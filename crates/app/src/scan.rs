@@ -45,6 +45,9 @@ pub struct ScanReport {
     pub extras: usize,
     /// Subtitle files attached to the film they sit next to.
     pub external_subtitles: usize,
+    /// Description files that gave up an identifier. Zero unless the server
+    /// was asked to read them.
+    pub companion_files_read: usize,
     /// Roots that could not be walked, by label. Never by path: a label is
     /// what logs and screens are allowed to show.
     pub unusable_roots: Vec<String>,
@@ -184,6 +187,18 @@ pub async fn scan_library(
         record_changes(state, library, root.id, &media, &mut report).await?;
         attach_companions(database, root.id, &companions, &media, &mut report).await?;
         attach_subtitles(database, root.id, &outcome.subtitles, &mut report).await?;
+
+        if state.config().scan.read_companion_files {
+            read_companion_files(
+                database,
+                &root.label,
+                &root.path,
+                root.id,
+                &outcome.companion_files,
+                &mut report,
+            )
+            .await?;
+        }
     }
 
     analyse_pending(state, library, handle, &mut report).await?;
@@ -427,6 +442,76 @@ fn film_of(companion: &FoundFile, media: &[FoundFile]) -> Option<PathBuf> {
         .next()
 }
 
+/// Reads the description files sitting next to the media, when the server was
+/// asked to.
+///
+/// Only the identifiers at the providers are kept. A title or a synopsis taken
+/// from such a file would be believed outright and would outrank what the
+/// provider says, whereas an identifier is something a provider can be asked
+/// about and can disagree with.
+async fn read_companion_files(
+    database: &Database,
+    root_label: &str,
+    root_path: &Path,
+    root_id: LibraryRootId,
+    companion_files: &[PathBuf],
+    report: &mut ScanReport,
+) -> Result<()> {
+    if companion_files.is_empty() {
+        return Ok(());
+    }
+    let stored = database.sources_of_root(root_id).await?;
+
+    for source in &stored {
+        let Some(stem) = source.relative_path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let folder = source.relative_path.parent();
+
+        // Either a file carrying the film's own name, or the one some tools
+        // write under a fixed name in a folder holding a single film.
+        let Some(path) = companion_files.iter().find(|path| {
+            path.parent() == folder
+                && path
+                    .file_stem()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|value| value == stem || value.eq_ignore_ascii_case("movie"))
+        }) else {
+            continue;
+        };
+
+        let full_path = root_path.join(path);
+        let contents = match tokio::fs::read_to_string(&full_path).await {
+            Ok(contents) => contents,
+            Err(error) => {
+                tracing::debug!(
+                    file = %MediaPath::new(root_label, &full_path),
+                    error = %error,
+                    "a description file could not be read"
+                );
+                continue;
+            }
+        };
+
+        let ids = melyxar_library::companion::read_ids(&contents);
+        if ids.is_empty() {
+            continue;
+        }
+        if let Some(tmdb) = &ids.tmdb {
+            database
+                .set_work_external_id(source.work_id, "tmdb", tmdb)
+                .await?;
+        }
+        if let Some(imdb) = &ids.imdb {
+            database
+                .set_work_external_id(source.work_id, "imdb", imdb)
+                .await?;
+        }
+        report.companion_files_read += 1;
+    }
+    Ok(())
+}
+
 /// Records the subtitle files sitting next to the media of one root.
 ///
 /// A subtitle in its own file is a track of the film, so it is attached to the
@@ -643,6 +728,15 @@ mod tests {
         directory: &Path,
         roots: Vec<(&str, PathBuf)>,
     ) -> (AppState, Library) {
+        state_with(directory, roots, false).await
+    }
+
+    /// The same, saying whether description files may be read.
+    async fn state_with(
+        directory: &Path,
+        roots: Vec<(&str, PathBuf)>,
+        read_companion_files: bool,
+    ) -> (AppState, Library) {
         let config = Config {
             directories: Directories {
                 data: directory.join("data"),
@@ -661,6 +755,9 @@ mod tests {
                     })
                     .collect(),
             }],
+            scan: melyxar_config::ScanConfig {
+                read_companion_files,
+            },
             ..Config::default()
         };
         crate::startup::prepare_directories(&config).expect("directories prepared");
@@ -1028,6 +1125,73 @@ mod tests {
                 |track| !matches!(&track.kind, melyxar_core::media::TrackKind::Subtitle(details)
                 if details.is_external)
             ));
+    }
+
+    #[tokio::test]
+    async fn a_description_file_is_left_alone_unless_the_server_was_asked_to_read_it() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
+        write(
+            &media,
+            "Quiet.Harbour.2019.MULTi.1080p.nfo",
+            b"<movie><tmdbid>12345</tmdbid></movie>",
+        );
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        let report = scan(&state, &library).await;
+
+        assert_eq!(report.added, 1, "a description file is not a film");
+        assert_eq!(report.companion_files_read, 0);
+        let works = state
+            .database()
+            .recent_works(library.id, 10)
+            .await
+            .expect("read");
+        assert!(state
+            .database()
+            .work_external_ids(works[0].id)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_description_file_gives_up_its_identifiers_when_the_server_is_asked_to_read_it() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
+        write(
+            &media,
+            "Quiet.Harbour.2019.MULTi.1080p.nfo",
+            b"<movie><title>Something Else</title><tmdbid>12345</tmdbid>\
+              <imdbid>tt7654321</imdbid></movie>",
+        );
+
+        let (state, library) = state_with(directory.path(), vec![("disk-one", media)], true).await;
+        let report = scan(&state, &library).await;
+        assert_eq!(report.companion_files_read, 1);
+
+        let works = state
+            .database()
+            .recent_works(library.id, 10)
+            .await
+            .expect("read");
+        assert_eq!(
+            state
+                .database()
+                .work_external_ids(works[0].id)
+                .await
+                .expect("read"),
+            vec![
+                ("imdb".to_string(), "tt7654321".to_string()),
+                ("tmdb".to_string(), "12345".to_string()),
+            ]
+        );
+        assert_eq!(
+            works[0].title, "Quiet Harbour",
+            "the title comes from the file name, never from a description file"
+        );
     }
 
     #[tokio::test]

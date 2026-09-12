@@ -359,6 +359,44 @@ impl Database {
         Ok(())
     }
 
+    /// Records what a work is called at an external provider.
+    ///
+    /// Replaces the identifier already held for that provider, since a work
+    /// has exactly one at each of them and a second would be a contradiction
+    /// rather than an addition.
+    pub async fn set_work_external_id(
+        &self,
+        work_id: WorkId,
+        provider: &str,
+        external_id: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO work_external_ids (work_id, provider, external_id)
+             VALUES (?, ?, ?)
+             ON CONFLICT (work_id, provider) DO UPDATE SET external_id = excluded.external_id",
+        )
+        .bind(work_id.to_db_string())
+        .bind(provider)
+        .bind(external_id)
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// What a work is called at each provider that knows it.
+    pub async fn work_external_ids(&self, work_id: WorkId) -> Result<Vec<(String, String)>> {
+        let rows = sqlx::query(
+            "SELECT provider, external_id FROM work_external_ids WHERE work_id = ? ORDER BY provider",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| Ok((row.try_get("provider")?, row.try_get("external_id")?)))
+            .collect()
+    }
+
     /// Files of one root that already carry a subtitle of their own.
     ///
     /// A scan asks for this so that it only rewrites what actually changed:
@@ -1283,6 +1321,42 @@ mod tests {
 
         let stored = database.extra_videos_of_work(work_id).await.expect("read");
         assert_eq!(stored, vec![extra]);
+    }
+
+    #[tokio::test]
+    async fn a_work_holds_one_identifier_per_provider_and_the_latest_wins() {
+        let (database, library_id, _) = library().await;
+        let work = database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+
+        database
+            .set_work_external_id(work.id, "tmdb", "12345")
+            .await
+            .expect("identifier stored");
+        database
+            .set_work_external_id(work.id, "imdb", "tt7654321")
+            .await
+            .expect("identifier stored");
+        database
+            .set_work_external_id(work.id, "tmdb", "54321")
+            .await
+            .expect("identifier corrected");
+
+        assert_eq!(
+            database.work_external_ids(work.id).await.expect("read"),
+            vec![
+                ("imdb".to_string(), "tt7654321".to_string()),
+                ("tmdb".to_string(), "54321".to_string()),
+            ]
+        );
     }
 
     #[tokio::test]

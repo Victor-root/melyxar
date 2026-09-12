@@ -136,6 +136,18 @@ impl Default for LimitsConfig {
     }
 }
 
+/// What a scan is allowed to do with the media folders.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScanConfig {
+    /// Read the description files some collections keep next to a film.
+    ///
+    /// Off by default: such a file may hold anything, and a server that
+    /// believes it without being asked to is a server that takes a stranger's
+    /// word over a provider's. Turning it on only ever makes the server read;
+    /// writing into a media folder is a separate matter and a separate switch.
+    pub read_companion_files: bool,
+}
+
 /// Logging behaviour.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoggingConfig {
@@ -196,6 +208,8 @@ pub struct Config {
     #[serde(default)]
     pub limits: LimitsConfig,
     #[serde(default)]
+    pub scan: ScanConfig,
+    #[serde(default)]
     pub logging: LoggingConfig,
     /// Metadata provider key. Lives here, never in the repository.
     #[serde(default)]
@@ -224,6 +238,7 @@ impl Default for Config {
             directories: Directories::default(),
             media_tools: MediaToolsConfig::default(),
             limits: LimitsConfig::default(),
+            scan: ScanConfig::default(),
             logging: LoggingConfig::default(),
             tmdb_api_key: None,
             libraries: Vec::new(),

@@ -11,6 +11,7 @@
 #![forbid(unsafe_code)]
 
 pub mod access;
+pub mod companion;
 pub mod naming;
 pub mod scan;
 pub mod sidecar;

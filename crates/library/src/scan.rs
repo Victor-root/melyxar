@@ -40,6 +40,10 @@ pub struct ScanOutcome {
     /// A subtitle in its own file is a track of the film it belongs to, not a
     /// work, so it is reported apart from the files above.
     pub subtitles: Vec<PathBuf>,
+    /// Description files sitting next to the media, by path relative to the
+    /// root. Reading them is a choice the server makes elsewhere; finding them
+    /// costs nothing and keeps the walk the only thing that touches the disk.
+    pub companion_files: Vec<PathBuf>,
     /// Folders that could not be entered, reported rather than swallowed.
     pub unreadable_folders: Vec<PathBuf>,
 }
@@ -70,6 +74,7 @@ pub fn walk(root_label: &str, root: &Path) -> Result<ScanOutcome, ScanError> {
     let mut outcome = ScanOutcome {
         files: Vec::new(),
         subtitles: Vec::new(),
+        companion_files: Vec::new(),
         unreadable_folders: Vec::new(),
     };
     walk_into(root, root, &mut outcome, root_label);
@@ -123,7 +128,9 @@ fn walk_into(root: &Path, start: &Path, outcome: &mut ScanOutcome, root_label: &
             };
 
             let is_video = naming::is_video_file(name);
-            if !is_video && !crate::sidecar::is_subtitle_file(name) {
+            let is_subtitle = crate::sidecar::is_subtitle_file(name);
+            let is_description = crate::companion::is_companion_file(name);
+            if !is_video && !is_subtitle && !is_description {
                 continue;
             }
 
@@ -131,8 +138,12 @@ fn walk_into(root: &Path, start: &Path, outcome: &mut ScanOutcome, root_label: &
                 continue;
             };
 
-            if !is_video {
+            if is_subtitle {
                 outcome.subtitles.push(relative_path.to_path_buf());
+                continue;
+            }
+            if is_description {
+                outcome.companion_files.push(relative_path.to_path_buf());
                 continue;
             }
 
@@ -159,6 +170,7 @@ fn walk_into(root: &Path, start: &Path, outcome: &mut ScanOutcome, root_label: &
         .files
         .sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
     outcome.subtitles.sort();
+    outcome.companion_files.sort();
     outcome.unreadable_folders.sort();
 }
 
@@ -244,6 +256,11 @@ mod tests {
         write(root, "Quiet.Harbour.2019.nfo", b"x");
 
         let outcome = walk("disk-one", root).expect("the root is usable");
+        assert_eq!(
+            outcome.companion_files.len(),
+            1,
+            "a description file is found, whether or not it is read"
+        );
         let names: Vec<String> = outcome
             .files
             .iter()
