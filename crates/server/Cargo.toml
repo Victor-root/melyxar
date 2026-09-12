@@ -1,0 +1,23 @@
+[package]
+name = "melyxar-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The HTTP surface. A translator, never a place for business rules."
+
+[dependencies]
+melyxar-core = { workspace = true }
+melyxar-config = { workspace = true }
+melyxar-app = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+melyxar-database = { workspace = true }
