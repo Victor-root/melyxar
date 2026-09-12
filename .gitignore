@@ -8,9 +8,9 @@
 *.db-wal
 *.db-shm
 
-# Web build output and dependencies.
+# Dependencies of the interface. Its build output is committed on purpose:
+# the server embeds it, so compiling the binary needs no JavaScript tool.
 /web/node_modules
-/web/dist
 
 # Local configuration holding real paths and keys.
 /melyxar.local.toml

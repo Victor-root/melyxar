@@ -1,0 +1,165 @@
+/*
+ * Every colour, spacing and radius the interface uses lives here as a token.
+ * Nothing else in the interface writes a colour: that is what lets the accent
+ * be changed in one place, and what makes a light and a dark theme the same
+ * design rather than two.
+ */
+
+:root {
+  /* The accent, and the shades derived from it. Emby uses its accent barely
+     at all; here it carries the play button, the focus ring, the active tab
+     and every emphasis worth noticing. */
+  --accent: #c81e1e;
+  --accent-bright: #e63535;
+  --accent-dim: #9b1616;
+  --accent-contrast: #ffffff;
+  --accent-glow: rgba(200, 30, 30, 0.35);
+
+  --radius-card: 10px;
+  --radius-control: 8px;
+  --radius-pill: 999px;
+
+  --gap-tight: 6px;
+  --gap: 12px;
+  --gap-wide: 24px;
+  --gap-section: 44px;
+
+  --page-width: 1680px;
+  --header-height: 60px;
+
+  /* Cards are 2:3, the shape of a poster. */
+  --card-width: 168px;
+  --card-width-wide: 200px;
+
+  --shadow-card: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --shadow-raised: 0 14px 40px rgba(0, 0, 0, 0.45);
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --quick: 120ms;
+  --calm: 240ms;
+
+  color-scheme: dark;
+}
+
+/* Dark is the default: a film library is looked at in the evening. */
+:root,
+:root[data-theme="dark"] {
+  --surface-deep: #0c0d10;
+  --surface: #14161b;
+  --surface-raised: #1b1e25;
+  --surface-hover: #232730;
+  --border: #2a2f39;
+  --border-strong: #3a4150;
+
+  --text: #f2f4f8;
+  --text-soft: #aab2c0;
+  --text-faint: #6f7888;
+
+  --scrim: linear-gradient(to top, #0c0d10 8%, rgba(12, 13, 16, 0.75) 45%, rgba(12, 13, 16, 0) 100%);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --surface-deep: #f4f5f7;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: #eceef2;
+  --border: #dfe2e8;
+  --border-strong: #c3c8d2;
+
+  --text: #14161b;
+  --text-soft: #4d5462;
+  --text-faint: #7b8393;
+
+  --accent-glow: rgba(200, 30, 30, 0.22);
+  --shadow-card: 0 4px 14px rgba(20, 22, 27, 0.14);
+  --shadow-raised: 0 12px 32px rgba(20, 22, 27, 0.18);
+  --scrim: linear-gradient(to top, #f4f5f7 8%, rgba(244, 245, 247, 0.7) 45%, rgba(244, 245, 247, 0) 100%);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--surface-deep);
+  color: var(--text);
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The scrollbar carries the accent, the way the maintainer asked. */
+* {
+  scrollbar-color: var(--accent-dim) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--accent-dim);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  background-clip: content-box;
+}
+
+/*
+ * One focus ring for the whole interface, visible on every surface. Keyboard
+ * navigation was asked for from the start, and an interface that hides where
+ * the focus is cannot be used without a mouse.
+ */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent-bright);
+  outline-offset: 3px;
+  border-radius: var(--radius-control);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+/* Anyone who asked their system for less movement gets less movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

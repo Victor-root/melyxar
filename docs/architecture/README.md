@@ -91,6 +91,8 @@ Ces décisions ont été prises après discussion et ne sont pas à rediscuter s
 | Fournisseur de métadonnées | Derrière un trait, avec un fournisseur de remplacement dans les tests. Un fournisseur injoignable n'arrête jamais un scan : la tâche est réessayée à intervalles qui s'écartent | Le scan et l'identification sont deux étapes séparées ; la bibliothèque reste consultable même si TMDb est en panne. |
 | Images | Téléchargées une fois, converties par FFmpeg en WebP aux largeurs fixes, servies sous un nom tiré de leur contenu. Jamais redimensionnées à la demande | Un serveur qui redimensionne à chaque requête passe son après-midi sur la même affiche. Le nom permet au navigateur de garder une image pour toujours et de voir la nouvelle le jour où elle change. |
 | Couleur de carte | Moyenne de l'affiche, lue en la réduisant à un pixel | Une carte a une couleur à montrer avant l'arrivée de son image. |
+| Interface | React construite ici et **le résultat construit est commité**, puis embarqué dans le binaire Rust | Le LXC n'a alors aucun outil JavaScript à installer et la commande de mise à jour ne change pas : elle compile le binaire, et l'interface est dedans. Le jour où des binaires précompilés sont distribués, rien ne bouge. |
+| Grille | Défilement continu par curseur, avec `content-visibility` plutôt qu'une bibliothèque de virtualisation | Le navigateur saute le dessin de ce qui est hors écran sans dépendance supplémentaire ni gestion manuelle des hauteurs. |
 | Vérification | Pas d'intégration continue GitHub. Compilation, `clippy` et tests dans l'environnement de travail avant chaque commit, puis compilation réelle dans le LXC par le mainteneur | Le mainteneur rapporte les erreurs directement. |
 
 ## Environnement de production

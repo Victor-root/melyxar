@@ -28,6 +28,9 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::catalogue::router())
         .merge(crate::images::router())
         .merge(crate::jobs::router())
+        // Last: anything that is not an address of the interface proper is
+        // answered with the interface, which reads the address itself.
+        .merge(crate::interface::router())
         .with_state(state)
 }
 
