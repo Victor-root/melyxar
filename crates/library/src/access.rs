@@ -58,19 +58,6 @@ fn can_write(path: &Path) -> bool {
     }
 }
 
-/// A short sentence code explaining a state, for the diagnostic output.
-///
-/// A code rather than a sentence, so the interface picks the wording and can
-/// translate it.
-pub fn explanation_code(access: RootAccess) -> &'static str {
-    match access {
-        RootAccess::Missing => "root_missing_or_not_mounted",
-        RootAccess::Unreadable => "root_not_readable_by_server_user",
-        RootAccess::ReadOnly => "root_readable_only",
-        RootAccess::ReadWrite => "root_readable_and_writable",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,17 +128,5 @@ mod tests {
             access.is_usable(),
             "a read only folder is still perfectly scannable"
         );
-    }
-
-    #[test]
-    fn every_state_has_an_explanation_code_the_interface_can_translate() {
-        for state in [
-            RootAccess::Missing,
-            RootAccess::Unreadable,
-            RootAccess::ReadOnly,
-            RootAccess::ReadWrite,
-        ] {
-            assert!(!explanation_code(state).is_empty());
-        }
     }
 }

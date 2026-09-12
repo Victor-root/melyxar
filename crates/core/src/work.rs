@@ -110,6 +110,14 @@ pub struct Work {
     /// Precomputed on write so that ordering costs an index lookup.
     pub sort_title: String,
     pub release_year: Option<i32>,
+    /// How long the work runs, as the provider gives it. Not the length of any
+    /// one file: a page shows the film's runtime, and a file that is a few
+    /// seconds short of it is still that film.
+    pub runtime: Option<Millis>,
+    /// What viewers elsewhere thought of it, on the provider's scale.
+    pub community_rating: Option<f64>,
+    /// Age rating as the country that issued it writes it.
+    pub age_rating_label: Option<String>,
     pub identification: IdentificationState,
     /// Dominant colour of the poster, sent with every card so a grid shows
     /// colour before a single image has arrived.

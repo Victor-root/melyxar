@@ -113,7 +113,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             library,
             label: entry.root.label.clone(),
             access: entry.access.as_str(),
-            explanation_code: melyxar_library::access::explanation_code(entry.access),
+            explanation_code: entry.access.explanation_code(),
             checked: entry.checked_at.is_some(),
         });
     }

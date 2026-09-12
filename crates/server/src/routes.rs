@@ -25,6 +25,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/system/health", get(health))
         .route("/api/v1/system/diagnostics", get(diagnostics))
         .route("/api/v1/public/branding", get(public_branding))
+        .merge(crate::catalogue::router())
+        .merge(crate::images::router())
+        .merge(crate::jobs::router())
         .with_state(state)
 }
 

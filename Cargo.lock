@@ -1200,7 +1200,7 @@ dependencies = [
  "melyxar-app",
  "melyxar-config",
  "melyxar-core",
- "melyxar-database",
+ "melyxar-jobs",
  "serde",
  "serde_json",
  "tempfile",

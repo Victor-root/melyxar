@@ -72,8 +72,9 @@ impl Database {
         limit: i64,
     ) -> Result<Vec<melyxar_core::work::Work>> {
         let rows = sqlx::query(
-            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year,
-                    identification, dominant_color, added_at, updated_at
+            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
+                    community_rating, age_rating_label, identification, dominant_color,
+                    added_at, updated_at
              FROM works
              WHERE library_id = ? AND identification IN ('pending', 'unidentified')
              ORDER BY added_at
@@ -325,6 +326,24 @@ impl Database {
                     row.try_get("character_name")?,
                 ))
             })
+            .collect()
+    }
+
+    /// Trailers hosted elsewhere, which playing means leaving this server.
+    pub async fn remote_extra_videos_of_work(
+        &self,
+        work_id: WorkId,
+    ) -> Result<Vec<(String, String)>> {
+        let rows = sqlx::query(
+            "SELECT COALESCE(name, kind) AS name, remote_url FROM extra_videos
+             WHERE work_id = ? AND remote_url IS NOT NULL ORDER BY created_at",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| Ok((row.try_get("name")?, row.try_get("remote_url")?)))
             .collect()
     }
 
@@ -844,6 +863,33 @@ mod tests {
             .expect("read")
             .iter()
             .any(|(field, _)| field == "title"));
+    }
+
+    #[tokio::test]
+    async fn the_trailers_that_leave_this_server_are_told_apart_from_the_rest() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("applied");
+
+        let remote = database
+            .remote_extra_videos_of_work(work.id)
+            .await
+            .expect("read");
+        assert_eq!(remote.len(), 1);
+        assert_eq!(remote[0].0, "Bande annonce");
+        assert!(remote[0].1.starts_with("https://"));
+
+        assert_eq!(
+            database
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .age_rating_label,
+            Some("12".to_string())
+        );
     }
 
     #[tokio::test]

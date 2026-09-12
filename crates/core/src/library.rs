@@ -76,6 +76,19 @@ pub enum RootAccess {
 }
 
 impl RootAccess {
+    /// A short code explaining the state, for an interface to word itself.
+    ///
+    /// A code rather than a sentence, so the wording belongs to the client and
+    /// can be translated.
+    pub fn explanation_code(self) -> &'static str {
+        match self {
+            Self::Missing => "root_missing_or_not_mounted",
+            Self::Unreadable => "root_not_readable_by_server_user",
+            Self::ReadOnly => "root_readable_only",
+            Self::ReadWrite => "root_readable_and_writable",
+        }
+    }
+
     /// Whether the scanner may walk this root at all.
     pub fn is_usable(self) -> bool {
         matches!(self, Self::ReadOnly | Self::ReadWrite)
@@ -160,5 +173,28 @@ mod tests {
     fn only_a_writable_root_may_offer_features_touching_the_disk() {
         assert!(!RootAccess::ReadOnly.allows_writing());
         assert!(RootAccess::ReadWrite.allows_writing());
+    }
+
+    #[test]
+    fn every_state_has_a_code_an_interface_can_word_in_its_own_language() {
+        let codes: Vec<&str> = [
+            RootAccess::Missing,
+            RootAccess::Unreadable,
+            RootAccess::ReadOnly,
+            RootAccess::ReadWrite,
+        ]
+        .into_iter()
+        .map(RootAccess::explanation_code)
+        .collect();
+
+        assert!(codes.iter().all(|code| !code.is_empty()));
+        let mut unique = codes.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            codes.len(),
+            "two states sharing a code would be two states a reader cannot tell apart"
+        );
     }
 }

@@ -148,7 +148,7 @@ impl Database {
     }
 }
 
-fn image_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredImage> {
+pub(crate) fn image_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredImage> {
     Ok(StoredImage {
         owner_kind: row.try_get("owner_kind")?,
         owner_id: row.try_get("owner_id")?,
