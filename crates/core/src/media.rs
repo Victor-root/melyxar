@@ -113,6 +113,40 @@ impl TrackKind {
     }
 }
 
+/// Normalises a language tag to its three letter lowercase form where we can.
+///
+/// Containers and file names disagree wildly here, and a track whose language
+/// is not recognised is a track a viewer cannot find in the picker. The rule
+/// lives here because it has to give the same answer whether the tag came out
+/// of a container or off the end of a file name.
+pub fn normalise_language(value: &str) -> String {
+    let lowered = value.trim().to_lowercase();
+    let base = lowered
+        .split(['-', '_'])
+        .next()
+        .unwrap_or(&lowered)
+        .to_string();
+    match base.as_str() {
+        "fr" => "fre".to_string(),
+        "en" => "eng".to_string(),
+        "de" => "ger".to_string(),
+        "es" => "spa".to_string(),
+        "it" => "ita".to_string(),
+        "ja" => "jpn".to_string(),
+        "nl" => "dut".to_string(),
+        "pt" => "por".to_string(),
+        "ru" => "rus".to_string(),
+        "zh" => "chi".to_string(),
+        // Both three letter codes exist for several languages; keeping one of
+        // each is what stops a picker from showing the same language twice.
+        "fra" => "fre".to_string(),
+        "deu" => "ger".to_string(),
+        "nld" => "dut".to_string(),
+        "zho" => "chi".to_string(),
+        other => other.to_string(),
+    }
+}
+
 /// One chapter of a source, either read from the file or generated at a fixed
 /// interval when the file declares none.
 ///

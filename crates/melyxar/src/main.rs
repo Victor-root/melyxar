@@ -175,7 +175,7 @@ async fn scan(config: Config, only: Option<String>) -> anyhow::Result<()> {
         match report {
             Some(report) => println!(
                 "{name}: {} added, {} changed, {} absent, {} back, {} unchanged, {} analysed, \
-                 {} unreadable, {} extra videos",
+                 {} unreadable, {} extra videos, {} subtitle files",
                 report.added,
                 report.changed,
                 report.missing,
@@ -183,7 +183,8 @@ async fn scan(config: Config, only: Option<String>) -> anyhow::Result<()> {
                 report.unchanged,
                 report.analysed,
                 report.unreadable_files,
-                report.extras
+                report.extras,
+                report.external_subtitles
             ),
             None => println!("{name}: the scan ended as {}", job_state.as_str()),
         }

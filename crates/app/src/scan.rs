@@ -14,17 +14,17 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use melyxar_core::id::JobId;
-use melyxar_core::id::{LibraryRootId, MediaSourceId, WorkId};
+use melyxar_core::id::{JobId, LibraryRootId, MediaSourceId, TrackId, WorkId};
 use melyxar_core::job::{JobKind, JobPriority, JobState};
 use melyxar_core::library::{Library, LibraryKind};
+use melyxar_core::media::{SubtitleDetails, Track, TrackKind};
 use melyxar_core::privacy::{MediaName, MediaPath};
 use melyxar_core::work::WorkKind;
 use melyxar_database::catalogue::{LocalExtraVideo, SourceAnalysis, StoredSource};
 use melyxar_database::Database;
 use melyxar_jobs::{JobHandle, StartedJob};
-use melyxar_library::naming;
 use melyxar_library::scan::{walk, FoundFile, KnownFile, ScanError};
+use melyxar_library::{naming, sidecar};
 
 use crate::{AppError, AppState, Result};
 
@@ -43,6 +43,8 @@ pub struct ScanReport {
     /// nobody can analyse is a file nobody will be able to play either.
     pub unreadable_files: usize,
     pub extras: usize,
+    /// Subtitle files attached to the film they sit next to.
+    pub external_subtitles: usize,
     /// Roots that could not be walked, by label. Never by path: a label is
     /// what logs and screens are allowed to show.
     pub unusable_roots: Vec<String>,
@@ -181,6 +183,7 @@ pub async fn scan_library(
 
         record_changes(state, library, root.id, &media, &mut report).await?;
         attach_companions(database, root.id, &companions, &media, &mut report).await?;
+        attach_subtitles(database, root.id, &outcome.subtitles, &mut report).await?;
     }
 
     analyse_pending(state, library, handle, &mut report).await?;
@@ -201,6 +204,7 @@ pub async fn scan_library(
         unchanged = report.unchanged,
         analysed = report.analysed,
         extras = report.extras,
+        subtitles = report.external_subtitles,
         cancelled = report.cancelled,
         "scan finished"
     );
@@ -421,6 +425,90 @@ fn film_of(companion: &FoundFile, media: &[FoundFile]) -> Option<PathBuf> {
         })
         .map(|file| file.relative_path.clone())
         .next()
+}
+
+/// Records the subtitle files sitting next to the media of one root.
+///
+/// A subtitle in its own file is a track of the film, so it is attached to the
+/// file it belongs to rather than kept in a corner of its own. The whole set
+/// is rewritten on every scan, which is what makes adding or removing one of
+/// them show up without any bookkeeping.
+async fn attach_subtitles(
+    database: &Database,
+    root_id: LibraryRootId,
+    subtitles: &[PathBuf],
+    report: &mut ScanReport,
+) -> Result<()> {
+    let stored = database.sources_of_root(root_id).await?;
+    if stored.is_empty() {
+        return Ok(());
+    }
+    let had_subtitles = database.sources_with_external_subtitles(root_id).await?;
+
+    for source in &stored {
+        let Some(stem) = source.relative_path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let folder = source.relative_path.parent();
+
+        let mut tracks = Vec::new();
+        for path in subtitles {
+            if path.parent() != folder {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            // The convention is the film's own name followed by what the
+            // subtitle is: language, and whether it is forced or for viewers
+            // who are hard of hearing.
+            let Some(remainder) = name.strip_prefix(stem) else {
+                continue;
+            };
+            let remainder = remainder
+                .strip_suffix(&format!(
+                    ".{}",
+                    path.extension()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or_default()
+                ))
+                .unwrap_or(remainder);
+            let Some(found) = sidecar::read(name, remainder) else {
+                continue;
+            };
+
+            tracks.push(Track {
+                id: TrackId::new(),
+                source_id: source.id,
+                // A file of its own holds one stream, and it is addressed by
+                // its path rather than by a position in a container.
+                stream_index: 0,
+                language: found.language.clone(),
+                title: None,
+                is_default: false,
+                is_forced: found.is_forced,
+                kind: TrackKind::Subtitle(SubtitleDetails {
+                    codec: found.codec.to_string(),
+                    layout: found.layout,
+                    is_hearing_impaired: found.is_hearing_impaired,
+                    is_external: true,
+                    external_relative_path: Some(path.clone()),
+                }),
+            });
+        }
+
+        // Nothing found and nothing stored means nothing to do. Nothing found
+        // where something was stored means a subtitle was taken away, and that
+        // has to be written down like any other change.
+        if tracks.is_empty() && !had_subtitles.contains(&source.id) {
+            continue;
+        }
+        report.external_subtitles += tracks.len();
+        database
+            .store_external_subtitles(source.id, &tracks)
+            .await?;
+    }
+    Ok(())
 }
 
 /// Analyses every file of the library that carries no analysis yet.
@@ -861,6 +949,85 @@ mod tests {
 
         assert_eq!(report.added, 1);
         assert_eq!(report.extras, 1);
+    }
+
+    #[tokio::test]
+    async fn a_subtitle_next_to_a_film_becomes_one_of_its_tracks() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
+        write(&media, "Quiet.Harbour.2019.MULTi.1080p.fr.srt", b"subtitle");
+        write(
+            &media,
+            "Quiet.Harbour.2019.MULTi.1080p.en.forced.srt",
+            b"subtitle",
+        );
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        let report = scan(&state, &library).await;
+
+        assert_eq!(report.added, 1, "a subtitle is not a film");
+        assert_eq!(report.external_subtitles, 2);
+
+        let source = state
+            .database()
+            .sources_of_root(library.roots[0].id)
+            .await
+            .expect("read")[0]
+            .clone();
+        let tracks = state
+            .database()
+            .tracks_of_source(source.id)
+            .await
+            .expect("read");
+        let subtitles: Vec<_> = tracks
+            .iter()
+            .filter_map(|track| match &track.kind {
+                melyxar_core::media::TrackKind::Subtitle(details) => Some((track, details)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(subtitles.len(), 2);
+        assert!(subtitles.iter().all(|(_, details)| details.is_external));
+        assert!(subtitles
+            .iter()
+            .any(|(track, _)| track.language.as_deref() == Some("fre") && !track.is_forced));
+        assert!(subtitles
+            .iter()
+            .any(|(track, _)| track.language.as_deref() == Some("eng") && track.is_forced));
+    }
+
+    #[tokio::test]
+    async fn a_subtitle_taken_away_stops_being_a_track() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
+        write(&media, "Quiet.Harbour.2019.MULTi.1080p.fr.srt", b"subtitle");
+
+        let (state, library) =
+            state_with_roots(directory.path(), vec![("disk-one", media.clone())]).await;
+        scan(&state, &library).await;
+
+        std::fs::remove_file(media.join("Quiet.Harbour.2019.MULTi.1080p.fr.srt")).expect("removed");
+        let report = scan(&state, &library).await;
+        assert_eq!(report.external_subtitles, 0);
+
+        let source = state
+            .database()
+            .sources_of_root(library.roots[0].id)
+            .await
+            .expect("read")[0]
+            .clone();
+        assert!(state
+            .database()
+            .tracks_of_source(source.id)
+            .await
+            .expect("read")
+            .iter()
+            .all(
+                |track| !matches!(&track.kind, melyxar_core::media::TrackKind::Subtitle(details)
+                if details.is_external)
+            ));
     }
 
     #[tokio::test]

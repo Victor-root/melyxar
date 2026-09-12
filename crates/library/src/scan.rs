@@ -36,6 +36,10 @@ pub struct FoundFile {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScanOutcome {
     pub files: Vec<FoundFile>,
+    /// Subtitle files sitting next to the media, by path relative to the root.
+    /// A subtitle in its own file is a track of the film it belongs to, not a
+    /// work, so it is reported apart from the files above.
+    pub subtitles: Vec<PathBuf>,
     /// Folders that could not be entered, reported rather than swallowed.
     pub unreadable_folders: Vec<PathBuf>,
 }
@@ -65,6 +69,7 @@ pub fn walk(root_label: &str, root: &Path) -> Result<ScanOutcome, ScanError> {
 
     let mut outcome = ScanOutcome {
         files: Vec::new(),
+        subtitles: Vec::new(),
         unreadable_folders: Vec::new(),
     };
     walk_into(root, root, &mut outcome, root_label);
@@ -72,6 +77,7 @@ pub fn walk(root_label: &str, root: &Path) -> Result<ScanOutcome, ScanError> {
     tracing::info!(
         root = root_label,
         files = outcome.files.len(),
+        subtitles = outcome.subtitles.len(),
         unreadable = outcome.unreadable_folders.len(),
         "walk finished"
     );
@@ -116,13 +122,19 @@ fn walk_into(root: &Path, start: &Path, outcome: &mut ScanOutcome, root_label: &
                 continue;
             };
 
-            if !naming::is_video_file(name) {
+            let is_video = naming::is_video_file(name);
+            if !is_video && !crate::sidecar::is_subtitle_file(name) {
                 continue;
             }
 
             let Ok(relative_path) = path.strip_prefix(root) else {
                 continue;
             };
+
+            if !is_video {
+                outcome.subtitles.push(relative_path.to_path_buf());
+                continue;
+            }
 
             tracing::debug!(
                 file = %MediaPath::new(root_label, &path),
@@ -146,6 +158,7 @@ fn walk_into(root: &Path, start: &Path, outcome: &mut ScanOutcome, root_label: &
     outcome
         .files
         .sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    outcome.subtitles.sort();
     outcome.unreadable_folders.sort();
 }
 
@@ -313,6 +326,24 @@ mod tests {
             .find(|file| file.relative_path == Path::new("Quiet.Harbour.2019.mkv"))
             .expect("the film was found");
         assert_eq!(film.companion_kind, None);
+    }
+
+    #[test]
+    fn subtitle_files_are_reported_apart_from_the_films_they_belong_to() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let root = directory.path();
+        write(root, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
+        write(root, "Quiet.Harbour.2019.MULTi.1080p.fr.srt", b"x");
+        write(root, "Quiet.Harbour.2019.MULTi.1080p.en.sdh.srt", b"x");
+        write(root, "notes.txt", b"x");
+
+        let outcome = walk("disk-one", root).expect("the root is usable");
+        assert_eq!(outcome.files.len(), 1, "a subtitle is not a film");
+        assert_eq!(outcome.subtitles.len(), 2);
+        assert!(outcome
+            .subtitles
+            .iter()
+            .all(|path| path.extension().is_some_and(|value| value == "srt")));
     }
 
     #[test]
