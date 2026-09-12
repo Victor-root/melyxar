@@ -8,6 +8,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod catalogue;
+pub mod detail;
 pub mod diagnostics;
 pub mod identify;
 pub mod images;
@@ -16,6 +18,21 @@ pub mod startup;
 pub mod state;
 
 pub use state::AppState;
+
+/// What browsing a library looks like, for whoever asks.
+///
+/// Re-exported here so the layer above speaks to the use cases and never to
+/// the storage, which is what keeps the dependencies pointing one way.
+pub mod browse {
+    pub use melyxar_database::browse::{
+        BrowseRequest, WorkCard, WorkOrder, WorkPage, DEFAULT_PAGE, LARGEST_PAGE,
+    };
+}
+
+/// Pictures the server has prepared, as they are stored.
+pub mod picture {
+    pub use melyxar_database::images::StoredImage;
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

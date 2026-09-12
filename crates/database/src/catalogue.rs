@@ -98,6 +98,9 @@ impl Database {
             title: title.to_string(),
             sort_title: sort_title.to_string(),
             release_year,
+            runtime: None,
+            community_rating: None,
+            age_rating_label: None,
             identification: IdentificationState::Pending,
             dominant_color: None,
             added_at: moment,
@@ -108,8 +111,9 @@ impl Database {
     /// One work by identifier.
     pub async fn work(&self, id: WorkId) -> Result<Option<Work>> {
         let row = sqlx::query(
-            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year,
-                    identification, dominant_color, added_at, updated_at
+            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
+                    community_rating, age_rating_label, identification, dominant_color,
+                    added_at, updated_at
              FROM works WHERE id = ?",
         )
         .bind(id.to_db_string())
@@ -131,8 +135,9 @@ impl Database {
         release_year: Option<i32>,
     ) -> Result<Option<Work>> {
         let row = sqlx::query(
-            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year,
-                    identification, dominant_color, added_at, updated_at
+            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
+                    community_rating, age_rating_label, identification, dominant_color,
+                    added_at, updated_at
              FROM works
              WHERE library_id = ? AND sort_title = ?
                AND (release_year IS ? OR (release_year IS NULL AND ? IS NULL))
@@ -152,8 +157,9 @@ impl Database {
     /// Works of a library, newest first, which is the order the home page uses.
     pub async fn recent_works(&self, library_id: LibraryId, limit: i64) -> Result<Vec<Work>> {
         let rows = sqlx::query(
-            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year,
-                    identification, dominant_color, added_at, updated_at
+            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
+                    community_rating, age_rating_label, identification, dominant_color,
+                    added_at, updated_at
              FROM works WHERE library_id = ? ORDER BY added_at DESC LIMIT ?",
         )
         .bind(library_id.to_db_string())
@@ -223,6 +229,51 @@ impl Database {
         .await?;
 
         rows.iter().map(stored_source_from_row).collect()
+    }
+
+    /// Every file behind one work, newest first.
+    ///
+    /// A work can have several: the same film in two definitions is two files
+    /// of one work, and the page offers a choice between them.
+    pub async fn sources_of_work(&self, work_id: WorkId) -> Result<Vec<StoredSource>> {
+        let rows = sqlx::query(
+            "SELECT id, work_id, relative_path, size_bytes, modified_at, missing_since
+             FROM media_sources WHERE work_id = ? ORDER BY added_at",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+        rows.iter().map(stored_source_from_row).collect()
+    }
+
+    /// What one file is, beyond what identifies it.
+    pub async fn source_details(
+        &self,
+        source_id: MediaSourceId,
+    ) -> Result<Option<(SourceAnalysis, Option<Timestamp>)>> {
+        let row = sqlx::query(
+            "SELECT container, duration_ms, overall_bitrate, analysed_at
+             FROM media_sources WHERE id = ?",
+        )
+        .bind(source_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+
+        row.map(|row| {
+            Ok((
+                SourceAnalysis {
+                    container: row.try_get("container")?,
+                    duration: row
+                        .try_get::<Option<i64>, _>("duration_ms")?
+                        .map(Millis::new),
+                    overall_bitrate: row.try_get("overall_bitrate")?,
+                },
+                parse_optional_timestamp(
+                    row.try_get::<Option<String>, _>("analysed_at")?.as_deref(),
+                )?,
+            ))
+        })
+        .transpose()
     }
 
     /// Files of one root that carry no analysis yet.
@@ -718,6 +769,11 @@ pub(crate) fn work_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Work> {
         title: row.try_get("title")?,
         sort_title: row.try_get("sort_title")?,
         release_year: row.try_get("release_year")?,
+        runtime: row
+            .try_get::<Option<i64>, _>("runtime_ms")?
+            .map(Millis::new),
+        community_rating: row.try_get("community_rating")?,
+        age_rating_label: row.try_get("age_rating_label")?,
         identification: IdentificationState::parse(&identification_text).ok_or_else(|| {
             DatabaseError::Corrupt(format!(
                 "identification state '{identification_text}' is unknown"
@@ -1263,6 +1319,76 @@ mod tests {
         );
         let stored = database.sources_of_root(root_id).await.expect("read");
         assert_eq!(stored[0].size_bytes, 2_000);
+    }
+
+    #[tokio::test]
+    async fn a_work_gives_up_every_file_behind_it() {
+        let (database, library_id, root_id) = library().await;
+        let work = database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+
+        for name in [
+            "Quiet.Harbour.2019.1080p.mkv",
+            "Quiet.Harbour.2019.2160p.mkv",
+        ] {
+            database
+                .insert_source(work.id, root_id, Path::new(name), 1_000, now())
+                .await
+                .expect("source recorded");
+        }
+
+        let sources = database.sources_of_work(work.id).await.expect("read");
+        assert_eq!(
+            sources.len(),
+            2,
+            "the same film in two definitions is two files of one work"
+        );
+    }
+
+    #[tokio::test]
+    async fn what_a_file_turned_out_to_be_is_read_back() {
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        let (before, analysed_at) = database
+            .source_details(source_id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(before, SourceAnalysis::default());
+        assert!(analysed_at.is_none(), "nothing has looked at it yet");
+
+        database
+            .store_analysis(
+                source_id,
+                &SourceAnalysis {
+                    container: Some("matroska,webm".to_string()),
+                    duration: Some(Millis::new(7_200_000)),
+                    overall_bitrate: Some(48_000_000),
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        let (after, analysed_at) = database
+            .source_details(source_id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(after.container.as_deref(), Some("matroska,webm"));
+        assert_eq!(after.duration, Some(Millis::new(7_200_000)));
+        assert!(analysed_at.is_some());
     }
 
     #[tokio::test]

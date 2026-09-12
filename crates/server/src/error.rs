@@ -67,8 +67,22 @@ impl ServerError {
         )
     }
 
+    /// Something the caller sent cannot be used. Says which thing, never why
+    /// in prose: the wording belongs to the client, in its own language.
+    pub fn invalid_input(detail: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, ErrorCode::InvalidInput, detail)
+    }
+
     pub fn unauthenticated(detail: impl Into<String>) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, ErrorCode::Unauthenticated, detail)
+    }
+}
+
+impl ServerError {
+    /// The stable code this failure carries, which is what a test and a client
+    /// key on rather than on the wording.
+    pub fn code(&self) -> &'static str {
+        self.body.code
     }
 }
 

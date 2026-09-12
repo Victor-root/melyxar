@@ -13,6 +13,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod browse;
 pub mod catalogue;
 pub mod images;
 pub mod jobs;
