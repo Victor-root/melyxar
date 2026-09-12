@@ -22,12 +22,14 @@ Légende : à faire, en cours, terminé.
   - **personnes et participations** (acteur, réalisateur, scénariste, personnage, ordre) ;
   - **collections** avec origine automatique ou manuelle, **étiquettes**, **listes de lecture** ;
   - **chapitres** et **segments repérés** (récapitulatif, générique de début, générique de fin) ;
-  - **journal d'activité**, indexé par date et purgeable.
+  - **journal d'activité**, indexé par date et purgeable ;
+  - **appareils connectés** avec leur jeton et leur dernière activité.
 - Répertoire des fichiers envoyés par l'administrateur, dans les données et non dans le cache.
 - Journalisation structurée avec temps par requête, censure des noms de médias.
 - Commande `melyxar doctor` : version de FFmpeg et accélérations, accès à `/dev/dri`, permissions sur chaque racine, mode WAL, tailles.
 - **Script shell d'installation et de mise à jour**, aux conventions du dépôt `Proxmox-Tools` du mainteneur (bilingue intégré, couleurs 256 niveaux désactivables, bannière, indicateur animé, encadrés, menu numéroté, sauvegarde avant modification, aucune dépendance) : vérification du système, outils, utilisateur système et répertoires, récupération et compilation en priorité basse, configuration, service, migrations, redémarrage, adresse à ouvrir. Sert aussi à la mise à jour et à la désinstallation.
-- Unité systemd.
+- Unité systemd. Entrées de menu pour la mise à jour, la sauvegarde, la restauration (arrêt, remplacement, vérification, redémarrage) et la désinstallation.
+- Tests en place dès le départ : unitaires sur la logique pure, intégration sur base temporaire.
 - Résultat visible : le service démarre, `ip:2100/api/v1/system/info` répond, `melyxar doctor` affiche un diagnostic lisible.
 
 ## Jalon 1 : scan et analyse
@@ -39,7 +41,8 @@ Légende : à faire, en cours, terminé.
 - Analyse ffprobe de chaque fichier. Champs stockés par piste, correspondant à ce que la fiche doit afficher : pour la vidéo, codec, profil, niveau, résolution, ratio, entrelacement, images par seconde, débit, plage dynamique, couleurs primaires, espace colorimétrique, courbe de transfert, profondeur des échantillons, format des pixels, images de référence ; pour l'audio, langue, codec, disposition et nombre de canaux, taux d'échantillonnage, profondeur, débit, piste par défaut ; pour les sous-titres, langue, codec, par défaut, forcée, malentendants, interne ou externe. Les champs de couleur commandent la décision de conversion en SDR, ce ne sont pas des informations d'affichage.
 - Détection des bandes annonces locales à côté des films.
 - Analyse des noms de fichiers (titre, année) : fichiers posés à plat sans dossier par film, découpage sur la dernière année plausible, tout ce qui suit écarté du titre, soulignement traité comme séparateur, casse et accents normalisés. Jeu de tests écrit avec des titres inventés couvrant chaque forme, jamais des noms réels.
-- Tâches de fond avec parallélisme borné, priorité basse, annulation.
+- Tâches de fond avec parallélisme borné, priorité basse, annulation. **L'identification est une étape séparée du scan**, rejouable seule sur un sous-ensemble.
+- Lecture des fichiers d'accompagnement existants, en option et désactivée par défaut. Rien n'est jamais écrit dans les dossiers de médias.
 - Résultat visible : après un scan de la bibliothèque de test (environ 50 films), la base contient les œuvres, sources et pistes ; le journal montre le déroulement sans nom complet de fichier.
 
 ## Jalon 2 : métadonnées et images
@@ -51,6 +54,7 @@ Légende : à faire, en cours, terminé.
 - Personnes (acteurs, réalisateurs) avec photos, collections officielles, films similaires, classification d'âge.
 - Textes stockés par langue, français prioritaire et repli anglais.
 - Correction manuelle de l'identification depuis l'interface : recherche par titre et année, saisie directe d'un identifiant, choix parmi les propositions illustrées.
+- Fichiers sans correspondance visibles dans la bibliothèque avec le repère « à identifier », plus une liste dédiée côté administration. Fournisseur injoignable : le scan continue, réessais espacés.
 - Téléchargement des affiches, fonds et images de titre, génération des tailles fixes en WebP, couleur dominante, URL avec empreinte.
 - Résultat visible : les œuvres ont titre, année, synopsis et affiches dans la base et le cache, et un film mal identifié se corrige en quelques clics.
 
@@ -69,6 +73,7 @@ Légende : à faire, en cours, terminé.
 - Route publique d'identité visuelle (nom et logo), sans authentification et sans divulgation.
 - Erreurs renvoyées sous forme de code et de données, jamais de phrase toute faite.
 - Spécification OpenAPI générée, client TypeScript généré.
+- **Flux temps réel** : un canal permanent par client connecté, transportant des événements typés et légers. Posé maintenant, utilisé ensuite par les tâches, les sessions et la maintenance.
 - Interface React : grille virtualisée, fiche, cache des réponses, images adaptées. Disposition inspirée d'Emby pour l'accueil et la fiche.
 - **Jetons de thème et internationalisation dès le premier composant** : aucune couleur ni chaîne en dur.
 - Page d'accueil : bannière en haut, reprendre la lecture, récemment ajouté par bibliothèque, suggestions. Sections réordonnables et masquables par l'utilisateur.
@@ -142,6 +147,7 @@ Légende : à faire, en cours, terminé.
 - Suppression d'une œuvre, avec case décochée par défaut pour effacer aussi le fichier du disque, réservée à l'administrateur, chemin résolu côté serveur et vérifié sous une racine déclarée, entrée au journal d'activité.
 - Assistant de première configuration : langue, compte administrateur, bibliothèques ajoutées en parcourant l'arborescence du serveur, langue des métadonnées et clé du fournisseur, mode d'accès, premier scan. S'ouvre tant que la configuration initiale n'est pas terminée et saute ce que le script d'installation a déjà réglé.
 - Écran de choix d'utilisateur avec avatars, désactivable.
+- Liste des appareils connectés avec leur dernière activité et révocation individuelle.
 - Statistiques personnelles : temps de visionnage, films vus sur une période, genres préférés.
 - Notification d'une version plus récente publiée sur GitHub, sans mise à jour automatique, vérification désactivable.
 - Sauvegarde automatique quotidienne de la base et des fichiers envoyés, quelques copies conservées.
@@ -163,6 +169,8 @@ Légende : à faire, en cours, terminé.
 - Normalisation audio : mesure de sonie au scan, application au gain à la lecture, modes morceau et album, compression de plage dynamique pour les films.
 - Plusieurs utilisateurs avec écran de connexion complet et gestion des droits.
 - Clients natifs : un projet Android, base commune (API, session, cache, lecteur), interface télévision d'abord, interface téléphone ensuite.
+- Émissions : type de bibliothèque à part entière (documentaires et programmes de télévision), réutilisant le modèle série, saison, épisode.
+- Import ponctuel de l'historique de visionnage et des favoris depuis une installation Jellyfin existante.
 - Recherche et téléchargement de sous-titres en ligne, sur demande explicite.
 - Contrôle à distance d'une session de lecture depuis un autre appareil, sans priorité.
 - Interface ambitieuse, surveillance des dossiers en temps réel.

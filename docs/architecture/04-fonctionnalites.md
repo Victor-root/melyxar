@@ -519,3 +519,55 @@ Le mainteneur juge qu'Emby **sous-emploie** sa couleur d'accentuation : l'interf
 **Où elle reste absente :** le texte courant, les grandes surfaces de fond, les bordures ordinaires des cartes, et les libellés d'information. Ces éléments restent neutres, et c'est ce qui donne sa force à la couleur partout ailleurs.
 
 **Conséquence sur le thème.** Cette liste devient un ensemble de rôles nommés dans les jetons de thème, pas une suite de valeurs recopiées. Quand un utilisateur change la couleur d'accentuation, tous ces éléments suivent ensemble, et la vérification automatique du contraste s'applique à chacun.
+
+## 31. Décisions de structure restantes
+
+Tous les points ci-dessous sont validés. Ils ferment la phase de conception sur papier.
+
+### Flux temps réel
+
+**Un seul flux permanent par client connecté**, ouvert à l'arrivée sur l'interface et refermé au départ, transportant des événements typés. Tout ce qui doit remonter du serveur passe par là : bibliothèque modifiée après un scan, progression et fin des tâches de fond, état des sessions de lecture, entrée et sortie du mode maintenance, et plus tard les commandes de contrôle à distance.
+
+**Pourquoi le décider maintenant.** Commencer par interroger le serveur en boucle puis ajouter un flux ensuite oblige à réécrire toute la couche de données du client. Posé dès le début, le coût est négligeable. Le flux est un simple canal descendant, pas un second chemin d'écriture : le client continue d'agir par les routes ordinaires, et le flux ne sert qu'à apprendre ce qui a changé. Il transporte des événements légers, jamais des données complètes : à réception, le client sait quoi rafraîchir et le demande normalement.
+
+### Rien à côté des médias
+
+Jellyfin et Emby peuvent écrire un fichier de métadonnées à côté de chaque film, mais ils ne le font pas par défaut et l'installation du mainteneur n'en contient aucun : tout est dans leur propre base, sur le disque système. **Melyxar fait pareil, et de façon stricte : rien n'est jamais écrit à côté des médias.** Toutes les métadonnées, images, vignettes et données de lecture vivent dans les répertoires du serveur, sur le disque rapide.
+
+Deux bénéfices concrets : les disques de médias peuvent rester montés en lecture seule, ce qui supprime une classe entière d'accidents ; et la sauvegarde du serveur suffit à tout restaurer, sans dépendre de l'état des disques de stockage.
+
+**Lecture des fichiers d'accompagnement.** S'ils existent, par exemple pour quelqu'un migrant depuis une installation qui en produisait, Melyxar sait les lire pour éviter une réidentification complète. C'est un réglage, désactivé par défaut. L'écriture, elle, n'est pas prévue : elle exigerait le droit d'écriture sur les disques de médias.
+
+### Reprise depuis une installation existante
+
+Import ponctuel de l'historique de visionnage et des favoris depuis une base Jellyfin, **après la V0.1**. Le modèle actuel l'accueille sans modification : il s'agit de faire correspondre les identifiants externes déjà stockés puis d'écrire des lignes de progression. Rien à prévoir de plus aujourd'hui.
+
+### Fichiers non identifiés
+
+Un fichier sans correspondance **reste visible dans la bibliothèque**, avec son nom de fichier nettoyé comme titre et un repère explicite « à identifier ». Il apparaît en plus dans une liste dédiée côté administration, d'où la correction manuelle se fait en série. Un fichier mis de côté invisible est un fichier oublié, c'est le comportement à éviter.
+
+### Fournisseur de métadonnées injoignable
+
+Le scan **ne s'arrête jamais** parce qu'un service externe ne répond pas. Les fichiers sont enregistrés, analysés, et marqués en attente d'identification. Une tâche de fond réessaie plus tard, avec des intervalles croissants. C'est une décision de structure des tâches, pas un détail de robustesse : elle impose que l'identification soit une étape séparée du scan, pouvant être rejouée seule sur un sous-ensemble.
+
+### Sessions et appareils
+
+**Un jeton par appareil, de longue durée**, révocable individuellement. L'administration affiche la liste des appareils connectés avec leur dernière activité, et permet de couper l'accès de l'un d'eux sans toucher aux autres. C'est le compromis adapté à un serveur domestique : pas de reconnexion permanente sur la télévision, et une reprise de contrôle possible si un appareil est perdu. Le code à quatre chiffres évoqué plus haut ne crée jamais un accès, il déverrouille un appareil déjà autorisé.
+
+### Tests automatiques
+
+Le mainteneur compile et essaie lui-même, mais certaines erreurs ne se voient pas à l'œil. Trois niveaux :
+
+- **Tests unitaires sur la logique pure** : décision de lecture, analyse des noms de fichiers, construction des commandes, calcul des palettes de couleur. Rapides, sans base ni processus externe.
+- **Tests d'intégration sur une base temporaire** : migrations, scan incrémental, compteurs agrégés, pagination.
+- **Tests de la chaîne de lecture sur des fichiers générés à la volée**, produits par l'outil de traitement lui-même dans les conteneurs et codecs voulus. Aucun contenu réel n'est nécessaire, et les cas difficiles (audio non lisible par le navigateur, conteneur à remuxer, source à plage dynamique étendue) se fabriquent à la demande.
+
+### Restauration
+
+La sauvegarde automatique était décidée, la remise en place ne l'était pas. Elle se fait par une entrée du menu du script d'installation : arrêt du service, remplacement de la base et des fichiers envoyés, vérification, redémarrage. Le script liste les sauvegardes disponibles avec leur date.
+
+### Le type de bibliothèque « Émissions »
+
+Il regroupe des documentaires et des programmes de télévision. Ces contenus sont organisés en épisodes et en saisons exactement comme des séries, et les bases de métadonnées les traitent d'ailleurs comme telles. **C'est donc un type de bibliothèque à part entière, qui réutilise le modèle série, saison et épisode et le même fournisseur.** Il est distinct pour que la navigation le soit : on ne mélange pas ses documentaires et ses séries de fiction dans la même grille.
+
+Le cas particulier à connaître : un documentaire unique, sans épisodes, est du point de vue des bases de métadonnées un film. S'il est rangé dans cette bibliothèque, il sera traité comme un programme à épisode unique. Si le mainteneur préfère les voir avec ses films, il suffit de les ranger dans la bibliothèque des films : la décision se fait au rangement, pas dans le code.
