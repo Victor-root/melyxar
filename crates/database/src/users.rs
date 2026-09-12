@@ -266,8 +266,23 @@ mod tests {
 
     #[tokio::test]
     async fn a_fresh_server_has_no_account_yet() {
+        // This count is what decides whether the setup wizard still has to
+        // run: an answer that never moves either locks the server behind a
+        // wizard for ever or hands it over without ever asking for a password.
         let database = database().await;
         assert_eq!(database.user_count().await.expect("counted"), 0);
+
+        database
+            .create_user("victor", None, &Permissions::administrator())
+            .await
+            .expect("account created");
+        assert_eq!(database.user_count().await.expect("counted"), 1);
+
+        database
+            .create_user("someone", None, &Permissions::viewer())
+            .await
+            .expect("account created");
+        assert_eq!(database.user_count().await.expect("counted"), 2);
     }
 
     #[tokio::test]
