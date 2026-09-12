@@ -200,3 +200,100 @@ Résumé des décisions à intégrer **avant la première migration**, parce qu'
 - **Nouveau jalon 8** : personnalisation et administration (thème, couleur d'accentuation, CSS personnalisé, identité visuelle, page de connexion, mode maintenance).
 - **Nouveau jalon 9** : accès et chiffrement, avec les quatre options.
 - **Après la V0.1** : séries et compteurs visibles, bibliothèque musicale et normalisation, clients Android TV puis Android.
+
+## 12. Utilisateurs, droits et confidentialité
+
+Décisions validées.
+
+- Plusieurs comptes, chacun avec sa progression, ses favoris et ses préférences.
+- **Droits par utilisateur** : accès autorisé bibliothèque par bibliothèque, limite de classification d'âge, autorisation de télécharger, autorisation de supprimer, nombre de lectures simultanées.
+- Connexion par mot de passe sur le web. **Code à quatre chiffres en option** pour les clients télévision, où taper un mot de passe à la télécommande est pénible. Le code est une commodité, pas une sécurité équivalente : il est propre à un appareil déjà autorisé une première fois par mot de passe, jamais un remplacement du mot de passe sur le web.
+- **Journal d'activité** visible par l'administrateur : qui a regardé quoi et quand, connexions, actions d'administration. Effacement automatique après une durée configurable.
+- **Détail des sessions en cours** : utilisateur, appareil et client, œuvre lue, position, décision de lecture et ses raisons, débit, en cas de transcodage la vitesse d'encodage et le matériel utilisé.
+
+**Ce que cela implique.** Une table de droits par utilisateur et une table de journal d'activité. Le journal grossit vite : il est indexé par date, purgé automatiquement, et jamais lu sur le chemin chaud. Les sessions en cours vivent en mémoire et sont diffusées au tableau de bord par le flux d'événements, elles ne s'écrivent pas en base à chaque seconde.
+
+**Quand.** Le modèle au jalon 0, l'application des droits au jalon 8, le journal et les sessions au jalon 7.
+
+## 13. Personnes, collections, étiquettes et listes
+
+Décisions validées.
+
+- **Fiche complète** comme chez Emby : affiche, image de fond, titre, année, durée, classification, notes, synopsis, genres, réalisateur, acteurs avec photos, studios, bande annonce, versions disponibles, pistes audio et sous-titres, lecture ou reprise, favori, vu ou non vu, films similaires.
+- **Acteurs et réalisateurs cliquables**, menant à leur filmographie dans la bibliothèque.
+- **Sagas** : une section dédiée dans la navigation, listant les coffrets, chacun ouvrable pour voir ses films.
+- **Étiquettes libres** et **listes de lecture personnelles**.
+
+**Ce que cela implique.** Trois groupes de tables nouvelles, toutes à créer dès la première migration parce qu'elles s'insèrent dans des requêtes de navigation qu'il serait pénible de reprendre ensuite.
+
+- **Personnes** : une table des personnes (nom, photo, identifiants externes) et une table de participation qui relie une personne à une œuvre avec son rôle (acteur, réalisateur, scénariste), le nom du personnage joué et l'ordre d'affichage. Une même personne ne doit exister qu'une fois, quelle que soit le nombre de films où elle apparaît, sinon la filmographie devient impossible.
+- **Collections** : une table de collections et une table de liaison. Les collections viennent de deux sources : celles que TMDb connaît (une saga officielle) et celles créées à la main. Les deux cohabitent dans la même table avec une origine indiquée, sinon un rafraîchissement des métadonnées effacerait les collections manuelles.
+- **Étiquettes et listes de lecture** : une table chacune plus une liaison. Les listes de lecture sont ordonnées et appartiennent à un utilisateur ; les étiquettes sont partagées.
+
+**Quand.** Modèle au jalon 0, affichage au jalon 3.
+
+## 14. Vignettes de chapitres et aperçu de la barre de lecture
+
+Décision validée, avec un point technique important.
+
+Le mainteneur veut des vignettes de chapitres, et surtout que **les vignettes tirées d'un film HDR ne soient pas délavées**.
+
+**Le piège, et il est réel.** Extraire une image d'un film HDR sans traitement donne une image terne, grisâtre et désaturée. Ce n'est pas un défaut de qualité, c'est que les couleurs d'un fichier HDR sont codées pour un écran capable de les restituer ; lues telles quelles comme une image ordinaire, elles paraissent lavées. Beaucoup de serveurs multimédias ont ce défaut et leurs vignettes de films HDR sont laides. **La correction est la même opération que pour la lecture : convertir en SDR au moment de générer la vignette.** C'est donc une règle par défaut, pas une option : toute image extraite d'un fichier (vignette de chapitre, aperçu de la barre de lecture, aperçu au survol) passe par la conversion si la source est en HDR. Un réglage permettra malgré tout de désactiver la conversion pour ceux qui la veulent brute.
+
+**Deux choses différentes**, à ne pas confondre :
+
+- **Les vignettes de chapitres** : une image par chapitre, peu nombreuses, affichées dans la fiche ou dans un menu. Faible coût, faible encombrement.
+- **L'aperçu de la barre de lecture** : la vignette qui apparaît quand on survole la barre de progression. Elle demande une image toutes les cinq ou dix secondes, soit des centaines par film. Stockées séparément, elles feraient des centaines de milliers de petits fichiers ; elles sont donc regroupées en planches (une grande image contenant une grille de vignettes), ce que font Plex, Emby et Jellyfin. Le coût en disque est réel et doit être annoncé : compter quelques mégaoctets par film, donc plusieurs gigaoctets pour une grande bibliothèque. L'intervalle et la résolution sont configurables, et la génération est activable par bibliothèque.
+
+Dans les deux cas, la génération est une tâche de fond, avec priorité basse et accélération matérielle quand elle est disponible.
+
+**Quand.** Vignettes de chapitres et aperçu de barre après le jalon 6, pour profiter de l'accélération matérielle. Les tables et les chemins de stockage sont prévus dès le jalon 0.
+
+## 15. Confort de lecture
+
+Décisions validées.
+
+- **Reprise directe** à la position enregistrée, avec un bouton distinct pour repartir du début.
+- **Mémoire des langues** : une préférence de langue par utilisateur pour l'audio et les sous-titres, plus une mémoire par série qui prime dessus.
+- **Apparence des sous-titres réglable** : taille, couleur, contour, fond, position.
+- **Enchaînement automatique de l'épisode suivant**.
+- **Saut d'intro et de générique**, signalé comme très important.
+- **Vitesse de lecture**, **image dans l'image** signalée comme très importante, **raccourcis clavier**.
+
+**Ce que cela implique.**
+
+- L'image dans l'image et la vitesse de lecture sont des fonctions natives du navigateur, disponibles aussi bien en lecture directe qu'en flux HLS. Peu de travail, à condition que le lecteur soit écrit comme un module isolé possédant l'élément vidéo, ce qui est déjà la règle.
+- **Le saut d'intro demande un vrai travail.** Aucune métadonnée publique ne dit où commence un générique. Trois sources possibles, à combiner : les chapitres présents dans le fichier quand ils existent et portent un nom explicite ; une détection automatique qui compare les empreintes sonores des épisodes d'une même saison pour trouver le passage commun, ce qui est la méthode utilisée par l'extension correspondante de Jellyfin ; et la correction manuelle. C'est une analyse de fond coûteuse, à l'échelle d'une saison entière, mais elle ne se fait qu'une fois.
+- Le modèle doit donc prévoir des **segments repérés** dans une source média : début et fin, avec un type (récapitulatif, générique de début, générique de fin, publicité). Le même mécanisme sert au bouton « épisode suivant » qui apparaît pendant le générique de fin. Cette table est à créer dès le départ même si elle ne se remplit qu'avec les séries.
+
+**Quand.** Reprise, langues, vitesse, image dans l'image et raccourcis au jalon 4. Apparence des sous-titres au jalon 5. Enchaînement et saut d'intro avec les séries, après la V0.1 ; la table des segments dès le jalon 0.
+
+## 16. Correction et gestion des médias
+
+Décisions validées.
+
+- **Correction d'identification depuis l'interface** : rechercher le bon film chez le fournisseur, voir les propositions avec affiche et année, en choisir une, et la fiche se met à jour. Le mainteneur souligne que cette fonction marche bien chez Emby et Jellyfin et qu'il faut s'en inspirer.
+- **Modification manuelle d'une fiche** avec verrouillage des champs modifiés, qu'un rafraîchissement n'écrase jamais.
+- **Suppression depuis l'interface**, avec une **case à cocher pour supprimer aussi le fichier du disque**, cette case étant réservée à l'administrateur.
+- **Téléchargement d'un fichier** pour un visionnage hors ligne, soumis à une autorisation par utilisateur.
+
+**Ce que cela implique.**
+
+- La recherche manuelle demande une route qui interroge le fournisseur avec un texte libre et une année facultative, et une route qui applique la correspondance choisie. Elle doit aussi permettre de saisir directement un identifiant TMDb ou IMDb, ce qui est souvent le plus rapide quand le titre est ambigu.
+- **La suppression du fichier sur le disque est l'opération la plus dangereuse de tout le projet.** Règles sans exception : jamais de chemin venant du client, seulement un identifiant interne que le serveur résout lui-même ; vérification que le chemin résolu est bien sous une racine déclarée ; case décochée par défaut et texte explicite disant ce qui sera effacé ; réservée à un administrateur disposant du droit correspondant ; et une entrée dans le journal d'activité. Une suppression seulement en base, sans toucher au disque, reste l'option par défaut.
+- **Point pratique sur les permissions du LXC.** Vos dossiers médias appartiennent à l'utilisateur et au groupe `jellyfin` avec les droits d'écriture pour le groupe. Pour que Melyxar puisse effacer un fichier, son utilisateur système devra appartenir à ce groupe. Tant que ce n'est pas fait, la lecture fonctionnera parfaitement mais la suppression sur disque échouera. À traiter au moment où la fonction sera activée, pas avant.
+- Le téléchargement sert le fichier d'origine avec le droit correspondant vérifié. Il ne doit pas passer par le chemin de transcodage.
+
+**Quand.** Correction d'identification au jalon 2. Modification manuelle au jalon 3. Suppression et téléchargement au jalon 8, avec les droits.
+
+## 17. Sauvegarde
+
+Décision validée : sauvegarde automatique de la base, quotidienne, avec quelques copies conservées. La base étant un simple fichier, la sauvegarde se fait avec le mécanisme prévu par SQLite, qui produit une copie cohérente pendant que le serveur tourne. Les fichiers envoyés par l'administrateur (logo, fonds) sont inclus. Le cache d'images et les transcodages ne le sont pas, ils se régénèrent.
+
+**Quand.** Jalon 8.
+
+## 18. Hors périmètre
+
+Exclus définitivement : télévision en direct, enregistrement, extensions tierces, gestion de téléchargements automatiques.
+
+**Trakt** reste une question ouverte. C'est un service en ligne qui tient l'historique de tout ce qu'une personne regarde, quelle que soit l'application utilisée. Marquer un film comme vu dans Melyxar le ferait apparaître sur le profil Trakt, et une autre application saurait qu'il est vu. Cela sert à ceux qui utilisent plusieurs applications, qui veulent des statistiques annuelles ou qui suivent des listes publiques. En contrepartie, cela demande un compte chez un tiers et cela envoie l'historique de visionnage à ce tiers. Ce n'est pas structurant : la synchronisation se brancherait plus tard sur les événements de progression déjà prévus. Décision reportée, sans conséquence sur les fondations.
