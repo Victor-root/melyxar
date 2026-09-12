@@ -599,6 +599,104 @@ mod tests {
         }
     }
 
+    /// A work as it comes out of a file name, without going near a database:
+    /// the rule that picks a film among several answers is pure, and testing
+    /// it through a provider hides which of its clauses actually decided.
+    fn work_named(title: &str, year: Option<i32>) -> Work {
+        Work {
+            id: WorkId::new(),
+            library_id: LibraryId::new(),
+            parent_id: None,
+            kind: WorkKind::Movie,
+            sort_title: naming::sort_title(title),
+            title: title.to_string(),
+            release_year: year,
+            runtime: None,
+            community_rating: None,
+            age_rating_label: None,
+            identification: IdentificationState::Pending,
+            dominant_color: None,
+            added_at: melyxar_core::time::now(),
+            updated_at: melyxar_core::time::now(),
+        }
+    }
+
+    #[test]
+    fn the_title_and_the_year_together_beat_either_on_its_own() {
+        let wanted = work_named("Quiet Harbour", Some(2019));
+        let offered = vec![
+            candidate("1", "Quiet Harbour", Some(1978)),
+            candidate("2", "Amber Field", Some(2019)),
+            candidate("3", "Quiet Harbour", Some(2019)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "3"
+        );
+    }
+
+    #[test]
+    fn a_title_that_matches_beats_a_year_that_matches() {
+        let wanted = work_named("Quiet Harbour", Some(2019));
+        let offered = vec![
+            candidate("1", "Amber Field", Some(2019)),
+            candidate("2", "Quiet Harbour", Some(1978)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "2",
+            "a remake is still the film someone named, a different film is not"
+        );
+    }
+
+    #[test]
+    fn the_year_decides_when_no_title_matches() {
+        let wanted = work_named("Quiet Harbour", Some(2019));
+        let offered = vec![
+            candidate("1", "Something Invented", Some(1978)),
+            candidate("2", "Something Else", Some(2019)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "2"
+        );
+    }
+
+    #[test]
+    fn a_file_named_after_the_original_title_still_finds_its_film() {
+        // A copy named in the language it was shot in, offered under its
+        // French title. Without this clause the name would match nothing.
+        let wanted = work_named("Quiet Harbour", Some(2019));
+        let offered = vec![
+            candidate("1", "Un Autre Film", Some(2019)),
+            MovieCandidate {
+                original_title: Some("Quiet Harbour".to_string()),
+                ..candidate("2", "Port Tranquille", Some(2019))
+            },
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "2"
+        );
+    }
+
+    #[test]
+    fn with_nothing_to_go_on_the_first_answer_is_all_there_is() {
+        let wanted = work_named("Something Invented", None);
+        let offered = vec![
+            candidate("1", "Amber Field", Some(2020)),
+            candidate("2", "Winter Signal", Some(2021)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "1"
+        );
+        assert!(
+            choose(&[], &wanted).is_none(),
+            "nothing offered is nothing chosen, not the first of nothing"
+        );
+    }
+
     fn details(id: &str, title: &str, year: Option<i32>) -> MovieDetails {
         MovieDetails {
             external_id: id.to_string(),
@@ -1207,6 +1305,21 @@ mod tests {
         )
         .serving(picture);
 
+        // The count is what the log reports, so it is worth an answer of its
+        // own: one picture prepared the first time, none the second, since the
+        // poster has not changed.
+        let details = details("111", "Quiet Harbour", Some(2019));
+        assert_eq!(
+            crate::images::store_provider_images(&state, &provider, work.id, &details).await,
+            1,
+            "the film has a poster and no backdrop, so one picture is prepared"
+        );
+        assert_eq!(
+            crate::images::store_provider_images(&state, &provider, work.id, &details).await,
+            0,
+            "a picture already here is not prepared a second time"
+        );
+
         run(&state, &provider, &library).await;
 
         let images = state
@@ -1478,9 +1591,22 @@ mod tests {
         let job = start_identification(&state, provider, library)
             .await
             .expect("job started");
+        // The identifier is what an activity page follows the run by, so it
+        // has to name a row that is really there.
+        let followed = job.id();
         let (job_state, report) = job.wait().await;
 
         assert_eq!(job_state, JobState::Succeeded);
         assert_eq!(report.expect("a finished run has a report").identified, 1);
+        assert_eq!(
+            state
+                .database()
+                .job(followed)
+                .await
+                .expect("read")
+                .expect("the run was written down before it started")
+                .state,
+            JobState::Succeeded
+        );
     }
 }
