@@ -9,6 +9,7 @@ Ce dossier est la mémoire du projet. Il contient les revues d'architecture réa
 | [01-revue-architecture.md](01-revue-architecture.md) | Revue complète des choix techniques (Rust, Axum, base de données, SQLx, FFmpeg, HLS, hls.js, React, monolithe modulaire), architecture révisée en crates, modèle de données, moteur de lecture, abstractions à figer, erreurs classiques, sujets à ne pas oublier, V0.1 révisée. |
 | [02-reactivite.md](02-reactivite.md) | Exigence de navigation quasi instantanée jusqu'à 100 000 médias : analyse Jellyfin contre Emby, principe chemin chaud / chemin froid, stratégie serveur et client, isolation des tâches de fond, ce qui est à faire dès le début ou prématuré, mesure et détection des régressions, outils de diagnostic. |
 | [03-plan.md](03-plan.md) | Plan par jalons de la V0.1 et état d'avancement. |
+| [04-fonctionnalites.md](04-fonctionnalites.md) | Ce que Melyxar doit savoir faire, demande par demande, avec les conséquences sur l'architecture. Se remplit au fil des discussions. |
 
 Le fichier `CLAUDE.md` à la racine du dépôt résume les règles pour chaque session de travail.
 
@@ -26,6 +27,15 @@ Ces décisions ont été prises après discussion et ne sont pas à rediscuter s
 | Client web | React, TypeScript, Vite, hls.js, client TypeScript généré depuis la spécification OpenAPI | Écosystème d'interface le plus riche ; le frontend ne connaît que l'API. |
 | Structure | Monolithe modulaire, workspace Cargo, direction unique des dépendances | Frontières imposées par le compilateur. |
 | Modèle de données | Œuvre, source média et piste sont trois entités distinctes ; identifiants internes UUID v7 ; identifiants externes dans une table à part ; chemins relatifs à une racine ; millisecondes et UTC partout | Remplacer un fichier ne doit jamais effacer l'historique. |
+| Modèle multi-domaines | La bibliothèque a un type explicite (films, séries, musique) ; le tronc commun (source, piste, progression, favoris, images) est séparé des métadonnées propres à chaque domaine | La musique est prévue à terme ; un schéma qui suppose « un film » imposerait une refonte. |
+| Sonie audio | Colonnes EBU R128 sur les pistes audio dès la première migration, mesurées au scan, appliquées au gain à la lecture | Sans la colonne, toute la bibliothèque devrait être réanalysée plus tard. |
+| Progression | État explicite (non commencé, en cours, vu), date de lecture, marquage manuel prioritaire, position horodatée jamais écrasée par une plus ancienne, copie locale côté client | Déduire « vu » d'un pourcentage empêche le marquage manuel ; sans horodatage, la reprise peut reculer. |
+| Compteurs | Nombre d'épisodes et d'épisodes non vus stockés par utilisateur et par saison ou série, mis à jour à l'écriture | Les compter à la lecture ruine la réactivité. |
+| Personnalisation | Paramètres du serveur (nom, logo, fonds, CSS global) et préférences utilisateur (thème, couleur, langue, volume, CSS personnel) dans des tables dédiées ; fichiers envoyés dans les données ; route publique d'identité visuelle sans divulgation | La page de connexion doit afficher le logo avant toute authentification. |
+| Thème | Aucune couleur, aucun espacement, aucun rayon en dur dans le frontend : tout par jetons. Modes clair, sombre et automatique. CSS personnalisé désactivable avec adresse de secours | Ajouter un thème après coup oblige à repasser sur chaque composant ; un CSS cassé ne doit jamais bloquer l'accès. |
+| Erreurs de l'API | Code d'erreur et données structurées, jamais de phrase toute faite | Sans cela, les clients ne peuvent pas traduire les messages. |
+| Chiffrement | Le serveur sait servir en HTTPS lui-même ; quatre options proposées (reverse proxy, auto-signé, certificat fourni, certificat reconnu par nom de domaine) avec leurs limites annoncées honnêtement | Un certificat auto-signé ne supprime pas l'avertissement du navigateur ; le promettre serait mentir. |
+| Clients natifs | Un seul projet Android, base commune (API, session, cache, lecteur), interfaces séparées, télévision d'abord | Deux applications distinctes coûtent cher en doublons ; une interface unique est médiocre partout. |
 | Utilisateurs | Un utilisateur par défaut et un jeton de session dès la V0.1 | Toute donnée de progression est rattachée à un utilisateur dès le départ. |
 | Réactivité | Rien de lourd sur le chemin de lecture : tout est précalculé à l'écriture | Exigence forte, voir le document 02. |
 | Compilation | **Directement dans le LXC de production**, via une commande unique de mise à jour (récupérer, compiler en priorité basse, migrer, redémarrer) | Les PC du mainteneur sont sous Windows ; aucun transfert de fichier. |
