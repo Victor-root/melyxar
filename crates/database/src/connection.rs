@@ -220,6 +220,22 @@ mod tests {
             "wal",
             "readers must never wait on the writer"
         );
+
+        // The diagnostic screen shows this number, and a number that says a
+        // migrated database weighs nothing helps nobody. It counts the pages
+        // the database holds rather than the bytes of the one file, since in
+        // this journal mode the newest pages are still in the journal.
+        let size = database.size_bytes().await.expect("size readable");
+        assert!(
+            size >= 16_384,
+            "a database carrying every table is bigger than that: {size}"
+        );
+
+        database.close().await;
+        assert!(
+            database.journal_mode().await.is_err(),
+            "a closed database refuses work rather than answering from a pool nobody stopped"
+        );
     }
 
     #[tokio::test]
