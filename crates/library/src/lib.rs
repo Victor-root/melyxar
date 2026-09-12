@@ -13,6 +13,7 @@
 pub mod access;
 pub mod naming;
 pub mod scan;
+pub mod sidecar;
 
 pub use access::check as check_root_access;
 pub use naming::{parse as parse_file_name, sort_title, ParsedName};

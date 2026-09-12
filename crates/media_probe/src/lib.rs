@@ -14,8 +14,8 @@
 
 use melyxar_core::id::{MediaSourceId, TrackId};
 use melyxar_core::media::{
-    AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, SubtitleDetails, SubtitleLayout, Track,
-    TrackKind, VideoDetails,
+    normalise_language, AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, SubtitleDetails,
+    SubtitleLayout, Track, TrackKind, VideoDetails,
 };
 use melyxar_core::time::Millis;
 use melyxar_ffmpeg::probe::{parse_rational, ProbeChapter, ProbeReport, ProbeStream};
@@ -240,38 +240,6 @@ pub fn subtitle_layout(codec: &str) -> SubtitleLayout {
             SubtitleLayout::Text
         }
         _ => SubtitleLayout::Bitmap,
-    }
-}
-
-/// Normalises a language tag to its three letter lowercase form where we can.
-///
-/// Containers disagree wildly here, and a track whose language is not
-/// recognised is a track a viewer cannot find in the picker.
-fn normalise_language(value: &str) -> String {
-    let lowered = value.trim().to_lowercase();
-    let base = lowered
-        .split(['-', '_'])
-        .next()
-        .unwrap_or(&lowered)
-        .to_string();
-    match base.as_str() {
-        "fr" => "fre".to_string(),
-        "en" => "eng".to_string(),
-        "de" => "ger".to_string(),
-        "es" => "spa".to_string(),
-        "it" => "ita".to_string(),
-        "ja" => "jpn".to_string(),
-        "nl" => "dut".to_string(),
-        "pt" => "por".to_string(),
-        "ru" => "rus".to_string(),
-        "zh" => "chi".to_string(),
-        // Both three letter codes exist for French; keep one of them so a
-        // picker never shows the same language twice.
-        "fra" => "fre".to_string(),
-        "deu" => "ger".to_string(),
-        "nld" => "dut".to_string(),
-        "zho" => "chi".to_string(),
-        other => other.to_string(),
     }
 }
 

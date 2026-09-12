@@ -261,7 +261,9 @@ impl Database {
         .bind(id.to_db_string())
         .execute(&mut *transaction)
         .await?;
-        sqlx::query("DELETE FROM tracks WHERE source_id = ?")
+        // The streams inside the file go, since they described a copy that is
+        // gone. A subtitle in its own file describes itself and stays.
+        sqlx::query("DELETE FROM tracks WHERE source_id = ? AND is_external = 0")
             .bind(id.to_db_string())
             .execute(&mut *transaction)
             .await?;
@@ -319,7 +321,9 @@ impl Database {
         .execute(&mut *transaction)
         .await?;
 
-        sqlx::query("DELETE FROM tracks WHERE source_id = ?")
+        // An analysis owns the streams inside the file and nothing else: the
+        // subtitles that live in their own files are not its to replace.
+        sqlx::query("DELETE FROM tracks WHERE source_id = ? AND is_external = 0")
             .bind(source_id.to_db_string())
             .execute(&mut *transaction)
             .await?;
@@ -351,6 +355,51 @@ impl Database {
             .await?;
         }
 
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// Files of one root that already carry a subtitle of their own.
+    ///
+    /// A scan asks for this so that it only rewrites what actually changed:
+    /// without it, either a removed subtitle would linger for ever or every
+    /// file in the library would be written to on every scan.
+    pub async fn sources_with_external_subtitles(
+        &self,
+        root_id: LibraryRootId,
+    ) -> Result<Vec<MediaSourceId>> {
+        let rows = sqlx::query(
+            "SELECT DISTINCT tracks.source_id FROM tracks
+             JOIN media_sources ON media_sources.id = tracks.source_id
+             WHERE media_sources.root_id = ? AND tracks.is_external = 1",
+        )
+        .bind(root_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| parse_id(&row.try_get::<String, _>("source_id")?))
+            .collect()
+    }
+
+    /// Replaces the subtitles that live in their own files next to a source.
+    ///
+    /// Kept apart from the analysis, which owns the streams inside the file:
+    /// each writes what it knows about and leaves the rest alone, so a scan
+    /// and an analysis can happen in either order.
+    pub async fn store_external_subtitles(
+        &self,
+        source_id: MediaSourceId,
+        tracks: &[Track],
+    ) -> Result<()> {
+        let mut transaction = self.begin().await?;
+        sqlx::query("DELETE FROM tracks WHERE source_id = ? AND is_external = 1")
+            .bind(source_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        for track in tracks {
+            insert_track(&mut transaction, source_id, track).await?;
+        }
         transaction.commit().await?;
         Ok(())
     }
@@ -966,6 +1015,119 @@ mod tests {
                 .expect("read")
                 .len(),
             1
+        );
+    }
+
+    fn external_subtitle(source_id: MediaSourceId) -> Track {
+        Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: 0,
+            language: Some("fre".to_string()),
+            title: None,
+            is_default: false,
+            is_forced: true,
+            kind: TrackKind::Subtitle(SubtitleDetails {
+                codec: "subrip".to_string(),
+                layout: SubtitleLayout::Text,
+                is_hearing_impaired: false,
+                is_external: true,
+                external_relative_path: Some(PathBuf::from("Quiet.Harbour.2019.fr.forced.srt")),
+            }),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_subtitle_in_its_own_file_survives_the_analysis_of_the_film() {
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        database
+            .store_external_subtitles(source_id, &[external_subtitle(source_id)])
+            .await
+            .expect("subtitle stored");
+        database
+            .store_analysis(
+                source_id,
+                &SourceAnalysis::default(),
+                &[video_track(source_id), subtitle_track(source_id)],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        let stored = database
+            .tracks_of_source(source_id)
+            .await
+            .expect("tracks read");
+        assert_eq!(stored.len(), 3, "the file next to the film is a track too");
+        let external: Vec<&Track> = stored
+            .iter()
+            .filter(
+                |track| matches!(&track.kind, TrackKind::Subtitle(details) if details.is_external),
+            )
+            .collect();
+        assert_eq!(external.len(), 1);
+        assert!(external[0].is_forced);
+        assert_eq!(external[0].language.as_deref(), Some("fre"));
+    }
+
+    #[tokio::test]
+    async fn subtitles_in_their_own_files_are_replaced_rather_than_piled_up() {
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        for _ in 0..3 {
+            database
+                .store_external_subtitles(source_id, &[external_subtitle(source_id)])
+                .await
+                .expect("subtitle stored");
+        }
+        assert_eq!(
+            database
+                .tracks_of_source(source_id)
+                .await
+                .expect("read")
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn a_replaced_film_keeps_the_subtitles_that_live_beside_it() {
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        database
+            .store_external_subtitles(source_id, &[external_subtitle(source_id)])
+            .await
+            .expect("subtitle stored");
+        database
+            .store_analysis(
+                source_id,
+                &SourceAnalysis::default(),
+                &[video_track(source_id)],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        database
+            .refresh_source_identity(source_id, 2_000, now())
+            .await
+            .expect("identity refreshed");
+
+        let stored = database.tracks_of_source(source_id).await.expect("read");
+        assert_eq!(
+            stored.len(),
+            1,
+            "the streams of the old copy go, the file next to it stays"
+        );
+        assert!(
+            matches!(&stored[0].kind, TrackKind::Subtitle(details) if details.is_external),
+            "a subtitle file describes itself, not the copy that was replaced"
         );
     }
 
