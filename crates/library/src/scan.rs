@@ -254,7 +254,7 @@ mod tests {
         assert!(outcome
             .files
             .iter()
-            .any(|file| file.relative_path == PathBuf::from("Boxset/Amber.Field.2020.mkv")));
+            .any(|file| file.relative_path == Path::new("Boxset/Amber.Field.2020.mkv")));
         assert!(
             outcome
                 .files
@@ -310,7 +310,7 @@ mod tests {
         let film = outcome
             .files
             .iter()
-            .find(|file| file.relative_path == PathBuf::from("Quiet.Harbour.2019.mkv"))
+            .find(|file| file.relative_path == Path::new("Quiet.Harbour.2019.mkv"))
             .expect("the film was found");
         assert_eq!(film.companion_kind, None);
     }
@@ -438,6 +438,6 @@ mod tests {
         assert!(outcome
             .files
             .iter()
-            .any(|file| file.relative_path == PathBuf::from("Quiet.Harbour.2019.mkv")));
+            .any(|file| file.relative_path == Path::new("Quiet.Harbour.2019.mkv")));
     }
 }

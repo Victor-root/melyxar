@@ -1,0 +1,24 @@
+[package]
+name = "melyxar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The Melyxar media server."
+
+[[bin]]
+name = "melyxar"
+path = "src/main.rs"
+
+[dependencies]
+melyxar-core = { workspace = true }
+melyxar-config = { workspace = true }
+melyxar-app = { workspace = true }
+melyxar-server = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }

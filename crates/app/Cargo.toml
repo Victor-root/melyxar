@@ -1,0 +1,24 @@
+[package]
+name = "melyxar-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Use cases: where the modules are assembled."
+
+[dependencies]
+melyxar-core = { workspace = true }
+melyxar-config = { workspace = true }
+melyxar-database = { workspace = true }
+melyxar-ffmpeg = { workspace = true }
+melyxar-library = { workspace = true }
+melyxar-media-probe = { workspace = true }
+melyxar-playback = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

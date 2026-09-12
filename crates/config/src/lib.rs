@@ -200,7 +200,10 @@ pub struct Config {
     /// Metadata provider key. Lives here, never in the repository.
     #[serde(default)]
     pub tmdb_api_key: Option<String>,
-    #[serde(default)]
+    /// Left out entirely when empty, so that a starting file printed by the
+    /// installer can have a library appended to it as it stands. An empty list
+    /// written out would make the appended block a duplicate key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub libraries: Vec<LibraryConfig>,
 }
 
@@ -404,6 +407,23 @@ mod tests {
         let rendered = config.to_toml();
         let reparsed = Config::parse(&rendered).expect("rendered configuration stays valid");
         assert_eq!(config, reparsed);
+    }
+
+    #[test]
+    fn a_starting_file_can_have_a_library_appended_to_it_as_it_stands() {
+        // The installer prints a starting file and then appends a library
+        // block. An empty list written out would make that a duplicate key.
+        let starting = Config::default().to_toml();
+        assert!(
+            !starting.contains("libraries"),
+            "an empty list must be left out entirely: {starting}"
+        );
+
+        let extended = format!(
+            "{starting}\n[[libraries]]\nname = \"Films\"\nkind = \"movies\"\n\n[[libraries.roots]]\nlabel = \"disk-one\"\npath = \"/mnt/one/Films\"\n"
+        );
+        let config = Config::parse(&extended).expect("the extended file is valid");
+        assert_eq!(config.libraries.len(), 1);
     }
 
     #[test]
