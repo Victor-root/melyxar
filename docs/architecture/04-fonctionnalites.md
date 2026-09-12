@@ -459,8 +459,10 @@ Le fond de page est l'image de fond du film, assombrie. Par-dessus :
 - **Ligne technique et sélecteurs** : la définition résumée en quelques mots (définition, plage dynamique, codec), puis une liste déroulante de piste audio et une liste déroulante de sous-titres, **disponibles avant le lancement**. Les sous-titres peuvent être désactivés depuis cette liste.
 - **Rangée d'actions** : bouton de lecture bien visible, bouton de bande annonce à côté, puis des boutons ronds à icône pour marquer vu, mettre en favori, supprimer, et un menu de trois points. Le bouton « vu » est rempli en couleur d'accentuation quand l'état est actif : l'icône porte l'état, il n'y a pas de texte à lire.
 - **Accroche** en gras, distincte du synopsis.
-- **Synopsis tronqué** après trois lignes environ, avec un lien pour dérouler. Cela garde le haut de page dense sans sacrifier le texte.
+- **Synopsis**, avec une règle qui s'écarte d'Emby, voir ci-dessous.
 - **Réalisateur** nommé juste en dessous.
+
+**Écart assumé sur le synopsis.** Emby coupe le texte à une hauteur fixe et affiche un lien pour dérouler, même quand le synopsis est plus court que la place disponible. Résultat visible sur la capture : un grand vide entre le synopsis et la section suivante. C'est le défaut à ne pas reproduire. La règle pour Melyxar : **le bloc occupe la place disponible et le texte la remplit ; le lien pour dérouler n'apparaît que si le texte déborde réellement.** Un synopsis court se lit donc en entier, sans bouton et sans vide. La place disponible se calcule à partir de la hauteur du bloc de gauche, l'affiche servant de référence, pour que les deux colonnes se terminent ensemble. Aucune hauteur fixe codée en dur : la règle vaut aussi bien sur un écran large que sur un téléphone, où la place disponible est différente.
 
 ### Sections suivantes, en rangées horizontales
 
@@ -493,3 +495,27 @@ Les champs de couleur (primaires, espace, courbe de transfert, profondeur) ne so
 ### Confirmation du problème des vignettes HDR
 
 La capture des chapitres porte sur un film en 4K avec plage dynamique étendue. **Ses vignettes y apparaissent très sombres, la première presque entièrement noire.** C'est exactement le défaut décrit plus haut : des images extraites d'une source à plage dynamique étendue sans conversion. Le point n'est donc pas théorique, il est visible sur la référence elle-même. La règle retenue pour Melyxar, convertir systématiquement à l'extraction, est confirmée par ce cas réel.
+
+## 30. Emploi de la couleur d'accentuation
+
+Le mainteneur juge qu'Emby **sous-emploie** sa couleur d'accentuation : l'interface reste trop grise et la couleur ne sert presque qu'au bouton de lecture. Melyxar doit en mettre davantage.
+
+**La règle, pour que « davantage » ne devienne pas « partout ».** La couleur garde une signification : elle marque ce qui est actif, ce qui est sélectionné, ce qui progresse et ce sur quoi on peut agir en premier. Étalée sur des éléments neutres, elle cesse de signaler quoi que ce soit et l'interface devient fatigante. On en met donc nettement plus qu'Emby, mais toujours sur des éléments porteurs de sens.
+
+**Où la couleur est présente :**
+
+- Bouton d'action principal, rempli.
+- Élément de navigation en cours, dans le menu comme dans les onglets.
+- **Contour de l'élément sélectionné au clavier ou à la télécommande.** C'est le repère le plus important de la navigation directionnelle, il doit être franc et immédiatement repérable.
+- Barre de progression de lecture, et barre de progression sur les cartes des titres commencés.
+- Barre de défilement.
+- États actifs des boutons à bascule : vu, favori, à voir plus tard.
+- Pastilles d'état sur les cartes, dont la coche de vu et le repère des ajouts récents.
+- Ligne ou point de section devant les titres de rangées, en marqueur discret.
+- Élément retenu dans une liste déroulante, y compris les sélecteurs de version, de piste audio et de sous-titres.
+- Anneau de chargement au démarrage d'une lecture.
+- Liens et textes interactifs, avec la variante éclaircie sur fond sombre.
+
+**Où elle reste absente :** le texte courant, les grandes surfaces de fond, les bordures ordinaires des cartes, et les libellés d'information. Ces éléments restent neutres, et c'est ce qui donne sa force à la couleur partout ailleurs.
+
+**Conséquence sur le thème.** Cette liste devient un ensemble de rôles nommés dans les jetons de thème, pas une suite de valeurs recopiées. Quand un utilisateur change la couleur d'accentuation, tous ces éléments suivent ensemble, et la vérification automatique du contraste s'applique à chacun.
