@@ -36,7 +36,7 @@ Légende : à faire, en cours, terminé.
 
 - Crates `library`, `media_probe`, `jobs`.
 - Scan incrémental d'une bibliothèque de films : ajouts, mises à jour, marquage absent, protection contre une racine injoignable.
-- Analyse ffprobe de chaque fichier, pistes stockées avec codecs, HDR, langues.
+- Analyse ffprobe de chaque fichier. Champs stockés par piste, correspondant à ce que la fiche doit afficher : pour la vidéo, codec, profil, niveau, résolution, ratio, entrelacement, images par seconde, débit, plage dynamique, couleurs primaires, espace colorimétrique, courbe de transfert, profondeur des échantillons, format des pixels, images de référence ; pour l'audio, langue, codec, disposition et nombre de canaux, taux d'échantillonnage, profondeur, débit, piste par défaut ; pour les sous-titres, langue, codec, par défaut, forcée, malentendants, interne ou externe. Les champs de couleur commandent la décision de conversion en SDR, ce ne sont pas des informations d'affichage.
 - Détection des bandes annonces locales à côté des films.
 - Analyse des noms de fichiers (titre, année) : fichiers posés à plat sans dossier par film, découpage sur la dernière année plausible, tout ce qui suit écarté du titre, soulignement traité comme séparateur, casse et accents normalisés. Jeu de tests écrit avec des titres inventés couvrant chaque forme, jamais des noms réels.
 - Tâches de fond avec parallélisme borné, priorité basse, annulation.
@@ -72,8 +72,9 @@ Légende : à faire, en cours, terminé.
 - Interface React : grille virtualisée, fiche, cache des réponses, images adaptées. Disposition inspirée d'Emby pour l'accueil et la fiche.
 - **Jetons de thème et internationalisation dès le premier composant** : aucune couleur ni chaîne en dur.
 - Page d'accueil : bannière en haut, reprendre la lecture, récemment ajouté par bibliothèque, suggestions. Sections réordonnables et masquables par l'utilisateur.
-- Fiche complète, sur la disposition relevée chez Emby : image de titre, barre d'actions avec bouton de lecture en couleur d'accentuation, affiche, ligne compacte (année, durée, classification, notes, heure de fin estimée), accroche, synopsis, étiquettes, liens externes, bloc technique avec sélecteurs de version, de piste audio et de sous-titres **avant le lancement**.
-- Distribution cliquable menant à la filmographie, studios, films similaires.
+- Fiche complète, sur la disposition relevée chez Emby : fond assombri, affiche, titre suivi des icônes de correction, ligne compacte (notes, année, durée, classification, genre, heure de fin estimée), ligne technique avec sélecteurs de version, de piste audio et de sous-titres **avant le lancement**, rangée d'actions (lecture, bande annonce, vu, favori, suppression, menu), accroche, synopsis tronqué avec dépliage, réalisateur.
+- Rangées horizontales : distribution cliquable menant à la filmographie, chapitres, similaires avec pastille de vu sur les cartes.
+- Section « À propos » : dernière lecture, genres, studios, liens externes, informations du média, puis une carte par piste vidéo, audio et sous-titres. **Chemin du fichier et taille réservés à l'administrateur**, contrairement à Emby.
 - Section dédiée aux sagas : liste des coffrets, chacun ouvrable sur ses films.
 - Lu et non lu, marquage manuel, favoris, étiquettes, listes de lecture.
 - Modification manuelle d'une fiche avec verrouillage des champs.
