@@ -16,6 +16,7 @@
 pub mod catalogue;
 pub mod jobs;
 pub mod libraries;
+pub mod metadata;
 pub mod settings;
 pub mod users;
 
