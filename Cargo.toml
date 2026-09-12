@@ -9,6 +9,7 @@ members = [
     "crates/playback",
     "crates/library",
     "crates/jobs",
+    "crates/metadata",
     "crates/app",
     "crates/server",
     "crates/melyxar",
@@ -30,6 +31,7 @@ melyxar-media-probe = { path = "crates/media_probe" }
 melyxar-playback = { path = "crates/playback" }
 melyxar-library = { path = "crates/library" }
 melyxar-jobs = { path = "crates/jobs" }
+melyxar-metadata = { path = "crates/metadata" }
 melyxar-app = { path = "crates/app" }
 melyxar-server = { path = "crates/server" }
 
@@ -48,6 +50,7 @@ axum = "0.8"
 tower-http = { version = "0.6", features = ["fs", "trace", "compression-gzip"] }
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
 
 [profile.release]
 opt-level = 3
