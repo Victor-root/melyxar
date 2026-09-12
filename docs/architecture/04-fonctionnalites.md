@@ -530,13 +530,36 @@ Tous les points ci-dessous sont validés. Ils ferment la phase de conception sur
 
 **Pourquoi le décider maintenant.** Commencer par interroger le serveur en boucle puis ajouter un flux ensuite oblige à réécrire toute la couche de données du client. Posé dès le début, le coût est négligeable. Le flux est un simple canal descendant, pas un second chemin d'écriture : le client continue d'agir par les routes ordinaires, et le flux ne sert qu'à apprendre ce qui a changé. Il transporte des événements légers, jamais des données complètes : à réception, le client sait quoi rafraîchir et le demande normalement.
 
-### Rien à côté des médias
+### Fichiers d'accompagnement, au choix de l'administrateur
 
-Jellyfin et Emby peuvent écrire un fichier de métadonnées à côté de chaque film, mais ils ne le font pas par défaut et l'installation du mainteneur n'en contient aucun : tout est dans leur propre base, sur le disque système. **Melyxar fait pareil, et de façon stricte : rien n'est jamais écrit à côté des médias.** Toutes les métadonnées, images, vignettes et données de lecture vivent dans les répertoires du serveur, sur le disque rapide.
+Jellyfin et Emby peuvent écrire un fichier de métadonnées à côté de chaque film, mais ils ne le font pas par défaut et l'installation du mainteneur n'en contient aucun : tout est dans leur propre base, sur le disque système.
 
-Deux bénéfices concrets : les disques de médias peuvent rester montés en lecture seule, ce qui supprime une classe entière d'accidents ; et la sauvegarde du serveur suffit à tout restaurer, sans dépendre de l'état des disques de stockage.
+**Comportement par défaut de Melyxar : tout sur le disque système**, dans ses propres répertoires. Métadonnées, images, vignettes et données de lecture y vivent. Deux bénéfices : les disques de médias peuvent rester montés en lecture seule, ce qui supprime une classe entière d'accidents, et la sauvegarde du serveur suffit à tout restaurer.
 
-**Lecture des fichiers d'accompagnement.** S'ils existent, par exemple pour quelqu'un migrant depuis une installation qui en produisait, Melyxar sait les lire pour éviter une réidentification complète. C'est un réglage, désactivé par défaut. L'écriture, elle, n'est pas prévue : elle exigerait le droit d'écriture sur les disques de médias.
+**Mais l'écriture à côté des médias est proposée en option**, désactivée par défaut, parce que certains la préfèrent : elle rend la bibliothèque autonome, lisible par un autre logiciel, et transportable avec les disques. Quand elle est activée :
+
+- Le serveur vérifie d'abord qu'il a bien le droit d'écrire sur la racine concernée, et le dit clairement sinon plutôt que d'échouer silencieusement fichier par fichier.
+- L'écriture se fait en tâche de fond, jamais sur le chemin de lecture.
+- Le fichier de référence reste celui du serveur : les fichiers d'accompagnement sont une copie exportée, pas la source de vérité. En cas de désaccord, la base gagne.
+
+**Lecture des fichiers d'accompagnement existants** : également une option, désactivée par défaut, utile pour quelqu'un migrant depuis une installation qui en produisait, afin d'éviter une réidentification complète.
+
+### Droits sur les disques, visibles dans l'interface
+
+Demande du mainteneur, qui constate que Jellyfin et Emby laissent dans le flou et qu'on découvre le problème au pire moment. **Chaque racine de bibliothèque affiche son état d'accès réel, directement dans l'interface.**
+
+Quatre états distincts, à ne pas confondre :
+
+- **Introuvable** : le chemin n'existe pas, typiquement un montage absent. C'est l'état qui doit arrêter un scan plutôt que de faire disparaître des milliers d'œuvres.
+- **Présent mais illisible** : le chemin existe et le serveur n'a pas le droit de le lire. Cause la plus fréquente d'un scan qui ne trouve rien.
+- **Lecture seule** : lisible, non modifiable. État parfaitement normal et même souhaitable par défaut.
+- **Lecture et écriture** : nécessaire seulement pour les fonctions qui touchent aux disques, soit la suppression de fichiers et l'écriture des fichiers d'accompagnement.
+
+**Comment c'est vérifié.** Par un test réel d'accès, pas par une lecture des droits affichés, qui ment dès qu'il y a des groupes, des montages réseau ou un conteneur non privilégié. L'état est calculé au démarrage, à chaque ajout de racine dans l'assistant, et à la demande depuis l'administration. Il n'est jamais recalculé sur le chemin de lecture.
+
+**Où il apparaît** : dans l'assistant au moment d'ajouter un dossier, ce qui évite de découvrir le problème après le premier scan ; dans la page d'administration des bibliothèques, une ligne par racine ; dans le tableau de bord ; et dans la commande de diagnostic.
+
+**Ce que l'interface en fait.** Une fonction qui exige l'écriture est présentée comme indisponible avec sa raison quand la racine est en lecture seule, au lieu d'être proposée puis d'échouer. Concrètement : la case de suppression sur disque et l'option d'écriture des fichiers d'accompagnement sont désactivées avec un texte explicite. C'est exactement le « on se retrouve coincé sans le savoir » qu'on veut éviter.
 
 ### Reprise depuis une installation existante
 
@@ -571,3 +594,17 @@ La sauvegarde automatique était décidée, la remise en place ne l'était pas. 
 Il regroupe des documentaires et des programmes de télévision. Ces contenus sont organisés en épisodes et en saisons exactement comme des séries, et les bases de métadonnées les traitent d'ailleurs comme telles. **C'est donc un type de bibliothèque à part entière, qui réutilise le modèle série, saison et épisode et le même fournisseur.** Il est distinct pour que la navigation le soit : on ne mélange pas ses documentaires et ses séries de fiction dans la même grille.
 
 Le cas particulier à connaître : un documentaire unique, sans épisodes, est du point de vue des bases de métadonnées un film. S'il est rangé dans cette bibliothèque, il sera traité comme un programme à épisode unique. Si le mainteneur préfère les voir avec ses films, il suffit de les ranger dans la bibliothèque des films : la décision se fait au rangement, pas dans le code.
+
+## 32. Choix du port 2100, vérifié
+
+Le port retenu est le **2100**. Vérification faite dans le registre officiel des ports plutôt que de mémoire, la question étant de ne pas gêner de futurs utilisateurs.
+
+**Ce que dit le registre officiel.** Le port 2100 est enregistré au nom du système de fichiers réseau de l'Amiga. C'est une attribution historique, sans usage réel aujourd'hui.
+
+**Le seul conflit réaliste.** Le service FTP du module XML d'Oracle Database écoute par défaut sur ce port. Cela ne concerne qu'une machine faisant tourner Oracle Database dans le même espace réseau que Melyxar, ce qui est très improbable pour un serveur multimédia domestique.
+
+**Aucun conflit dans l'écosystème concerné.** Les serveurs multimédias et outils voisins utilisent des ports éloignés. Pour mémoire, Plex a d'ailleurs officiellement enregistré le sien, ce qui reste l'exception.
+
+**Une pratique courante.** Plusieurs outils très répandus de ce milieu occupent des ports attribués à des services obsolètes, exactement comme nous le ferions ici. Ce n'est donc ni inhabituel ni problématique.
+
+**Conclusion.** Le 2100 est conservé. Il reste **modifiable dans la configuration**, et le script d'installation le propose au moment de l'installation en vérifiant qu'il est libre avant de continuer. Un conflit éventuel se règle donc en une question, sans toucher au code.
