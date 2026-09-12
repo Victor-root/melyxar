@@ -15,15 +15,17 @@ use std::path::Path;
 use melyxar_core::fingerprint;
 use melyxar_core::id::WorkId;
 use melyxar_database::images::StoredImage;
+use melyxar_database::metadata::CreditedPerson;
 use melyxar_metadata::{MetadataProvider, MovieDetails};
 
 use crate::{AppState, Result};
 
-/// What a picture is for, which decides the widths generated.
+/// What a picture is for, which decides its widths and where it is filed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Poster,
     Backdrop,
+    Photo,
 }
 
 impl Kind {
@@ -31,6 +33,7 @@ impl Kind {
         match self {
             Self::Poster => "poster",
             Self::Backdrop => "backdrop",
+            Self::Photo => "photo",
         }
     }
 
@@ -38,6 +41,23 @@ impl Kind {
         match self {
             Self::Poster => &melyxar_ffmpeg::images::POSTER_WIDTHS,
             Self::Backdrop => &melyxar_ffmpeg::images::BACKDROP_WIDTHS,
+            Self::Photo => &melyxar_ffmpeg::images::PHOTO_WIDTHS,
+        }
+    }
+
+    /// What the picture belongs to: a film, or a person who is in several.
+    fn owner_kind(self) -> &'static str {
+        match self {
+            Self::Poster | Self::Backdrop => "work",
+            Self::Photo => "person",
+        }
+    }
+
+    /// The folder of the cache it is filed under.
+    fn folder(self) -> &'static str {
+        match self {
+            Self::Poster | Self::Backdrop => "works",
+            Self::Photo => "people",
         }
     }
 }
@@ -56,15 +76,33 @@ pub async fn store_provider_images(
         return 0;
     };
 
+    let owner_id = work_id.to_db_string();
     let mut prepared = 0;
     for (kind, path) in [
         (Kind::Poster, details.poster_path.as_deref()),
         (Kind::Backdrop, details.backdrop_path.as_deref()),
     ] {
         let Some(path) = path else { continue };
-        match store_one(state, provider, &tools.ffmpeg, work_id, kind, path).await {
-            Ok(true) => prepared += 1,
-            Ok(false) => {}
+        match store_one(state, provider, &tools.ffmpeg, kind, &owner_id, path).await {
+            Ok(None) => {}
+            Ok(Some(picture)) => {
+                prepared += 1;
+                // The card shows a colour before any picture arrives, and the
+                // poster is what a card shows, so it is the poster that gives
+                // the colour.
+                if kind == Kind::Poster {
+                    if let Some(colour) = picture.colour {
+                        if let Err(error) =
+                            state.database().set_work_dominant_color(work_id, &colour).await
+                        {
+                            tracing::warn!(
+                                error = %error,
+                                "the colour of a card could not be recorded"
+                            );
+                        }
+                    }
+                }
+            }
             Err(error) => {
                 tracing::warn!(
                     kind = kind.as_str(),
@@ -77,29 +115,80 @@ pub async fn store_provider_images(
     prepared
 }
 
-/// Answers whether anything was actually prepared.
+/// How many faces are worth fetching for one work.
+///
+/// Exactly what the cast row of a detail page shows. Fewer would leave empty
+/// circles among the faces; more would mean fetching pictures for names a
+/// provider lists and nobody displays, which for a long cast is fifty
+/// pictures per film.
+const FACES_FETCHED: usize = 18;
+
+/// Fetches the faces a page shows next to the cast.
+///
+/// Only the actors, and only the first of them: nobody scrolls to the
+/// forty-third name, and a face already fetched for another film is never
+/// fetched again, since people are shared.
+pub async fn store_person_photos(
+    state: &AppState,
+    provider: &impl MetadataProvider,
+    people: &[CreditedPerson],
+) -> usize {
+    let Some(tools) = state.tools() else {
+        return 0;
+    };
+
+    let mut cast: Vec<&CreditedPerson> = people
+        .iter()
+        .filter(|person| person.role == "actor" && person.photo_path.is_some())
+        .collect();
+    cast.sort_by_key(|person| person.ordinal);
+
+    let mut prepared = 0;
+    for person in cast.into_iter().take(FACES_FETCHED) {
+        let owner_id = person.person_id.to_db_string();
+        let path = person.photo_path.as_deref().unwrap_or_default();
+        match store_one(state, provider, &tools.ffmpeg, Kind::Photo, &owner_id, path).await {
+            Ok(Some(_)) => prepared += 1,
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    "a face could not be prepared; the page shows the name on its own"
+                );
+            }
+        }
+    }
+    prepared
+}
+
+/// What preparing one picture left behind.
+struct Prepared {
+    /// The average colour of the picture, when the tool could read one.
+    colour: Option<String>,
+}
+
+/// Prepares one picture, and answers with nothing when there was nothing to do.
 async fn store_one(
     state: &AppState,
     provider: &impl MetadataProvider,
     tool: &Path,
-    work_id: WorkId,
     kind: Kind,
+    owner_id: &str,
     provider_path: &str,
-) -> Result<bool> {
+) -> Result<Option<Prepared>> {
     let database = state.database();
-    let owner_id = work_id.to_db_string();
     // The provider changes the path when it changes the picture, so the path
     // already says whether anything is new. Hashing the bytes would mean
     // fetching them first, which is the very thing to avoid.
     let fingerprint = fingerprint::of_text(provider_path);
 
     if database
-        .image_fingerprint("work", &owner_id, kind.as_str())
+        .image_fingerprint(kind.owner_kind(), owner_id, kind.as_str())
         .await?
         .as_deref()
         == Some(fingerprint.as_str())
     {
-        return Ok(false);
+        return Ok(None);
     }
 
     let bytes = match provider.fetch_image(provider_path).await {
@@ -110,12 +199,12 @@ async fn store_one(
                 reason = %error,
                 "the picture could not be fetched; it will be asked for again later"
             );
-            return Ok(false);
+            return Ok(None);
         }
     };
 
     let root = state.config().directories.images();
-    let folder = root.join("works").join(&owner_id);
+    let folder = root.join(kind.folder()).join(owner_id);
     tokio::fs::create_dir_all(&folder).await?;
 
     // The picture as it arrived is kept only while the sizes are made from it.
@@ -143,10 +232,10 @@ async fn store_one(
             continue;
         }
         prepared.push(StoredImage {
-            owner_kind: "work".to_string(),
-            owner_id: owner_id.clone(),
+            owner_kind: kind.owner_kind().to_string(),
+            owner_id: owner_id.to_string(),
             image_kind: kind.as_str().to_string(),
-            relative_path: format!("works/{owner_id}/{name}"),
+            relative_path: format!("{}/{owner_id}/{name}", kind.folder()),
             width: Some(*width as i32),
             height: source_size.map(|(w, h)| scaled_height(*width, w, h)),
             fingerprint: fingerprint.clone(),
@@ -158,24 +247,17 @@ async fn store_one(
     tokio::fs::remove_file(&original).await.ok();
 
     if prepared.is_empty() {
-        return Ok(false);
+        return Ok(None);
     }
 
     let no_longer_used = database
-        .replace_images("work", &owner_id, kind.as_str(), &prepared)
+        .replace_images(kind.owner_kind(), owner_id, kind.as_str(), &prepared)
         .await?;
     for path in no_longer_used {
         tokio::fs::remove_file(root.join(path)).await.ok();
     }
 
-    // The card shows a colour before any picture arrives, and the poster is
-    // what a card shows, so it is the poster that gives the colour.
-    if kind == Kind::Poster {
-        if let Some(colour) = colour {
-            database.set_work_dominant_color(work_id, &colour).await?;
-        }
-    }
-    Ok(true)
+    Ok(Some(Prepared { colour }))
 }
 
 /// The size of the picture as it arrived, so a client can leave the right

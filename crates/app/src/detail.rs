@@ -5,7 +5,7 @@
 //! opens with one, and on a television that is the difference between a page
 //! that appears and a page that assembles itself in front of you.
 
-use melyxar_core::id::{MediaSourceId, WorkId};
+use melyxar_core::id::{MediaSourceId, PersonId, WorkId};
 use melyxar_core::media::{Chapter, Track};
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::Work;
@@ -24,7 +24,7 @@ pub struct WorkDetail {
     pub genres: Vec<String>,
     pub studios: Vec<String>,
     /// Who is credited, leads first, then the parts behind the camera.
-    pub credits: Vec<(String, String, Option<String>)>,
+    pub credits: Vec<Credit>,
     /// The saga this film belongs to, when it belongs to one.
     pub collection: Option<String>,
     pub images: Vec<StoredImage>,
@@ -33,6 +33,20 @@ pub struct WorkDetail {
     /// Trailers, the local ones first since they play without leaving here.
     pub trailers: Vec<TrailerLink>,
     pub external_ids: Vec<(String, String)>,
+}
+
+/// One line of the credits, with the face shown next to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Credit {
+    pub person_id: PersonId,
+    pub name: String,
+    /// actor, director, writer, producer, composer.
+    pub role: String,
+    /// Who they played, for an actor.
+    pub character: Option<String>,
+    /// Every size of their face, largest first. Empty until it has been
+    /// fetched, and for everyone the provider has no picture of.
+    pub photo: Vec<StoredImage>,
 }
 
 /// One copy of a work on disk, with what it holds.
@@ -163,12 +177,35 @@ pub async fn work_detail(state: &AppState, work_id: WorkId) -> Result<Option<Wor
             }),
     );
 
+    // The faces come back in one read, then each one joins its own name: a page
+    // of eighteen credits must not cost eighteen round trips.
+    let faces = database.credit_photos_of_work(work_id).await?;
+    let credits = database
+        .work_credits(work_id)
+        .await?
+        .into_iter()
+        .map(|credit| {
+            let owner = credit.person_id.to_db_string();
+            Credit {
+                photo: faces
+                    .iter()
+                    .filter(|image| image.owner_id == owner)
+                    .cloned()
+                    .collect(),
+                person_id: credit.person_id,
+                name: credit.name,
+                role: credit.role,
+                character: credit.character,
+            }
+        })
+        .collect();
+
     Ok(Some(WorkDetail {
         tagline: texts.as_ref().and_then(|(_, tagline, _)| tagline.clone()),
         overview: texts.as_ref().and_then(|(_, _, overview)| overview.clone()),
         genres: database.work_genres(work_id).await?,
         studios: database.work_studios(work_id).await?,
-        credits: database.work_credits(work_id).await?,
+        credits,
         collection: database.work_collection(work_id).await?,
         images: database.images_of("work", &work_id.to_db_string()).await?,
         external_ids: database.work_external_ids(work_id).await?,

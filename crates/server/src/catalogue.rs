@@ -8,7 +8,7 @@
 use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
 use melyxar_app::browse::{BrowseRequest, WorkCard, WorkOrder, DEFAULT_PAGE};
-use melyxar_app::detail::{Version, WorkDetail};
+use melyxar_app::detail::{Credit, Version, WorkDetail};
 use melyxar_app::picture::StoredImage;
 use melyxar_app::AppState;
 use melyxar_core::id::{LibraryId, WorkId};
@@ -291,6 +291,9 @@ struct CreditView {
     name: String,
     role: String,
     character: Option<String>,
+    /// The face shown next to the name. Empty for anyone whose picture has not
+    /// been fetched, and the page shows an initial instead.
+    photo: Vec<ImageView>,
 }
 
 #[derive(Debug, Serialize)]
@@ -400,22 +403,14 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         cast: detail
             .credits
             .iter()
-            .filter(|(_, role, _)| role == "actor")
-            .map(|(name, role, character)| CreditView {
-                name: name.clone(),
-                role: role.clone(),
-                character: character.clone(),
-            })
+            .filter(|credit| credit.role == "actor")
+            .map(credit_view)
             .collect(),
         crew: detail
             .credits
             .iter()
-            .filter(|(_, role, _)| role != "actor")
-            .map(|(name, role, character)| CreditView {
-                name: name.clone(),
-                role: role.clone(),
-                character: character.clone(),
-            })
+            .filter(|credit| credit.role != "actor")
+            .map(credit_view)
             .collect(),
         poster: images_of("poster"),
         backdrop: images_of("backdrop"),
@@ -437,6 +432,15 @@ fn work_view(detail: &WorkDetail) -> WorkView {
                 id: id.clone(),
             })
             .collect(),
+    }
+}
+
+fn credit_view(credit: &Credit) -> CreditView {
+    CreditView {
+        name: credit.name.clone(),
+        role: credit.role.clone(),
+        character: credit.character.clone(),
+        photo: credit.photo.iter().map(image_view).collect(),
     }
 }
 

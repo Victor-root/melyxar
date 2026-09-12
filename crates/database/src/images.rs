@@ -113,6 +113,28 @@ impl Database {
         rows.iter().map(image_from_row).collect()
     }
 
+    /// The photos of everyone a work credits, largest first.
+    ///
+    /// One query for the whole page rather than one per name: a page with
+    /// eighteen faces would otherwise cost eighteen round trips. The rows carry
+    /// the person they belong to, which is how a caller puts each face next to
+    /// its name.
+    pub async fn credit_photos_of_work(&self, work_id: WorkId) -> Result<Vec<StoredImage>> {
+        let rows = sqlx::query(
+            "SELECT owner_kind, owner_id, image_kind, relative_path, width, height,
+                    fingerprint, dominant_color
+             FROM images
+             WHERE owner_kind = 'person'
+               AND owner_id IN (SELECT person_id FROM credits WHERE work_id = ?)
+             ORDER BY width DESC",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter().map(image_from_row).collect()
+    }
+
     /// The name the content of one picture earned, when it is already here.
     ///
     /// This is what stops a refresh from fetching a poster that has not
@@ -352,6 +374,121 @@ mod tests {
                 .expect("read")
                 .as_deref(),
             Some("abc")
+        );
+    }
+
+    /// The smallest identification that credits one actor and one director.
+    fn identified_with_a_cast() -> crate::metadata::IdentifiedWork {
+        crate::metadata::IdentifiedWork {
+            provider: "tmdb".to_string(),
+            external_id: "111".to_string(),
+            imdb_id: None,
+            language: "fr".to_string(),
+            title: "Quiet Harbour".to_string(),
+            sort_title: "quiet harbour".to_string(),
+            tagline: None,
+            overview: None,
+            release_year: Some(2019),
+            runtime: None,
+            community_rating: None,
+            age_rating_label: None,
+            genres: Vec::new(),
+            studios: Vec::new(),
+            credits: vec![
+                crate::metadata::CreditRecord {
+                    external_id: "1".to_string(),
+                    name: "Alix Moreau".to_string(),
+                    sort_name: "alix moreau".to_string(),
+                    role: "actor".to_string(),
+                    character: Some("Camille".to_string()),
+                    ordinal: 0,
+                    photo_path: Some("/alix.jpg".to_string()),
+                },
+                crate::metadata::CreditRecord {
+                    external_id: "3".to_string(),
+                    name: "Sacha Nord".to_string(),
+                    sort_name: "sacha nord".to_string(),
+                    role: "director".to_string(),
+                    character: None,
+                    ordinal: 0,
+                    photo_path: None,
+                },
+            ],
+            collection: None,
+            trailers: Vec::new(),
+        }
+    }
+
+    fn face(person_id: &str, width: i32) -> StoredImage {
+        StoredImage {
+            owner_kind: "person".to_string(),
+            owner_id: person_id.to_string(),
+            image_kind: "photo".to_string(),
+            relative_path: format!("people/{person_id}/photo-abc-{width}.webp"),
+            width: Some(width),
+            height: Some(width * 3 / 2),
+            fingerprint: "abc".to_string(),
+            dominant_color: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn the_faces_of_a_page_come_back_in_one_read() {
+        let (database, work_id) = work().await;
+        let people = database
+            .apply_identification(work_id, &identified_with_a_cast(), false)
+            .await
+            .expect("identification applied");
+        let actor = people
+            .iter()
+            .find(|person| person.role == "actor")
+            .expect("an actor was credited");
+
+        database
+            .replace_images(
+                "person",
+                &actor.person_id.to_db_string(),
+                "photo",
+                &[
+                    face(&actor.person_id.to_db_string(), 96),
+                    face(&actor.person_id.to_db_string(), 192),
+                ],
+            )
+            .await
+            .expect("photo stored");
+
+        let faces = database
+            .credit_photos_of_work(work_id)
+            .await
+            .expect("read");
+        assert_eq!(faces.len(), 2, "both sizes of the one face that was fetched");
+        assert!(faces
+            .iter()
+            .all(|image| image.owner_id == actor.person_id.to_db_string()));
+        assert_eq!(faces[0].width, Some(192), "the largest comes first");
+    }
+
+    #[tokio::test]
+    async fn a_face_of_someone_this_film_does_not_credit_is_left_out() {
+        let (database, work_id) = work().await;
+        database
+            .apply_identification(work_id, &identified_with_a_cast(), false)
+            .await
+            .expect("identification applied");
+
+        let stranger = melyxar_core::id::PersonId::new().to_db_string();
+        database
+            .replace_images("person", &stranger, "photo", &[face(&stranger, 96)])
+            .await
+            .expect("photo stored");
+
+        assert!(
+            database
+                .credit_photos_of_work(work_id)
+                .await
+                .expect("read")
+                .is_empty(),
+            "a page shows the faces of its own credits and nobody else's"
         );
     }
 
