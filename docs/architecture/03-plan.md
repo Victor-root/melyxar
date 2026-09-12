@@ -37,7 +37,9 @@ Vérifié dans l'environnement de travail : la compilation passe, `cargo clippy`
 
 ## Jalon 1 : scan et analyse
 
-État : à faire.
+État : terminé, sauf l'identification qui appartient au jalon 2.
+
+Vérifié dans l'environnement de travail : un premier scan enregistre et analyse de vrais fichiers, un deuxième ne change rien, un film retiré est marqué absent puis retrouve son identifiant quand il revient, une racine injoignable est ignorée sans vider les autres, une bande annonce est rattachée à son film, les sous-titres posés à côté deviennent des pistes, et aucun nom de fichier n'apparaît dans les journaux. La commande `melyxar scan` fait tout cela depuis un terminal et affiche le compte rendu.
 
 - Crates `library`, `media_probe`, `jobs`.
 - Scan incrémental d'une bibliothèque de films : ajouts, mises à jour, marquage absent, protection contre une racine injoignable.
