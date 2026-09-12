@@ -110,6 +110,18 @@ impl JobPriority {
     }
 }
 
+/// How long to wait before trying a job again.
+///
+/// The wait doubles each time and then stops growing, so a provider that is
+/// down is asked again soon at first and rarely after a while. No randomness:
+/// on a server with one user there is nothing to spread out, and a delay that
+/// can be worked out by hand is a delay that can be explained.
+pub fn retry_delay_seconds(attempt: u32) -> u64 {
+    const FIRST: u64 = 30;
+    const LONGEST: u64 = 6 * 60 * 60;
+    FIRST.saturating_mul(1u64 << attempt.min(16)).min(LONGEST)
+}
+
 /// A job as stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Job {
@@ -195,6 +207,21 @@ mod tests {
             started_at: None,
             finished_at: None,
         }
+    }
+
+    #[test]
+    fn the_wait_before_another_try_grows_and_then_stops_growing() {
+        assert_eq!(retry_delay_seconds(0), 30);
+        assert_eq!(retry_delay_seconds(1), 60);
+        assert_eq!(retry_delay_seconds(2), 120);
+
+        let longest = retry_delay_seconds(60);
+        assert_eq!(longest, 6 * 60 * 60);
+        assert_eq!(
+            retry_delay_seconds(20),
+            longest,
+            "a wait that keeps doubling ends up never trying again at all"
+        );
     }
 
     #[test]
