@@ -350,6 +350,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn progress_is_not_written_down_once_per_step() {
+        // Fifty steps in a few microseconds must not mean fifty writes: the
+        // screen refreshes a few times a second, and the writer is single.
+        let runner = runner().await;
+        let database = runner.database().clone();
+
+        let started = runner
+            .start(
+                JobKind::FetchImages,
+                JobPriority::BACKGROUND,
+                None,
+                move |handle| async move {
+                    handle.set_total(50).await;
+                    for _ in 0..50 {
+                        handle.advance(1).await;
+                    }
+
+                    // Read our own row, by the identifier the handle carries.
+                    let midway = database
+                        .job(handle.id())
+                        .await
+                        .expect("read")
+                        .expect("the row of a running job is there");
+                    assert_eq!(
+                        midway.progress_done, 0,
+                        "nothing was written since the total: the steps were too close together"
+                    );
+                    assert_eq!(midway.progress_total, Some(50));
+                    Ok(())
+                },
+            )
+            .await
+            .expect("job started");
+
+        assert_eq!(
+            started.completion.await.expect("the task ran"),
+            JobState::Succeeded
+        );
+        let stored = runner
+            .database()
+            .job(started.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(
+            stored.progress_done, 50,
+            "what was held back during the run is written down at the end"
+        );
+    }
+
+    #[tokio::test]
     async fn a_job_that_gives_up_keeps_the_reason_it_gave() {
         let runner = runner().await;
         let started = runner
