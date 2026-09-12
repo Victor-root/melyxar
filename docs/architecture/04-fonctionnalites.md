@@ -382,7 +382,9 @@ Le mainteneur la veut si elle est simple, sans en faire une priorité.
 
 **Couleur principale : `#c81e1e`**, un rouge franc choisi par le mainteneur. Elle sert à la fois de couleur de thème du script d'installation et de couleur d'accentuation par défaut de l'interface web.
 
-**Ce que cela implique, vérifié plutôt que supposé.** Ce rouge se comporte bien sur fond clair : du texte blanc posé dessus atteint un contraste d'environ 5,7 pour 1, au-dessus du seuil de lisibilité recommandé. En revanche, du texte noir dessus n'atteint que 3,7 pour 1, donc le texte posé sur cette couleur sera toujours blanc. Sur fond sombre, ce rouge devient trop foncé pour rester lisible : le thème sombre utilisera une variante éclaircie de la même teinte. C'est exactement le rôle de la palette dérivée décrite plus haut, et cela confirme la règle : l'accentuation n'est jamais une couleur unique mais un petit jeu de variantes calculées, avec vérification automatique du contraste.
+**Usage exact, précisé par le mainteneur.** Cette couleur est employée **en remplissage**, pas en couleur de texte : fond du bouton de lecture principal, barre de défilement, éléments actifs. Le texte posé dessus est blanc. Elle garde la même valeur en thème clair comme en thème sombre.
+
+**Ce que la mesure confirme.** Du blanc sur ce rouge atteint un contraste d'environ 5,7 pour 1, au-dessus du seuil de lisibilité : un bouton rempli de cette couleur avec un libellé blanc est correct sur n'importe quel fond. Du noir dessus ne monterait qu'à 3,7, donc le texte posé sur cette couleur est toujours blanc, jamais noir. En revanche, ce rouge employé comme **couleur de texte fin sur fond sombre** ne donne qu'environ 3,2 pour 1 : insuffisant pour du texte courant, suffisant pour un élément d'interface non textuel comme une barre de défilement. Règle retenue : la couleur telle quelle pour les remplissages et les éléments graphiques dans les deux thèmes, et une variante éclaircie de la même teinte réservée aux liens et aux petits textes colorés sur fond sombre. C'est le rôle de la palette dérivée décrite plus haut.
 
 Pour le script d'installation, le rouge tient le rôle de couleur principale et ses variantes foncée et douce s'en déduisent, sur le modèle du script WireGuard du dépôt `Proxmox-Tools`.
 
@@ -412,3 +414,48 @@ Pour Melyxar, ce serait, dans l'ordre :
 ## 27. Nouveautés
 
 Décision validée : pas de notification poussée ni de courriel. Les nouveautés se voient dans une **section « Récemment ajoutés »** sur la page d'accueil, à la manière d'Emby, alimentée par la date d'ajout déjà stockée et indexée.
+
+## 28. Analyse des noms de fichiers
+
+Le mainteneur a fourni un échantillon de sa bibliothèque réelle, **à ne pas reproduire dans le dépôt**. Seules les formes observées sont consignées ici, illustrées par des exemples inventés. Les jeux de tests utiliseront eux aussi des titres inventés couvrant ces mêmes formes.
+
+### Structure observée
+
+- **Fichiers posés à plat** dans le dossier de la bibliothèque, sans dossier par film. Le nom du fichier est donc la seule source d'information : rien ne peut être déduit d'un dossier parent. L'organisation en un dossier par film, courante ailleurs, doit malgré tout être reconnue, mais elle n'est pas la forme principale ici.
+- Le **point sert de séparateur de mots** sur toute la longueur du nom.
+- Le **titre précède l'année**, et l'année sur quatre chiffres est la frontière fiable entre le titre et le reste.
+- Après l'année vient une **suite d'étiquettes techniques** de longueur variable : langues et pistes, définition, source, codec vidéo, codec audio, nombre de canaux.
+- Un **groupe de diffusion** peut terminer le nom après un tiret.
+
+### Règles à retenir
+
+1. **Découper sur la dernière année plausible.** Prendre le dernier groupe de quatre chiffres compris dans une plage raisonnable, à condition qu'il soit suivi d'étiquettes techniques et non de mots du titre. Cette règle traite correctement les titres qui contiennent eux-mêmes une année.
+2. **Ne jamais se fier au seul titre pour identifier un film.** L'échantillon contient deux films dont le titre commence identiquement mais dont l'année diffère. L'année est donc indispensable à la recherche chez le fournisseur.
+3. **Le soulignement est un séparateur au même titre que le point.** Des marqueurs personnels apparaissent collés à la dernière étiquette technique sans séparateur propre. Sans cette règle, l'étiquette est méconnue et peut se retrouver dans le titre.
+4. **Tout ce qui suit l'année est jeté du titre**, connu ou non. Le titre se construit exclusivement à partir de ce qui précède l'année, ce qui évite d'avoir à connaître toutes les étiquettes existantes.
+5. **Ne pas confondre un mot court du titre avec une étiquette.** Certains titres contiennent des mots d'une seule lettre qui ressemblent à des marqueurs. Puisque la règle précédente ne filtre que ce qui suit l'année, ce piège disparaît, mais il ne faut pas le réintroduire en filtrant des mots à l'intérieur du titre.
+6. **La casse est incohérente** d'un fichier à l'autre pour un même titre. Le titre extrait est donc normalisé avant la recherche, et la comparaison ignore la casse et les accents.
+7. **Les étiquettes reconnues sont exploitées, pas seulement ignorées** : elles renseignent la définition annoncée, la source, les langues présentes et la présence de sous-titres. Elles restent indicatives : **la vérité technique vient de l'analyse du fichier**, jamais du nom. Un fichier annoncé en une définition et encodé dans une autre n'est pas un cas rare.
+
+### Tests
+
+Un jeu de cas écrit avec des titres inventés couvre chacune de ces formes : titre simple, titre à plusieurs mots, titre contenant un mot d'une lettre, titre contenant une année, marqueur personnel collé, groupe de diffusion terminal, casse incohérente, deux films au titre proche distingués par l'année. Chaque cas indique le titre et l'année attendus. Ce jeu est enrichi à chaque anomalie constatée sur la bibliothèque réelle, toujours sous forme de cas inventé équivalent.
+
+## 29. Disposition de la fiche, relevée sur Emby
+
+Le mainteneur a fourni une capture de la fiche d'un film chez Emby comme référence de disposition. Ce qui en est retenu, sachant qu'on reprend l'agencement et non le code ni les visuels.
+
+**De haut en bas :**
+
+- **Bandeau supérieur** : à gauche, retour, accueil et menu regroupés ; à droite, accès aux utilisateurs, diffusion vers un appareil, recherche, et avatar du compte.
+- **Image de titre du film** en haut à gauche, sur le fond, plutôt que le titre en texte. C'est une image dédiée fournie par les bases de métadonnées, distincte de l'affiche et du fond. Elle doit donc être récupérée et stockée comme un type d'image à part entière.
+- **Barre d'actions** alignée à droite : un bouton de lecture bien visible en couleur d'accentuation, puis des boutons à icône pour la bande annonce, le marquage vu, le favori, et un menu de trois points pour le reste.
+- **Affiche** à gauche, et à sa droite le bloc d'informations.
+- **Ligne de métadonnées compacte** : année, durée, classification d'âge du pays, note du fournisseur, note d'un agrégateur, et **heure de fin estimée si le film démarrait maintenant**. Ce dernier détail est peu coûteux et très apprécié, il est retenu.
+- **Accroche** en gros caractères, distincte du synopsis.
+- **Synopsis**.
+- **Étiquettes** du fournisseur, affichées comme des mots-clés.
+- **Liens vers les fiches externes**.
+- **Bloc technique** séparé : ligne vidéo décrivant définition, codec et présence du HDR, puis **listes déroulantes de choix de la piste audio et de la piste de sous-titres, disponibles avant le lancement de la lecture**. Ce point est important : le choix se fait sur la fiche, pas seulement une fois la lecture démarrée, ce qui évite de lancer un transcodage pour rien avant de changer d'avis.
+
+**Conséquences pour Melyxar.** Trois éléments s'ajoutent à ce qui était prévu : l'image de titre comme type d'image distinct, l'heure de fin estimée, et surtout les sélecteurs de pistes sur la fiche. Ce dernier point rejoint le sélecteur de version décidé plus haut : la fiche est l'endroit où l'on règle version, piste audio et sous-titres, et la décision de lecture n'est calculée qu'au moment où l'on appuie sur le bouton.

@@ -31,6 +31,7 @@ Toute nouvelle décision d'architecture est ajoutée au README des décisions av
 - Aucun travail lourd sur les threads asynchrones de Tokio.
 - Tout journal de débogage est protégé par `cfg(debug_assertions)` ou équivalent, jamais actif en release.
 - **Journaux : les noms de médias sont censurés.** Un nom de fichier n'apparaît que par ses quatre premiers caractères suivis de points de suspension ; les chemins n'affichent que le libellé de la racine. Un réglage de configuration explicite, désactivé par défaut, permet de révéler les noms complets.
+- **Aucun nom de fichier réel du mainteneur ne doit apparaître dans le dépôt** : ni dans le code, ni dans les tests, ni dans la documentation, ni dans un message de commit. Les jeux de tests utilisent des titres inventés couvrant les mêmes formes.
 - Pas de code mort, pas de contournement temporaire, pas de commentaire inutile. Nettoyer entièrement toute tentative abandonnée.
 - Vérifier les usages réels avant de supprimer, déplacer ou remplacer du code.
 - Avant chaque commit : compiler, lancer `cargo clippy` et les tests dans l'environnement de travail. Relire le diff complet.
