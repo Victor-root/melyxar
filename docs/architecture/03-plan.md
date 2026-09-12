@@ -56,9 +56,11 @@ Vérifié dans l'environnement de travail : un premier scan enregistre et analys
 
 Fait : le fournisseur TMDb derrière un trait, avec un fournisseur de remplacement pour les tests ; l'identification en tâche de fond, séparée du scan et rejouable seule ; le choix du bon film (titre exact, puis année, l'ordre du fournisseur en dernier) ; les identifiants déjà connus qui court-circuitent la recherche ; les textes par langue, genres, studios, personnes, participations, collections et bandes annonces distantes ; les affiches et fonds téléchargés une fois, convertis en WebP aux tailles fixes, servis sous un nom tiré de leur contenu, avec la couleur dominante de la carte ; les champs verrouillés à la main et la provenance de chaque champ.
 
-Reste : les photos des personnes et les images de titre, les films similaires, et tout ce qui se corrige depuis l'interface (recherche manuelle, repère « à identifier »).
+Fait aussi : les photos des personnes, préparées en deux tailles pour les dix-huit noms que la fiche montre, jamais pour l'équipe technique, et jamais deux fois pour quelqu'un qui joue dans plusieurs films.
 
-Vérifié dans l'environnement de travail : une affiche réelle est préparée en trois tailles avec sa couleur, une affiche inchangée n'est pas retéléchargée, un film sans affiche reste identifié, une clé refusée arrête la série en désignant la clé, et un fournisseur injoignable laisse les films en attente sans rien inventer.
+Reste : les images de titre, les films similaires, et tout ce qui se corrige depuis l'interface (recherche manuelle, repère « à identifier »).
+
+Vérifié dans l'environnement de travail : une affiche réelle est préparée en trois tailles avec sa couleur, une affiche inchangée n'est pas retéléchargée, un film sans affiche reste identifié, une clé refusée arrête la série en désignant la clé, et un fournisseur injoignable laisse les films en attente sans rien inventer. Sur cinq vrais films, les visages arrivent pour toute la distribution affichée et pour personne d'autre.
 
 - Crate `metadata` avec le fournisseur TMDb derrière un trait.
 - Identification des films, identifiants externes, provenance des champs, liens de bandes annonces.
@@ -71,7 +73,13 @@ Vérifié dans l'environnement de travail : une affiche réelle est préparée e
 
 ## Jalon 3 : API et interface minimale
 
-État : à faire.
+État : en cours. On peut parcourir la bibliothèque dans un navigateur, ouvrir une fiche et chercher un titre ; ce qui reste demande un compte connecté ou du travail de fond qui n'existe pas encore.
+
+Fait : les routes de navigation (cartes paginées par curseur, fiche, images, filtres), le tri par titre, date d'ajout, année, note et durée, les filtres par genre, décennie et « à identifier », la recherche, la page d'accueil avec les derniers ajouts, la fiche complète avec sélecteur de version, distribution en visages, équipe, saga et bandes annonces, la page des tâches, les deux langues, les deux thèmes, et l'interface embarquée dans le binaire.
+
+Reste : la liste « à voir plus tard » et les favoris (il faut d'abord un compte connecté), les films similaires, la correction manuelle depuis l'interface, la spécification OpenAPI et le canal temps réel.
+
+Vérifié dans l'environnement de travail, sur de vrais films : la grille et la fiche s'affichent sans une seule erreur de console, le défilement continu passe de soixante à cent quarante-cinq cartes sans doublon puis annonce la fin, les flèches du clavier se déplacent d'une carte et d'une rangée, le contour de sélection est visible, et rien ne déborde de l'écran à quatre cents pixels de large.
 
 - Routes de navigation : liste de cartes paginée par curseur, fiche, images, recherche globale sur titres, personnes et collections avec résultats groupés.
 - Tri par titre, date d'ajout, année, note, durée. Filtres par genre, décennie, non vu, favoris, résolution, présence de sous-titres.

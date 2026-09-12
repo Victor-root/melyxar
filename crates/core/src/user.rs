@@ -256,6 +256,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn every_theme_survives_a_round_trip_through_its_stored_form() {
+        for (mode, written) in [
+            (ThemeMode::Light, "light"),
+            (ThemeMode::Dark, "dark"),
+            (ThemeMode::System, "system"),
+        ] {
+            assert_eq!(mode.as_str(), written);
+            assert_eq!(ThemeMode::parse(written), Some(mode));
+        }
+        assert_eq!(
+            ThemeMode::parse("midnight"),
+            None,
+            "a theme nobody knows falls back rather than locking the account out"
+        );
+        assert_eq!(
+            ThemeMode::default(),
+            ThemeMode::System,
+            "without a choice, the theme is the one the machine is set to"
+        );
+    }
+
+    #[test]
     fn an_empty_library_list_means_every_library() {
         let permissions = Permissions::viewer();
         assert!(permissions.may_access_library(LibraryId::new()));

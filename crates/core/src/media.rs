@@ -395,6 +395,18 @@ mod tests {
     }
 
     #[test]
+    fn every_definition_a_file_can_have_is_named() {
+        // Each step of the ladder, so a copy is never announced as something
+        // it is not. The boundaries are what a wide picture actually measures:
+        // a 4K film is often 1600 lines tall rather than 2160.
+        assert_eq!(video(2160, "hevc", None).summary(), "4K HEVC");
+        assert_eq!(video(1440, "hevc", None).summary(), "1440p HEVC");
+        assert_eq!(video(1200, "hevc", None).summary(), "1080p HEVC");
+        assert_eq!(video(720, "h264", None).summary(), "720p H264");
+        assert_eq!(video(576, "mpeg4", None).summary(), "SD MPEG4");
+    }
+
+    #[test]
     fn only_more_than_two_channels_counts_as_multichannel() {
         let stereo = AudioDetails {
             codec: "aac".into(),
@@ -429,5 +441,144 @@ mod tests {
         };
         assert!(!text.forces_full_transcode());
         assert!(bitmap.forces_full_transcode());
+    }
+
+    fn track(kind: TrackKind, is_default: bool) -> Track {
+        Track {
+            id: TrackId::new(),
+            source_id: MediaSourceId::new(),
+            stream_index: 0,
+            language: None,
+            title: None,
+            is_default,
+            is_forced: false,
+            kind,
+        }
+    }
+
+    fn soundtrack() -> TrackKind {
+        TrackKind::Audio(AudioDetails {
+            codec: "eac3".into(),
+            profile: None,
+            channels: 6,
+            channel_layout: Some("5.1".into()),
+            sample_rate: Some(48_000),
+            bit_depth: None,
+            bitrate: None,
+            loudness: Loudness::default(),
+        })
+    }
+
+    fn caption() -> TrackKind {
+        TrackKind::Subtitle(SubtitleDetails {
+            codec: "subrip".into(),
+            layout: SubtitleLayout::Text,
+            is_hearing_impaired: false,
+            is_external: false,
+            external_relative_path: None,
+        })
+    }
+
+    fn source_with(tracks: Vec<Track>) -> MediaSource {
+        MediaSource {
+            id: MediaSourceId::new(),
+            work_id: WorkId::new(),
+            root_id: LibraryRootId::new(),
+            relative_path: PathBuf::from("Something/Quiet.Harbour.2019.mkv"),
+            container: Some("matroska,webm".into()),
+            duration: Some(Millis::new(7_200_000)),
+            overall_bitrate: None,
+            identity: FileIdentity {
+                size_bytes: 1_000,
+                modified_at: crate::time::now(),
+                content_fingerprint: None,
+            },
+            added_at: crate::time::now(),
+            tracks,
+        }
+    }
+
+    #[test]
+    fn each_kind_of_track_is_read_back_on_its_own() {
+        let source = source_with(vec![
+            track(TrackKind::Video(video(1080, "h264", None)), true),
+            track(soundtrack(), true),
+            track(soundtrack(), false),
+            track(caption(), false),
+        ]);
+
+        assert_eq!(source.video_tracks().count(), 1);
+        assert_eq!(source.audio_tracks().count(), 2);
+        assert_eq!(source.subtitle_tracks().count(), 1);
+        assert_eq!(
+            source.tracks[0].kind.as_str(),
+            "video",
+            "these words travel to the interface and must not drift"
+        );
+        assert_eq!(source.tracks[1].kind.as_str(), "audio");
+        assert_eq!(source.tracks[3].kind.as_str(), "subtitle");
+    }
+
+    #[test]
+    fn the_picture_a_player_uses_is_the_one_the_file_marked_default() {
+        let source = source_with(vec![
+            track(TrackKind::Video(video(480, "mpeg4", None)), false),
+            track(TrackKind::Video(video(2160, "hevc", None)), true),
+        ]);
+        let (_, chosen) = source.primary_video().expect("a film has a picture");
+        assert_eq!(chosen.height, 2160);
+
+        // A file that marks none still plays: the first one is the picture.
+        let unmarked = source_with(vec![
+            track(TrackKind::Video(video(480, "mpeg4", None)), false),
+            track(TrackKind::Video(video(2160, "hevc", None)), false),
+        ]);
+        assert_eq!(
+            unmarked.primary_video().expect("a picture").1.height,
+            480
+        );
+
+        assert!(
+            source_with(vec![track(soundtrack(), true)])
+                .primary_video()
+                .is_none(),
+            "a file with no picture has none to offer"
+        );
+    }
+
+    #[test]
+    fn a_source_is_named_by_its_file_and_not_by_its_folders() {
+        let source = source_with(Vec::new());
+        assert_eq!(source.file_name(), "Quiet.Harbour.2019.mkv");
+    }
+
+    #[test]
+    fn a_language_written_any_of_the_usual_ways_comes_out_the_same() {
+        // What a picker needs: one entry per language, whatever the file says.
+        for written in ["fr", "fra", "fre", "FR", " fr-FR ", "fr_CA"] {
+            assert_eq!(
+                normalise_language(written),
+                "fre",
+                "{written} is the same language as the others"
+            );
+        }
+        assert_eq!(normalise_language("en"), "eng");
+        assert_eq!(normalise_language("zho"), "chi");
+        assert_eq!(
+            normalise_language("und"),
+            "und",
+            "a code nobody knows is passed on rather than invented"
+        );
+    }
+
+    #[test]
+    fn a_soundtrack_nobody_measured_says_so() {
+        let mut loudness = Loudness::default();
+        assert!(
+            !loudness.is_measured(),
+            "without a measurement there is no gain to apply"
+        );
+        loudness.integrated_lufs = Some(-23.0);
+        assert!(loudness.is_measured());
     }
 }

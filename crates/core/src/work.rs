@@ -209,6 +209,53 @@ mod tests {
 
     const HOUR: Millis = Millis::new(3_600_000);
 
+    /// These words are written into the database and sent to the interface.
+    /// One of them changing silently would turn every stored row of that kind
+    /// into something nothing recognises, so they are pinned here.
+    #[test]
+    fn every_kind_of_work_survives_a_round_trip_through_its_stored_form() {
+        for (kind, written) in [
+            (WorkKind::Movie, "movie"),
+            (WorkKind::Series, "series"),
+            (WorkKind::Season, "season"),
+            (WorkKind::Episode, "episode"),
+            (WorkKind::Artist, "artist"),
+            (WorkKind::Album, "album"),
+            (WorkKind::Song, "song"),
+        ] {
+            assert_eq!(kind.as_str(), written);
+            assert_eq!(WorkKind::parse(written), Some(kind));
+        }
+        assert_eq!(WorkKind::parse("photograph"), None);
+    }
+
+    #[test]
+    fn only_what_carries_a_file_of_its_own_is_played() {
+        assert!(WorkKind::Movie.is_playable());
+        assert!(WorkKind::Episode.is_playable());
+        assert!(WorkKind::Song.is_playable());
+        assert!(
+            !WorkKind::Series.is_playable(),
+            "a series is opened to find what is inside it"
+        );
+        assert!(!WorkKind::Season.is_playable());
+        assert!(!WorkKind::Artist.is_playable());
+        assert!(!WorkKind::Album.is_playable());
+    }
+
+    #[test]
+    fn every_playback_state_survives_a_round_trip_through_its_stored_form() {
+        for (state, written) in [
+            (PlaybackState::NotStarted, "not_started"),
+            (PlaybackState::InProgress, "in_progress"),
+            (PlaybackState::Watched, "watched"),
+        ] {
+            assert_eq!(state.as_str(), written);
+            assert_eq!(PlaybackState::parse(written), Some(state));
+        }
+        assert_eq!(PlaybackState::parse("halfway"), None);
+    }
+
     #[test]
     fn a_position_past_the_threshold_counts_as_watched() {
         let state = state_for_position(Millis::new(3_300_000), Some(HOUR), 0.9, false);
@@ -275,6 +322,13 @@ mod tests {
             Some(datetime!(2026-01-01 12:00:10 UTC)),
             datetime!(2026-01-01 12:00 UTC)
         ));
+        assert!(
+            !should_accept_position(
+                Some(datetime!(2026-01-01 12:00 UTC)),
+                datetime!(2026-01-01 12:00 UTC)
+            ),
+            "a report from the same instant is not fresher, so the stored one stays"
+        );
     }
 
     #[test]

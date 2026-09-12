@@ -159,12 +159,8 @@ mod tests {
         });
     }
 
-    #[test]
-    fn redaction_is_the_default_when_nothing_was_configured() {
-        // No call to the setter: the flag must start redacted.
-        let _lock = GUARD
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        assert!(!reveal_media_names());
-    }
+    // That redaction is the default is checked in its own test binary, in
+    // tests/redaction_is_the_default.rs: every test here restores the flag to
+    // its default when it is done, so a check made in this process would pass
+    // even if the flag started the other way round.
 }

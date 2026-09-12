@@ -44,6 +44,16 @@ mod tests {
     }
 
     #[test]
+    fn a_path_a_provider_gave_is_named_the_same_way_as_its_bytes_would_be() {
+        assert_eq!(of_text("/abc123.jpg"), of_bytes(b"/abc123.jpg"));
+        assert_ne!(
+            of_text("/abc123.jpg"),
+            of_text("/def456.jpg"),
+            "a provider that changed the picture changed its path"
+        );
+    }
+
+    #[test]
     fn content_that_changed_gets_another_name() {
         assert_ne!(of_bytes(b"a poster"), of_bytes(b"another poster"));
         assert_ne!(
