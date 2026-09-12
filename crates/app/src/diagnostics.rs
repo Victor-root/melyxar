@@ -38,10 +38,9 @@ pub struct CatalogueReport {
     pub identified: i64,
     /// Works still waiting for a provider to recognise them.
     pub awaiting_identification: i64,
-    /// Whether a provider key was configured at all. Without one nothing can
-    /// be looked up, and that is worth saying plainly rather than leaving
+    /// Whether films can be looked up at all. Saying so plainly beats leaving
     /// someone to wonder why every film is untitled.
-    pub metadata_provider_configured: bool,
+    pub metadata_available: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -171,7 +170,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                 missing_files: summary.missing_files,
                 identified: summary.identified,
                 awaiting_identification: summary.awaiting_identification,
-                metadata_provider_configured: state.metadata_provider().is_some(),
+                metadata_available: state.metadata_provider().is_some(),
             })?,
     })
 }
@@ -313,14 +312,14 @@ pub fn render_text(report: &Diagnostics) -> String {
         ),
     );
     line!(
-        if report.catalogue.metadata_provider_configured {
+        if report.catalogue.metadata_available {
             "+"
         } else {
             "!"
         },
         format!(
-            "metadata provider key configured: {}",
-            yes_no(report.catalogue.metadata_provider_configured)
+            "films can be looked up: {}",
+            yes_no(report.catalogue.metadata_available)
         ),
     );
     if report.catalogue.awaiting_identification > 0 {
@@ -452,8 +451,8 @@ mod tests {
         assert_eq!(report.libraries, 1);
         assert_eq!(report.catalogue.works, 0);
         assert!(
-            !report.catalogue.metadata_provider_configured,
-            "no key was configured, and saying so beats leaving someone to wonder"
+            report.catalogue.metadata_available,
+            "a film that cannot be looked up is a film that stays untitled, and the report has to say so"
         );
         assert_eq!(report.roots.len(), 1);
         assert_eq!(report.roots[0].library, "Films");

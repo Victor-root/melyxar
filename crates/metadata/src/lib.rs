@@ -10,6 +10,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod defaults;
 pub mod provider;
 pub mod tmdb;
 

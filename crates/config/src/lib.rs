@@ -211,9 +211,6 @@ pub struct Config {
     pub scan: ScanConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
-    /// Metadata provider key. Lives here, never in the repository.
-    #[serde(default)]
-    pub tmdb_api_key: Option<String>,
     /// Left out entirely when empty, so that a starting file printed by the
     /// installer can have a library appended to it as it stands. An empty list
     /// written out would make the appended block a duplicate key.
@@ -240,7 +237,6 @@ impl Default for Config {
             limits: LimitsConfig::default(),
             scan: ScanConfig::default(),
             logging: LoggingConfig::default(),
-            tmdb_api_key: None,
             libraries: Vec::new(),
         }
     }

@@ -22,6 +22,7 @@ use melyxar_database::metadata::{
 };
 use melyxar_jobs::{JobHandle, StartedJob};
 use melyxar_library::naming;
+use melyxar_metadata::provider::Trailer;
 use melyxar_metadata::{MetadataProvider, MovieCandidate, MovieDetails, ProviderError};
 
 use crate::{AppError, AppState, Result};
@@ -303,17 +304,42 @@ fn to_record(details: &MovieDetails, provider: &str, language: &str) -> Identifi
                 sort_name: naming::sort_title(&collection.name),
                 name: collection.name.clone(),
             }),
-        trailers: details
-            .trailers
-            .iter()
-            .filter_map(|trailer| {
-                Some(RemoteTrailerRecord {
-                    name: trailer.name.clone(),
-                    url: trailer.watch_url()?,
-                })
-            })
-            .collect(),
+        trailers: best_trailers(&details.trailers, language),
     }
+}
+
+/// How many trailers are worth keeping for one film.
+///
+/// A page offers a trailer, not a list of five. One is what gets watched; a
+/// couple more are kept in case the first has been taken down.
+const TRAILERS_KEPT: usize = 3;
+
+/// Orders the trailers the way a viewer would want them and keeps a few.
+///
+/// The one in the language the library is in comes first, and an official one
+/// beats a fan edit. Without this the interface would show whichever the
+/// provider happened to list first, which is often neither.
+fn best_trailers(trailers: &[Trailer], language: &str) -> Vec<RemoteTrailerRecord> {
+    let wanted = melyxar_core::media::normalise_language(language);
+
+    let mut ordered: Vec<&Trailer> = trailers.iter().collect();
+    ordered.sort_by_key(|trailer| {
+        let speaks_the_language = trailer.language.as_deref() == Some(wanted.as_str());
+        // Sorting is ascending, so false comes first; negating puts the ones
+        // that matter at the top.
+        (!speaks_the_language, !trailer.is_official)
+    });
+
+    ordered
+        .into_iter()
+        .filter_map(|trailer| {
+            Some(RemoteTrailerRecord {
+                name: trailer.name.clone(),
+                url: trailer.watch_url()?,
+            })
+        })
+        .take(TRAILERS_KEPT)
+        .collect()
 }
 
 /// An identification running in the background.
@@ -978,6 +1004,52 @@ mod tests {
                 .map(|(_, id)| id.as_str()),
             Some("111")
         );
+    }
+
+    fn trailer(name: &str, language: Option<&str>, official: bool) -> Trailer {
+        Trailer {
+            name: name.to_string(),
+            site: "YouTube".to_string(),
+            key: name.to_lowercase().replace(' ', "-"),
+            is_official: official,
+            language: language.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn the_trailer_a_viewer_would_pick_comes_first() {
+        let found = best_trailers(
+            &[
+                trailer("Fan edit", None, false),
+                trailer("Official English trailer", Some("eng"), true),
+                trailer("Bande annonce officielle", Some("fre"), true),
+                trailer("Extrait francais", Some("fre"), false),
+            ],
+            "fr",
+        );
+
+        assert_eq!(found[0].name, "Bande annonce officielle");
+        assert_eq!(
+            found[1].name, "Extrait francais",
+            "the language matters more than the stamp of approval"
+        );
+    }
+
+    #[test]
+    fn a_page_offers_a_trailer_rather_than_a_list_of_five() {
+        let many: Vec<Trailer> = (0..8)
+            .map(|index| trailer(&format!("Trailer {index}"), Some("fre"), true))
+            .collect();
+        assert_eq!(best_trailers(&many, "fr").len(), 3);
+    }
+
+    #[test]
+    fn a_trailer_on_a_site_nobody_knows_is_left_out_rather_than_linked_wrongly() {
+        let elsewhere = Trailer {
+            site: "SomeSite".to_string(),
+            ..trailer("Ailleurs", Some("fre"), true)
+        };
+        assert!(best_trailers(&[elsewhere], "fr").is_empty());
     }
 
     #[tokio::test]
