@@ -370,6 +370,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_activity_page_reads_back_what_has_been_running() {
+        // Finished or not: this is the list the maintainer looks at when he
+        // wants to know what the server has been doing.
+        let database = database().await;
+        let first = database
+            .create_job(JobKind::ScanLibrary, JobPriority::REQUESTED, Some("films"))
+            .await
+            .expect("job created");
+        let second = database
+            .create_job(JobKind::IdentifyWork, JobPriority::BACKGROUND, None)
+            .await
+            .expect("job created");
+        database
+            .finish_job(first.id, JobState::Succeeded, None)
+            .await
+            .expect("job finished");
+
+        let recent = database.recent_jobs(10).await.expect("read");
+        assert_eq!(recent.len(), 2, "a finished job is still worth showing");
+        assert!(recent
+            .iter()
+            .any(|job| job.id == first.id && job.state == JobState::Succeeded));
+        assert!(recent.iter().any(|job| job.id == second.id));
+
+        assert_eq!(
+            database.recent_jobs(1).await.expect("read").len(),
+            1,
+            "the page asks for a handful, not for the whole history"
+        );
+    }
+
+    #[tokio::test]
     async fn a_malformed_stored_kind_is_reported_rather_than_guessed() {
         let database = database().await;
         let job = database

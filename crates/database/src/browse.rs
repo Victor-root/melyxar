@@ -576,6 +576,62 @@ mod tests {
             page.next.is_none(),
             "a grid must know when to stop asking for more"
         );
+
+        // The case that hides: a library holding exactly one full page. There
+        // is nothing after it, and a grid told otherwise asks for a page that
+        // does not exist before it admits it has reached the end.
+        let exactly_full = database
+            .browse_works(&BrowseRequest {
+                library_id: Some(library_id),
+                limit: 2,
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert_eq!(exactly_full.cards.len(), 2);
+        assert!(exactly_full.next.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_library_says_how_many_works_it_holds() {
+        // What the menu and the home page show next to the name, without
+        // fetching a page first.
+        let (database, library_id) =
+            library_of(&[("Quiet Harbour", 2019, 7.4), ("Amber Field", 2020, 8.1)]).await;
+
+        assert_eq!(
+            database
+                .count_browsable(Some(library_id))
+                .await
+                .expect("read"),
+            2
+        );
+        assert_eq!(
+            database.count_browsable(None).await.expect("read"),
+            2,
+            "without a library named, the count covers everything"
+        );
+
+        let elsewhere = database
+            .create_library(
+                "Animes",
+                melyxar_core::library::LibraryKind::Anime,
+                "fr",
+                &[(
+                    "disk-two".to_string(),
+                    std::path::PathBuf::from("/mnt/two/Animes"),
+                )],
+            )
+            .await
+            .expect("library created");
+        assert_eq!(
+            database
+                .count_browsable(Some(elsewhere.id))
+                .await
+                .expect("read"),
+            0,
+            "a library nobody filled holds nothing, which is not a failure"
+        );
     }
 
     #[tokio::test]

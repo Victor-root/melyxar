@@ -1106,6 +1106,71 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn every_wide_gamut_flavour_is_read_back_as_the_one_that_was_written() {
+        // Each one calls for a different answer at playback time, and a
+        // flavour that comes back as none would have the file played untouched
+        // and shown washed out.
+        let (database, library_id, root_id) = library().await;
+
+        for flavour in [
+            HdrFormat::Hdr10,
+            HdrFormat::Hlg,
+            HdrFormat::DolbyVision { profile: Some(8) },
+        ] {
+            let (_, source_id) = work_with_source(
+                &database,
+                library_id,
+                root_id,
+                &format!("Winter.Signal.{flavour:?}.mkv"),
+            )
+            .await;
+
+            let mut track = video_track(source_id);
+            if let TrackKind::Video(details) = &mut track.kind {
+                details.hdr = Some(flavour);
+            }
+            database
+                .store_analysis(source_id, &SourceAnalysis::default(), &[track], &[])
+                .await
+                .expect("analysis stored");
+
+            let stored = database
+                .tracks_of_source(source_id)
+                .await
+                .expect("tracks read");
+            let TrackKind::Video(details) = &stored[0].kind else {
+                panic!("the first stream is the video one");
+            };
+            assert_eq!(details.hdr, Some(flavour), "{flavour:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_ordinary_picture_carries_no_wide_gamut_flavour() {
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Amber.Field.2020.mkv").await;
+
+        let mut track = video_track(source_id);
+        if let TrackKind::Video(details) = &mut track.kind {
+            details.hdr = None;
+        }
+        database
+            .store_analysis(source_id, &SourceAnalysis::default(), &[track], &[])
+            .await
+            .expect("analysis stored");
+
+        let stored = database
+            .tracks_of_source(source_id)
+            .await
+            .expect("tracks read");
+        let TrackKind::Video(details) = &stored[0].kind else {
+            panic!("the first stream is the video one");
+        };
+        assert_eq!(details.hdr, None);
+    }
+
+    #[tokio::test]
     async fn analysing_the_same_file_twice_replaces_its_streams_rather_than_piling_them_up() {
         let (database, library_id, root_id) = library().await;
         let (_, source_id) =
@@ -1199,6 +1264,52 @@ mod tests {
         assert_eq!(external.len(), 1);
         assert!(external[0].is_forced);
         assert_eq!(external[0].language.as_deref(), Some("fre"));
+
+        // Text or pictures is what decides whether showing this subtitle costs
+        // a full rebuild of the picture, so it has to survive storage.
+        let layouts: Vec<SubtitleLayout> = stored
+            .iter()
+            .filter_map(|track| match &track.kind {
+                TrackKind::Subtitle(details) => Some(details.layout),
+                _ => None,
+            })
+            .collect();
+        assert!(layouts.contains(&SubtitleLayout::Text));
+        assert!(layouts.contains(&SubtitleLayout::Bitmap));
+    }
+
+    #[tokio::test]
+    async fn the_films_carrying_a_subtitle_of_their_own_are_listed_for_the_scan() {
+        // A scan asks for this so it rewrites only what changed. An answer of
+        // nothing would make every scan rewrite every file in the library.
+        let (database, library_id, root_id) = library().await;
+        let (_, with_one) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        let (_, without) =
+            work_with_source(&database, library_id, root_id, "Amber.Field.2020.mkv").await;
+
+        database
+            .store_external_subtitles(with_one, &[external_subtitle(with_one)])
+            .await
+            .expect("subtitle stored");
+        // A subtitle inside the film is not a file beside it.
+        database
+            .store_analysis(
+                without,
+                &SourceAnalysis::default(),
+                &[subtitle_track(without)],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        assert_eq!(
+            database
+                .sources_with_external_subtitles(root_id)
+                .await
+                .expect("read"),
+            vec![with_one]
+        );
     }
 
     #[tokio::test]
@@ -1256,6 +1367,46 @@ mod tests {
         assert!(
             matches!(&stored[0].kind, TrackKind::Subtitle(details) if details.is_external),
             "a subtitle file describes itself, not the copy that was replaced"
+        );
+    }
+
+    #[tokio::test]
+    async fn only_the_files_still_waiting_for_an_analysis_are_handed_to_it() {
+        let (database, library_id, root_id) = library().await;
+        let (_, waiting) =
+            work_with_source(&database, library_id, root_id, "Amber.Field.2020.mkv").await;
+        let (_, already_done) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        let (_, gone) =
+            work_with_source(&database, library_id, root_id, "Winter.Signal.2021.mkv").await;
+
+        database
+            .store_analysis(
+                already_done,
+                &SourceAnalysis {
+                    container: Some("matroska,webm".to_string()),
+                    duration: Some(Millis::new(7_200_000)),
+                    overall_bitrate: None,
+                },
+                &[video_track(already_done)],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+        database.mark_source_missing(gone).await.expect("marked");
+
+        let waiting_list = database
+            .unanalysed_sources_of_root(root_id)
+            .await
+            .expect("read");
+        assert_eq!(
+            waiting_list
+                .iter()
+                .map(|source| source.id)
+                .collect::<Vec<_>>(),
+            vec![waiting],
+            "a file already looked at is not looked at again, and one that is \
+             not on the disk would only fail"
         );
     }
 
