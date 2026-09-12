@@ -97,6 +97,7 @@ Légende : à faire, en cours, terminé.
 - Reprise directe avec bouton distinct pour repartir du début.
 - Courbe de volume vérifiée à l'oreille sur toute la course.
 - Mémoire des langues audio et sous-titres, par utilisateur puis par série.
+- Préférences de repliement stéréo (méthode et gain) prises en compte **comme entrée de la décision** : une méthode demandée force le transcodage audio, et la raison le dit.
 - Vitesse de lecture, image dans l'image, raccourcis clavier.
 - Résultat visible : un MP4 H.264 AAC se lit dans Brave, le journal explique pourquoi Direct Play a été choisi, fermer l'onglet en pleine lecture ne perd pas la position.
 
@@ -110,6 +111,7 @@ Légende : à faire, en cours, terminé.
 - État de préparation de lecture exposé par étapes nommées, avec progression réelle sur la production du premier segment et la mise en tampon.
 - Lecture des bandes annonces, locales et distantes.
 - Apparence des sous-titres réglable : taille, couleur, contour, fond, position.
+- Repliement stéréo appliqué : méthodes en préréglages de filtre, gain de compensation suivi d'une limitation contre la saturation.
 - Limite de sessions simultanées, arrêt propre sur SIGTERM, balayage au démarrage.
 - Résultat visible : le premier jalon utile du document 01. Un MKV avec audio EAC3 se lit dans Brave, un seek à 80 % fonctionne, aucun FFmpeg ne survit à la fermeture de l'onglet.
 

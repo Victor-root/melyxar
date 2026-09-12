@@ -608,3 +608,55 @@ Le port retenu est le **2100**. Vérification faite dans le registre officiel de
 **Une pratique courante.** Plusieurs outils très répandus de ce milieu occupent des ports attribués à des services obsolètes, exactement comme nous le ferions ici. Ce n'est donc ni inhabituel ni problématique.
 
 **Conclusion.** Le 2100 est conservé. Il reste **modifiable dans la configuration**, et le script d'installation le propose au moment de l'installation en vérifiant qu'il est libre avant de continuer. Un conflit éventuel se règle donc en une question, sans toucher au code.
+
+## 33. Mixage vers la stéréo et gain associé
+
+Demande du mainteneur, qui utilise cette fonction chez Jellyfin et la juge très importante. Elle mérite d'être bien comprise, car elle ne se limite pas à un réglage : **elle devient une entrée du moteur de décision de lecture**.
+
+### Le problème
+
+Un film porte presque toujours une piste multicanal, 5.1 ou 7.1. Un navigateur restitue de la stéréo. Il faut donc replier les canaux, et ce repliement décide de la façon dont les dialogues, les effets et les basses se retrouvent mélangés. Fait naïvement, il donne le défaut le plus courant des serveurs multimédias : des dialogues inaudibles et des explosions assourdissantes. Le repliement réduit aussi le niveau perçu, d'où un gain à appliquer derrière.
+
+### Les quatre méthodes, avec leurs défauts réels
+
+Les compromis ci-dessous viennent de la documentation de Jellyfin, qui les décrit honnêtement.
+
+- **Répartition avec renfort du centre et des basses.** Divise le canal central et celui des basses dans la gauche et la droite. Conserve bien le volume global, mais les dialogues peuvent rester trop discrets et les basses devenir envahissantes. Des cas de distorsion ont été signalés avec cette méthode.
+- **Mode nuit orienté dialogues.** Met fortement en avant le canal central et abaisse tous les autres. Dialogues très clairs, mais effets trop discrets. Excellent pour regarder tard sans réveiller la maison, moins agréable pour un vrai film.
+- **Méthode normalisée issue d'une spécification ouverte.** Répartit les canaux d'ambiance entre la gauche et la droite en préservant l'intensité perçue. Très bonne conservation du volume, mais spatialisation appauvrie et dialogues parfois couverts.
+- **Méthode d'un standard industriel de diffusion.** Applique une atténuation mesurée au centre et aux canaux d'ambiance, et écarte le canal de basses. C'est la plus équilibrée : elle n'excelle nulle part mais ne rate rien. **C'est celle qu'utilise le mainteneur et qui lui convient.**
+
+**Choix pour Melyxar** : la méthode du standard industriel par défaut, parce qu'elle est équilibrée, documentée et sans surprise. Les autres restent proposées, chacune accompagnée d'une phrase disant à qui elle convient plutôt que d'un nom technique seul.
+
+### Le gain associé
+
+Un multiplicateur appliqué après le repliement, parce que celui-ci abaisse le niveau perçu. La valeur 1 conserve le niveau d'origine. Une valeur de 2 est un bon point de départ ; le mainteneur utilise 3 chez lui.
+
+**Précaution nécessaire.** Multiplier un signal peut le faire saturer, ce qui s'entend comme une distorsion sale, et c'est précisément ce qui est reproché à l'une des méthodes ci-dessus. Le gain sera donc suivi d'une limitation qui écrête proprement les crêtes plutôt que de les laisser saturer. C'est peu coûteux et cela supprime le seul vrai défaut de la fonction.
+
+### Trois réglages voisins à ne pas confondre
+
+Ils agissent tous sur le son mais répondent à des questions différentes, et ils se cumulent :
+
+1. **Le repliement vers la stéréo** décide comment les canaux se mélangent. Il ne s'applique que lorsqu'on passe du multicanal à la stéréo.
+2. **Le gain de repliement** compense la baisse de niveau que ce mélange provoque.
+3. **La normalisation de sonie**, déjà décidée, met tous les fichiers au même niveau les uns par rapport aux autres. Elle est mesurée au scan et vaut aussi pour la musique.
+
+Un quatrième, la **compression de plage dynamique**, réduit l'écart entre les passages discrets et les passages forts à l'intérieur d'un même fichier. Le mode nuit décrit plus haut en est une forme appliquée au repliement.
+
+### Conséquence sur l'architecture, le point important
+
+**Un choix de repliement force le transcodage audio.** Si un utilisateur demande une méthode particulière, l'audio doit être traité par le serveur, même lorsque le navigateur saurait lire la piste telle quelle. Autrement dit, cette préférence est **une entrée de la décision de lecture**, au même titre que le profil de capacités du client et les pistes choisies. Sans cela, un utilisateur réglerait sa préférence et n'entendrait aucune différence sur les fichiers lus directement, sans comprendre pourquoi.
+
+La décision doit donc l'exposer dans ses raisons : « repliement stéréo demandé, l'audio est transcodé ». C'est exactement le genre de raison qui évite une session de débogage.
+
+Deux conséquences pratiques :
+
+- La liste des raisons et le moteur de décision, décidés au jalon 4, prennent cette préférence en compte dès le départ.
+- L'interface indique clairement, à côté du réglage, qu'il ne s'applique pas en lecture directe et qu'il implique un traitement par le serveur. Un réglage qui semble sans effet est pire qu'un réglage absent.
+
+### Où cela vit dans le code
+
+Les méthodes de repliement sont des **jeux de coefficients appliqués par un filtre audio**, donc des préréglages nommés dans la crate qui construit les commandes de traitement. Jamais des chaînes recopiées à plusieurs endroits. Le choix et le gain sont des **préférences par utilisateur**, avec une valeur par défaut au niveau du serveur : le réglage confortable pour regarder un film le soir n'est pas celui de quelqu'un d'autre dans la journée.
+
+**Quand.** Préférences et prise en compte dans la décision au jalon 4, application effective au jalon 5 avec le traitement audio.
