@@ -8,6 +8,7 @@
 
 pub mod error;
 pub mod id;
+pub mod job;
 pub mod library;
 pub mod media;
 pub mod privacy;

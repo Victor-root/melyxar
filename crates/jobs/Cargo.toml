@@ -1,0 +1,15 @@
+[package]
+name = "melyxar-jobs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Background work: lifecycle, progress, cancellation and bounded parallelism."
+
+[dependencies]
+melyxar-core = { workspace = true }
+melyxar-database = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

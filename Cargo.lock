@@ -1077,6 +1077,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "melyxar-jobs"
+version = "0.1.0"
+dependencies = [
+ "melyxar-core",
+ "melyxar-database",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "melyxar-library"
 version = "0.1.0"
 dependencies = [
