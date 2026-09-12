@@ -40,6 +40,15 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Scan the libraries: find what is new, gone or replaced, and analyse it.
+    ///
+    /// Runs the same work the server runs on its own, and waits for it, so a
+    /// first scan can be watched from a terminal.
+    Scan {
+        /// Scan only this library, by name. Every library by default.
+        #[arg(long)]
+        library: Option<String>,
+    },
     /// Print a starting configuration, for the installer.
     PrintDefaultConfig,
 }
@@ -64,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.command.unwrap_or(Command::Serve) {
         Command::Serve => serve(config).await,
         Command::Doctor { json } => doctor(config, json).await,
+        Command::Scan { library } => scan(config, library).await,
         Command::PrintDefaultConfig => unreachable!("handled above"),
     }
 }
@@ -128,6 +138,55 @@ async fn doctor(config: Config, as_json: bool) -> anyhow::Result<()> {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         print!("{}", melyxar_app::diagnostics::render_text(&report));
+    }
+
+    state.database().close().await;
+    Ok(())
+}
+
+async fn scan(config: Config, only: Option<String>) -> anyhow::Result<()> {
+    let state = melyxar_app::startup::bring_up(config)
+        .await
+        .context("bringing the server up for the scan")?;
+
+    let libraries = state
+        .database()
+        .list_libraries()
+        .await
+        .context("reading the libraries")?;
+    let chosen: Vec<_> = match &only {
+        Some(name) => libraries
+            .into_iter()
+            .filter(|library| library.name.eq_ignore_ascii_case(name))
+            .collect(),
+        None => libraries,
+    };
+    if chosen.is_empty() {
+        anyhow::bail!("no library to scan; declare one in the configuration first");
+    }
+
+    for library in chosen {
+        let name = library.name.clone();
+        let job = melyxar_app::scan::start_scan(&state, library)
+            .await
+            .with_context(|| format!("starting the scan of {name}"))?;
+        let (job_state, report) = job.wait().await;
+
+        match report {
+            Some(report) => println!(
+                "{name}: {} added, {} changed, {} absent, {} back, {} unchanged, {} analysed, \
+                 {} unreadable, {} extra videos",
+                report.added,
+                report.changed,
+                report.missing,
+                report.restored,
+                report.unchanged,
+                report.analysed,
+                report.unreadable_files,
+                report.extras
+            ),
+            None => println!("{name}: the scan ended as {}", job_state.as_str()),
+        }
     }
 
     state.database().close().await;

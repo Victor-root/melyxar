@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 pub mod diagnostics;
+pub mod scan;
 pub mod startup;
 pub mod state;
 
@@ -26,6 +27,8 @@ pub enum AppError {
     Directory(#[from] std::io::Error),
     #[error("{0}")]
     Domain(#[from] melyxar_core::Error),
+    #[error(transparent)]
+    Jobs(#[from] melyxar_jobs::JobError),
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;

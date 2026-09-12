@@ -74,6 +74,15 @@ pub fn now() -> Timestamp {
     OffsetDateTime::now_utc()
 }
 
+/// The year it is now.
+///
+/// Reading a file name needs to know how far ahead a year is still plausible.
+/// The rules themselves take the year as an argument so a test never depends
+/// on the clock; this is what the server passes them when it is not a test.
+pub fn current_year() -> i32 {
+    now().year()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
