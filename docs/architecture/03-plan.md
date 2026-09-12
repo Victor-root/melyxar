@@ -61,7 +61,11 @@ Légende : à faire, en cours, terminé.
 - Routes de navigation : liste de cartes paginée par curseur, fiche, images, recherche globale sur titres, personnes et collections avec résultats groupés.
 - Tri par titre, date d'ajout, année, note, durée. Filtres par genre, décennie, non vu, favoris, résolution, présence de sous-titres.
 - Liste « à voir plus tard », distincte des favoris.
-- Vrais boutons et vrais liens, ordre de tabulation respecté, contour visible sur l'élément sélectionné.
+- Vrais boutons et vrais liens, ordre de tabulation respecté, contour visible sur l'élément sélectionné, et gestionnaire de focus directionnel écrit en même temps que la première grille.
+- Interface utilisable depuis le navigateur d'un téléphone : grilles qui se réorganisent, zones tactiles suffisantes, aucune action accessible seulement au survol.
+- Sélecteur de version sur la fiche quand plusieurs copies existent, décrites par résolution, codec, pistes et taille.
+- Section « Récemment ajoutés » sur l'accueil, alimentée par la date d'ajout indexée.
+- Couleur d'accentuation par défaut `#c81e1e`, avec sa palette dérivée et une variante éclaircie pour le thème sombre.
 - Route publique d'identité visuelle (nom et logo), sans authentification et sans divulgation.
 - Erreurs renvoyées sous forme de code et de données, jamais de phrase toute faite.
 - Spécification OpenAPI générée, client TypeScript généré.
@@ -134,6 +138,7 @@ Légende : à faire, en cours, terminé.
 - Gestion des utilisateurs et de leurs droits : accès par bibliothèque, limite d'âge, téléchargement, suppression, sessions simultanées. Code à quatre chiffres pour les appareils de télévision déjà autorisés.
 - Téléchargement d'un fichier, soumis au droit correspondant.
 - Suppression d'une œuvre, avec case décochée par défaut pour effacer aussi le fichier du disque, réservée à l'administrateur, chemin résolu côté serveur et vérifié sous une racine déclarée, entrée au journal d'activité.
+- Assistant de première configuration : langue, compte administrateur, bibliothèques ajoutées en parcourant l'arborescence du serveur, langue des métadonnées et clé du fournisseur, mode d'accès, premier scan. S'ouvre tant que la configuration initiale n'est pas terminée et saute ce que le script d'installation a déjà réglé.
 - Écran de choix d'utilisateur avec avatars, désactivable.
 - Statistiques personnelles : temps de visionnage, films vus sur une période, genres préférés.
 - Notification d'une version plus récente publiée sur GitHub, sans mise à jour automatique, vérification désactivable.

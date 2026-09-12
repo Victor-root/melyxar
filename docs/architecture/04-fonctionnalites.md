@@ -316,11 +316,19 @@ Décisions validées.
 
 **Quand.** Langue et traductions au jalon 2. Recherche, tri, filtres et liste à voir au jalon 3. Choix d'utilisateur et statistiques au jalon 8. Sous-titres en ligne après la V0.1.
 
-## 20. Version non retenue : sélecteur de version
+## 20. Plusieurs versions d'une même œuvre
 
-Le mainteneur ne souhaite pas de sélecteur de version ni de choix automatique entre une copie 4K et une copie 1080p du même film.
+Décision révisée : **un sélecteur de version est bien voulu.** Le mainteneur aura plusieurs copies du même film pour ses tests (conteneurs, codecs et pistes audio différents), et doit pouvoir passer de l'une à l'autre.
 
-**Ce que cela change, et ce que cela ne change pas.** Le modèle garde plusieurs sources possibles par œuvre : c'est indispensable au repérage des fichiers remplacés et des doublons, indépendamment de toute interface. En revanche, aucune logique de sélection automatique n'est écrite, et la fiche ne montre pas de sélecteur. Si plusieurs fichiers se rattachent à la même œuvre, ils sont simplement listés et l'administrateur en est informé, à charge pour lui de faire le ménage.
+**Ce que cela implique.**
+
+- La fiche affiche un sélecteur listant chaque version avec ce qui la distingue : résolution, codec vidéo, pistes audio, taille du fichier, conteneur. Un simple nom de fichier ne suffit pas à choisir, c'est la description technique qui compte, et elle est déjà en base grâce à l'analyse des pistes.
+- Une version est proposée par défaut, choisie sur des critères simples et prévisibles : la résolution la plus haute, puis le débit le plus élevé. Pas de choix dépendant de la connexion ou de l'appareil, qui rendrait le comportement imprévisible pendant les tests.
+- Le choix d'une version est mémorisé pour la session en cours, pas de façon permanente : relancer le film plus tard repart sur la version par défaut.
+- La progression reste attachée à l'œuvre, pas à la version. Regarder la moitié d'un film puis reprendre sur une autre copie reprend au bon endroit.
+- Le sélecteur n'apparaît que lorsqu'il y a plus d'une version, ce qui est le cas ordinaire.
+
+**Quand.** Modèle au jalon 0, déjà présent. Sélecteur et choix par défaut au jalon 3 pour l'affichage, actif à la lecture au jalon 4.
 
 ## 21. Contrôle à distance
 
@@ -366,6 +374,41 @@ Le mainteneur la veut si elle est simple, sans en faire une priorité.
 **Distinction utile.** Il y a deux niveaux, très différents en coût.
 
 - **Le niveau gratuit, à faire dès le début** : ne pas casser le comportement natif du navigateur. Utiliser de vrais boutons et de vrais liens plutôt que des éléments décoratifs rendus cliquables, respecter l'ordre de tabulation, afficher un contour visible sur l'élément sélectionné. Cela ne coûte presque rien pendant l'écriture et c'est très coûteux à rattraper, parce qu'il faut alors reprendre chaque composant. C'est aussi ce qui rend l'interface utilisable par les outils d'accessibilité.
-- **Le niveau coûteux, reporté** : la navigation directionnelle complète, où les flèches déplacent la sélection de vignette en vignette dans une grille, comme sur une télévision. Cela demande un gestionnaire de focus dédié qui connaît la position de chaque élément à l'écran. Reporté sans regret, et de toute façon repris dans le client télévision.
+- **Le niveau exigeant, retenu lui aussi** : la navigation directionnelle, où les flèches déplacent la sélection de vignette en vignette dans une grille, comme sur une télévision. Cela demande un gestionnaire de focus qui connaît la position de chaque élément à l'écran. Le mainteneur a choisi de le faire dès le départ. C'est le bon arbitrage à une condition : le gestionnaire est écrit **en même temps que le premier composant de grille**, pas plus tard. Greffé après coup sur des grilles existantes, il coûte plusieurs fois plus cher. Son autre avantage est de préparer directement le client télévision, qui repose sur la même logique.
 
-**Quand.** Niveau gratuit dès le jalon 3, niveau directionnel non planifié.
+**Quand.** Niveau gratuit et gestionnaire de focus directionnel au jalon 3, avec la première grille.
+
+## 24. Identité visuelle de Melyxar
+
+**Couleur principale : `#c81e1e`**, un rouge franc choisi par le mainteneur. Elle sert à la fois de couleur de thème du script d'installation et de couleur d'accentuation par défaut de l'interface web.
+
+**Ce que cela implique, vérifié plutôt que supposé.** Ce rouge se comporte bien sur fond clair : du texte blanc posé dessus atteint un contraste d'environ 5,7 pour 1, au-dessus du seuil de lisibilité recommandé. En revanche, du texte noir dessus n'atteint que 3,7 pour 1, donc le texte posé sur cette couleur sera toujours blanc. Sur fond sombre, ce rouge devient trop foncé pour rester lisible : le thème sombre utilisera une variante éclaircie de la même teinte. C'est exactement le rôle de la palette dérivée décrite plus haut, et cela confirme la règle : l'accentuation n'est jamais une couleur unique mais un petit jeu de variantes calculées, avec vérification automatique du contraste.
+
+Pour le script d'installation, le rouge tient le rôle de couleur principale et ses variantes foncée et douce s'en déduisent, sur le modèle du script WireGuard du dépôt `Proxmox-Tools`.
+
+## 25. Interface web sur téléphone
+
+Décision validée : l'interface web doit être utilisable depuis le navigateur d'un téléphone, en attendant les applications natives.
+
+**Ce que cela implique.** Peu de chose si c'est prévu dès le premier écran, beaucoup si cela arrive après. Concrètement : grilles qui se réorganisent selon la largeur, zones tactiles suffisamment grandes, lecteur vidéo utilisable au doigt avec les gestes attendus, pas de survol comme seul moyen d'accéder à une action, et menus adaptés à un écran étroit. Le préchargement au survol décrit plus haut n'existe pas sur un écran tactile : l'équivalent y est le préchargement de la fiche dès que la vignette devient visible.
+
+## 26. Assistant de première configuration
+
+Le mainteneur demandait ce que recouvre ce terme. Il s'agit de ce que font Jellyfin et Emby au premier démarrage : plutôt que d'ouvrir une interface vide où l'on ne sait pas quoi faire, le serveur présente une courte suite d'écrans guidés.
+
+Pour Melyxar, ce serait, dans l'ordre :
+
+1. Choix de la langue de l'interface.
+2. Création du compte administrateur, avec son nom et son mot de passe.
+3. Ajout des bibliothèques : donner un nom, choisir le type (films, séries, animés, musique), et désigner les dossiers en parcourant l'arborescence du serveur plutôt qu'en tapant un chemin. Plusieurs dossiers par bibliothèque, ce qui correspond aux quatre disques du mainteneur.
+4. Langue préférée des métadonnées et clé du fournisseur.
+5. Mode d'accès, si le script d'installation ne l'a pas déjà réglé.
+6. Écran final proposant de lancer le premier scan.
+
+**Déclenchement.** L'assistant s'ouvre automatiquement tant que la configuration initiale n'est pas terminée, quelle que soit l'adresse demandée, et se marque comme achevé une fois parcouru. Une partie de ces étapes peut déjà avoir été remplie par le script d'installation : l'assistant saute alors ce qui est connu plutôt que de le redemander.
+
+**Quand.** Jalon 8, sauf la création du compte administrateur qui existe dès le jalon 0 sous une forme minimale.
+
+## 27. Nouveautés
+
+Décision validée : pas de notification poussée ni de courriel. Les nouveautés se voient dans une **section « Récemment ajoutés »** sur la page d'accueil, à la manière d'Emby, alimentée par la date d'ajout déjà stockée et indexée.
