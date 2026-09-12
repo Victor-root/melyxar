@@ -907,6 +907,71 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_provider_that_answers_nonsense_is_not_worth_waiting_for() {
+        // Told apart from a provider that is down: asking again changes
+        // nothing, so the film is marked rather than left on the waiting list
+        // for ever.
+        let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
+        let provider = StandIn::failing(|| ProviderError::Unexpected("not json at all".into()));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.unidentified, 1);
+        assert_eq!(report.postponed, 0);
+        assert_eq!(
+            state
+                .database()
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification,
+            IdentificationState::Unidentified
+        );
+    }
+
+    #[tokio::test]
+    async fn a_library_that_learnt_something_says_so_to_whoever_is_reading_it() {
+        // The counter is how a client knows its copy of the grid is stale. A
+        // run that changed nothing must not move it, or every client throws
+        // away what it holds for nothing.
+        let (_directory, state, library, _) = state_with_work("Quiet Harbour", Some(2019)).await;
+        let before = state
+            .database()
+            .library_version(library.id)
+            .await
+            .expect("read");
+
+        let nothing_found = StandIn::new(Vec::new(), Vec::new());
+        run(&state, &nothing_found, &library).await;
+        assert_eq!(
+            state
+                .database()
+                .library_version(library.id)
+                .await
+                .expect("read"),
+            before,
+            "nothing was learnt, so nothing is stale"
+        );
+
+        // A film nobody recognised today may be recognised tomorrow, so the
+        // same film is looked up again, this time by a provider that knows it.
+        let provider = StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        );
+        assert_eq!(run(&state, &provider, &library).await.identified, 1);
+        assert!(
+            state
+                .database()
+                .library_version(library.id)
+                .await
+                .expect("read")
+                > before,
+            "a film that gained a title changed what every grid shows"
+        );
+    }
+
+    #[tokio::test]
     async fn a_provider_that_is_down_leaves_the_work_waiting_rather_than_marking_it() {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
         let provider = StandIn::failing(|| ProviderError::Unreachable("timed out".into()));
