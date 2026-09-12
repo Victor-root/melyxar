@@ -94,6 +94,37 @@ mod tests {
     }
 
     #[test]
+    fn the_year_it_is_now_is_a_year_a_film_could_carry() {
+        // What decides how far ahead a year read off a file name is still
+        // plausible: a wrong answer here makes every recent film unreadable.
+        let year = current_year();
+        assert!(
+            (2026..=2100).contains(&year),
+            "the clock says {year}, which is not a year anyone releases films in"
+        );
+    }
+
+    #[test]
+    fn a_duration_says_its_unit_when_written_into_a_log() {
+        assert_eq!(Millis::new(1500).to_string(), "1500ms");
+        assert_eq!(Millis::ZERO.to_string(), "0ms");
+    }
+
+    #[test]
+    fn milliseconds_convert_back_to_the_seconds_a_seek_is_asked_for_in() {
+        // This is the number handed to the media tool to start somewhere in
+        // the middle: a factor out of place sends a viewer to another scene.
+        assert_eq!(Millis::new(1500).as_seconds_f64(), 1.5);
+        assert_eq!(Millis::new(3_600_000).as_seconds_f64(), 3600.0);
+        assert_eq!(Millis::ZERO.as_seconds_f64(), 0.0);
+        assert_eq!(
+            Millis::from_seconds_f64(42.125).as_seconds_f64(),
+            42.125,
+            "a position survives the round trip"
+        );
+    }
+
+    #[test]
     fn a_ratio_never_escapes_the_zero_to_one_range() {
         assert_eq!(Millis::new(500).ratio_of(Millis::new(1000)), 0.5);
         assert_eq!(Millis::new(5000).ratio_of(Millis::new(1000)), 1.0);

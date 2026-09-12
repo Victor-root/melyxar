@@ -161,6 +161,16 @@ mod tests {
         assert!(!LibraryKind::Music.is_episodic());
     }
 
+    /// The interface turns these into a sentence of its own, so they are part
+    /// of what this server promises and never rewritten lightly.
+    #[test]
+    fn the_state_of_a_root_is_named_the_way_the_interface_expects() {
+        assert_eq!(RootAccess::Missing.as_str(), "missing");
+        assert_eq!(RootAccess::Unreadable.as_str(), "unreadable");
+        assert_eq!(RootAccess::ReadOnly.as_str(), "read_only");
+        assert_eq!(RootAccess::ReadWrite.as_str(), "read_write");
+    }
+
     #[test]
     fn only_mounted_and_readable_roots_may_be_scanned() {
         assert!(!RootAccess::Missing.is_usable());

@@ -156,6 +156,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn work_someone_is_waiting_on_comes_before_work_nobody_asked_for() {
+        assert!(JobPriority::REQUESTED > JobPriority::BACKGROUND);
+        assert_eq!(
+            JobPriority::from_stored(JobPriority::REQUESTED.get()),
+            JobPriority::REQUESTED,
+            "a priority read back from the storage is the one that was written"
+        );
+        assert_eq!(JobPriority::BACKGROUND.get(), 0);
+    }
+
+    #[test]
     fn every_kind_and_state_survives_a_round_trip_through_its_stored_form() {
         for kind in [
             JobKind::ScanLibrary,

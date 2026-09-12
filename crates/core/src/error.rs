@@ -100,3 +100,41 @@ impl Error {
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A client reads the code rather than the sentence: it is what tells a
+    /// page to say "nothing there" instead of "something went wrong". Changing
+    /// one of these words silently would break every client at once.
+    #[test]
+    fn every_code_keeps_the_name_a_client_reads() {
+        for (code, written) in [
+            (ErrorCode::NotFound, "not_found"),
+            (ErrorCode::AlreadyExists, "already_exists"),
+            (ErrorCode::InvalidInput, "invalid_input"),
+            (ErrorCode::Unauthenticated, "unauthenticated"),
+            (ErrorCode::Forbidden, "forbidden"),
+            (ErrorCode::Conflict, "conflict"),
+            (ErrorCode::PathNotAllowed, "path_not_allowed"),
+            (ErrorCode::RootUnavailable, "root_unavailable"),
+            (ErrorCode::DependencyMissing, "dependency_missing"),
+            (
+                ErrorCode::ExternalServiceUnavailable,
+                "external_service_unavailable",
+            ),
+            (ErrorCode::Internal, "internal"),
+        ] {
+            assert_eq!(code.as_str(), written);
+            assert_eq!(code.to_string(), written, "shown the same way it is sent");
+        }
+    }
+
+    #[test]
+    fn an_error_carries_both_its_code_and_what_went_wrong() {
+        let error = Error::not_found("no work with that identifier");
+        assert_eq!(error.code, ErrorCode::NotFound);
+        assert!(error.to_string().contains("no work with that identifier"));
+    }
+}
