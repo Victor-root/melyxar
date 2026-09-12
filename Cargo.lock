@@ -706,6 +706,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "melyxar-library"
+version = "0.1.0"
+dependencies = [
+ "melyxar-core",
+ "tempfile",
+ "thiserror",
+ "time",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "melyxar-media-probe"
 version = "0.1.0"
 dependencies = [
