@@ -92,8 +92,10 @@ pub async fn store_provider_images(
                 // the colour.
                 if kind == Kind::Poster {
                     if let Some(colour) = picture.colour {
-                        if let Err(error) =
-                            state.database().set_work_dominant_color(work_id, &colour).await
+                        if let Err(error) = state
+                            .database()
+                            .set_work_dominant_color(work_id, &colour)
+                            .await
                         {
                             tracing::warn!(
                                 error = %error,

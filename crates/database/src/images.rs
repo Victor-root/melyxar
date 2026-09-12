@@ -457,11 +457,12 @@ mod tests {
             .await
             .expect("photo stored");
 
-        let faces = database
-            .credit_photos_of_work(work_id)
-            .await
-            .expect("read");
-        assert_eq!(faces.len(), 2, "both sizes of the one face that was fetched");
+        let faces = database.credit_photos_of_work(work_id).await.expect("read");
+        assert_eq!(
+            faces.len(),
+            2,
+            "both sizes of the one face that was fetched"
+        );
         assert!(faces
             .iter()
             .all(|image| image.owner_id == actor.person_id.to_db_string()));
