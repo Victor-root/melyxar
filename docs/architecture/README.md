@@ -38,6 +38,8 @@ Ces décisions ont été prises après discussion et ne sont pas à rediscuter s
 
 ## Règles de travail
 
+- **Langue du code : anglais.** Noms de crates, modules, types, fonctions, variables, tables et colonnes, routes de l'API, messages de commit, commentaires dans le code, journaux techniques : tout suit les standards anglais habituels.
+- **Langue de tout le reste : français.** Documentation, explications, revues, décisions, échanges avec le mainteneur.
 - Le em dash est banni de tout texte du projet.
 - Textes d'interface toujours passés par l'internationalisation, anglais d'abord, français ensuite.
 - Tout journal de débogage est protégé par un contrôle de type `BuildConfig.DEBUG` ou équivalent Rust (`cfg(debug_assertions)`).
