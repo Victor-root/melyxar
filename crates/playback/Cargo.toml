@@ -1,0 +1,12 @@
+[package]
+name = "melyxar-playback"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Decides how a media source can be delivered to a given client."
+
+[dependencies]
+melyxar-core = { workspace = true }
+serde = { workspace = true }
