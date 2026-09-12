@@ -23,6 +23,25 @@ pub struct Diagnostics {
     pub roots: Vec<RootReport>,
     pub accounts: i64,
     pub libraries: usize,
+    pub catalogue: CatalogueReport,
+}
+
+/// What the library actually holds, which is the first thing anyone asks
+/// after a scan.
+#[derive(Debug, Clone, Serialize)]
+pub struct CatalogueReport {
+    pub works: i64,
+    pub files: i64,
+    /// Files no longer on disk. Kept rather than removed, so a number here is
+    /// a question to look into and not a loss.
+    pub missing_files: i64,
+    pub identified: i64,
+    /// Works still waiting for a provider to recognise them.
+    pub awaiting_identification: i64,
+    /// Whether a provider key was configured at all. Without one nothing can
+    /// be looked up, and that is worth saying plainly rather than leaving
+    /// someone to wonder why every film is untitled.
+    pub metadata_provider_configured: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -143,6 +162,17 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
         roots,
         accounts: database.user_count().await?,
         libraries: libraries.len(),
+        catalogue: database
+            .catalogue_summary()
+            .await
+            .map(|summary| CatalogueReport {
+                works: summary.works,
+                files: summary.files,
+                missing_files: summary.missing_files,
+                identified: summary.identified,
+                awaiting_identification: summary.awaiting_identification,
+                metadata_provider_configured: state.metadata_provider().is_some(),
+            })?,
     })
 }
 
@@ -261,6 +291,49 @@ pub fn render_text(report: &Diagnostics) -> String {
     line!("+", format!("libraries {}", report.libraries));
     out.push('\n');
 
+    line!("#", "Library");
+    line!("+", format!("works {}", report.catalogue.works));
+    line!("+", format!("files {}", report.catalogue.files));
+    line!(
+        if report.catalogue.missing_files == 0 {
+            "+"
+        } else {
+            "!"
+        },
+        format!(
+            "files no longer on disk {} (kept, never removed)",
+            report.catalogue.missing_files
+        ),
+    );
+    line!(
+        "+",
+        format!(
+            "identified {} of {}",
+            report.catalogue.identified, report.catalogue.works
+        ),
+    );
+    line!(
+        if report.catalogue.metadata_provider_configured {
+            "+"
+        } else {
+            "!"
+        },
+        format!(
+            "metadata provider key configured: {}",
+            yes_no(report.catalogue.metadata_provider_configured)
+        ),
+    );
+    if report.catalogue.awaiting_identification > 0 {
+        line!(
+            "!",
+            format!(
+                "waiting to be looked up {}",
+                report.catalogue.awaiting_identification
+            ),
+        );
+    }
+    out.push('\n');
+
     line!("#", "Directories");
     for directory in &report.directories {
         line!(
@@ -377,6 +450,11 @@ mod tests {
         assert!(report.media_tools.can_serve_browsers);
         assert_eq!(report.accounts, 1);
         assert_eq!(report.libraries, 1);
+        assert_eq!(report.catalogue.works, 0);
+        assert!(
+            !report.catalogue.metadata_provider_configured,
+            "no key was configured, and saying so beats leaving someone to wonder"
+        );
         assert_eq!(report.roots.len(), 1);
         assert_eq!(report.roots[0].library, "Films");
         assert!(report.roots[0].checked);

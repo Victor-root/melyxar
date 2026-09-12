@@ -42,6 +42,16 @@ pub struct SourceAnalysis {
     pub overall_bitrate: Option<i64>,
 }
 
+/// What a library holds, counted in one pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CatalogueSummary {
+    pub works: i64,
+    pub files: i64,
+    pub missing_files: i64,
+    pub identified: i64,
+    pub awaiting_identification: i64,
+}
+
 /// A video that belongs to a work without being the work itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalExtraVideo {
@@ -152,6 +162,30 @@ impl Database {
         .await?;
 
         rows.iter().map(work_from_row).collect()
+    }
+
+    /// What the whole catalogue holds, for the diagnostic.
+    pub async fn catalogue_summary(&self) -> Result<CatalogueSummary> {
+        let works: (i64, i64, i64) = sqlx::query_as(
+            "SELECT count(*),
+                    sum(identification IN ('identified', 'manual')),
+                    sum(identification IN ('pending', 'unidentified'))
+             FROM works",
+        )
+        .fetch_one(self.reader())
+        .await?;
+        let files: (i64, i64) =
+            sqlx::query_as("SELECT count(*), sum(missing_since IS NOT NULL) FROM media_sources")
+                .fetch_one(self.reader())
+                .await?;
+
+        Ok(CatalogueSummary {
+            works: works.0,
+            identified: works.1,
+            awaiting_identification: works.2,
+            files: files.0,
+            missing_files: files.1,
+        })
     }
 
     /// How many works a library holds.
@@ -1356,6 +1390,31 @@ mod tests {
                 ("imdb".to_string(), "tt7654321".to_string()),
                 ("tmdb".to_string(), "54321".to_string()),
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_summary_says_what_the_library_holds_and_what_is_missing() {
+        let (database, library_id, root_id) = library().await;
+        let (_, first) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        work_with_source(&database, library_id, root_id, "Amber.Field.2020.mkv").await;
+        database.mark_source_missing(first).await.expect("marked");
+
+        let summary = database.catalogue_summary().await.expect("read");
+        assert_eq!(summary.works, 2);
+        assert_eq!(summary.files, 2);
+        assert_eq!(summary.missing_files, 1);
+        assert_eq!(summary.identified, 0);
+        assert_eq!(summary.awaiting_identification, 2);
+    }
+
+    #[tokio::test]
+    async fn a_summary_of_nothing_is_a_row_of_zeros_rather_than_a_failure() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(
+            database.catalogue_summary().await.expect("read"),
+            CatalogueSummary::default()
         );
     }
 
