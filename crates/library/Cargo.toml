@@ -1,0 +1,18 @@
+[package]
+name = "melyxar-library"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Scanning folders and making sense of file names."
+
+[dependencies]
+melyxar-core = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+time = { workspace = true }
