@@ -43,7 +43,7 @@ impl AppState {
         tools: Option<ToolPaths>,
         capabilities: Option<Capabilities>,
     ) -> Self {
-        let provider = config.tmdb_api_key.as_deref().and_then(|key| {
+        let provider = melyxar_metadata::defaults::provider_key().and_then(|key| {
             match TmdbProvider::new(key) {
                 Ok(provider) => Some(Arc::new(provider)),
                 Err(error) => {
@@ -77,7 +77,7 @@ impl AppState {
         &self.inner.jobs
     }
 
-    /// The metadata provider, when one was configured.
+    /// The metadata provider, when there is one to use.
     pub fn metadata_provider(&self) -> Option<Arc<TmdbProvider>> {
         self.inner.provider.clone()
     }
