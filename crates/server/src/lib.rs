@@ -10,6 +10,7 @@
 pub mod catalogue;
 pub mod error;
 pub mod images;
+pub mod interface;
 pub mod jobs;
 pub mod routes;
 

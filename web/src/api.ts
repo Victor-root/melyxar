@@ -1,0 +1,271 @@
+/*
+ * The one place that talks to the server.
+ *
+ * Every shape here mirrors what the server sends, so a change on that side
+ * fails at compilation rather than at three in the morning on a screen.
+ */
+
+export interface Picture {
+  url: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface Card {
+  id: string;
+  title: string;
+  year: number | null;
+  runtime_minutes: number | null;
+  rating: number | null;
+  identification: "pending" | "identified" | "unidentified" | "manual";
+  color: string | null;
+  poster: Picture[];
+}
+
+export interface Page {
+  cards: Card[];
+  next: string | null;
+}
+
+export interface Root {
+  label: string;
+  access: "missing" | "unreadable" | "read_only" | "read_write";
+  explanation_code: string;
+}
+
+export interface Library {
+  id: string;
+  name: string;
+  kind: string;
+  works: number;
+  version: number;
+  roots: Root[];
+}
+
+export interface Filters {
+  genres: { name: string; works: number }[];
+  decades: { decade: number; works: number }[];
+}
+
+export interface Home {
+  recently_added: Card[];
+  works: number;
+  awaiting_identification: number;
+}
+
+export interface Credit {
+  name: string;
+  role: string;
+  character: string | null;
+  /** Empty for anyone whose face has not been fetched. */
+  photo: Picture[];
+}
+
+export interface VideoTrack {
+  codec: string;
+  width: number;
+  height: number;
+  hdr: string | null;
+  frame_rate: number | null;
+}
+
+export interface AudioTrack {
+  codec: string;
+  language: string | null;
+  channels: number;
+  channel_layout: string | null;
+  is_default: boolean;
+}
+
+export interface SubtitleTrack {
+  codec: string;
+  language: string | null;
+  is_forced: boolean;
+  is_hearing_impaired: boolean;
+  is_external: boolean;
+  burns_in: boolean;
+}
+
+export interface Version {
+  id: string;
+  summary: string;
+  size_bytes: number;
+  duration_minutes: number | null;
+  container: string | null;
+  analysed: boolean;
+  missing: boolean;
+  video: VideoTrack[];
+  audio: AudioTrack[];
+  subtitles: SubtitleTrack[];
+  chapters: number;
+}
+
+export interface Trailer {
+  name: string | null;
+  remote_url: string | null;
+  local: boolean;
+}
+
+export interface Work {
+  id: string;
+  library_id: string;
+  kind: string;
+  title: string;
+  tagline: string | null;
+  overview: string | null;
+  year: number | null;
+  runtime_minutes: number | null;
+  rating: number | null;
+  age_rating: string | null;
+  identification: Card["identification"];
+  color: string | null;
+  genres: string[];
+  studios: string[];
+  collection: string | null;
+  cast: Credit[];
+  crew: Credit[];
+  poster: Picture[];
+  backdrop: Picture[];
+  versions: Version[];
+  trailers: Trailer[];
+  external_ids: { provider: string; id: string }[];
+}
+
+export interface Job {
+  id: string;
+  kind: string;
+  state: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  target: string | null;
+  done: number;
+  total: number | null;
+  ratio: number | null;
+  failure_reason: string | null;
+}
+
+export interface Jobs {
+  running: Job[];
+  recent: Job[];
+}
+
+export interface SystemInfo {
+  server_name: string;
+  version: string;
+  api_version: string;
+  setup_complete: boolean;
+  playback_available: boolean;
+  maintenance: boolean;
+}
+
+/**
+ * A failure carrying the code the server sent.
+ *
+ * The code is what the interface words in its own language; the server never
+ * sends a finished sentence, precisely so that it can be translated here.
+ */
+export class ApiError extends Error {
+  constructor(
+    readonly code: string,
+    readonly status: number,
+  ) {
+    super(code);
+  }
+}
+
+async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, { signal, headers: { accept: "application/json" } });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") {
+      throw cause;
+    }
+    throw new ApiError("unreachable", 0);
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(body?.code ?? "generic", response.status);
+  }
+  return (await response.json()) as T;
+}
+
+async function post<T>(path: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, { method: "POST", headers: { accept: "application/json" } });
+  } catch {
+    throw new ApiError("unreachable", 0);
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(body?.code ?? "generic", response.status);
+  }
+  return (await response.json()) as T;
+}
+
+export interface BrowseOptions {
+  library?: string;
+  order?: string;
+  descending?: boolean;
+  after?: string | null;
+  limit?: number;
+  genre?: string;
+  decade?: number;
+  search?: string;
+  unidentified?: boolean;
+}
+
+/** Turns the choices of a grid into a query the server understands. */
+export function browseQuery(options: BrowseOptions): string {
+  const parameters = new URLSearchParams();
+  if (options.library) parameters.set("library", options.library);
+  if (options.order) parameters.set("order", options.order);
+  if (options.descending) parameters.set("descending", "true");
+  if (options.after) parameters.set("after", options.after);
+  if (options.limit) parameters.set("limit", String(options.limit));
+  if (options.genre) parameters.set("genre", options.genre);
+  if (options.decade !== undefined) parameters.set("decade", String(options.decade));
+  if (options.search) parameters.set("search", options.search);
+  if (options.unidentified) parameters.set("unidentified", "true");
+  return parameters.toString();
+}
+
+export const api = {
+  system: (signal?: AbortSignal) => get<SystemInfo>("/api/v1/system/info", signal),
+  libraries: (signal?: AbortSignal) => get<Library[]>("/api/v1/libraries", signal),
+  filters: (library: string, signal?: AbortSignal) =>
+    get<Filters>(`/api/v1/libraries/${library}/filters`, signal),
+  home: (library: string | undefined, signal?: AbortSignal) =>
+    get<Home>(`/api/v1/home${library ? `?library=${library}` : ""}`, signal),
+  works: (options: BrowseOptions, signal?: AbortSignal) =>
+    get<Page>(`/api/v1/works?${browseQuery(options)}`, signal),
+  work: (id: string, signal?: AbortSignal) => get<Work>(`/api/v1/works/${id}`, signal),
+  jobs: (signal?: AbortSignal) => get<Jobs>("/api/v1/jobs", signal),
+  scan: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/scan`),
+  identify: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/identify`),
+  cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
+};
+
+/**
+ * The set of sizes a browser picks from, and the one to load by default.
+ *
+ * Handing over every size lets the browser choose by screen and by how much
+ * room the picture actually has, which is what stops a phone downloading a
+ * poster meant for a television.
+ */
+export function pictureSet(pictures: Picture[]): { src: string; srcSet: string } | null {
+  if (pictures.length === 0) {
+    return null;
+  }
+  const sized = pictures.filter((picture) => picture.width !== null);
+  if (sized.length === 0) {
+    return { src: pictures[0].url, srcSet: "" };
+  }
+  const smallest = sized.reduce((best, picture) =>
+    (picture.width ?? 0) < (best.width ?? 0) ? picture : best,
+  );
+  return {
+    src: smallest.url,
+    srcSet: sized.map((picture) => `${picture.url} ${picture.width}w`).join(", "),
+  };
+}
