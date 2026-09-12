@@ -315,6 +315,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn every_state_a_root_can_be_in_survives_storage() {
+        // The diagnostic and the interface both read this back, and a state
+        // that returned as something else would either hide an unmounted disk
+        // or announce a perfectly good one as gone.
+        let database = database().await;
+        let library = database
+            .create_library("Films", LibraryKind::Movies, "fr", &roots())
+            .await
+            .expect("library created");
+        let root_id = library.roots[0].id;
+
+        for state in [
+            RootAccess::ReadWrite,
+            RootAccess::ReadOnly,
+            RootAccess::Unreadable,
+            RootAccess::Missing,
+        ] {
+            database
+                .set_root_access(root_id, state)
+                .await
+                .expect("access recorded");
+            let stored = database
+                .roots_with_access()
+                .await
+                .expect("roots readable")
+                .into_iter()
+                .find(|entry| entry.root.id == root_id)
+                .expect("root still present");
+            assert_eq!(stored.access, state, "{state:?}");
+        }
+    }
+
+    #[tokio::test]
     async fn an_unknown_stored_access_state_reads_as_the_most_cautious_one() {
         let database = database().await;
         let library = database
