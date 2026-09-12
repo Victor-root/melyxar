@@ -26,7 +26,8 @@ Légende : à faire, en cours, terminé.
 - Répertoire des fichiers envoyés par l'administrateur, dans les données et non dans le cache.
 - Journalisation structurée avec temps par requête, censure des noms de médias.
 - Commande `melyxar doctor` : version de FFmpeg et accélérations, accès à `/dev/dri`, permissions sur chaque racine, mode WAL, tailles.
-- Script de mise à jour pour le LXC (récupérer, compiler en priorité basse, migrer, redémarrer) et unité systemd.
+- **Script shell d'installation et de mise à jour**, aux conventions du dépôt `Proxmox-Tools` du mainteneur (bilingue intégré, couleurs 256 niveaux désactivables, bannière, indicateur animé, encadrés, menu numéroté, sauvegarde avant modification, aucune dépendance) : vérification du système, outils, utilisateur système et répertoires, récupération et compilation en priorité basse, configuration, service, migrations, redémarrage, adresse à ouvrir. Sert aussi à la mise à jour et à la désinstallation.
+- Unité systemd.
 - Résultat visible : le service démarre, `ip:2100/api/v1/system/info` répond, `melyxar doctor` affiche un diagnostic lisible.
 
 ## Jalon 1 : scan et analyse
@@ -48,6 +49,7 @@ Légende : à faire, en cours, terminé.
 - Crate `metadata` avec le fournisseur TMDb derrière un trait.
 - Identification des films, identifiants externes, provenance des champs, liens de bandes annonces.
 - Personnes (acteurs, réalisateurs) avec photos, collections officielles, films similaires, classification d'âge.
+- Textes stockés par langue, français prioritaire et repli anglais.
 - Correction manuelle de l'identification depuis l'interface : recherche par titre et année, saisie directe d'un identifiant, choix parmi les propositions illustrées.
 - Téléchargement des affiches et fonds, génération des tailles fixes en WebP, couleur dominante, URL avec empreinte.
 - Résultat visible : les œuvres ont titre, année, synopsis et affiches dans la base et le cache, et un film mal identifié se corrige en quelques clics.
@@ -56,7 +58,10 @@ Légende : à faire, en cours, terminé.
 
 État : à faire.
 
-- Routes de navigation : liste de cartes paginée par curseur, fiche, images, recherche par préfixe.
+- Routes de navigation : liste de cartes paginée par curseur, fiche, images, recherche globale sur titres, personnes et collections avec résultats groupés.
+- Tri par titre, date d'ajout, année, note, durée. Filtres par genre, décennie, non vu, favoris, résolution, présence de sous-titres.
+- Liste « à voir plus tard », distincte des favoris.
+- Vrais boutons et vrais liens, ordre de tabulation respecté, contour visible sur l'élément sélectionné.
 - Route publique d'identité visuelle (nom et logo), sans authentification et sans divulgation.
 - Erreurs renvoyées sous forme de code et de données, jamais de phrase toute faite.
 - Spécification OpenAPI générée, client TypeScript généré.
@@ -129,6 +134,9 @@ Légende : à faire, en cours, terminé.
 - Gestion des utilisateurs et de leurs droits : accès par bibliothèque, limite d'âge, téléchargement, suppression, sessions simultanées. Code à quatre chiffres pour les appareils de télévision déjà autorisés.
 - Téléchargement d'un fichier, soumis au droit correspondant.
 - Suppression d'une œuvre, avec case décochée par défaut pour effacer aussi le fichier du disque, réservée à l'administrateur, chemin résolu côté serveur et vérifié sous une racine déclarée, entrée au journal d'activité.
+- Écran de choix d'utilisateur avec avatars, désactivable.
+- Statistiques personnelles : temps de visionnage, films vus sur une période, genres préférés.
+- Notification d'une version plus récente publiée sur GitHub, sans mise à jour automatique, vérification désactivable.
 - Sauvegarde automatique quotidienne de la base et des fichiers envoyés, quelques copies conservées.
 - Résultat visible : le serveur ne ressemble plus à l'installation par défaut, et une maintenance annoncée s'affiche proprement.
 
@@ -148,4 +156,6 @@ Légende : à faire, en cours, terminé.
 - Normalisation audio : mesure de sonie au scan, application au gain à la lecture, modes morceau et album, compression de plage dynamique pour les films.
 - Plusieurs utilisateurs avec écran de connexion complet et gestion des droits.
 - Clients natifs : un projet Android, base commune (API, session, cache, lecteur), interface télévision d'abord, interface téléphone ensuite.
+- Recherche et téléchargement de sous-titres en ligne, sur demande explicite.
+- Contrôle à distance d'une session de lecture depuis un autre appareil, sans priorité.
 - Interface ambitieuse, surveillance des dossiers en temps réel.
