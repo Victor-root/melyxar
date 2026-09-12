@@ -27,7 +27,8 @@ Toute nouvelle décision d'architecture est ajoutée au README des décisions av
 ## Règles de code
 
 - Respecter l'architecture des documents : direction unique des dépendances entre crates, SQL uniquement dans `database`, binaires FFmpeg lancés uniquement par `ffmpeg`, logique métier dans `app` et jamais dans les handlers HTTP, décision de lecture pure dans `playback`.
-- SQLite en mode WAL, une seule connexion d'écriture, transactions courtes. Métadonnées SQLx versionnées dans `.sqlx`, compilation en mode hors ligne : régénérer et commiter `.sqlx` à chaque changement de requête.
+- SQLite en mode WAL, une seule connexion d'écriture, transactions courtes.
+- **Toute requête SQL doit être couverte par un test d'intégration** sur une base migrée : c'est ce qui remplace la vérification à la compilation.
 - Aucun travail lourd sur les threads asynchrones de Tokio.
 - Tout journal de débogage est protégé par `cfg(debug_assertions)` ou équivalent, jamais actif en release.
 - **Journaux : les noms de médias sont censurés.** Un nom de fichier n'apparaît que par ses quatre premiers caractères suivis de points de suspension ; les chemins n'affichent que le libellé de la racine. Un réglage de configuration explicite, désactivé par défaut, permet de révéler les noms complets.
