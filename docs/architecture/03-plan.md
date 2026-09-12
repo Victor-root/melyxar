@@ -8,7 +8,9 @@ Légende : à faire, en cours, terminé.
 
 ## Jalon 0 : socle
 
-État : à faire.
+État : terminé.
+
+Vérifié dans l'environnement de travail : la compilation passe, `cargo clippy` ne signale rien, la suite de tests est verte, `melyxar doctor` affiche FFmpeg, les accélérations matérielles, l'absence de `/dev/dri` et l'état d'accès de chaque racine, le service répond sur `/api/v1/system/info` et s'arrête proprement sur SIGTERM. Le script d'installation a été passé au vérificateur `shellcheck` puis exécuté en entier : vérifications système, paquets, compte et répertoires, récupération du dépôt, compilation en priorité basse, installation du binaire et écriture de la configuration se déroulent sans intervention. Seule la pose du service systemd n'a pas pu être exercée ici, faute de systemd dans l'environnement de travail ; c'est au mainteneur de la confirmer dans le LXC.
 
 - Workspace Cargo avec les crates `core`, `config`, `database`, `ffmpeg`, `app`, `server`, `melyxar` (les autres arrivent quand elles servent).
 - Configuration TOML (`/etc/melyxar/melyxar.toml`) : chemins des données, du cache, des transcodages, du binaire FFmpeg, port 2100, mode d'accès (HTTP ou HTTPS) prévu dès maintenant, bibliothèques déclarées.
