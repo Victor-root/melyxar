@@ -36,6 +36,13 @@ Ces décisions ont été prises après discussion et ne sont pas à rediscuter s
 | Erreurs de l'API | Code d'erreur et données structurées, jamais de phrase toute faite | Sans cela, les clients ne peuvent pas traduire les messages. |
 | Chiffrement | Le serveur sait servir en HTTPS lui-même ; quatre options proposées (reverse proxy, auto-signé, certificat fourni, certificat reconnu par nom de domaine) avec leurs limites annoncées honnêtement | Un certificat auto-signé ne supprime pas l'avertissement du navigateur ; le promettre serait mentir. |
 | Clients natifs | Un seul projet Android, base commune (API, session, cache, lecteur), interfaces séparées, télévision d'abord | Deux applications distinctes coûtent cher en doublons ; une interface unique est médiocre partout. |
+| Personnes | Table des personnes unique et table de participation (rôle, personnage, ordre) | Sans identité unique, la filmographie d'un acteur est impossible. |
+| Collections | Une seule table pour les sagas automatiques et manuelles, avec l'origine indiquée | Sinon un rafraîchissement des métadonnées efface les collections créées à la main. |
+| Droits par utilisateur | Accès par bibliothèque, limite d'âge, téléchargement, suppression, sessions simultanées | Chaque fonction sensible s'y rattache ; les ajouter après multiplie les migrations. |
+| Images extraites d'un fichier | Toujours converties en SDR quand la source est HDR, par défaut | Sans conversion, les vignettes d'un film HDR sont délavées et grisâtres. |
+| Aperçu de la barre de lecture | Vignettes regroupées en planches, intervalle et résolution configurables, activable par bibliothèque | Des fichiers individuels donneraient des centaines de milliers de petits fichiers. |
+| Segments repérés | Table des segments (récapitulatif, générique de début, générique de fin) sur la source média | Base du saut d'intro et du bouton « épisode suivant ». |
+| Suppression sur disque | Jamais de chemin venant du client, chemin résolu et vérifié sous une racine déclarée, case décochée par défaut, droit d'administrateur, entrée au journal | C'est l'opération la plus dangereuse du projet. |
 | Utilisateurs | Un utilisateur par défaut et un jeton de session dès la V0.1 | Toute donnée de progression est rattachée à un utilisateur dès le départ. |
 | Réactivité | Rien de lourd sur le chemin de lecture : tout est précalculé à l'écriture | Exigence forte, voir le document 02. |
 | Compilation | **Directement dans le LXC de production**, via une commande unique de mise à jour (récupérer, compiler en priorité basse, migrer, redémarrer) | Les PC du mainteneur sont sous Windows ; aucun transfert de fichier. |
