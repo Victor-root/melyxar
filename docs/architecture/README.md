@@ -8,6 +8,9 @@ Ce dossier est la mémoire du projet. Il contient les revues d'architecture réa
 |---|---|
 | [01-revue-architecture.md](01-revue-architecture.md) | Revue complète des choix techniques (Rust, Axum, base de données, SQLx, FFmpeg, HLS, hls.js, React, monolithe modulaire), architecture révisée en crates, modèle de données, moteur de lecture, abstractions à figer, erreurs classiques, sujets à ne pas oublier, V0.1 révisée. |
 | [02-reactivite.md](02-reactivite.md) | Exigence de navigation quasi instantanée jusqu'à 100 000 médias : analyse Jellyfin contre Emby, principe chemin chaud / chemin froid, stratégie serveur et client, isolation des tâches de fond, ce qui est à faire dès le début ou prématuré, mesure et détection des régressions, outils de diagnostic. |
+| [03-plan.md](03-plan.md) | Plan par jalons de la V0.1 et état d'avancement. |
+
+Le fichier `CLAUDE.md` à la racine du dépôt résume les règles pour chaque session de travail.
 
 ## Décisions actées
 
@@ -28,11 +31,18 @@ Ces décisions ont été prises après discussion et ne sont pas à rediscuter s
 | Compilation | **Directement dans le LXC de production**, via une commande unique de mise à jour (récupérer, compiler en priorité basse, migrer, redémarrer) | Les PC du mainteneur sont sous Windows ; aucun transfert de fichier. |
 | Ressources du LXC | 100 Go de disque, 16 Go de mémoire, 12 threads (monter à 16 si les autres services de l'hôte le permettent) | Le 16 Go et les threads servent surtout à la compilation ; le serveur lui-même est léger. |
 | Matériel de transcodage | Intel Arc A380 passée au LXC via `/dev/dri`, distribution FFmpeg de Jellyfin recommandée | Décodage, encodage H.264, HEVC, AV1 et tonemapping HDR sur la carte. |
+| Port | 2100, accès local en `ip:2100` | Libre de tout usage courant. Reverse proxy nginx (autre LXC) et HTTPS plus tard. |
+| Configuration et répertoires | TOML dans `/etc/melyxar/melyxar.toml` ; données (base) dans `/var/lib/melyxar` ; cache d'images et segments de transcodage dans `/var/cache/melyxar` ; utilisateur système `melyxar` ; service `melyxar.service` | Conventions Debian, tout sur le NVMe du LXC, jamais dans les dossiers médias. |
+| Métadonnées | TMDb avec une clé d'API propre au mainteneur, dans la configuration, jamais dans le dépôt | TMDb exige une clé ; Jellyfin et Emby en embarquent une dans leur code. Une clé par défaut embarquée pourra être ajoutée plus tard pour la distribution. |
+| Journaux | Noms de médias censurés (quatre premiers caractères puis points de suspension, racine seule pour les chemins), réglage explicite pour révéler, désactivé par défaut | Les journaux sont partagés pour le débogage. |
+| Vérification | Pas d'intégration continue GitHub. Compilation, `clippy` et tests dans l'environnement de travail avant chaque commit, puis compilation réelle dans le LXC par le mainteneur | Le mainteneur rapporte les erreurs directement. |
 
 ## Environnement de production
 
-- Hôte Proxmox : Ryzen 7 3700X (8 cœurs, 16 threads), 32 Go DDR4, Intel Arc A380, NVMe.
-- LXC Melyxar : Linux, non privilégié, 12 threads, 16 Go, 100 Go sur NVMe.
+- Hôte Proxmox : Ryzen 7 3700X (8 cœurs, 16 threads), 32 Go DDR4, Intel Arc A380, NVMe. Noyau hôte `7.0.14-12-pve`.
+- LXC Melyxar : Debian 13, **non privilégié**, 12 threads, 16 Go, 100 Go sur NVMe.
+- Médias : plusieurs disques montés dans le LXC sous `/mnt/SATA1-ZC189KW4`, `/mnt/SATA2-ZC189K8E`, `/mnt/SATA3-ZC189KZT`, `/mnt/SATA4-K4KNWWDL`, chacun avec des dossiers `Films`, `Séries`, `Animés`, `Émissions`. Les dossiers sont lisibles par tous les utilisateurs (droits `rwxrwxr-x`), la lecture ne demande donc aucun alignement d'identifiant. Une écriture future (fichiers annexes) demanderait que l'utilisateur `melyxar` ait le même identifiant numérique que le propriétaire des dossiers.
+- Bibliothèque de test : le dossier `Films` existant, environ 50 films.
 - Première cible client : Brave / Chromium sous Windows, en réseau local.
 - Le mainteneur ne lit pas le code : les journaux, la commande de diagnostic et la page de diagnostic sont conçus pour lui.
 
