@@ -10,6 +10,7 @@
 
 pub mod diagnostics;
 pub mod identify;
+pub mod images;
 pub mod scan;
 pub mod startup;
 pub mod state;

@@ -14,6 +14,7 @@
 #![forbid(unsafe_code)]
 
 pub mod catalogue;
+pub mod images;
 pub mod jobs;
 pub mod libraries;
 pub mod metadata;

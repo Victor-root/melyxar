@@ -52,7 +52,13 @@ Vérifié dans l'environnement de travail : un premier scan enregistre et analys
 
 ## Jalon 2 : métadonnées et images
 
-État : à faire.
+État : en cours. Le serveur, les règles et le stockage sont là ; ce qui reste demande l'interface du jalon 3.
+
+Fait : le fournisseur TMDb derrière un trait, avec un fournisseur de remplacement pour les tests ; l'identification en tâche de fond, séparée du scan et rejouable seule ; le choix du bon film (titre exact, puis année, l'ordre du fournisseur en dernier) ; les identifiants déjà connus qui court-circuitent la recherche ; les textes par langue, genres, studios, personnes, participations, collections et bandes annonces distantes ; les affiches et fonds téléchargés une fois, convertis en WebP aux tailles fixes, servis sous un nom tiré de leur contenu, avec la couleur dominante de la carte ; les champs verrouillés à la main et la provenance de chaque champ.
+
+Reste : les photos des personnes et les images de titre, les films similaires, et tout ce qui se corrige depuis l'interface (recherche manuelle, repère « à identifier »).
+
+Vérifié dans l'environnement de travail : une affiche réelle est préparée en trois tailles avec sa couleur, une affiche inchangée n'est pas retéléchargée, un film sans affiche reste identifié, une clé refusée arrête la série en désignant la clé, et un fournisseur injoignable laisse les films en attente sans rien inventer.
 
 - Crate `metadata` avec le fournisseur TMDb derrière un trait.
 - Identification des films, identifiants externes, provenance des champs, liens de bandes annonces.

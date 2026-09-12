@@ -17,6 +17,21 @@ use crate::provider::{
 
 const BASE_URL: &str = "https://api.themoviedb.org/3";
 
+/// Where the provider keeps its pictures.
+///
+/// Fetched at their full size and shrunk here, so the sizes the interface
+/// serves are ours to choose and do not change under us.
+const IMAGE_BASE_URL: &str = "https://image.tmdb.org/t/p/original";
+
+/// How long fetching one picture may take.
+///
+/// Longer than a question, since a backdrop is a few hundred kilobytes, but
+/// still bounded: a picture that will not come is a picture for another day.
+const IMAGE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Refuses a picture beyond any plausible size before reading it all.
+const LARGEST_IMAGE: u64 = 16 * 1024 * 1024;
+
 /// How long a single request may take.
 ///
 /// Short on purpose. A film that takes ten seconds to identify is a film that
@@ -31,6 +46,7 @@ pub struct TmdbProvider {
     client: reqwest::Client,
     api_key: String,
     base_url: String,
+    image_base_url: String,
 }
 
 impl TmdbProvider {
@@ -47,6 +63,7 @@ impl TmdbProvider {
             client,
             api_key: api_key.into(),
             base_url: BASE_URL.to_string(),
+            image_base_url: IMAGE_BASE_URL.to_string(),
         })
     }
 
@@ -54,6 +71,12 @@ impl TmdbProvider {
     /// place of the real thing.
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = base_url.into();
+        self
+    }
+
+    /// Points the pictures somewhere else, for the same reason.
+    pub fn with_image_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.image_base_url = base_url.into();
         self
     }
 
@@ -134,6 +157,62 @@ impl MetadataProvider for TmdbProvider {
             )
             .await?;
         Ok(details_from(raw, language))
+    }
+
+    fn image_url(&self, path: &str) -> String {
+        format!("{}{}", self.image_base_url, path)
+    }
+
+    async fn fetch_image(&self, path: &str) -> Result<Vec<u8>> {
+        let response = self
+            .client
+            .get(self.image_url(path))
+            .timeout(IMAGE_TIMEOUT)
+            .send()
+            .await
+            .map_err(|error| ProviderError::Unreachable(short_reason(&error)))?;
+
+        match response.status().as_u16() {
+            200 => {}
+            401 | 403 => return Err(ProviderError::Unauthorised),
+            429 => {
+                return Err(ProviderError::TooManyRequests {
+                    retry_after_seconds: None,
+                })
+            }
+            status if (500..600).contains(&status) => {
+                return Err(ProviderError::Unreachable(format!(
+                    "the provider answered {status}"
+                )))
+            }
+            status => {
+                return Err(ProviderError::Unexpected(format!(
+                    "the provider answered {status}"
+                )))
+            }
+        }
+
+        // A picture announcing an absurd size is refused before a single byte
+        // of it is kept, rather than after the disk has filled up.
+        if response
+            .content_length()
+            .is_some_and(|size| size > LARGEST_IMAGE)
+        {
+            return Err(ProviderError::Unexpected(
+                "the picture is larger than any picture has business being".to_string(),
+            ));
+        }
+
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|error| ProviderError::Unreachable(short_reason(&error)))?;
+        if bytes.len() as u64 > LARGEST_IMAGE {
+            return Err(ProviderError::Unexpected(
+                "the picture is larger than any picture has business being".to_string(),
+            ));
+        }
+        Ok(bytes.to_vec())
     }
 
     async fn movie_by_imdb_id(
@@ -651,6 +730,15 @@ mod tests {
         let film = details_from(raw, "fr");
         assert_eq!(film.runtime, None);
         assert_eq!(film.community_rating, None);
+    }
+
+    #[test]
+    fn a_picture_is_asked_for_at_its_full_size_so_the_sizes_served_stay_ours() {
+        let provider = TmdbProvider::new("key").expect("a client");
+        assert_eq!(
+            provider.image_url("/poster.jpg"),
+            "https://image.tmdb.org/t/p/original/poster.jpg"
+        );
     }
 
     #[test]

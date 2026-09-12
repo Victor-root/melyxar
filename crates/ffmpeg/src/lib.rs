@@ -15,6 +15,7 @@
 
 pub mod capabilities;
 pub mod command;
+pub mod images;
 pub mod probe;
 pub mod process;
 

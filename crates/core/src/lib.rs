@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 pub mod error;
+pub mod fingerprint;
 pub mod id;
 pub mod job;
 pub mod library;

@@ -148,6 +148,10 @@ async fn identify_one(
         .await
         .map_err(AppError::from)?;
 
+    // The pictures follow at once, from what the provider already told us:
+    // asking a second time for the same film would be a request for nothing.
+    crate::images::store_provider_images(state, provider, work.id, &details).await;
+
     tracing::debug!(
         work = %MediaName::new(&details.title),
         provider = provider.name(),
@@ -427,6 +431,8 @@ mod tests {
         /// What to fail with instead of answering, if anything.
         failure: Option<fn() -> ProviderError>,
         searches: Mutex<Vec<(String, Option<i32>)>>,
+        /// Bytes handed back for any picture asked for, when there are any.
+        picture: Option<Vec<u8>>,
     }
 
     impl StandIn {
@@ -436,6 +442,7 @@ mod tests {
                 details,
                 failure: None,
                 searches: Mutex::new(Vec::new()),
+                picture: None,
             }
         }
 
@@ -445,11 +452,18 @@ mod tests {
                 details: Vec::new(),
                 failure: Some(failure),
                 searches: Mutex::new(Vec::new()),
+                picture: None,
             }
         }
 
         fn searches(&self) -> Vec<(String, Option<i32>)> {
             self.searches.lock().expect("free").clone()
+        }
+
+        /// Hands back a real picture, so the whole preparation can be exercised.
+        fn serving(mut self, picture: Vec<u8>) -> Self {
+            self.picture = Some(picture);
+            self
         }
     }
 
@@ -497,6 +511,17 @@ mod tests {
                 .find(|details| details.external_id == external_id)
                 .cloned()
                 .ok_or_else(|| ProviderError::Unexpected("not found".into()))
+        }
+
+        fn image_url(&self, path: &str) -> String {
+            format!("https://pictures.invalid{path}")
+        }
+
+        async fn fetch_image(&self, _path: &str) -> melyxar_metadata::provider::Result<Vec<u8>> {
+            match &self.picture {
+                Some(bytes) => Ok(bytes.clone()),
+                None => Err(ProviderError::Unexpected("no picture here".into())),
+            }
         }
 
         async fn movie_by_imdb_id(
@@ -576,6 +601,23 @@ mod tests {
         title: &str,
         year: Option<i32>,
     ) -> (tempfile::TempDir, AppState, Library, Work) {
+        build_state(title, year, false).await
+    }
+
+    /// The same, with the media tools, which the preparation of a picture
+    /// needs and the rest of the rules do not.
+    async fn state_with_tools(
+        title: &str,
+        year: Option<i32>,
+    ) -> (tempfile::TempDir, AppState, Library, Work) {
+        build_state(title, year, true).await
+    }
+
+    async fn build_state(
+        title: &str,
+        year: Option<i32>,
+        with_tools: bool,
+    ) -> (tempfile::TempDir, AppState, Library, Work) {
         let directory = tempfile::tempdir().expect("temporary directory");
         let config = Config {
             directories: Directories {
@@ -616,9 +658,14 @@ mod tests {
             .await
             .expect("work created");
 
+        let (tools, capabilities) = match with_tools {
+            true => crate::startup::detect_media_tools(&config).await,
+            false => (None, None),
+        };
+
         (
             directory,
-            AppState::new(config, database, None, None),
+            AppState::new(config, database, tools, capabilities),
             library,
             work,
         )
@@ -950,6 +997,178 @@ mod tests {
         .await
         .expect("read");
         assert_eq!(row.0, "https://www.youtube.com/watch?v=abc");
+    }
+
+    /// A real picture, made by the tool the server itself uses.
+    fn a_real_poster() -> Option<Vec<u8>> {
+        let file = tempfile::Builder::new()
+            .suffix(".jpg")
+            .tempfile()
+            .expect("temporary file");
+        let made = std::process::Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=#c81e1e:s=600x900",
+                "-frames:v",
+                "1",
+            ])
+            .arg(file.path())
+            .output()
+            .ok()?;
+        made.status
+            .success()
+            .then(|| std::fs::read(file.path()).ok())?
+    }
+
+    #[tokio::test]
+    async fn a_poster_is_prepared_in_every_size_the_interface_serves() {
+        let Some(picture) = a_real_poster() else {
+            eprintln!("no media tool here, the preparation of a picture was not exercised");
+            return;
+        };
+
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+        let provider = StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        )
+        .serving(picture);
+
+        run(&state, &provider, &library).await;
+
+        let images = state
+            .database()
+            .images_of("work", &work.id.to_db_string())
+            .await
+            .expect("read");
+        let posters: Vec<_> = images
+            .iter()
+            .filter(|image| image.image_kind == "poster")
+            .collect();
+        assert_eq!(posters.len(), 3, "one size per width the interface serves");
+        assert!(posters
+            .iter()
+            .all(|image| image.relative_path.ends_with(".webp")));
+        assert_eq!(
+            posters[0].height,
+            Some(posters[0].width.expect("a width") * 3 / 2),
+            "the shape of the poster is kept"
+        );
+
+        let root = state.config().directories.images();
+        for image in &posters {
+            assert!(
+                root.join(&image.relative_path).exists(),
+                "a row without its file is a broken picture"
+            );
+        }
+        assert!(
+            !root
+                .join("works")
+                .join(work.id.to_db_string())
+                .read_dir()
+                .expect("the folder is there")
+                .filter_map(std::result::Result::ok)
+                .any(|entry| entry
+                    .path()
+                    .extension()
+                    .is_some_and(|value| value == "source")),
+            "the picture as it arrived has done its work and is not kept"
+        );
+
+        let stored = state
+            .database()
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        let colour = stored.dominant_color.expect("a card has a colour to show");
+        assert!(colour.starts_with('#') && colour.len() == 7, "{colour}");
+    }
+
+    #[tokio::test]
+    async fn a_poster_that_has_not_changed_is_not_fetched_again() {
+        let Some(picture) = a_real_poster() else {
+            return;
+        };
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+        let provider = StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        )
+        .serving(picture);
+
+        run(&state, &provider, &library).await;
+        let before = state
+            .database()
+            .images_of("work", &work.id.to_db_string())
+            .await
+            .expect("read");
+
+        // Asking again is what a refresh does. The pictures are the same, so
+        // nothing is fetched and nothing is written.
+        state
+            .database()
+            .apply_identification(
+                work.id,
+                &to_record(&details("111", "Quiet Harbour", Some(2019)), "tmdb", "fr"),
+                false,
+            )
+            .await
+            .expect("applied");
+        crate::images::store_provider_images(
+            &state,
+            &provider,
+            work.id,
+            &details("111", "Quiet Harbour", Some(2019)),
+        )
+        .await;
+
+        assert_eq!(
+            state
+                .database()
+                .images_of("work", &work.id.to_db_string())
+                .await
+                .expect("read"),
+            before,
+            "a poster that did not change must not be fetched or written again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_picture_that_will_not_come_never_costs_the_film_its_identification() {
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+        // The stand-in serves no picture at all.
+        let provider = StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        );
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 1);
+
+        let stored = state
+            .database()
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.identification, IdentificationState::Identified);
+        assert!(state
+            .database()
+            .images_of("work", &work.id.to_db_string())
+            .await
+            .expect("read")
+            .is_empty());
     }
 
     #[tokio::test]

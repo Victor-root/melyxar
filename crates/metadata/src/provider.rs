@@ -144,6 +144,15 @@ pub trait MetadataProvider: Send + Sync {
         language: &str,
     ) -> impl Future<Output = Result<MovieDetails>> + Send;
 
+    /// The address a picture the provider named can be fetched from.
+    ///
+    /// The provider owns the shape of its addresses, so the caller passes the
+    /// path it was given back rather than assembling one.
+    fn image_url(&self, path: &str) -> String;
+
+    /// Fetches a picture the provider named.
+    fn fetch_image(&self, path: &str) -> impl Future<Output = Result<Vec<u8>>> + Send;
+
     /// The film an identifier from another site stands for.
     ///
     /// This is what makes a description file worth reading: an identifier can
