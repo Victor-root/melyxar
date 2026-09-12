@@ -102,6 +102,14 @@ define_id!(
     PersonId
 );
 define_id!(
+    /// Identifies one person's part in one work.
+    CreditId
+);
+define_id!(
+    /// Identifies a shared name such as a genre, a studio or a label.
+    NameId
+);
+define_id!(
     /// Identifies a collection, either provider-supplied or hand made.
     CollectionId
 );

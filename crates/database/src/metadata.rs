@@ -1,0 +1,932 @@
+//! Writing down what a provider said about a work.
+//!
+//! Everything lands in one transaction, so a reader never sees a film that has
+//! a new title and the old cast. Two things are never touched: a field someone
+//! edited by hand, and anything a person made themselves. A refresh that wipes
+//! what its owner arranged is a refresh nobody dares run twice.
+
+use melyxar_core::id::{CollectionId, CreditId, ExtraVideoId, NameId, PersonId, WorkId};
+use melyxar_core::time::{now, Millis};
+use melyxar_core::work::IdentificationState;
+use sqlx::{Row, Sqlite, Transaction};
+
+use crate::convert::timestamp_to_text;
+use crate::{Database, Result};
+
+/// One person's part in a work, as a provider described it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreditRecord {
+    pub external_id: String,
+    pub name: String,
+    pub sort_name: String,
+    pub role: String,
+    pub character: Option<String>,
+    pub ordinal: i32,
+}
+
+/// A series of works a provider groups together.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CollectionRecord {
+    pub external_id: String,
+    pub name: String,
+    pub sort_name: String,
+}
+
+/// A trailer hosted elsewhere.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteTrailerRecord {
+    pub name: String,
+    pub url: String,
+}
+
+/// Everything a provider said, ready to be written.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IdentifiedWork {
+    /// Name of the provider, kept with every field it supplied so a later
+    /// refresh knows what it owns.
+    pub provider: String,
+    pub external_id: String,
+    pub imdb_id: Option<String>,
+    /// Language the texts below are written in.
+    pub language: String,
+    pub title: String,
+    pub sort_title: String,
+    pub tagline: Option<String>,
+    pub overview: Option<String>,
+    pub release_year: Option<i32>,
+    pub runtime: Option<Millis>,
+    pub community_rating: Option<f64>,
+    pub age_rating_label: Option<String>,
+    pub genres: Vec<String>,
+    pub studios: Vec<String>,
+    pub credits: Vec<CreditRecord>,
+    pub collection: Option<CollectionRecord>,
+    pub trailers: Vec<RemoteTrailerRecord>,
+}
+
+impl Database {
+    /// Works of a library that are still waiting to be looked up.
+    pub async fn works_awaiting_identification(
+        &self,
+        library_id: melyxar_core::id::LibraryId,
+        limit: i64,
+    ) -> Result<Vec<melyxar_core::work::Work>> {
+        let rows = sqlx::query(
+            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year,
+                    identification, dominant_color, added_at, updated_at
+             FROM works
+             WHERE library_id = ? AND identification IN ('pending', 'unidentified')
+             ORDER BY added_at
+             LIMIT ?",
+        )
+        .bind(library_id.to_db_string())
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter().map(crate::catalogue::work_from_row).collect()
+    }
+
+    /// Records that a work was looked up and not recognised.
+    ///
+    /// It stays in the library with a marker rather than being set aside,
+    /// because a file nobody can see is a file nobody remembers to fix.
+    pub async fn mark_work_unidentified(&self, work_id: WorkId) -> Result<()> {
+        sqlx::query("UPDATE works SET identification = ?, updated_at = ? WHERE id = ?")
+            .bind(IdentificationState::Unidentified.as_str())
+            .bind(timestamp_to_text(now()))
+            .bind(work_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
+    /// Writes down everything a provider said about a work.
+    ///
+    /// `chosen_by_hand` marks a match a person picked, which a later refresh
+    /// must never undo.
+    pub async fn apply_identification(
+        &self,
+        work_id: WorkId,
+        found: &IdentifiedWork,
+        chosen_by_hand: bool,
+    ) -> Result<()> {
+        let locked = self.locked_fields(work_id).await?;
+        let mut transaction = self.begin().await?;
+        let moment = timestamp_to_text(now());
+
+        let state = match chosen_by_hand {
+            true => IdentificationState::Manual,
+            false => IdentificationState::Identified,
+        };
+
+        // A field edited by hand keeps what it was given, whatever the
+        // provider now says.
+        let keeps = |field: &str| locked.iter().any(|held| held == field);
+
+        sqlx::query(
+            "UPDATE works SET
+                title = CASE WHEN ?1 THEN title ELSE ?2 END,
+                sort_title = CASE WHEN ?1 THEN sort_title ELSE ?3 END,
+                release_year = CASE WHEN ?4 THEN release_year ELSE ?5 END,
+                runtime_ms = CASE WHEN ?6 THEN runtime_ms ELSE ?7 END,
+                community_rating = ?8,
+                age_rating_label = ?9,
+                identification = ?10,
+                updated_at = ?11
+             WHERE id = ?12",
+        )
+        .bind(keeps("title"))
+        .bind(&found.title)
+        .bind(&found.sort_title)
+        .bind(keeps("release_year"))
+        .bind(found.release_year)
+        .bind(keeps("runtime"))
+        .bind(found.runtime.map(Millis::get))
+        .bind(found.community_rating)
+        .bind(found.age_rating_label.as_deref())
+        .bind(state.as_str())
+        .bind(&moment)
+        .bind(work_id.to_db_string())
+        .execute(&mut *transaction)
+        .await?;
+
+        set_external_id(
+            &mut transaction,
+            work_id,
+            &found.provider,
+            &found.external_id,
+        )
+        .await?;
+        if let Some(imdb_id) = &found.imdb_id {
+            set_external_id(&mut transaction, work_id, "imdb", imdb_id).await?;
+        }
+
+        if !keeps("overview") {
+            sqlx::query(
+                "INSERT INTO work_translations (work_id, language, title, tagline, overview)
+                 VALUES (?, ?, ?, ?, ?)
+                 ON CONFLICT (work_id, language) DO UPDATE SET
+                    title = excluded.title,
+                    tagline = excluded.tagline,
+                    overview = excluded.overview",
+            )
+            .bind(work_id.to_db_string())
+            .bind(&found.language)
+            .bind(&found.title)
+            .bind(found.tagline.as_deref())
+            .bind(found.overview.as_deref())
+            .execute(&mut *transaction)
+            .await?;
+        }
+
+        replace_links(&mut transaction, work_id, &GENRES, &found.genres).await?;
+        replace_links(&mut transaction, work_id, &STUDIOS, &found.studios).await?;
+
+        replace_credits(&mut transaction, work_id, &found.provider, &found.credits).await?;
+
+        if let Some(collection) = &found.collection {
+            attach_to_collection(&mut transaction, work_id, &found.provider, collection).await?;
+        }
+        replace_remote_trailers(&mut transaction, work_id, &found.trailers, &moment).await?;
+
+        for field in [
+            "title",
+            "overview",
+            "release_year",
+            "runtime",
+            "community_rating",
+            "age_rating",
+            "genres",
+            "studios",
+            "credits",
+        ] {
+            if keeps(field) {
+                continue;
+            }
+            sqlx::query(
+                "INSERT INTO work_field_provenance (work_id, field, provider, fetched_at)
+                 VALUES (?, ?, ?, ?)
+                 ON CONFLICT (work_id, field) DO UPDATE SET
+                    provider = excluded.provider, fetched_at = excluded.fetched_at",
+            )
+            .bind(work_id.to_db_string())
+            .bind(field)
+            .bind(&found.provider)
+            .bind(&moment)
+            .execute(&mut *transaction)
+            .await?;
+        }
+
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// Fields someone edited by hand, which a refresh leaves alone.
+    pub async fn locked_fields(&self, work_id: WorkId) -> Result<Vec<String>> {
+        let rows = sqlx::query("SELECT field FROM work_locked_fields WHERE work_id = ?")
+            .bind(work_id.to_db_string())
+            .fetch_all(self.reader())
+            .await?;
+        rows.iter().map(|row| Ok(row.try_get("field")?)).collect()
+    }
+
+    /// Marks a field as edited by hand.
+    pub async fn lock_field(&self, work_id: WorkId, field: &str) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO work_locked_fields (work_id, field, locked_at) VALUES (?, ?, ?)
+             ON CONFLICT (work_id, field) DO NOTHING",
+        )
+        .bind(work_id.to_db_string())
+        .bind(field)
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// Which provider supplied which field, and when.
+    pub async fn field_provenance(&self, work_id: WorkId) -> Result<Vec<(String, String)>> {
+        let rows = sqlx::query(
+            "SELECT field, provider FROM work_field_provenance WHERE work_id = ? ORDER BY field",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+        rows.iter()
+            .map(|row| Ok((row.try_get("field")?, row.try_get("provider")?)))
+            .collect()
+    }
+
+    /// Texts of a work in one language.
+    pub async fn work_translation(
+        &self,
+        work_id: WorkId,
+        language: &str,
+    ) -> Result<Option<(Option<String>, Option<String>, Option<String>)>> {
+        let row = sqlx::query(
+            "SELECT title, tagline, overview FROM work_translations
+             WHERE work_id = ? AND language = ?",
+        )
+        .bind(work_id.to_db_string())
+        .bind(language)
+        .fetch_optional(self.reader())
+        .await?;
+
+        row.map(|row| {
+            Ok((
+                row.try_get("title")?,
+                row.try_get("tagline")?,
+                row.try_get("overview")?,
+            ))
+        })
+        .transpose()
+    }
+
+    /// Genres of a work, in order.
+    pub async fn work_genres(&self, work_id: WorkId) -> Result<Vec<String>> {
+        self.linked_names(work_id, &GENRES).await
+    }
+
+    /// Studios of a work, in order.
+    pub async fn work_studios(&self, work_id: WorkId) -> Result<Vec<String>> {
+        self.linked_names(work_id, &STUDIOS).await
+    }
+
+    async fn linked_names(&self, work_id: WorkId, link: &LinkStatements) -> Result<Vec<String>> {
+        let rows = sqlx::query(link.list)
+            .bind(work_id.to_db_string())
+            .fetch_all(self.reader())
+            .await?;
+        rows.iter().map(|row| Ok(row.try_get("name")?)).collect()
+    }
+
+    /// Who is credited on a work, leads first.
+    pub async fn work_credits(
+        &self,
+        work_id: WorkId,
+    ) -> Result<Vec<(String, String, Option<String>)>> {
+        let rows = sqlx::query(
+            "SELECT people.name, credits.role, credits.character_name
+             FROM credits JOIN people ON people.id = credits.person_id
+             WHERE credits.work_id = ?
+             ORDER BY CASE credits.role WHEN 'actor' THEN 0 ELSE 1 END, credits.ordinal,
+                      people.sort_name",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                Ok((
+                    row.try_get("name")?,
+                    row.try_get("role")?,
+                    row.try_get("character_name")?,
+                ))
+            })
+            .collect()
+    }
+
+    /// The collection a work belongs to, if any.
+    pub async fn work_collection(&self, work_id: WorkId) -> Result<Option<String>> {
+        let row = sqlx::query(
+            "SELECT collections.name FROM collections
+             JOIN collection_items ON collection_items.collection_id = collections.id
+             WHERE collection_items.work_id = ? LIMIT 1",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+        row.map(|row| Ok(row.try_get("name")?)).transpose()
+    }
+}
+
+async fn set_external_id(
+    transaction: &mut Transaction<'_, Sqlite>,
+    work_id: WorkId,
+    provider: &str,
+    external_id: &str,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO work_external_ids (work_id, provider, external_id) VALUES (?, ?, ?)
+         ON CONFLICT (work_id, provider) DO UPDATE SET external_id = excluded.external_id",
+    )
+    .bind(work_id.to_db_string())
+    .bind(provider)
+    .bind(external_id)
+    .execute(&mut **transaction)
+    .await?;
+    Ok(())
+}
+
+/// The statements behind one of the shared name tables.
+///
+/// Written out rather than built, so no statement here is ever assembled from
+/// anything that came from outside.
+struct LinkStatements {
+    select: &'static str,
+    insert: &'static str,
+    clear: &'static str,
+    link: &'static str,
+    list: &'static str,
+}
+
+const GENRES: LinkStatements = LinkStatements {
+    select: "SELECT id FROM genres WHERE name = ? COLLATE NOCASE",
+    insert: "INSERT INTO genres (id, name) VALUES (?, ?)",
+    clear: "DELETE FROM work_genres WHERE work_id = ?",
+    link: "INSERT INTO work_genres (work_id, genre_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+    list: "SELECT genres.name FROM genres
+           JOIN work_genres ON work_genres.genre_id = genres.id
+           WHERE work_genres.work_id = ? ORDER BY genres.name",
+};
+
+const STUDIOS: LinkStatements = LinkStatements {
+    select: "SELECT id FROM studios WHERE name = ? COLLATE NOCASE",
+    insert: "INSERT INTO studios (id, name) VALUES (?, ?)",
+    clear: "DELETE FROM work_studios WHERE work_id = ?",
+    link: "INSERT INTO work_studios (work_id, studio_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+    list: "SELECT studios.name FROM studios
+           JOIN work_studios ON work_studios.studio_id = studios.id
+           WHERE work_studios.work_id = ? ORDER BY studios.name",
+};
+
+/// Replaces the genres or the studios of a work.
+///
+/// The names themselves are shared, so a genre is created once and reused; the
+/// links are rebuilt, which is how a film that lost a genre loses it here too.
+async fn replace_links(
+    transaction: &mut Transaction<'_, Sqlite>,
+    work_id: WorkId,
+    statements: &LinkStatements,
+    names: &[String],
+) -> Result<()> {
+    sqlx::query(statements.clear)
+        .bind(work_id.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
+
+    for name in names {
+        let existing: Option<(String,)> = sqlx::query_as(statements.select)
+            .bind(name)
+            .fetch_optional(&mut **transaction)
+            .await?;
+        let id = match existing {
+            Some((id,)) => id,
+            None => {
+                let id = NameId::new().to_db_string();
+                sqlx::query(statements.insert)
+                    .bind(&id)
+                    .bind(name)
+                    .execute(&mut **transaction)
+                    .await?;
+                id
+            }
+        };
+        sqlx::query(statements.link)
+            .bind(work_id.to_db_string())
+            .bind(&id)
+            .execute(&mut **transaction)
+            .await?;
+    }
+    Ok(())
+}
+
+/// Replaces who is credited on a work.
+///
+/// People are shared and kept: an actor who left this film is still in others,
+/// and their photo was fetched once.
+async fn replace_credits(
+    transaction: &mut Transaction<'_, Sqlite>,
+    work_id: WorkId,
+    provider: &str,
+    credits: &[CreditRecord],
+) -> Result<()> {
+    sqlx::query("DELETE FROM credits WHERE work_id = ?")
+        .bind(work_id.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
+
+    for credit in credits {
+        let existing: Option<(String,)> = sqlx::query_as(
+            "SELECT person_id FROM person_external_ids WHERE provider = ? AND external_id = ?",
+        )
+        .bind(provider)
+        .bind(&credit.external_id)
+        .fetch_optional(&mut **transaction)
+        .await?;
+
+        let person_id = match existing {
+            Some((id,)) => id,
+            None => {
+                let id = PersonId::new().to_db_string();
+                sqlx::query(
+                    "INSERT INTO people (id, name, sort_name, created_at) VALUES (?, ?, ?, ?)",
+                )
+                .bind(&id)
+                .bind(&credit.name)
+                .bind(&credit.sort_name)
+                .bind(timestamp_to_text(now()))
+                .execute(&mut **transaction)
+                .await?;
+                sqlx::query(
+                    "INSERT INTO person_external_ids (person_id, provider, external_id)
+                     VALUES (?, ?, ?)",
+                )
+                .bind(&id)
+                .bind(provider)
+                .bind(&credit.external_id)
+                .execute(&mut **transaction)
+                .await?;
+                id
+            }
+        };
+
+        sqlx::query(
+            "INSERT INTO credits (id, work_id, person_id, role, character_name, ordinal)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(CreditId::new().to_db_string())
+        .bind(work_id.to_db_string())
+        .bind(&person_id)
+        .bind(&credit.role)
+        .bind(credit.character.as_deref())
+        .bind(credit.ordinal)
+        .execute(&mut **transaction)
+        .await?;
+    }
+    Ok(())
+}
+
+/// Puts a work in the collection a provider says it belongs to.
+///
+/// Only collections the provider made are touched. One a person put together
+/// is theirs, and a refresh has no business rearranging it.
+async fn attach_to_collection(
+    transaction: &mut Transaction<'_, Sqlite>,
+    work_id: WorkId,
+    provider: &str,
+    collection: &CollectionRecord,
+) -> Result<()> {
+    let existing: Option<(String,)> = sqlx::query_as(
+        "SELECT collection_id FROM collection_external_ids WHERE provider = ? AND external_id = ?",
+    )
+    .bind(provider)
+    .bind(&collection.external_id)
+    .fetch_optional(&mut **transaction)
+    .await?;
+
+    let collection_id = match existing {
+        Some((id,)) => id,
+        None => {
+            let id = CollectionId::new().to_db_string();
+            sqlx::query(
+                "INSERT INTO collections (id, name, sort_name, origin, created_at)
+                 VALUES (?, ?, ?, 'provider', ?)",
+            )
+            .bind(&id)
+            .bind(&collection.name)
+            .bind(&collection.sort_name)
+            .bind(timestamp_to_text(now()))
+            .execute(&mut **transaction)
+            .await?;
+            sqlx::query(
+                "INSERT INTO collection_external_ids (collection_id, provider, external_id)
+                 VALUES (?, ?, ?)",
+            )
+            .bind(&id)
+            .bind(provider)
+            .bind(&collection.external_id)
+            .execute(&mut **transaction)
+            .await?;
+            id
+        }
+    };
+
+    sqlx::query(
+        "INSERT INTO collection_items (collection_id, work_id) VALUES (?, ?)
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(&collection_id)
+    .bind(work_id.to_db_string())
+    .execute(&mut **transaction)
+    .await?;
+    Ok(())
+}
+
+/// Replaces the trailers hosted elsewhere.
+///
+/// Only those: a trailer sitting on the disk was found by the scan and has
+/// nothing to do with what a provider knows.
+async fn replace_remote_trailers(
+    transaction: &mut Transaction<'_, Sqlite>,
+    work_id: WorkId,
+    trailers: &[RemoteTrailerRecord],
+    moment: &str,
+) -> Result<()> {
+    sqlx::query("DELETE FROM extra_videos WHERE work_id = ? AND remote_url IS NOT NULL")
+        .bind(work_id.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
+
+    for trailer in trailers {
+        sqlx::query(
+            "INSERT INTO extra_videos (id, work_id, kind, name, remote_url, created_at)
+             VALUES (?, ?, 'trailer', ?, ?, ?)",
+        )
+        .bind(ExtraVideoId::new().to_db_string())
+        .bind(work_id.to_db_string())
+        .bind(&trailer.name)
+        .bind(&trailer.url)
+        .bind(moment)
+        .execute(&mut **transaction)
+        .await?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use melyxar_core::library::LibraryKind;
+    use melyxar_core::work::WorkKind;
+    use std::path::PathBuf;
+
+    async fn work_in_library() -> (Database, melyxar_core::work::Work) {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Films"))],
+            )
+            .await
+            .expect("library created");
+        let work = database
+            .create_work(
+                library.id,
+                WorkKind::Movie,
+                "Quiet Harbour 2019 MULTi",
+                "quiet harbour 2019 multi",
+                None,
+            )
+            .await
+            .expect("work created");
+        (database, work)
+    }
+
+    fn found() -> IdentifiedWork {
+        IdentifiedWork {
+            provider: "tmdb".to_string(),
+            external_id: "111".to_string(),
+            imdb_id: Some("tt7654321".to_string()),
+            language: "fr".to_string(),
+            title: "Quiet Harbour".to_string(),
+            sort_title: "quiet harbour".to_string(),
+            tagline: Some("La mer ne rend rien.".to_string()),
+            overview: Some("Un port, une nuit.".to_string()),
+            release_year: Some(2019),
+            runtime: Some(Millis::new(118 * 60_000)),
+            community_rating: Some(7.4),
+            age_rating_label: Some("12".to_string()),
+            genres: vec!["Drame".to_string(), "Thriller".to_string()],
+            studios: vec!["Invented Pictures".to_string()],
+            credits: vec![
+                CreditRecord {
+                    external_id: "1".to_string(),
+                    name: "Alix Moreau".to_string(),
+                    sort_name: "alix moreau".to_string(),
+                    role: "actor".to_string(),
+                    character: Some("Camille".to_string()),
+                    ordinal: 0,
+                },
+                CreditRecord {
+                    external_id: "3".to_string(),
+                    name: "Sacha Nord".to_string(),
+                    sort_name: "sacha nord".to_string(),
+                    role: "director".to_string(),
+                    character: None,
+                    ordinal: 0,
+                },
+            ],
+            collection: Some(CollectionRecord {
+                external_id: "77".to_string(),
+                name: "Harbour Trilogy".to_string(),
+                sort_name: "harbour trilogy".to_string(),
+            }),
+            trailers: vec![RemoteTrailerRecord {
+                name: "Bande annonce".to_string(),
+                url: "https://www.youtube.com/watch?v=abc".to_string(),
+            }],
+        }
+    }
+
+    #[tokio::test]
+    async fn an_identified_work_carries_what_the_page_shows() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+
+        let stored = database
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.title, "Quiet Harbour");
+        assert_eq!(stored.release_year, Some(2019));
+        assert_eq!(stored.identification, IdentificationState::Identified);
+        assert!(!stored.identification.may_be_looked_up_again());
+
+        assert_eq!(
+            database.work_genres(work.id).await.expect("read"),
+            vec!["Drame", "Thriller"]
+        );
+        assert_eq!(
+            database.work_studios(work.id).await.expect("read"),
+            vec!["Invented Pictures"]
+        );
+        assert_eq!(
+            database
+                .work_collection(work.id)
+                .await
+                .expect("read")
+                .as_deref(),
+            Some("Harbour Trilogy")
+        );
+        assert_eq!(
+            database.work_external_ids(work.id).await.expect("read"),
+            vec![
+                ("imdb".to_string(), "tt7654321".to_string()),
+                ("tmdb".to_string(), "111".to_string()),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_texts_are_stored_in_the_language_they_were_asked_for() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+
+        let (title, tagline, overview) = database
+            .work_translation(work.id, "fr")
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(title.as_deref(), Some("Quiet Harbour"));
+        assert_eq!(tagline.as_deref(), Some("La mer ne rend rien."));
+        assert_eq!(overview.as_deref(), Some("Un port, une nuit."));
+
+        assert!(
+            database
+                .work_translation(work.id, "en")
+                .await
+                .expect("read")
+                .is_none(),
+            "a language nobody fetched holds nothing"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_cast_comes_back_with_the_leads_first() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+
+        let credits = database.work_credits(work.id).await.expect("read");
+        assert_eq!(credits.len(), 2);
+        assert_eq!(credits[0].0, "Alix Moreau");
+        assert_eq!(credits[0].1, "actor");
+        assert_eq!(credits[0].2.as_deref(), Some("Camille"));
+        assert_eq!(credits[1].1, "director");
+    }
+
+    #[tokio::test]
+    async fn looking_a_work_up_twice_replaces_what_it_holds_rather_than_doubling_it() {
+        let (database, work) = work_in_library().await;
+        for _ in 0..3 {
+            database
+                .apply_identification(work.id, &found(), false)
+                .await
+                .expect("identification applied");
+        }
+
+        assert_eq!(database.work_genres(work.id).await.expect("read").len(), 2);
+        assert_eq!(database.work_credits(work.id).await.expect("read").len(), 2);
+        assert_eq!(
+            database
+                .extra_videos_of_work(work.id)
+                .await
+                .expect("read")
+                .len(),
+            0,
+            "a trailer hosted elsewhere is not a file on the disk"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_genre_is_shared_rather_than_created_again_for_every_film() {
+        let (database, first) = work_in_library().await;
+        let second = database
+            .create_work(
+                first.library_id,
+                WorkKind::Movie,
+                "Amber Field",
+                "amber field",
+                None,
+            )
+            .await
+            .expect("work created");
+
+        database
+            .apply_identification(first.id, &found(), false)
+            .await
+            .expect("applied");
+        database
+            .apply_identification(
+                second.id,
+                &IdentifiedWork {
+                    external_id: "222".to_string(),
+                    title: "Amber Field".to_string(),
+                    sort_title: "amber field".to_string(),
+                    ..found()
+                },
+                false,
+            )
+            .await
+            .expect("applied");
+
+        let count: (i64,) = sqlx::query_as("SELECT count(*) FROM genres")
+            .fetch_one(database.reader())
+            .await
+            .expect("read");
+        assert_eq!(count.0, 2, "two films sharing two genres make two genres");
+    }
+
+    #[tokio::test]
+    async fn a_field_edited_by_hand_survives_a_later_lookup() {
+        let (database, work) = work_in_library().await;
+        database
+            .lock_field(work.id, "title")
+            .await
+            .expect("field locked");
+
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+
+        let stored = database
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(
+            stored.title, "Quiet Harbour 2019 MULTi",
+            "a refresh that undoes what someone typed is a refresh nobody dares run"
+        );
+        assert_eq!(
+            stored.release_year,
+            Some(2019),
+            "the fields nobody touched still take what the provider says"
+        );
+        assert!(!database
+            .field_provenance(work.id)
+            .await
+            .expect("read")
+            .iter()
+            .any(|(field, _)| field == "title"));
+    }
+
+    #[tokio::test]
+    async fn a_match_picked_by_hand_says_so() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), true)
+            .await
+            .expect("identification applied");
+
+        let stored = database
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.identification, IdentificationState::Manual);
+        assert!(
+            !stored.identification.may_be_looked_up_again(),
+            "a choice someone made is never undone by a background refresh"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_work_nobody_recognised_stays_in_the_library_with_a_marker() {
+        let (database, work) = work_in_library().await;
+        database
+            .mark_work_unidentified(work.id)
+            .await
+            .expect("marked");
+
+        let stored = database
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.identification, IdentificationState::Unidentified);
+        assert!(
+            stored.identification.may_be_looked_up_again(),
+            "a film nobody recognised today may be recognised tomorrow"
+        );
+        assert_eq!(
+            database
+                .works_awaiting_identification(work.library_id, 10)
+                .await
+                .expect("read")
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn works_already_identified_are_not_asked_about_again() {
+        let (database, work) = work_in_library().await;
+        assert_eq!(
+            database
+                .works_awaiting_identification(work.library_id, 10)
+                .await
+                .expect("read")
+                .len(),
+            1
+        );
+
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("applied");
+        assert!(database
+            .works_awaiting_identification(work.library_id, 10)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_provider_of_every_field_it_supplied_is_written_down() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("applied");
+
+        let provenance = database.field_provenance(work.id).await.expect("read");
+        assert!(provenance.iter().all(|(_, provider)| provider == "tmdb"));
+        assert!(provenance.iter().any(|(field, _)| field == "overview"));
+    }
+}

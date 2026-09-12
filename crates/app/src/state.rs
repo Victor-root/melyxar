@@ -9,6 +9,7 @@ use melyxar_config::Config;
 use melyxar_database::Database;
 use melyxar_ffmpeg::{Capabilities, ToolPaths};
 use melyxar_jobs::JobRunner;
+use melyxar_metadata::TmdbProvider;
 
 /// The server, assembled.
 #[derive(Clone)]
@@ -29,6 +30,10 @@ struct Inner {
     /// still browses without them; only playback needs them.
     tools: Option<ToolPaths>,
     capabilities: Option<Capabilities>,
+    /// The metadata provider, built once and kept, so the connection to it
+    /// stays open instead of being made again for every film. Absent when no
+    /// key was configured: the library still scans and browses without one.
+    provider: Option<Arc<TmdbProvider>>,
 }
 
 impl AppState {
@@ -38,9 +43,20 @@ impl AppState {
         tools: Option<ToolPaths>,
         capabilities: Option<Capabilities>,
     ) -> Self {
+        let provider = config.tmdb_api_key.as_deref().and_then(|key| {
+            match TmdbProvider::new(key) {
+                Ok(provider) => Some(Arc::new(provider)),
+                Err(error) => {
+                    tracing::error!(error = %error, "the metadata provider could not be prepared");
+                    None
+                }
+            }
+        });
+
         Self {
             inner: Arc::new(Inner {
                 jobs: JobRunner::new(database.clone()),
+                provider,
                 config,
                 database,
                 tools,
@@ -59,6 +75,11 @@ impl AppState {
 
     pub fn jobs(&self) -> &JobRunner {
         &self.inner.jobs
+    }
+
+    /// The metadata provider, when one was configured.
+    pub fn metadata_provider(&self) -> Option<Arc<TmdbProvider>> {
+        self.inner.provider.clone()
     }
 
     pub fn tools(&self) -> Option<&ToolPaths> {

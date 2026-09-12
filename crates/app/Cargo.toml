@@ -15,6 +15,7 @@ melyxar-ffmpeg = { workspace = true }
 melyxar-jobs = { workspace = true }
 melyxar-library = { workspace = true }
 melyxar-media-probe = { workspace = true }
+melyxar-metadata = { workspace = true }
 melyxar-playback = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -22,4 +23,5 @@ thiserror = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
+sqlx = { workspace = true }
 tempfile = { workspace = true }

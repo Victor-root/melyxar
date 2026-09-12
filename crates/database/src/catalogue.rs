@@ -669,7 +669,7 @@ fn stored_source_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredSource>
     })
 }
 
-fn work_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Work> {
+pub(crate) fn work_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Work> {
     let kind_text: String = row.try_get("kind")?;
     let identification_text: String = row.try_get("identification")?;
     Ok(Work {

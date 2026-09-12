@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 pub mod diagnostics;
+pub mod identify;
 pub mod scan;
 pub mod startup;
 pub mod state;
