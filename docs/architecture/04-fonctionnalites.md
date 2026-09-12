@@ -443,19 +443,53 @@ Un jeu de cas écrit avec des titres inventés couvre chacune de ces formes : ti
 
 ## 29. Disposition de la fiche, relevée sur Emby
 
-Le mainteneur a fourni une capture de la fiche d'un film chez Emby comme référence de disposition. Ce qui en est retenu, sachant qu'on reprend l'agencement et non le code ni les visuels.
+Le mainteneur a fourni des captures de la fiche d'un film chez Emby comme référence de direction. Melyxar reprendra cet agencement, avec des écarts assumés plus tard. On reprend la structure et le parcours, jamais le code ni les visuels, qui sont propriétaires. Les captures montrent des titres et des chemins réels : rien de tout cela n'est reproduit ici.
 
-**De haut en bas :**
+### Bandeau supérieur
 
-- **Bandeau supérieur** : à gauche, retour, accueil et menu regroupés ; à droite, accès aux utilisateurs, diffusion vers un appareil, recherche, et avatar du compte.
-- **Image de titre du film** en haut à gauche, sur le fond, plutôt que le titre en texte. C'est une image dédiée fournie par les bases de métadonnées, distincte de l'affiche et du fond. Elle doit donc être récupérée et stockée comme un type d'image à part entière.
-- **Barre d'actions** alignée à droite : un bouton de lecture bien visible en couleur d'accentuation, puis des boutons à icône pour la bande annonce, le marquage vu, le favori, et un menu de trois points pour le reste.
-- **Affiche** à gauche, et à sa droite le bloc d'informations.
-- **Ligne de métadonnées compacte** : année, durée, classification d'âge du pays, note du fournisseur, note d'un agrégateur, et **heure de fin estimée si le film démarrait maintenant**. Ce dernier détail est peu coûteux et très apprécié, il est retenu.
-- **Accroche** en gros caractères, distincte du synopsis.
-- **Synopsis**.
-- **Étiquettes** du fournisseur, affichées comme des mots-clés.
-- **Liens vers les fiches externes**.
-- **Bloc technique** séparé : ligne vidéo décrivant définition, codec et présence du HDR, puis **listes déroulantes de choix de la piste audio et de la piste de sous-titres, disponibles avant le lancement de la lecture**. Ce point est important : le choix se fait sur la fiche, pas seulement une fois la lecture démarrée, ce qui évite de lancer un transcodage pour rien avant de changer d'avis.
+Retour, accueil et menu à gauche, puis l'image de titre du film en petit format. À droite : diffusion vers un appareil, recherche, avatar du compte, réglages. Le bandeau reste visible au défilement et l'image de titre y rappelle où l'on se trouve.
 
-**Conséquences pour Melyxar.** Trois éléments s'ajoutent à ce qui était prévu : l'image de titre comme type d'image distinct, l'heure de fin estimée, et surtout les sélecteurs de pistes sur la fiche. Ce dernier point rejoint le sélecteur de version décidé plus haut : la fiche est l'endroit où l'on règle version, piste audio et sous-titres, et la décision de lecture n'est calculée qu'au moment où l'on appuie sur le bouton.
+### Bloc principal
+
+Le fond de page est l'image de fond du film, assombrie. Par-dessus :
+
+- **Affiche** à gauche, en grand format.
+- **Titre** en très gros caractères, suivi immédiatement de deux icônes discrètes : modifier la fiche, et gérer les images. C'est le point d'entrée de la correction manuelle, placé là où l'on regarde déjà.
+- **Ligne de métadonnées compacte** : note du fournisseur, note d'un agrégateur, année, durée, classification d'âge du pays, genre principal, et **heure de fin estimée si la lecture démarrait maintenant**.
+- **Ligne technique et sélecteurs** : la définition résumée en quelques mots (définition, plage dynamique, codec), puis une liste déroulante de piste audio et une liste déroulante de sous-titres, **disponibles avant le lancement**. Les sous-titres peuvent être désactivés depuis cette liste.
+- **Rangée d'actions** : bouton de lecture bien visible, bouton de bande annonce à côté, puis des boutons ronds à icône pour marquer vu, mettre en favori, supprimer, et un menu de trois points. Le bouton « vu » est rempli en couleur d'accentuation quand l'état est actif : l'icône porte l'état, il n'y a pas de texte à lire.
+- **Accroche** en gras, distincte du synopsis.
+- **Synopsis tronqué** après trois lignes environ, avec un lien pour dérouler. Cela garde le haut de page dense sans sacrifier le texte.
+- **Réalisateur** nommé juste en dessous.
+
+### Sections suivantes, en rangées horizontales
+
+Chacune est un titre de section suivi d'une bande défilante horizontalement.
+
+- **Distribution et équipe** : photos des personnes en vignettes.
+- **Chapitres** : vignette, libellé du chapitre, horodatage. Dans la capture fournie, les chapitres sont régulièrement espacés, ce qui correspond à des chapitres générés plutôt qu'à des chapitres nommés présents dans le fichier. Melyxar affichera les deux, en privilégiant les chapitres réels quand le fichier en contient.
+- **Similaire** : affiches avec titre et année, et **une pastille de coche en coin pour les titres déjà vus**. Cet état sur la carte elle-même est à reprendre partout, y compris dans les grilles de bibliothèque.
+
+### Section « À propos »
+
+Un bloc d'informations détaillées, en bas de page :
+
+- Date de dernière lecture, genres, studios, liens vers les fiches externes.
+- **Informations du média** : chemin du fichier, conteneur, taille, date d'ajout.
+- Puis **une carte par piste**, côte à côte, avec une icône par type : une carte vidéo, une carte par piste audio, une carte par piste de sous-titres.
+
+**Une différence volontaire avec Emby sur ce point.** Emby affiche le chemin complet du fichier à tout utilisateur. Pour Melyxar, le chemin et la taille ne seront visibles que par un administrateur : ce sont des informations sur l'organisation du serveur, pas sur le film. Le reste du bloc technique reste visible par tous.
+
+### Champs techniques à stocker et à afficher
+
+Les cartes de la capture donnent la liste exacte de ce qu'un utilisateur exigeant veut voir. Elle devient la cible de l'analyse du fichier au jalon 1, et elle recoupe ce que l'outil d'analyse fournit déjà.
+
+- **Piste vidéo** : titre lisible, codec, profil, niveau, résolution, ratio d'aspect, entrelacement, images par seconde, débit, plage dynamique, couleurs primaires, espace colorimétrique, courbe de transfert, profondeur des échantillons, format des pixels, nombre d'images de référence.
+- **Piste audio** : titre lisible, langue, codec, disposition des canaux, nombre de canaux, taux d'échantillonnage, profondeur des échantillons, débit, piste par défaut.
+- **Piste de sous-titres** : titre lisible, langue, codec, par défaut, forcée, destinée aux malentendants, interne ou externe.
+
+Les champs de couleur (primaires, espace, courbe de transfert, profondeur) ne sont pas là pour décorer : **ce sont eux qui déterminent la décision de conversion en SDR**, pour la lecture comme pour les vignettes. Les stocker dès le premier scan est donc une nécessité fonctionnelle, pas un luxe d'affichage.
+
+### Confirmation du problème des vignettes HDR
+
+La capture des chapitres porte sur un film en 4K avec plage dynamique étendue. **Ses vignettes y apparaissent très sombres, la première presque entièrement noire.** C'est exactement le défaut décrit plus haut : des images extraites d'une source à plage dynamique étendue sans conversion. Le point n'est donc pas théorique, il est visible sur la référence elle-même. La règle retenue pour Melyxar, convertir systématiquement à l'extraction, est confirmée par ce cas réel.
