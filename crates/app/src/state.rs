@@ -8,6 +8,7 @@ use std::sync::Arc;
 use melyxar_config::Config;
 use melyxar_database::Database;
 use melyxar_ffmpeg::{Capabilities, ToolPaths};
+use melyxar_jobs::JobRunner;
 
 /// The server, assembled.
 #[derive(Clone)]
@@ -18,6 +19,9 @@ pub struct AppState {
 struct Inner {
     config: Config,
     database: Database,
+    /// The one place background work is started from, so that what is running
+    /// can be listed, followed and stopped.
+    jobs: JobRunner,
     /// Where the media tools are, when they were found.
     ///
     /// Optional on purpose: the server has to start and say what is wrong when
@@ -36,6 +40,7 @@ impl AppState {
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
+                jobs: JobRunner::new(database.clone()),
                 config,
                 database,
                 tools,
@@ -50,6 +55,10 @@ impl AppState {
 
     pub fn database(&self) -> &Database {
         &self.inner.database
+    }
+
+    pub fn jobs(&self) -> &JobRunner {
+        &self.inner.jobs
     }
 
     pub fn tools(&self) -> Option<&ToolPaths> {

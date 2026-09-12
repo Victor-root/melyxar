@@ -34,7 +34,17 @@ pub async fn bring_up(config: Config) -> Result<AppState> {
     reconcile_libraries(&database, &config).await?;
     refresh_root_access(&database).await?;
 
-    Ok(AppState::new(config, database, tools, capabilities))
+    let state = AppState::new(config, database, tools, capabilities);
+
+    // Nothing is running yet, so a job still marked as running is a leftover
+    // from a stop or a crash. Saying so beats a progress bar that will never
+    // move again.
+    state
+        .jobs()
+        .close_interrupted("the server restarted before this job finished")
+        .await?;
+
+    Ok(state)
 }
 
 /// Creates the three directories the server writes to.

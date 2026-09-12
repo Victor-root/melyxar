@@ -202,20 +202,52 @@ pub fn is_video_file(file_name: &str) -> bool {
     VIDEO_EXTENSIONS.contains(&extension.to_lowercase().as_str())
 }
 
+/// Markers a release puts at the end of a clip that is not the film itself.
+const COMPANION_MARKERS: &[(&str, &str)] = &[
+    ("-trailer", "trailer"),
+    (".trailer", "trailer"),
+    (" trailer", "trailer"),
+    ("-sample", "sample"),
+    (".sample", "sample"),
+];
+
+/// The marker a companion clip carries, and where the name proper ends.
+fn companion_marker(file_name: &str) -> Option<(&'static str, usize)> {
+    let stem = strip_extension(file_name);
+    if stem.eq_ignore_ascii_case("sample") {
+        return Some(("sample", 0));
+    }
+    COMPANION_MARKERS.iter().find_map(|(marker, kind)| {
+        let start = stem.len().checked_sub(marker.len())?;
+        // The markers are plain characters, so comparing without regard to
+        // case keeps every position valid in the name as it was given.
+        (stem.is_char_boundary(start) && stem[start..].eq_ignore_ascii_case(marker))
+            .then_some((*kind, start))
+    })
+}
+
 /// Whether a name looks like a companion clip rather than the film itself.
 ///
 /// Two families to leave out: sample clips some releases ship, and trailers,
 /// which are a kind of their own rather than another film.
 pub fn is_companion_clip(file_name: &str) -> Option<&'static str> {
-    let lowered = file_name.to_lowercase();
-    let stem = strip_extension(&lowered).to_string();
-    if stem.ends_with("-trailer") || stem.ends_with(".trailer") || stem.ends_with(" trailer") {
-        return Some("trailer");
+    companion_marker(file_name).map(|(kind, _)| kind)
+}
+
+/// The name the film itself would carry, taken from one of its companions.
+///
+/// A trailer sits next to its film under the film's own name plus a marker.
+/// Taking the marker off is what lets the clip be read by the very rules the
+/// film was read with, rather than by a second set that would drift.
+pub fn without_companion_marker(file_name: &str) -> Option<String> {
+    let (_, end_of_name) = companion_marker(file_name)?;
+    if end_of_name == 0 {
+        // A clip called nothing but "sample" says nothing about which film it
+        // belongs to, and guessing from the folder would be a guess.
+        return None;
     }
-    if stem == "sample" || stem.ends_with("-sample") || stem.ends_with(".sample") {
-        return Some("sample");
-    }
-    None
+    let extension = &file_name[strip_extension(file_name).len()..];
+    Some(format!("{}{}", &file_name[..end_of_name], extension))
 }
 
 #[cfg(test)]
@@ -406,6 +438,47 @@ mod tests {
             Some("sample")
         );
         assert_eq!(is_companion_clip("Quiet.Harbour.2019.mkv"), None);
+        assert_eq!(
+            is_companion_clip("Quiet.Harbour.2019-TRAILER.mkv"),
+            Some("trailer"),
+            "a marker shouted in capitals is the same marker"
+        );
+    }
+
+    #[test]
+    fn a_companion_gives_up_the_name_of_the_film_it_belongs_to() {
+        assert_eq!(
+            without_companion_marker("Quiet.Harbour.2019-trailer.mkv").as_deref(),
+            Some("Quiet.Harbour.2019.mkv")
+        );
+        assert_eq!(
+            without_companion_marker("Amber Field 2020 trailer.mp4").as_deref(),
+            Some("Amber Field 2020.mp4")
+        );
+        assert_eq!(
+            without_companion_marker("Quiet.Harbour.2019.mkv"),
+            None,
+            "a film is not a companion of anything"
+        );
+        assert_eq!(
+            without_companion_marker("sample.mkv"),
+            None,
+            "a clip named only sample says nothing about which film it belongs to"
+        );
+    }
+
+    #[test]
+    fn the_name_taken_from_a_companion_reads_like_the_film_itself() {
+        // A trailer carries the whole name of its film, tags included, which is
+        // what lets one set of rules read both.
+        let base = without_companion_marker("Quiet.Harbour.2019.MULTi.1080p-trailer.mkv")
+            .expect("a companion");
+        assert_eq!(base, "Quiet.Harbour.2019.MULTi.1080p.mkv");
+
+        let film = parsed(&base);
+        assert_eq!(film.title, "Quiet Harbour");
+        assert_eq!(film.year, Some(2019));
+        assert_eq!(film, parsed("Quiet.Harbour.2019.MULTi.1080p.mkv"));
     }
 
     #[test]

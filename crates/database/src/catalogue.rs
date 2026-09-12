@@ -109,6 +109,36 @@ impl Database {
         row.map(|row| work_from_row(&row)).transpose()
     }
 
+    /// The work a scan should attach a file to, if it already exists.
+    ///
+    /// Two copies of one film are two files of the same work, not two works:
+    /// that is what puts a version chooser on the page instead of the same
+    /// title twice in the grid.
+    pub async fn work_by_identity(
+        &self,
+        library_id: LibraryId,
+        sort_title: &str,
+        release_year: Option<i32>,
+    ) -> Result<Option<Work>> {
+        let row = sqlx::query(
+            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year,
+                    identification, dominant_color, added_at, updated_at
+             FROM works
+             WHERE library_id = ? AND sort_title = ?
+               AND (release_year IS ? OR (release_year IS NULL AND ? IS NULL))
+             ORDER BY added_at
+             LIMIT 1",
+        )
+        .bind(library_id.to_db_string())
+        .bind(sort_title)
+        .bind(release_year)
+        .bind(release_year)
+        .fetch_optional(self.reader())
+        .await?;
+
+        row.map(|row| work_from_row(&row)).transpose()
+    }
+
     /// Works of a library, newest first, which is the order the home page uses.
     pub async fn recent_works(&self, library_id: LibraryId, limit: i64) -> Result<Vec<Work>> {
         let rows = sqlx::query(
@@ -158,21 +188,27 @@ impl Database {
         .fetch_all(self.reader())
         .await?;
 
-        let mut sources = Vec::with_capacity(rows.len());
-        for row in rows {
-            sources.push(StoredSource {
-                id: parse_id(&row.try_get::<String, _>("id")?)?,
-                work_id: parse_id(&row.try_get::<String, _>("work_id")?)?,
-                relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
-                size_bytes: row.try_get("size_bytes")?,
-                modified_at: parse_timestamp(&row.try_get::<String, _>("modified_at")?)?,
-                missing_since: parse_optional_timestamp(
-                    row.try_get::<Option<String>, _>("missing_since")?
-                        .as_deref(),
-                )?,
-            });
-        }
-        Ok(sources)
+        rows.iter().map(stored_source_from_row).collect()
+    }
+
+    /// Files of one root that carry no analysis yet.
+    ///
+    /// A file absent from disk is left out: analysing it would fail, and
+    /// failing on purpose is not a diagnosis.
+    pub async fn unanalysed_sources_of_root(
+        &self,
+        root_id: LibraryRootId,
+    ) -> Result<Vec<StoredSource>> {
+        let rows = sqlx::query(
+            "SELECT id, work_id, relative_path, size_bytes, modified_at, missing_since
+             FROM media_sources
+             WHERE root_id = ? AND analysed_at IS NULL AND missing_since IS NULL
+             ORDER BY relative_path",
+        )
+        .bind(root_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+        rows.iter().map(stored_source_from_row).collect()
     }
 
     /// Records a file found by a scan.
@@ -530,6 +566,20 @@ async fn insert_track(
     .execute(&mut **transaction)
     .await?;
     Ok(())
+}
+
+fn stored_source_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredSource> {
+    Ok(StoredSource {
+        id: parse_id(&row.try_get::<String, _>("id")?)?,
+        work_id: parse_id(&row.try_get::<String, _>("work_id")?)?,
+        relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
+        size_bytes: row.try_get("size_bytes")?,
+        modified_at: parse_timestamp(&row.try_get::<String, _>("modified_at")?)?,
+        missing_since: parse_optional_timestamp(
+            row.try_get::<Option<String>, _>("missing_since")?
+                .as_deref(),
+        )?,
+    })
 }
 
 fn work_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Work> {
@@ -979,6 +1029,61 @@ mod tests {
         );
         let stored = database.sources_of_root(root_id).await.expect("read");
         assert_eq!(stored[0].size_bytes, 2_000);
+    }
+
+    #[tokio::test]
+    async fn a_second_copy_of_one_film_finds_the_work_that_is_already_there() {
+        let (database, library_id, _) = library().await;
+        database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+
+        assert!(database
+            .work_by_identity(library_id, "quiet harbour", Some(2019))
+            .await
+            .expect("read")
+            .is_some());
+        assert!(
+            database
+                .work_by_identity(library_id, "quiet harbour", Some(2024))
+                .await
+                .expect("read")
+                .is_none(),
+            "a remake is another film, not another copy"
+        );
+        assert!(database
+            .work_by_identity(library_id, "quiet harbour", None)
+            .await
+            .expect("read")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn a_film_whose_name_carries_no_year_is_still_found_back() {
+        let (database, library_id, _) = library().await;
+        database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "Amber Field",
+                "amber field",
+                None,
+            )
+            .await
+            .expect("work created");
+
+        assert!(database
+            .work_by_identity(library_id, "amber field", None)
+            .await
+            .expect("read")
+            .is_some());
     }
 
     #[tokio::test]
