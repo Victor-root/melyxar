@@ -38,7 +38,7 @@ Légende : à faire, en cours, terminé.
 - Scan incrémental d'une bibliothèque de films : ajouts, mises à jour, marquage absent, protection contre une racine injoignable.
 - Analyse ffprobe de chaque fichier, pistes stockées avec codecs, HDR, langues.
 - Détection des bandes annonces locales à côté des films.
-- Analyse des noms de fichiers (titre, année) avec tests sur des dizaines de cas.
+- Analyse des noms de fichiers (titre, année) : fichiers posés à plat sans dossier par film, découpage sur la dernière année plausible, tout ce qui suit écarté du titre, soulignement traité comme séparateur, casse et accents normalisés. Jeu de tests écrit avec des titres inventés couvrant chaque forme, jamais des noms réels.
 - Tâches de fond avec parallélisme borné, priorité basse, annulation.
 - Résultat visible : après un scan de la bibliothèque de test (environ 50 films), la base contient les œuvres, sources et pistes ; le journal montre le déroulement sans nom complet de fichier.
 
@@ -51,7 +51,7 @@ Légende : à faire, en cours, terminé.
 - Personnes (acteurs, réalisateurs) avec photos, collections officielles, films similaires, classification d'âge.
 - Textes stockés par langue, français prioritaire et repli anglais.
 - Correction manuelle de l'identification depuis l'interface : recherche par titre et année, saisie directe d'un identifiant, choix parmi les propositions illustrées.
-- Téléchargement des affiches et fonds, génération des tailles fixes en WebP, couleur dominante, URL avec empreinte.
+- Téléchargement des affiches, fonds et images de titre, génération des tailles fixes en WebP, couleur dominante, URL avec empreinte.
 - Résultat visible : les œuvres ont titre, année, synopsis et affiches dans la base et le cache, et un film mal identifié se corrige en quelques clics.
 
 ## Jalon 3 : API et interface minimale
@@ -72,7 +72,8 @@ Légende : à faire, en cours, terminé.
 - Interface React : grille virtualisée, fiche, cache des réponses, images adaptées. Disposition inspirée d'Emby pour l'accueil et la fiche.
 - **Jetons de thème et internationalisation dès le premier composant** : aucune couleur ni chaîne en dur.
 - Page d'accueil : bannière en haut, reprendre la lecture, récemment ajouté par bibliothèque, suggestions. Sections réordonnables et masquables par l'utilisateur.
-- Fiche complète : distribution cliquable menant à la filmographie, studios, films similaires, versions et pistes disponibles.
+- Fiche complète, sur la disposition relevée chez Emby : image de titre, barre d'actions avec bouton de lecture en couleur d'accentuation, affiche, ligne compacte (année, durée, classification, notes, heure de fin estimée), accroche, synopsis, étiquettes, liens externes, bloc technique avec sélecteurs de version, de piste audio et de sous-titres **avant le lancement**.
+- Distribution cliquable menant à la filmographie, studios, films similaires.
 - Section dédiée aux sagas : liste des coffrets, chacun ouvrable sur ses films.
 - Lu et non lu, marquage manuel, favoris, étiquettes, listes de lecture.
 - Modification manuelle d'une fiche avec verrouillage des champs.
