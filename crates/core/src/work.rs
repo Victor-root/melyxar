@@ -48,6 +48,52 @@ impl IdentificationState {
     }
 }
 
+/// What a work is, which decides how it is shown and what may parent it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkKind {
+    Movie,
+    Series,
+    Season,
+    Episode,
+    Artist,
+    Album,
+    Song,
+}
+
+impl WorkKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Movie => "movie",
+            Self::Series => "series",
+            Self::Season => "season",
+            Self::Episode => "episode",
+            Self::Artist => "artist",
+            Self::Album => "album",
+            Self::Song => "song",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "movie" => Some(Self::Movie),
+            "series" => Some(Self::Series),
+            "season" => Some(Self::Season),
+            "episode" => Some(Self::Episode),
+            "artist" => Some(Self::Artist),
+            "album" => Some(Self::Album),
+            "song" => Some(Self::Song),
+            _ => None,
+        }
+    }
+
+    /// Whether a viewer plays this work itself, as opposed to opening it to
+    /// find what is inside. Only these carry files of their own.
+    pub fn is_playable(self) -> bool {
+        matches!(self, Self::Movie | Self::Episode | Self::Song)
+    }
+}
+
 /// A work as stored: the common trunk only. Domain specific metadata, such as
 /// the fields proper to a film or to an album, live in their own tables so
 /// that adding music later is an addition rather than a rewrite.
@@ -57,6 +103,7 @@ pub struct Work {
     pub library_id: LibraryId,
     /// Parent work, used by seasons and episodes. Absent for a film.
     pub parent_id: Option<WorkId>,
+    pub kind: WorkKind,
     /// Title as displayed, in the preferred language when one is available.
     pub title: String,
     /// Title used for sorting: leading articles removed, accents folded.

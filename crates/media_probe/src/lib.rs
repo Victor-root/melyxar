@@ -14,7 +14,7 @@
 
 use melyxar_core::id::{MediaSourceId, TrackId};
 use melyxar_core::media::{
-    AudioDetails, ColorInfo, HdrFormat, Loudness, SubtitleDetails, SubtitleLayout, Track,
+    AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, SubtitleDetails, SubtitleLayout, Track,
     TrackKind, VideoDetails,
 };
 use melyxar_core::time::Millis;
@@ -27,14 +27,7 @@ pub struct AnalysedFile {
     pub duration: Option<Millis>,
     pub overall_bitrate: Option<i64>,
     pub tracks: Vec<Track>,
-    pub chapters: Vec<AnalysedChapter>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AnalysedChapter {
-    pub ordinal: i32,
-    pub start: Millis,
-    pub title: Option<String>,
+    pub chapters: Vec<Chapter>,
 }
 
 impl AnalysedFile {
@@ -282,16 +275,17 @@ fn normalise_language(value: &str) -> String {
     }
 }
 
-fn chapters_from_report(chapters: &[ProbeChapter]) -> Vec<AnalysedChapter> {
+fn chapters_from_report(chapters: &[ProbeChapter]) -> Vec<Chapter> {
     chapters
         .iter()
         .enumerate()
         .filter_map(|(index, chapter)| {
             let start = chapter.start_time.as_deref()?.parse::<f64>().ok()?;
-            Some(AnalysedChapter {
+            Some(Chapter {
                 ordinal: index as i32 + 1,
                 start: Millis::from_seconds_f64(start),
                 title: chapter.title().map(str::to_string),
+                thumbnail_path: None,
             })
         })
         .collect()

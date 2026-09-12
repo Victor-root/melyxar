@@ -113,6 +113,23 @@ impl TrackKind {
     }
 }
 
+/// One chapter of a source, either read from the file or generated at a fixed
+/// interval when the file declares none.
+///
+/// Chapters are always addressed as the ordered list belonging to one source,
+/// never one by one, so the identifier the storage gives them stays a storage
+/// matter and does not appear here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Chapter {
+    pub ordinal: i32,
+    pub start: Millis,
+    pub title: Option<String>,
+    /// Generated thumbnail, relative to the image cache. Always converted to
+    /// standard range when the source is wide gamut, otherwise it comes out
+    /// washed out and grey.
+    pub thumbnail_path: Option<PathBuf>,
+}
+
 /// Colour description of a video track.
 ///
 /// These four fields together say whether the track carries high dynamic
