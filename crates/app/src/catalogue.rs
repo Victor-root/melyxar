@@ -282,4 +282,123 @@ mod tests {
             Filters::default()
         );
     }
+
+    #[tokio::test]
+    async fn a_filter_menu_offers_what_the_library_actually_holds() {
+        let (_directory, state, library_id) = state_with_films(&["Quiet Harbour"]).await;
+        let work = state
+            .database()
+            .browse_works(&BrowseRequest {
+                library_id: Some(library_id),
+                ..Default::default()
+            })
+            .await
+            .expect("read")
+            .cards[0]
+            .id;
+
+        state
+            .database()
+            .apply_identification(
+                work,
+                &melyxar_database::metadata::IdentifiedWork {
+                    provider: "tmdb".to_string(),
+                    external_id: "111".to_string(),
+                    imdb_id: None,
+                    language: "fr".to_string(),
+                    title: "Quiet Harbour".to_string(),
+                    sort_title: "quiet harbour".to_string(),
+                    tagline: None,
+                    overview: None,
+                    release_year: Some(2019),
+                    runtime: None,
+                    community_rating: None,
+                    age_rating_label: None,
+                    genres: vec!["Drame".to_string(), "Thriller".to_string()],
+                    studios: Vec::new(),
+                    credits: Vec::new(),
+                    collection: None,
+                    trailers: Vec::new(),
+                },
+                false,
+            )
+            .await
+            .expect("identification applied");
+
+        let offered = filters(&state, Some(library_id)).await.expect("read");
+        assert_eq!(
+            offered
+                .genres
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Drame", "Thriller"]
+        );
+        assert_eq!(offered.decades, vec![(2010, 1)]);
+    }
+
+    #[tokio::test]
+    async fn a_home_page_shows_one_library_rather_than_the_whole_server() {
+        // Two libraries, and the page was asked about one of them: a home page
+        // that answers with everything puts films from elsewhere on it.
+        let (_directory, state, library_id) = state_with_films(&["Quiet Harbour"]).await;
+        let elsewhere = state
+            .database()
+            .create_library(
+                "Animes",
+                melyxar_core::library::LibraryKind::Anime,
+                "fr",
+                &[(
+                    "disk-two".to_string(),
+                    std::path::PathBuf::from("/mnt/two/Animes"),
+                )],
+            )
+            .await
+            .expect("library created");
+        state
+            .database()
+            .create_work(
+                elsewhere.id,
+                WorkKind::Movie,
+                "Amber Field",
+                "amber field",
+                Some(2020),
+            )
+            .await
+            .expect("work created");
+
+        let page = home(&state, Some(library_id)).await.expect("read");
+        assert_eq!(page.works, 1);
+        assert_eq!(page.recently_added.cards.len(), 1);
+        assert_eq!(page.recently_added.cards[0].title, "Quiet Harbour");
+
+        let everything = home(&state, None).await.expect("read");
+        assert_eq!(
+            everything.works, 2,
+            "without a library named, a home page covers the whole server"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_home_page_shows_a_handful_of_the_newest_and_not_the_whole_library() {
+        // Titles in the reverse of the order they arrive, so a page ordered by
+        // name rather than by arrival is told apart from one that is not.
+        let titles: Vec<String> = (0..30)
+            .map(|index| format!("Invented Title {:02}", 29 - index))
+            .collect();
+        let borrowed: Vec<&str> = titles.iter().map(String::as_str).collect();
+        let (_directory, state, library_id) = state_with_films(&borrowed).await;
+
+        let page = home(&state, Some(library_id)).await.expect("read");
+        assert_eq!(page.works, 30, "the count covers everything");
+        assert_eq!(
+            page.recently_added.cards.len(),
+            RECENTLY_ADDED as usize,
+            "a home page opens on a handful, not on the whole library"
+        );
+        assert_eq!(
+            page.recently_added.cards[0].title, "Invented Title 00",
+            "newest first, which is the one that arrived last and not the last by name"
+        );
+    }
 }

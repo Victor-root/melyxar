@@ -329,4 +329,98 @@ mod tests {
         let summary = version(Vec::new()).summary();
         assert!(summary.is_empty(), "nothing known means nothing claimed");
     }
+
+    /// Two libraries speaking two languages, so that a page reading the wrong
+    /// one is told apart from a page reading the right one.
+    async fn two_libraries() -> (melyxar_database::Database, WorkId) {
+        use melyxar_core::library::LibraryKind;
+        use melyxar_core::work::WorkKind;
+        use melyxar_database::metadata::IdentifiedWork;
+        use std::path::PathBuf;
+
+        let database = melyxar_database::Database::open_in_memory()
+            .await
+            .expect("database opens");
+        database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Films"))],
+            )
+            .await
+            .expect("library created");
+        let english = database
+            .create_library(
+                "Shows",
+                LibraryKind::Shows,
+                "en",
+                &[("disk-two".to_string(), PathBuf::from("/mnt/two/Shows"))],
+            )
+            .await
+            .expect("library created");
+
+        let work = database
+            .create_work(
+                english.id,
+                WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+
+        // The same film described twice, once per language, as a provider
+        // answers when asked twice.
+        for (language, overview) in [
+            ("fr", "Un port, une nuit."),
+            ("en", "A harbour, one night."),
+        ] {
+            database
+                .apply_identification(
+                    work.id,
+                    &IdentifiedWork {
+                        provider: "tmdb".to_string(),
+                        external_id: "111".to_string(),
+                        imdb_id: None,
+                        language: language.to_string(),
+                        title: "Quiet Harbour".to_string(),
+                        sort_title: "quiet harbour".to_string(),
+                        tagline: None,
+                        overview: Some(overview.to_string()),
+                        release_year: Some(2019),
+                        runtime: None,
+                        community_rating: None,
+                        age_rating_label: None,
+                        genres: Vec::new(),
+                        studios: Vec::new(),
+                        credits: Vec::new(),
+                        collection: None,
+                        trailers: Vec::new(),
+                    },
+                    false,
+                )
+                .await
+                .expect("identification applied");
+        }
+
+        (database, work.id)
+    }
+
+    #[tokio::test]
+    async fn a_page_speaks_the_language_of_the_library_the_film_is_in() {
+        let (database, work_id) = two_libraries().await;
+        let state = AppState::new(melyxar_config::Config::default(), database, None, None);
+
+        let detail = work_detail(&state, work_id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(
+            detail.overview.as_deref(),
+            Some("A harbour, one night."),
+            "the film is in the library that speaks English, not in the other one"
+        );
+    }
 }
