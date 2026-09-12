@@ -31,7 +31,7 @@ Toute nouvelle décision d'architecture est ajoutée au README des décisions av
 - Aucun travail lourd sur les threads asynchrones de Tokio.
 - Tout journal de débogage est protégé par `cfg(debug_assertions)` ou équivalent, jamais actif en release.
 - **Journaux : les noms de médias sont censurés.** Un nom de fichier n'apparaît que par ses quatre premiers caractères suivis de points de suspension ; les chemins n'affichent que le libellé de la racine. Un réglage de configuration explicite, désactivé par défaut, permet de révéler les noms complets.
-- **Aucun nom de fichier réel du mainteneur ne doit apparaître dans le dépôt** : ni dans le code, ni dans les tests, ni dans la documentation, ni dans un message de commit. Les jeux de tests utilisent des titres inventés couvrant les mêmes formes.
+- **Rien de personnel au mainteneur ne doit apparaître dans le dépôt** : ni nom de fichier média réel, ni chemin réel, ni numéro de série de disque, ni clé d'API, que ce soit dans le code, les tests, la documentation ou un message de commit. Les jeux de tests utilisent des titres inventés couvrant les mêmes formes, et les chemins réels vivent uniquement dans la configuration du serveur.
 - Pas de code mort, pas de contournement temporaire, pas de commentaire inutile. Nettoyer entièrement toute tentative abandonnée.
 - Vérifier les usages réels avant de supprimer, déplacer ou remplacer du code.
 - Avant chaque commit : compiler, lancer `cargo clippy` et les tests dans l'environnement de travail. Relire le diff complet.
@@ -45,6 +45,6 @@ Toute nouvelle décision d'architecture est ajoutée au README des décisions av
 ## Environnement de production (résumé)
 
 - LXC Debian 13 non privilégié, 12 threads, 16 Go, 100 Go NVMe. Hôte Proxmox avec Intel Arc A380 passée via `/dev/dri`.
-- Médias montés sous `/mnt/SATA*-*/` (dossiers `Films`, `Séries`, `Animés`, `Émissions`), lisibles par tous.
+- Médias : quatre disques montés sous `/mnt/`, chacun avec des dossiers `Films`, `Séries`, `Animés`, `Émissions`, lisibles par tous. Films posés à plat, sans sous-dossier par film. Une bibliothèque regroupe les quatre dossiers de même nom.
 - Accès local en `ip:2100` pour commencer ; reverse proxy nginx (autre LXC) plus tard.
 - Configuration en TOML dans `/etc/melyxar/melyxar.toml` ; données dans `/var/lib/melyxar` ; cache dans `/var/cache/melyxar`.

@@ -73,7 +73,8 @@ Ces décisions ont été prises après discussion et ne sont pas à rediscuter s
 
 - Hôte Proxmox : Ryzen 7 3700X (8 cœurs, 16 threads), 32 Go DDR4, Intel Arc A380, NVMe. Noyau hôte `7.0.14-12-pve`.
 - LXC Melyxar : Debian 13, **non privilégié**, 12 threads, 16 Go, 100 Go sur NVMe.
-- Médias : plusieurs disques montés dans le LXC sous `/mnt/SATA1-ZC189KW4`, `/mnt/SATA2-ZC189K8E`, `/mnt/SATA3-ZC189KZT`, `/mnt/SATA4-K4KNWWDL`, chacun avec des dossiers `Films`, `Séries`, `Animés`, `Émissions`. Les dossiers sont lisibles par tous les utilisateurs (droits `rwxrwxr-x`), la lecture ne demande donc aucun alignement d'identifiant. Une écriture future (fichiers annexes) demanderait que l'utilisateur `melyxar` ait le même identifiant numérique que le propriétaire des dossiers.
+- Médias : quatre disques montés dans le LXC sous `/mnt/`, un dossier par disque, chacun contenant des dossiers `Films`, `Séries`, `Animés`, `Émissions`. Une bibliothèque regroupe donc les quatre dossiers de même nom. Les dossiers sont lisibles par tous les utilisateurs (droits `rwxrwxr-x`), la lecture ne demande donc aucun alignement d'identifiant. Une écriture future (fichiers annexes, suppression) demanderait que l'utilisateur `melyxar` appartienne au groupe propriétaire des dossiers. Les chemins réels vivent dans la configuration du serveur, jamais dans le dépôt.
+- Films posés à plat dans leur dossier, sans sous-dossier par film.
 - Bibliothèque de test : le dossier `Films` existant, environ 50 films.
 - Première cible client : Brave / Chromium sous Windows, en réseau local.
 - Le mainteneur ne lit pas le code : les journaux, la commande de diagnostic et la page de diagnostic sont conçus pour lui.
