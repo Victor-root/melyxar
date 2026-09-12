@@ -1,0 +1,375 @@
+//! Accounts, rights and preferences.
+//!
+//! Even with a single account at first, rights and preferences exist from the
+//! first migration: every sensitive feature hangs off them, and adding them
+//! later would mean touching every table and every route.
+
+use crate::id::{DeviceId, LibraryId, UserId};
+use crate::time::Timestamp;
+
+/// What a person is allowed to do.
+///
+/// Kept as plain data rather than a role name, so that a right can be granted
+/// to one person without inventing a new role.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Permissions {
+    pub is_administrator: bool,
+    /// Libraries this person may see. Empty means every library.
+    pub allowed_libraries: Vec<LibraryId>,
+    /// Highest age rating this person may watch, when one is set.
+    pub max_age_rating: Option<i32>,
+    pub may_download: bool,
+    /// Remove a work from the library.
+    pub may_delete: bool,
+    /// Also erase the file from disk. Administrators only, and still gated on
+    /// the root being writable.
+    pub may_delete_from_disk: bool,
+    /// Simultaneous playback sessions. None means no limit.
+    pub max_sessions: Option<i32>,
+}
+
+impl Permissions {
+    /// Rights of the default account created at first start.
+    pub fn administrator() -> Self {
+        Self {
+            is_administrator: true,
+            allowed_libraries: Vec::new(),
+            max_age_rating: None,
+            may_download: true,
+            may_delete: true,
+            may_delete_from_disk: true,
+            max_sessions: None,
+        }
+    }
+
+    /// Rights of an ordinary viewer.
+    pub fn viewer() -> Self {
+        Self {
+            is_administrator: false,
+            allowed_libraries: Vec::new(),
+            max_age_rating: None,
+            may_download: false,
+            may_delete: false,
+            may_delete_from_disk: false,
+            max_sessions: None,
+        }
+    }
+
+    /// Whether this person may see the given library.
+    pub fn may_access_library(&self, library: LibraryId) -> bool {
+        self.allowed_libraries.is_empty() || self.allowed_libraries.contains(&library)
+    }
+
+    /// Whether this person may see a work carrying the given age rating.
+    ///
+    /// An unknown rating is allowed: refusing everything unrated would hide
+    /// most of a personal library.
+    pub fn may_watch_rating(&self, rating: Option<i32>) -> bool {
+        match (self.max_age_rating, rating) {
+            (None, _) => true,
+            (Some(_), None) => true,
+            (Some(limit), Some(value)) => value <= limit,
+        }
+    }
+}
+
+/// How multichannel audio is folded down to stereo.
+///
+/// Browsers output stereo, so this happens on nearly every transcode. Done
+/// naively it buries the dialogue under the effects, which is the most common
+/// complaint about media servers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DownmixMethod {
+    /// Leave it to the processing tool's own default.
+    None,
+    /// Splits centre and low frequency into left and right. Keeps the overall
+    /// level well, but dialogue stays quiet and bass can dominate.
+    CentreAndBassSplit,
+    /// Strongly favours the centre channel. Very clear dialogue, quiet
+    /// effects. Made for watching late without waking the house.
+    NightDialogue,
+    /// Spreads the surround channels across both sides while preserving
+    /// perceived intensity. Good level, weaker spatial impression.
+    IntensityPreserving,
+    /// Broadcast standard: measured attenuation on centre and surround, low
+    /// frequency channel dropped. The balanced choice and the default.
+    #[default]
+    BroadcastStandard,
+}
+
+impl DownmixMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::CentreAndBassSplit => "centre_and_bass_split",
+            Self::NightDialogue => "night_dialogue",
+            Self::IntensityPreserving => "intensity_preserving",
+            Self::BroadcastStandard => "broadcast_standard",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "none" => Some(Self::None),
+            "centre_and_bass_split" => Some(Self::CentreAndBassSplit),
+            "night_dialogue" => Some(Self::NightDialogue),
+            "intensity_preserving" => Some(Self::IntensityPreserving),
+            "broadcast_standard" => Some(Self::BroadcastStandard),
+            _ => None,
+        }
+    }
+
+    /// Whether asking for this method forces the server to process the audio.
+    ///
+    /// This is what makes the preference an input of the playback decision:
+    /// without it, the setting would silently do nothing on files the browser
+    /// can already play, which is worse than having no setting at all.
+    pub fn requires_processing(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
+/// Lowest and highest gain accepted after a downmix.
+pub const MIN_DOWNMIX_GAIN: f64 = 0.5;
+pub const MAX_DOWNMIX_GAIN: f64 = 3.0;
+pub const DEFAULT_DOWNMIX_GAIN: f64 = 2.0;
+
+/// Which colour scheme the interface uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeMode {
+    Light,
+    Dark,
+    /// Follow the operating system setting.
+    #[default]
+    System,
+}
+
+impl ThemeMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Light => "light",
+            Self::Dark => "dark",
+            Self::System => "system",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "light" => Some(Self::Light),
+            "dark" => Some(Self::Dark),
+            "system" => Some(Self::System),
+            _ => None,
+        }
+    }
+}
+
+/// Default accent colour: the red picked by the maintainer.
+///
+/// Used as a fill with white text on it, in both themes. A lighter variant is
+/// derived for links and small coloured text on a dark background.
+pub const DEFAULT_ACCENT_COLOR: &str = "#c81e1e";
+
+/// Per person settings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Preferences {
+    pub interface_language: String,
+    /// Preferred audio language, applied when no per-series memory exists.
+    pub preferred_audio_language: Option<String>,
+    pub preferred_subtitle_language: Option<String>,
+    pub theme_mode: ThemeMode,
+    pub accent_color: String,
+    /// Stylesheet applied to this person only.
+    pub custom_css: Option<String>,
+    /// Last volume, on the slider scale from zero to one.
+    pub volume: f64,
+    pub downmix_method: DownmixMethod,
+    pub downmix_gain: f64,
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            interface_language: "en".to_string(),
+            preferred_audio_language: None,
+            preferred_subtitle_language: None,
+            theme_mode: ThemeMode::default(),
+            accent_color: DEFAULT_ACCENT_COLOR.to_string(),
+            custom_css: None,
+            volume: 1.0,
+            downmix_method: DownmixMethod::default(),
+            downmix_gain: DEFAULT_DOWNMIX_GAIN,
+        }
+    }
+}
+
+impl Preferences {
+    /// Clamps values that came from a client into their accepted range.
+    pub fn normalised(mut self) -> Self {
+        self.volume = self.volume.clamp(0.0, 1.0);
+        self.downmix_gain = self.downmix_gain.clamp(MIN_DOWNMIX_GAIN, MAX_DOWNMIX_GAIN);
+        self
+    }
+}
+
+/// An account.
+#[derive(Debug, Clone, PartialEq)]
+pub struct User {
+    pub id: UserId,
+    pub name: String,
+    pub avatar_path: Option<String>,
+    pub permissions: Permissions,
+    pub preferences: Preferences,
+    pub created_at: Timestamp,
+}
+
+/// A device holding a long lived token.
+///
+/// One token per device, individually revocable, so that a television does not
+/// have to sign in again every week and a lost device can be cut off without
+/// touching the others.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Device {
+    pub id: DeviceId,
+    pub user_id: UserId,
+    /// Name shown in the device list, for example the browser and system.
+    pub name: String,
+    pub created_at: Timestamp,
+    pub last_seen_at: Timestamp,
+}
+
+/// Maps a slider position to the gain actually applied to the audio element.
+///
+/// Wiring the slider straight to the element is the usual mistake: the ear
+/// does not perceive amplitude linearly, so most of the audible change ends up
+/// crammed into part of the travel. A moderate power curve spreads the change
+/// evenly. The exponent is deliberately gentle, because an aggressive curve is
+/// what makes the bottom half of a slider sound like silence.
+pub fn volume_curve(slider_position: f64) -> f64 {
+    const EXPONENT: f64 = 1.6;
+    slider_position.clamp(0.0, 1.0).powf(EXPONENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_library_list_means_every_library() {
+        let permissions = Permissions::viewer();
+        assert!(permissions.may_access_library(LibraryId::new()));
+    }
+
+    #[test]
+    fn a_restricted_account_only_sees_the_libraries_it_was_granted() {
+        let allowed = LibraryId::new();
+        let other = LibraryId::new();
+        let permissions = Permissions {
+            allowed_libraries: vec![allowed],
+            ..Permissions::viewer()
+        };
+        assert!(permissions.may_access_library(allowed));
+        assert!(!permissions.may_access_library(other));
+    }
+
+    #[test]
+    fn an_age_limit_only_blocks_works_rated_above_it() {
+        let permissions = Permissions {
+            max_age_rating: Some(12),
+            ..Permissions::viewer()
+        };
+        assert!(permissions.may_watch_rating(Some(10)));
+        assert!(permissions.may_watch_rating(Some(12)));
+        assert!(!permissions.may_watch_rating(Some(16)));
+    }
+
+    #[test]
+    fn an_unrated_work_is_not_hidden_by_an_age_limit() {
+        let permissions = Permissions {
+            max_age_rating: Some(12),
+            ..Permissions::viewer()
+        };
+        assert!(permissions.may_watch_rating(None));
+    }
+
+    #[test]
+    fn the_default_downmix_is_the_balanced_broadcast_one() {
+        assert_eq!(DownmixMethod::default(), DownmixMethod::BroadcastStandard);
+    }
+
+    #[test]
+    fn every_downmix_method_except_none_forces_the_server_to_process_audio() {
+        assert!(!DownmixMethod::None.requires_processing());
+        for method in [
+            DownmixMethod::CentreAndBassSplit,
+            DownmixMethod::NightDialogue,
+            DownmixMethod::IntensityPreserving,
+            DownmixMethod::BroadcastStandard,
+        ] {
+            assert!(
+                method.requires_processing(),
+                "{method:?} must force processing"
+            );
+        }
+    }
+
+    #[test]
+    fn downmix_methods_round_trip_through_their_stored_form() {
+        for method in [
+            DownmixMethod::None,
+            DownmixMethod::CentreAndBassSplit,
+            DownmixMethod::NightDialogue,
+            DownmixMethod::IntensityPreserving,
+            DownmixMethod::BroadcastStandard,
+        ] {
+            assert_eq!(DownmixMethod::parse(method.as_str()), Some(method));
+        }
+    }
+
+    #[test]
+    fn preferences_coming_from_a_client_are_clamped_into_range() {
+        let wild = Preferences {
+            volume: 12.0,
+            downmix_gain: 99.0,
+            ..Preferences::default()
+        }
+        .normalised();
+        assert_eq!(wild.volume, 1.0);
+        assert_eq!(wild.downmix_gain, MAX_DOWNMIX_GAIN);
+
+        let negative = Preferences {
+            volume: -3.0,
+            downmix_gain: 0.0,
+            ..Preferences::default()
+        }
+        .normalised();
+        assert_eq!(negative.volume, 0.0);
+        assert_eq!(negative.downmix_gain, MIN_DOWNMIX_GAIN);
+    }
+
+    #[test]
+    fn the_volume_curve_keeps_its_ends_and_rises_without_a_dead_zone() {
+        assert_eq!(volume_curve(0.0), 0.0);
+        assert_eq!(volume_curve(1.0), 1.0);
+
+        // Half travel must stay clearly audible: an aggressive curve is what
+        // makes the lower half of a slider sound like silence.
+        let half = volume_curve(0.5);
+        assert!(half > 0.25, "half the slider sounded far too quiet: {half}");
+        assert!(half < 0.5, "the curve must still compensate for the ear");
+
+        // Strictly increasing across the whole travel.
+        let mut previous = 0.0;
+        for step in 1..=20 {
+            let value = volume_curve(f64::from(step) / 20.0);
+            assert!(value > previous, "the curve must never flatten out");
+            previous = value;
+        }
+    }
+
+    #[test]
+    fn a_quarter_of_the_slider_is_still_audible() {
+        assert!(volume_curve(0.25) > 0.08);
+    }
+}
