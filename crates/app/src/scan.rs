@@ -1049,6 +1049,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_trailer_goes_to_its_own_film_and_not_to_the_one_next_to_it() {
+        // Films are laid flat in one folder here, so a trailer is surrounded by
+        // other films. Two of them came out the same year, which is the case
+        // where a rule that leans on the year alone attaches it to the wrong
+        // one: a viewer then opens a film and is offered somebody else's
+        // trailer.
+        // The film the trailer belongs to is deliberately not the first of the
+        // folder: a rule that settles for the first neighbour that matches
+        // anything would pick the other one.
+        for trailer in [
+            // Named exactly after its film, tags and all.
+            "Quiet.Harbour.2019.MULTi.1080p.BluRay-trailer.mkv",
+            // The same trailer with the technical tags dropped, which is how
+            // most of them are actually named.
+            "Quiet.Harbour.2019.1080p-trailer.mkv",
+        ] {
+            let directory = tempfile::tempdir().expect("temporary directory");
+            let media = directory.path().join("films");
+            write(&media, "Amber.Field.2019.MULTi.1080p.BluRay.mkv", b"x");
+            write(&media, "Quiet.Harbour.2019.MULTi.1080p.BluRay.mkv", b"x");
+            write(&media, trailer, b"x");
+
+            let (state, library) =
+                state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+            let report = scan(&state, &library).await;
+            assert_eq!(report.added, 2, "{trailer}");
+            assert_eq!(report.extras, 1, "{trailer}");
+
+            let page = state
+                .database()
+                .browse_works(&melyxar_database::browse::BrowseRequest {
+                    library_id: Some(library.id),
+                    ..Default::default()
+                })
+                .await
+                .expect("read");
+            for card in &page.cards {
+                let extras = state
+                    .database()
+                    .extra_videos_of_work(card.id)
+                    .await
+                    .expect("read");
+                match card.title.starts_with("Quiet") {
+                    true => assert_eq!(extras.len(), 1, "the trailer belongs to this one: {trailer}"),
+                    false => assert!(
+                        extras.is_empty(),
+                        "this film has no trailer, and being next to one is not having one: {trailer}"
+                    ),
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn a_subtitle_next_to_a_film_becomes_one_of_its_tracks() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let media = directory.path().join("films");
