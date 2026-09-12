@@ -89,6 +89,15 @@ define_id!(
     TrackId
 );
 define_id!(
+    /// Identifies one chapter of a media source.
+    ChapterId
+);
+define_id!(
+    /// Identifies a video attached to a work without being the work itself,
+    /// such as a trailer.
+    ExtraVideoId
+);
+define_id!(
     /// Identifies a person credited on a work.
     PersonId
 );
