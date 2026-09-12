@@ -26,7 +26,8 @@ Légende : à faire, en cours, terminé.
   - **appareils connectés** avec leur jeton et leur dernière activité.
 - Répertoire des fichiers envoyés par l'administrateur, dans les données et non dans le cache.
 - Journalisation structurée avec temps par requête, censure des noms de médias.
-- Commande `melyxar doctor` : version de FFmpeg et accélérations, accès à `/dev/dri`, permissions sur chaque racine, mode WAL, tailles.
+- **État d'accès de chaque racine** établi par un test réel : introuvable, illisible, lecture seule, lecture et écriture. Calculé au démarrage et à la demande, jamais sur le chemin de lecture.
+- Commande `melyxar doctor` : version de FFmpeg et accélérations, accès à `/dev/dri`, état d'accès de chaque racine, mode WAL, tailles.
 - **Script shell d'installation et de mise à jour**, aux conventions du dépôt `Proxmox-Tools` du mainteneur (bilingue intégré, couleurs 256 niveaux désactivables, bannière, indicateur animé, encadrés, menu numéroté, sauvegarde avant modification, aucune dépendance) : vérification du système, outils, utilisateur système et répertoires, récupération et compilation en priorité basse, configuration, service, migrations, redémarrage, adresse à ouvrir. Sert aussi à la mise à jour et à la désinstallation.
 - Unité systemd. Entrées de menu pour la mise à jour, la sauvegarde, la restauration (arrêt, remplacement, vérification, redémarrage) et la désinstallation.
 - Tests en place dès le départ : unitaires sur la logique pure, intégration sur base temporaire.
@@ -42,7 +43,7 @@ Légende : à faire, en cours, terminé.
 - Détection des bandes annonces locales à côté des films.
 - Analyse des noms de fichiers (titre, année) : fichiers posés à plat sans dossier par film, découpage sur la dernière année plausible, tout ce qui suit écarté du titre, soulignement traité comme séparateur, casse et accents normalisés. Jeu de tests écrit avec des titres inventés couvrant chaque forme, jamais des noms réels.
 - Tâches de fond avec parallélisme borné, priorité basse, annulation. **L'identification est une étape séparée du scan**, rejouable seule sur un sous-ensemble.
-- Lecture des fichiers d'accompagnement existants, en option et désactivée par défaut. Rien n'est jamais écrit dans les dossiers de médias.
+- Lecture des fichiers d'accompagnement existants, en option et désactivée par défaut. Par défaut, rien n'est écrit dans les dossiers de médias ; l'écriture est une option arrivant au jalon 8 avec les droits.
 - Résultat visible : après un scan de la bibliothèque de test (environ 50 films), la base contient les œuvres, sources et pistes ; le journal montre le déroulement sans nom complet de fichier.
 
 ## Jalon 2 : métadonnées et images
@@ -148,6 +149,8 @@ Légende : à faire, en cours, terminé.
 - Assistant de première configuration : langue, compte administrateur, bibliothèques ajoutées en parcourant l'arborescence du serveur, langue des métadonnées et clé du fournisseur, mode d'accès, premier scan. S'ouvre tant que la configuration initiale n'est pas terminée et saute ce que le script d'installation a déjà réglé.
 - Écran de choix d'utilisateur avec avatars, désactivable.
 - Liste des appareils connectés avec leur dernière activité et révocation individuelle.
+- Page des bibliothèques affichant l'état d'accès de chaque racine. Les fonctions exigeant l'écriture (suppression sur disque, écriture des fichiers d'accompagnement) sont désactivées avec leur raison quand la racine est en lecture seule.
+- Option d'écriture des fichiers d'accompagnement à côté des médias, désactivée par défaut, avec vérification préalable du droit d'écriture.
 - Statistiques personnelles : temps de visionnage, films vus sur une période, genres préférés.
 - Notification d'une version plus récente publiée sur GitHub, sans mise à jour automatique, vérification désactivable.
 - Sauvegarde automatique quotidienne de la base et des fichiers envoyés, quelques copies conservées.
