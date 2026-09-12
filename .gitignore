@@ -1,0 +1,17 @@
+/target
+**/*.rs.bk
+
+# Local runtime data, never committed.
+/data
+/cache
+*.db
+*.db-wal
+*.db-shm
+
+# Web build output and dependencies.
+/web/node_modules
+/web/dist
+
+# Local configuration holding real paths and keys.
+/melyxar.local.toml
+.env
