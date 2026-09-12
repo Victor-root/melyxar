@@ -5,6 +5,7 @@ members = [
     "crates/config",
     "crates/database",
     "crates/ffmpeg",
+    "crates/media_probe",
 ]
 
 [workspace.package]
@@ -19,6 +20,7 @@ melyxar-core = { path = "crates/core" }
 melyxar-config = { path = "crates/config" }
 melyxar-database = { path = "crates/database" }
 melyxar-ffmpeg = { path = "crates/ffmpeg" }
+melyxar-media-probe = { path = "crates/media_probe" }
 melyxar-app = { path = "crates/app" }
 melyxar-server = { path = "crates/server" }
 

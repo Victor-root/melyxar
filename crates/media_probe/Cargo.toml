@@ -1,0 +1,17 @@
+[package]
+name = "melyxar-media-probe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Turns an analyser report into the domain model of a media file."
+
+[dependencies]
+melyxar-core = { workspace = true }
+melyxar-ffmpeg = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile = { workspace = true }
