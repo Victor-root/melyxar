@@ -504,4 +504,63 @@ mod tests {
         assert_eq!(human_size(5 * 1024 * 1024), "5.0 MB");
         assert_eq!(human_size(3 * 1024 * 1024 * 1024), "3.0 GB");
     }
+
+    #[test]
+    fn a_size_bigger_than_the_largest_unit_still_has_a_name() {
+        // Four disks of several terabytes is the ordinary case here, and a
+        // report that stops at the last unit it knows would not print at all.
+        let four_terabytes = 4 * 1024_i64.pow(4);
+        assert_eq!(human_size(four_terabytes), "4.0 TB");
+        assert_eq!(human_size(four_terabytes * 500), "2000.0 TB");
+    }
+
+    #[tokio::test]
+    async fn the_report_answers_yes_or_no_rather_than_leaving_a_blank() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(
+            text.contains("yes") || text.contains("no"),
+            "a question in the report is answered, not left empty: {text}"
+        );
+        assert!(
+            !text.contains("waiting to be looked up"),
+            "nothing is waiting, so the report says nothing about it: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_report_says_when_films_are_still_waiting_to_be_looked_up() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let library = state
+            .database()
+            .library_by_name("Films")
+            .await
+            .expect("read")
+            .expect("declared");
+        state
+            .database()
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(
+            text.contains("waiting to be looked up"),
+            "a film with no title yet is the first thing to explain: {text}"
+        );
+    }
 }
