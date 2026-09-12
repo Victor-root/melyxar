@@ -109,6 +109,11 @@ pub enum Reason {
     SubtitleMustBeBurnedIn {
         codec: String,
     },
+    /// The client draws no subtitle format this server can deliver alongside
+    /// the picture, so the only way to show one is to draw it in.
+    SubtitleFormatNotDrawnByClient {
+        format: String,
+    },
     /// The client cannot switch tracks inside a file it plays directly, so
     /// choosing another one means rebuilding the stream.
     NonDefaultTrackSelected,
@@ -248,10 +253,11 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
 
     PlaybackDecision {
         method,
-        video: match method {
-            PlaybackMethod::DirectPlay => StreamAction::Copy,
-            _ => video_action,
-        },
+        // Direct play needs no special case here: when there is a picture and
+        // nothing to rebuild, the decision above is already to carry it over,
+        // and a file that holds no picture must not be described as carrying
+        // one.
+        video: video_action,
         audio: audio_action,
         subtitles: delivery,
         audio_stream_index: audio.map(|(track, _)| track.stream_index),
@@ -496,6 +502,10 @@ fn decide_audio(
     }
 }
 
+/// The format text subtitles are converted to before being sent alongside the
+/// picture. One format rather than several: it is the one every browser draws.
+const DELIVERED_SUBTITLE_FORMAT: &str = "webvtt";
+
 /// Decides how subtitles are delivered, and says whether that forces the
 /// picture to be rebuilt.
 fn decide_subtitles(
@@ -515,9 +525,17 @@ fn decide_subtitles(
     }
 
     // Text subtitles are converted to the one format clients draw and sent
-    // alongside, which keeps them switchable during playback.
-    let _ = profile;
-    (SubtitleDelivery::External, false)
+    // alongside, which keeps them switchable during playback. A client that
+    // draws none has to have them burnt in: sending a track it cannot draw
+    // means a viewer who asked for subtitles and sees none.
+    if profile.supports_subtitle_format(DELIVERED_SUBTITLE_FORMAT) {
+        return (SubtitleDelivery::External, false);
+    }
+
+    reasons.push(Reason::SubtitleFormatNotDrawnByClient {
+        format: DELIVERED_SUBTITLE_FORMAT.to_string(),
+    });
+    (SubtitleDelivery::BurnIn, true)
 }
 
 #[cfg(test)]
@@ -921,6 +939,104 @@ mod tests {
             "the picture is untouched"
         );
         assert_eq!(decision.method, PlaybackMethod::Remux);
+        assert!(
+            !decision.is_direct_play(),
+            "a stream that had to be rebuilt in any way is not direct play"
+        );
+        assert!(
+            !decision.reasons.contains(&Reason::EverythingSupported),
+            "everything was not supported: the subtitle had to be sent apart"
+        );
+    }
+
+    #[test]
+    fn a_stream_rebuilt_only_to_carry_a_subtitle_is_not_called_untouched() {
+        // A client that can switch tracks inside the container asks for a
+        // subtitle and nothing else stands in the way: the answer is still a
+        // rebuild, and saying everything was supported would be a lie.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        profile.can_switch_tracks_in_container = true;
+        let tracks = vec![
+            video_track(0, "h264", 1080, None),
+            audio_track(1, "aac", 2, true),
+            subtitle_track(2, "subrip", SubtitleLayout::Text),
+        ];
+        let source = source("matroska,webm", tracks);
+        let subtitle = source.tracks[2].clone();
+
+        let decision = decide(
+            &source,
+            &PlaybackRequest {
+                subtitle_track: Some(&subtitle),
+                ..request(&profile)
+            },
+        );
+
+        assert_eq!(decision.method, PlaybackMethod::Remux);
+        assert!(!decision.reasons.contains(&Reason::EverythingSupported));
+    }
+
+    #[test]
+    fn a_client_that_draws_no_subtitle_has_them_drawn_into_the_picture() {
+        // Sending a track it cannot draw would leave a viewer who asked for
+        // subtitles looking at none.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        profile.subtitle_formats.clear();
+        let tracks = vec![
+            video_track(0, "h264", 1080, None),
+            audio_track(1, "aac", 2, true),
+            subtitle_track(2, "subrip", SubtitleLayout::Text),
+        ];
+        let source = source("matroska,webm", tracks);
+        let subtitle = source.tracks[2].clone();
+
+        let decision = decide(
+            &source,
+            &PlaybackRequest {
+                subtitle_track: Some(&subtitle),
+                ..request(&profile)
+            },
+        );
+
+        assert_eq!(decision.subtitles, SubtitleDelivery::BurnIn);
+        assert_eq!(decision.method, PlaybackMethod::FullTranscode);
+        assert!(decision
+            .reasons
+            .iter()
+            .any(|reason| matches!(reason, Reason::SubtitleFormatNotDrawnByClient { .. })));
+    }
+
+    #[test]
+    fn a_file_holding_no_picture_is_not_described_as_carrying_one() {
+        // Not a film, but the same decision answers for every source, and an
+        // answer that claims a picture is copied where there is none would
+        // send the player looking for a stream that does not exist.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        let source = source("matroska,webm", vec![audio_track(0, "aac", 2, true)]);
+        let decision = decide(&source, &request(&profile));
+
+        assert_eq!(decision.method, PlaybackMethod::DirectPlay);
+        assert_eq!(decision.video, StreamAction::Drop);
+        assert_eq!(decision.video_stream_index, None);
+    }
+
+    #[test]
+    fn the_client_is_told_which_way_the_stream_is_produced() {
+        // These words travel to the client and to the activity page, so they
+        // are pinned rather than left to drift.
+        assert_eq!(PlaybackMethod::DirectPlay.as_str(), "direct_play");
+        assert_eq!(PlaybackMethod::Remux.as_str(), "remux");
+        assert_eq!(PlaybackMethod::TranscodeAudio.as_str(), "transcode_audio");
+        assert_eq!(PlaybackMethod::FullTranscode.as_str(), "full_transcode");
+
+        // Only the two that decode anything count against the limit.
+        assert!(!PlaybackMethod::DirectPlay.is_expensive());
+        assert!(!PlaybackMethod::Remux.is_expensive());
+        assert!(PlaybackMethod::TranscodeAudio.is_expensive());
+        assert!(PlaybackMethod::FullTranscode.is_expensive());
     }
 
     #[test]
@@ -975,6 +1091,82 @@ mod tests {
                 max_height: 1080
             }
         )));
+    }
+
+    #[test]
+    fn a_picture_that_arrives_faster_than_the_client_accepts_is_rebuilt() {
+        // The case this guards against is a viewer on a thin connection: the
+        // file plays for two seconds and then stalls for ever.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        profile.max_bitrate = Some(8_000_000);
+
+        let mut fast = video_track(0, "h264", 1080, None);
+        if let TrackKind::Video(details) = &mut fast.kind {
+            details.bitrate = Some(25_000_000);
+        }
+        let source = source("matroska,webm", vec![fast, audio_track(1, "aac", 2, true)]);
+        let decision = decide(&source, &request(&profile));
+
+        assert_eq!(decision.method, PlaybackMethod::FullTranscode);
+        assert!(decision.reasons.iter().any(|reason| matches!(
+            reason,
+            Reason::BitrateTooHigh {
+                bitrate: 25_000_000,
+                max_bitrate: 8_000_000
+            }
+        )));
+    }
+
+    #[test]
+    fn a_picture_exactly_at_the_bitrate_the_client_accepts_is_left_alone() {
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        profile.max_bitrate = Some(8_000_000);
+
+        let mut exactly = video_track(0, "h264", 1080, None);
+        if let TrackKind::Video(details) = &mut exactly.kind {
+            details.bitrate = Some(8_000_000);
+        }
+        let source = source(
+            "matroska,webm",
+            vec![exactly, audio_track(1, "aac", 2, true)],
+        );
+        let decision = decide(&source, &request(&profile));
+
+        assert_eq!(
+            decision.method,
+            PlaybackMethod::DirectPlay,
+            "the limit is what the client accepts, not what it refuses"
+        );
+        assert!(!decision
+            .reasons
+            .iter()
+            .any(|reason| matches!(reason, Reason::BitrateTooHigh { .. })));
+    }
+
+    #[test]
+    fn a_picture_exactly_as_tall_as_the_client_accepts_is_left_alone() {
+        // The boundary matters: rescaling a picture to the size it already is
+        // costs a full rebuild and gives the viewer exactly what they had.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        profile.max_height = Some(1080);
+        let source = source(
+            "matroska,webm",
+            vec![
+                video_track(0, "h264", 1080, None),
+                audio_track(1, "aac", 2, true),
+            ],
+        );
+        let decision = decide(&source, &request(&profile));
+
+        assert_eq!(decision.scale_to_height, None);
+        assert!(!decision
+            .reasons
+            .iter()
+            .any(|reason| matches!(reason, Reason::ResolutionTooHigh { .. })));
+        assert_eq!(decision.method, PlaybackMethod::DirectPlay);
     }
 
     #[test]
