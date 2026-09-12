@@ -114,6 +114,10 @@ define_id!(
     CollectionId
 );
 define_id!(
+    /// Identifies one generated picture in the cache.
+    ImageId
+);
+define_id!(
     /// Identifies a device holding a long lived access token.
     DeviceId
 );

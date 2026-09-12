@@ -89,6 +89,8 @@ Ces décisions ont été prises après discussion et ne sont pas à rediscuter s
 | Analyse des fichiers | Étape distincte du parcours des dossiers, reprise par le scan suivant, bornée à quelques fichiers à la fois | Un scan doit laisser intacte la lecture qui se déroule à côté. |
 | Client HTTP sortant | `reqwest` avec `rustls`, jamais OpenSSL, délais d'attente explicites et un seul client réutilisé | `rustls` évite de dépendre d'une bibliothèque système et donc d'un paquet de développement de plus à installer dans le LXC. Un client partagé garde les connexions ouvertes vers le fournisseur au lieu d'en rouvrir une par film. |
 | Fournisseur de métadonnées | Derrière un trait, avec un fournisseur de remplacement dans les tests. Un fournisseur injoignable n'arrête jamais un scan : la tâche est réessayée à intervalles qui s'écartent | Le scan et l'identification sont deux étapes séparées ; la bibliothèque reste consultable même si TMDb est en panne. |
+| Images | Téléchargées une fois, converties par FFmpeg en WebP aux largeurs fixes, servies sous un nom tiré de leur contenu. Jamais redimensionnées à la demande | Un serveur qui redimensionne à chaque requête passe son après-midi sur la même affiche. Le nom permet au navigateur de garder une image pour toujours et de voir la nouvelle le jour où elle change. |
+| Couleur de carte | Moyenne de l'affiche, lue en la réduisant à un pixel | Une carte a une couleur à montrer avant l'arrivée de son image. |
 | Vérification | Pas d'intégration continue GitHub. Compilation, `clippy` et tests dans l'environnement de travail avant chaque commit, puis compilation réelle dans le LXC par le mainteneur | Le mainteneur rapporte les erreurs directement. |
 
 ## Environnement de production
