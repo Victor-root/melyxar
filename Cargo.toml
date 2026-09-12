@@ -4,6 +4,7 @@ members = [
     "crates/core",
     "crates/config",
     "crates/database",
+    "crates/ffmpeg",
 ]
 
 [workspace.package]
