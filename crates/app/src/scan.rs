@@ -1268,11 +1268,28 @@ mod tests {
         let job = start_scan(&state, library.clone())
             .await
             .expect("job started");
+        // What a client follows the scan by, so it has to name a real row.
+        let followed = job.id();
         let (state_at_end, report) = job.wait().await;
 
         assert_eq!(state_at_end, JobState::Succeeded);
         assert_eq!(report.expect("a finished scan has a report").added, 1);
+        assert_eq!(
+            state
+                .database()
+                .job(followed)
+                .await
+                .expect("read")
+                .expect("the scan was written down before it started")
+                .state,
+            JobState::Succeeded
+        );
     }
+
+    // A folder the server cannot open is counted in the report, and that count
+    // has no test here: making a folder unreadable needs a user who is not its
+    // owner, and these tests run as one. The walk itself is covered in the
+    // library crate, which keeps going and never loses the files it can reach.
 
     #[tokio::test]
     async fn two_scans_of_one_library_never_run_at_once() {
@@ -1321,6 +1338,78 @@ mod tests {
                 .expect("read"),
             after_first,
             "a scan that found nothing new must not make every client refetch"
+        );
+    }
+
+    #[tokio::test]
+    async fn any_kind_of_movement_makes_a_grid_stale_not_only_an_arrival() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+
+        let version = |state: AppState, id| async move {
+            state.database().library_version(id).await.expect("read")
+        };
+
+        scan(&state, &library).await;
+        let after_arrival = version(state.clone(), library.id).await;
+
+        // Replaced by a better copy: the same name, other contents.
+        write(
+            &directory.path().join("films"),
+            "Quiet.Harbour.2019.MULTi.1080p.mkv",
+            b"a larger file altogether",
+        );
+        let report = scan(&state, &library).await;
+        assert_eq!(report.changed, 1);
+        let after_change = version(state.clone(), library.id).await;
+        assert!(
+            after_change > after_arrival,
+            "a copy that was replaced changes what the page shows"
+        );
+
+        // A disk unplugged and plugged back in: the file leaves and comes back
+        // exactly as it was, which is the case the restored count is for.
+        let path = directory
+            .path()
+            .join("films")
+            .join("Quiet.Harbour.2019.MULTi.1080p.mkv");
+        let as_it_was = std::fs::metadata(&path)
+            .expect("the file is there")
+            .modified()
+            .expect("a modification time");
+        std::fs::remove_file(&path).expect("file removed");
+
+        let report = scan(&state, &library).await;
+        assert_eq!(report.missing, 1);
+        let after_loss = version(state.clone(), library.id).await;
+        assert!(
+            after_loss > after_change,
+            "a film that cannot be played any more changes what the page shows"
+        );
+
+        write(
+            &directory.path().join("films"),
+            "Quiet.Harbour.2019.MULTi.1080p.mkv",
+            b"a larger file altogether",
+        );
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .expect("the file is there")
+            .set_modified(as_it_was)
+            .expect("the time it had is put back");
+
+        let report = scan(&state, &library).await;
+        assert_eq!(report.restored, 1);
+        assert_eq!(
+            report.changed, 0,
+            "the file came back exactly as it left, so nothing about it changed"
+        );
+        assert!(
+            version(state.clone(), library.id).await > after_loss,
+            "a film that came back changes what the page shows"
         );
     }
 }
