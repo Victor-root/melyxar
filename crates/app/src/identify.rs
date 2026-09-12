@@ -1500,6 +1500,26 @@ mod tests {
             0,
             "a face that did not change must not be fetched or written again"
         );
+
+        // The same people credited on another film: still nobody new, so
+        // still nothing prepared, while a face nobody has yet is prepared.
+        let (_elsewhere, other_state, other_library, other_work) =
+            state_with_tools("Amber Field", Some(2020)).await;
+        let _ = other_library;
+        let fresh = other_state
+            .database()
+            .apply_identification(
+                other_work.id,
+                &to_record(&details("111", "Quiet Harbour", Some(2019)), "tmdb", "fr"),
+                false,
+            )
+            .await
+            .expect("applied");
+        assert_eq!(
+            crate::images::store_person_photos(&other_state, &provider, &fresh).await,
+            1,
+            "one actor with a photo, so one face prepared"
+        );
     }
 
     #[tokio::test]
