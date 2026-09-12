@@ -22,6 +22,9 @@ pub struct CreditRecord {
     pub role: String,
     pub character: Option<String>,
     pub ordinal: i32,
+    /// Where the photo lives at the provider. Fetching it is a separate step,
+    /// so an identification never waits on a dozen pictures.
+    pub photo_path: Option<String>,
 }
 
 /// A series of works a provider groups together.
@@ -30,6 +33,29 @@ pub struct CollectionRecord {
     pub external_id: String,
     pub name: String,
     pub sort_name: String,
+}
+
+/// One line of the credits of a work, as a page shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkCredit {
+    pub person_id: PersonId,
+    pub name: String,
+    pub role: String,
+    pub character: Option<String>,
+}
+
+/// A person a work credits, as stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreditedPerson {
+    pub person_id: PersonId,
+    pub name: String,
+    /// The part they played in the work, which decides whether a page shows
+    /// their face at all.
+    pub role: String,
+    /// Where the photo lives at the provider, when it named one.
+    pub photo_path: Option<String>,
+    /// Billing order, so only the faces a page actually shows are fetched.
+    pub ordinal: i32,
 }
 
 /// A trailer hosted elsewhere.
@@ -106,12 +132,14 @@ impl Database {
     ///
     /// `chosen_by_hand` marks a match a person picked, which a later refresh
     /// must never undo.
+    /// Answers with the people it credited and where their photos live, so the
+    /// caller can fetch those without asking the provider a second time.
     pub async fn apply_identification(
         &self,
         work_id: WorkId,
         found: &IdentifiedWork,
         chosen_by_hand: bool,
-    ) -> Result<()> {
+    ) -> Result<Vec<CreditedPerson>> {
         let locked = self.locked_fields(work_id).await?;
         let mut transaction = self.begin().await?;
         let moment = timestamp_to_text(now());
@@ -184,7 +212,8 @@ impl Database {
         replace_links(&mut transaction, work_id, &GENRES, &found.genres).await?;
         replace_links(&mut transaction, work_id, &STUDIOS, &found.studios).await?;
 
-        replace_credits(&mut transaction, work_id, &found.provider, &found.credits).await?;
+        let people = replace_credits(&mut transaction, work_id, &found.provider, &found.credits)
+            .await?;
 
         if let Some(collection) = &found.collection {
             attach_to_collection(&mut transaction, work_id, &found.provider, collection).await?;
@@ -220,7 +249,7 @@ impl Database {
         }
 
         transaction.commit().await?;
-        Ok(())
+        Ok(people)
     }
 
     /// Fields someone edited by hand, which a refresh leaves alone.
@@ -303,12 +332,9 @@ impl Database {
     }
 
     /// Who is credited on a work, leads first.
-    pub async fn work_credits(
-        &self,
-        work_id: WorkId,
-    ) -> Result<Vec<(String, String, Option<String>)>> {
+    pub async fn work_credits(&self, work_id: WorkId) -> Result<Vec<WorkCredit>> {
         let rows = sqlx::query(
-            "SELECT people.name, credits.role, credits.character_name
+            "SELECT credits.person_id, people.name, credits.role, credits.character_name
              FROM credits JOIN people ON people.id = credits.person_id
              WHERE credits.work_id = ?
              ORDER BY CASE credits.role WHEN 'actor' THEN 0 ELSE 1 END, credits.ordinal,
@@ -320,11 +346,15 @@ impl Database {
 
         rows.iter()
             .map(|row| {
-                Ok((
-                    row.try_get("name")?,
-                    row.try_get("role")?,
-                    row.try_get("character_name")?,
-                ))
+                let person_id: String = row.try_get("person_id")?;
+                Ok(WorkCredit {
+                    person_id: person_id.parse().map_err(|_| {
+                        crate::DatabaseError::Corrupt("person identifier".to_string())
+                    })?,
+                    name: row.try_get("name")?,
+                    role: row.try_get("role")?,
+                    character: row.try_get("character_name")?,
+                })
             })
             .collect()
     }
@@ -461,12 +491,13 @@ async fn replace_credits(
     work_id: WorkId,
     provider: &str,
     credits: &[CreditRecord],
-) -> Result<()> {
+) -> Result<Vec<CreditedPerson>> {
     sqlx::query("DELETE FROM credits WHERE work_id = ?")
         .bind(work_id.to_db_string())
         .execute(&mut **transaction)
         .await?;
 
+    let mut people = Vec::new();
     for credit in credits {
         let existing: Option<(String,)> = sqlx::query_as(
             "SELECT person_id FROM person_external_ids WHERE provider = ? AND external_id = ?",
@@ -514,8 +545,18 @@ async fn replace_credits(
         .bind(credit.ordinal)
         .execute(&mut **transaction)
         .await?;
+
+        people.push(CreditedPerson {
+            person_id: person_id
+                .parse()
+                .map_err(|_| crate::DatabaseError::Corrupt("person identifier".to_string()))?,
+            name: credit.name.clone(),
+            role: credit.role.clone(),
+            photo_path: credit.photo_path.clone(),
+            ordinal: credit.ordinal,
+        });
     }
-    Ok(())
+    Ok(people)
 }
 
 /// Puts a work in the collection a provider says it belongs to.
@@ -660,6 +701,7 @@ mod tests {
                     role: "actor".to_string(),
                     character: Some("Camille".to_string()),
                     ordinal: 0,
+                    photo_path: Some("/alix.jpg".to_string()),
                 },
                 CreditRecord {
                     external_id: "3".to_string(),
@@ -668,6 +710,7 @@ mod tests {
                     role: "director".to_string(),
                     character: None,
                     ordinal: 0,
+                    photo_path: None,
                 },
             ],
             collection: Some(CollectionRecord {
@@ -762,10 +805,70 @@ mod tests {
 
         let credits = database.work_credits(work.id).await.expect("read");
         assert_eq!(credits.len(), 2);
-        assert_eq!(credits[0].0, "Alix Moreau");
-        assert_eq!(credits[0].1, "actor");
-        assert_eq!(credits[0].2.as_deref(), Some("Camille"));
-        assert_eq!(credits[1].1, "director");
+        assert_eq!(credits[0].name, "Alix Moreau");
+        assert_eq!(credits[0].role, "actor");
+        assert_eq!(credits[0].character.as_deref(), Some("Camille"));
+        assert_eq!(credits[1].role, "director");
+    }
+
+    #[tokio::test]
+    async fn an_identification_says_whose_face_is_worth_fetching() {
+        let (database, work) = work_in_library().await;
+        let people = database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+
+        assert_eq!(people.len(), 2);
+        let actor = people
+            .iter()
+            .find(|person| person.role == "actor")
+            .expect("an actor was credited");
+        assert_eq!(actor.name, "Alix Moreau");
+        assert_eq!(actor.photo_path.as_deref(), Some("/alix.jpg"));
+        assert_eq!(
+            actor.person_id,
+            database.work_credits(work.id).await.expect("read")[0].person_id,
+            "the people answered for are the people the page credits"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_person_credited_on_two_films_is_the_same_person() {
+        let (database, first) = work_in_library().await;
+        let second = database
+            .create_work(
+                first.library_id,
+                WorkKind::Movie,
+                "Amber Field",
+                "amber field",
+                None,
+            )
+            .await
+            .expect("work created");
+
+        let here = database
+            .apply_identification(first.id, &found(), false)
+            .await
+            .expect("applied");
+        let there = database
+            .apply_identification(
+                second.id,
+                &IdentifiedWork {
+                    external_id: "222".to_string(),
+                    title: "Amber Field".to_string(),
+                    sort_title: "amber field".to_string(),
+                    ..found()
+                },
+                false,
+            )
+            .await
+            .expect("applied");
+
+        assert_eq!(
+            here[0].person_id, there[0].person_id,
+            "an actor is shared, and their photo is fetched once rather than per film"
+        );
     }
 
     #[tokio::test]

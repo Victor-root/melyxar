@@ -29,6 +29,9 @@ const QUALITY: u8 = 80;
 pub const POSTER_WIDTHS: [u32; 3] = [200, 400, 800];
 /// Backdrops are shown wide, so they start where posters end.
 pub const BACKDROP_WIDTHS: [u32; 3] = [640, 1280, 1920];
+/// A face is shown in a small round frame, and a screen with fine pixels wants
+/// twice what it measures. Two widths cover both and no more.
+pub const PHOTO_WIDTHS: [u32; 2] = [96, 192];
 
 /// Builds the conversion of one picture to one width.
 ///
@@ -191,6 +194,11 @@ mod tests {
         assert!(
             BACKDROP_WIDTHS[0] > POSTER_WIDTHS[0],
             "a backdrop is shown wide and a poster is not"
+        );
+        assert!(PHOTO_WIDTHS.windows(2).all(|pair| pair[0] < pair[1]));
+        assert!(
+            PHOTO_WIDTHS[0] < POSTER_WIDTHS[0],
+            "a face in a round frame is the smallest picture prepared"
         );
     }
 }

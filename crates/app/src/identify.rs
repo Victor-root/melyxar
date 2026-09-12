@@ -140,7 +140,7 @@ async fn identify_one(
         Err(error) => return Ok(postpone(work, &error)),
     };
 
-    database
+    let people = database
         .apply_identification(
             work.id,
             &to_record(&details, provider.name(), language),
@@ -152,6 +152,7 @@ async fn identify_one(
     // The pictures follow at once, from what the provider already told us:
     // asking a second time for the same film would be a request for nothing.
     crate::images::store_provider_images(state, provider, work.id, &details).await;
+    crate::images::store_person_photos(state, provider, &people).await;
 
     tracing::debug!(
         work = %MediaName::new(&details.title),
@@ -294,6 +295,7 @@ fn to_record(details: &MovieDetails, provider: &str, language: &str) -> Identifi
                 role: credit.role.clone(),
                 character: credit.character.clone(),
                 ordinal: credit.ordinal,
+                photo_path: credit.photo_path.clone(),
             })
             .collect(),
         collection: details
@@ -428,7 +430,7 @@ pub async fn identify_by_hand(
         .await
         .map_err(|error| AppError::Domain(melyxar_core::Error::invalid_input(error.to_string())))?;
 
-    state
+    let people = state
         .database()
         .apply_identification(
             work_id,
@@ -436,6 +438,13 @@ pub async fn identify_by_hand(
             true,
         )
         .await?;
+
+    // A film someone identified by hand gets its pictures like any other: the
+    // provider has just described it, so asking again would be a request for
+    // nothing.
+    crate::images::store_provider_images(state, provider, work_id, &details).await;
+    crate::images::store_person_photos(state, provider, &people).await;
+
     state.database().bump_library_version(library_id).await?;
     Ok(())
 }
@@ -457,6 +466,9 @@ mod tests {
         /// What to fail with instead of answering, if anything.
         failure: Option<fn() -> ProviderError>,
         searches: Mutex<Vec<(String, Option<i32>)>>,
+        /// Every picture actually asked for, so a test can show that nothing
+        /// is fetched twice and that a long cast does not mean a long wait.
+        fetched: Mutex<Vec<String>>,
         /// Bytes handed back for any picture asked for, when there are any.
         picture: Option<Vec<u8>>,
     }
@@ -468,6 +480,7 @@ mod tests {
                 details,
                 failure: None,
                 searches: Mutex::new(Vec::new()),
+                fetched: Mutex::new(Vec::new()),
                 picture: None,
             }
         }
@@ -478,12 +491,17 @@ mod tests {
                 details: Vec::new(),
                 failure: Some(failure),
                 searches: Mutex::new(Vec::new()),
+                fetched: Mutex::new(Vec::new()),
                 picture: None,
             }
         }
 
         fn searches(&self) -> Vec<(String, Option<i32>)> {
             self.searches.lock().expect("free").clone()
+        }
+
+        fn fetched(&self) -> Vec<String> {
+            self.fetched.lock().expect("free").clone()
         }
 
         /// Hands back a real picture, so the whole preparation can be exercised.
@@ -543,7 +561,8 @@ mod tests {
             format!("https://pictures.invalid{path}")
         }
 
-        async fn fetch_image(&self, _path: &str) -> melyxar_metadata::provider::Result<Vec<u8>> {
+        async fn fetch_image(&self, path: &str) -> melyxar_metadata::provider::Result<Vec<u8>> {
+            self.fetched.lock().expect("free").push(path.to_string());
             match &self.picture {
                 Some(bytes) => Ok(bytes.clone()),
                 None => Err(ProviderError::Unexpected("no picture here".into())),
@@ -595,14 +614,24 @@ mod tests {
             age_rating_label: Some("12".to_string()),
             genres: vec!["Drame".to_string()],
             studios: vec!["Invented Pictures".to_string()],
-            credits: vec![Credit {
-                external_id: "1".to_string(),
-                name: "Alix Moreau".to_string(),
-                role: "actor".to_string(),
-                character: Some("Camille".to_string()),
-                ordinal: 0,
-                photo_path: None,
-            }],
+            credits: vec![
+                Credit {
+                    external_id: "1".to_string(),
+                    name: "Alix Moreau".to_string(),
+                    role: "actor".to_string(),
+                    character: Some("Camille".to_string()),
+                    ordinal: 0,
+                    photo_path: Some("/alix.jpg".to_string()),
+                },
+                Credit {
+                    external_id: "3".to_string(),
+                    name: "Sacha Nord".to_string(),
+                    role: "director".to_string(),
+                    character: None,
+                    ordinal: 0,
+                    photo_path: Some("/sacha.jpg".to_string()),
+                },
+            ],
             collection: Some(Collection {
                 external_id: "77".to_string(),
                 name: "Harbour Trilogy".to_string(),
@@ -1163,6 +1192,132 @@ mod tests {
             .expect("present");
         let colour = stored.dominant_color.expect("a card has a colour to show");
         assert!(colour.starts_with('#') && colour.len() == 7, "{colour}");
+    }
+
+    #[tokio::test]
+    async fn the_faces_of_the_cast_are_prepared_and_nobody_elses() {
+        let Some(picture) = a_real_poster() else {
+            eprintln!("no media tool here, the preparation of a picture was not exercised");
+            return;
+        };
+
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+        let provider = StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        )
+        .serving(picture);
+
+        run(&state, &provider, &library).await;
+
+        let detail = crate::detail::work_detail(&state, work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        let actor = detail
+            .credits
+            .iter()
+            .find(|credit| credit.role == "actor")
+            .expect("an actor was credited");
+        assert_eq!(
+            actor.photo.len(),
+            2,
+            "one size per width a face is shown at"
+        );
+        assert!(actor
+            .photo
+            .iter()
+            .all(|image| image.relative_path.starts_with("people/")
+                && image.relative_path.ends_with(".webp")));
+
+        let root = state.config().directories.images();
+        for image in &actor.photo {
+            assert!(
+                root.join(&image.relative_path).exists(),
+                "a row without its file is a broken picture"
+            );
+        }
+
+        let director = detail
+            .credits
+            .iter()
+            .find(|credit| credit.role == "director")
+            .expect("a director was credited");
+        assert!(
+            director.photo.is_empty(),
+            "a page reads the crew as names, so their faces are never fetched"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_with_a_long_cast_does_not_fetch_a_face_nobody_scrolls_to() {
+        let Some(picture) = a_real_poster() else {
+            return;
+        };
+        let (_directory, state, library, _) = state_with_tools("Quiet Harbour", Some(2019)).await;
+
+        let mut crowded = details("111", "Quiet Harbour", Some(2019));
+        crowded.credits = (0..40)
+            .map(|index| Credit {
+                external_id: format!("p{index}"),
+                name: format!("Invented Name {index}"),
+                role: "actor".to_string(),
+                character: Some(format!("Part {index}")),
+                ordinal: index,
+                photo_path: Some(format!("/face-{index}.jpg")),
+            })
+            .collect();
+
+        let provider = StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![crowded],
+        )
+        .serving(picture);
+        run(&state, &provider, &library).await;
+
+        let faces: Vec<String> = provider
+            .fetched()
+            .into_iter()
+            .filter(|path| path.starts_with("/face-"))
+            .collect();
+        assert_eq!(faces.len(), 18, "a page shows the leads, not the call sheet");
+        assert!(
+            faces.contains(&"/face-0.jpg".to_string())
+                && !faces.contains(&"/face-39.jpg".to_string()),
+            "the faces fetched are the ones billed first: {faces:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_face_already_fetched_is_not_fetched_again_for_the_next_film() {
+        let Some(picture) = a_real_poster() else {
+            return;
+        };
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+        let provider = StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        )
+        .serving(picture);
+
+        run(&state, &provider, &library).await;
+        let people = state
+            .database()
+            .apply_identification(
+                work.id,
+                &to_record(&details("111", "Quiet Harbour", Some(2019)), "tmdb", "fr"),
+                false,
+            )
+            .await
+            .expect("applied");
+
+        assert_eq!(
+            crate::images::store_person_photos(&state, &provider, &people).await,
+            0,
+            "a face that did not change must not be fetched or written again"
+        );
     }
 
     #[tokio::test]
