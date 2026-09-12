@@ -296,4 +296,76 @@ Décision validée : sauvegarde automatique de la base, quotidienne, avec quelqu
 
 Exclus définitivement : télévision en direct, enregistrement, extensions tierces, gestion de téléchargements automatiques.
 
-**Trakt** reste une question ouverte. C'est un service en ligne qui tient l'historique de tout ce qu'une personne regarde, quelle que soit l'application utilisée. Marquer un film comme vu dans Melyxar le ferait apparaître sur le profil Trakt, et une autre application saurait qu'il est vu. Cela sert à ceux qui utilisent plusieurs applications, qui veulent des statistiques annuelles ou qui suivent des listes publiques. En contrepartie, cela demande un compte chez un tiers et cela envoie l'historique de visionnage à ce tiers. Ce n'est pas structurant : la synchronisation se brancherait plus tard sur les événements de progression déjà prévus. Décision reportée, sans conséquence sur les fondations.
+**Trakt** est écarté pour l'instant, sans conséquence sur les fondations : la synchronisation se brancherait plus tard sur les événements de progression déjà prévus. Le paragraphe ci-dessous décrit ce dont il s'agit, pour mémoire.
+
+**Trakt, pour mémoire.** C'est un service en ligne qui tient l'historique de tout ce qu'une personne regarde, quelle que soit l'application utilisée. Marquer un film comme vu dans Melyxar le ferait apparaître sur le profil Trakt, et une autre application saurait qu'il est vu. Cela sert à ceux qui utilisent plusieurs applications, qui veulent des statistiques annuelles ou qui suivent des listes publiques. En contrepartie, cela demande un compte chez un tiers et cela envoie l'historique de visionnage à ce tiers. Ce n'est pas structurant : la synchronisation se brancherait plus tard sur les événements de progression déjà prévus. Décision reportée, sans conséquence sur les fondations.
+
+## 19. Métadonnées, recherche et navigation
+
+Décisions validées.
+
+- **Langue des métadonnées** : français en priorité, repli sur l'anglais quand le français manque. Les deux versions sont stockées quand le fournisseur les donne, ce qui permet de basculer l'affichage d'une fiche sans requête externe.
+- **Écran de choix d'utilisateur** avec avatars, avant la saisie du mot de passe, avec un réglage pour le désactiver et revenir à une saisie du nom.
+- **Sous-titres manquants** : recherche et téléchargement depuis un service en ligne, **sur demande explicite uniquement**, jamais automatiquement. La qualité des sous-titres publics est inégale et un téléchargement de masse remplirait la bibliothèque de fichiers douteux.
+- **Recherche globale** : titres, personnes, collections, avec résultats groupés par type.
+- **Tri** par titre, date d'ajout, année, note, durée. **Filtres** par genre, décennie, non vu, favoris, résolution, présence de sous-titres.
+- **Liste « à voir plus tard »**, distincte des favoris.
+- **Statistiques personnelles** : temps de visionnage, films vus sur une période, genres préférés.
+
+**Ce que cela implique.** Les métadonnées textuelles sont stockées par langue, ce qui veut dire une table de traductions plutôt que des colonnes de texte sur l'œuvre. C'est une décision de schéma à prendre maintenant. L'écran de choix d'utilisateur passe par la route publique déjà prévue, qui renverra alors la liste des comptes et leurs avatars : c'est une divulgation volontaire, d'où le réglage pour la désactiver. Les statistiques se calculent depuis le journal d'activité, sans table supplémentaire, mais sur des données historiques qui doivent survivre à la purge du journal : un résumé mensuel agrégé est conservé au-delà.
+
+**Quand.** Langue et traductions au jalon 2. Recherche, tri, filtres et liste à voir au jalon 3. Choix d'utilisateur et statistiques au jalon 8. Sous-titres en ligne après la V0.1.
+
+## 20. Version non retenue : sélecteur de version
+
+Le mainteneur ne souhaite pas de sélecteur de version ni de choix automatique entre une copie 4K et une copie 1080p du même film.
+
+**Ce que cela change, et ce que cela ne change pas.** Le modèle garde plusieurs sources possibles par œuvre : c'est indispensable au repérage des fichiers remplacés et des doublons, indépendamment de toute interface. En revanche, aucune logique de sélection automatique n'est écrite, et la fiche ne montre pas de sélecteur. Si plusieurs fichiers se rattachent à la même œuvre, ils sont simplement listés et l'administrateur en est informé, à charge pour lui de faire le ménage.
+
+## 21. Contrôle à distance
+
+Piloter la lecture d'un appareil depuis un autre est souhaité mais explicitement **sans priorité**, à traiter bien plus tard. L'envoi vers un Chromecast n'est pas décidé.
+
+**Ce que cela implique dès maintenant.** Rien, à une condition déjà respectée : les sessions de lecture sont identifiées côté serveur et diffusées par le flux d'événements. Un pilotage à distance consiste alors à envoyer une commande à une session existante, ce que la structure permettra sans refonte.
+
+## 22. Installation, mise à jour et publication
+
+### Script d'installation
+
+L'installation et la première configuration dans le LXC se font par un **script shell unique**, reprenant exactement les conventions des scripts du dépôt `Proxmox-Tools` du mainteneur, qui sont sa signature. Les conventions relevées, à respecter à la lettre :
+
+- En-tête `#!/usr/bin/env bash`, puis `set -Eeuo pipefail`, et `umask 077` quand le script écrit des fichiers sensibles.
+- Sections séparées par des commentaires encadrés de caractères de filet, par exemple `# ── Couleurs ────`.
+- **Bilingue, intégré au script.** La langue est déduite de la locale du système, l'anglais étant le repli pour une locale inconnue comme pour une clé manquante. Les textes vivent dans un tableau associatif chargé depuis un bloc de données au format `langue|clé|texte`, avec deux fonctions d'accès, l'une pour un texte simple, l'autre pour un texte contenant des valeurs à insérer.
+- **Couleurs sur 256 niveaux**, désactivées si la sortie n'est pas un terminal ou si la variable d'environnement correspondante est posée. Les rôles sont toujours les mêmes : couleur principale, sa variante foncée, sa variante douce, ambre pour les avertissements, vert pour les succès, cyan, bleu, gris, atténué, gras, remise à zéro.
+- **La couleur principale suit le sujet du script** : orange Proxmox pour les outils Proxmox, rouge pour WireGuard. Melyxar aura donc la sienne, cohérente avec la couleur d'accentuation par défaut de l'interface web.
+- Largeur de terminal lue dynamiquement et plafonnée à 92 colonnes, trait de séparation dessiné à cette largeur.
+- Messages courts préfixés d'un symbole : coche pour un succès, chevron pour une information, triangle pour un avertissement, croix pour une erreur, avec une fonction qui affiche l'erreur puis s'arrête.
+- Encadrés d'explication dessinés avec des filets d'angle, pour les passages où l'utilisateur doit comprendre un choix.
+- Bannière en lettres capitales dessinées en caractères de bloc, suivie du nom de l'outil et de la mention de l'auteur, puis d'un trait.
+- **Exécution des étapes longues avec un indicateur animé**, la sortie de la commande étant capturée dans un fichier temporaire : en cas de succès la ligne devient une coche, en cas d'échec une croix suivie de la sortie complète, indentée.
+- Invites de saisie préfixées d'un point d'interrogation, avec la valeur par défaut affichée entre crochets, et des confirmations acceptant les formes française et anglaise du oui et du non.
+- Menu interactif numéroté pour les actions.
+- Sauvegarde avant toute modification, et restauration possible.
+- Aucune dépendance à installer au-delà de bash.
+
+Ce que le script fera pour Melyxar : vérifier le système, installer les outils nécessaires, créer l'utilisateur système et les répertoires, récupérer et compiler le projet, écrire la configuration, installer le service, proposer le mode d'accès, et afficher l'adresse à ouvrir. Il servira aussi aux mises à jour et à la désinstallation propre.
+
+### Publication et notification de mise à jour
+
+- Chaque version publiée correspond à une **étiquette de version sur GitHub**.
+- Le serveur vérifie périodiquement s'il existe une version plus récente et l'indique dans l'administration. **Aucune mise à jour automatique** : c'est l'administrateur qui lance la mise à jour.
+- Cette vérification est un appel sortant vers GitHub : elle est désactivable, et son échec ne perturbe rien.
+
+**Quand.** Script d'installation au jalon 0, dans sa forme minimale, complété au fil des jalons. Notification de version au jalon 8.
+
+## 23. Navigation au clavier
+
+Le mainteneur la veut si elle est simple, sans en faire une priorité.
+
+**Distinction utile.** Il y a deux niveaux, très différents en coût.
+
+- **Le niveau gratuit, à faire dès le début** : ne pas casser le comportement natif du navigateur. Utiliser de vrais boutons et de vrais liens plutôt que des éléments décoratifs rendus cliquables, respecter l'ordre de tabulation, afficher un contour visible sur l'élément sélectionné. Cela ne coûte presque rien pendant l'écriture et c'est très coûteux à rattraper, parce qu'il faut alors reprendre chaque composant. C'est aussi ce qui rend l'interface utilisable par les outils d'accessibilité.
+- **Le niveau coûteux, reporté** : la navigation directionnelle complète, où les flèches déplacent la sélection de vignette en vignette dans une grille, comme sur une télévision. Cela demande un gestionnaire de focus dédié qui connaît la position de chaque élément à l'écran. Reporté sans regret, et de toute façon repris dans le client télévision.
+
+**Quand.** Niveau gratuit dès le jalon 3, niveau directionnel non planifié.
