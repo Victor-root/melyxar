@@ -368,6 +368,43 @@ mod tests {
         let result = parsed("Harbour 2049.mkv");
         assert_eq!(result.title, "Harbour 2049");
         assert_eq!(result.year, None);
+
+        // The same rule when the number would have been a plausible year:
+        // a film called after a year keeps it in its title.
+        let plainly_a_title = parse("Harbour 2019.mkv", NOW);
+        assert_eq!(plainly_a_title.title, "Harbour 2019");
+        assert_eq!(plainly_a_title.year, None);
+    }
+
+    #[test]
+    fn a_name_starting_with_a_year_keeps_it_rather_than_ending_up_untitled() {
+        let result = parse("2019.Remastered.mkv", NOW);
+        assert_eq!(
+            result.title, "2019 Remastered",
+            "a film with no title left is a film nobody finds again"
+        );
+        assert_eq!(result.year, None);
+    }
+
+    #[test]
+    fn a_film_from_this_year_or_the_next_is_still_a_film() {
+        for year in [NOW - 1, NOW, NOW + 1] {
+            let result = parse(&format!("Quiet.Harbour.{year}.1080p.mkv"), NOW);
+            assert_eq!(result.year, Some(year), "a film from {year}");
+            assert_eq!(result.title, "Quiet Harbour");
+        }
+    }
+
+    #[test]
+    fn the_year_itself_never_lands_among_the_markers() {
+        let result = parse("Quiet.Harbour.2019.MULTi.1080p.mkv", NOW);
+        assert_eq!(result.year, Some(2019));
+        assert!(
+            !result.tags.contains("2019"),
+            "the year is a field of its own, not a marker: {:?}",
+            result.tags
+        );
+        assert!(result.tags.contains("multi") && result.tags.contains("1080p"));
     }
 
     #[test]

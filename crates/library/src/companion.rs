@@ -156,6 +156,30 @@ mod tests {
         );
         assert_eq!(ids.tmdb.as_deref(), Some("12345"));
         assert_eq!(ids.imdb.as_deref(), Some("tt7654321"));
+        assert!(!ids.is_empty());
+    }
+
+    #[test]
+    fn one_identifier_is_enough_to_be_worth_reading() {
+        // A file that names the film at one site only still spares a search,
+        // so it must not be thrown away as though it said nothing.
+        let only_one = CompanionIds {
+            tmdb: Some("12345".to_string()),
+            imdb: None,
+        };
+        assert!(!only_one.is_empty());
+
+        let the_other = CompanionIds {
+            tmdb: None,
+            imdb: Some("tt7654321".to_string()),
+        };
+        assert!(!the_other.is_empty());
+
+        assert!(CompanionIds {
+            tmdb: None,
+            imdb: None,
+        }
+        .is_empty());
     }
 
     #[test]

@@ -460,6 +460,40 @@ mod tests {
     }
 
     #[test]
+    fn only_the_file_that_left_is_reported_missing() {
+        // The case that matters: one film removed from a folder that still
+        // holds the others. A scan that reports the whole library absent puts
+        // every film behind a warning until the next one.
+        let moment = now();
+        let known = vec![
+            KnownFile {
+                relative_path: PathBuf::from("Quiet.Harbour.2019.mkv"),
+                size_bytes: 100,
+                modified_at: moment,
+            },
+            KnownFile {
+                relative_path: PathBuf::from("Amber.Field.2020.mkv"),
+                size_bytes: 200,
+                modified_at: moment,
+            },
+        ];
+        let still_there = vec![FoundFile {
+            relative_path: PathBuf::from("Amber.Field.2020.mkv"),
+            size_bytes: 200,
+            modified_at: moment,
+            companion_kind: None,
+        }];
+
+        let changes = diff(&still_there, &known);
+        assert_eq!(
+            changes.missing,
+            vec![PathBuf::from("Quiet.Harbour.2019.mkv")]
+        );
+        assert_eq!(changes.unchanged, 1);
+        assert!(changes.added.is_empty() && changes.changed.is_empty());
+    }
+
+    #[test]
     fn an_unreadable_subfolder_is_reported_rather_than_silently_skipped() {
         use std::os::unix::fs::PermissionsExt;
 

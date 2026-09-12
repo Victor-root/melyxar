@@ -212,8 +212,8 @@ impl Database {
         replace_links(&mut transaction, work_id, &GENRES, &found.genres).await?;
         replace_links(&mut transaction, work_id, &STUDIOS, &found.studios).await?;
 
-        let people = replace_credits(&mut transaction, work_id, &found.provider, &found.credits)
-            .await?;
+        let people =
+            replace_credits(&mut transaction, work_id, &found.provider, &found.credits).await?;
 
         if let Some(collection) = &found.collection {
             attach_to_collection(&mut transaction, work_id, &found.provider, collection).await?;

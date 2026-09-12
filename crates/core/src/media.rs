@@ -533,10 +533,7 @@ mod tests {
             track(TrackKind::Video(video(480, "mpeg4", None)), false),
             track(TrackKind::Video(video(2160, "hevc", None)), false),
         ]);
-        assert_eq!(
-            unmarked.primary_video().expect("a picture").1.height,
-            480
-        );
+        assert_eq!(unmarked.primary_video().expect("a picture").1.height, 480);
 
         assert!(
             source_with(vec![track(soundtrack(), true)])

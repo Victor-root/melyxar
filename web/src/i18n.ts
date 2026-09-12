@@ -46,8 +46,6 @@ const en: Dictionary = {
   "library.end": "That is everything.",
 
   "search.placeholder": "Search a title",
-  "search.results": "{count} found",
-  "search.nothing": "Nothing found.",
 
   "work.play": "Play",
   "work.trailer": "Trailer",
@@ -57,7 +55,6 @@ const en: Dictionary = {
   "work.crew": "Crew",
   "work.versions": "Versions",
   "work.version": "Version",
-  "work.details": "File details",
   "work.collection": "Part of {name}",
   "work.minutes": "{count} min",
   "work.unidentified": "Not identified",
@@ -73,7 +70,6 @@ const en: Dictionary = {
   "work.hearing_impaired": "For the hard of hearing",
   "work.burns_in": "Has to be burnt into the picture",
   "work.no_overview": "No synopsis yet.",
-  "work.back": "Back",
 
   "jobs.title": "Activity",
   "jobs.running": "Running",
@@ -100,7 +96,6 @@ const en: Dictionary = {
 
   "error.unreachable": "The server did not answer.",
   "error.not_found": "Nothing there.",
-  "error.generic": "Something went wrong.",
   "error.retry": "Try again",
 
   "credit.actor": "Actor",
@@ -152,8 +147,6 @@ const fr: Dictionary = {
   "library.end": "C'est tout.",
 
   "search.placeholder": "Chercher un titre",
-  "search.results": "{count} trouvés",
-  "search.nothing": "Rien trouvé.",
 
   "work.play": "Lire",
   "work.trailer": "Bande annonce",
@@ -163,7 +156,6 @@ const fr: Dictionary = {
   "work.crew": "Équipe",
   "work.versions": "Versions",
   "work.version": "Version",
-  "work.details": "Détails du fichier",
   "work.collection": "Fait partie de {name}",
   "work.minutes": "{count} min",
   "work.unidentified": "Non identifié",
@@ -179,7 +171,6 @@ const fr: Dictionary = {
   "work.hearing_impaired": "Malentendants",
   "work.burns_in": "Doit être incrusté dans l'image",
   "work.no_overview": "Pas encore de synopsis.",
-  "work.back": "Retour",
 
   "jobs.title": "Activité",
   "jobs.running": "En cours",
@@ -206,7 +197,6 @@ const fr: Dictionary = {
 
   "error.unreachable": "Le serveur n'a pas répondu.",
   "error.not_found": "Il n'y a rien ici.",
-  "error.generic": "Quelque chose s'est mal passé.",
   "error.retry": "Réessayer",
 
   "credit.actor": "Acteur",

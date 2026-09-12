@@ -129,4 +129,15 @@ mod tests {
             "a read only folder is still perfectly scannable"
         );
     }
+
+    #[test]
+    fn the_probe_answers_no_when_it_truly_cannot_write() {
+        // The test above runs as the owner of the folder, who is granted
+        // writing whatever the bits say, so it cannot show the probe answering
+        // no. Somewhere that does not exist can.
+        assert!(
+            !can_write(Path::new("/nowhere/at/all")),
+            "a probe that always says yes would announce a disk as writable when it is not"
+        );
+    }
 }

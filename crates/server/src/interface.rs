@@ -122,8 +122,14 @@ mod tests {
 
     #[test]
     fn every_kind_the_build_produces_is_named_correctly() {
-        assert_eq!(content_type_of("assets/index-abc123.js"), "text/javascript; charset=utf-8");
-        assert_eq!(content_type_of("assets/index-abc123.css"), "text/css; charset=utf-8");
+        assert_eq!(
+            content_type_of("assets/index-abc123.js"),
+            "text/javascript; charset=utf-8"
+        );
+        assert_eq!(
+            content_type_of("assets/index-abc123.css"),
+            "text/css; charset=utf-8"
+        );
         assert_eq!(content_type_of("index.html"), "text/html; charset=utf-8");
         assert_eq!(content_type_of("logo.svg"), "image/svg+xml");
     }

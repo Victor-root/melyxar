@@ -1281,7 +1281,11 @@ mod tests {
             .into_iter()
             .filter(|path| path.starts_with("/face-"))
             .collect();
-        assert_eq!(faces.len(), 18, "a page shows the leads, not the call sheet");
+        assert_eq!(
+            faces.len(),
+            18,
+            "a page shows the leads, not the call sheet"
+        );
         assert!(
             faces.contains(&"/face-0.jpg".to_string())
                 && !faces.contains(&"/face-39.jpg".to_string()),
