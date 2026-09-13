@@ -14,6 +14,7 @@ use std::sync::Arc;
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::media::Track;
 use melyxar_core::time::{Millis, Timestamp};
+use melyxar_core::user::DownmixMethod;
 use melyxar_core::work::{state_for_position, PlaybackState, DEFAULT_WATCHED_THRESHOLD};
 use melyxar_playback::decision::{decide, PlaybackRequest};
 
@@ -63,6 +64,12 @@ pub struct PlayPlan {
     /// Where this viewer stopped last time, when they did.
     pub resume_from: Option<Millis>,
     pub tracks: Vec<Track>,
+    /// How this viewer wants a multichannel soundtrack folded to stereo, and
+    /// how much to lift it afterwards. Carried on the plan because the fold is
+    /// only actually performed later, and a preference that changes the answer
+    /// without changing what is produced is a setting that does nothing.
+    pub downmix: DownmixMethod,
+    pub downmix_gain: f64,
 }
 
 /// Works out how one file reaches one client.
@@ -137,16 +144,22 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
             TrackShape::Subtitle,
         ),
     };
+    let downmix = preferences
+        .as_ref()
+        .map(|values| values.downmix_method)
+        .unwrap_or_default();
+    let downmix_gain = preferences
+        .as_ref()
+        .map(|values| values.downmix_gain)
+        .unwrap_or(melyxar_core::user::DEFAULT_DOWNMIX_GAIN);
+
     let decision = decide(
         &media,
         &PlaybackRequest {
             profile: &profile,
             audio_track: audio,
             subtitle_track: subtitle,
-            downmix: preferences
-                .as_ref()
-                .map(|values| values.downmix_method)
-                .unwrap_or_default(),
+            downmix,
             // Nothing asks for levelling yet: no preference carries it, and
             // asking for it without a measurement to level by would turn a
             // copy into a rebuild for nothing. When the preference arrives it
@@ -168,6 +181,8 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         decision,
         resume_from,
         tracks,
+        downmix,
+        downmix_gain,
     })
 }
 
@@ -315,9 +330,14 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
                     "these media tools cannot build a soundtrack a browser reads",
                 ))
             })?;
-            AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
-                encoder,
-            ))
+            let mut encode = melyxar_ffmpeg::command::AudioEncode::browser_stereo(encoder);
+            // The fold this viewer asked for, rather than the one the default
+            // would apply. Their choice is already what made this a rebuild in
+            // the first place, so producing a different fold would be the
+            // worst of both: the cost of the work without the point of it.
+            encode.downmix = plan.downmix;
+            encode.downmix_gain = plan.downmix_gain;
+            AudioOutput::Encode(encode)
         }
     };
 
@@ -1054,6 +1074,61 @@ mod tests {
         );
         assert!(matches!(recipe.audio, AudioOutput::Encode(_)));
         assert_eq!(recipe.duration, Millis::new(7_200_000));
+    }
+
+    #[tokio::test]
+    async fn the_fold_a_viewer_asked_for_is_the_one_actually_performed() {
+        // Asking for it is what turned a copy into a rebuild. Producing a
+        // different fold would be the worst of both: the cost of the work
+        // without the point of it.
+        use melyxar_core::user::DownmixMethod;
+        use melyxar_ffmpeg::command::AudioOutput;
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![video(id, "h264", 1080), audio(id, "eac3", 6, true)]
+            })
+            .await;
+
+        let mut preferences = state
+            .database()
+            .user(user_id)
+            .await
+            .expect("read")
+            .expect("the account")
+            .preferences;
+        preferences.downmix_method = DownmixMethod::NightDialogue;
+        preferences.downmix_gain = 2.5;
+        state
+            .database()
+            .save_preferences(user_id, &preferences)
+            .await
+            .expect("preferences kept");
+
+        let plan = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: None,
+            },
+        )
+        .await
+        .expect("a plan");
+        assert_eq!(plan.downmix, DownmixMethod::NightDialogue);
+
+        let recipe = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
+        let AudioOutput::Encode(encode) = recipe.audio else {
+            panic!("a soundtrack no browser reads is rebuilt");
+        };
+        assert_eq!(encode.downmix, DownmixMethod::NightDialogue);
+        assert_eq!(encode.downmix_gain, 2.5);
+        assert!(
+            encode.limiter,
+            "the compensation gain is followed by a limiter, or a loud passage clips"
+        );
     }
 
     #[tokio::test]

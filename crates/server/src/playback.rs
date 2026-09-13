@@ -688,6 +688,8 @@ mod tests {
             },
             resume_from: None,
             tracks: vec![picture.clone(), words.clone()],
+            downmix: Default::default(),
+            downmix_gain: melyxar_core::user::DEFAULT_DOWNMIX_GAIN,
         }
     }
 
