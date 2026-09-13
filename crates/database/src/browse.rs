@@ -340,7 +340,7 @@ impl Database {
     ///
     /// One query for the whole page rather than one per card: a grid of sixty
     /// cards would otherwise cost sixty round trips to show one screen.
-    async fn attach_posters(&self, cards: &mut [WorkCard]) -> Result<()> {
+    pub(crate) async fn attach_posters(&self, cards: &mut [WorkCard]) -> Result<()> {
         if cards.is_empty() {
             return Ok(());
         }
@@ -521,7 +521,7 @@ fn escape_for_like(value: &str) -> String {
         .replace('_', "\\_")
 }
 
-fn card_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<WorkCard> {
+pub(crate) fn card_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<WorkCard> {
     let kind_text: String = row.try_get("kind")?;
     let identification_text: String = row.try_get("identification")?;
 

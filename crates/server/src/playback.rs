@@ -18,7 +18,7 @@ use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::playback::{ClientProfile, PlayPlan, PlayRequest, Session};
 use melyxar_app::AppState;
-use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
+use melyxar_core::id::{MediaSourceId, TrackId, WorkId};
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::{Millis, Timestamp};
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,7 @@ use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
 use crate::error::{Result, ServerError};
+use crate::viewer;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -599,21 +600,6 @@ async fn remember_tracks(
     .await?;
 
     Ok(Json(serde_json::json!({ "remembered": true })))
-}
-
-/// Who is watching.
-///
-/// There is no signing in yet, so this is the account the server created for
-/// itself at first start. When accounts arrive it is read from the request,
-/// and nothing else here changes.
-async fn viewer(state: &AppState) -> Result<UserId> {
-    state
-        .database()
-        .user_by_name(melyxar_app::startup::DEFAULT_ACCOUNT_NAME)
-        .await
-        .map_err(|error| ServerError::internal(error.to_string()))?
-        .map(|(user, _)| user.id)
-        .ok_or_else(|| ServerError::internal("this server has no account at all"))
 }
 
 fn parse_source(value: &str) -> Result<MediaSourceId> {

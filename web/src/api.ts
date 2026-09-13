@@ -69,6 +69,8 @@ export interface Filters {
 }
 
 export interface Home {
+  /** Films started and not finished, the latest first. */
+  carry_on: (Card & { position_seconds: number })[];
   recently_added: Card[];
   works: number;
   awaiting_identification: number;

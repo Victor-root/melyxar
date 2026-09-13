@@ -25,6 +25,24 @@ use tower_http::trace::TraceLayer;
 pub use error::{ApiError, ServerError};
 pub use routes::{router, API_VERSION};
 
+/// Who is watching.
+///
+/// There is no signing in yet, so this is the account the server created for
+/// itself at first start. When accounts arrive it is read from the request,
+/// and nothing else changes.
+///
+/// Asked for by more than the playback routes: a home page showing what
+/// somebody left halfway has to know whose halfway it is.
+pub(crate) async fn viewer(state: &AppState) -> error::Result<melyxar_core::id::UserId> {
+    state
+        .database()
+        .user_by_name(melyxar_app::startup::DEFAULT_ACCOUNT_NAME)
+        .await
+        .map_err(|error| ServerError::internal(error.to_string()))?
+        .map(|(user, _)| user.id)
+        .ok_or_else(|| ServerError::internal("this server has no account at all"))
+}
+
 /// Builds the application with the layers every response goes through.
 pub fn build(state: AppState) -> axum::Router {
     routes::router(state)

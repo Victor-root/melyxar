@@ -55,7 +55,69 @@ pub struct StoredProgress {
     pub subtitle_track_id: Option<TrackId>,
 }
 
+/// A work somebody started and has not finished, and where they got to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkToCarryOn {
+    pub card: crate::browse::WorkCard,
+    pub position: Millis,
+    /// When it was last played, which is the order a row of them is read in.
+    pub last_played_at: Option<Timestamp>,
+}
+
 impl Database {
+    /// Works this viewer started and has not finished, the latest first.
+    ///
+    /// A film left halfway is the one thing somebody comes back for, and until
+    /// now the only way to it was to remember its title and find it in the
+    /// whole library. The position travels with it, so a card can show how far
+    /// in it is without asking again per film.
+    ///
+    /// Only what is really unfinished: a film somebody marked watched, or
+    /// played to its end, has nothing to carry on.
+    pub async fn works_to_carry_on(
+        &self,
+        user_id: UserId,
+        limit: i64,
+    ) -> Result<Vec<WorkToCarryOn>> {
+        let rows = sqlx::query(
+            "SELECT w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
+                    w.community_rating, w.identification, w.identification_note,
+                    w.dominant_color, w.added_at,
+                    p.position_ms, p.last_played_at
+             FROM playback_progress p
+             JOIN works w ON w.id = p.work_id
+             WHERE p.user_id = ? AND p.state = 'in_progress'
+             ORDER BY p.last_played_at DESC, w.sort_title
+             LIMIT ?",
+        )
+        .bind(user_id.to_db_string())
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        let mut carrying_on: Vec<WorkToCarryOn> = rows
+            .iter()
+            .map(|row| {
+                Ok(WorkToCarryOn {
+                    card: crate::browse::card_from_row(row)?,
+                    position: Millis::new(row.try_get("position_ms")?),
+                    last_played_at: parse_optional_timestamp(
+                        row.try_get::<Option<String>, _>("last_played_at")?
+                            .as_deref(),
+                    )?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut cards: Vec<crate::browse::WorkCard> =
+            carrying_on.iter().map(|entry| entry.card.clone()).collect();
+        self.attach_posters(&mut cards).await?;
+        for (entry, card) in carrying_on.iter_mut().zip(cards) {
+            entry.card = card;
+        }
+        Ok(carrying_on)
+    }
+
     /// The file behind one source, resolved to a path.
     pub async fn playable_source(&self, id: MediaSourceId) -> Result<Option<PlayableSource>> {
         let row = sqlx::query(
@@ -352,6 +414,97 @@ mod tests {
             .await
             .expect("read")
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn a_film_left_halfway_is_offered_back_with_where_it_stopped() {
+        // The one thing somebody comes back for. Finding it used to mean
+        // remembering the title and hunting it down in the whole library.
+        let (database, user_id, work_id, _) = one_film().await;
+        assert!(database
+            .works_to_carry_on(user_id, 20)
+            .await
+            .expect("read")
+            .is_empty());
+
+        database
+            .record_playback_progress(
+                user_id,
+                work_id,
+                Millis::new(1_800_000),
+                PlaybackState::InProgress,
+                datetime!(2026-01-01 12:00 UTC),
+            )
+            .await
+            .expect("recorded");
+
+        let carrying_on = database.works_to_carry_on(user_id, 20).await.expect("read");
+        assert_eq!(carrying_on.len(), 1);
+        assert_eq!(carrying_on[0].card.id, work_id);
+        assert_eq!(carrying_on[0].card.title, "Quiet Harbour");
+        assert_eq!(
+            carrying_on[0].position,
+            Millis::new(1_800_000),
+            "where it stopped travels with it, rather than being asked for per film"
+        );
+
+        // A film watched to its end has nothing to carry on.
+        database
+            .record_playback_progress(
+                user_id,
+                work_id,
+                Millis::new(7_000_000),
+                PlaybackState::Watched,
+                datetime!(2026-01-01 13:00 UTC),
+            )
+            .await
+            .expect("recorded");
+        assert!(database
+            .works_to_carry_on(user_id, 20)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn what_was_watched_last_is_offered_first() {
+        let (database, user_id, first, _) = one_film().await;
+        let library = database.list_libraries().await.expect("read")[0].id;
+        let second = database
+            .create_work(library, WorkKind::Movie, "Amber Field", "amber field", None)
+            .await
+            .expect("work created");
+
+        database
+            .record_playback_progress(
+                user_id,
+                first,
+                Millis::new(600_000),
+                PlaybackState::InProgress,
+                datetime!(2026-01-01 12:00 UTC),
+            )
+            .await
+            .expect("recorded");
+        database
+            .record_playback_progress(
+                user_id,
+                second.id,
+                Millis::new(600_000),
+                PlaybackState::InProgress,
+                datetime!(2026-01-02 21:00 UTC),
+            )
+            .await
+            .expect("recorded");
+
+        let carrying_on = database.works_to_carry_on(user_id, 20).await.expect("read");
+        assert_eq!(
+            carrying_on
+                .iter()
+                .map(|entry| entry.card.title.clone())
+                .collect::<Vec<_>>(),
+            vec!["Amber Field".to_string(), "Quiet Harbour".to_string()],
+            "a row is read from the left, and the left is where somebody just was"
+        );
     }
 
     #[tokio::test]
