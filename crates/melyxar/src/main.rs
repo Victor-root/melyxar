@@ -217,13 +217,15 @@ async fn scan(config: Config, only: Option<String>, then_identify: bool) -> anyh
         match report {
             Some(report) => println!(
                 "{name}: {} added, {} changed, {} absent, {} back, {} unchanged, {} renamed, \
-                 {} analysed, {} unreadable, {} extra videos, {} subtitle files",
+                 {} found to be copies of a film already here, {} analysed, {} unreadable, \
+                 {} extra videos, {} subtitle files",
                 report.added,
                 report.changed,
                 report.missing,
                 report.restored,
                 report.unchanged,
                 report.renamed,
+                report.merged,
                 report.analysed,
                 report.unreadable_files,
                 report.extras,
@@ -294,11 +296,13 @@ async fn identify_one_library(
         Some(report) => {
             println!(
                 "{name}: {} identified, {} not recognised, {} put off until the provider \
-                 answers, {} renamed after their file, {} given the pictures they were missing",
+                 answers, {} renamed after their file, {} found to be copies of a film \
+                 already here, {} given the pictures they were missing",
                 report.identified,
                 report.unidentified,
                 report.postponed,
                 report.renamed,
+                report.merged,
                 report.pictures_filled
             );
             Ok(true)

@@ -45,6 +45,9 @@ pub struct ScanReport {
     /// Works whose title was read again from their file name and came out
     /// different, because the rules that read file names improved.
     pub renamed: usize,
+    /// Works that turned out to be another copy of a film already here, and
+    /// whose files joined it rather than standing as a film of their own.
+    pub merged: usize,
     pub extras: usize,
     /// Subtitle files attached to the film they sit next to.
     pub external_subtitles: usize,
@@ -68,6 +71,7 @@ impl ScanReport {
             || self.missing > 0
             || self.restored > 0
             || self.renamed > 0
+            || self.merged > 0
     }
 }
 
@@ -201,7 +205,7 @@ pub async fn scan_library(
     let database = state.database();
     // Read before anything is recorded, so a file added today is named by the
     // same rules as the ones already here.
-    let marks = marks_of(state, library).await?;
+    let signs = signs_of(state, library).await?;
 
     for root in &library.roots {
         if handle.is_cancelled() {
@@ -233,7 +237,7 @@ pub async fn scan_library(
             .into_iter()
             .partition(|file| file.companion_kind.is_none());
 
-        record_changes(state, library, root.id, &media, &marks, &mut report).await?;
+        record_changes(state, library, root.id, &media, &signs, &mut report).await?;
         attach_companions(database, root.id, &companions, &media, &mut report).await?;
         attach_subtitles(database, root.id, &outcome.subtitles, &mut report).await?;
 
@@ -250,7 +254,9 @@ pub async fn scan_library(
         }
     }
 
-    report.renamed = reread_names_of_nameless_works(state, library).await?;
+    let reread = reread_names_of_nameless_works(state, library).await?;
+    report.renamed = reread.renamed;
+    report.merged = reread.merged;
     analyse_pending(state, library, handle, &mut report).await?;
 
     if report.changed_anything() {
@@ -282,7 +288,7 @@ async fn record_changes(
     library: &Library,
     root_id: LibraryRootId,
     media: &[FoundFile],
-    marks: &std::collections::BTreeSet<String>,
+    signs: &naming::LibrarySigns,
     report: &mut ScanReport,
 ) -> Result<()> {
     let database = state.database();
@@ -304,7 +310,7 @@ async fn record_changes(
         .collect();
 
     for file in &changes.added {
-        let work_id = work_for(state, library, &file.relative_path, marks).await?;
+        let work_id = work_for(state, library, &file.relative_path, signs).await?;
         database
             .insert_source(
                 work_id,
@@ -358,14 +364,19 @@ async fn record_changes(
 /// way out would be to throw the database away.
 ///
 /// A title a provider gave, or a person chose by hand, is never touched.
+///
+/// A name that now reads as a film already in the library is not a second
+/// film: its file joins that one. Two copies whose names differed only by
+/// something a tool stuck on the front are one film with two copies, and
+/// leaving them apart puts the same title twice in a grid.
 pub(crate) async fn reread_names_of_nameless_works(
     state: &AppState,
     library: &Library,
-) -> Result<usize> {
+) -> Result<Reread> {
     let database = state.database();
     let year = melyxar_core::time::current_year();
-    let marks = marks_of(state, library).await?;
-    let mut renamed = 0;
+    let signs = signs_of(state, library).await?;
+    let mut done = Reread::default();
 
     for work in database.works_named_after_their_file(library.id).await? {
         let file_name = work
@@ -373,41 +384,57 @@ pub(crate) async fn reread_names_of_nameless_works(
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or_default();
-        let parsed = naming::parse_signed(file_name, year, &marks);
+        let parsed = naming::parse_signed(file_name, year, &signs);
         if parsed.title == work.title && parsed.year == work.release_year {
+            continue;
+        }
+        let sort_title = naming::sort_title(&parsed.title);
+
+        if let Some(twin) = database
+            .work_by_identity(library.id, &sort_title, parsed.year)
+            .await?
+            .filter(|twin| twin.id != work.id)
+        {
+            database.merge_work_into(work.id, twin.id).await?;
+            tracing::info!(
+                work = %MediaName::new(&parsed.title),
+                "two copies of one film read as one film now"
+            );
+            done.merged += 1;
             continue;
         }
 
         database
-            .rename_work(
-                work.id,
-                &parsed.title,
-                &naming::sort_title(&parsed.title),
-                parsed.year,
-            )
+            .rename_work(work.id, &parsed.title, &sort_title, parsed.year)
             .await?;
         tracing::info!(
             was = %MediaName::new(&work.title),
             now = %MediaName::new(&parsed.title),
             "a film still waiting to be named reads differently now"
         );
-        renamed += 1;
+        done.renamed += 1;
     }
 
-    Ok(renamed)
+    Ok(done)
 }
 
-/// What this library signs its files with, read off the library itself.
+/// What reading the file names again changed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Reread {
+    /// Works whose title came out different.
+    pub renamed: usize,
+    /// Works that turned out to be a copy of a film already in the library.
+    pub merged: usize,
+}
+
+/// What the names of this library carry, read off the library itself.
 ///
-/// Asked for once per scan rather than per file: a signature is only visible
+/// Asked for once per scan rather than per file: such a sign is only visible
 /// across the whole set of names, and reading them again for every file would
 /// be a query per film.
-async fn marks_of(
-    state: &AppState,
-    library: &Library,
-) -> Result<std::collections::BTreeSet<String>> {
+async fn signs_of(state: &AppState, library: &Library) -> Result<naming::LibrarySigns> {
     let names = state.database().source_names_of_library(library.id).await?;
-    Ok(naming::markers_in(&names))
+    Ok(naming::signs_in(&names))
 }
 
 /// Finds the work a file belongs to, or creates it.
@@ -415,14 +442,14 @@ async fn work_for(
     state: &AppState,
     library: &Library,
     relative_path: &Path,
-    marks: &std::collections::BTreeSet<String>,
+    signs: &naming::LibrarySigns,
 ) -> Result<WorkId> {
     let database = state.database();
     let file_name = relative_path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_default();
-    let parsed = naming::parse_signed(file_name, melyxar_core::time::current_year(), marks);
+    let parsed = naming::parse_signed(file_name, melyxar_core::time::current_year(), signs);
     let sort_title = naming::sort_title(&parsed.title);
 
     if let Some(existing) = database
@@ -1088,6 +1115,49 @@ mod tests {
             !titles.iter().any(|title| title.contains("SOMEGROUP")),
             "the signature belongs to no title: {titles:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn copies_named_with_something_stuck_on_the_front_are_one_film() {
+        // Copies of one film whose names differ only by a few characters at
+        // the very front. Nothing about those characters says what they are;
+        // what says it is that the same name is there without them.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet Harbour BD.Rip 1080 x264.mkv", b"x");
+        write(&media, "zz12Quiet Harbour BD.Rip 1080 x264.mkv", b"xx");
+        write(&media, "wxyzQuiet Harbour BD.Rip 1080 x264.mkv", b"xxx");
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        let report = scan(&state, &library).await;
+        assert_eq!(report.added, 3, "three files");
+
+        let works = state
+            .database()
+            .recent_works(library.id, 10)
+            .await
+            .expect("read");
+        assert_eq!(
+            works.len(),
+            1,
+            "one film, whatever was stuck to the front of its copies: {:?}",
+            works.iter().map(|work| &work.title).collect::<Vec<_>>()
+        );
+        assert_eq!(works[0].title, "Quiet Harbour");
+        assert_eq!(
+            state
+                .database()
+                .sources_of_root(library.roots[0].id)
+                .await
+                .expect("read")
+                .len(),
+            3,
+            "three copies of it, and not one file lost"
+        );
+
+        let settled = scan(&state, &library).await;
+        assert_eq!(settled.merged, 0, "there is nothing left to merge");
+        assert_eq!(settled.renamed, 0);
     }
 
     #[tokio::test]

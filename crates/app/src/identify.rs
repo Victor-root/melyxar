@@ -40,6 +40,8 @@ pub struct IdentifyReport {
     /// Works whose title was read again from their file name before anything
     /// was asked about them, and came out different.
     pub renamed: usize,
+    /// Works that turned out to be another copy of a film already here.
+    pub merged: usize,
     /// Films that had a name but no picture, and have one now.
     pub pictures_filled: usize,
     /// Films that had a name but no synopsis, and have one now.
@@ -64,10 +66,11 @@ where
     // one. A work still waiting has never been given anything but the name of
     // its file, the rules that read those names get better, and a title read
     // by yesterday's rules is the commonest reason a provider answers nothing.
-    let renamed = crate::scan::reread_names_of_nameless_works(state, library).await?;
+    let reread = crate::scan::reread_names_of_nameless_works(state, library).await?;
 
     let mut report = IdentifyReport {
-        renamed,
+        renamed: reread.renamed,
+        merged: reread.merged,
         ..IdentifyReport::default()
     };
     // Everything waiting, read once. A run deals with all of it: a library of
@@ -125,6 +128,7 @@ where
         unidentified = report.unidentified,
         postponed = report.postponed,
         renamed = report.renamed,
+        merged = report.merged,
         pictures_filled = report.pictures_filled,
         synopses_filled = report.synopses_filled,
         cancelled = report.cancelled,

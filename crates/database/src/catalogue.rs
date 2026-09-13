@@ -417,6 +417,41 @@ impl Database {
         Ok(())
     }
 
+    /// Moves every file of one work onto another and drops the empty one.
+    ///
+    /// Two works turn out to be one film whenever the rules that read file
+    /// names improve: several copies whose names differed only by something a
+    /// tool stuck on the front now read as the same title. Left alone they are
+    /// the same film several times over in a grid, which is the very thing a
+    /// version chooser exists to avoid.
+    ///
+    /// Only ever called for a work still named after its file, which is why
+    /// nothing else has to be carried over: a work nobody has named has no
+    /// picture, no cast and no synopsis. Its files and the clips attached to
+    /// them are all it has.
+    pub async fn merge_work_into(&self, from: WorkId, into: WorkId) -> Result<()> {
+        if from == into {
+            return Ok(());
+        }
+        let mut transaction = self.begin().await?;
+        sqlx::query("UPDATE media_sources SET work_id = ? WHERE work_id = ?")
+            .bind(into.to_db_string())
+            .bind(from.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("UPDATE extra_videos SET work_id = ? WHERE work_id = ?")
+            .bind(into.to_db_string())
+            .bind(from.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("DELETE FROM works WHERE id = ?")
+            .bind(from.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
     /// Marks a file absent. Never a deletion: a disconnected disk must not
     /// cost a library.
     pub async fn mark_source_missing(&self, id: MediaSourceId) -> Result<()> {
@@ -1689,6 +1724,79 @@ mod tests {
             .map(|source| source.relative_path.to_string_lossy().into_owned())
             .collect();
         assert_eq!(paths, vec!["a.mkv", "b.mkv", "c.mkv"]);
+    }
+
+    #[tokio::test]
+    async fn two_works_that_turn_out_to_be_one_film_become_one_work_with_two_files() {
+        let (database, library_id, root_id) = library().await;
+        let (kept, _) =
+            work_with_source(&database, library_id, root_id, "Quiet Harbour 1080p.mkv").await;
+        let (gone, moved) = work_with_source(
+            &database,
+            library_id,
+            root_id,
+            "zz12Quiet Harbour 1080p.mkv",
+        )
+        .await;
+        database
+            .store_local_extra_video(
+                gone,
+                &LocalExtraVideo {
+                    kind: "trailer".to_string(),
+                    name: None,
+                    root_id,
+                    relative_path: PathBuf::from("zz12Quiet Harbour 1080p-trailer.mkv"),
+                },
+            )
+            .await
+            .expect("trailer attached");
+
+        database
+            .merge_work_into(gone, kept)
+            .await
+            .expect("the two are one film");
+
+        assert!(
+            database.work(gone).await.expect("read").is_none(),
+            "the same film twice in a grid is the defect this exists to avoid"
+        );
+        let sources = database.sources_of_root(root_id).await.expect("read");
+        assert_eq!(sources.len(), 2, "no file is lost in the move");
+        assert!(
+            sources.iter().all(|source| source.work_id == kept),
+            "both copies belong to the film that stayed"
+        );
+        assert!(
+            sources.iter().any(|source| source.id == moved),
+            "a file keeps its identifier, and with it everything attached to it"
+        );
+        assert_eq!(
+            database
+                .extra_videos_of_work(kept)
+                .await
+                .expect("read")
+                .len(),
+            1,
+            "what was attached to the copy follows it"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_is_never_merged_into_itself() {
+        let (database, library_id, root_id) = library().await;
+        let (work_id, _) =
+            work_with_source(&database, library_id, root_id, "Quiet Harbour 1080p.mkv").await;
+
+        database
+            .merge_work_into(work_id, work_id)
+            .await
+            .expect("nothing to do");
+
+        assert!(database.work(work_id).await.expect("read").is_some());
+        assert_eq!(
+            database.sources_of_root(root_id).await.expect("read").len(),
+            1
+        );
     }
 
     #[tokio::test]
