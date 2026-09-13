@@ -640,27 +640,68 @@ fn is_a_combining_mark(c: char) -> bool {
     ('\u{0300}'..='\u{036f}').contains(&c)
 }
 
-/// The form two titles are compared in when deciding whether they are the
+/// The words two titles are compared by when deciding whether they are the
 /// same title.
 ///
 /// Only the words survive: accents are folded, capitals go, and everything
 /// that is neither a letter nor a number becomes a space. Whoever named a file
-/// dropped a colon, wrote an apostrophe another way or spelled a hyphenated
-/// name as two words, and none of that makes it another film. What it never
-/// does is join two words into one, because two words and one word are two
-/// different names.
+/// dropped a colon or spelled a hyphenated name as two words, and none of that
+/// makes it another film. What it never does is join two words into one,
+/// because two words and one word are two different names.
+///
+/// An apostrophe goes without leaving a space, which is the one punctuation
+/// mark that sits inside a word rather than between two.
+///
+/// A sequel written in roman numerals becomes the number it is. One side of a
+/// comparison writes it one way and the other the other way, name after name,
+/// and they are the same number.
 ///
 /// Kept apart from the ordering title, which has to leave a title readable and
 /// therefore cannot go this far.
-pub fn matchable_title(title: &str) -> String {
-    let folded = fold_accents(title).to_lowercase();
+pub fn matchable_title(title: &str) -> Vec<String> {
+    let folded = fold_accents(title)
+        .to_lowercase()
+        .replace(['\'', '\u{2019}'], "");
     folded
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<&str>>()
-        .join(" ")
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            number_of_a_roman_numeral(word).map_or_else(|| word.to_string(), |n| n.to_string())
+        })
+        .collect()
+}
+
+/// The number a sequel written in roman numerals stands for.
+///
+/// Only the ones a sequel is ever numbered with. Read as a whole word from a
+/// short list rather than worked out letter by letter, because plenty of real
+/// words are made only of those letters and none of them is a number.
+fn number_of_a_roman_numeral(word: &str) -> Option<u8> {
+    const NUMERALS: [&str; 13] = [
+        "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii",
+    ];
+    NUMERALS
+        .iter()
+        .position(|numeral| *numeral == word)
+        .map(|index| index as u8 + 1)
+}
+
+/// How much two titles have in common, between nothing and one.
+///
+/// The share of the words either of them uses that both of them use. Counted
+/// both ways on purpose: a title that holds every word of another and six more
+/// besides is a different title, and counting one way only would call them the
+/// same.
+pub fn how_alike(left: &[String], right: &[String]) -> f64 {
+    if left.is_empty() || right.is_empty() {
+        return 0.0;
+    }
+    let left: BTreeSet<&String> = left.iter().collect();
+    let right: BTreeSet<&String> = right.iter().collect();
+
+    let shared = left.intersection(&right).count() as f64;
+    let between_them = left.union(&right).count() as f64;
+    shared / between_them
 }
 
 /// Whether a title is written in plain letters, which decides whether asking a
@@ -1282,7 +1323,56 @@ mod tests {
         // The line this must not cross: dropping a hyphen without leaving a
         // space would make two different names look like one.
         assert!(matchable_title("Amber-Field") != matchable_title("Amberfield"));
-        assert_eq!(matchable_title("Amber-Field"), "amber field");
+        assert_eq!(matchable_title("Amber-Field"), ["amber", "field"]);
+    }
+
+    #[test]
+    fn an_apostrophe_goes_without_leaving_a_space_behind_it() {
+        // The one mark that sits inside a word rather than between two, and
+        // the one a file name drops most often.
+        assert_eq!(
+            matchable_title("Don't Breathe 2"),
+            matchable_title("Dont Breathe 2")
+        );
+        assert_eq!(matchable_title("L'Auberge"), ["lauberge"]);
+    }
+
+    #[test]
+    fn a_sequel_numbered_in_roman_numerals_is_the_number_it_is() {
+        // One hand writes it one way and the other hand the other way, name
+        // after name, and it is the same number.
+        assert_eq!(
+            matchable_title("Quiet Harbour II"),
+            matchable_title("Quiet Harbour 2")
+        );
+        assert_eq!(
+            matchable_title("Quiet Harbour VIII"),
+            matchable_title("Quiet Harbour 8")
+        );
+    }
+
+    #[test]
+    fn a_word_that_merely_looks_like_roman_numerals_is_left_alone() {
+        // Plenty of real words are made only of those letters, and none of
+        // them is a number.
+        assert_eq!(matchable_title("Mix"), ["mix"]);
+        assert_eq!(matchable_title("Civil"), ["civil"]);
+    }
+
+    #[test]
+    fn how_alike_counts_the_words_both_titles_use_and_neither_one_alone() {
+        let alike =
+            |left: &str, right: &str| how_alike(&matchable_title(left), &matchable_title(right));
+
+        assert_eq!(alike("Quiet Harbour", "Quiet Harbour"), 1.0);
+        // One word of five differs, which is one hand writing a conjunction
+        // the other hand wrote as a sign.
+        assert!(alike("Amber And Field Rising Tide", "Amber Field Rising Tide") > 0.7);
+        // A title holding every word of another and several more besides is a
+        // different title, which counting one way only would miss.
+        assert!(alike("Quiet Harbour", "Quiet Harbour The Making Of It All") < 0.5);
+        assert_eq!(alike("Quiet Harbour", "Amber Field"), 0.0);
+        assert_eq!(alike("", "Quiet Harbour"), 0.0);
     }
 
     #[test]

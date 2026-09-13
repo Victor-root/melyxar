@@ -494,6 +494,13 @@ const YEARS_APART: i32 = 1;
 /// it ranks by how famous a film is, and on twenty films of one common title
 /// one of them is the one nearly everybody means.
 ///
+/// A name that is not quite the same name still has to be recognised, because
+/// the two are written by different hands. Whoever named the file left out the
+/// volume number, wrote the conjunction as a word, kept the episode number the
+/// provider drops. So a candidate that is not word for word what was searched
+/// for is taken when it is close enough **and** its year agrees: the year is
+/// what stops a near miss from being a different film.
+///
 /// What is deliberately not done is taking the first answer when nothing
 /// matches. A search made of a name the provider does not know still comes
 /// back with something, and that something is a film picked at random as far
@@ -507,13 +514,14 @@ fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a Movie
     }
     let wanted = naming::matchable_title(&work.title);
 
-    let matches_title = |candidate: &&MovieCandidate| {
-        naming::matchable_title(&candidate.title) == wanted
-            || candidate
-                .original_title
-                .as_deref()
-                .is_some_and(|title| naming::matchable_title(title) == wanted)
+    let names_of = |candidate: &MovieCandidate| {
+        let mut names = vec![naming::matchable_title(&candidate.title)];
+        if let Some(original) = candidate.original_title.as_deref() {
+            names.push(naming::matchable_title(original));
+        }
+        names
     };
+    let matches_title = |candidate: &&MovieCandidate| names_of(candidate).contains(&wanted);
     let near_the_year =
         |candidate: &&MovieCandidate| match (work.release_year, candidate.release_year) {
             (Some(wanted), Some(found)) => (wanted - found).abs() <= YEARS_APART,
@@ -522,14 +530,58 @@ fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a Movie
 
     let carrying_the_name: Vec<&MovieCandidate> = candidates.iter().filter(matches_title).collect();
 
-    carrying_the_name
+    let word_for_word = carrying_the_name
         .iter()
         .copied()
         .find(near_the_year)
         // Every film of this name is from another time. The name is still the
         // strongest thing there is, so the best of them is taken anyway.
-        .or_else(|| carrying_the_name.first().copied())
+        .or_else(|| carrying_the_name.first().copied());
+    if word_for_word.is_some() {
+        return word_for_word;
+    }
+
+    // Nothing carries the name exactly. The closest of those whose year agrees
+    // is taken, and only if it is close enough to be the same film named by
+    // two different hands. A year that is not known on both sides decides
+    // nothing, so only the closeness is left to go on.
+    let year_allows =
+        |candidate: &&MovieCandidate| match (work.release_year, candidate.release_year) {
+            (Some(_), Some(_)) => near_the_year(candidate),
+            _ => true,
+        };
+
+    candidates
+        .iter()
+        .filter(year_allows)
+        .map(|candidate| {
+            let closeness = names_of(candidate)
+                .iter()
+                .map(|name| naming::how_alike(name, &wanted))
+                .fold(0.0_f64, f64::max);
+            (candidate, closeness)
+        })
+        .filter(|(_, closeness)| *closeness >= CLOSE_ENOUGH)
+        // The closest wins, and on a tie the provider's order does: it puts
+        // the film nearly everybody means first, so the first of equals stays.
+        .fold(
+            None,
+            |best: Option<(&MovieCandidate, f64)>, next| match best {
+                Some((_, closeness)) if closeness >= next.1 => best,
+                _ => Some(next),
+            },
+        )
+        .map(|(candidate, _)| candidate)
 }
+
+/// How much of their words two titles must share before they count as one
+/// title written by two hands.
+///
+/// Half. Below that the words in common are the ordinary words any two titles
+/// share, and above it a search that came back with something unrelated is
+/// still refused: a name the provider never understood has almost nothing in
+/// common with what it answered.
+const CLOSE_ENOUGH: f64 = 0.5;
 
 /// Turns what the provider said into what the storage takes.
 fn to_record(details: &MovieDetails, provider: &str, language: &str) -> IdentifiedWork {
@@ -1103,6 +1155,74 @@ mod tests {
             "a film nobody could name says so and waits, which is visible and correctable"
         );
         assert!(choose(&[], &wanted).is_none());
+    }
+
+    #[test]
+    fn a_name_written_by_another_hand_is_still_recognised_when_the_year_agrees() {
+        // The commonest shape of all: whoever named the file left out a word
+        // the provider keeps, or kept one it drops.
+        let wanted = work_named("Quiet Harbour 2", Some(2019));
+        let offered = vec![
+            candidate("1", "Something Else Entirely", Some(2019)),
+            candidate("2", "Quiet Harbour Vol. 2", Some(2019)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "2"
+        );
+    }
+
+    #[test]
+    fn the_closest_of_several_near_misses_is_the_one_taken() {
+        // A making-of carries the whole title of its film and several words
+        // more. Both are close, and only one of them is the film.
+        let wanted = work_named("Quiet Harbour Rising Tide", Some(2019));
+        let offered = vec![
+            candidate(
+                "1",
+                "Quiet Harbour Rising Tide, The Making Of It",
+                Some(2019),
+            ),
+            candidate("2", "Quiet Harbour & Rising Tide", Some(2019)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "2"
+        );
+    }
+
+    #[test]
+    fn a_near_miss_from_another_time_is_not_the_film() {
+        // The year is what stops a name that is nearly right from being a
+        // different film altogether.
+        let wanted = work_named("Quiet Harbour 2", Some(2019));
+        let offered = vec![candidate("1", "Quiet Harbour Vol. 2", Some(1994))];
+        assert!(choose(&offered, &wanted).is_none());
+    }
+
+    #[test]
+    fn with_no_year_on_the_file_the_name_alone_has_to_be_close_enough() {
+        let wanted = work_named("The Descent 2", None);
+        let offered = vec![
+            candidate("1", "The Descent: Part 2", Some(2009)),
+            candidate("2", "The Longest Descent, Part 2, To The Sea", Some(2020)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "1"
+        );
+    }
+
+    #[test]
+    fn a_word_in_common_is_not_a_name_in_common() {
+        // What the closeness is really there to refuse: a search the provider
+        // never understood answers films that share an ordinary word.
+        let wanted = work_named("Studio Invented Harbour", Some(2009));
+        let offered = vec![
+            candidate("1", "The Making Of Something And Harbour", Some(2009)),
+            candidate("2", "Amber Field And Harbour", Some(2009)),
+        ];
+        assert!(choose(&offered, &wanted).is_none());
     }
 
     #[test]
