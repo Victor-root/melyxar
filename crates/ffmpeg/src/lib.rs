@@ -15,6 +15,7 @@
 
 pub mod capabilities;
 pub mod command;
+pub mod hardware;
 pub mod images;
 pub mod probe;
 pub mod process;
@@ -24,6 +25,7 @@ use std::path::PathBuf;
 
 pub use capabilities::{Capabilities, HardwareAcceleration};
 pub use command::{AudioOutput, Command, Input, Output, StreamSelection, VideoOutput};
+pub use hardware::{Card, CardSearch};
 pub use probe::{ProbeReport, ProbeStream};
 pub use process::{Progress, RunningProcess};
 

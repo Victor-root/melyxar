@@ -157,6 +157,14 @@ pub struct PlaybackDecision {
     pub video_stream_index: Option<i32>,
     /// Height to scale down to, when the client asked for a smaller picture.
     pub scale_to_height: Option<i32>,
+    /// Rate the rebuilt picture must stay under, when the client asked for
+    /// one. Absent when it did not, or when nothing is being rebuilt.
+    ///
+    /// Carried on the answer rather than read from the profile again later:
+    /// asking for a rate is what turns a film into a rebuild in the first
+    /// place, and producing it at some other rate would be the cost of the
+    /// work without the point of it.
+    pub bitrate_ceiling: Option<i64>,
     /// Convert wide gamut colour to standard range.
     pub tone_map: bool,
     /// Every reason behind the answer, in the order they were found.
@@ -192,7 +200,7 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
     let audio = chosen_audio(source, request.audio_track);
     let subtitle = chosen_subtitle(request.subtitle_track);
 
-    let video_action = decide_video(video, request.profile, &mut reasons);
+    let video_action = decide_video(video, source, request.profile, &mut reasons);
     let audio_action = decide_audio(audio, request, &mut reasons);
     let (delivery, subtitle_forces_burn) =
         decide_subtitles(subtitle, request.profile, &mut reasons);
@@ -251,6 +259,14 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         reasons.push(Reason::EverythingSupported);
     }
 
+    // Only when something is actually being rebuilt: a film handed over as it
+    // lies on the disk arrives at the rate it was written at, whatever anybody
+    // asked for.
+    let bitrate_ceiling = match video_action {
+        StreamAction::Transcode => request.profile.max_bitrate,
+        _ => None,
+    };
+
     PlaybackDecision {
         method,
         // Direct play needs no special case here: when there is a picture and
@@ -264,6 +280,7 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         subtitle_stream_index: subtitle.map(|(track, _)| track.stream_index),
         video_stream_index: video.map(|(track, _)| track.stream_index),
         scale_to_height,
+        bitrate_ceiling,
         tone_map,
         reasons,
     }
@@ -374,6 +391,7 @@ fn chose_a_non_default_track(source: &MediaSource, request: &PlaybackRequest<'_>
 
 fn decide_video(
     video: Option<(&Track, &VideoDetails)>,
+    source: &MediaSource,
     profile: &ClientProfile,
     reasons: &mut Vec<Reason>,
 ) -> StreamAction {
@@ -434,7 +452,14 @@ fn decide_video(
         must_rebuild = true;
     }
 
-    if let (Some(max), Some(bitrate)) = (profile.max_bitrate, details.bitrate) {
+    // The rate of the picture when the file states one, otherwise the rate of
+    // the whole file. The second is the sound as well and is therefore a
+    // little high, but most films in a collection state no rate per stream at
+    // all, and a limit that quietly does nothing on most films is worse than
+    // no limit: somebody would set it, see no change, and conclude the setting
+    // is broken.
+    let arriving_at = details.bitrate.or(source.overall_bitrate);
+    if let (Some(max), Some(bitrate)) = (profile.max_bitrate, arriving_at) {
         if bitrate > max {
             reasons.push(Reason::BitrateTooHigh {
                 bitrate,
@@ -1114,6 +1139,73 @@ mod tests {
             Reason::BitrateTooHigh {
                 bitrate: 25_000_000,
                 max_bitrate: 8_000_000
+            }
+        )));
+    }
+
+    #[test]
+    fn a_rate_asked_for_travels_with_the_answer_so_it_is_the_one_produced() {
+        // Asking for a rate is what turned this into a rebuild. Producing it
+        // at some other rate would be the cost of the work without the point
+        // of it, and the viewer on the thin connection would stall anyway.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        profile.max_bitrate = Some(4_000_000);
+
+        let mut fast = video_track(0, "h264", 1080, None);
+        if let TrackKind::Video(details) = &mut fast.kind {
+            details.bitrate = Some(25_000_000);
+        }
+        let too_fast = source("matroska,webm", vec![fast, audio_track(1, "aac", 2, true)]);
+        assert_eq!(
+            decide(&too_fast, &request(&profile)).bitrate_ceiling,
+            Some(4_000_000)
+        );
+
+        // Nothing rebuilt, so nothing to hold to a rate: the file arrives at
+        // the rate it was written at whatever anybody asked for.
+        let slow = source(
+            "matroska,webm",
+            vec![
+                video_track(0, "h264", 1080, None),
+                audio_track(1, "aac", 2, true),
+            ],
+        );
+        let decision = decide(&slow, &request(&profile));
+        assert_eq!(decision.method, PlaybackMethod::DirectPlay);
+        assert_eq!(decision.bitrate_ceiling, None);
+    }
+
+    #[test]
+    fn a_film_stating_no_rate_per_stream_is_judged_on_the_rate_of_the_whole_file() {
+        // Most films in a collection state none, and a limit that quietly does
+        // nothing on most films is worse than no limit at all: somebody sets
+        // it, sees no change, and concludes the setting is broken.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        profile.max_bitrate = Some(8_000_000);
+
+        let mut source = source(
+            "matroska,webm",
+            vec![
+                video_track(0, "h264", 1080, None),
+                audio_track(1, "aac", 2, true),
+            ],
+        );
+        assert_eq!(
+            decide(&source, &request(&profile)).method,
+            PlaybackMethod::DirectPlay,
+            "nothing says how fast this arrives, so nothing says it is too fast"
+        );
+
+        source.overall_bitrate = Some(30_000_000);
+        let decision = decide(&source, &request(&profile));
+        assert_eq!(decision.method, PlaybackMethod::FullTranscode);
+        assert!(decision.reasons.iter().any(|reason| matches!(
+            reason,
+            Reason::BitrateTooHigh {
+                bitrate: 30_000_000,
+                ..
             }
         )));
     }

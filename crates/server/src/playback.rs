@@ -96,6 +96,26 @@ struct PlanView {
     resume_from_seconds: Option<f64>,
     audio: Vec<TrackView>,
     subtitles: Vec<TrackView>,
+    /// How the picture is being rebuilt, when it is. Absent when nothing is.
+    rebuild: Option<RebuildView>,
+}
+
+/// What is rebuilding the picture, and into what.
+///
+/// On the page rather than in a log alone: "the card is doing this, in this
+/// codec, at this size" is the answer to the only question anybody asks about
+/// a film that stutters, and looking for it used to mean a terminal.
+#[derive(Debug, Serialize)]
+struct RebuildView {
+    /// card or processor.
+    by: &'static str,
+    /// The device the card is, when it is one. Only ever shown to whoever
+    /// administers the server: it is a fact about the machine.
+    device: Option<String>,
+    codec: String,
+    height: Option<i32>,
+    /// Rate the picture is held to, in bits per second.
+    bitrate: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -208,6 +228,16 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
         resume_from_seconds: plan.resume_from.map(|position| position.as_seconds_f64()),
         audio,
         subtitles,
+        rebuild: plan.rebuild.as_ref().map(|rebuild| RebuildView {
+            by: match rebuild.on_a_card() {
+                true => "card",
+                false => "processor",
+            },
+            device: rebuild.card_name(),
+            codec: rebuild.codec.clone(),
+            height: rebuild.height,
+            bitrate: rebuild.bitrate,
+        }),
     }
 }
 
@@ -703,6 +733,7 @@ mod tests {
                 subtitle_stream_index: Some(0),
                 video_stream_index: Some(0),
                 scale_to_height: None,
+                bitrate_ceiling: None,
                 tone_map: false,
                 reasons: Vec::new(),
             },
@@ -710,6 +741,7 @@ mod tests {
             tracks: vec![picture.clone(), words.clone()],
             downmix: Default::default(),
             downmix_gain: melyxar_core::user::DEFAULT_DOWNMIX_GAIN,
+            rebuild: None,
         }
     }
 

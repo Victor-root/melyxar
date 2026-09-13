@@ -71,6 +71,39 @@ pub struct PlayPlan {
     /// without changing what is produced is a setting that does nothing.
     pub downmix: DownmixMethod,
     pub downmix_gain: f64,
+    /// How the picture will actually be rebuilt, when it is.
+    ///
+    /// Worked out here rather than where the tool is set going, because a page
+    /// has to be able to say it: "the card is doing this, in this codec, at
+    /// this size" is the answer to the only question anybody asks about a film
+    /// that stutters.
+    pub rebuild: Option<PictureRebuild>,
+}
+
+/// How the picture is rebuilt, when it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PictureRebuild {
+    /// Codec it comes out in.
+    pub codec: String,
+    /// The card doing the work. Absent means the processor is.
+    pub card: Option<melyxar_ffmpeg::Card>,
+    /// Height it comes out at. Absent means the size is left alone.
+    pub height: Option<i32>,
+    /// Rate it is held to, in bits per second.
+    pub bitrate: Option<i64>,
+}
+
+impl PictureRebuild {
+    pub fn on_a_card(&self) -> bool {
+        self.card.is_some()
+    }
+
+    /// What the card is called, for a log line and for a page.
+    pub fn card_name(&self) -> Option<String> {
+        self.card
+            .as_ref()
+            .map(|card| card.device.display().to_string())
+    }
 }
 
 /// Works out how one file reaches one client.
@@ -109,7 +142,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         relative_path: source.path.clone(),
         container: source.container.clone(),
         duration: source.duration,
-        overall_bitrate: None,
+        overall_bitrate: source.overall_bitrate,
         identity: melyxar_core::media::FileIdentity {
             size_bytes: source.size_bytes,
             modified_at: melyxar_core::time::now(),
@@ -179,9 +212,20 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         },
     );
 
+    let rebuild = how_to_rebuild(
+        &decision,
+        &tracks,
+        &profile,
+        state.capabilities(),
+        subtitle_to_paint_on(&decision, &tracks).is_some(),
+    );
+
     // The one line that explains a playback afterwards. The reasons are worked
     // out here, travel to the page, and used to go nowhere else: a viewer who
-    // says "it would not play" left nothing behind to look at.
+    // says "it would not play" left nothing behind to look at. What is
+    // rebuilding the picture belongs on the same line for the same reason: it
+    // is the first question anybody asks about a film that stutters, and the
+    // answer used to be somewhere between a process listing and a guess.
     tracing::info!(
         file = %MediaName::new(
             source
@@ -195,6 +239,14 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         audio = ?decision.audio,
         subtitles = ?decision.subtitles,
         tone_map = decision.tone_map,
+        rebuilt_by = rebuild.as_ref().map(|rebuild| match rebuild.on_a_card() {
+            true => "card",
+            false => "processor",
+        }),
+        rebuilt_on = rebuild.as_ref().and_then(PictureRebuild::card_name),
+        rebuilt_into = rebuild.as_ref().map(|rebuild| rebuild.codec.as_str()),
+        rebuilt_height = rebuild.as_ref().and_then(|rebuild| rebuild.height),
+        rebuilt_bitrate = rebuild.as_ref().and_then(|rebuild| rebuild.bitrate),
         reasons = ?decision.reasons,
         "playback decided"
     );
@@ -214,6 +266,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         tracks,
         downmix,
         downmix_gain,
+        rebuild,
     })
 }
 
@@ -331,14 +384,14 @@ pub async fn open_session(state: &AppState, plan: &PlayPlan) -> Result<Arc<Sessi
 /// the tool paints pictures onto pictures, so a subtitle of words would cost a
 /// full rebuild and put nothing on the screen. The words are sent alongside
 /// instead, which the one client there is draws anyway.
-fn subtitle_to_paint_on(plan: &PlayPlan) -> Option<i32> {
+fn subtitle_to_paint_on(decision: &PlaybackDecision, tracks: &[Track]) -> Option<i32> {
     use melyxar_core::media::{SubtitleLayout, TrackKind};
 
-    if plan.decision.subtitles != SubtitleDelivery::BurnIn {
+    if decision.subtitles != SubtitleDelivery::BurnIn {
         return None;
     }
-    let index = plan.decision.subtitle_stream_index?;
-    plan.tracks
+    let index = decision.subtitle_stream_index?;
+    tracks
         .iter()
         .find(|track| match &track.kind {
             TrackKind::Subtitle(details) => {
@@ -357,26 +410,123 @@ fn subtitle_to_paint_on(plan: &PlayPlan) -> Option<i32> {
 /// picture beats a larger one nobody can watch.
 ///
 /// Only ever true of a rebuild done in software. A card does this without
-/// noticing, and the day one is used the ceiling is not its.
+/// noticing, and the ceiling is not applied to one.
 const TALLEST_SOFTWARE_REBUILD: i32 = 1080;
 
-/// How tall the rebuilt picture should be.
+/// The codecs a rebuilt picture is offered in, best first.
+///
+/// Best means the most picture for a given rate. A card produces all three at
+/// much the same speed, so the newer ones cost nothing here and are worth a
+/// great deal to a viewer who asked for a lighter stream. The last one is the
+/// one no client has ever refused.
+const BEST_FIRST: &[&str] = &["av1", "hevc", melyxar_playback::profile::ALWAYS_READ];
+
+/// How tall the picture of a film is, when it holds one.
+fn height_of(tracks: &[Track]) -> Option<i32> {
+    tracks.iter().find_map(|track| match &track.kind {
+        melyxar_core::media::TrackKind::Video(details) => Some(details.height),
+        _ => None,
+    })
+}
+
+/// How tall a picture rebuilt by the processor should be.
 ///
 /// What the client asked for, and never more than the ceiling above. Absent
 /// when the picture is no taller than that already, since resizing a picture
 /// to its own size is work for nothing.
-fn height_to_rebuild_at(plan: &PlayPlan) -> Option<i32> {
-    let source_height = plan.tracks.iter().find_map(|track| match &track.kind {
-        melyxar_core::media::TrackKind::Video(details) => Some(details.height),
-        _ => None,
-    })?;
-    let ceiling = plan
-        .decision
-        .scale_to_height
-        .unwrap_or(i32::MAX)
-        .min(TALLEST_SOFTWARE_REBUILD);
-
+fn height_to_rebuild_at(source_height: Option<i32>, asked_for: Option<i32>) -> Option<i32> {
+    let source_height = source_height?;
+    let ceiling = asked_for.unwrap_or(i32::MAX).min(TALLEST_SOFTWARE_REBUILD);
     (ceiling < source_height).then_some(ceiling)
+}
+
+/// What a rebuilt picture is given to work with when nobody asked for a rate.
+///
+/// A card has to be given one: it counts quality on a scale of its own for
+/// each codec, where the same number means three different things, and a rate
+/// means the same thing to all three. These are the usual streaming rates for
+/// the codec every client reads, and the newer codecs are given less because
+/// needing less is the whole point of them.
+fn rate_for(height: Option<i32>, codec: &str) -> i64 {
+    let as_h264 = match height.unwrap_or(1080) {
+        height if height > 1440 => 25_000_000,
+        height if height > 1080 => 16_000_000,
+        height if height > 720 => 10_000_000,
+        height if height > 480 => 5_000_000,
+        _ => 2_500_000,
+    };
+    match codec {
+        "av1" => as_h264 * 55 / 100,
+        "hevc" => as_h264 * 65 / 100,
+        _ => as_h264,
+    }
+}
+
+/// Works out who rebuilds the picture, into what, and at what size.
+///
+/// Nothing when the picture is not being rebuilt at all, which is most films.
+fn how_to_rebuild(
+    decision: &PlaybackDecision,
+    tracks: &[Track],
+    profile: &ClientProfile,
+    capabilities: Option<&melyxar_ffmpeg::Capabilities>,
+    painting_subtitles: bool,
+) -> Option<PictureRebuild> {
+    if decision.video != melyxar_playback::decision::StreamAction::Transcode {
+        return None;
+    }
+    let source_height = height_of(tracks);
+
+    let card = capabilities
+        .and_then(melyxar_ffmpeg::Capabilities::card)
+        // Painting words into a picture is done where the words are, which is
+        // on the processor. Getting them onto a card is a different piece of
+        // work, and this is not it.
+        .filter(|_| !painting_subtitles)
+        // A card that cannot convert wide gamut colour would hand back a film
+        // that is grey, which is worse than one that is merely smaller.
+        .filter(|card| !decision.tone_map || card.can_tone_map);
+
+    let on_a_card = card.and_then(|card| {
+        BEST_FIRST
+            .iter()
+            .find(|codec| card.encoder_for(codec).is_some() && profile.accepts_rebuilt(codec))
+            .map(|codec| (card, (*codec).to_string()))
+    });
+
+    let Some((card, codec)) = on_a_card else {
+        return Some(PictureRebuild {
+            codec: melyxar_playback::profile::ALWAYS_READ.to_string(),
+            card: None,
+            height: height_to_rebuild_at(source_height, decision.scale_to_height),
+            bitrate: decision.bitrate_ceiling,
+        });
+    };
+
+    // Only what the client asked for: the ceiling above is a limit of the
+    // processor, and a card does not have it.
+    let height = decision.scale_to_height.filter(|_| card.can_scale);
+    Some(PictureRebuild {
+        bitrate: Some(
+            decision
+                .bitrate_ceiling
+                .unwrap_or_else(|| rate_for(height.or(source_height), &codec)),
+        ),
+        codec,
+        card: Some(card.clone()),
+        height,
+    })
+}
+
+/// The same answer with the card left out, which is what a session falls back
+/// to if the card will not have the film after all.
+fn without_the_card(plan: &PlayPlan) -> PictureRebuild {
+    PictureRebuild {
+        codec: melyxar_playback::profile::ALWAYS_READ.to_string(),
+        card: None,
+        height: height_to_rebuild_at(height_of(&plan.tracks), plan.decision.scale_to_height),
+        bitrate: plan.decision.bitrate_ceiling,
+    }
 }
 
 /// Turns a decision into what the tool is asked to do.
@@ -392,22 +542,31 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
         ))
     })?;
 
-    let painted_on = subtitle_to_paint_on(plan);
+    let painted_on = subtitle_to_paint_on(&plan.decision, &plan.tracks);
 
     let video = match plan.decision.video {
         StreamAction::Drop => VideoOutput::None,
         StreamAction::Copy => VideoOutput::Copy,
         StreamAction::Transcode => {
-            let mut encode = melyxar_ffmpeg::command::VideoEncode::software_h264();
-            encode.scale_to_height = height_to_rebuild_at(plan);
-            encode.tone_map = plan.decision.tone_map;
-            encode.burn_in_subtitle = painted_on;
-            // Key frames on the segment boundaries, which is what lets any
-            // segment be produced on its own rather than only after the one
-            // before it.
-            encode.keyframe_interval = Some(melyxar_streaming::playlist::SEGMENT_DURATION);
-            VideoOutput::Encode(encode)
+            let rebuild = plan.rebuild.as_ref().ok_or_else(|| {
+                AppError::Domain(melyxar_core::Error::invalid_input(
+                    "this picture is to be rebuilt and nothing says how",
+                ))
+            })?;
+            VideoOutput::Encode(encode_for(rebuild, plan, painted_on)?)
         }
+    };
+
+    // Only when a card is doing the work. A card is proved at start-up on a
+    // generated picture, which does not prove every film, and a refusal must
+    // not reach a viewer as a black screen.
+    let if_the_card_refuses = match plan.rebuild.as_ref().is_some_and(PictureRebuild::on_a_card) {
+        true => Some(VideoOutput::Encode(encode_for(
+            &without_the_card(plan),
+            plan,
+            painted_on,
+        )?)),
+        false => None,
     };
 
     let audio = match plan.decision.audio {
@@ -440,7 +599,33 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
         },
         video,
         audio,
+        if_the_card_refuses,
     })
+}
+
+/// Turns one answer about the picture into what the tool is handed.
+fn encode_for(
+    rebuild: &PictureRebuild,
+    plan: &PlayPlan,
+    painted_on: Option<i32>,
+) -> Result<melyxar_ffmpeg::command::VideoEncode> {
+    let mut encode = match &rebuild.card {
+        Some(card) => melyxar_ffmpeg::command::VideoEncode::on_a_card(card, &rebuild.codec)
+            .ok_or_else(|| {
+                AppError::Domain(melyxar_core::Error::invalid_input(
+                    "this card was never proved to produce that codec",
+                ))
+            })?,
+        None => melyxar_ffmpeg::command::VideoEncode::software_h264(),
+    };
+    encode.scale_to_height = rebuild.height;
+    encode.max_bitrate = rebuild.bitrate;
+    encode.tone_map = plan.decision.tone_map;
+    encode.burn_in_subtitle = painted_on;
+    // Key frames on the segment boundaries, which is what lets any segment be
+    // produced on its own rather than only after the one before it.
+    encode.keyframe_interval = Some(melyxar_streaming::playlist::SEGMENT_DURATION);
+    Ok(encode)
 }
 
 /// How often sessions nobody is watching are looked for.
@@ -1100,6 +1285,7 @@ mod tests {
             decoders: Default::default(),
             filters: Default::default(),
             hardware: Default::default(),
+            card_search: Default::default(),
         }
     }
 
@@ -1409,6 +1595,7 @@ mod tests {
                     streams: melyxar_ffmpeg::command::StreamSelection::default(),
                     video: melyxar_ffmpeg::command::VideoOutput::Copy,
                     audio: melyxar_ffmpeg::command::AudioOutput::Copy,
+                    if_the_card_refuses: None,
                 },
                 false,
             )
@@ -1439,6 +1626,7 @@ mod tests {
                     streams: melyxar_ffmpeg::command::StreamSelection::default(),
                     video: melyxar_ffmpeg::command::VideoOutput::Copy,
                     audio: melyxar_ffmpeg::command::AudioOutput::Copy,
+                    if_the_card_refuses: None,
                 },
                 false,
             )
@@ -1507,46 +1695,227 @@ mod tests {
 
     #[test]
     fn a_picture_rebuilt_in_software_is_never_rebuilt_larger_than_one_can_be() {
-        let plan = |height: i32, asked: Option<i32>| PlayPlan {
-            source_id: MediaSourceId::new(),
-            work_id: WorkId::new(),
-            path: PathBuf::from("/mnt/one/Films/Quiet.Harbour.mkv"),
-            size_bytes: 1_000,
-            duration: Some(Millis::new(7_200_000)),
-            decision: PlaybackDecision {
-                method: PlaybackMethod::FullTranscode,
-                video: StreamAction::Transcode,
-                audio: StreamAction::Transcode,
-                subtitles: SubtitleDelivery::None,
-                audio_stream_index: None,
-                subtitle_stream_index: None,
-                video_stream_index: Some(0),
-                scale_to_height: asked,
-                tone_map: true,
-                reasons: Vec::new(),
-            },
-            resume_from: None,
-            tracks: vec![video(MediaSourceId::new(), "hevc", height)],
-            downmix: DownmixMethod::BroadcastStandard,
-            downmix_gain: 2.0,
-        };
-
         assert_eq!(
-            height_to_rebuild_at(&plan(2160, None)),
+            height_to_rebuild_at(Some(2160), None),
             Some(1080),
             "a processor cannot rebuild a picture that size while somebody watches it"
         );
         assert_eq!(
-            height_to_rebuild_at(&plan(2160, Some(720))),
+            height_to_rebuild_at(Some(2160), Some(720)),
             Some(720),
             "a client asking for less is asking for less, not for the ceiling"
         );
         assert_eq!(
-            height_to_rebuild_at(&plan(1080, None)),
+            height_to_rebuild_at(Some(1080), None),
             None,
             "resizing a picture to its own size is work for nothing"
         );
-        assert_eq!(height_to_rebuild_at(&plan(720, None)), None);
+        assert_eq!(height_to_rebuild_at(Some(720), None), None);
+        assert_eq!(height_to_rebuild_at(None, Some(720)), None);
+    }
+
+    /// A decision to rebuild the picture, as the engine would produce one.
+    fn rebuilding(
+        height_asked: Option<i32>,
+        tone_map: bool,
+        rate: Option<i64>,
+    ) -> PlaybackDecision {
+        PlaybackDecision {
+            method: PlaybackMethod::FullTranscode,
+            video: StreamAction::Transcode,
+            audio: StreamAction::Transcode,
+            subtitles: SubtitleDelivery::None,
+            audio_stream_index: None,
+            subtitle_stream_index: None,
+            video_stream_index: Some(0),
+            scale_to_height: height_asked,
+            bitrate_ceiling: rate,
+            tone_map,
+            reasons: Vec::new(),
+        }
+    }
+
+    /// A card, with a say in what it was proved able to do.
+    fn a_card(codecs: &[&str], can_tone_map: bool) -> melyxar_ffmpeg::Card {
+        melyxar_ffmpeg::Card {
+            way: melyxar_ffmpeg::HardwareAcceleration::Vaapi,
+            device: PathBuf::from("/dev/dri/renderD128"),
+            encoders: codecs
+                .iter()
+                .map(|codec| ((*codec).to_string(), format!("{codec}_vaapi")))
+                .collect(),
+            can_scale: true,
+            can_tone_map,
+        }
+    }
+
+    fn capabilities_with(card: Option<melyxar_ffmpeg::Card>) -> melyxar_ffmpeg::Capabilities {
+        melyxar_ffmpeg::Capabilities {
+            card_search: melyxar_ffmpeg::CardSearch {
+                card,
+                ..Default::default()
+            },
+            ..capabilities_of_a_usual_tool()
+        }
+    }
+
+    #[test]
+    fn a_card_rebuilds_the_picture_in_the_best_codec_the_client_takes() {
+        // A card produces all three at much the same speed, so the newer ones
+        // cost nothing here and are worth a great deal to a viewer who asked
+        // for a lighter stream.
+        let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
+        let card = capabilities_with(Some(a_card(&["h264", "hevc", "av1"], true)));
+
+        let takes_everything = ClientProfile {
+            rebuilt_video: vec!["h264".into(), "hevc".into(), "av1".into()],
+            ..ClientProfile::conservative_browser()
+        };
+        let rebuild = how_to_rebuild(
+            &rebuilding(None, true, None),
+            &tracks,
+            &takes_everything,
+            Some(&card),
+            false,
+        )
+        .expect("this picture is rebuilt");
+        assert!(rebuild.on_a_card());
+        assert_eq!(rebuild.codec, "av1");
+        assert_eq!(
+            rebuild.height, None,
+            "a card rebuilds a picture at its own size, and the ceiling is the processor's"
+        );
+
+        // The same card and a client that measured nothing: what every client
+        // reads, because a guess wrong here is a black screen.
+        let rebuild = how_to_rebuild(
+            &rebuilding(None, true, None),
+            &tracks,
+            &ClientProfile::conservative_browser(),
+            Some(&card),
+            false,
+        )
+        .expect("this picture is rebuilt");
+        assert_eq!(rebuild.codec, "h264");
+        assert!(rebuild.on_a_card());
+    }
+
+    #[test]
+    fn a_card_that_cannot_convert_wide_gamut_colour_is_left_out_of_those_films() {
+        // It would hand back a film that is grey, which is worse than one that
+        // is merely smaller.
+        let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
+        let card = capabilities_with(Some(a_card(&["h264", "av1"], false)));
+        let profile = ClientProfile {
+            rebuilt_video: vec!["h264".into(), "av1".into()],
+            ..ClientProfile::conservative_browser()
+        };
+
+        let grey = how_to_rebuild(
+            &rebuilding(None, true, None),
+            &tracks,
+            &profile,
+            Some(&card),
+            false,
+        )
+        .expect("this picture is rebuilt");
+        assert!(!grey.on_a_card());
+        assert_eq!(
+            grey.height,
+            Some(1080),
+            "and the processor's ceiling applies"
+        );
+
+        let ordinary = how_to_rebuild(
+            &rebuilding(None, false, None),
+            &tracks,
+            &profile,
+            Some(&card),
+            false,
+        )
+        .expect("this picture is rebuilt");
+        assert!(
+            ordinary.on_a_card(),
+            "the same card is perfectly good for a film with ordinary colour"
+        );
+    }
+
+    #[test]
+    fn words_painted_into_a_picture_keep_it_on_the_processor() {
+        // Painting them is done where the words are. Getting them onto a card
+        // is a different piece of work, and this is not it.
+        let tracks = vec![video(MediaSourceId::new(), "h264", 1080)];
+        let card = capabilities_with(Some(a_card(&["h264", "av1"], true)));
+        let profile = ClientProfile {
+            rebuilt_video: vec!["h264".into(), "av1".into()],
+            ..ClientProfile::conservative_browser()
+        };
+
+        let painted = how_to_rebuild(
+            &rebuilding(None, false, None),
+            &tracks,
+            &profile,
+            Some(&card),
+            true,
+        )
+        .expect("this picture is rebuilt");
+        assert!(!painted.on_a_card());
+    }
+
+    #[test]
+    fn a_rate_a_viewer_asked_for_is_the_rate_the_card_is_given() {
+        let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
+        let card = capabilities_with(Some(a_card(&["h264", "av1"], true)));
+        let profile = ClientProfile {
+            rebuilt_video: vec!["h264".into(), "av1".into()],
+            max_bitrate: Some(4_000_000),
+            max_height: Some(720),
+            ..ClientProfile::conservative_browser()
+        };
+
+        let rebuild = how_to_rebuild(
+            &rebuilding(Some(720), false, Some(4_000_000)),
+            &tracks,
+            &profile,
+            Some(&card),
+            false,
+        )
+        .expect("this picture is rebuilt");
+        assert_eq!(rebuild.height, Some(720));
+        assert_eq!(rebuild.bitrate, Some(4_000_000));
+
+        // Nobody asked for one, so the card is given the usual rate for the
+        // size and the codec: it has to be given one, because it counts
+        // quality on a scale of its own for each codec.
+        let unasked = how_to_rebuild(
+            &rebuilding(None, false, None),
+            &tracks,
+            &profile,
+            Some(&card),
+            false,
+        )
+        .expect("this picture is rebuilt");
+        assert_eq!(unasked.codec, "av1");
+        assert_eq!(unasked.bitrate, Some(rate_for(Some(2160), "av1")));
+        assert!(
+            unasked.bitrate < Some(rate_for(Some(2160), "h264")),
+            "needing less is the whole point of the newer codec"
+        );
+    }
+
+    #[test]
+    fn a_picture_nobody_is_rebuilding_has_nothing_to_say_about_how() {
+        let tracks = vec![video(MediaSourceId::new(), "h264", 1080)];
+        let mut untouched = rebuilding(None, false, None);
+        untouched.video = StreamAction::Copy;
+        assert!(how_to_rebuild(
+            &untouched,
+            &tracks,
+            &ClientProfile::conservative_browser(),
+            Some(&capabilities_with(Some(a_card(&["h264"], true)))),
+            false,
+        )
+        .is_none());
     }
 
     #[tokio::test]

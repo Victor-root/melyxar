@@ -94,12 +94,60 @@ pub async fn detect_media_tools(config: &Config) -> (Option<ToolPaths>, Option<C
                 hardware = capabilities.hardware.len(),
                 "media tools ready"
             );
+            report_the_card(&capabilities);
             (Some(tools), Some(capabilities))
         }
         Err(error) => {
             tracing::warn!(%error, "the media tools were found but would not answer");
             (Some(tools), None)
         }
+    }
+}
+
+/// Writes down what the search for a card found, whether or not it found one.
+///
+/// Every trial, not only the outcome. A card that was refused is the single
+/// commonest thing to go wrong here, and what the tool printed when it refused
+/// is the whole answer: a container never given the graphics device, a driver
+/// that is not installed, a codec this generation of card does not carry. None
+/// of those can be told apart from "no card" without these lines.
+fn report_the_card(capabilities: &Capabilities) {
+    let search = &capabilities.card_search;
+
+    for trial in &search.trials {
+        if trial.worked {
+            tracing::info!(
+                what = trial.what,
+                device = trial.device,
+                "the card can do this"
+            );
+        } else {
+            tracing::warn!(
+                what = trial.what,
+                device = trial.device,
+                said = trial.said,
+                "the card would not do this"
+            );
+        }
+    }
+
+    match &search.card {
+        Some(card) => tracing::info!(
+            device = %card.device.display(),
+            way = card.way.as_str(),
+            codecs = ?card.encoders.keys().collect::<Vec<_>>(),
+            can_scale = card.can_scale,
+            can_tone_map = card.can_tone_map,
+            "a card is rebuilding pictures"
+        ),
+        None if search.devices.is_empty() => tracing::warn!(
+            "no graphics device is visible here, so every picture is rebuilt on the processor; \
+             an unprivileged container has to be given /dev/dri explicitly"
+        ),
+        None => tracing::warn!(
+            devices = ?search.devices,
+            "a graphics device is present but would not rebuild a picture, so the processor does it"
+        ),
     }
 }
 

@@ -11,6 +11,7 @@ use std::process::Stdio;
 
 use tokio::process::Command as TokioCommand;
 
+use crate::hardware::{Card, CardSearch};
 use crate::{FfmpegError, Result, ToolPaths};
 
 /// A hardware path the encoder was built with.
@@ -49,11 +50,16 @@ pub struct Capabilities {
     pub encoders: BTreeSet<String>,
     pub decoders: BTreeSet<String>,
     pub filters: BTreeSet<String>,
+    /// Hardware paths the build carries. What a build carries and what the
+    /// machine can actually do are two different questions: the second one is
+    /// answered by the search below, by trying.
     pub hardware: BTreeSet<HardwareAcceleration>,
+    /// What was found when a card was looked for, whether or not one was.
+    pub card_search: CardSearch,
 }
 
 impl Capabilities {
-    /// Asks the tool what it supports.
+    /// Asks the tool what it supports, and the machine what it can do.
     pub async fn detect(tools: &ToolPaths) -> Result<Self> {
         let version = first_line(&run(&tools.ffmpeg, &["-hide_banner", "-version"]).await?);
         let encoders = parse_codec_list(&run(&tools.ffmpeg, &["-hide_banner", "-encoders"]).await?);
@@ -61,6 +67,7 @@ impl Capabilities {
         let filters = parse_filter_list(&run(&tools.ffmpeg, &["-hide_banner", "-filters"]).await?);
         let hardware =
             parse_hardware_list(&run(&tools.ffmpeg, &["-hide_banner", "-hwaccels"]).await?);
+        let card_search = CardSearch::run(&tools.ffmpeg, &encoders).await;
 
         Ok(Self {
             version,
@@ -68,7 +75,14 @@ impl Capabilities {
             decoders,
             filters,
             hardware,
+            card_search,
         })
+    }
+
+    /// The card this machine can rebuild a picture on, when it has one that
+    /// was proved to work.
+    pub fn card(&self) -> Option<&Card> {
+        self.card_search.card.as_ref()
     }
 
     pub fn has_encoder(&self, name: &str) -> bool {

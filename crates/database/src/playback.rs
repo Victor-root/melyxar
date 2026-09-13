@@ -32,6 +32,12 @@ pub struct PlayableSource {
     pub size_bytes: i64,
     pub container: Option<String>,
     pub duration: Option<Millis>,
+    /// How fast the whole file arrives, when the analysis found out.
+    ///
+    /// Kept because it is the only rate most films in a collection state at
+    /// all: the rate of the picture alone is usually absent, and a viewer who
+    /// asks for a lighter stream has to be answered on something.
+    pub overall_bitrate: Option<i64>,
     /// True while the file is not on disk. Such a file is refused with an
     /// explanation rather than opened and failing halfway.
     pub missing: bool,
@@ -123,7 +129,8 @@ impl Database {
         let row = sqlx::query(
             "SELECT media_sources.id, media_sources.work_id, media_sources.relative_path,
                     media_sources.size_bytes, media_sources.container, media_sources.duration_ms,
-                    media_sources.missing_since, library_roots.path AS root_path
+                    media_sources.overall_bitrate, media_sources.missing_since,
+                    library_roots.path AS root_path
              FROM media_sources
              JOIN library_roots ON library_roots.id = media_sources.root_id
              WHERE media_sources.id = ?",
@@ -152,6 +159,7 @@ impl Database {
             duration: row
                 .try_get::<Option<i64>, _>("duration_ms")?
                 .map(Millis::new),
+            overall_bitrate: row.try_get("overall_bitrate")?,
             missing: row.try_get::<Option<String>, _>("missing_since")?.is_some(),
         }))
     }
@@ -386,6 +394,47 @@ mod tests {
         assert_eq!(playable.work_id, work_id);
         assert_eq!(playable.size_bytes, 1_000);
         assert!(!playable.missing);
+    }
+
+    #[tokio::test]
+    async fn how_fast_a_file_arrives_comes_back_with_it() {
+        // It is the only rate most films state at all, and a viewer asking for
+        // a lighter stream has to be answered on something.
+        let (database, _, _, source_id) = one_film().await;
+        assert_eq!(
+            database
+                .playable_source(source_id)
+                .await
+                .expect("read")
+                .expect("present")
+                .overall_bitrate,
+            None,
+            "nothing has looked inside this file yet"
+        );
+
+        database
+            .store_analysis(
+                source_id,
+                &crate::catalogue::SourceAnalysis {
+                    container: Some("matroska,webm".to_string()),
+                    duration: Some(Millis::new(7_200_000)),
+                    overall_bitrate: Some(30_000_000),
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        assert_eq!(
+            database
+                .playable_source(source_id)
+                .await
+                .expect("read")
+                .expect("present")
+                .overall_bitrate,
+            Some(30_000_000)
+        );
     }
 
     #[tokio::test]

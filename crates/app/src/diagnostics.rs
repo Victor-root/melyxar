@@ -145,6 +145,38 @@ pub struct MediaToolsReport {
     /// Whether the graphics device is visible, which is what an unprivileged
     /// container most often gets wrong.
     pub graphics_device_present: bool,
+    /// The card that was proved to rebuild a picture, when there is one.
+    pub card: Option<CardReport>,
+    /// Every trial run against a card, in order, with what the tool said when
+    /// it refused.
+    ///
+    /// The whole list rather than the outcome alone: a container never given
+    /// the device, a driver that is absent and a codec this generation of card
+    /// does not carry all look exactly like "no card" from outside, and these
+    /// lines are what tells them apart.
+    pub card_trials: Vec<CardTrialReport>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CardReport {
+    pub device: String,
+    /// vaapi, qsv and so on.
+    pub way: &'static str,
+    /// The codecs it was proved to produce.
+    pub codecs: Vec<String>,
+    pub can_scale: bool,
+    pub can_tone_map: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CardTrialReport {
+    /// What was being established, as a code the interface turns into a
+    /// sentence in the reader's own language.
+    pub what: String,
+    pub device: String,
+    pub worked: bool,
+    /// What the tool printed when it refused.
+    pub said: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -292,6 +324,30 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             can_convert_wide_gamut: capabilities
                 .is_some_and(melyxar_ffmpeg::Capabilities::can_tone_map_in_software),
             graphics_device_present: std::path::Path::new(GRAPHICS_DEVICE).exists(),
+            card: capabilities
+                .and_then(melyxar_ffmpeg::Capabilities::card)
+                .map(|card| CardReport {
+                    device: card.device.display().to_string(),
+                    way: card.way.as_str(),
+                    codecs: card.encoders.keys().cloned().collect(),
+                    can_scale: card.can_scale,
+                    can_tone_map: card.can_tone_map,
+                }),
+            card_trials: capabilities
+                .map(|capabilities| {
+                    capabilities
+                        .card_search
+                        .trials
+                        .iter()
+                        .map(|trial| CardTrialReport {
+                            what: trial.what.clone(),
+                            device: trial.device.clone(),
+                            worked: trial.worked,
+                            said: trial.said.clone(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
         },
         database: DatabaseReport {
             readers_never_wait_on_the_writer: journal_mode.eq_ignore_ascii_case("wal"),
@@ -503,6 +559,39 @@ pub fn render_text(report: &Diagnostics) -> String {
                 yes_no(report.media_tools.graphics_device_present)
             ),
         );
+
+        // What was actually tried on the card, and what the tool said when it
+        // refused. A card that is present and unused is the commonest thing to
+        // go wrong here, and it is indistinguishable from no card at all
+        // without these lines.
+        match &report.media_tools.card {
+            Some(card) => line!(
+                "+",
+                format!(
+                    "a card is rebuilding pictures: {} ({}), codecs {}, can make a picture \
+                     smaller: {}, can convert wide gamut colour: {}",
+                    card.device,
+                    card.way,
+                    card.codecs.join(", "),
+                    yes_no(card.can_scale),
+                    yes_no(card.can_tone_map)
+                ),
+            ),
+            None => line!(
+                "!",
+                "no card is rebuilding pictures, so every one of them is rebuilt on the processor"
+                    .to_string(),
+            ),
+        }
+        for trial in &report.media_tools.card_trials {
+            line!(
+                if trial.worked { "+" } else { "x" },
+                match trial.worked {
+                    true => format!("card trial, {}: yes", trial.what),
+                    false => format!("card trial, {}: no, {}", trial.what, trial.said),
+                },
+            );
+        }
     } else {
         line!("x", "not found; browsing works, playback does not");
     }

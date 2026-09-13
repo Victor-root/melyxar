@@ -171,6 +171,7 @@ mod tests {
             streams: StreamSelection::default(),
             video: VideoOutput::Copy,
             audio: AudioOutput::Copy,
+            if_the_card_refuses: None,
         }
     }
 
