@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use melyxar_core::id::{MediaSourceId, UserId, WorkId};
+use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::time::{now, Millis, Timestamp};
 use melyxar_core::work::{should_accept_position, PlaybackState};
 use sqlx::Row;
@@ -45,6 +45,10 @@ pub struct StoredProgress {
     /// Instant the position was measured on the client.
     pub reported_at: Option<Timestamp>,
     pub last_played_at: Option<Timestamp>,
+    /// The tracks this viewer chose last time, so the next session starts the
+    /// same way rather than back on whatever the file marks as default.
+    pub audio_track_id: Option<TrackId>,
+    pub subtitle_track_id: Option<TrackId>,
 }
 
 impl Database {
@@ -92,7 +96,8 @@ impl Database {
         work_id: WorkId,
     ) -> Result<Option<StoredProgress>> {
         let row = sqlx::query(
-            "SELECT position_ms, state, marked_manually, play_count, reported_at, last_played_at
+            "SELECT position_ms, state, marked_manually, play_count, reported_at, last_played_at,
+                    audio_track_id, subtitle_track_id
              FROM playback_progress WHERE user_id = ? AND work_id = ?",
         )
         .bind(user_id.to_db_string())
@@ -116,6 +121,8 @@ impl Database {
                     row.try_get::<Option<String>, _>("last_played_at")?
                         .as_deref(),
                 )?,
+                audio_track_id: parse_track(row.try_get("audio_track_id")?)?,
+                subtitle_track_id: parse_track(row.try_get("subtitle_track_id")?)?,
             })
         })
         .transpose()
@@ -189,6 +196,35 @@ impl Database {
         Ok(true)
     }
 
+    /// Remembers which tracks a viewer chose for one work.
+    ///
+    /// Written apart from the position: choosing a soundtrack says nothing
+    /// about where anyone is, and a viewer who picks a track before pressing
+    /// play has chosen nothing to resume from yet.
+    pub async fn record_chosen_tracks(
+        &self,
+        user_id: UserId,
+        work_id: WorkId,
+        audio_track_id: Option<TrackId>,
+        subtitle_track_id: Option<TrackId>,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO playback_progress
+                (user_id, work_id, audio_track_id, subtitle_track_id)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (user_id, work_id) DO UPDATE SET
+                audio_track_id = excluded.audio_track_id,
+                subtitle_track_id = excluded.subtitle_track_id",
+        )
+        .bind(user_id.to_db_string())
+        .bind(work_id.to_db_string())
+        .bind(audio_track_id.map(|id| id.to_db_string()))
+        .bind(subtitle_track_id.map(|id| id.to_db_string()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
     /// Counts one more viewing of a work.
     ///
     /// Kept apart from the position: a film watched twice is two viewings and
@@ -208,6 +244,15 @@ impl Database {
         .await?;
         Ok(())
     }
+}
+
+/// Reads back a track identifier, treating a malformed one as none.
+///
+/// A remembered choice is a comfort, never a reason to refuse to play: a row
+/// pointing at a track that no longer parses means the file is played the way
+/// it marks itself, which is what would have happened anyway.
+fn parse_track(value: Option<String>) -> Result<Option<TrackId>> {
+    Ok(value.and_then(|value| value.parse().ok()))
 }
 
 #[cfg(test)]
@@ -416,6 +461,68 @@ mod tests {
             Millis::new(2_000),
             "the position still follows, so resuming works"
         );
+    }
+
+    #[tokio::test]
+    async fn the_tracks_a_viewer_chose_are_remembered_for_next_time() {
+        let (database, user_id, work_id, _) = one_film().await;
+        let soundtrack = TrackId::new();
+        let caption = TrackId::new();
+
+        database
+            .record_chosen_tracks(user_id, work_id, Some(soundtrack), Some(caption))
+            .await
+            .expect("choice recorded");
+
+        let stored = database
+            .playback_progress(user_id, work_id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.audio_track_id, Some(soundtrack));
+        assert_eq!(stored.subtitle_track_id, Some(caption));
+        assert_eq!(
+            stored.position,
+            Millis::ZERO,
+            "choosing a soundtrack says nothing about where anyone is"
+        );
+
+        // Turning subtitles off is a choice too, and it has to stick.
+        database
+            .record_chosen_tracks(user_id, work_id, Some(soundtrack), None)
+            .await
+            .expect("choice recorded");
+        assert_eq!(
+            database
+                .playback_progress(user_id, work_id)
+                .await
+                .expect("read")
+                .expect("present")
+                .subtitle_track_id,
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn a_remembered_track_that_no_longer_makes_sense_is_forgotten_rather_than_fatal() {
+        // A row can outlive the file it points into: an analysis run again
+        // gives the tracks new identifiers. Playing the film is what matters.
+        let (database, user_id, work_id, _) = one_film().await;
+        database
+            .record_chosen_tracks(user_id, work_id, Some(TrackId::new()), None)
+            .await
+            .expect("choice recorded");
+        sqlx::query("UPDATE playback_progress SET audio_track_id = 'not an identifier'")
+            .execute(database.writer())
+            .await
+            .expect("value forced");
+
+        let stored = database
+            .playback_progress(user_id, work_id)
+            .await
+            .expect("a malformed choice is not a failure")
+            .expect("present");
+        assert_eq!(stored.audio_track_id, None);
     }
 
     #[tokio::test]

@@ -34,6 +34,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/playback/progress",
             axum::routing::post(record_progress),
         )
+        .route(
+            "/api/v1/playback/tracks",
+            axum::routing::post(remember_tracks),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +243,56 @@ async fn record_progress(
     .await?;
 
     Ok(Json(ProgressView { kept }))
+}
+
+#[derive(Debug, Deserialize)]
+struct TracksBody {
+    work_id: String,
+    source_id: String,
+    #[serde(default)]
+    audio_track_id: Option<String>,
+    #[serde(default)]
+    subtitle_track_id: Option<String>,
+}
+
+/// Remembers what a viewer chose, so the next time starts the same way.
+async fn remember_tracks(
+    State(state): State<AppState>,
+    Json(body): Json<TracksBody>,
+) -> Result<Json<serde_json::Value>> {
+    let work_id: WorkId = body
+        .work_id
+        .parse()
+        .map_err(|_| ServerError::invalid_input("the work identifier is malformed"))?;
+    let source_id = parse_source(&body.source_id)?;
+
+    // The tracks are read back from the file rather than taken on trust: what
+    // is remembered has to be a track this film really holds.
+    let tracks = state
+        .database()
+        .tracks_of_source(source_id)
+        .await
+        .map_err(|error| ServerError::internal(error.to_string()))?;
+    let find = |wanted: Option<String>| -> Result<Option<&melyxar_core::media::Track>> {
+        match wanted {
+            None => Ok(None),
+            Some(value) => {
+                let id = parse_track(&value)?;
+                Ok(tracks.iter().find(|track| track.id == id))
+            }
+        }
+    };
+
+    melyxar_app::playback::remember_chosen_tracks(
+        &state,
+        viewer(&state).await?,
+        work_id,
+        find(body.audio_track_id)?,
+        find(body.subtitle_track_id)?,
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({ "remembered": true })))
 }
 
 /// Who is watching.
