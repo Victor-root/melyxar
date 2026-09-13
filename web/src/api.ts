@@ -192,11 +192,21 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+const post = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
+  send<T>("POST", path, body, signal);
+const put = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
+  send<T>("PUT", path, body, signal);
+
+async function send<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
-      method: "POST",
+      method,
       headers:
         body === undefined
           ? { accept: "application/json" }
@@ -253,6 +263,22 @@ export interface PlaybackSession {
   playlist_url: string;
   duration_minutes: number | null;
   resume_from_seconds: number | null;
+}
+
+/** What the viewer has decided, and what they can decide between. */
+export interface ViewerPreferences {
+  /** Three letter code, or null for no preference: the file then decides. */
+  preferred_audio_language: string | null;
+  preferred_subtitle_language: string | null;
+  downmix_method: string;
+  downmix_gain: number;
+  /** The range the gain is kept inside, so a slider cannot be dragged
+   *  somewhere the server would refuse. */
+  downmix_gain_range: [number, number];
+  downmix_methods: string[];
+  /** The languages the library really holds, which is what a picker offers. */
+  audio_languages: string[];
+  subtitle_languages: string[];
 }
 
 /** How far the preparation of a film has got. */
@@ -318,6 +344,10 @@ export const api = {
     post<PlaybackSession>(`/api/v1/playback/${source}/session`, body, signal),
   preparation: (session: string, signal?: AbortSignal) =>
     get<Preparation>(`/api/v1/stream/${session}/preparation`, signal),
+  preferences: (signal?: AbortSignal) =>
+    get<ViewerPreferences>("/api/v1/preferences", signal),
+  savePreferences: (changes: Partial<ViewerPreferences>, signal?: AbortSignal) =>
+    put<ViewerPreferences>("/api/v1/preferences", changes, signal),
   /**
    * Closes a session, including while the page is going away.
    *

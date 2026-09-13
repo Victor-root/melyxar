@@ -99,6 +99,21 @@ pub enum DownmixMethod {
 }
 
 impl DownmixMethod {
+    /// Every fold this server knows how to perform.
+    ///
+    /// Listed here rather than in whatever screen offers them, so a method
+    /// added to this file appears in the interface instead of quietly existing
+    /// where nobody can choose it.
+    pub const fn every() -> [Self; 5] {
+        [
+            Self::None,
+            Self::CentreAndBassSplit,
+            Self::NightDialogue,
+            Self::IntensityPreserving,
+            Self::BroadcastStandard,
+        ]
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
@@ -338,15 +353,21 @@ mod tests {
 
     #[test]
     fn downmix_methods_round_trip_through_their_stored_form() {
-        for method in [
-            DownmixMethod::None,
-            DownmixMethod::CentreAndBassSplit,
-            DownmixMethod::NightDialogue,
-            DownmixMethod::IntensityPreserving,
-            DownmixMethod::BroadcastStandard,
-        ] {
+        for method in DownmixMethod::every() {
             assert_eq!(DownmixMethod::parse(method.as_str()), Some(method));
         }
+    }
+
+    #[test]
+    fn the_list_offered_to_a_viewer_holds_every_fold_and_no_repeat() {
+        // A method added to the enum and forgotten here would exist in the
+        // code and be impossible to choose from a screen.
+        let every = DownmixMethod::every();
+        let mut names: Vec<&str> = every.iter().map(|method| method.as_str()).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), every.len(), "each one appears once");
+        assert!(every.contains(&DownmixMethod::default()));
     }
 
     #[test]
