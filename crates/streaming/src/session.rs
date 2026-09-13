@@ -50,6 +50,14 @@ pub struct Recipe {
     pub streams: StreamSelection,
     pub video: melyxar_ffmpeg::command::VideoOutput,
     pub audio: melyxar_ffmpeg::command::AudioOutput,
+    /// What to rebuild the picture with if the card will not have it.
+    ///
+    /// A card is proved at start-up on a generated picture, which is the right
+    /// way round but does not prove every film: a driver refuses a size, a
+    /// colour layout, a film nobody thought of. That refusal must not reach a
+    /// viewer as a black screen, so it costs one restart on the processor and
+    /// a line in the log naming what the tool said.
+    pub if_the_card_refuses: Option<melyxar_ffmpeg::command::VideoOutput>,
 }
 
 /// Where the preparation of a film has got to.
@@ -143,6 +151,11 @@ pub struct Session {
     folder: PathBuf,
     tools: ToolPaths,
     running: Mutex<Option<AtWork>>,
+    /// Set once the card has refused this film and the picture is being
+    /// rebuilt on the processor instead. One way only: a card that refused
+    /// this film refuses it again, and trying twice would cost a viewer two
+    /// waits to reach the same place.
+    stepped_down: std::sync::atomic::AtomicBool,
     /// When this session was last asked for anything. A session nobody is
     /// watching any more is swept away, tool and folder together.
     touched: Mutex<Instant>,
@@ -168,8 +181,47 @@ impl Session {
             folder,
             tools,
             running: Mutex::new(None),
+            stepped_down: std::sync::atomic::AtomicBool::new(false),
             touched: Mutex::new(Instant::now()),
         })
+    }
+
+    /// What the picture is being rebuilt with right now.
+    fn video_now(&self) -> melyxar_ffmpeg::command::VideoOutput {
+        match self.stepped_down.load(std::sync::atomic::Ordering::SeqCst) {
+            true => self
+                .recipe
+                .if_the_card_refuses
+                .clone()
+                .unwrap_or_else(|| self.recipe.video.clone()),
+            false => self.recipe.video.clone(),
+        }
+    }
+
+    /// Whether this failure is worth one more try on the processor.
+    ///
+    /// Only a tool that refused: a machine that was merely slow would be just
+    /// as slow the second time, and a segment outside the film is not there
+    /// whoever rebuilds it.
+    fn step_down_from_the_card(&self, error: &StreamingError) -> bool {
+        if !matches!(error, StreamingError::MediaTool(_)) {
+            return false;
+        }
+        if self.recipe.if_the_card_refuses.is_none() {
+            return false;
+        }
+        if self
+            .stepped_down
+            .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            return false;
+        }
+        tracing::error!(
+            session = %self.id,
+            reason = %error,
+            "the card would not rebuild this film; falling back to the processor"
+        );
+        true
     }
 
     pub fn playlist(&self) -> &Playlist {
@@ -253,8 +305,15 @@ impl Session {
         }
 
         self.make_sure_someone_is_producing(index).await?;
-        self.wait_for(&path, index).await?;
-        Ok(path)
+        match self.wait_for(&path, index).await {
+            Ok(()) => Ok(path),
+            Err(error) if self.step_down_from_the_card(&error) => {
+                self.make_sure_someone_is_producing(index).await?;
+                self.wait_for(&path, index).await?;
+                Ok(path)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Starts the tool at this segment, unless one is already on its way here.
@@ -304,7 +363,7 @@ impl Session {
             },
         )
         .with_streams(self.recipe.streams)
-        .with_video(self.recipe.video.clone())
+        .with_video(self.video_now())
         .with_audio(self.recipe.audio.clone())
     }
 
@@ -486,6 +545,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                if_the_card_refuses: None,
             },
             directory.join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -591,6 +651,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
+                if_the_card_refuses: None,
             },
             folder.clone(),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -629,6 +690,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                if_the_card_refuses: None,
             },
             directory.path().join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -653,6 +715,92 @@ mod tests {
         assert!(
             waited < PATIENCE,
             "a tool that is already gone is not worth waiting {PATIENCE:?} for, waited {waited:?}"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_card_that_will_not_have_this_film_hands_it_to_the_processor_instead() {
+        // The card was proved at start-up on a generated picture, which is the
+        // right way round and still does not prove every film: a driver
+        // refuses a size, a colour layout, a film nobody thought of. Left
+        // alone that refusal reaches a viewer as a black screen.
+        //
+        // Asked for here by naming an encoder the tool does not have, which is
+        // the same refusal from the tool's point of view and needs no card to
+        // provoke.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip(&source, 12).await;
+
+        let refused = melyxar_ffmpeg::command::VideoEncode {
+            encoder: "h264_a_card_this_machine_does_not_have".to_string(),
+            ..melyxar_ffmpeg::command::VideoEncode::software_h264()
+        };
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(12_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Encode(refused),
+                audio: AudioOutput::Copy,
+                if_the_card_refuses: Some(VideoOutput::Encode(
+                    melyxar_ffmpeg::command::VideoEncode::software_h264(),
+                )),
+            },
+            directory.path().join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+
+        let segment = session
+            .segment(0)
+            .await
+            .expect("a refused card costs a restart, never the film");
+        assert!(segment.exists());
+        assert!(
+            session
+                .stepped_down
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "and the session stays on the processor rather than asking again every segment"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_film_nothing_can_rebuild_is_still_refused_rather_than_retried_for_ever() {
+        // The other half of the same rule: stepping down is one restart, not a
+        // loop. Nothing here can read the file, so the processor fails exactly
+        // as the card did.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("not-a-film.mkv");
+        std::fs::write(&source, b"this is not a film at all").expect("file written");
+
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(12_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Encode(melyxar_ffmpeg::command::VideoEncode::software_h264()),
+                audio: AudioOutput::Copy,
+                if_the_card_refuses: Some(VideoOutput::Encode(
+                    melyxar_ffmpeg::command::VideoEncode::software_h264(),
+                )),
+            },
+            directory.path().join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+
+        let started = Instant::now();
+        assert!(session.segment(0).await.is_err());
+        assert!(
+            started.elapsed() < PATIENCE,
+            "two refusals are two refusals, not two waits"
         );
         session.close().await;
     }
@@ -868,6 +1016,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
+                if_the_card_refuses: None,
             },
             directory.path().join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -914,6 +1063,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                if_the_card_refuses: None,
             },
             directory.path().join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),

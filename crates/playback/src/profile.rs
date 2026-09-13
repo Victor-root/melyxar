@@ -11,6 +11,10 @@
 
 use serde::{Deserialize, Serialize};
 
+/// The codec no client has ever refused, and therefore the one produced when
+/// nothing better was measured.
+pub const ALWAYS_READ: &str = "h264";
+
 /// A video codec the client can decode, with the limits it holds to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VideoCapability {
@@ -63,6 +67,18 @@ pub struct ClientProfile {
     /// Containers the client can open directly.
     pub containers: Vec<String>,
     pub video: Vec<VideoCapability>,
+    /// Codecs the client accepts in a stream the server rebuilds and feeds to
+    /// it in pieces.
+    ///
+    /// A separate question from the one above, and the client has to ask the
+    /// platform separately too: a browser that opens a file of one codec does
+    /// not always accept the same codec handed to it piece by piece, and the
+    /// two are answered by two different parts of it.
+    ///
+    /// Empty means nothing was measured, and the server then produces the one
+    /// codec every client reads.
+    #[serde(default)]
+    pub rebuilt_video: Vec<String>,
     /// Audio codec names the client can decode.
     pub audio_codecs: Vec<String>,
     /// Most channels the client will accept. Browsers output stereo.
@@ -114,6 +130,20 @@ impl ClientProfile {
             .any(|known| known.eq_ignore_ascii_case(codec))
     }
 
+    /// Whether a stream rebuilt into this codec is one the client will take.
+    ///
+    /// A client that measured nothing gets the codec every client reads, which
+    /// is the only safe answer: producing a codec on a guess and being wrong
+    /// is a black screen with no message on it.
+    pub fn accepts_rebuilt(&self, codec: &str) -> bool {
+        if self.rebuilt_video.is_empty() {
+            return codec.eq_ignore_ascii_case(ALWAYS_READ);
+        }
+        self.rebuilt_video
+            .iter()
+            .any(|known| known.eq_ignore_ascii_case(codec))
+    }
+
     pub fn supports_subtitle_format(&self, codec: &str) -> bool {
         self.subtitle_formats
             .iter()
@@ -133,6 +163,9 @@ impl ClientProfile {
                 VideoCapability::any("vp9"),
                 VideoCapability::any("av1"),
             ],
+            // Only the one every client reads: this stands in for a client
+            // that measured nothing, and a guess wrong here is a black screen.
+            rebuilt_video: vec![ALWAYS_READ.into()],
             audio_codecs: vec![
                 "aac".into(),
                 "mp3".into(),
@@ -201,6 +234,30 @@ mod tests {
         assert!(profile.supports_container(" MP4 "));
         assert!(!profile.supports_container("matroska"));
         assert!(!profile.supports_container("avi"));
+    }
+
+    #[test]
+    fn a_client_that_measured_nothing_is_given_the_codec_every_client_reads() {
+        // Producing a better codec on a guess and being wrong is a black
+        // screen with nothing written on it.
+        let silent = ClientProfile {
+            rebuilt_video: Vec::new(),
+            ..ClientProfile::conservative_browser()
+        };
+        assert!(silent.accepts_rebuilt("h264"));
+        assert!(!silent.accepts_rebuilt("av1"));
+        assert!(!silent.accepts_rebuilt("hevc"));
+    }
+
+    #[test]
+    fn a_client_that_said_what_it_takes_is_taken_at_its_word() {
+        let measured = ClientProfile {
+            rebuilt_video: vec!["h264".into(), "hevc".into(), "av1".into()],
+            ..ClientProfile::conservative_browser()
+        };
+        assert!(measured.accepts_rebuilt("av1"));
+        assert!(measured.accepts_rebuilt("HEVC"));
+        assert!(!measured.accepts_rebuilt("vp9"));
     }
 
     #[test]

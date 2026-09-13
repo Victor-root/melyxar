@@ -17,6 +17,8 @@ use std::path::PathBuf;
 use melyxar_core::time::Millis;
 use melyxar_core::user::DownmixMethod;
 
+use crate::hardware::Card;
+
 /// The input file and where to start reading it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Input {
@@ -61,14 +63,37 @@ pub enum VideoOutput {
     Encode(VideoEncode),
 }
 
+/// Who rebuilds the picture, which is what decides the options the tool takes.
+///
+/// A software encoder and a card express the same idea in settings neither
+/// accepts from the other: one is given a quality and a speed preset, the other
+/// a rate. Keeping the two apart as values rather than as optional fields is
+/// what stops the builder becoming a thicket of conditions, and it is what
+/// makes a nonsensical pairing impossible to write down.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Rebuilding {
+    /// By the processor.
+    InSoftware {
+        /// Quality setting, lower meaning better.
+        quality: u8,
+        /// Speed preset, trading time against size.
+        preset: String,
+    },
+    /// On a card that was proved to accept this work.
+    ///
+    /// A card is driven by a rate rather than by a quality on purpose: every
+    /// codec counts quality on its own scale there, and the same number means
+    /// three different things across the three codecs a card produces. A rate
+    /// means the same thing to all of them.
+    OnACard(Card),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VideoEncode {
     /// Encoder name, as the tool knows it.
     pub encoder: String,
-    /// Quality setting, lower meaning better for the software encoder.
-    pub quality: Option<u8>,
-    /// Speed preset, trading time against size.
-    pub preset: Option<String>,
+    /// Who does the work.
+    pub how: Rebuilding,
     /// Cap on the produced bitrate, in bits per second.
     pub max_bitrate: Option<i64>,
     /// Height to scale down to, keeping the aspect ratio.
@@ -98,18 +123,58 @@ pub struct VideoEncode {
     pub burn_in_subtitle: Option<i32>,
 }
 
+/// Quality the software encoder aims at, on its own scale.
+///
+/// The usual middle of the road: visually indistinguishable from the source on
+/// film material, and small enough that a local network never notices.
+const SOFTWARE_QUALITY: u8 = 23;
+
+/// Speed the software encoder works at.
+///
+/// Fast enough to stay ahead of a viewer on a processor with other things to
+/// do, which is the only thing that matters while somebody is watching.
+const SOFTWARE_PRESET: &str = "veryfast";
+
 impl VideoEncode {
     /// Software encoding to the codec every browser reads.
     pub fn software_h264() -> Self {
         Self {
             encoder: "libx264".to_string(),
-            quality: Some(23),
-            preset: Some("veryfast".to_string()),
+            how: Rebuilding::InSoftware {
+                quality: SOFTWARE_QUALITY,
+                preset: SOFTWARE_PRESET.to_string(),
+            },
             max_bitrate: None,
             scale_to_height: None,
             tone_map: false,
             keyframe_interval: None,
             burn_in_subtitle: None,
+        }
+    }
+
+    /// Encoding one codec on a card.
+    ///
+    /// Absent when this card was not proved to produce that codec: a card that
+    /// refused a codec at start-up is a card that will refuse it in the middle
+    /// of a film.
+    pub fn on_a_card(card: &Card, codec: &str) -> Option<Self> {
+        let encoder = card.encoder_for(codec)?.to_string();
+        Some(Self {
+            encoder,
+            how: Rebuilding::OnACard(card.clone()),
+            max_bitrate: None,
+            scale_to_height: None,
+            tone_map: false,
+            keyframe_interval: None,
+            burn_in_subtitle: None,
+        })
+    }
+
+    /// The card doing the work, when one is.
+    pub fn card(&self) -> Option<&Card> {
+        match &self.how {
+            Rebuilding::OnACard(card) => Some(card),
+            Rebuilding::InSoftware { .. } => None,
         }
     }
 }
@@ -252,6 +317,14 @@ impl Command {
         matches!(self.video, VideoOutput::Encode(_)) || matches!(self.audio, AudioOutput::Encode(_))
     }
 
+    /// The card this command works on, when it works on one.
+    pub fn card(&self) -> Option<&Card> {
+        match &self.video {
+            VideoOutput::Encode(encode) => encode.card(),
+            _ => None,
+        }
+    }
+
     /// The filter graph that paints a subtitle onto every frame, when one is
     /// being drawn in.
     ///
@@ -292,6 +365,15 @@ impl Command {
         push!("-nostdin");
         push!("-loglevel");
         push!("error");
+
+        // The card is opened before anything is read: a device named after the
+        // input is a device the filters cannot reach, and the tool says so in
+        // a sentence that names neither.
+        if let Some(card) = self.card() {
+            for argument in card.opening_arguments() {
+                push!(&argument);
+            }
+        }
 
         if self.report_progress {
             push!("-progress");
@@ -414,14 +496,25 @@ impl Command {
 
                 push!("-c:v");
                 push!(&encode.encoder);
-                if let Some(preset) = &encode.preset {
-                    push!("-preset");
-                    push!(preset);
+
+                match &encode.how {
+                    Rebuilding::InSoftware { quality, preset } => {
+                        push!("-preset");
+                        push!(preset);
+                        push!("-crf");
+                        push!(&quality.to_string());
+                    }
+                    // A rate rather than a quality, because the three codecs a
+                    // card produces count quality on three different scales
+                    // and a rate means the same thing to all of them.
+                    Rebuilding::OnACard(_) => {
+                        if let Some(bitrate) = encode.max_bitrate {
+                            push!("-b:v");
+                            push!(&bitrate.to_string());
+                        }
+                    }
                 }
-                if let Some(quality) = encode.quality {
-                    push!("-crf");
-                    push!(&quality.to_string());
-                }
+
                 if let Some(bitrate) = encode.max_bitrate {
                     push!("-maxrate");
                     push!(&bitrate.to_string());
@@ -440,8 +533,13 @@ impl Command {
                     ));
                 }
                 // Wide compatibility beats a marginally smaller file here.
-                push!("-pix_fmt");
-                push!("yuv420p");
+                // Only ever in software: a picture sitting on a card is not
+                // held in a layout the processor names, and asking for one is
+                // how a card refuses a film it was perfectly able to rebuild.
+                if encode.card().is_none() {
+                    push!("-pix_fmt");
+                    push!("yuv420p");
+                }
             }
         }
 
@@ -546,9 +644,15 @@ const PAINTED_PICTURE: &str = "[painted]";
 
 /// Builds what happens to the picture before it is encoded.
 ///
-/// Conversion comes before scaling: mapping colours on the full size picture
-/// and then shrinking gives a cleaner result than the other way round.
+/// Two shapes, because the two paths have nothing in common beyond the order:
+/// on a card the picture is handed up and worked on there, in software it is
+/// worked on where it already is.
 fn picture_filter_chain(encode: &VideoEncode) -> Option<String> {
+    if let Some(card) = encode.card() {
+        let filters = card.filters_for(encode.scale_to_height, encode.tone_map);
+        return (!filters.is_empty()).then(|| filters.join(","));
+    }
+
     let mut filters: Vec<String> = Vec::new();
 
     // Made smaller first, converted afterwards. Converting colours is the most
@@ -839,6 +943,105 @@ mod tests {
             "converting every pixel of a picture about to be thrown away is \
              three quarters of the work for nothing: {filters}"
         );
+    }
+
+    /// A card that produces all three codecs and can do everything asked of
+    /// it, which is what the maintainer's card is.
+    fn a_card() -> Card {
+        Card {
+            way: crate::capabilities::HardwareAcceleration::Vaapi,
+            device: PathBuf::from("/dev/dri/renderD128"),
+            encoders: [
+                ("h264", "h264_vaapi"),
+                ("hevc", "hevc_vaapi"),
+                ("av1", "av1_vaapi"),
+            ]
+            .into_iter()
+            .map(|(codec, encoder)| (codec.to_string(), encoder.to_string()))
+            .collect(),
+            can_scale: true,
+            can_tone_map: true,
+        }
+    }
+
+    #[test]
+    fn a_card_is_opened_before_the_film_is_read() {
+        // A device named after the input is a device the filters cannot reach,
+        // and the tool then refuses in a sentence naming neither.
+        let mut encode = VideoEncode::on_a_card(&a_card(), "av1").expect("this card produces it");
+        encode.max_bitrate = Some(8_000_000);
+        let command = Command::new(
+            Input::new("/media/film.mkv").starting_at(Millis::new(20_000)),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode));
+
+        let args = arguments(&command);
+        let opened = position(&args, "-init_hw_device").expect("the card is opened");
+        assert!(opened < position(&args, "-i").expect("an input is present"));
+        assert_eq!(args[opened + 1], "vaapi=card:/dev/dri/renderD128");
+        assert!(args.contains(&"av1_vaapi".to_string()));
+    }
+
+    #[test]
+    fn a_card_is_never_given_the_settings_of_a_software_encoder() {
+        // Neither accepts the other's, and a card handed a speed preset or a
+        // picture layout it does not hold refuses a film it was perfectly able
+        // to rebuild.
+        let mut encode = VideoEncode::on_a_card(&a_card(), "h264").expect("this card produces it");
+        encode.max_bitrate = Some(6_000_000);
+        let args = arguments(
+            &Command::new(
+                Input::new("/media/film.mkv"),
+                Output::File(PathBuf::from("/tmp/out.mp4")),
+            )
+            .with_video(VideoOutput::Encode(encode)),
+        );
+
+        assert!(!args.iter().any(|value| value == "-preset"), "{args:?}");
+        assert!(!args.iter().any(|value| value == "-crf"), "{args:?}");
+        assert!(!args.iter().any(|value| value == "-pix_fmt"), "{args:?}");
+
+        let rate = position(&args, "-b:v").expect("a card is driven by a rate");
+        assert_eq!(args[rate + 1], "6000000");
+        assert_eq!(
+            args[position(&args, "-bufsize").expect("a buffer goes with it") + 1],
+            "12000000"
+        );
+    }
+
+    #[test]
+    fn a_picture_rebuilt_on_a_card_is_handed_up_to_it_first() {
+        let mut encode = VideoEncode::on_a_card(&a_card(), "hevc").expect("this card produces it");
+        encode.scale_to_height = Some(1080);
+        encode.tone_map = true;
+        let args = arguments(
+            &Command::new(
+                Input::new("/media/film.mkv"),
+                Output::File(PathBuf::from("/tmp/out.mp4")),
+            )
+            .with_video(VideoOutput::Encode(encode)),
+        );
+
+        let filters = &args[position(&args, "-vf").expect("a filter chain is present") + 1];
+        assert_eq!(
+            filters,
+            "format=p010,hwupload,scale_vaapi=w=-2:h=1080,tonemap_vaapi=format=nv12"
+        );
+        assert!(
+            !filters.contains("zscale"),
+            "converting colours on the processor is exactly the work the card exists to take: {filters}"
+        );
+    }
+
+    #[test]
+    fn a_card_that_was_never_proved_to_produce_a_codec_is_not_asked_for_it() {
+        // A card that refused a codec at start-up is a card that refuses it in
+        // the middle of a film, and by then somebody is watching.
+        let mut card = a_card();
+        card.encoders.remove("av1");
+        assert!(VideoEncode::on_a_card(&card, "av1").is_none());
+        assert!(VideoEncode::on_a_card(&card, "h264").is_some());
     }
 
     #[test]

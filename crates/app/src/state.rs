@@ -165,6 +165,7 @@ mod tests {
             decoders: BTreeSet::new(),
             filters: filters.iter().map(|value| value.to_string()).collect(),
             hardware: hardware.iter().copied().collect(),
+            card_search: Default::default(),
         }
     }
 

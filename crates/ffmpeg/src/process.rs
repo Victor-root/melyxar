@@ -384,7 +384,10 @@ mod tests {
         // Slow preset on purpose, so the process is still working when asked
         // to stop.
         let mut encode = crate::command::VideoEncode::software_h264();
-        encode.preset = Some("veryslow".to_string());
+        encode.how = crate::command::Rebuilding::InSoftware {
+            quality: 18,
+            preset: "veryslow".to_string(),
+        };
         let command = Command::new(
             Input::new(&source),
             Output::File(directory.path().join("out.mp4")),
