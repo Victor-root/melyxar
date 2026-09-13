@@ -106,7 +106,13 @@ Vérifié dans l'environnement de travail, sur de vrais films : la grille et la 
 
 ## Jalon 4 : lecture Direct Play
 
-État : à faire.
+État : en cours. Un film que le navigateur sait ouvrir se lit, et on revient là où on s'était arrêté.
+
+Fait : la décision pure avec ses raisons, le profil demandé au navigateur lui-même (chaque combinaison essayée, jamais devinée d'après le nom du navigateur), le fichier servi par morceaux, le lecteur, la position enregistrée pendant la lecture et une dernière fois en partant, la reprise, et les raccourcis clavier.
+
+Reste : le bouton distinct pour repartir du début, la mémoire des langues choisies, les préférences de repliement stéréo, la vitesse de lecture et l'image dans l'image. Un film que le navigateur ne sait pas ouvrir le dit clairement : le convertir est le jalon 5.
+
+Vérifié dans un vrai navigateur : le film se lit, la page explique pourquoi il se lit de cette façon, quitter à douze secondes et revenir repart à douze secondes, et un rapport de position qui arrive en retard est refusé.
 
 - Crate `playback` avec la décision pure et ses raisons.
 - Profil de capacités construit par le client web et envoyé au serveur.
