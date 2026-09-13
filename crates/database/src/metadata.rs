@@ -36,6 +36,16 @@ pub struct NamelessWork {
     pub file_name: Option<String>,
 }
 
+/// A file nothing has managed to describe, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UndescribedFile {
+    /// The name of the file, without the folders leading to it.
+    pub file_name: String,
+    /// What the analyser said. Absent for a file nothing has tried yet, which
+    /// is itself the answer.
+    pub reason: Option<String>,
+}
+
 /// A film the library holds more than one copy of.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkWithCopies {
@@ -221,9 +231,9 @@ impl Database {
     /// counted: such a file is in the library, has a card, and fails the
     /// moment somebody presses play, and the count alone sends whoever reads
     /// it to a terminal.
-    pub async fn files_nothing_could_describe(&self, limit: i64) -> Result<Vec<String>> {
-        let rows: Vec<(String,)> = sqlx::query_as(
-            "SELECT relative_path FROM media_sources
+    pub async fn files_nothing_could_describe(&self, limit: i64) -> Result<Vec<UndescribedFile>> {
+        let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT relative_path, analysis_failure FROM media_sources
              WHERE analysed_at IS NULL AND missing_since IS NULL
              ORDER BY relative_path
              LIMIT ?",
@@ -234,10 +244,11 @@ impl Database {
 
         Ok(rows
             .into_iter()
-            .map(|(path,)| {
-                Path::new(&path)
+            .map(|(path, reason)| UndescribedFile {
+                file_name: Path::new(&path)
                     .file_name()
-                    .map_or(path.clone(), |name| name.to_string_lossy().into_owned())
+                    .map_or(path.clone(), |name| name.to_string_lossy().into_owned()),
+                reason,
             })
             .collect())
     }
@@ -1926,14 +1937,61 @@ mod tests {
             .await
             .expect("analysis stored");
 
+        let listed = database
+            .files_nothing_could_describe(15)
+            .await
+            .expect("read");
+        assert_eq!(
+            listed,
+            vec![UndescribedFile {
+                file_name: "Quiet Harbour BD Rip.avi".to_string(),
+                reason: None,
+            }],
+            "the name of the file, and never the folders leading to it"
+        );
+
+        // What the analyser said is the one thing anybody can act on.
+        let refused = database
+            .sources_of_work(work.id)
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|source| source.relative_path.ends_with("Quiet Harbour BD Rip.avi"))
+            .expect("the copy nothing could describe");
+        database
+            .record_analysis_failure(refused.id, "Picture size 0x0 is invalid")
+            .await
+            .expect("written down");
         assert_eq!(
             database
                 .files_nothing_could_describe(15)
                 .await
-                .expect("read"),
-            vec!["Quiet Harbour BD Rip.avi".to_string()],
-            "the name of the file, and never the folders leading to it"
+                .expect("read")[0]
+                .reason
+                .as_deref(),
+            Some("Picture size 0x0 is invalid")
         );
+
+        // And it goes the moment the file is described, rather than outliving
+        // what caused it and sending the next reader the wrong way.
+        database
+            .store_analysis(
+                refused.id,
+                &crate::catalogue::SourceAnalysis {
+                    container: Some("avi".to_string()),
+                    duration: Some(melyxar_core::time::Millis::new(5_400_000)),
+                    overall_bitrate: Some(2_000_000),
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+        assert!(database
+            .files_nothing_could_describe(15)
+            .await
+            .expect("read")
+            .is_empty());
     }
 
     #[tokio::test]

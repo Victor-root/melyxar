@@ -50,7 +50,7 @@ pub struct Diagnostics {
     /// Such a file is in the library, has a card, and fails the moment
     /// somebody presses play. It was only ever visible to whoever happened to
     /// be watching a scan in a terminal.
-    pub undescribed: Vec<String>,
+    pub undescribed: Vec<UndescribedReport>,
     /// The last pieces of work and what became of them.
     ///
     /// In the report rather than only in a log, because a run that failed says
@@ -73,6 +73,14 @@ pub struct NamelessReport {
     /// answer to it. Shown only when it says something the title does not, so
     /// the list stays readable.
     pub file_name: Option<String>,
+}
+
+/// One file nothing has managed to describe, and what the analyser said.
+#[derive(Debug, Clone, Serialize)]
+pub struct UndescribedReport {
+    pub file_name: String,
+    /// Absent for a file nothing has tried yet, which is itself the answer.
+    pub reason: Option<String>,
 }
 
 /// One film the library holds more than one copy of.
@@ -324,7 +332,13 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             .collect(),
         undescribed: database
             .files_nothing_could_describe(UNDESCRIBED_SHOWN)
-            .await?,
+            .await?
+            .into_iter()
+            .map(|file| UndescribedReport {
+                file_name: file.file_name,
+                reason: file.reason,
+            })
+            .collect(),
         copies: database
             .works_held_in_several_copies()
             .await?
@@ -634,8 +648,15 @@ pub fn render_text(report: &Diagnostics) -> String {
 
     if !report.undescribed.is_empty() {
         line!("#", "Files nothing could describe");
-        for name in &report.undescribed {
-            line!("!", name.clone());
+        for file in &report.undescribed {
+            line!("!", file.file_name.clone());
+            line!(
+                " ",
+                match &file.reason {
+                    Some(reason) => format!("    {reason}"),
+                    None => "    nothing has tried to read it yet".to_string(),
+                },
+            );
         }
         line!(
             " ",
@@ -997,6 +1018,27 @@ mod tests {
             !text.contains("Anciens"),
             "the name of the file, and never the folders leading to it: {text}"
         );
+        assert!(
+            text.contains("nothing has tried to read it yet"),
+            "a file nothing has looked at yet is a different problem: {text}"
+        );
+
+        // And once something has looked and refused, why it refused is the
+        // whole point: the name alone says nothing anybody can act on.
+        let source = state
+            .database()
+            .sources_of_root(library.roots[0].id)
+            .await
+            .expect("read")[0]
+            .clone();
+        state
+            .database()
+            .record_analysis_failure(source.id, "Picture size 0x0 is invalid")
+            .await
+            .expect("the reason is written down");
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(text.contains("Picture size 0x0 is invalid"), "{text}");
     }
 
     #[tokio::test]
