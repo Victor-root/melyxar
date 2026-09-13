@@ -25,6 +25,17 @@ pub struct ProbeReport {
     pub chapters: Vec<ProbeChapter>,
 }
 
+impl ProbeReport {
+    /// Whether this report says anything about a film.
+    ///
+    /// Empty braces parse perfectly well and mean nothing at all, which is
+    /// what an analyser that fell over before reading anything leaves behind.
+    /// A report worth keeping names the container and at least one stream.
+    pub fn describes_something(&self) -> bool {
+        self.format.format_name.is_some() && !self.streams.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ProbeFormat {
     #[serde(default)]
@@ -184,19 +195,39 @@ pub async fn probe(analyser: &Path, media: &Path) -> Result<ProbeReport> {
         .output()
         .await?;
 
-    if !output.status.success() {
-        return Err(FfmpegError::Failed {
-            tool: "analyser",
-            status: output.status.to_string(),
-            output: String::from_utf8_lossy(&output.stderr)
-                .lines()
-                .take(5)
-                .collect::<Vec<_>>()
-                .join(" | "),
-        });
+    let complaint = || {
+        String::from_utf8_lossy(&output.stderr)
+            .lines()
+            .take(5)
+            .collect::<Vec<_>>()
+            .join(" | ")
+    };
+
+    if output.status.success() {
+        return parse_report(&String::from_utf8_lossy(&output.stdout));
     }
 
-    parse_report(&String::from_utf8_lossy(&output.stdout))
+    // An exit code is not the only thing the analyser says. It complains about
+    // one broken track of a film and gives up with a status, having already
+    // described every stream it read. Believing the status alone loses the
+    // whole film over a subtitle track nobody was going to watch, and loses it
+    // again at every scan.
+    match parse_report(&String::from_utf8_lossy(&output.stdout)) {
+        Ok(report) if report.describes_something() => {
+            tracing::warn!(
+                status = %output.status,
+                complaint = complaint(),
+                streams = report.streams.len(),
+                "the analyser complained but described the file all the same"
+            );
+            Ok(report)
+        }
+        _ => Err(FfmpegError::Failed {
+            tool: "analyser",
+            status: output.status.to_string(),
+            output: complaint(),
+        }),
+    }
 }
 
 /// Parses a report that was already captured, which is what tests use.
@@ -219,7 +250,78 @@ pub fn parse_rational(value: &str) -> Option<f64> {
 mod tests {
     use super::*;
     use crate::ToolPaths;
+    use std::path::PathBuf;
     use tokio::process::Command as TokioCommand;
+
+    /// A stand-in analyser that behaves the way the real one does on a film
+    /// with one broken track: it describes the file, complains, and gives up
+    /// with a status all the same.
+    ///
+    /// Written as a script rather than waited for on a real file, because the
+    /// films that provoke it are rare, large, and nobody's to put in a test.
+    fn analyser_that_complains(directory: &Path, prints: &str, status: i32) -> PathBuf {
+        let script = directory.join("analyser");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ncat <<'REPORT'\n{prints}\nREPORT\necho 'Picture size 0x0 is invalid' >&2\nexit {status}\n"),
+        )
+        .expect("the script is written");
+        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .expect("the script can be run");
+        script
+    }
+
+    const A_REAL_ENOUGH_REPORT: &str = r#"{
+        "streams": [
+            {"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080},
+            {"index": 1, "codec_type": "audio", "codec_name": "eac3", "channels": 6},
+            {"index": 2, "codec_type": "subtitle", "codec_name": "dvd_subtitle"}
+        ],
+        "format": {"format_name": "matroska,webm", "duration": "7200.000"}
+    }"#;
+
+    #[tokio::test]
+    async fn a_film_the_analyser_described_is_kept_even_when_it_gave_up_afterwards() {
+        // One broken subtitle track used to lose the whole film, and lose it
+        // again at every scan. The description is what matters; the status
+        // alone is not the whole of what the analyser said.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let analyser = analyser_that_complains(directory.path(), A_REAL_ENOUGH_REPORT, 1);
+
+        let report = probe(&analyser, Path::new("/films/Quiet.Harbour.2019.mkv"))
+            .await
+            .expect("the film is described");
+        assert_eq!(report.streams.len(), 3);
+        assert_eq!(report.format.format_name.as_deref(), Some("matroska,webm"));
+    }
+
+    #[tokio::test]
+    async fn an_analyser_that_gave_up_before_reading_anything_is_still_a_failure() {
+        // Empty braces parse perfectly well and mean nothing at all. Accepting
+        // them would record a film with no container and no track, which is
+        // worse than saying the file could not be read.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        for prints in ["{}", r#"{"streams":[],"format":{}}"#, "not json at all"] {
+            let analyser = analyser_that_complains(directory.path(), prints, 1);
+            assert!(
+                probe(&analyser, Path::new("/films/Quiet.Harbour.2019.mkv"))
+                    .await
+                    .is_err(),
+                "nothing usable came back: {prints}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_report_with_no_container_named_is_not_a_film() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let analyser = analyser_that_complains(
+            directory.path(),
+            r#"{"streams":[{"index":0,"codec_type":"video"}],"format":{}}"#,
+            1,
+        );
+        assert!(probe(&analyser, Path::new("/films/x.mkv")).await.is_err());
+    }
 
     #[test]
     fn a_rate_written_as_a_fraction_is_read_back() {

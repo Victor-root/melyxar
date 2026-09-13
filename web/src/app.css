@@ -767,6 +767,15 @@
   margin-bottom: var(--gap-tight);
 }
 
+/* What is running, shown on a page that is otherwise about something else.
+   Held to a readable width and laid out normally, because the block around it
+   on the empty home page is centred. */
+.jobs {
+  max-width: 560px;
+  margin: 0 auto;
+  text-align: left;
+}
+
 .job-kind {
   font-weight: 650;
   min-width: 120px;

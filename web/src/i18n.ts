@@ -27,6 +27,7 @@ const en: Dictionary = {
   "home.empty.body": "Point a library at a folder and run a scan to fill this page.",
   "home.awaiting": "{count} still waiting to be looked up",
   "home.scan": "Scan",
+  "home.scanning": "Looking through your folders. The films appear as they are found.",
   "home.identify": "Look up what is missing",
 
   "library.all": "All",
@@ -218,6 +219,7 @@ const fr: Dictionary = {
     "Indiquez un dossier à une bibliothèque et lancez un scan pour remplir cette page.",
   "home.awaiting": "{count} en attente d'identification",
   "home.scan": "Scanner",
+  "home.scanning": "Parcours de vos dossiers en cours. Les films apparaissent au fur et à mesure.",
   "home.identify": "Identifier ce qui manque",
 
   "library.all": "Tout",

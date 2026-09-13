@@ -105,11 +105,14 @@ async fn start_scan(
     Path(id): Path<String>,
 ) -> Result<Json<StartedView>> {
     let library = library_of(&state, &id).await?;
-    let job = melyxar_app::scan::start_scan(&state, library)
+    // A scan asked for from a screen looks up what it found, because a person
+    // pressing one button expects one thing to happen and that thing is a
+    // filled library, not a list of file names.
+    let job = melyxar_app::scan::start_scan_and_identification(&state, library)
         .await
         .map_err(already_running)?;
     Ok(Json(StartedView {
-        job_id: job.id().to_string(),
+        job_id: job.to_string(),
     }))
 }
 
