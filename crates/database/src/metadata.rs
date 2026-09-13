@@ -5,13 +5,27 @@
 //! edited by hand, and anything a person made themselves. A refresh that wipes
 //! what its owner arranged is a refresh nobody dares run twice.
 
-use melyxar_core::id::{CollectionId, CreditId, ExtraVideoId, NameId, PersonId, WorkId};
+use std::path::PathBuf;
+
+use melyxar_core::id::{
+    CollectionId, CreditId, ExtraVideoId, LibraryId, NameId, PersonId, WorkId,
+};
 use melyxar_core::time::{now, Millis};
 use melyxar_core::work::{IdentificationNote, IdentificationState};
 use sqlx::{Row, Sqlite, Transaction};
 
 use crate::convert::timestamp_to_text;
-use crate::{Database, Result};
+use crate::{Database, DatabaseError, Result};
+
+/// A work that still carries the name of the file it was found in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkNamedAfterItsFile {
+    pub id: WorkId,
+    pub title: String,
+    pub release_year: Option<i32>,
+    /// The file the title was read from, relative to its root.
+    pub relative_path: PathBuf,
+}
 
 /// One person's part in a work, as a provider described it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,6 +143,71 @@ impl Database {
             .bind(work_id.to_db_string())
             .execute(self.writer())
             .await?;
+        Ok(())
+    }
+
+    /// Works nobody has named yet, with the file they were named after.
+    ///
+    /// The file name is all such a work has ever been given, so when the rules
+    /// that read file names improve, this is the list that has to be read
+    /// again. A work someone chose by hand, or a provider named, is left out:
+    /// its title no longer comes from a file name.
+    pub async fn works_named_after_their_file(
+        &self,
+        library_id: LibraryId,
+    ) -> Result<Vec<WorkNamedAfterItsFile>> {
+        let rows = sqlx::query(
+            "SELECT w.id, w.title, w.release_year, min(s.relative_path) AS relative_path
+             FROM works w
+             JOIN media_sources s ON s.work_id = w.id
+             WHERE w.library_id = ? AND w.identification IN ('pending', 'unidentified')
+             GROUP BY w.id
+             ORDER BY w.added_at",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                Ok(WorkNamedAfterItsFile {
+                    id: row
+                        .try_get::<String, _>("id")?
+                        .parse()
+                        .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?,
+                    title: row.try_get("title")?,
+                    release_year: row.try_get("release_year")?,
+                    relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
+                })
+            })
+            .collect()
+    }
+
+    /// Gives a work the title its file name now reads as.
+    ///
+    /// Only ever called for a work still named after its file: a title a
+    /// provider gave, or a person chose, is never overwritten by a file name.
+    pub async fn rename_work(
+        &self,
+        work_id: WorkId,
+        title: &str,
+        sort_title: &str,
+        release_year: Option<i32>,
+    ) -> Result<()> {
+        sqlx::query(
+            "UPDATE works SET title = ?, sort_title = ?, release_year = ?,
+                -- The old reason spoke of the old title.
+                identification_note = NULL,
+                updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(title)
+        .bind(sort_title)
+        .bind(release_year)
+        .bind(timestamp_to_text(now()))
+        .bind(work_id.to_db_string())
+        .execute(self.writer())
+        .await?;
         Ok(())
     }
 
@@ -1121,6 +1200,113 @@ mod tests {
                 .identification_note,
             None,
             "a reason that outlives its cause is a lie on a screen"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_work_still_named_after_its_file_is_listed_with_that_file() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Films"))],
+            )
+            .await
+            .expect("library created");
+        let work = database
+            .create_work(
+                library.id,
+                WorkKind::Movie,
+                "Quiet Harbour 2160p",
+                "quiet harbour 2160p",
+                None,
+            )
+            .await
+            .expect("work created");
+        database
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Quiet Harbour 2160p.mkv"),
+                1_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+
+        let listed = database
+            .works_named_after_their_file(library.id)
+            .await
+            .expect("read");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, work.id);
+        assert_eq!(listed[0].title, "Quiet Harbour 2160p");
+        assert_eq!(
+            listed[0].relative_path,
+            PathBuf::from("Quiet Harbour 2160p.mkv")
+        );
+
+        database
+            .rename_work(work.id, "Quiet Harbour", "quiet harbour", Some(2019))
+            .await
+            .expect("renamed");
+        let stored = database
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.title, "Quiet Harbour");
+        assert_eq!(stored.sort_title, "quiet harbour");
+        assert_eq!(stored.release_year, Some(2019));
+
+        // A film a provider named is no longer described by its file name, so
+        // it must never be renamed from one again.
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+        assert!(database
+            .works_named_after_their_file(library.id)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_work_with_no_file_at_all_is_not_listed_as_named_after_one() {
+        let (database, work) = work_in_library().await;
+        assert!(
+            database
+                .works_named_after_their_file(work.library_id)
+                .await
+                .expect("read")
+                .is_empty(),
+            "there is no file name to read again"
+        );
+    }
+
+    #[tokio::test]
+    async fn renaming_a_work_drops_the_reason_that_spoke_of_its_old_name() {
+        let (database, work) = work_in_library().await;
+        database
+            .set_identification_note(work.id, IdentificationNote::NoMatch)
+            .await
+            .expect("note written");
+        database
+            .rename_work(work.id, "Quiet Harbour", "quiet harbour", Some(2019))
+            .await
+            .expect("renamed");
+
+        assert_eq!(
+            database
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification_note,
+            None
         );
     }
 

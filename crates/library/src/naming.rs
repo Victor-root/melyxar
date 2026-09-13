@@ -45,24 +45,39 @@ pub fn parse(file_name: &str, current_year: i32) -> ParsedName {
     let normalised = stem.replace(['.', '_'], " ");
     let words: Vec<&str> = normalised.split_whitespace().collect();
 
-    match find_year(&words, current_year) {
-        Some(position) => {
-            let title = join_title(&words[..position]);
-            let year = words[position].parse().ok();
-            let tags = words[position + 1..]
-                .iter()
-                .flat_map(|word| split_release_group(word))
-                .map(|word| word.to_lowercase())
-                .filter(|word| !word.is_empty())
-                .collect();
-            ParsedName { title, year, tags }
-        }
-        None => ParsedName {
-            title: join_title(&words),
-            year: None,
-            tags: BTreeSet::new(),
-        },
+    if let Some(position) = find_year(&words, current_year) {
+        return ParsedName {
+            title: join_title(&words[..position]),
+            year: bare(words[position]).parse().ok(),
+            tags: tags_from(&words[position + 1..]),
+        };
     }
+
+    // No year to cut at. The name still has to give up a title, and a name
+    // with nothing technical in it at all would have been found by now, so
+    // what is left is the two shapes a year would have handled.
+    let boundary = first_technical_tag(&words).unwrap_or(words.len());
+    let kept = trim_trailing_marker(&words[..boundary]);
+    ParsedName {
+        title: join_title(kept),
+        year: None,
+        tags: tags_from(&words[boundary..]),
+    }
+}
+
+/// Lowercased technical markers, with any release group split off.
+fn tags_from(words: &[&str]) -> BTreeSet<String> {
+    words
+        .iter()
+        .flat_map(|word| split_release_group(word))
+        .map(|word| bare(word).to_lowercase())
+        .filter(|word| !word.is_empty())
+        .collect()
+}
+
+/// A word without the brackets a release may have wrapped it in.
+fn bare(word: &str) -> &str {
+    word.trim_matches(|c| matches!(c, '(' | ')' | '[' | ']' | '{' | '}'))
 }
 
 /// Finds the word holding the release year.
@@ -71,26 +86,75 @@ pub fn parse(file_name: &str, current_year: i32) -> ParsedName {
 /// a year of its own: in such a name the release year comes after the title,
 /// so taking the last one keeps the title intact.
 ///
-/// A year is only accepted when something follows it, because a trailing
-/// number is far more likely to be part of the title than a release year.
+/// A bare year is only accepted when something follows it, because a trailing
+/// number is far more likely to be part of the title than a release year. A
+/// year somebody put in brackets carries no such doubt: no film is called
+/// `(2019)`, so it is a boundary wherever it sits.
 fn find_year(words: &[&str], current_year: i32) -> Option<usize> {
     let latest = current_year + YEARS_AHEAD;
     words
         .iter()
         .enumerate()
         .filter(|(index, word)| {
-            // Nothing after it means it is not a boundary.
-            *index + 1 < words.len()
+            let stripped = bare(word);
+            (*index + 1 < words.len() || stripped.len() != word.len())
                 // A title cannot be only a year.
                 && *index > 0
-                && word.len() == 4
-                && word.chars().all(|c| c.is_ascii_digit())
-                && word
+                && stripped.len() == 4
+                && stripped.chars().all(|c| c.is_ascii_digit())
+                && stripped
                     .parse::<i32>()
                     .is_ok_and(|year| (EARLIEST_YEAR..=latest).contains(&year))
         })
         .map(|(index, _)| index)
         .next_back()
+}
+
+/// Words that can only ever describe the file, never name a film.
+///
+/// Kept deliberately short. The list of technical markers is endless, and this
+/// one is not trying to be complete: it only has to hold the words that no
+/// title contains, so that a name carrying no year still has a boundary.
+const TECHNICAL_TAGS: &[&str] = &[
+    "2160p", "1440p", "1080p", "1080i", "720p", "576p", "480p", "4klight", "hdlight", "bluray",
+    "brrip", "bdrip", "webrip", "web-dl", "webdl", "hdtv", "dvdrip", "dvdscr", "remux", "x264",
+    "x265", "h264", "h265", "hevc", "xvid", "divx", "av1", "10bit", "8bit", "hdr", "hdr10",
+    "truehd", "atmos", "dts", "ac3", "eac3", "aac", "multi", "vostfr", "vff", "vfq", "vfi", "vf2",
+    "subfrench", "truefrench", "proper", "repack",
+];
+
+/// Where the description of the file starts, in a name that has no year.
+///
+/// The first word that can only be technical ends the title. Everything after
+/// it is description, whatever it happens to be, which is what makes this work
+/// on markers the list has never heard of.
+fn first_technical_tag(words: &[&str]) -> Option<usize> {
+    words.iter().enumerate().skip(1).find_map(|(index, word)| {
+        let lowered = bare(word).to_lowercase();
+        TECHNICAL_TAGS.contains(&lowered.as_str()).then_some(index)
+    })
+}
+
+/// Drops the marker a release or a person put at the end of a name.
+///
+/// Recognised by its shape rather than by a list, because the list would be
+/// one name long and would name its owner: a marker shouts in capitals at the
+/// end of a title that does not. A title written wholly in capitals keeps
+/// every word, since there is then nothing to tell apart.
+fn trim_trailing_marker<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
+    let shouting = |word: &str| {
+        let mut letters = word.chars().filter(|c| c.is_alphabetic());
+        word.chars().count() >= 2
+            && word.chars().filter(|c| c.is_alphabetic()).count() >= 2
+            && letters.all(|c| c.is_uppercase())
+            // A sequel number is written this way and belongs to the title.
+            && !word.chars().all(|c| "IVXLCDM".contains(c))
+    };
+
+    match words.split_last() {
+        Some((last, rest)) if shouting(last) && rest.iter().any(|word| !shouting(word)) => rest,
+        _ => words,
+    }
 }
 
 /// Turns the words before the year back into a readable title.
@@ -352,6 +416,62 @@ mod tests {
         let second = parsed("Quiet.Harbour.2016.MULTi.1080p.x264.mkv");
         assert_eq!(sort_title(&first.title), sort_title(&second.title));
         assert_eq!(first.year, second.year);
+    }
+
+    #[test]
+    fn a_year_somebody_put_in_brackets_is_still_the_boundary() {
+        let result = parsed("Quiet Royale (2006) MULTI 4KLight HDR 265 SOMEGROUP.mkv");
+        assert_eq!(
+            result.title, "Quiet Royale",
+            "brackets round the year are as common as none, and cost the whole title"
+        );
+        assert_eq!(result.year, Some(2006));
+        assert!(result.tags.contains("multi") && result.tags.contains("hdr"));
+    }
+
+    #[test]
+    fn a_bracketed_year_at_the_very_end_is_a_year_and_not_part_of_the_title() {
+        // Nothing follows it, which for a bare number would mean the title
+        // carries it. Nobody calls a film "(2019)", so the doubt does not
+        // apply once it is in brackets.
+        let result = parsed("Quiet Harbour (2019).mkv");
+        assert_eq!(result.title, "Quiet Harbour");
+        assert_eq!(result.year, Some(2019));
+    }
+
+    #[test]
+    fn a_name_with_no_year_is_cut_at_the_first_word_that_can_only_be_technical() {
+        let result = parsed("Quiet Harbour 2160p SOMEGROUP.mkv");
+        assert_eq!(
+            result.title, "Quiet Harbour",
+            "a definition is never part of a title, and asking a provider about one finds nothing"
+        );
+        assert_eq!(result.year, None);
+        assert!(result.tags.contains("2160p"));
+    }
+
+    #[test]
+    fn a_marker_shouting_at_the_end_of_a_title_is_not_part_of_it() {
+        let result = parsed("Quiet Harbour By The Sea SOMEGROUP.mkv");
+        assert_eq!(result.title, "Quiet Harbour By The Sea");
+        assert_eq!(result.year, None);
+    }
+
+    #[test]
+    fn a_title_written_wholly_in_capitals_keeps_every_word() {
+        // Nothing stands out, so nothing is dropped: guessing here would cost
+        // a word of the title itself.
+        let result = parsed("QUIET HARBOUR RISING.mkv");
+        assert_eq!(result.title, "QUIET HARBOUR RISING");
+    }
+
+    #[test]
+    fn a_sequel_number_at_the_end_belongs_to_the_title() {
+        let result = parsed("Quiet Harbour II.mkv");
+        assert_eq!(
+            result.title, "Quiet Harbour II",
+            "a roman numeral shouts like a marker and is the opposite of one"
+        );
     }
 
     #[test]
