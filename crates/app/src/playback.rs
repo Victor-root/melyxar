@@ -293,6 +293,31 @@ pub async fn open_session(state: &AppState, plan: &PlayPlan) -> Result<Arc<Sessi
     Ok(sessions.open(recipe, expensive).await?)
 }
 
+/// The subtitle to paint onto every frame, when there is one.
+///
+/// Only a subtitle made of pictures. The decision also asks for painting when
+/// a client says it draws no subtitle at all, and that case is not served here:
+/// the tool paints pictures onto pictures, so a subtitle of words would cost a
+/// full rebuild and put nothing on the screen. The words are sent alongside
+/// instead, which the one client there is draws anyway.
+fn subtitle_to_paint_on(plan: &PlayPlan) -> Option<i32> {
+    use melyxar_core::media::{SubtitleLayout, TrackKind};
+
+    if plan.decision.subtitles != SubtitleDelivery::BurnIn {
+        return None;
+    }
+    let index = plan.decision.subtitle_stream_index?;
+    plan.tracks
+        .iter()
+        .find(|track| match &track.kind {
+            TrackKind::Subtitle(details) => {
+                track.stream_index == index && details.layout == SubtitleLayout::Bitmap
+            }
+            _ => false,
+        })
+        .map(|track| track.stream_index)
+}
+
 /// Turns a decision into what the tool is asked to do.
 fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> Result<Recipe> {
     use melyxar_ffmpeg::command::{AudioOutput, StreamSelection, VideoOutput};
@@ -306,6 +331,8 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
         ))
     })?;
 
+    let painted_on = subtitle_to_paint_on(plan);
+
     let video = match plan.decision.video {
         StreamAction::Drop => VideoOutput::None,
         StreamAction::Copy => VideoOutput::Copy,
@@ -313,6 +340,7 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
             let mut encode = melyxar_ffmpeg::command::VideoEncode::software_h264();
             encode.scale_to_height = plan.decision.scale_to_height;
             encode.tone_map = plan.decision.tone_map;
+            encode.burn_in_subtitle = painted_on;
             // Key frames on the segment boundaries, which is what lets any
             // segment be produced on its own rather than only after the one
             // before it.
@@ -547,6 +575,19 @@ mod tests {
                 external_relative_path: None,
             }),
         }
+    }
+
+    /// A subtitle made of pictures, the kind a disc carries.
+    fn picture_subtitle(source_id: MediaSourceId) -> Track {
+        let mut track = subtitle(source_id);
+        track.kind = TrackKind::Subtitle(SubtitleDetails {
+            codec: "dvd_subtitle".into(),
+            layout: SubtitleLayout::Bitmap,
+            is_hearing_impaired: false,
+            is_external: false,
+            external_relative_path: None,
+        });
+        track
     }
 
     /// One film in one library, with the file named as the client will ask
@@ -1129,6 +1170,104 @@ mod tests {
             encode.limiter,
             "the compensation gain is followed by a limiter, or a loud passage clips"
         );
+    }
+
+    #[tokio::test]
+    async fn a_subtitle_made_of_pictures_is_painted_onto_every_frame() {
+        // There is no text in one to hand a browser, so painting it on is the
+        // only way to show it, and that is what makes it cost a full rebuild.
+        use melyxar_ffmpeg::command::VideoOutput;
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![
+                    video(id, "h264", 1080),
+                    audio(id, "aac", 2, true),
+                    picture_subtitle(id),
+                ]
+            })
+            .await;
+
+        let tracks = state
+            .database()
+            .tracks_of_source(source_id)
+            .await
+            .expect("read");
+        let words = tracks
+            .iter()
+            .find(|track| matches!(track.kind, TrackKind::Subtitle(_)))
+            .expect("the film carries one");
+
+        let plan = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: Some(words.id),
+            },
+        )
+        .await
+        .expect("a plan");
+        assert_eq!(plan.decision.subtitles, SubtitleDelivery::BurnIn);
+
+        let recipe = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
+        let VideoOutput::Encode(encode) = recipe.video else {
+            panic!("painting a subtitle on means rebuilding the picture");
+        };
+        assert_eq!(encode.burn_in_subtitle, Some(words.stream_index));
+    }
+
+    #[tokio::test]
+    async fn a_subtitle_made_of_words_is_never_painted_onto_the_picture() {
+        // The tool paints pictures onto pictures. Asking it to paint words on
+        // would cost a full rebuild and put nothing on the screen, which is
+        // the worst of both.
+        use melyxar_ffmpeg::command::VideoOutput;
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![
+                    video(id, "hevc", 2160),
+                    audio(id, "aac", 2, true),
+                    subtitle(id),
+                ]
+            })
+            .await;
+
+        let tracks = state
+            .database()
+            .tracks_of_source(source_id)
+            .await
+            .expect("read");
+        let words = tracks
+            .iter()
+            .find(|track| matches!(track.kind, TrackKind::Subtitle(_)))
+            .expect("the film carries one");
+
+        let mut plan = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: Some(words.id),
+            },
+        )
+        .await
+        .expect("a plan");
+        // Said outright rather than found: the one client there is draws these
+        // itself, so the decision never asks for this today.
+        plan.decision.subtitles = SubtitleDelivery::BurnIn;
+        plan.decision.subtitle_stream_index = Some(words.stream_index);
+
+        let recipe = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
+        let VideoOutput::Encode(encode) = recipe.video else {
+            panic!("this picture is rebuilt for its own reasons");
+        };
+        assert_eq!(encode.burn_in_subtitle, None);
     }
 
     #[tokio::test]
