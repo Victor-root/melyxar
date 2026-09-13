@@ -72,6 +72,15 @@ pub struct CreditedPerson {
     pub ordinal: i32,
 }
 
+/// A film that has a name and is still missing something a page shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncompleteWork {
+    pub title: String,
+    pub release_year: Option<i32>,
+    /// What a page would leave a hole for, named as the interface names it.
+    pub missing: Vec<&'static str>,
+}
+
 /// A trailer hosted elsewhere.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteTrailerRecord {
@@ -148,6 +157,61 @@ impl Database {
         .await?;
 
         rows.iter().map(crate::catalogue::work_from_row).collect()
+    }
+
+    /// Films that were named and are still missing something.
+    ///
+    /// A title nobody could find says so plainly; a film with no poster says
+    /// nothing at all, and the hole is only ever seen by whoever scrolls past
+    /// it. Counted here so the report can name them, which is the only way to
+    /// tell a film the provider has no picture of from one whose picture never
+    /// arrived.
+    pub async fn works_missing_something(&self, limit: i64) -> Result<Vec<IncompleteWork>> {
+        let rows = sqlx::query(
+            "SELECT w.title, w.release_year,
+                    (SELECT count(*) FROM images i
+                      WHERE i.owner_kind = 'work' AND i.owner_id = w.id
+                        AND i.image_kind = 'poster') AS posters,
+                    (SELECT count(*) FROM images i
+                      WHERE i.owner_kind = 'work' AND i.owner_id = w.id
+                        AND i.image_kind = 'backdrop') AS backdrops,
+                    (SELECT count(*) FROM work_translations t
+                      WHERE t.work_id = w.id AND t.overview IS NOT NULL
+                        AND t.overview <> '') AS overviews,
+                    (SELECT count(*) FROM credits c WHERE c.work_id = w.id) AS credits
+             FROM works w
+             WHERE w.identification IN ('identified', 'manual')
+             ORDER BY w.sort_title",
+        )
+        .fetch_all(self.reader())
+        .await?;
+
+        let mut incomplete = Vec::new();
+        for row in &rows {
+            let mut missing = Vec::new();
+            for (count, what) in [
+                (row.try_get::<i64, _>("posters")?, "poster"),
+                (row.try_get::<i64, _>("backdrops")?, "backdrop"),
+                (row.try_get::<i64, _>("overviews")?, "overview"),
+                (row.try_get::<i64, _>("credits")?, "cast"),
+            ] {
+                if count == 0 {
+                    missing.push(what);
+                }
+            }
+            if missing.is_empty() {
+                continue;
+            }
+            incomplete.push(IncompleteWork {
+                title: row.try_get("title")?,
+                release_year: row.try_get("release_year")?,
+                missing,
+            });
+            if incomplete.len() as i64 >= limit {
+                break;
+            }
+        }
+        Ok(incomplete)
     }
 
     /// Records why the last look up did not name a work.
@@ -1223,6 +1287,75 @@ mod tests {
             None,
             "a reason that outlives its cause is a lie on a screen"
         );
+    }
+
+    #[tokio::test]
+    async fn a_film_with_a_name_and_no_poster_is_counted_as_missing_one() {
+        let (database, work) = work_in_library().await;
+        // Everything a provider gave, and no picture: a picture is not stored
+        // by an identification, it arrives afterwards.
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+
+        let incomplete = database
+            .works_missing_something(10)
+            .await
+            .expect("read");
+        assert_eq!(incomplete.len(), 1);
+        assert_eq!(incomplete[0].title, "Quiet Harbour");
+        assert_eq!(incomplete[0].release_year, Some(2019));
+        assert!(incomplete[0].missing.contains(&"poster"), "{incomplete:?}");
+        assert!(incomplete[0].missing.contains(&"backdrop"), "{incomplete:?}");
+        assert!(
+            !incomplete[0].missing.contains(&"overview"),
+            "the provider gave one: {incomplete:?}"
+        );
+        assert!(
+            !incomplete[0].missing.contains(&"cast"),
+            "the provider gave one: {incomplete:?}"
+        );
+
+        database
+            .replace_images(
+                "work",
+                &work.id.to_db_string(),
+                "poster",
+                &[crate::images::StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: work.id.to_db_string(),
+                    image_kind: "poster".to_string(),
+                    relative_path: "works/x/poster-200.webp".to_string(),
+                    width: Some(200),
+                    height: Some(300),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("picture stored");
+
+        let after = database
+            .works_missing_something(10)
+            .await
+            .expect("read");
+        assert!(
+            !after[0].missing.contains(&"poster"),
+            "a film that got its picture stops being counted for it: {after:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_nobody_could_name_is_left_out_of_what_is_missing() {
+        // It is already named in the section above, with the reason it has no
+        // title at all. Counting its holes a second time says nothing new.
+        let (database, _) = work_in_library().await;
+        assert!(database
+            .works_missing_something(10)
+            .await
+            .expect("read")
+            .is_empty());
     }
 
     #[tokio::test]

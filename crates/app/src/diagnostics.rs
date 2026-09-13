@@ -33,6 +33,11 @@ pub struct Diagnostics {
     /// Titles, never paths: what is guarded elsewhere is where somebody's
     /// files live, and the name of a film is not that.
     pub nameless: Vec<NamelessReport>,
+    /// Films that were named and are still missing something a page shows.
+    ///
+    /// A film nobody could name says so; a film with no poster says nothing,
+    /// and the hole is only ever seen by whoever scrolls past it.
+    pub incomplete: Vec<IncompleteReport>,
     /// The last pieces of work and what became of them.
     ///
     /// In the report rather than only in a log, because a run that failed says
@@ -49,6 +54,15 @@ pub struct NamelessReport {
     pub year: Option<i32>,
     /// Why the last look up failed, when one has run.
     pub reason: Option<&'static str>,
+}
+
+/// One named film and the holes left in it.
+#[derive(Debug, Clone, Serialize)]
+pub struct IncompleteReport {
+    pub title: String,
+    pub year: Option<i32>,
+    /// poster, backdrop, overview, cast.
+    pub missing: Vec<&'static str>,
 }
 
 /// One piece of background work, as the diagnostic shows it.
@@ -228,6 +242,16 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                     .map(melyxar_core::work::IdentificationNote::as_str),
             })
             .collect(),
+        incomplete: database
+            .works_missing_something(INCOMPLETE_SHOWN)
+            .await?
+            .into_iter()
+            .map(|work| IncompleteReport {
+                title: work.title,
+                year: work.release_year,
+                missing: work.missing,
+            })
+            .collect(),
         recent_work: database
             .recent_jobs(WORK_SHOWN)
             .await?
@@ -242,6 +266,9 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
 /// Enough to see a pattern in them, few enough that the report stays one
 /// block somebody reads.
 const NAMELESS_SHOWN: i64 = 25;
+
+/// How many incomplete films the report names.
+const INCOMPLETE_SHOWN: i64 = 25;
 
 /// How many finished pieces of work the report carries.
 ///
@@ -440,6 +467,21 @@ pub fn render_text(report: &Diagnostics) -> String {
                     "  and {} more",
                     report.catalogue.awaiting_identification - report.nameless.len() as i64
                 ),
+            );
+        }
+        out.push('\n');
+    }
+
+    if !report.incomplete.is_empty() {
+        line!("#", "Films missing something");
+        for film in &report.incomplete {
+            let year = match film.year {
+                Some(year) => format!(" ({year})"),
+                None => String::new(),
+            };
+            line!(
+                "!",
+                format!("{}{year}  no {}", film.title, film.missing.join(", no ")),
             );
         }
         out.push('\n');
@@ -679,6 +721,75 @@ mod tests {
         let text = render_text(&report);
         assert!(text.contains("Quiet Harbour Extended (2019)"), "{text}");
         assert!(text.contains("no_match"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn a_film_that_was_named_and_still_has_holes_in_it_is_named_too() {
+        // Nothing anywhere says this out loud: the film has its title, the run
+        // succeeded, and the only sign is a grey rectangle somebody scrolls
+        // past. Without naming them there is no way to tell a film the
+        // provider has no picture of from one whose picture never arrived.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .pop()
+            .expect("one library");
+        let work = state
+            .database()
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        state
+            .database()
+            .apply_identification(work.id, &named("Quiet Harbour"), false)
+            .await
+            .expect("identification applied");
+
+        let report = collect(&state).await.expect("report collected");
+        assert_eq!(report.incomplete.len(), 1);
+        assert_eq!(report.incomplete[0].title, "Quiet Harbour");
+        assert!(report.incomplete[0].missing.contains(&"poster"), "{:?}", report.incomplete[0]);
+
+        let text = render_text(&report);
+        assert!(text.contains("Films missing something"), "{text}");
+        assert!(text.contains("Quiet Harbour (2019)"), "{text}");
+        assert!(text.contains("no poster"), "{text}");
+    }
+
+    /// The little a provider has to say for a film to count as named.
+    fn named(title: &str) -> melyxar_database::metadata::IdentifiedWork {
+        melyxar_database::metadata::IdentifiedWork {
+            provider: "tmdb".to_string(),
+            external_id: "111".to_string(),
+            imdb_id: None,
+            language: "fr".to_string(),
+            sort_title: title.to_lowercase(),
+            title: title.to_string(),
+            tagline: None,
+            overview: None,
+            release_year: Some(2019),
+            runtime: None,
+            community_rating: None,
+            age_rating_label: None,
+            genres: Vec::new(),
+            studios: Vec::new(),
+            credits: Vec::new(),
+            collection: None,
+            trailers: Vec::new(),
+        }
     }
 
     #[tokio::test]
