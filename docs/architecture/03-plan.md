@@ -169,12 +169,23 @@ Vérifié sur le serveur en vrai : un film HEVC que le navigateur ne sait pas d�
 
 ## Jalon 6 : accélération matérielle
 
-État : à faire.
+État : en cours.
 
-- Backend QSV / VAAPI pour l'Intel Arc A380 : détection, test réel, repli logiciel.
-- Tonemapping HDR sur la carte.
+Fait :
+
+- VAAPI pour l'Intel Arc A380 : détection par **essai réel** au démarrage, un essai par codec, chaque refus conservé mot pour mot dans le journal et dans le rapport.
+- Encodage H.264, HEVC et AV1 sur la carte, le meilleur codec que le client et la carte portent tous les deux.
+- Conversion HDR vers SDR sur la carte (`tonemap_vaapi`), avec repli complet sur le logiciel si la carte ne sait pas la faire : une carte qui ne convertit pas rendrait un film gris, ce qui est pire qu'un film plus petit.
+- Repli automatique sur le processeur quand la carte refuse un film en cours de session, une seule fois, avec la phrase de l'outil au journal.
+- Choix de qualité par le spectateur (taille et débit), qui devient un plafond dans le profil client.
+
+Reste à faire :
+
+- **Décodage sur la carte.** Aujourd'hui l'image est décodée par le processeur puis remontée sur la carte, qui filtre et encode. C'est le choix sûr : il marche quel que soit le codec du fichier, et il déplace la moitié chère du travail. Décoder aussi sur la carte dépend du codec de chaque film et demande un essai par codec de décodage.
+- **NVENC pour Nvidia et VAAPI vérifié pour AMD.** Le mainteneur possède les deux. VAAPI couvre déjà AMD sur le papier, et rien ne l'a prouvé sur une vraie carte AMD ; Nvidia demande un chemin distinct. Les deux se branchent au même endroit : `HardwareAcceleration`, le nom de l'encodeur, et les filtres correspondants.
+- **QSV pour Intel.** VAAPI marche sur l'Arc ; QSV est parfois plus rapide sur les cartes Intel récentes. À mesurer avant de l'ajouter, pas à supposer.
 - Vignettes de chapitres et aperçu de la barre de lecture en planches, **toujours converties en SDR quand la source est HDR** pour éviter des images délavées. Intervalle et résolution configurables, génération activable par bibliothèque.
-- Résultat visible : un film 4K HDR se lit en SDR avec moins d'un cœur de processeur utilisé, et ses vignettes sont en couleurs correctes.
+- Résultat visible attendu : un film 4K HDR se lit en SDR avec moins d'un cœur de processeur utilisé, et ses vignettes sont en couleurs correctes.
 
 ## Jalon 7 : réactivité mesurée et tableau de bord
 
