@@ -187,6 +187,7 @@ impl Card {
         tone_map: bool,
         reads_the_film: bool,
     ) -> Vec<String> {
+        let way = self.way.as_str();
         let mut filters = Vec::new();
 
         if !reads_the_film {
@@ -206,11 +207,24 @@ impl Card {
         // Made smaller first for the same reason as in software: converting
         // colours is the most expensive thing done to a picture, so doing it
         // on fewer pixels costs less.
-        if let Some(height) = scale_to_height.filter(|_| self.can_scale) {
-            filters.push(format!("scale_{}=w=-2:h={height}", self.way.as_str()));
+        match (scale_to_height.filter(|_| self.can_scale), tone_map) {
+            // Converting the colours is what leaves the picture in the layout
+            // the encoder takes, so the resize before it must not throw away
+            // the bits that conversion works from.
+            (Some(height), true) => filters.push(format!("scale_{way}=w=-2:h={height}")),
+            (Some(height), false) => {
+                filters.push(format!("scale_{way}=w=-2:h={height}:format=nv12"))
+            }
+            // A film the card read itself is handed over in the layout it was
+            // written in, and anything worth a card is written with ten bits
+            // to a channel where the encoder takes eight. One more pass on the
+            // card costs nothing measurable; leaving it out is a refusal in
+            // the middle of somebody's film.
+            (None, false) if reads_the_film => filters.push(format!("scale_{way}=format=nv12")),
+            (None, _) => {}
         }
         if tone_map {
-            filters.push(format!("tonemap_{}=format=nv12", self.way.as_str()));
+            filters.push(format!("tonemap_{way}=format=nv12"));
         }
 
         filters
@@ -481,7 +495,16 @@ impl CardSearch {
             };
             let Some(sample) = sample else { continue };
 
-            let (worked, said) = try_reading(ffmpeg, card, floor, sample.path()).await;
+            // Run through the chain a real film in that codec runs: the wide
+            // gamut one is a wide gamut film and goes through the conversion,
+            // the others through what an ordinary film goes through. A card
+            // that reads a film and then offers the frames in a layout the
+            // encoder refuses has not read it, as far as a viewer is
+            // concerned, and that refusal comes at the end of the chain.
+            let chain = card
+                .filters_for(None, *codec == WIDE_GAMUT_CODEC && card.can_tone_map, true)
+                .join(",");
+            let (worked, said) = try_reading(ffmpeg, card, floor, sample.path(), &chain).await;
             self.trials.push(Trial {
                 what: format!("read_{codec}"),
                 device: named.to_string(),
@@ -685,10 +708,18 @@ async fn sample_in(
 
 /// Hands the card a film and asks it to read it for itself.
 ///
-/// Nothing is filtered: what is being established is whether the card takes
-/// the film in, and the frames come out of it already up there, so the encoder
-/// takes them as they are.
-async fn try_reading(ffmpeg: &Path, card: &Card, encoder: &str, sample: &Path) -> (bool, String) {
+/// Filtered the way a real film of that codec would be, because reading is
+/// only half of it: a card that reads a film and then offers the frames in a
+/// layout the encoder refuses has not read it, as far as a viewer is
+/// concerned, and that refusal comes at the end of the chain rather than at
+/// the reading.
+async fn try_reading(
+    ffmpeg: &Path,
+    card: &Card,
+    encoder: &str,
+    sample: &Path,
+    filters: &str,
+) -> (bool, String) {
     let arguments = ["-hide_banner", "-nostdin", "-loglevel", "error"]
         .map(str::to_string)
         .into_iter()
@@ -697,6 +728,8 @@ async fn try_reading(ffmpeg: &Path, card: &Card, encoder: &str, sample: &Path) -
             [
                 "-i",
                 &sample.display().to_string(),
+                "-vf",
+                filters,
                 "-c:v",
                 encoder,
                 "-f",
@@ -844,6 +877,47 @@ mod tests {
             .position(|value| value.starts_with("tonemap_vaapi"))
             .expect("the colours are converted");
         assert!(scale < tone_map, "{filters:?}");
+    }
+
+    #[test]
+    fn a_film_the_card_read_itself_is_put_in_a_layout_the_encoder_takes() {
+        // A card hands a film over in the layout it was written in, and
+        // anything worth a card is written with ten bits to a channel where
+        // the encoder takes eight. Leaving that out is a refusal in the middle
+        // of somebody's film, and the trial never saw it because the trial was
+        // not running the chain a real film runs.
+        assert_eq!(
+            card(true, true).filters_for(None, false, true),
+            vec!["scale_vaapi=format=nv12".to_string()]
+        );
+
+        // Converting the colours already ends in that layout, so nothing is
+        // added in front of it.
+        assert_eq!(
+            card(true, true).filters_for(None, true, true),
+            vec!["tonemap_vaapi=format=nv12".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_resize_before_a_conversion_keeps_the_bits_the_conversion_works_from() {
+        // Made smaller first, which is the whole point, but not made smaller
+        // and flattened first: the conversion starts from those bits.
+        let converting = card(true, true).filters_for(Some(1080), true, true);
+        assert_eq!(
+            converting,
+            vec![
+                "scale_vaapi=w=-2:h=1080".to_string(),
+                "tonemap_vaapi=format=nv12".to_string(),
+            ]
+        );
+
+        // Nothing converts the colours here, so the resize is what has to
+        // leave the picture in the layout the encoder takes.
+        assert_eq!(
+            card(true, true).filters_for(Some(1080), false, true),
+            vec!["scale_vaapi=w=-2:h=1080:format=nv12".to_string()]
+        );
     }
 
     #[test]
