@@ -84,6 +84,18 @@ pub struct VideoEncode {
     /// what lets the server own the playlist and hand out any segment on
     /// demand instead of waiting for the encoder to reach it.
     pub keyframe_interval: Option<Millis>,
+    /// Paint this subtitle onto every frame, by its place in the file.
+    ///
+    /// Only ever a subtitle made of pictures. There is no text in one to hand
+    /// a browser, so painting it on is the only way to show it, and that is
+    /// what makes such a subtitle cost a full rebuild.
+    ///
+    /// A subtitle made of words is never painted on here. The tool paints
+    /// pictures onto pictures, and drawing words would mean naming the film
+    /// inside a filter expression, where a colon or an apostrophe in a title
+    /// changes what the expression means. It stays alongside the picture,
+    /// which is also the only form a viewer can switch off.
+    pub burn_in_subtitle: Option<i32>,
 }
 
 impl VideoEncode {
@@ -97,6 +109,7 @@ impl VideoEncode {
             scale_to_height: None,
             tone_map: false,
             keyframe_interval: None,
+            burn_in_subtitle: None,
         }
     }
 }
@@ -239,6 +252,31 @@ impl Command {
         matches!(self.video, VideoOutput::Encode(_)) || matches!(self.audio, AudioOutput::Encode(_))
     }
 
+    /// The filter graph that paints a subtitle onto every frame, when one is
+    /// being drawn in.
+    ///
+    /// Everything else the picture goes through happens first, on the picture
+    /// alone: painting the words on and then shrinking would shrink the words
+    /// with it, which is how subtitles end up unreadable on a small screen.
+    fn picture_painted_with_subtitles(&self) -> Option<String> {
+        let VideoOutput::Encode(encode) = &self.video else {
+            return None;
+        };
+        let subtitle = encode.burn_in_subtitle?;
+
+        let picture = match self.streams.video_index {
+            Some(index) => format!("[0:{index}]"),
+            None => "[0:v:0]".to_string(),
+        };
+        let before = match picture_filter_chain(encode) {
+            Some(filters) => format!("{picture}{filters}[picture];[picture]"),
+            None => picture,
+        };
+        Some(format!(
+            "{before}[0:{subtitle}]overlay=shortest=0{PAINTED_PICTURE}"
+        ))
+    }
+
     /// Turns the command into the argument list to hand to the tool.
     pub fn to_arguments(&self) -> Vec<OsString> {
         let mut args: Vec<OsString> = Vec::new();
@@ -292,7 +330,20 @@ impl Command {
         // to choose on its own.
         let needs_explicit_mapping = matches!(self.output, Output::Segments { .. });
 
+        // Drawing a subtitle into the picture is a filter with two inputs, and
+        // a filter with two inputs cannot be written as a plain video filter.
+        // The whole chain moves to a named graph, and the picture is then
+        // mapped by the name that graph gives it rather than by its number.
+        let painted = self.picture_painted_with_subtitles();
+        if let Some(graph) = &painted {
+            push!("-filter_complex");
+            push!(graph);
+            push!("-map");
+            push!(PAINTED_PICTURE);
+        }
+
         match (self.streams.video_index, &self.video) {
+            _ if painted.is_some() => {}
             (Some(index), _) => {
                 push!("-map");
                 push!(&format!("0:{index}"));
@@ -320,7 +371,9 @@ impl Command {
             (None, _) => {}
         }
 
-        if let Some(index) = self.streams.subtitle_index {
+        // A subtitle being drawn into the picture is consumed by the graph:
+        // carrying it out as a track of its own as well would show it twice.
+        if let (Some(index), None) = (self.streams.subtitle_index, &painted) {
             push!("-map");
             push!(&format!("0:{index}"));
         }
@@ -332,19 +385,14 @@ impl Command {
                 push!("copy");
             }
             VideoOutput::Encode(encode) => {
-                let mut filters: Vec<String> = Vec::new();
-                // Conversion comes before scaling: mapping colours on the
-                // full size picture then shrinking gives a cleaner result
-                // than the other way round.
-                if encode.tone_map {
-                    filters.push(TONE_MAP_FILTER.to_string());
-                }
-                if let Some(height) = encode.scale_to_height {
-                    filters.push(format!("scale=-2:{height}"));
-                }
-                if !filters.is_empty() {
-                    push!("-vf");
-                    push!(&filters.join(","));
+                // Already written into the named graph when the picture is
+                // being painted with subtitles: saying it twice would apply
+                // it twice.
+                if painted.is_none() {
+                    if let Some(filters) = picture_filter_chain(encode) {
+                        push!("-vf");
+                        push!(&filters);
+                    }
                 }
 
                 push!("-c:v");
@@ -475,6 +523,24 @@ const TONE_MAP_FILTER: &str = concat!(
     "zscale=transfer=bt709:matrix=bt709:range=limited,",
     "format=yuv420p"
 );
+
+/// What the painted picture is called inside the filter graph.
+const PAINTED_PICTURE: &str = "[painted]";
+
+/// Builds what happens to the picture before it is encoded.
+///
+/// Conversion comes before scaling: mapping colours on the full size picture
+/// and then shrinking gives a cleaner result than the other way round.
+fn picture_filter_chain(encode: &VideoEncode) -> Option<String> {
+    let mut filters: Vec<String> = Vec::new();
+    if encode.tone_map {
+        filters.push(TONE_MAP_FILTER.to_string());
+    }
+    if let Some(height) = encode.scale_to_height {
+        filters.push(format!("scale=-2:{height}"));
+    }
+    (!filters.is_empty()).then(|| filters.join(","))
+}
 
 /// Builds the audio filter chain: loudness levelling, fold to stereo, gain,
 /// then the safety limiter, in that order.
@@ -628,6 +694,92 @@ mod tests {
             .position(|value| value == "-i")
             .expect("an input is present");
         assert_eq!(args[input + 1], OsString::from("/media/-strange-name.mkv"));
+    }
+
+    /// A command that draws the subtitle at `subtitle` into the picture.
+    fn painting(subtitle: i32) -> Command {
+        let mut encode = VideoEncode::software_h264();
+        encode.burn_in_subtitle = Some(subtitle);
+        Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode))
+    }
+
+    #[test]
+    fn a_subtitle_drawn_into_the_picture_is_a_graph_and_not_a_plain_filter() {
+        // A filter with two inputs cannot be written as a plain video filter,
+        // and a picture coming out of a named graph is mapped by that name.
+        let args = arguments(&painting(3));
+        let graph = position(&args, "-filter_complex").expect("a graph is built");
+        assert_eq!(args[graph + 1], "[0:v:0][0:3]overlay=shortest=0[painted]");
+
+        let mapped = position(&args, "-map").expect("the picture is mapped");
+        assert_eq!(args[mapped + 1], "[painted]");
+        assert!(
+            !args.iter().any(|value| value == "-vf"),
+            "saying it twice would apply it twice: {args:?}"
+        );
+    }
+
+    #[test]
+    fn what_the_picture_goes_through_happens_before_the_words_are_painted_on() {
+        // Painting the words on and then shrinking would shrink the words with
+        // it, which is how subtitles end up unreadable on a small screen.
+        let mut encode = VideoEncode::software_h264();
+        encode.burn_in_subtitle = Some(3);
+        encode.scale_to_height = Some(720);
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode));
+
+        let args = arguments(&command);
+        let graph = position(&args, "-filter_complex").expect("a graph is built");
+        assert_eq!(
+            args[graph + 1],
+            "[0:v:0]scale=-2:720[picture];[picture][0:3]overlay=shortest=0[painted]"
+        );
+        assert!(
+            !args.iter().any(|value| value == "-vf"),
+            "the scaling is already in the graph: saying it again would shrink \
+             the picture twice: {args:?}"
+        );
+    }
+
+    #[test]
+    fn a_subtitle_being_painted_on_is_not_also_carried_out_as_a_track() {
+        // It is consumed by the graph; carrying it as well would show it twice.
+        let command = painting(3).with_streams(StreamSelection {
+            video_index: Some(0),
+            audio_index: Some(1),
+            subtitle_index: Some(3),
+        });
+        let args = arguments(&command);
+        assert!(
+            !args.iter().any(|value| value == "0:3"),
+            "the subtitle is in the picture, not beside it: {args:?}"
+        );
+        let graph = position(&args, "-filter_complex").expect("a graph is built");
+        assert_eq!(args[graph + 1], "[0:0][0:3]overlay=shortest=0[painted]");
+    }
+
+    #[test]
+    fn nothing_changes_for_a_film_with_no_subtitle_to_paint_on() {
+        let mut encode = VideoEncode::software_h264();
+        encode.scale_to_height = Some(720);
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode));
+
+        let args = arguments(&command);
+        assert!(!args.iter().any(|value| value == "-filter_complex"));
+        let filters = position(&args, "-vf").expect("the picture is still scaled");
+        assert_eq!(args[filters + 1], "scale=-2:720");
     }
 
     #[test]
