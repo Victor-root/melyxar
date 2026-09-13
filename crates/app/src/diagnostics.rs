@@ -39,6 +39,12 @@ pub struct Diagnostics {
     /// A film nobody could name says so; a film with no poster says nothing,
     /// and the hole is only ever seen by whoever scrolls past it.
     pub incomplete: Vec<IncompleteReport>,
+    /// Films held in more than one copy, with the name of each copy.
+    ///
+    /// Several copies of one film are wanted, and are also what a wrong
+    /// grouping leaves behind. Reading the names side by side is what settles
+    /// which of the two it is.
+    pub copies: Vec<CopiesReport>,
     /// The last pieces of work and what became of them.
     ///
     /// In the report rather than only in a log, because a run that failed says
@@ -61,6 +67,14 @@ pub struct NamelessReport {
     /// answer to it. Shown only when it says something the title does not, so
     /// the list stays readable.
     pub file_name: Option<String>,
+}
+
+/// One film the library holds more than one copy of.
+#[derive(Debug, Clone, Serialize)]
+pub struct CopiesReport {
+    pub title: String,
+    pub year: Option<i32>,
+    pub file_names: Vec<String>,
 }
 
 /// One named film and the holes left in it.
@@ -254,6 +268,16 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                     .filter(|name| name_says_more_than(name, &nameless.work.title)),
             })
             .collect(),
+        copies: database
+            .works_held_in_several_copies()
+            .await?
+            .into_iter()
+            .map(|film| CopiesReport {
+                title: film.title,
+                year: film.release_year,
+                file_names: film.file_names,
+            })
+            .collect(),
         incomplete: database
             .works_missing_something()
             .await?
@@ -289,6 +313,10 @@ fn name_says_more_than(file_name: &str, title: &str) -> bool {
 /// Enough to see a pattern in them, few enough that the report stays one
 /// block somebody reads.
 const NAMELESS_SHOWN: i64 = 25;
+
+/// How many films held in several copies the report names before saying how
+/// many more. The list behind it is not cut.
+const COPIES_SHOWN: usize = 15;
 
 /// How many incomplete films the report names before saying how many more.
 ///
@@ -517,6 +545,27 @@ pub fn render_text(report: &Diagnostics) -> String {
             line!(
                 " ",
                 format!("  and {} more", report.incomplete.len() - INCOMPLETE_SHOWN),
+            );
+        }
+        out.push('\n');
+    }
+
+    if !report.copies.is_empty() {
+        line!("#", "Films held in more than one copy");
+        for film in report.copies.iter().take(COPIES_SHOWN) {
+            let year = match film.year {
+                Some(year) => format!(" ({year})"),
+                None => String::new(),
+            };
+            line!("+", format!("{}{year}", film.title));
+            for name in &film.file_names {
+                line!(" ", format!("    {name}"));
+            }
+        }
+        if report.copies.len() > COPIES_SHOWN {
+            line!(
+                " ",
+                format!("  and {} more", report.copies.len() - COPIES_SHOWN),
             );
         }
         out.push('\n');
@@ -812,6 +861,52 @@ mod tests {
             !text.contains("Anciens"),
             "the name of the file, and never the folders leading to it: {text}"
         );
+    }
+
+    #[tokio::test]
+    async fn a_film_held_in_several_copies_is_shown_with_each_of_their_names() {
+        // A grouping nobody can check is a grouping nobody should trust. The
+        // names side by side are the check.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .pop()
+            .expect("one library");
+        let work = state
+            .database()
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        for name in ["Quiet Harbour 1080p.mkv", "zz12Quiet Harbour 1080p.mkv"] {
+            state
+                .database()
+                .insert_source(
+                    work.id,
+                    library.roots[0].id,
+                    std::path::Path::new(name),
+                    1_000,
+                    melyxar_core::time::now(),
+                )
+                .await
+                .expect("source recorded");
+        }
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(text.contains("Films held in more than one copy"), "{text}");
+        assert!(text.contains("zz12Quiet Harbour 1080p.mkv"), "{text}");
     }
 
     #[tokio::test]

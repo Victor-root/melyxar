@@ -36,6 +36,15 @@ pub struct NamelessWork {
     pub file_name: Option<String>,
 }
 
+/// A film the library holds more than one copy of.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkWithCopies {
+    pub title: String,
+    pub release_year: Option<i32>,
+    /// The name of each copy, without the folders leading to it.
+    pub file_names: Vec<String>,
+}
+
 /// One person's part in a work, as a provider described it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreditRecord {
@@ -203,6 +212,55 @@ impl Database {
                 })
             })
             .collect()
+    }
+
+    /// Films held in more than one copy, with the name of each copy.
+    ///
+    /// Several copies of one film are ordinary and wanted: that is what puts a
+    /// version chooser on a page rather than the same title twice in a grid.
+    /// But copies are also what a wrong grouping leaves behind, and a grouping
+    /// nobody can check is a grouping nobody should trust. Named here so that
+    /// reading the names side by side settles it.
+    pub async fn works_held_in_several_copies(&self) -> Result<Vec<WorkWithCopies>> {
+        let rows = sqlx::query(
+            "SELECT w.id, w.title, w.release_year, w.sort_title, s.relative_path
+             FROM works w
+             JOIN media_sources s ON s.work_id = w.id
+             WHERE w.id IN (SELECT work_id FROM media_sources
+                            GROUP BY work_id HAVING count(*) > 1)
+             ORDER BY w.sort_title, w.id, s.relative_path",
+        )
+        .fetch_all(self.reader())
+        .await?;
+
+        let mut films: Vec<WorkWithCopies> = Vec::new();
+        let mut current: Option<String> = None;
+        for row in &rows {
+            let id: String = row.try_get("id")?;
+            let path: String = row.try_get("relative_path")?;
+            let file_name = Path::new(&path)
+                .file_name()
+                .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+
+            match (&current, films.last_mut()) {
+                (Some(seen), Some(film)) if *seen == id => film.file_names.push(file_name),
+                _ => {
+                    current = Some(id);
+                    films.push(WorkWithCopies {
+                        title: row.try_get("title")?,
+                        release_year: row.try_get("release_year")?,
+                        file_names: vec![file_name],
+                    });
+                }
+            }
+        }
+        // In the order they are shown in, which is by name: the rows come back
+        // ordered by the whole path, and a folder would shuffle the list a
+        // reader is comparing names down.
+        for film in &mut films {
+            film.file_names.sort();
+        }
+        Ok(films)
     }
 
     /// Films that were named and are still missing something.
@@ -1780,6 +1838,73 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_film_held_in_several_copies_is_named_with_each_of_them() {
+        // What a grouping leaves behind, and what makes it checkable: the
+        // names side by side say at a glance whether the two really are one
+        // film.
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Films"))],
+            )
+            .await
+            .expect("library created");
+        let held_twice = database
+            .create_work(
+                library.id,
+                WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        let held_once = database
+            .create_work(
+                library.id,
+                WorkKind::Movie,
+                "Amber Field",
+                "amber field",
+                Some(2020),
+            )
+            .await
+            .expect("work created");
+
+        for (work_id, path) in [
+            (held_twice.id, "Quiet Harbour 1080p.mkv"),
+            (held_twice.id, "Anciens/zz12Quiet Harbour 1080p.mkv"),
+            (held_once.id, "Amber Field 1080p.mkv"),
+        ] {
+            database
+                .insert_source(
+                    work_id,
+                    library.roots[0].id,
+                    std::path::Path::new(path),
+                    1_000,
+                    melyxar_core::time::now(),
+                )
+                .await
+                .expect("source recorded");
+        }
+
+        let listed = database.works_held_in_several_copies().await.expect("read");
+        assert_eq!(listed.len(), 1, "a film held once is held once");
+        assert_eq!(listed[0].title, "Quiet Harbour");
+        assert_eq!(listed[0].release_year, Some(2019));
+        assert_eq!(
+            listed[0].file_names,
+            vec![
+                "Quiet Harbour 1080p.mkv".to_string(),
+                "zz12Quiet Harbour 1080p.mkv".to_string(),
+            ],
+            "the name of each copy, and never the folders leading to it"
+        );
     }
 
     #[tokio::test]
