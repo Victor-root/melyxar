@@ -48,6 +48,47 @@ impl IdentificationState {
     }
 }
 
+/// What stopped the last look up from naming a work.
+///
+/// Written down next to the work rather than left in a log, because the person
+/// who wants to know why a film is still nameless is looking at that film on a
+/// screen, not at a terminal. A work that has never been looked up carries no
+/// note at all, which is itself the answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentificationNote {
+    /// The provider answered, and knew nothing under this title. The name read
+    /// off the file is the thing to look at.
+    NoMatch,
+    /// The provider could not be reached. The work is still waiting.
+    ProviderUnreachable,
+    /// The provider asked to be left alone for a while. Still waiting.
+    ProviderBusy,
+    /// The provider answered something that could not be read.
+    ProviderUnreadable,
+}
+
+impl IdentificationNote {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NoMatch => "no_match",
+            Self::ProviderUnreachable => "provider_unreachable",
+            Self::ProviderBusy => "provider_busy",
+            Self::ProviderUnreadable => "provider_unreadable",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "no_match" => Some(Self::NoMatch),
+            "provider_unreachable" => Some(Self::ProviderUnreachable),
+            "provider_busy" => Some(Self::ProviderBusy),
+            "provider_unreadable" => Some(Self::ProviderUnreadable),
+            _ => None,
+        }
+    }
+}
+
 /// What a work is, which decides how it is shown and what may parent it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -119,6 +160,8 @@ pub struct Work {
     /// Age rating as the country that issued it writes it.
     pub age_rating_label: Option<String>,
     pub identification: IdentificationState,
+    /// What stopped the last look up, when one has run and failed.
+    pub identification_note: Option<IdentificationNote>,
     /// Dominant colour of the poster, sent with every card so a grid shows
     /// colour before a single image has arrived.
     pub dominant_color: Option<String>,
@@ -241,6 +284,26 @@ mod tests {
         assert!(!WorkKind::Season.is_playable());
         assert!(!WorkKind::Artist.is_playable());
         assert!(!WorkKind::Album.is_playable());
+    }
+
+    #[test]
+    fn every_reason_a_look_up_failed_survives_a_round_trip_through_its_stored_form() {
+        for (note, written) in [
+            (IdentificationNote::NoMatch, "no_match"),
+            (
+                IdentificationNote::ProviderUnreachable,
+                "provider_unreachable",
+            ),
+            (IdentificationNote::ProviderBusy, "provider_busy"),
+            (
+                IdentificationNote::ProviderUnreadable,
+                "provider_unreadable",
+            ),
+        ] {
+            assert_eq!(note.as_str(), written);
+            assert_eq!(IdentificationNote::parse(written), Some(note));
+        }
+        assert_eq!(IdentificationNote::parse("no idea"), None);
     }
 
     #[test]

@@ -14,7 +14,7 @@
 
 use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::time::{Millis, Timestamp};
-use melyxar_core::work::{IdentificationState, WorkKind};
+use melyxar_core::work::{IdentificationNote, IdentificationState, WorkKind};
 use sqlx::{AssertSqlSafe, Row};
 
 use crate::convert::parse_timestamp;
@@ -143,6 +143,9 @@ pub struct WorkCard {
     pub runtime: Option<Millis>,
     pub community_rating: Option<f64>,
     pub identification: IdentificationState,
+    /// What stopped the last look up, so a grid says why a film is nameless
+    /// instead of only saying that it is.
+    pub identification_note: Option<IdentificationNote>,
     /// Shown while the picture loads, so a grid has colour from the first
     /// moment instead of grey holes.
     pub dominant_color: Option<String>,
@@ -167,7 +170,8 @@ impl Database {
 
         let mut sql = String::from(
             "SELECT DISTINCT w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
-                    w.community_rating, w.identification, w.dominant_color, w.added_at
+                    w.community_rating, w.identification, w.identification_note, w.dominant_color,
+                    w.added_at
              FROM works w",
         );
         if request.genre.is_some() {
@@ -419,6 +423,7 @@ fn card_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<WorkCard> {
                 "identification state '{identification_text}' is unknown"
             ))
         })?,
+        identification_note: crate::catalogue::identification_note_from_row(row)?,
         dominant_color: row.try_get("dominant_color")?,
         added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
         poster: Vec::new(),
@@ -791,6 +796,32 @@ mod tests {
             .await
             .expect("read");
         assert_eq!(titles(&page), vec!["Unknown"]);
+    }
+
+    #[tokio::test]
+    async fn a_card_says_why_its_film_has_no_name() {
+        let (database, library_id) = library_of(&[]).await;
+        let work = database
+            .create_work(library_id, WorkKind::Movie, "Unknown", "unknown", None)
+            .await
+            .expect("work created");
+        database
+            .set_identification_note(work.id, IdentificationNote::NoMatch)
+            .await
+            .expect("note written");
+
+        let page = database
+            .browse_works(&BrowseRequest {
+                library_id: Some(library_id),
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert_eq!(
+            page.cards[0].identification_note,
+            Some(IdentificationNote::NoMatch),
+            "a grid that only says a film is nameless sends nobody anywhere"
+        );
     }
 
     #[tokio::test]

@@ -155,6 +155,12 @@ export function WorkPage() {
             )}
           </div>
 
+          {/* Said in full here, where there is room for a sentence somebody can
+              act on without opening a terminal. */}
+          {work.identification_note && (
+            <p className="notice">{t(`note.${work.identification_note}`)}</p>
+          )}
+
           <div className="work-actions">
             <button
               className="button button-accent button-large"

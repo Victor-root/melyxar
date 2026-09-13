@@ -13,7 +13,7 @@ use melyxar_core::media::{
     TrackKind, VideoDetails,
 };
 use melyxar_core::time::{now, Millis, Timestamp};
-use melyxar_core::work::{IdentificationState, Work, WorkKind};
+use melyxar_core::work::{IdentificationNote, IdentificationState, Work, WorkKind};
 use sqlx::Row;
 
 use crate::convert::{
@@ -115,6 +115,7 @@ impl Database {
             community_rating: None,
             age_rating_label: None,
             identification: IdentificationState::Pending,
+            identification_note: None,
             dominant_color: None,
             added_at: moment,
             updated_at: moment,
@@ -125,8 +126,8 @@ impl Database {
     pub async fn work(&self, id: WorkId) -> Result<Option<Work>> {
         let row = sqlx::query(
             "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
-                    community_rating, age_rating_label, identification, dominant_color,
-                    added_at, updated_at
+                    community_rating, age_rating_label, identification, identification_note,
+                    dominant_color, added_at, updated_at
              FROM works WHERE id = ?",
         )
         .bind(id.to_db_string())
@@ -149,8 +150,8 @@ impl Database {
     ) -> Result<Option<Work>> {
         let row = sqlx::query(
             "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
-                    community_rating, age_rating_label, identification, dominant_color,
-                    added_at, updated_at
+                    community_rating, age_rating_label, identification, identification_note,
+                    dominant_color, added_at, updated_at
              FROM works
              WHERE library_id = ? AND sort_title = ?
                AND (release_year IS ? OR (release_year IS NULL AND ? IS NULL))
@@ -171,8 +172,8 @@ impl Database {
     pub async fn recent_works(&self, library_id: LibraryId, limit: i64) -> Result<Vec<Work>> {
         let rows = sqlx::query(
             "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
-                    community_rating, age_rating_label, identification, dominant_color,
-                    added_at, updated_at
+                    community_rating, age_rating_label, identification, identification_note,
+                    dominant_color, added_at, updated_at
              FROM works WHERE library_id = ? ORDER BY added_at DESC LIMIT ?",
         )
         .bind(library_id.to_db_string())
@@ -797,10 +798,25 @@ pub(crate) fn work_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Work> {
                 "identification state '{identification_text}' is unknown"
             ))
         })?,
+        identification_note: identification_note_from_row(row)?,
         dominant_color: row.try_get("dominant_color")?,
         added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
         updated_at: parse_timestamp(&row.try_get::<String, _>("updated_at")?)?,
     })
+}
+
+/// Reads the reason the last look up failed.
+///
+/// A word this version does not know is read as no reason rather than as a
+/// corrupt row: the note explains a film, it does not decide anything, and a
+/// page that refuses to open because of an explanation would be absurd.
+pub(crate) fn identification_note_from_row(
+    row: &sqlx::sqlite::SqliteRow,
+) -> Result<Option<IdentificationNote>> {
+    Ok(row
+        .try_get::<Option<String>, _>("identification_note")?
+        .as_deref()
+        .and_then(IdentificationNote::parse))
 }
 
 fn track_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Track> {

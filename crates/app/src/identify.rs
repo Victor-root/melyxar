@@ -16,7 +16,7 @@ use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::job::{JobKind, JobPriority, JobState};
 use melyxar_core::library::Library;
 use melyxar_core::privacy::MediaName;
-use melyxar_core::work::Work;
+use melyxar_core::work::{IdentificationNote, Work};
 use melyxar_database::metadata::{
     CollectionRecord, CreditRecord, IdentifiedWork, RemoteTrailerRecord,
 };
@@ -72,11 +72,18 @@ pub async fn identify_library(
 
         match identify_one(state, provider, library, &work).await? {
             Outcome::Identified => report.identified += 1,
-            Outcome::Unknown => {
+            Outcome::Unknown(note) => {
                 database.mark_work_unidentified(work.id).await?;
+                database.set_identification_note(work.id, note).await?;
                 report.unidentified += 1;
             }
-            Outcome::Postponed => report.postponed += 1,
+            // Nothing about the film is written down, only why nobody has got
+            // round to it: without that, a work that is still waiting looks
+            // exactly like one that has never been tried.
+            Outcome::Postponed(note) => {
+                database.set_identification_note(work.id, note).await?;
+                report.postponed += 1;
+            }
             // Every other work would meet the same wall, and none of them are
             // the problem. Stopping here says what is actually wrong.
             Outcome::Refused => {
@@ -105,10 +112,10 @@ pub async fn identify_library(
 
 enum Outcome {
     Identified,
-    Unknown,
-    /// The provider could not be reached. Nothing is written down, so the work
-    /// is still waiting and the next run tries again.
-    Postponed,
+    Unknown(IdentificationNote),
+    /// The provider could not be reached. Nothing about the film is written
+    /// down, so it is still waiting and the next run tries again.
+    Postponed(IdentificationNote),
     /// The provider refused the key. Nothing is wrong with this work, and
     /// nothing will be right with the next one either.
     Refused,
@@ -130,7 +137,18 @@ async fn identify_one(
         Some(external_id) => external_id,
         None => match find_candidate(provider, work, &known_ids, language).await {
             Ok(Some(candidate)) => candidate.external_id,
-            Ok(None) => return Ok(Outcome::Unknown),
+            // The provider answered and offered nothing at all. The only thing
+            // it was given is the title read off the file name, so that title
+            // is what the line has to say.
+            Ok(None) => {
+                tracing::info!(
+                    work = %MediaName::new(&work.title),
+                    year = work.release_year,
+                    provider = provider.name(),
+                    "no film came back under this title; the name on disk is most likely not the name of the film"
+                );
+                return Ok(Outcome::Unknown(IdentificationNote::NoMatch));
+            }
             Err(error) => return Ok(postpone(work, &error)),
         },
     };
@@ -172,21 +190,31 @@ fn postpone(work: &Work, error: &ProviderError) -> Outcome {
             tracing::error!("the metadata provider refused the key; nothing can be looked up");
             Outcome::Refused
         }
+        ProviderError::TooManyRequests {
+            retry_after_seconds,
+        } => {
+            tracing::warn!(
+                work = %MediaName::new(&work.title),
+                retry_after_seconds,
+                "the provider asked to be left alone; this work stays on the waiting list"
+            );
+            Outcome::Postponed(IdentificationNote::ProviderBusy)
+        }
         error if error.is_worth_retrying() => {
             tracing::warn!(
                 work = %MediaName::new(&work.title),
                 reason = %error,
                 "the provider could not be reached; this work stays on the waiting list"
             );
-            Outcome::Postponed
+            Outcome::Postponed(IdentificationNote::ProviderUnreachable)
         }
         error => {
             tracing::warn!(
                 work = %MediaName::new(&work.title),
                 reason = %error,
-                "the provider had nothing for this work"
+                "the provider answered something that could not be read"
             );
-            Outcome::Unknown
+            Outcome::Unknown(IdentificationNote::ProviderUnreadable)
         }
     }
 }
@@ -615,6 +643,7 @@ mod tests {
             community_rating: None,
             age_rating_label: None,
             identification: IdentificationState::Pending,
+            identification_note: None,
             dominant_color: None,
             added_at: melyxar_core::time::now(),
             updated_at: melyxar_core::time::now(),
@@ -998,6 +1027,11 @@ mod tests {
             .expect("read")
             .expect("present");
         assert_eq!(stored.identification, IdentificationState::Unidentified);
+        assert_eq!(
+            stored.identification_note,
+            Some(IdentificationNote::NoMatch),
+            "the film says why nobody named it, so nobody has to read a log"
+        );
         assert!(
             stored.identification.may_be_looked_up_again(),
             "a film nobody recognised today may be recognised tomorrow"
@@ -1015,15 +1049,45 @@ mod tests {
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.unidentified, 1);
         assert_eq!(report.postponed, 0);
+
+        let stored = state
+            .database()
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.identification, IdentificationState::Unidentified);
         assert_eq!(
-            state
-                .database()
-                .work(work.id)
-                .await
-                .expect("read")
-                .expect("present")
-                .identification,
-            IdentificationState::Unidentified
+            stored.identification_note,
+            Some(IdentificationNote::ProviderUnreadable),
+            "a film blamed for someone else's broken answer is a film nobody can fix"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_provider_asking_to_be_left_alone_says_so_on_the_film_itself() {
+        // The likeliest reason a whole library stays nameless after one run:
+        // told apart from a provider that is down, because the answer to one
+        // is to wait and the answer to the other is to look at the network.
+        let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
+        let provider = StandIn::failing(|| ProviderError::TooManyRequests {
+            retry_after_seconds: Some(3),
+        });
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.postponed, 1);
+        assert_eq!(report.unidentified, 0);
+
+        let stored = state
+            .database()
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.identification, IdentificationState::Pending);
+        assert_eq!(
+            stored.identification_note,
+            Some(IdentificationNote::ProviderBusy)
         );
     }
 
@@ -1088,6 +1152,11 @@ mod tests {
             stored.identification,
             IdentificationState::Pending,
             "a provider that is down says nothing about the film"
+        );
+        assert_eq!(
+            stored.identification_note,
+            Some(IdentificationNote::ProviderUnreachable),
+            "a film still waiting must not look like one nobody has tried"
         );
         assert_eq!(
             state
