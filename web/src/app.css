@@ -889,6 +889,69 @@
   color: var(--text-faint);
 }
 
+/* The grid with the letters beside it. The letters follow the page down, so
+   jumping to another one never means scrolling back up first. */
+.grid-with-letters {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-wide);
+}
+
+.grid-with-letters > :first-child {
+  flex: 1;
+  /* Without this a grid of wide cards refuses to shrink and pushes the
+     letters off the screen. */
+  min-width: 0;
+}
+
+.letters {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: var(--gap-wide);
+}
+
+.letter {
+  min-width: 30px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.letter:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.letter-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* Narrow: the letters go above the grid rather than beside it, where a column
+   would leave the cards no room at all. */
+@media (max-width: 700px) {
+  .grid-with-letters {
+    flex-direction: column-reverse;
+  }
+
+  .letters {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-self: stretch;
+  }
+}
+
 /* Only ever on a film held in several copies, and quiet: it is a correction,
    not something anybody came here to do. */
 .version-detach {

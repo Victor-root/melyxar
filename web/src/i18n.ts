@@ -186,6 +186,9 @@ const en: Dictionary = {
   "byhand.look": "Search",
   "byhand.nothing": "Nothing came back under that name. Try another spelling, or the title it was shot under.",
 
+  "library.letters": "Jump to a letter",
+  "library.letters.all": "All",
+
   "detach.open": "This copy is another film",
   "detach.busy": "Separating...",
   "detach.done": "Separated. It is waiting to be identified.",
@@ -440,6 +443,9 @@ const fr: Dictionary = {
   "byhand.field": "Titre à chercher",
   "byhand.look": "Chercher",
   "byhand.nothing": "Rien ne revient sous ce nom. Essayez une autre orthographe, ou le titre original.",
+
+  "library.letters": "Aller à une lettre",
+  "library.letters.all": "Tout",
 
   "detach.open": "Cette copie est un autre film",
   "detach.busy": "Séparation...",

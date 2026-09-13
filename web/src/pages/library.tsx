@@ -33,6 +33,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
   const decade = parameters.get("decade") ? Number(parameters.get("decade")) : undefined;
   const search = parameters.get("search") ?? undefined;
   const unidentified = parameters.get("unidentified") === "true";
+  const initial = parameters.get("initial") ?? undefined;
   const library = libraries.find((entry) => entry.id === id);
 
   // Any change to the choices starts the grid again from the top, since the
@@ -43,7 +44,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
     setFailed(false);
     api
       .works(
-        { library: id, order, descending, genre, decade, search, unidentified },
+        { library: id, order, descending, genre, decade, search, unidentified, initial },
         controller.signal,
       )
       .then((page) => {
@@ -58,7 +59,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
         }
       });
     return () => controller.abort();
-  }, [id, order, descending, genre, decade, search, unidentified]);
+  }, [id, order, descending, genre, decade, search, unidentified, initial]);
 
   useEffect(() => {
     if (!id) {
@@ -79,7 +80,17 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
     }
     setLoading(true);
     api
-      .works({ library: id, order, descending, genre, decade, search, unidentified, after: next })
+      .works({
+        library: id,
+        order,
+        descending,
+        genre,
+        decade,
+        search,
+        unidentified,
+        initial,
+        after: next,
+      })
       .then((page) => {
         // Appended rather than replaced: the cards already on screen stay
         // where they are, which is what keeps the scroll position honest.
@@ -88,7 +99,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [next, loading, id, order, descending, genre, decade, search, unidentified]);
+  }, [next, loading, id, order, descending, genre, decade, search, unidentified, initial]);
 
   const choose = (name: string, value: string | null) => {
     const updated = new URLSearchParams(parameters);
@@ -180,11 +191,40 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
         <p className="notice">{t("library.empty")}</p>
       )}
 
-      <Grid onReachEnd={loadMore} hasMore={next !== null}>
-        {cards.map((card) => (
-          <Card key={card.id} card={card} />
-        ))}
-      </Grid>
+      {/* The grid and the letters beside it. A few hundred films is too long
+          to scroll through and too short to search by hand every time, and the
+          letter is the one thing anybody remembers about a title. */}
+      <div className="grid-with-letters">
+        <Grid onReachEnd={loadMore} hasMore={next !== null}>
+          {cards.map((card) => (
+            <Card key={card.id} card={card} />
+          ))}
+        </Grid>
+
+        {/* Only the letters the library really has: a letter leading to an
+            empty grid reads as a fault. One letter alone is no choice. */}
+        {filters && filters.initials.length > 1 && (
+          <nav className="letters" aria-label={t("library.letters")}>
+            <button
+              className={`letter ${initial ? "" : "letter-on"}`}
+              onClick={() => choose("initial", null)}
+            >
+              {t("library.letters.all")}
+            </button>
+            {filters.initials.map((entry) => (
+              <button
+                key={entry.name}
+                className={`letter ${initial === entry.name ? "letter-on" : ""}`}
+                onClick={() => choose("initial", entry.name)}
+                title={t("library.count", { count: entry.works })}
+                aria-pressed={initial === entry.name}
+              >
+                {entry.name.toUpperCase()}
+              </button>
+            ))}
+          </nav>
+        )}
+      </div>
 
       {loading && <p className="notice">{t("library.loading")}</p>}
       {!loading && next === null && cards.length > 0 && (

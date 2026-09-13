@@ -93,6 +93,8 @@ struct OrderStatements {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrowseRequest {
     pub library_id: Option<LibraryId>,
+    /// The letter a grid was asked to start at.
+    pub initial: Option<Initial>,
     pub order: WorkOrder,
     pub descending: bool,
     /// The last card of the previous page. Absent for the first page.
@@ -107,10 +109,69 @@ pub struct BrowseRequest {
     pub unidentified_only: bool,
 }
 
+/// The letter a title begins with, as a grid is asked to jump to it.
+///
+/// A collection of a few hundred films is too long to scroll through and too
+/// short to search by hand every time. What is wanted is the letter, which is
+/// also the only thing a viewer reliably remembers about a title they are
+/// looking for.
+///
+/// Everything that begins with no letter at all shares one bucket: digits,
+/// symbols, and the alphabets the fold to plain letters does not reach.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Initial {
+    Letter(char),
+    Other,
+}
+
+/// What the bucket for everything else is written as, in an address and on a
+/// button alike.
+const OTHER_INITIAL: &str = "#";
+
+impl Initial {
+    /// Reads one from what a client sent, refusing anything else.
+    pub fn parse(value: &str) -> Option<Self> {
+        if value == OTHER_INITIAL {
+            return Some(Self::Other);
+        }
+        let mut characters = value.chars();
+        match (characters.next(), characters.next()) {
+            (Some(letter), None) if letter.is_ascii_alphabetic() => {
+                Some(Self::Letter(letter.to_ascii_lowercase()))
+            }
+            _ => None,
+        }
+    }
+
+    /// How it is written back to a client.
+    pub fn as_text(self) -> String {
+        match self {
+            Self::Letter(letter) => letter.to_string(),
+            Self::Other => OTHER_INITIAL.to_string(),
+        }
+    }
+
+    /// The half open range of ordering titles this letter covers.
+    ///
+    /// A range rather than a test on the first character, so the ordering
+    /// index does the work: on a hundred thousand films the difference is a
+    /// walk of the whole table against a seek.
+    fn range(self) -> Option<(String, String)> {
+        match self {
+            Self::Letter(letter) => {
+                let next = char::from(letter as u8 + 1);
+                Some((letter.to_string(), next.to_string()))
+            }
+            Self::Other => None,
+        }
+    }
+}
+
 impl Default for BrowseRequest {
     fn default() -> Self {
         Self {
             library_id: None,
+            initial: None,
             order: WorkOrder::Title,
             descending: false,
             after: None,
@@ -199,6 +260,17 @@ impl Database {
         if request.unidentified_only {
             sql.push_str(" AND w.identification IN ('pending', 'unidentified')");
         }
+        match request.initial {
+            Some(Initial::Letter(_)) => {
+                sql.push_str(" AND w.sort_title >= ? AND w.sort_title < ?");
+            }
+            // Everything the letters do not cover, which is everything sorting
+            // before the first of them or after the last.
+            Some(Initial::Other) => {
+                sql.push_str(" AND (w.sort_title < 'a' OR w.sort_title >= '{')");
+            }
+            None => {}
+        }
         // A film with nothing to order on would otherwise sit at one end of
         // every ordering and be the first thing anyone sees.
         if !matches!(request.order, WorkOrder::Title | WorkOrder::AddedAt) {
@@ -239,6 +311,9 @@ impl Database {
         }
         if let Some(search) = &request.search {
             query = query.bind(format!("%{}%", escape_for_like(search)));
+        }
+        if let Some((from, to)) = request.initial.and_then(Initial::range) {
+            query = query.bind(from).bind(to);
         }
         if let Some(after) = request.after {
             query = query.bind(after.to_db_string());
@@ -360,6 +435,49 @@ impl Database {
 
         rows.iter()
             .map(|row| Ok((row.try_get("name")?, row.try_get("total")?)))
+            .collect()
+    }
+
+    /// Every letter a title starts with, with how many start with it.
+    ///
+    /// What the row of letters is built from. Offering a letter nobody has
+    /// leads to an empty grid and looks like a fault, exactly as it would for
+    /// a genre.
+    pub async fn initials_in_use(
+        &self,
+        library_id: Option<LibraryId>,
+    ) -> Result<Vec<(String, i64)>> {
+        // The bucket for everything beginning with no letter sorts before the
+        // letters, which is where a row of them wants it.
+        let counted = "SELECT CASE
+                           WHEN substr(sort_title, 1, 1) BETWEEN 'a' AND 'z'
+                           THEN substr(sort_title, 1, 1)
+                           ELSE '#'
+                         END AS initial,
+                         count(*) AS total
+                       FROM works
+                       WHERE kind IN ('movie', 'series', 'album')";
+
+        let rows = match library_id {
+            Some(id) => {
+                sqlx::query(AssertSqlSafe(format!(
+                    "{counted} AND library_id = ? GROUP BY initial ORDER BY initial"
+                )))
+                .bind(id.to_db_string())
+                .fetch_all(self.reader())
+                .await?
+            }
+            None => {
+                sqlx::query(AssertSqlSafe(format!(
+                    "{counted} GROUP BY initial ORDER BY initial"
+                )))
+                .fetch_all(self.reader())
+                .await?
+            }
+        };
+
+        rows.iter()
+            .map(|row| Ok((row.try_get("initial")?, row.try_get("total")?)))
             .collect()
     }
 
@@ -822,6 +940,110 @@ mod tests {
             Some(IdentificationNote::NoMatch),
             "a grid that only says a film is nameless sends nobody anywhere"
         );
+    }
+
+    #[tokio::test]
+    async fn a_grid_can_be_asked_to_start_at_one_letter() {
+        // A few hundred films is too long to scroll and too short to search by
+        // hand every time. The letter is also the one thing a viewer reliably
+        // remembers about a title.
+        let (database, library_id) = library_of(&[
+            ("Amber Field", 2020, 7.0),
+            ("Quiet Harbour", 2019, 7.4),
+            ("Zephyr", 2021, 6.0),
+            ("2 Lost Days", 2015, 6.5),
+        ])
+        .await;
+        // A leading article is moved out of the way when the ordering title is
+        // built, so this film belongs under A and nowhere else.
+        database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "The Amber Road",
+                "amber road",
+                Some(2018),
+            )
+            .await
+            .expect("work created");
+
+        let starting_at = async |letter: &str| {
+            let page = database
+                .browse_works(&BrowseRequest {
+                    library_id: Some(library_id),
+                    initial: Initial::parse(letter),
+                    ..Default::default()
+                })
+                .await
+                .expect("read");
+            titles(&page)
+        };
+
+        assert_eq!(
+            starting_at("a").await,
+            vec!["Amber Field", "The Amber Road"],
+            "the ordering title is what decides, so a leading article counts for nothing"
+        );
+        assert_eq!(
+            starting_at("A").await,
+            vec!["Amber Field", "The Amber Road"]
+        );
+        assert_eq!(starting_at("q").await, vec!["Quiet Harbour"]);
+        assert_eq!(
+            starting_at("z").await,
+            vec!["Zephyr"],
+            "the last letter is a letter"
+        );
+        assert!(starting_at("b").await.is_empty());
+        assert_eq!(
+            starting_at("#").await,
+            vec!["2 Lost Days"],
+            "everything beginning with no letter shares one bucket"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_letters_offered_are_the_ones_the_library_really_has() {
+        let (database, library_id) = library_of(&[
+            ("Amber Field", 2020, 7.0),
+            ("Zephyr", 2021, 6.0),
+            ("2 Lost Days", 2015, 6.5),
+        ])
+        .await;
+        database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "The Amber Road",
+                "amber road",
+                Some(2018),
+            )
+            .await
+            .expect("work created");
+
+        assert_eq!(
+            database
+                .initials_in_use(Some(library_id))
+                .await
+                .expect("read"),
+            vec![
+                ("#".to_string(), 1),
+                ("a".to_string(), 2),
+                ("z".to_string(), 1),
+            ],
+            "offering a letter nobody has leads to an empty grid and looks like a fault"
+        );
+    }
+
+    #[test]
+    fn only_a_single_letter_is_ever_taken_for_one() {
+        assert_eq!(Initial::parse("c"), Some(Initial::Letter('c')));
+        assert_eq!(Initial::parse("C"), Some(Initial::Letter('c')));
+        assert_eq!(Initial::parse("#"), Some(Initial::Other));
+        assert_eq!(Initial::parse(""), None);
+        assert_eq!(Initial::parse("ab"), None);
+        assert_eq!(Initial::parse("4"), None);
+        assert_eq!(Initial::parse("%"), None);
     }
 
     #[tokio::test]
