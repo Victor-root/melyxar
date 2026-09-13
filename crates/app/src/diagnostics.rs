@@ -147,6 +147,13 @@ pub struct MediaToolsReport {
     pub graphics_device_present: bool,
     /// The card that was proved to rebuild a picture, when there is one.
     pub card: Option<CardReport>,
+    /// Whether a graphics device was there and this server could open it.
+    ///
+    /// What separates the two ways a card goes unused. A device that will not
+    /// open is a permission to grant; one that opens and then answers nothing
+    /// is a driver to install. The media tool words both the same way, and
+    /// they are fixed in entirely different places.
+    pub card_device_opened: bool,
     /// Every trial run against a card, in order, with what the tool said when
     /// it refused.
     ///
@@ -333,6 +340,8 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                     can_scale: card.can_scale,
                     can_tone_map: card.can_tone_map,
                 }),
+            card_device_opened: capabilities
+                .is_some_and(|capabilities| capabilities.card_search.a_device_opened()),
             card_trials: capabilities
                 .map(|capabilities| {
                     capabilities
@@ -577,11 +586,32 @@ pub fn render_text(report: &Diagnostics) -> String {
                     yes_no(card.can_tone_map)
                 ),
             ),
-            None => line!(
-                "!",
-                "no card is rebuilding pictures, so every one of them is rebuilt on the processor"
+            None => {
+                line!(
+                    "!",
+                    "no card is rebuilding pictures, so every one of them is rebuilt on the \
+                     processor"
+                        .to_string(),
+                );
+                // Which of the three it is, because they are fixed in three
+                // different places and the media tool words all three the same
+                // way: no display found.
+                line!(
+                    "!",
+                    if !report.media_tools.graphics_device_present {
+                        "and the graphics device is not visible here at all: an unprivileged \
+                         container has to be given /dev/dri explicitly"
+                    } else if report.media_tools.card_device_opened {
+                        "the device opens, and no video acceleration driver answers for it: that \
+                         driver is a package of its own, apart from the media tools"
+                    } else {
+                        "the device is there and this server is not allowed to open it: the \
+                         account it runs as has to belong to the group owning the device inside \
+                         the container"
+                    }
                     .to_string(),
-            ),
+                );
+            }
         }
         for trial in &report.media_tools.card_trials {
             line!(

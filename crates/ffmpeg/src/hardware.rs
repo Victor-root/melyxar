@@ -175,7 +175,21 @@ pub struct CardSearch {
     pub card: Option<Card>,
 }
 
+/// The trial that tells a forbidden device from a driverless one.
+const OPENING: &str = "open_the_device";
+
 impl CardSearch {
+    /// Whether a device was there and this account could open it.
+    ///
+    /// The question worth asking when no card was found: a device that would
+    /// not open is a permission to grant, and a device that opened and then
+    /// answered nothing is a driver to install. Nothing else separates them.
+    pub fn a_device_opened(&self) -> bool {
+        self.trials
+            .iter()
+            .any(|trial| trial.what == OPENING && trial.worked)
+    }
+
     /// Looks for a card and proves what it can do, or explains itself.
     ///
     /// `encoders` is what the tool was built with: there is no point trying a
@@ -223,8 +237,38 @@ impl CardSearch {
         built_with: &BTreeSet<String>,
     ) -> Option<Card> {
         let named = device.display().to_string();
-        let mut encoders = BTreeMap::new();
 
+        // Asked first, because it is what tells the two failures apart. A
+        // device that will not open is an account that is not allowed to use
+        // it; a device that opens and then answers nothing is a driver that is
+        // not installed. Both come out of the media tool as the same sentence
+        // about no display being found, and they are fixed in entirely
+        // different places.
+        if let Err(error) = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&device)
+        {
+            self.trials.push(Trial {
+                what: OPENING.to_string(),
+                device: named,
+                worked: false,
+                said: format!(
+                    "{error}; the account this server runs as has to be allowed to open it, \
+                     which in an unprivileged container means belonging to the group that \
+                     owns it inside the container"
+                ),
+            });
+            return None;
+        }
+        self.trials.push(Trial {
+            what: OPENING.to_string(),
+            device: named.clone(),
+            worked: true,
+            said: String::new(),
+        });
+
+        let mut encoders = BTreeMap::new();
         for codec in WORTH_TRYING {
             let encoder = encoder_name(codec, way);
             if !built_with.contains(&encoder) {
@@ -495,6 +539,35 @@ mod tests {
         assert_eq!(search.trials.len(), 1);
         assert_eq!(search.trials[0].what, "built_with_the_path");
         assert!(search.trials[0].said.contains("h264_vaapi"));
+    }
+
+    #[test]
+    fn a_forbidden_device_and_a_driverless_one_are_told_apart() {
+        // The media tool words both the same way, as no display being found,
+        // and they are fixed in entirely different places: one is a permission
+        // to grant, the other a package to install.
+        let opened = CardSearch {
+            trials: vec![Trial {
+                what: OPENING.to_string(),
+                device: "/dev/dri/renderD128".to_string(),
+                worked: true,
+                said: String::new(),
+            }],
+            ..CardSearch::default()
+        };
+        assert!(opened.a_device_opened());
+
+        let forbidden = CardSearch {
+            trials: vec![Trial {
+                what: OPENING.to_string(),
+                device: "/dev/dri/renderD128".to_string(),
+                worked: false,
+                said: "permission denied".to_string(),
+            }],
+            ..CardSearch::default()
+        };
+        assert!(!forbidden.a_device_opened());
+        assert!(!CardSearch::default().a_device_opened());
     }
 
     #[tokio::test]

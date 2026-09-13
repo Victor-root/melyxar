@@ -144,9 +144,20 @@ fn report_the_card(capabilities: &Capabilities) {
             "no graphics device is visible here, so every picture is rebuilt on the processor; \
              an unprivileged container has to be given /dev/dri explicitly"
         ),
+        // The device opened and then answered nothing. That is a driver, not a
+        // permission and not the card: the video acceleration driver is a
+        // package of its own, separate from the media tools, and a machine can
+        // carry the card and the tools and still have no driver between them.
+        None if search.a_device_opened() => tracing::warn!(
+            devices = ?search.devices,
+            "the graphics device opens but no video acceleration driver answers for it, so the \
+             processor rebuilds every picture; that driver is a package of its own, apart from \
+             the media tools"
+        ),
         None => tracing::warn!(
             devices = ?search.devices,
-            "a graphics device is present but would not rebuild a picture, so the processor does it"
+            "the graphics device is there and this server is not allowed to open it, so the \
+             processor rebuilds every picture"
         ),
     }
 }
