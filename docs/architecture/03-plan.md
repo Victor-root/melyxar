@@ -116,6 +116,8 @@ Fait aussi : l'écran de réglages qui permet enfin de choisir tout cela. Le rep
 
 Reste : la courbe de volume, à vérifier à l'oreille par le mainteneur. Un film que le navigateur ne sait pas ouvrir tel quel le dit clairement : le convertir est le jalon 5.
 
+À savoir : les commandes de lecture elles-mêmes (barre de progression, volume, plein écran) sont aujourd'hui celles du navigateur. Tout ce qui les entoure est à nous : le choix des pistes pendant la lecture, la vitesse, l'image dans un coin, les raccourcis clavier, les étapes de préparation et l'apparence des sous-titres. C'est volontaire à ce stade, et ce n'est pas l'état final : un lecteur à nous est prévu au jalon 8.
+
 À savoir : par défaut le serveur replie lui-même un son multicanal en stéréo plutôt que de laisser le navigateur le faire, parce que le repliement des navigateurs enterre les dialogues sous les effets. Cela coûte une reconstruction du son, la page le dit, et le réglage permet de laisser faire le navigateur.
 
 Vérifié dans un vrai navigateur : le film se lit, la page explique pourquoi il se lit de cette façon, quitter à douze secondes et revenir repart à douze secondes, repartir du début repart bien de zéro, la piste audio choisie revient à la visite suivante, et un rapport de position qui arrive en retard est refusé.
@@ -192,6 +194,7 @@ Vérifié sur le serveur en vrai : un film HEVC que le navigateur ne sait pas d�
 - Couleur d'accentuation choisie par l'utilisateur, avec palette dérivée et vérification automatique du contraste.
 - Modes clair, sombre et automatique, stockés dans les préférences.
 - CSS personnalisé, au niveau du serveur pour l'administrateur et au niveau de chaque utilisateur, avec possibilité de le désactiver et adresse de secours sans CSS.
+- Lecteur avec ses propres commandes à la place de celles du navigateur : barre de progression, volume, plein écran, titre du film et retour, le tout cohérent en fenêtre comme en plein écran, et rejoignant le choix des pistes, la vitesse et l'image dans un coin qui existent déjà autour. Les commandes du navigateur conviennent à une vidéo regardée vite fait : elles ne portent ni le nom de ce qu'on regarde, ni ce qui l'entoure, et elles changent d'un navigateur à l'autre. Prévu ici parce que c'est le jalon où l'interface cesse de ressembler à une installation par défaut.
 - Mode maintenance : message, durée estimée, page dédiée avec le code d'état approprié, accès conservé pour l'administrateur, avertissement des lectures en cours, exemple de configuration nginx.
 - Gestion des utilisateurs et de leurs droits : accès par bibliothèque, limite d'âge, téléchargement, suppression, sessions simultanées. Code à quatre chiffres pour les appareils de télévision déjà autorisés.
 - Téléchargement d'un fichier, soumis au droit correspondant.
