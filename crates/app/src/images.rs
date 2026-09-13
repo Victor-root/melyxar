@@ -88,7 +88,17 @@ pub async fn store_provider_images(
         (Kind::Poster, details.poster_path.as_deref()),
         (Kind::Backdrop, details.backdrop_path.as_deref()),
     ] {
-        let Some(path) = path else { continue };
+        // Said out loud rather than passed over: a film with no picture is
+        // indistinguishable from one whose picture failed to arrive, and the
+        // two want opposite answers.
+        let Some(path) = path else {
+            tracing::info!(
+                work = %melyxar_core::privacy::MediaName::new(&details.title),
+                kind = kind.as_str(),
+                "the provider named no picture of this kind for this film"
+            );
+            continue;
+        };
         match store_one(state, provider, &tools.ffmpeg, kind, &owner_id, path).await {
             Ok(None) => {}
             Ok(Some(picture)) => {
