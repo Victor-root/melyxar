@@ -1105,7 +1105,27 @@ mod tests {
         assert!(args.contains(&"-init_hw_device".to_string()));
         assert_eq!(
             args[position(&args, "-vf").expect("a filter chain is present") + 1],
-            "format=nv12,hwupload"
+            "format=nv12,hwupload",
+            "handed up in the layout the encoder takes, and nothing more asked of the card"
+        );
+    }
+
+    #[test]
+    fn a_film_the_card_read_itself_is_put_in_a_layout_the_encoder_takes() {
+        // Measured on a real card: it read the film perfectly well and then
+        // offered the frames with ten bits to a channel, which the encoder
+        // refuses. As far as a viewer is concerned the card had not read it.
+        let encode = VideoEncode::on_a_card(&a_card(), "av1", true).expect("proved");
+        let args = arguments(
+            &Command::new(
+                Input::new("/media/film.mkv"),
+                Output::File(PathBuf::from("/tmp/out.mp4")),
+            )
+            .with_video(VideoOutput::Encode(encode)),
+        );
+        assert_eq!(
+            args[position(&args, "-vf").expect("a filter chain is present") + 1],
+            "scale_vaapi=format=nv12"
         );
     }
 
