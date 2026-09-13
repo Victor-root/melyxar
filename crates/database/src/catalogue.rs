@@ -21,6 +21,14 @@ use crate::convert::{
 };
 use crate::{Database, DatabaseError, Result};
 
+/// Works one provider says are the same film.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedIdentity {
+    /// The one that has been here longest, which the others join.
+    pub keep: WorkId,
+    pub others: Vec<WorkId>,
+}
+
 /// A file as it is recorded, reduced to what a scan compares.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredSource {
@@ -425,13 +433,16 @@ impl Database {
     /// the same film several times over in a grid, which is the very thing a
     /// version chooser exists to avoid.
     ///
-    /// Only ever called for a work still named after its file, which is why
-    /// nothing else has to be carried over: a work nobody has named has no
-    /// picture, no cast and no synopsis. Its files and the clips attached to
-    /// them are all it has.
-    pub async fn merge_work_into(&self, from: WorkId, into: WorkId) -> Result<()> {
+    /// Only the files and the clips attached to them are carried over. The one
+    /// that goes describes the same film as the one that stays, by name, by
+    /// picture and by cast, so there is nothing there worth keeping twice.
+    ///
+    /// The paths of the pictures it had come back, so their files can be
+    /// removed from the cache by the caller that put them there. Nothing else
+    /// points at those rows, so without this they would sit there for ever.
+    pub async fn merge_work_into(&self, from: WorkId, into: WorkId) -> Result<Vec<String>> {
         if from == into {
-            return Ok(());
+            return Ok(Vec::new());
         }
         let mut transaction = self.begin().await?;
         sqlx::query("UPDATE media_sources SET work_id = ? WHERE work_id = ?")
@@ -444,12 +455,88 @@ impl Database {
             .bind(from.to_db_string())
             .execute(&mut *transaction)
             .await?;
+
+        let no_longer_used: Vec<String> = sqlx::query(
+            "SELECT relative_path FROM images WHERE owner_kind = 'work' AND owner_id = ?",
+        )
+        .bind(from.to_db_string())
+        .fetch_all(&mut *transaction)
+        .await?
+        .iter()
+        .map(|row| row.try_get::<String, _>("relative_path"))
+        .collect::<std::result::Result<_, _>>()?;
+        // Pictures are found by owner rather than by a key the engine knows
+        // about, so dropping the work does not drop them.
+        sqlx::query("DELETE FROM images WHERE owner_kind = 'work' AND owner_id = ?")
+            .bind(from.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+
         sqlx::query("DELETE FROM works WHERE id = ?")
             .bind(from.to_db_string())
             .execute(&mut *transaction)
             .await?;
         transaction.commit().await?;
-        Ok(())
+        Ok(no_longer_used)
+    }
+
+    /// Works of one library the provider says are one and the same film.
+    ///
+    /// Two copies can carry names nothing could ever match, and be the same
+    /// film: only the provider can say so, and it says so by answering the
+    /// same identifier for both. Left apart they are the same title, the same
+    /// poster and the same synopsis twice in a grid.
+    ///
+    /// One provider is asked about at a time, and a work carries one
+    /// identifier per provider, so the groups never overlap.
+    pub async fn works_sharing_an_identity(
+        &self,
+        library_id: LibraryId,
+        provider: &str,
+    ) -> Result<Vec<SharedIdentity>> {
+        let rows = sqlx::query(
+            "SELECT e.external_id, e.work_id
+             FROM work_external_ids e
+             JOIN works w ON w.id = e.work_id
+             WHERE w.library_id = ? AND e.provider = ?
+             ORDER BY e.external_id, w.added_at",
+        )
+        .bind(library_id.to_db_string())
+        .bind(provider)
+        .fetch_all(self.reader())
+        .await?;
+
+        let mut groups: Vec<SharedIdentity> = Vec::new();
+        let mut current: Option<String> = None;
+        for row in &rows {
+            let external_id: String = row.try_get("external_id")?;
+            let work_id: WorkId = row
+                .try_get::<String, _>("work_id")?
+                .parse()
+                .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?;
+
+            // The first of each group is the one that has been here longest,
+            // which is the one the others join.
+            match current.as_deref() {
+                Some(seen) if seen == external_id => {
+                    groups
+                        .last_mut()
+                        .expect("a group was started with this identifier")
+                        .others
+                        .push(work_id);
+                }
+                _ => {
+                    current = Some(external_id);
+                    groups.push(SharedIdentity {
+                        keep: work_id,
+                        others: Vec::new(),
+                    });
+                }
+            }
+        }
+
+        groups.retain(|group| !group.others.is_empty());
+        Ok(groups)
     }
 
     /// Marks a file absent. Never a deletion: a disconnected disk must not
@@ -1779,6 +1866,107 @@ mod tests {
             1,
             "what was attached to the copy follows it"
         );
+    }
+
+    #[tokio::test]
+    async fn the_pictures_of_a_work_that_goes_are_named_so_their_files_can_go_too() {
+        // Pictures are found by owner rather than by a key the engine knows
+        // about, so dropping a work leaves its rows and its files behind.
+        let (database, library_id, root_id) = library().await;
+        let (kept, _) =
+            work_with_source(&database, library_id, root_id, "Quiet Harbour 1080p.mkv").await;
+        let (gone, _) = work_with_source(
+            &database,
+            library_id,
+            root_id,
+            "zz12Quiet Harbour 1080p.mkv",
+        )
+        .await;
+        database
+            .replace_images(
+                "work",
+                &gone.to_db_string(),
+                "poster",
+                &[crate::images::StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: gone.to_db_string(),
+                    image_kind: "poster".to_string(),
+                    relative_path: format!("works/{gone}/poster-abc-200.webp"),
+                    width: Some(200),
+                    height: Some(300),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("poster stored");
+
+        let no_longer_used = database
+            .merge_work_into(gone, kept)
+            .await
+            .expect("the two are one film");
+
+        assert_eq!(no_longer_used.len(), 1);
+        assert!(no_longer_used[0].contains("poster-abc-200"));
+        assert!(
+            database
+                .images_of("work", &gone.to_db_string())
+                .await
+                .expect("read")
+                .is_empty(),
+            "a row pointing at a work that no longer exists is a row nobody will ever clear"
+        );
+    }
+
+    #[tokio::test]
+    async fn works_the_provider_gives_one_identifier_are_listed_together() {
+        let (database, library_id, root_id) = library().await;
+        let (first, _) =
+            work_with_source(&database, library_id, root_id, "Quiet Harbour 1080p.mkv").await;
+        let (second, _) =
+            work_with_source(&database, library_id, root_id, "Port Tranquille 1080p.mkv").await;
+        let (apart, _) =
+            work_with_source(&database, library_id, root_id, "Amber Field 1080p.mkv").await;
+
+        for (work_id, external_id) in [(first, "111"), (second, "111"), (apart, "222")] {
+            database
+                .set_work_external_id(work_id, "tmdb", external_id)
+                .await
+                .expect("identifier written");
+        }
+        // Another provider naming the same film is not a second grouping.
+        database
+            .set_work_external_id(first, "imdb", "tt111")
+            .await
+            .expect("identifier written");
+
+        let shared = database
+            .works_sharing_an_identity(library_id, "tmdb")
+            .await
+            .expect("read");
+        assert_eq!(shared.len(), 1, "one film is here twice, and one once");
+        assert_eq!(
+            shared[0].keep, first,
+            "the one that has been here longest is the one the others join"
+        );
+        assert_eq!(shared[0].others, vec![second]);
+    }
+
+    #[tokio::test]
+    async fn a_film_that_is_here_once_is_not_listed_as_sharing_anything() {
+        let (database, library_id, root_id) = library().await;
+        let (work_id, _) =
+            work_with_source(&database, library_id, root_id, "Quiet Harbour 1080p.mkv").await;
+        database
+            .set_work_external_id(work_id, "tmdb", "111")
+            .await
+            .expect("identifier written");
+
+        assert!(database
+            .works_sharing_an_identity(library_id, "tmdb")
+            .await
+            .expect("read")
+            .is_empty());
     }
 
     #[tokio::test]

@@ -395,7 +395,7 @@ pub(crate) async fn reread_names_of_nameless_works(
             .await?
             .filter(|twin| twin.id != work.id)
         {
-            database.merge_work_into(work.id, twin.id).await?;
+            join_work_into(state, work.id, twin.id).await?;
             tracing::info!(
                 work = %MediaName::new(&parsed.title),
                 "two copies of one film read as one film now"
@@ -416,6 +416,20 @@ pub(crate) async fn reread_names_of_nameless_works(
     }
 
     Ok(done)
+}
+
+/// Joins one work to another, and clears what the one that went had cached.
+///
+/// The pictures of a work are found by owner rather than by a key the engine
+/// knows about, so dropping the work leaves their files behind. They are
+/// removed here, where the folder they live in is known.
+pub(crate) async fn join_work_into(state: &AppState, from: WorkId, into: WorkId) -> Result<()> {
+    let no_longer_used = state.database().merge_work_into(from, into).await?;
+    let images = state.config().directories.images();
+    for path in no_longer_used {
+        tokio::fs::remove_file(images.join(path)).await.ok();
+    }
+    Ok(())
 }
 
 /// What reading the file names again changed.
@@ -1158,6 +1172,47 @@ mod tests {
         let settled = scan(&state, &library).await;
         assert_eq!(settled.merged, 0, "there is nothing left to merge");
         assert_eq!(settled.renamed, 0);
+    }
+
+    #[tokio::test]
+    async fn a_run_of_films_with_names_built_on_one_another_stays_a_run_of_films() {
+        // The shape a series has: one title, its plural, its number, and a
+        // word added. Nothing here may ever be put together, whatever is stuck
+        // to the front of the copies.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        for name in [
+            "Harbour BD.Rip 1080 x264.mkv",
+            "Harbours BD.Rip 1080 x264.mkv",
+            "Harbour II BD.Rip 1080 x264.mkv",
+            "Harbour Rising BD.Rip 1080 x264.mkv",
+            "zz12Harbour BD.Rip 1080 x264.mkv",
+        ] {
+            write(&media, name, name.as_bytes());
+        }
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+
+        let mut titles: Vec<String> = state
+            .database()
+            .recent_works(library.id, 10)
+            .await
+            .expect("read")
+            .into_iter()
+            .map(|work| work.title)
+            .collect();
+        titles.sort();
+        assert_eq!(
+            titles,
+            vec![
+                "Harbour".to_string(),
+                "Harbour II".to_string(),
+                "Harbour Rising".to_string(),
+                "Harbours".to_string(),
+            ],
+            "four films, and the fifth file is a second copy of the first"
+        );
     }
 
     #[tokio::test]
