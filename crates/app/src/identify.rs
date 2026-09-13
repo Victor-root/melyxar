@@ -50,12 +50,15 @@ pub struct IdentifyReport {
 const BATCH: i64 = 200;
 
 /// Identifies the works of a library that are still waiting.
-pub async fn identify_library(
+pub async fn identify_library<P>(
     state: &AppState,
-    provider: &impl MetadataProvider,
+    provider: &Arc<P>,
     library: &Library,
     handle: &JobHandle,
-) -> Result<IdentifyReport> {
+) -> Result<IdentifyReport>
+where
+    P: MetadataProvider + 'static,
+{
     let database = state.database();
     // Before asking anyone about a film, make sure the question is the right
     // one. A work still waiting has never been given anything but the name of
@@ -134,12 +137,15 @@ enum Outcome {
     Refused,
 }
 
-async fn identify_one(
+async fn identify_one<P>(
     state: &AppState,
-    provider: &impl MetadataProvider,
+    provider: &Arc<P>,
     library: &Library,
     work: &Work,
-) -> Result<Outcome> {
+) -> Result<Outcome>
+where
+    P: MetadataProvider + 'static,
+{
     let database = state.database();
     let language = &library.metadata_language;
 
@@ -148,7 +154,7 @@ async fn identify_one(
     let known_ids = database.work_external_ids(work.id).await?;
     let chosen = match known_id(&known_ids, provider.name()) {
         Some(external_id) => external_id,
-        None => match find_candidate(provider, work, &known_ids, language).await {
+        None => match find_candidate(provider.as_ref(), work, &known_ids, language).await {
             Ok(Some(candidate)) => candidate.external_id,
             // The provider answered and offered nothing at all. The only thing
             // it was given is the title read off the file name, so that title
@@ -182,7 +188,7 @@ async fn identify_one(
 
     // The pictures follow at once, from what the provider already told us:
     // asking a second time for the same film would be a request for nothing.
-    crate::images::store_provider_images(state, provider, work.id, &details).await;
+    crate::images::store_provider_images(state, provider.as_ref(), work.id, &details).await;
     crate::images::store_person_photos(state, provider, &people).await;
 
     tracing::debug!(
@@ -434,7 +440,7 @@ where
             JobPriority::BACKGROUND,
             Some(target),
             move |handle| async move {
-                match identify_library(&state, provider.as_ref(), &library, &handle).await {
+                match identify_library(&state, &provider, &library, &handle).await {
                     Ok(report) => {
                         *recorded
                             .lock()
@@ -451,13 +457,16 @@ where
 }
 
 /// Chooses a match by hand, and remembers that a person chose it.
-pub async fn identify_by_hand(
+pub async fn identify_by_hand<P>(
     state: &AppState,
-    provider: &impl MetadataProvider,
+    provider: &Arc<P>,
     library_id: LibraryId,
     work_id: WorkId,
     external_id: &str,
-) -> Result<()> {
+) -> Result<()>
+where
+    P: MetadataProvider + 'static,
+{
     let library = state
         .database()
         .list_libraries()
@@ -483,7 +492,7 @@ pub async fn identify_by_hand(
     // A film someone identified by hand gets its pictures like any other: the
     // provider has just described it, so asking again would be a request for
     // nothing.
-    crate::images::store_provider_images(state, provider, work_id, &details).await;
+    crate::images::store_provider_images(state, provider.as_ref(), work_id, &details).await;
     crate::images::store_person_photos(state, provider, &people).await;
 
     state.database().bump_library_version(library_id).await?;
@@ -866,7 +875,7 @@ mod tests {
         )
     }
 
-    async fn run(state: &AppState, provider: &StandIn, library: &Library) -> IdentifyReport {
+    async fn run(state: &AppState, provider: &Arc<StandIn>, library: &Library) -> IdentifyReport {
         let runner = melyxar_jobs::JobRunner::new(state.database().clone());
         let holder: Arc<Mutex<Option<JobHandle>>> = Arc::new(Mutex::new(None));
         let kept = Arc::clone(&holder);
@@ -895,10 +904,10 @@ mod tests {
     #[tokio::test]
     async fn a_film_the_provider_knows_gets_everything_a_page_shows() {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
-        );
+        ));
 
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.identified, 1);
@@ -929,7 +938,7 @@ mod tests {
     #[tokio::test]
     async fn the_year_decides_between_a_film_and_its_remake() {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![
                 candidate("999", "Quiet Harbour", Some(1978)),
                 candidate("111", "Quiet Harbour", Some(2019)),
@@ -938,7 +947,7 @@ mod tests {
                 details("999", "Quiet Harbour", Some(1978)),
                 details("111", "Quiet Harbour", Some(2019)),
             ],
-        );
+        ));
 
         run(&state, &provider, &library).await;
         assert_eq!(
@@ -959,10 +968,10 @@ mod tests {
         // The file said 2020, the film came out in 2019: a search with the
         // year finds nothing, and the one without it finds the film.
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2020)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
-        );
+        ));
 
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.identified, 1);
@@ -992,10 +1001,10 @@ mod tests {
             .await
             .expect("identifier stored");
 
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             Vec::new(),
             vec![details("111", "Quiet Harbour", Some(2019))],
-        );
+        ));
         let report = run(&state, &provider, &library).await;
 
         assert_eq!(report.identified, 1);
@@ -1014,10 +1023,10 @@ mod tests {
             .await
             .expect("identifier stored");
 
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             Vec::new(),
             vec![details("111", "Quiet Harbour", Some(2019))],
-        );
+        ));
         let report = run(&state, &provider, &library).await;
 
         assert_eq!(report.identified, 1);
@@ -1028,7 +1037,7 @@ mod tests {
     async fn a_film_nobody_recognised_stays_in_the_library_with_a_marker() {
         let (_directory, state, library, work) =
             state_with_work("Something Invented", Some(2019)).await;
-        let provider = StandIn::new(Vec::new(), Vec::new());
+        let provider = Arc::new(StandIn::new(Vec::new(), Vec::new()));
 
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.unidentified, 1);
@@ -1057,7 +1066,7 @@ mod tests {
         // nothing, so the film is marked rather than left on the waiting list
         // for ever.
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::failing(|| ProviderError::Unexpected("not json at all".into()));
+        let provider = Arc::new(StandIn::failing(|| ProviderError::Unexpected("not json at all".into())));
 
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.unidentified, 1);
@@ -1083,9 +1092,9 @@ mod tests {
         // told apart from a provider that is down, because the answer to one
         // is to wait and the answer to the other is to look at the network.
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::failing(|| ProviderError::TooManyRequests {
+        let provider = Arc::new(StandIn::failing(|| ProviderError::TooManyRequests {
             retry_after_seconds: Some(3),
-        });
+        }));
 
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.postponed, 1);
@@ -1116,7 +1125,7 @@ mod tests {
             .await
             .expect("read");
 
-        let nothing_found = StandIn::new(Vec::new(), Vec::new());
+        let nothing_found = Arc::new(StandIn::new(Vec::new(), Vec::new()));
         run(&state, &nothing_found, &library).await;
         assert_eq!(
             state
@@ -1130,10 +1139,10 @@ mod tests {
 
         // A film nobody recognised today may be recognised tomorrow, so the
         // same film is looked up again, this time by a provider that knows it.
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
-        );
+        ));
         assert_eq!(run(&state, &provider, &library).await.identified, 1);
         assert!(
             state
@@ -1149,7 +1158,7 @@ mod tests {
     #[tokio::test]
     async fn a_provider_that_is_down_leaves_the_work_waiting_rather_than_marking_it() {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::failing(|| ProviderError::Unreachable("timed out".into()));
+        let provider = Arc::new(StandIn::failing(|| ProviderError::Unreachable("timed out".into())));
 
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.postponed, 1);
@@ -1185,7 +1194,7 @@ mod tests {
     #[tokio::test]
     async fn a_key_the_provider_refuses_stops_the_run_and_blames_the_key() {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::failing(|| ProviderError::Unauthorised);
+        let provider = Arc::new(StandIn::failing(|| ProviderError::Unauthorised));
 
         let runner = melyxar_jobs::JobRunner::new(state.database().clone());
         let holder: Arc<Mutex<Option<JobHandle>>> = Arc::new(Mutex::new(None));
@@ -1228,10 +1237,10 @@ mod tests {
     #[tokio::test]
     async fn a_work_already_identified_is_left_alone() {
         let (_directory, state, library, _) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
-        );
+        ));
 
         assert_eq!(run(&state, &provider, &library).await.identified, 1);
         let second = run(&state, &provider, &library).await;
@@ -1242,13 +1251,13 @@ mod tests {
     #[tokio::test]
     async fn a_match_picked_by_hand_is_never_undone_by_a_later_run() {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("999", "Quiet Harbour", Some(2019))],
             vec![
                 details("999", "Quiet Harbour", Some(2019)),
                 details("111", "Quiet Harbour", Some(2019)),
             ],
-        );
+        ));
 
         identify_by_hand(&state, &provider, library.id, work.id, "111")
             .await
@@ -1329,10 +1338,10 @@ mod tests {
     #[tokio::test]
     async fn a_trailer_hosted_elsewhere_is_kept_as_a_link() {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
-        );
+        ));
         run(&state, &provider, &library).await;
 
         let row: (String,) = sqlx::query_as(
@@ -1381,23 +1390,23 @@ mod tests {
 
         let (_directory, state, library, work) =
             state_with_tools("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
         )
-        .serving(picture);
+        .serving(picture));
 
         // The count is what the log reports, so it is worth an answer of its
         // own: one picture prepared the first time, none the second, since the
         // poster has not changed.
         let details = details("111", "Quiet Harbour", Some(2019));
         assert_eq!(
-            crate::images::store_provider_images(&state, &provider, work.id, &details).await,
+            crate::images::store_provider_images(&state, provider.as_ref(), work.id, &details).await,
             1,
             "the film has a poster and no backdrop, so one picture is prepared"
         );
         assert_eq!(
-            crate::images::store_provider_images(&state, &provider, work.id, &details).await,
+            crate::images::store_provider_images(&state, provider.as_ref(), work.id, &details).await,
             0,
             "a picture already here is not prepared a second time"
         );
@@ -1463,11 +1472,11 @@ mod tests {
 
         let (_directory, state, library, work) =
             state_with_tools("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
         )
-        .serving(picture);
+        .serving(picture));
 
         run(&state, &provider, &library).await;
 
@@ -1529,11 +1538,11 @@ mod tests {
             })
             .collect();
 
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![crowded],
         )
-        .serving(picture);
+        .serving(picture));
         run(&state, &provider, &library).await;
 
         let faces: Vec<String> = provider
@@ -1560,11 +1569,11 @@ mod tests {
         };
         let (_directory, state, library, work) =
             state_with_tools("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
         )
-        .serving(picture);
+        .serving(picture));
 
         run(&state, &provider, &library).await;
         let people = state
@@ -1611,11 +1620,11 @@ mod tests {
         };
         let (_directory, state, library, work) =
             state_with_tools("Quiet Harbour", Some(2019)).await;
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
         )
-        .serving(picture);
+        .serving(picture));
 
         run(&state, &provider, &library).await;
         let before = state
@@ -1637,7 +1646,7 @@ mod tests {
             .expect("applied");
         crate::images::store_provider_images(
             &state,
-            &provider,
+            provider.as_ref(),
             work.id,
             &details("111", "Quiet Harbour", Some(2019)),
         )
@@ -1659,10 +1668,10 @@ mod tests {
         let (_directory, state, library, work) =
             state_with_tools("Quiet Harbour", Some(2019)).await;
         // The stand-in serves no picture at all.
-        let provider = StandIn::new(
+        let provider = Arc::new(StandIn::new(
             vec![candidate("111", "Quiet Harbour", Some(2019))],
             vec![details("111", "Quiet Harbour", Some(2019))],
-        );
+        ));
 
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.identified, 1);

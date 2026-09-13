@@ -33,29 +33,51 @@ pub const BACKDROP_WIDTHS: [u32; 3] = [640, 1280, 1920];
 /// twice what it measures. Two widths cover both and no more.
 pub const PHOTO_WIDTHS: [u32; 2] = [96, 192];
 
-/// Builds the conversion of one picture to one width.
+/// Builds the conversion of one picture to every width at once.
+///
+/// One run rather than one per width, because reading the picture and starting
+/// the tool cost more than the scaling does: a film brings twenty pictures and
+/// a library brings a hundred films, so the difference is minutes.
 ///
 /// The height follows the width so nothing is ever stretched, and an odd
 /// number of pixels is allowed here: unlike video, a picture has no encoder
 /// demanding even sides.
-pub fn resize_arguments(source: &Path, destination: &Path, width: u32) -> Vec<OsString> {
-    vec![
+pub fn resize_arguments(source: &Path, destinations: &[(u32, &Path)]) -> Vec<OsString> {
+    let mut arguments = vec![
         OsString::from("-hide_banner"),
         OsString::from("-loglevel"),
         OsString::from("error"),
         OsString::from("-y"),
         OsString::from("-i"),
         source.as_os_str().to_os_string(),
-        OsString::from("-vf"),
-        OsString::from(format!("scale={width}:-1:flags=lanczos")),
-        OsString::from("-frames:v"),
-        OsString::from("1"),
-        OsString::from("-c:v"),
-        OsString::from("libwebp"),
-        OsString::from("-quality"),
-        OsString::from(QUALITY.to_string()),
-        destination.as_os_str().to_os_string(),
-    ]
+    ];
+
+    // The picture is read once and handed to every scaling, which is what lets
+    // the outputs share the one run.
+    let mut graph = format!("[0:v]split={}", destinations.len());
+    for index in 0..destinations.len() {
+        graph.push_str(&format!("[in{index}]"));
+    }
+    for (index, (width, _)) in destinations.iter().enumerate() {
+        graph.push_str(&format!(
+            ";[in{index}]scale={width}:-1:flags=lanczos[out{index}]"
+        ));
+    }
+    arguments.push(OsString::from("-filter_complex"));
+    arguments.push(OsString::from(graph));
+
+    for (index, (_, destination)) in destinations.iter().enumerate() {
+        arguments.push(OsString::from("-map"));
+        arguments.push(OsString::from(format!("[out{index}]")));
+        arguments.push(OsString::from("-frames:v"));
+        arguments.push(OsString::from("1"));
+        arguments.push(OsString::from("-c:v"));
+        arguments.push(OsString::from("libwebp"));
+        arguments.push(OsString::from("-quality"));
+        arguments.push(OsString::from(QUALITY.to_string()));
+        arguments.push(destination.as_os_str().to_os_string());
+    }
+    arguments
 }
 
 /// Builds the reading of a picture's average colour.
@@ -82,10 +104,13 @@ pub fn average_colour_arguments(source: &Path) -> Vec<OsString> {
     ]
 }
 
-/// Writes one picture at one width.
-pub async fn resize(tool: &Path, source: &Path, destination: &Path, width: u32) -> Result<()> {
+/// Writes one picture at every width the interface serves.
+pub async fn resize(tool: &Path, source: &Path, destinations: &[(u32, &Path)]) -> Result<()> {
+    if destinations.is_empty() {
+        return Ok(());
+    }
     let output = TokioCommand::new(tool)
-        .args(resize_arguments(source, destination, width))
+        .args(resize_arguments(source, destinations))
         .stdin(Stdio::null())
         .output()
         .await?;
@@ -145,11 +170,8 @@ mod tests {
 
     #[test]
     fn a_resize_keeps_the_shape_of_the_picture() {
-        let arguments = resize_arguments(
-            &PathBuf::from("/cache/source.jpg"),
-            &PathBuf::from("/cache/poster-400.webp"),
-            400,
-        );
+        let small = PathBuf::from("/cache/poster-400.webp");
+        let arguments = resize_arguments(&PathBuf::from("/cache/source.jpg"), &[(400, &small)]);
         let line = rendered(&arguments);
 
         assert!(line.contains("scale=400:-1"), "{line}");
@@ -161,6 +183,73 @@ mod tests {
             line.contains("-y"),
             "a picture generated again replaces itself"
         );
+    }
+
+    #[test]
+    fn every_width_is_written_by_one_run_that_reads_the_picture_once() {
+        let small = PathBuf::from("/cache/poster-200.webp");
+        let large = PathBuf::from("/cache/poster-800.webp");
+        let line = rendered(&resize_arguments(
+            &PathBuf::from("/cache/source.jpg"),
+            &[(200, &small), (800, &large)],
+        ));
+
+        assert_eq!(line.matches(" -i ").count(), 1, "read once: {line}");
+        assert!(line.contains("split=2"), "{line}");
+        assert!(line.contains("[in0]scale=200:-1"), "{line}");
+        assert!(line.contains("[in1]scale=800:-1"), "{line}");
+        assert!(
+            line.contains("-map [out0] -frames:v 1 -c:v libwebp -quality 80 /cache/poster-200.webp"),
+            "each width is an output of its own: {line}"
+        );
+        assert!(line.ends_with("/cache/poster-800.webp"), "{line}");
+    }
+
+    /// The command above is only worth anything if the tool accepts it, and
+    /// nothing but the tool can say so.
+    #[tokio::test]
+    async fn the_tool_really_writes_every_width_in_one_run() {
+        let folder = tempfile::tempdir().expect("temporary directory");
+        let source = folder.path().join("source.jpg");
+        let made = TokioCommand::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=#3366aa:s=1000x1500",
+                "-frames:v",
+                "1",
+            ])
+            .arg(&source)
+            .output()
+            .await;
+        if !made.is_ok_and(|output| output.status.success()) {
+            eprintln!("no media tool here, the conversion was not exercised");
+            return;
+        }
+
+        let small = folder.path().join("poster-200.webp");
+        let large = folder.path().join("poster-800.webp");
+        resize(
+            Path::new("ffmpeg"),
+            &source,
+            &[(200, &small), (800, &large)],
+        )
+        .await
+        .expect("the tool accepted the command");
+
+        for (path, least) in [(&small, 100), (&large, 1_000)] {
+            let written = std::fs::metadata(path).expect("a file was written");
+            assert!(
+                written.len() > least,
+                "{path:?} came out at {} bytes",
+                written.len()
+            );
+        }
     }
 
     #[test]
