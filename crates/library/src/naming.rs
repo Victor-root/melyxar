@@ -354,9 +354,18 @@ fn strip_leading_article(title: &str) -> String {
 ///
 /// Handles the letters that actually occur in the languages at hand rather
 /// than pulling in a full normalisation library for a handful of characters.
+///
+/// An accent reaches us written one of two ways. Usually it is one character,
+/// and the table below covers those. But a file can carry the plain letter
+/// followed by the accent as a mark of its own, which looks identical on any
+/// screen and is not the same text at all. Those marks are dropped, so that
+/// the folded form is the same either way: without that, two spellings of one
+/// title sort apart, compare as different, and one of them finds nothing at a
+/// provider.
 pub fn fold_accents(value: &str) -> String {
     value
         .chars()
+        .filter(|c| !is_a_combining_mark(*c))
         .map(|c| match c {
             'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => 'a',
             'À' | 'Á' | 'Â' | 'Ã' | 'Ä' | 'Å' => 'A',
@@ -376,6 +385,18 @@ pub fn fold_accents(value: &str) -> String {
             other => other,
         })
         .collect()
+}
+
+/// Whether a character is an accent written on its own, after the letter it
+/// belongs to. The block below is the one Latin scripts use.
+fn is_a_combining_mark(c: char) -> bool {
+    ('\u{0300}'..='\u{036f}').contains(&c)
+}
+
+/// Whether a title is written in plain letters, which decides whether asking a
+/// provider for its folded form is a second question or the same one twice.
+pub fn carries_accents(title: &str) -> bool {
+    !title.is_ascii()
 }
 
 /// File extensions treated as video.
@@ -764,6 +785,31 @@ mod tests {
         let result = parsed("Quiet Harbour 2019 1080p BluRay.mkv");
         assert_eq!(result.title, "Quiet Harbour");
         assert_eq!(result.year, Some(2019));
+    }
+
+    #[test]
+    fn an_accent_written_as_a_mark_of_its_own_folds_like_any_other() {
+        // The same title twice, spelled the two ways a file can carry it: one
+        // character for the accented letter, or the plain letter followed by
+        // the accent. They look identical and are different text.
+        let one_character = "La ru\u{e9}e vers l'or";
+        let letter_then_accent = "La rue\u{301}e vers l'or";
+        assert_ne!(one_character, letter_then_accent, "different text");
+
+        assert_eq!(fold_accents(one_character), fold_accents(letter_then_accent));
+        assert_eq!(
+            sort_title(one_character),
+            sort_title(letter_then_accent),
+            "or the same film sorts in two places and never matches itself"
+        );
+        assert!(sort_title(letter_then_accent).is_ascii());
+    }
+
+    #[test]
+    fn a_title_with_no_accent_at_all_is_told_apart_from_one_that_has_them() {
+        assert!(!carries_accents("Quiet Harbour"));
+        assert!(carries_accents("La ru\u{e9}e vers l'or"));
+        assert!(carries_accents("La rue\u{301}e vers l'or"));
     }
 
     #[test]
