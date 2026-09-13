@@ -22,6 +22,9 @@ pub enum ErrorCode {
     Conflict,
     PathNotAllowed,
     RootUnavailable,
+    /// Nothing has managed to describe the file, so there is nothing to decide
+    /// how to play it with.
+    NotDescribed,
     DependencyMissing,
     ExternalServiceUnavailable,
     Internal,
@@ -39,6 +42,7 @@ impl ErrorCode {
             Self::Conflict => "conflict",
             Self::PathNotAllowed => "path_not_allowed",
             Self::RootUnavailable => "root_unavailable",
+            Self::NotDescribed => "not_described",
             Self::DependencyMissing => "dependency_missing",
             Self::ExternalServiceUnavailable => "external_service_unavailable",
             Self::Internal => "internal",
@@ -97,6 +101,10 @@ impl Error {
     pub fn dependency_missing(detail: impl Into<String>) -> Self {
         Self::new(ErrorCode::DependencyMissing, detail)
     }
+
+    pub fn not_described(detail: impl Into<String>) -> Self {
+        Self::new(ErrorCode::NotDescribed, detail)
+    }
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -119,6 +127,7 @@ mod tests {
             (ErrorCode::Conflict, "conflict"),
             (ErrorCode::PathNotAllowed, "path_not_allowed"),
             (ErrorCode::RootUnavailable, "root_unavailable"),
+            (ErrorCode::NotDescribed, "not_described"),
             (ErrorCode::DependencyMissing, "dependency_missing"),
             (
                 ErrorCode::ExternalServiceUnavailable,

@@ -145,6 +145,9 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::RootUnavailable | ErrorCode::DependencyMissing => {
             StatusCode::SERVICE_UNAVAILABLE
         }
+        // The file is there and is the problem: nothing about the server will
+        // change that, and no amount of waiting will either.
+        ErrorCode::NotDescribed => StatusCode::UNPROCESSABLE_ENTITY,
         ErrorCode::ExternalServiceUnavailable => StatusCode::BAD_GATEWAY,
         ErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
     }
@@ -218,6 +221,7 @@ mod tests {
                 ErrorCode::DependencyMissing,
                 StatusCode::SERVICE_UNAVAILABLE,
             ),
+            (ErrorCode::NotDescribed, StatusCode::UNPROCESSABLE_ENTITY),
             (
                 ErrorCode::ExternalServiceUnavailable,
                 StatusCode::BAD_GATEWAY,

@@ -79,6 +79,8 @@ function wording(error: unknown): string {
       return "player.too_busy";
     case "dependency_missing":
       return "player.no_conversion";
+    case "not_described":
+      return "player.not_described";
     default:
       return "error.unreachable";
   }

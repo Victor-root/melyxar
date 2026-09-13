@@ -639,9 +639,16 @@ impl Database {
     ///
     /// The files themselves are untouched, and so is everything attached to
     /// them: only what was read out of them goes.
+    ///
+    /// All of it goes, not merely the mark saying it was read. A file left
+    /// with the container an older reading found and no streams to go with it
+    /// describes itself as something it was never shown to be, and whatever
+    /// reads that afterwards believes it.
     pub async fn forget_analysis(&self, library_id: LibraryId) -> Result<u64> {
         let done = sqlx::query(
-            "UPDATE media_sources SET analysed_at = NULL
+            "UPDATE media_sources
+             SET analysed_at = NULL, analysis_failure = NULL, container = NULL,
+                 duration_ms = NULL, overall_bitrate = NULL
              WHERE root_id IN (SELECT id FROM library_roots WHERE library_id = ?)",
         )
         .bind(library_id.to_db_string())
