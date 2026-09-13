@@ -132,6 +132,14 @@ pub struct VideoEncode {
     pub burn_in_subtitle: Option<i32>,
 }
 
+/// How often the tool is asked to say where it has got to, in seconds.
+///
+/// Ten times a second. A segment is handed over once the tool has said it
+/// passed the end of it, so this is the delay between a segment being finished
+/// and anybody knowing. The default of half a second or more was measured as
+/// most of that wait on a real film.
+const HOW_OFTEN_IT_REPORTS: &str = "0.1";
+
 /// Quality the software encoder aims at, on its own scale.
 ///
 /// The usual middle of the road: visually indistinguishable from the source on
@@ -394,6 +402,13 @@ impl Command {
             push!("-progress");
             push!("pipe:1");
             push!("-nostats");
+            // How often it says where it has got to. The default is the best
+            // part of a second, and a segment is only known to be finished
+            // once the tool has said so: measured on a real film, that wait
+            // was most of the time between a segment being written and being
+            // handed over. It costs a line of text now and then.
+            push!("-stats_period");
+            push!(HOW_OFTEN_IT_REPORTS);
         }
 
         // Seeking before the input makes the tool jump there; after the input
@@ -1380,6 +1395,12 @@ mod tests {
         let args = arguments(&command);
         let index = position(&args, "-progress").expect("progress is requested");
         assert_eq!(args[index + 1], "pipe:1");
+
+        // Often enough that a finished segment is known to be finished. What
+        // the tool does by default was measured as most of the wait between a
+        // segment being written and being handed over.
+        let period = position(&args, "-stats_period").expect("a period is asked for");
+        assert_eq!(args[period + 1], "0.1");
     }
 
     #[test]

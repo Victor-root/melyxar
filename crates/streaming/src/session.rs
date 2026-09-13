@@ -152,6 +152,15 @@ struct AtWork {
     /// which is the one thing that turns into stuttering rather than into a
     /// wait at the start.
     speed: Arc<AtomicI64>,
+    /// How long the tool took to say anything at all, in milliseconds, or a
+    /// negative number while it has not.
+    ///
+    /// It says nothing until it has opened the film, found its way to the
+    /// point asked for and begun producing. On a jump into a large file that
+    /// is a real part of the wait, and it is a different part from producing
+    /// the segment: one is attacked by asking the tool to look at less of the
+    /// file, the other only by producing faster.
+    opening: Arc<AtomicI64>,
 }
 
 impl AtWork {
@@ -163,6 +172,14 @@ impl AtWork {
     /// How fast the tool says it is working, relative to real time.
     fn speed(&self) -> f64 {
         self.speed.load(Ordering::Relaxed) as f64 / 1000.0
+    }
+
+    /// How long the tool took to say anything, when it has.
+    fn opening(&self) -> Option<u128> {
+        match self.opening.load(Ordering::Relaxed) {
+            silent if silent < 0 => None,
+            said => Some(said as u128),
+        }
     }
 }
 
@@ -327,6 +344,34 @@ impl Session {
         }
     }
 
+    /// Removes what a tool left half written when it was stopped where it
+    /// stood.
+    ///
+    /// A segment whose end the tool had not reached was still being written,
+    /// and a file that is merely there is handed over on sight. Without this,
+    /// jumping back to that second of the film later serves a truncated
+    /// segment, which breaks playback in a way nobody can read. It is exactly
+    /// what asking the tool politely used to buy, at a fraction of the price.
+    async fn remove_what_was_half_written(&self, reached: Millis) {
+        let segment = self.playlist.segment.get().max(1);
+        // The segment holding the last position it reported is the one it was
+        // inside. Everything after that it cannot have finished either, and a
+        // tool writes them in order, so there are never more than a couple.
+        let mut index = (reached.get().max(0) / segment) as u32;
+        while self.path_of(index).exists() {
+            if let Err(error) = tokio::fs::remove_file(self.path_of(index)).await {
+                tracing::warn!(
+                    session = %self.id,
+                    index,
+                    error = %error,
+                    "a half written segment could not be removed, so it is left to be                      produced again"
+                );
+                return;
+            }
+            index += 1;
+        }
+    }
+
     /// Whether the tool has finished writing one segment.
     ///
     /// Three ways of knowing the same thing, cheapest and soonest first. The
@@ -385,9 +430,12 @@ impl Session {
     /// four seconds of ordinary playback would bury them. The ordinary case is
     /// still written down, quietly, for a session being looked at closely.
     async fn say_what_it_took(&self, index: u32, started: Option<WhatItTook>, waited: WhatItTook) {
-        let speed = {
+        let (speed, opening) = {
             let running = self.running.lock().await;
-            running.as_ref().map(AtWork::speed)
+            match running.as_ref() {
+                Some(at_work) => (Some(at_work.speed()), at_work.opening()),
+                None => (None, None),
+            }
         };
         let Some(getting_going) = started else {
             tracing::debug!(
@@ -409,6 +457,7 @@ impl Session {
             at_second = self.playlist.start_of(index).as_seconds_f64(),
             stopping_ms = getting_going.stopping.as_millis(),
             starting_ms = getting_going.starting.as_millis(),
+            opening_ms = opening,
             appearing_ms = waited.appearing.as_millis(),
             settling_ms = waited.settling.as_millis(),
             total_ms = total.as_millis(),
@@ -437,7 +486,15 @@ impl Session {
         // in between to be produced first.
         let stopping = Instant::now();
         if let Some(at_work) = running.take() {
-            at_work.process.stop().await?;
+            // Stopped where it stands rather than asked to finish. Everything
+            // it was doing is worthless the moment somebody jumps elsewhere,
+            // and measured on a real film, asking politely cost the best part
+            // of a second of the viewer's wait, every time. What it leaves
+            // half written is cleared away instead, which costs a file
+            // removal.
+            let reached = at_work.reached();
+            at_work.process.stop_now().await?;
+            self.remove_what_was_half_written(reached).await;
         }
         let stopping = stopping.elapsed();
 
@@ -453,11 +510,21 @@ impl Session {
         // large file are two different problems.
         let reached = Arc::new(AtomicI64::new(0));
         let speed = Arc::new(AtomicI64::new(0));
+        let opening = Arc::new(AtomicI64::new(-1));
         let (reports, mut incoming) =
             tokio::sync::mpsc::channel::<melyxar_ffmpeg::process::Progress>(4);
-        let mirrored = (reached.clone(), speed.clone());
+        let mirrored = (reached.clone(), speed.clone(), opening.clone());
+        let began = Instant::now();
         tokio::spawn(async move {
             while let Some(report) = incoming.recv().await {
+                // The first word out of the tool is the moment it stopped
+                // opening the film and started producing it.
+                let _ = mirrored.2.compare_exchange(
+                    -1,
+                    began.elapsed().as_millis() as i64,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                );
                 mirrored.0.store(report.position.get(), Ordering::Relaxed);
                 if let Some(rate) = report.speed {
                     mirrored.1.store((rate * 1000.0) as i64, Ordering::Relaxed);
@@ -472,6 +539,7 @@ impl Session {
             from: index,
             reached,
             speed,
+            opening,
         });
         Ok(Some(WhatItTook {
             stopping,
@@ -1003,6 +1071,47 @@ mod tests {
             "a segment was handed over only once the one after it had been \
              produced on top of it, which is twice the wait for nothing"
         );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_tool_stopped_where_it_stood_leaves_nothing_half_written_behind() {
+        // This is what asking the tool politely used to buy, and it cost the
+        // best part of a second of the viewer's wait on every jump. A file
+        // that is merely there is handed over on sight, so a segment the tool
+        // had not finished would be served truncated to whoever jumped back
+        // to that second of the film later.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 60).await;
+        for index in 0..6 {
+            std::fs::write(session.folder().join(format!("segment-{index}.m4s")), b"x")
+                .expect("a segment");
+        }
+
+        // Sixteen seconds in: it had finished the first four segments and was
+        // inside the fifth.
+        session
+            .remove_what_was_half_written(Millis::new(17_000))
+            .await;
+
+        for finished in 0..4 {
+            assert!(
+                session
+                    .folder()
+                    .join(format!("segment-{finished}.m4s"))
+                    .exists(),
+                "segment {finished} was finished and must be kept"
+            );
+        }
+        for unfinished in 4..6 {
+            assert!(
+                !session
+                    .folder()
+                    .join(format!("segment-{unfinished}.m4s"))
+                    .exists(),
+                "segment {unfinished} was never finished and would be served truncated"
+            );
+        }
         session.close().await;
     }
 
