@@ -37,6 +37,9 @@ pub struct IdentifyReport {
     /// Works left untouched because the provider could not be reached. They
     /// are still waiting, so the next run picks them up.
     pub postponed: usize,
+    /// Works whose title was read again from their file name before anything
+    /// was asked about them, and came out different.
+    pub renamed: usize,
     pub cancelled: bool,
 }
 
@@ -54,11 +57,20 @@ pub async fn identify_library(
     handle: &JobHandle,
 ) -> Result<IdentifyReport> {
     let database = state.database();
+    // Before asking anyone about a film, make sure the question is the right
+    // one. A work still waiting has never been given anything but the name of
+    // its file, the rules that read those names get better, and a title read
+    // by yesterday's rules is the commonest reason a provider answers nothing.
+    let renamed = crate::scan::reread_names_of_nameless_works(state, library).await?;
+
     let waiting = database
         .works_awaiting_identification(library.id, BATCH)
         .await?;
 
-    let mut report = IdentifyReport::default();
+    let mut report = IdentifyReport {
+        renamed,
+        ..IdentifyReport::default()
+    };
     if waiting.is_empty() {
         return Ok(report);
     }
@@ -104,6 +116,7 @@ pub async fn identify_library(
         identified = report.identified,
         unidentified = report.unidentified,
         postponed = report.postponed,
+        renamed = report.renamed,
         cancelled = report.cancelled,
         "identification finished"
     );

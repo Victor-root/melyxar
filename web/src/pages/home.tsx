@@ -10,7 +10,7 @@ import type { Home as HomeData, Library } from "../api";
 import { Card } from "../components/card";
 import { Grid } from "../components/grid";
 import { JobLine } from "../components/job";
-import { useRunning } from "../running";
+import { useRunning, useStartScan } from "../running";
 import { useSettings } from "../settings";
 
 export function HomePage({ libraries }: { libraries: Library[] }) {
@@ -37,20 +37,16 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
     return () => controller.abort();
   }, [load]);
 
-  /* A scan takes minutes on a real library, so the page watches the one it
-     started and fetches what it produced when it ends. Without this, pressing
-     the button looks exactly like pressing a button that does nothing. */
-  const { jobs, watch } = useRunning(() => load());
-
-  const startScan = async () => {
-    setWorking(true);
-    try {
-      await Promise.all(libraries.map((library) => api.scan(library.id)));
-      watch();
-    } finally {
-      setWorking(false);
+  /* Work takes minutes on a real library, so the page reads again what it
+     produced when it ends. Without this, pressing a button looks exactly like
+     pressing a button that does nothing. */
+  const { jobs, watch, finished } = useRunning();
+  const { start: startScan, starting } = useStartScan(libraries);
+  useEffect(() => {
+    if (finished > 0) {
+      load();
     }
-  };
+  }, [finished, load]);
 
   /* Asked for on its own, for the films a previous look up did not name:
      a provider that was down, a title nobody recognised, a key added since. */
@@ -100,7 +96,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
             <>
               <p>{t("home.empty.body")}</p>
               {libraries.length > 0 && (
-                <button className="button button-accent" onClick={startScan} disabled={working}>
+                <button className="button button-accent" onClick={startScan} disabled={starting}>
                   {t("home.scan")}
                 </button>
               )}
@@ -137,7 +133,11 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
                   films sit there named after their file for ever, and the
                   only way out is a terminal. */}
               {jobs.length === 0 && (
-                <button className="button button-small" onClick={startIdentification}>
+                <button
+                  className="button button-small"
+                  onClick={startIdentification}
+                  disabled={working}
+                >
                   {t("home.identify")}
                 </button>
               )}

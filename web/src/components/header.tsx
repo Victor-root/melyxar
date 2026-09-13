@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
+import { useRunning, useStartScan } from "../running";
 import { useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
 
@@ -15,6 +16,11 @@ export function Header({ libraries }: { libraries: Library[] }) {
   const [parameters] = useSearchParams();
   const [query, setQuery] = useState(parameters.get("search") ?? "");
   const field = useRef<HTMLInputElement>(null);
+  const { jobs } = useRunning();
+  /* A scan is the one thing somebody needs from wherever they happen to be:
+     films were added, a name was corrected, a disk came back. It lives here so
+     that nobody has to find the page it belongs to. */
+  const { start: startScan, starting } = useStartScan(libraries);
 
   // A slash puts the cursor in the search field, the way every list of things
   // has worked for thirty years.
@@ -74,6 +80,22 @@ export function Header({ libraries }: { libraries: Library[] }) {
             aria-label={t("nav.search")}
           />
         </form>
+
+        {/* While something runs, the button becomes what is running: the one
+            place somebody looks for the work is the place that started it. */}
+        {jobs.length > 0 ? (
+          <Link className="header-busy" to="/activity">
+            <span className="header-busy-mark" aria-hidden="true" />
+            {t(`jobs.${jobs[0].kind}`)}
+            {jobs[0].ratio !== null && ` ${Math.round(jobs[0].ratio * 100)} %`}
+          </Link>
+        ) : (
+          libraries.length > 0 && (
+            <button className="button button-small" onClick={startScan} disabled={starting}>
+              {t("home.scan")}
+            </button>
+          )
+        )}
 
         <div className="header-choices">
           <Choice
