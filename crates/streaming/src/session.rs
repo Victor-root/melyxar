@@ -530,6 +530,87 @@ mod tests {
         session.close().await;
     }
 
+    /// When the first picture and the first sound of a segment happen, in
+    /// milliseconds on the clock of the film.
+    async fn when_it_starts(folder: &Path, segment: &Path) -> (f64, f64) {
+        let whole = folder.join("readable.mp4");
+        let mut bytes = std::fs::read(folder.join("init.mp4")).expect("the header is there");
+        bytes.extend(std::fs::read(segment).expect("the segment is there"));
+        std::fs::write(&whole, bytes).expect("written");
+
+        let first_of = async |stream: &str| {
+            let output = tokio::process::Command::new("ffprobe")
+                .args([
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    stream,
+                    "-show_entries",
+                    "packet=pts_time",
+                    "-of",
+                    "csv=p=0",
+                ])
+                .arg(&whole)
+                .output()
+                .await
+                .expect("the analyser runs");
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .next()
+                .and_then(|line| line.trim().parse::<f64>().ok())
+                .expect("a first packet with a time on it")
+        };
+        (first_of("v:0").await, first_of("a:0").await)
+    }
+
+    #[tokio::test]
+    async fn a_jump_hands_out_a_segment_whose_sound_belongs_to_its_picture() {
+        // The defect this exists for: a copied picture can only begin at a key
+        // frame, so the tool rewound to the one before the jump, and then
+        // trimmed the sound to the jump itself because the sound was being
+        // rebuilt and could start anywhere. One segment, a picture from one
+        // moment and a sound from another, ten seconds apart on a film with
+        // key frames ten seconds apart.
+        //
+        // The commonest film of all takes this path: a picture every browser
+        // reads and a soundtrack none of them do.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("film.mkv");
+        // Key frames ten seconds apart, as a real film has them. One a second
+        // hides the whole thing.
+        clip_with_key_frames_every(&source, 60, 240).await;
+
+        let folder = directory.path().join("session");
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(60_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Copy,
+                audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
+                    "aac",
+                )),
+            },
+            folder.clone(),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+
+        // Five segments of four seconds in: twenty seconds, which is halfway
+        // between two key frames and therefore the worst case.
+        let segment = session.segment(5).await.expect("the segment is produced");
+        let (picture, sound) = when_it_starts(&folder, &segment).await;
+
+        assert!(
+            (picture - sound).abs() < 0.2,
+            "the sound of a segment has to belong to its picture: \
+             picture at {picture}s, sound at {sound}s"
+        );
+        session.close().await;
+    }
+
     #[tokio::test]
     async fn a_tool_that_cannot_read_the_film_says_so_instead_of_being_waited_out() {
         // What a viewer meets when a film cannot be converted at all. The tool
