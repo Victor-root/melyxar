@@ -59,6 +59,11 @@ struct PlanBody {
 struct PlanView {
     /// Where to fetch the film itself.
     url: String,
+    /// The tracks this answer was worked out for, whether the viewer chose
+    /// them, they were remembered, or the file decided. A page shows them as
+    /// the current choice rather than guessing which one that is.
+    chosen_audio_id: Option<String>,
+    chosen_subtitle_id: Option<String>,
     /// direct_play, remux, transcode_audio or full_transcode.
     method: &'static str,
     /// Whether anything has to be decoded, which is what a limit applies to.
@@ -140,8 +145,18 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
         }
     }
 
+    let chosen = |index: Option<i32>| -> Option<String> {
+        let index = index?;
+        plan.tracks
+            .iter()
+            .find(|track| track.stream_index == index)
+            .map(|track| track.id.to_string())
+    };
+
     PlanView {
         url: format!("/api/v1/playback/{}/stream", plan.source_id),
+        chosen_audio_id: chosen(plan.decision.audio_stream_index),
+        chosen_subtitle_id: chosen(plan.decision.subtitle_stream_index),
         method: plan.decision.method.as_str(),
         expensive: plan.decision.method.is_expensive(),
         reasons: plan

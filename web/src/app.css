@@ -862,6 +862,34 @@
   background: #000;
 }
 
+/* What the viewer can change while watching: the soundtrack, the subtitles,
+   the speed. Under the picture rather than over it, so nothing is hidden
+   behind a panel that has to be opened first. */
+.player-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--gap-tight) var(--gap);
+  color: #fff;
+}
+
+.player-choices .choice-label {
+  color: color-mix(in srgb, #fff 60%, transparent);
+}
+
+.player-choices select {
+  background: #1a1a1a;
+  border-color: #333;
+  color: #fff;
+}
+
+.player-choices .toggle {
+  background: #1a1a1a;
+  border-color: #333;
+  color: #fff;
+}
+
 /* Why the film is reaching this browser the way it is. Faint on purpose: it
    answers a question a viewer only asks when something looks wrong. */
 .player-why {
