@@ -270,7 +270,15 @@ async fn source_dimensions(state: &AppState, path: &Path) -> Option<(i32, i32)> 
         .await
         .ok()?;
     let stream = report.streams.first()?;
-    match (stream.width, stream.height) {
+    usable_dimensions(stream.width, stream.height)
+}
+
+/// The size of a picture, when the tool gave one worth using.
+///
+/// A side of nothing is not a size: a client told a picture is zero wide
+/// leaves no room for it, and every height computed from it is zero.
+fn usable_dimensions(width: Option<i32>, height: Option<i32>) -> Option<(i32, i32)> {
+    match (width, height) {
         (Some(width), Some(height)) if width > 0 && height > 0 => Some((width, height)),
         _ => None,
     }
@@ -287,6 +295,19 @@ fn scaled_height(width: u32, source_width: i32, source_height: i32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_picture_with_a_side_of_nothing_has_no_size_worth_using() {
+        // A tool that answers zero, or answers nothing at all, must not end up
+        // as a size: a client told a picture is zero wide leaves no room for
+        // it, and every height computed from it is zero.
+        assert_eq!(usable_dimensions(Some(600), Some(900)), Some((600, 900)));
+        assert_eq!(usable_dimensions(Some(0), Some(900)), None);
+        assert_eq!(usable_dimensions(Some(600), Some(0)), None);
+        assert_eq!(usable_dimensions(None, Some(900)), None);
+        assert_eq!(usable_dimensions(Some(600), None), None);
+        assert_eq!(usable_dimensions(Some(-1), Some(900)), None);
+    }
 
     #[test]
     fn a_height_follows_the_width_so_nothing_is_stretched() {
