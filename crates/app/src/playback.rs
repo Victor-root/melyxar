@@ -95,14 +95,38 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         .profile
         .clone()
         .unwrap_or_else(ClientProfile::conservative_browser);
-    let audio = request
-        .audio_track_id
-        .and_then(|id| tracks.iter().find(|track| track.id == id));
-    let subtitle = request
-        .subtitle_track_id
-        .and_then(|id| tracks.iter().find(|track| track.id == id));
 
     let preferences = database.user(user_id).await?.map(|user| user.preferences);
+    let remembered = database.playback_progress(user_id, source.work_id).await?;
+
+    // What the viewer asked for now, otherwise what they chose last time for
+    // this very film, otherwise a track in the language they prefer. Only then
+    // does the file get to decide, which is what happens today for everyone.
+    let audio = chosen_track(
+        &tracks,
+        request.audio_track_id,
+        remembered.as_ref().and_then(|stored| stored.audio_track_id),
+        preferences
+            .as_ref()
+            .and_then(|values| values.preferred_audio_language.as_deref()),
+        TrackShape::Audio,
+    );
+    let subtitle = match request.subtitle_track_id {
+        // A subtitle is only shown when someone asks for one: a film that
+        // starts with subtitles nobody wanted is a film someone stops.
+        Some(id) => tracks.iter().find(|track| track.id == id),
+        None => chosen_track(
+            &tracks,
+            None,
+            remembered
+                .as_ref()
+                .and_then(|stored| stored.subtitle_track_id),
+            preferences
+                .as_ref()
+                .and_then(|values| values.preferred_subtitle_language.as_deref()),
+            TrackShape::Subtitle,
+        ),
+    };
     let decision = decide(
         &media,
         &PlaybackRequest {
@@ -121,9 +145,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         },
     );
 
-    let resume_from = database
-        .playback_progress(user_id, source.work_id)
-        .await?
+    let resume_from = remembered
         .filter(|progress| progress.state == PlaybackState::InProgress)
         .map(|progress| progress.position);
 
@@ -137,6 +159,93 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         resume_from,
         tracks,
     })
+}
+
+/// Which of the two kinds of track is being looked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TrackShape {
+    Audio,
+    Subtitle,
+}
+
+impl TrackShape {
+    fn matches(self, track: &Track) -> bool {
+        match self {
+            Self::Audio => matches!(track.kind, melyxar_core::media::TrackKind::Audio(_)),
+            Self::Subtitle => matches!(track.kind, melyxar_core::media::TrackKind::Subtitle(_)),
+        }
+    }
+}
+
+/// Picks a track, in the order a viewer would expect.
+///
+/// What they asked for now beats what they chose last time, which beats the
+/// language they prefer in general. A choice pointing at a track the file no
+/// longer holds falls through to the next rule rather than to nothing: an
+/// analysis run again renumbers the tracks, and a viewer should not have to
+/// notice.
+fn chosen_track<'a>(
+    tracks: &'a [Track],
+    asked_for: Option<TrackId>,
+    remembered: Option<TrackId>,
+    preferred_language: Option<&str>,
+    shape: TrackShape,
+) -> Option<&'a Track> {
+    let by_id = |wanted: TrackId| tracks.iter().find(|track| track.id == wanted);
+
+    if let Some(track) = asked_for.and_then(by_id) {
+        return Some(track);
+    }
+    if let Some(track) = remembered.and_then(by_id) {
+        return Some(track);
+    }
+
+    let wanted = preferred_language.map(melyxar_core::media::normalise_language)?;
+    tracks.iter().find(|track| {
+        shape.matches(track)
+            && track
+                .language
+                .as_deref()
+                .map(melyxar_core::media::normalise_language)
+                .is_some_and(|spoken| spoken == wanted)
+    })
+}
+
+/// Remembers the tracks a viewer chose, and the languages they were in.
+///
+/// Both, and for different reasons. The tracks so this film starts the same
+/// way next time, down to the track; the languages so the next film does too,
+/// even though its tracks are numbered differently.
+pub async fn remember_chosen_tracks(
+    state: &AppState,
+    user_id: UserId,
+    work_id: WorkId,
+    audio: Option<&Track>,
+    subtitle: Option<&Track>,
+) -> Result<()> {
+    let database = state.database();
+    database
+        .record_chosen_tracks(
+            user_id,
+            work_id,
+            audio.map(|track| track.id),
+            subtitle.map(|track| track.id),
+        )
+        .await?;
+
+    if let Some(user) = database.user(user_id).await? {
+        let mut preferences = user.preferences;
+        // A track with no language declared teaches nothing about what this
+        // viewer prefers, so it leaves the preference alone.
+        if let Some(language) = audio.and_then(|track| track.language.clone()) {
+            preferences.preferred_audio_language = Some(language);
+        }
+        // Subtitles are different: turning them off is itself a preference,
+        // and one a viewer expects to hold for the next film too.
+        preferences.preferred_subtitle_language = subtitle.and_then(|track| track.language.clone());
+        database.save_preferences(user_id, &preferences).await?;
+    }
+    Ok(())
 }
 
 /// Records where a viewer got to.
@@ -452,6 +561,189 @@ mod tests {
 
         assert_eq!(plan.decision.subtitles, SubtitleDelivery::External);
         assert_eq!(plan.decision.subtitle_stream_index, Some(2));
+    }
+
+    /// Two soundtracks, French second, so the file's own order and the
+    /// viewer's preference disagree.
+    fn two_soundtracks(source_id: MediaSourceId) -> Vec<Track> {
+        let mut english = audio(source_id, "aac", 2, true);
+        english.language = Some("eng".to_string());
+        english.stream_index = 1;
+        let mut french = audio(source_id, "aac", 2, false);
+        french.language = Some("fre".to_string());
+        french.stream_index = 2;
+        vec![video(source_id, "h264", 1080), english, french]
+    }
+
+    async fn soundtrack_of(
+        state: &AppState,
+        user: UserId,
+        source: MediaSourceId,
+    ) -> Option<String> {
+        let plan = plan(
+            state,
+            user,
+            &PlayRequest {
+                source_id: source,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: None,
+            },
+        )
+        .await
+        .expect("a plan");
+        let index = plan.decision.audio_stream_index?;
+        plan.tracks
+            .iter()
+            .find(|track| track.stream_index == index)
+            .and_then(|track| track.language.clone())
+    }
+
+    #[tokio::test]
+    async fn without_a_preference_the_file_decides_which_soundtrack_plays() {
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", two_soundtracks).await;
+        assert_eq!(
+            soundtrack_of(&state, user_id, source_id).await.as_deref(),
+            Some("eng"),
+            "the one the file marks as default"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_language_a_viewer_prefers_is_picked_without_being_asked_again() {
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", two_soundtracks).await;
+
+        let tracks = state
+            .database()
+            .tracks_of_source(source_id)
+            .await
+            .expect("read");
+        let french = tracks
+            .iter()
+            .find(|track| track.language.as_deref() == Some("fre"))
+            .expect("a French soundtrack");
+        let work_id = state
+            .database()
+            .playable_source(source_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .work_id;
+
+        remember_chosen_tracks(&state, user_id, work_id, Some(french), None)
+            .await
+            .expect("choice remembered");
+
+        assert_eq!(
+            soundtrack_of(&state, user_id, source_id).await.as_deref(),
+            Some("fre"),
+            "the same film starts the way it was left"
+        );
+
+        // Another film altogether, whose tracks are numbered differently: the
+        // language is what carries over, not the identifier.
+        let (_elsewhere, other_state, other_user, other_source) =
+            state_with_film("Amber.Field.2020.mp4", "mov,mp4,m4a", two_soundtracks).await;
+        let mut preferences = other_state
+            .database()
+            .user(other_user)
+            .await
+            .expect("read")
+            .expect("present")
+            .preferences;
+        preferences.preferred_audio_language = Some("fr".to_string());
+        other_state
+            .database()
+            .save_preferences(other_user, &preferences)
+            .await
+            .expect("preferences saved");
+
+        assert_eq!(
+            soundtrack_of(&other_state, other_user, other_source)
+                .await
+                .as_deref(),
+            Some("fre"),
+            "written as two letters or three, it is the same language"
+        );
+    }
+
+    #[tokio::test]
+    async fn what_was_chosen_for_this_film_beats_the_language_preferred_in_general() {
+        // A viewer who watches everything in French but this one film in its
+        // own language gets that film in its own language.
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", two_soundtracks).await;
+        let tracks = state
+            .database()
+            .tracks_of_source(source_id)
+            .await
+            .expect("read");
+        let english = tracks
+            .iter()
+            .find(|track| track.language.as_deref() == Some("eng"))
+            .expect("an English soundtrack");
+        let work_id = state
+            .database()
+            .playable_source(source_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .work_id;
+
+        state
+            .database()
+            .record_chosen_tracks(user_id, work_id, Some(english.id), None)
+            .await
+            .expect("choice recorded");
+        let mut preferences = state
+            .database()
+            .user(user_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .preferences;
+        preferences.preferred_audio_language = Some("fre".to_string());
+        state
+            .database()
+            .save_preferences(user_id, &preferences)
+            .await
+            .expect("preferences saved");
+
+        assert_eq!(
+            soundtrack_of(&state, user_id, source_id).await.as_deref(),
+            Some("eng"),
+            "the choice made about this film is more particular than a habit"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_never_starts_with_subtitles_nobody_asked_for() {
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![
+                    video(id, "h264", 1080),
+                    audio(id, "aac", 2, true),
+                    subtitle(id),
+                ]
+            })
+            .await;
+
+        let plan = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: None,
+            },
+        )
+        .await
+        .expect("a plan");
+        assert_eq!(plan.decision.subtitles, SubtitleDelivery::None);
+        assert_eq!(plan.decision.subtitle_stream_index, None);
     }
 
     #[tokio::test]
