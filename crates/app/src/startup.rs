@@ -160,9 +160,8 @@ pub async fn reconcile_libraries(database: &Database, config: &Config) -> Result
                 // Only add roots that are new. Removing one is an explicit
                 // action, never a side effect of editing a file.
                 for root in &declared.roots {
-                    let already_there =
-                        existing.roots.iter().any(|stored| stored.path == root.path);
-                    if !already_there {
+                    let Some(stored) = existing.roots.iter().find(|stored| stored.path == root.path)
+                    else {
                         database
                             .add_root(existing.id, &root.label, &root.path)
                             .await?;
@@ -170,6 +169,20 @@ pub async fn reconcile_libraries(database: &Database, config: &Config) -> Result
                             library = declared.name,
                             root = root.label,
                             "root added to an existing library"
+                        );
+                        continue;
+                    };
+
+                    // A root is recognised by its path and called by its
+                    // label, so a label corrected in the file is a correction
+                    // to make, not a second root.
+                    if stored.label != root.label {
+                        database.rename_root(stored.id, &root.label).await?;
+                        tracing::info!(
+                            library = declared.name,
+                            was = stored.label,
+                            now = root.label,
+                            "a root is called something else now"
                         );
                     }
                 }
@@ -308,6 +321,35 @@ mod tests {
 
         let libraries = database.list_libraries().await.expect("listed");
         assert_eq!(libraries[0].roots.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_label_corrected_in_the_file_is_corrected_everywhere() {
+        // A root is recognised by its path and called by its label. Mistyping
+        // the label used to be permanent: it is what every log line and every
+        // screen shows, and nothing read the file for it ever again.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let database = Database::open_in_memory().await.expect("database opens");
+        let mut config = config_with_library(directory.path());
+        let path = config.libraries[0].roots[0].path.clone();
+
+        reconcile_libraries(&database, &config)
+            .await
+            .expect("first pass");
+
+        config.libraries[0].roots[0].label = "the name it should have had".into();
+        reconcile_libraries(&database, &config)
+            .await
+            .expect("second pass");
+
+        let libraries = database.list_libraries().await.expect("listed");
+        assert_eq!(
+            libraries[0].roots.len(),
+            1,
+            "a new name is a correction, not a second root"
+        );
+        assert_eq!(libraries[0].roots[0].label, "the name it should have had");
+        assert_eq!(libraries[0].roots[0].path, path);
     }
 
     #[tokio::test]

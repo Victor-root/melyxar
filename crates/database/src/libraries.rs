@@ -177,6 +177,21 @@ impl Database {
         Ok(())
     }
 
+    /// Gives a root the name the configuration now calls it by.
+    ///
+    /// A root is recognised by its path, which is what it is; the label is
+    /// what it is called, and what every log line and every screen shows. So
+    /// changing the label in the configuration has to reach the screens, and
+    /// mistyping one has to be fixable by fixing the file.
+    pub async fn rename_root(&self, root_id: LibraryRootId, label: &str) -> Result<()> {
+        sqlx::query("UPDATE library_roots SET label = ? WHERE id = ?")
+            .bind(label)
+            .bind(root_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// Adds a root to an existing library.
     pub async fn add_root(
         &self,
