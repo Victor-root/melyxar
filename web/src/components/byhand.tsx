@@ -60,7 +60,7 @@ export function IdentifyByHand({
 
   if (!open) {
     return (
-      <button className="button" onClick={() => setOpen(true)}>
+      <button className="button button-small byhand-open" onClick={() => setOpen(true)}>
         {t("byhand.open")}
       </button>
     );
