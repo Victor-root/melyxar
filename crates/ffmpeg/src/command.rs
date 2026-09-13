@@ -264,6 +264,14 @@ impl Command {
         // Seeking before the input makes the tool jump there; after the input
         // it would decode and throw away everything up to that point.
         if let Some(start) = self.input.start_at {
+            // Segments carry their own clock, and a player places each one by
+            // it. Without this the tool restarts that clock at zero after a
+            // jump, so a segment the playlist says covers the eighth second
+            // announces itself as the first: measured, and it puts a player
+            // in the wrong place.
+            if matches!(self.output, Output::Segments { .. }) {
+                push!("-copyts");
+            }
             push!("-ss");
             push!(&format_seconds(start));
         }
@@ -749,6 +757,50 @@ mod tests {
         let args = arguments(&command);
         let index = position(&args, "-start_number").expect("a start number is present");
         assert_eq!(args[index + 1], "312");
+    }
+
+    #[test]
+    fn a_jump_keeps_the_clock_of_the_film_so_a_player_places_the_segment_right() {
+        let jumped = Command::new(
+            Input::new("/media/film.mkv").starting_at(Millis::new(8_000)),
+            Output::Segments {
+                pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
+                initialisation: PathBuf::from("/tmp/session/init.mp4"),
+                tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
+                duration: Millis::new(4000),
+                start_number: 2,
+            },
+        );
+        let args = arguments(&jumped);
+        assert!(args.contains(&"-copyts".to_string()));
+        assert!(
+            position(&args, "-copyts") < position(&args, "-i"),
+            "it has to reach the reading of the file, not the writing"
+        );
+
+        let from_the_start = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::Segments {
+                pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
+                initialisation: PathBuf::from("/tmp/session/init.mp4"),
+                tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
+                duration: Millis::new(4000),
+                start_number: 0,
+            },
+        );
+        assert!(
+            !arguments(&from_the_start).contains(&"-copyts".to_string()),
+            "nothing was skipped, so there is no clock to preserve"
+        );
+
+        let plain_file = Command::new(
+            Input::new("/media/film.mkv").starting_at(Millis::new(8_000)),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        );
+        assert!(
+            !arguments(&plain_file).contains(&"-copyts".to_string()),
+            "a file that starts part way through starts at nothing, as a file does"
+        );
     }
 
     #[test]
