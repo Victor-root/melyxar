@@ -15,6 +15,12 @@
 //! describe a file. And whatever the name, two things are trimmed off the end
 //! of the title: the word naming which cut of the film this is, and a marker
 //! shouting in capitals at the end of a title that does not.
+//!
+//! Two more things are dropped, and neither is written down here: they are
+//! read off the library itself. The word its owner signs names with, because a
+//! signature repeats and a title does not. And whatever was stuck to the front
+//! of a name that is otherwise, in full, another name of the same library,
+//! because the copy without it is the proof that it was added.
 
 use std::collections::BTreeSet;
 
@@ -44,15 +50,17 @@ pub struct ParsedName {
 /// `current_year` is passed in rather than read from the clock, so the same
 /// name always parses the same way in a test.
 pub fn parse(file_name: &str, current_year: i32) -> ParsedName {
-    parse_signed(file_name, current_year, &BTreeSet::new())
+    parse_signed(file_name, current_year, &LibrarySigns::default())
 }
 
-/// Reads a file name, knowing what this library signs its files with.
+/// Reads a file name, knowing what the names of this library carry.
 ///
-/// `markers` comes from `markers_in`, which reads them off the library rather
-/// than from any list: whoever named these files put the same word at the end
-/// of many of them, and that word is never part of a title.
-pub fn parse_signed(file_name: &str, current_year: i32, markers: &BTreeSet<String>) -> ParsedName {
+/// `signs` comes from `signs_in`, which reads them off the library rather than
+/// from any list: what is dropped here is what those names carry and no title
+/// ever does.
+pub fn parse_signed(file_name: &str, current_year: i32, signs: &LibrarySigns) -> ParsedName {
+    let file_name = signs.without_the_glued_prefix(file_name);
+    let markers = &signs.marks;
     let stem = strip_extension(file_name);
     // The underscore separates words just like the dot does. Personal markers
     // attach themselves to the previous tag with one, and without this rule
@@ -79,6 +87,97 @@ pub fn parse_signed(file_name: &str, current_year: i32, markers: &BTreeSet<Strin
     }
 }
 
+/// What the names of one library carry that no title ever does.
+///
+/// Learnt from the names themselves rather than written down here, for two
+/// reasons. Such a thing names whoever produced it, and the repository is not
+/// the place for that. And no list could hold them all: they are somebody's
+/// initials, a site, a group, whatever a tool stuck on the way past.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LibrarySigns {
+    /// Words that end name after name.
+    marks: BTreeSet<String>,
+    /// Strings stuck to the front of a name that is otherwise, in full,
+    /// another name of the same library. Lowercased.
+    prefixes: BTreeSet<String>,
+}
+
+impl LibrarySigns {
+    /// The name with what was stuck to its front taken off.
+    ///
+    /// The longest one that fits, so a short sign is never preferred to the
+    /// longer one it happens to begin.
+    fn without_the_glued_prefix<'a>(&'a self, file_name: &'a str) -> &'a str {
+        if self.prefixes.is_empty() {
+            return file_name;
+        }
+        file_name
+            .char_indices()
+            .map(|(index, _)| index)
+            .filter(|index| *index > 0 && *index <= LONGEST_GLUED_PREFIX)
+            .rfind(|index| self.prefixes.contains(&file_name[..*index].to_lowercase()))
+            .map_or(file_name, |index| &file_name[index..])
+    }
+}
+
+/// Reads off a library what its names carry and no title does.
+pub fn signs_in<S: AsRef<str>>(file_names: &[S]) -> LibrarySigns {
+    LibrarySigns {
+        marks: marks_in(file_names),
+        prefixes: glued_prefixes(file_names),
+    }
+}
+
+/// How long a thing stuck to the front of a name may be.
+///
+/// Short by nature: it is something a tool or a transfer left behind, never a
+/// sentence. The limit is what stops a whole title from ever being read as one.
+const LONGEST_GLUED_PREFIX: usize = 16;
+
+/// The shortest thing worth calling a prefix.
+///
+/// A single character in front of a name that exists on its own is as likely
+/// to be a coincidence as a sign, and the cost of being wrong is a lost word.
+const SHORTEST_GLUED_PREFIX: usize = 2;
+
+/// The things stuck to the front of names in this library.
+///
+/// Nothing is guessed from the shape of a word here. A prefix is recognised
+/// only when the rest of the name is, in full and to the letter, another name
+/// of the same library: the proof that it was added is that the same file is
+/// there without it.
+///
+/// It must also be one piece, with no separator in it. A prefix that ends at a
+/// word boundary cannot be told from the first word of a title, and two real
+/// films can perfectly well be called one thing and that thing with a word in
+/// front of it.
+fn glued_prefixes<S: AsRef<str>>(file_names: &[S]) -> BTreeSet<String> {
+    let known: std::collections::HashSet<&str> =
+        file_names.iter().map(|name| name.as_ref()).collect();
+
+    let mut found = BTreeSet::new();
+    for name in file_names.iter().map(|name| name.as_ref()) {
+        let glued = name
+            .char_indices()
+            .map(|(index, _)| index)
+            .take_while(|index| *index <= LONGEST_GLUED_PREFIX)
+            .find(|index| {
+                *index >= SHORTEST_GLUED_PREFIX
+                    && could_be_glued_on(&name[..*index])
+                    && known.contains(&name[*index..])
+            });
+        if let Some(index) = glued {
+            found.insert(name[..index].to_lowercase());
+        }
+    }
+    found
+}
+
+/// Whether a piece of a name could be something stuck to its front.
+fn could_be_glued_on(head: &str) -> bool {
+    !head.contains([' ', '.', '_', '-'])
+}
+
 /// How many names a word must end before it counts as this library's mark.
 ///
 /// Three is low enough to catch a mark on a handful of files and high enough
@@ -87,15 +186,10 @@ const REPEATED_ENOUGH: usize = 3;
 
 /// The words this library signs its files with.
 ///
-/// Everyone who names files by hand ends up with a signature, and no list
-/// could hold them all: they are somebody's initials, a site, a group. What
-/// can be said generally is that a signature repeats and a title does not, so
-/// the last word of every name is counted and the ones that keep coming back
-/// are the marks.
-///
-/// Deliberately learnt rather than written down: a mark written into this file
-/// would name whoever uses it, and would only ever fit one library.
-pub fn markers_in<S: AsRef<str>>(file_names: &[S]) -> BTreeSet<String> {
+/// What can be said generally is that a signature repeats and a title does
+/// not, so the last word of every name is counted and the ones that keep
+/// coming back are the marks.
+fn marks_in<S: AsRef<str>>(file_names: &[S]) -> BTreeSet<String> {
     let mut counted: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
 
     for name in file_names {
@@ -717,9 +811,86 @@ mod tests {
             "Winter Signal 2160p SOMEGROUP.mkv",
             "The Long Road North (2018) x264.mkv",
         ];
-        let marks = markers_in(&names);
+        let marks = signs_in(&names).marks;
         assert!(marks.contains("somegroup"), "{marks:?}");
         assert!(!marks.contains("x264"), "a definition is not a signature");
+    }
+
+    #[test]
+    fn a_thing_stuck_to_the_front_of_a_name_is_recognised_by_the_copy_without_it() {
+        // Nothing about the shape of these says anything. What says it is that
+        // the very same name is there on its own: the proof that the rest was
+        // added is the file that does not carry it.
+        let names = [
+            "Quiet Harbour BD.Rip 1080 x264.mkv",
+            "zz12Quiet Harbour BD.Rip 1080 x264.mkv",
+            "wxyzQuiet Harbour BD.Rip 1080 x264.mkv",
+            "Amber Field BD.Rip 1080 x264.mkv",
+            "zz12Amber Field BD.Rip 1080 x264.mkv",
+        ];
+        let signs = signs_in(&names);
+        assert_eq!(
+            signs.prefixes,
+            ["wxyz".to_string(), "zz12".to_string()]
+                .into_iter()
+                .collect()
+        );
+
+        for name in names {
+            let read = parse_signed(name, NOW, &signs);
+            assert!(
+                read.title == "Quiet Harbour" || read.title == "Amber Field",
+                "{name} read as {}",
+                read.title
+            );
+        }
+    }
+
+    #[test]
+    fn a_film_whose_name_is_another_with_a_word_in_front_keeps_that_word() {
+        // Two real films, one called what the other is called with a word
+        // before it. Everything else about the names is identical, which is
+        // exactly the shape a prefix has. What tells them apart is the space:
+        // a piece that ends at a word boundary is a word.
+        let names = [
+            "Harbour (2019) 1080p x264.mkv",
+            "Quiet Harbour (2019) 1080p x264.mkv",
+        ];
+        let signs = signs_in(&names);
+        assert!(signs.prefixes.is_empty(), "{:?}", signs.prefixes);
+        assert_eq!(
+            parse_signed(names[1], NOW, &signs).title,
+            "Quiet Harbour",
+            "a word of a real title must never be taken for a sign"
+        );
+    }
+
+    #[test]
+    fn nothing_is_stripped_from_a_library_where_no_copy_proves_it() {
+        // The same odd names, with no plain copy anywhere to prove that the
+        // front of them was added. Guessing here would cost a real title.
+        let names = [
+            "zz12Quiet Harbour BD.Rip 1080 x264.mkv",
+            "zz12Amber Field BD.Rip 1080 x264.mkv",
+        ];
+        let signs = signs_in(&names);
+        assert!(signs.prefixes.is_empty(), "{:?}", signs.prefixes);
+        assert_eq!(
+            parse_signed(names[0], NOW, &signs).title,
+            "zz12Quiet Harbour"
+        );
+    }
+
+    #[test]
+    fn the_longest_sign_that_fits_is_the_one_taken_off() {
+        let signs = LibrarySigns {
+            prefixes: ["zz".to_string(), "zz12".to_string()].into_iter().collect(),
+            ..LibrarySigns::default()
+        };
+        assert_eq!(
+            parse_signed("zz12Quiet Harbour 1080p.mkv", NOW, &signs).title,
+            "Quiet Harbour"
+        );
     }
 
     #[test]
@@ -734,7 +905,7 @@ mod tests {
             "Amber Rising II.mkv",
             "Signal Rising II.mkv",
         ];
-        let marks = markers_in(&names);
+        let marks = signs_in(&names).marks;
         assert!(marks.is_empty(), "{marks:?}");
     }
 
@@ -743,13 +914,13 @@ mod tests {
         // The case nothing else can reach: every word is in capitals, so no
         // rule of shape can tell the signature from the title. Knowing the
         // mark is what makes it possible.
-        let marks = markers_in(&[
+        let signs = signs_in(&[
             "QUIET HARBOUR CONTRE ATTAQUE SOMEGROUP.mkv",
             "Amber Field (2020) 1080p SOMEGROUP.mkv",
             "Winter Signal 2160p SOMEGROUP.mkv",
         ]);
 
-        let read = parse_signed("QUIET HARBOUR CONTRE ATTAQUE SOMEGROUP.mkv", NOW, &marks);
+        let read = parse_signed("QUIET HARBOUR CONTRE ATTAQUE SOMEGROUP.mkv", NOW, &signs);
         assert_eq!(read.title, "QUIET HARBOUR CONTRE ATTAQUE");
         assert_eq!(
             parsed("QUIET HARBOUR CONTRE ATTAQUE SOMEGROUP.mkv").title,
@@ -760,9 +931,12 @@ mod tests {
 
     #[test]
     fn a_title_made_only_of_the_mark_keeps_it_rather_than_vanishing() {
-        let marks: BTreeSet<String> = ["somegroup".to_string()].into_iter().collect();
+        let signs = LibrarySigns {
+            marks: ["somegroup".to_string()].into_iter().collect(),
+            ..LibrarySigns::default()
+        };
         assert_eq!(
-            parse_signed("SOMEGROUP.mkv", NOW, &marks).title,
+            parse_signed("SOMEGROUP.mkv", NOW, &signs).title,
             "SOMEGROUP"
         );
     }
