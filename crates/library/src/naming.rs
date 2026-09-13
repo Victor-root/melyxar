@@ -9,6 +9,11 @@
 //! Everything before it is the title, everything after is discarded. That is
 //! far more robust than trying to recognise every technical tag, because the
 //! list of tags is endless and grows, whereas a four digit year is a year.
+//!
+//! Two fallbacks, and only for a name that carries no year at all, since such
+//! a name would otherwise hand a provider the file name whole: the title stops
+//! at the first word that can only describe a file, and a marker shouting in
+//! capitals at the end of a title that does not is dropped by its shape.
 
 use std::collections::BTreeSet;
 
