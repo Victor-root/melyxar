@@ -128,3 +128,82 @@ impl AppState {
             .is_some_and(Capabilities::can_tone_map_in_software)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use melyxar_ffmpeg::capabilities::HardwareAcceleration;
+    use std::collections::BTreeSet;
+
+    fn capabilities(
+        encoders: &[&str],
+        filters: &[&str],
+        hardware: &[HardwareAcceleration],
+    ) -> Capabilities {
+        Capabilities {
+            version: "ffmpeg version invented".to_string(),
+            encoders: encoders.iter().map(|value| value.to_string()).collect(),
+            decoders: BTreeSet::new(),
+            filters: filters.iter().map(|value| value.to_string()).collect(),
+            hardware: hardware.iter().copied().collect(),
+        }
+    }
+
+    async fn state_with(capabilities: Option<Capabilities>) -> AppState {
+        let database = melyxar_database::Database::open_in_memory()
+            .await
+            .expect("database opens");
+        AppState::new(Config::default(), database, None, capabilities)
+    }
+
+    #[tokio::test]
+    async fn a_server_without_the_media_tools_says_playback_is_out_rather_than_failing_later() {
+        let state = state_with(None).await;
+        assert!(
+            !state.can_play_media(),
+            "a library still browses, and a client is told before it presses play"
+        );
+        assert!(!state.can_convert_wide_gamut());
+        assert!(state.hardware_acceleration_names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_tool_that_cannot_build_what_a_browser_plays_is_not_good_enough() {
+        // The two the browser target rests on. Without them, what would be
+        // built is something no browser opens.
+        let state = state_with(Some(capabilities(&["libx264"], &[], &[]))).await;
+        assert!(!state.can_play_media(), "a picture without a soundtrack");
+
+        let state = state_with(Some(capabilities(&["aac"], &[], &[]))).await;
+        assert!(!state.can_play_media(), "a soundtrack without a picture");
+
+        let state = state_with(Some(capabilities(&["libx264", "aac"], &[], &[]))).await;
+        assert!(state.can_play_media());
+    }
+
+    #[tokio::test]
+    async fn wide_gamut_conversion_is_announced_only_when_a_filter_can_do_it() {
+        let without = state_with(Some(capabilities(&["libx264", "aac"], &[], &[]))).await;
+        assert!(
+            !without.can_convert_wide_gamut(),
+            "without it such films cannot be shown with correct colours at all"
+        );
+
+        let with = state_with(Some(capabilities(&["libx264", "aac"], &["zscale"], &[]))).await;
+        assert!(with.can_convert_wide_gamut());
+    }
+
+    #[tokio::test]
+    async fn the_hardware_paths_are_named_the_way_a_client_reads_them() {
+        let state = state_with(Some(capabilities(
+            &["libx264", "aac"],
+            &[],
+            &[HardwareAcceleration::Vaapi, HardwareAcceleration::QuickSync],
+        )))
+        .await;
+
+        let mut names = state.hardware_acceleration_names();
+        names.sort();
+        assert_eq!(names, vec!["qsv".to_string(), "vaapi".to_string()]);
+    }
+}
