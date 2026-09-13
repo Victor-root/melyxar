@@ -25,6 +25,10 @@ pub struct PlayableSource {
     /// Where the file is, root included. Never sent to a client: a viewer is
     /// given an address, not a path on someone's disk.
     pub path: PathBuf,
+    /// The root the file sits under. Kept because a subtitle in a file of its
+    /// own is recorded relative to the root and nowhere else, so without this
+    /// there is nothing to join it to.
+    pub root: PathBuf,
     pub size_bytes: i64,
     pub container: Option<String>,
     pub duration: Option<Millis>,
@@ -79,7 +83,8 @@ impl Database {
             work_id: work_id
                 .parse()
                 .map_err(|_| DatabaseError::Corrupt("work identifier is malformed".to_string()))?,
-            path: PathBuf::from(root).join(relative),
+            path: PathBuf::from(&root).join(relative),
+            root: PathBuf::from(root),
             size_bytes: row.try_get("size_bytes")?,
             container: row.try_get("container")?,
             duration: row

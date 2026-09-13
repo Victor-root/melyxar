@@ -59,6 +59,7 @@ pub fn prepare_directories(config: &Config) -> Result<()> {
         &config.directories.transcodes,
         &config.directories.uploads(),
         &config.directories.images(),
+        &config.directories.subtitles(),
         &config.directories.backups(),
     ] {
         std::fs::create_dir_all(directory).map_err(AppError::Directory)?;
@@ -395,6 +396,7 @@ mod tests {
         assert!(config.directories.transcodes.is_dir());
         assert!(config.directories.uploads().is_dir());
         assert!(config.directories.images().is_dir());
+        assert!(config.directories.subtitles().is_dir());
         assert!(config.directories.backups().is_dir());
     }
 
