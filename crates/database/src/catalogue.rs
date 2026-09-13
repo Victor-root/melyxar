@@ -245,6 +245,34 @@ impl Database {
         rows.iter().map(stored_source_from_row).collect()
     }
 
+    /// The name of every file a library holds.
+    ///
+    /// Read for what the names have in common rather than for any one of them:
+    /// the word whoever named these files signs with can only be seen across
+    /// the whole set.
+    pub async fn source_names_of_library(&self, library_id: LibraryId) -> Result<Vec<String>> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT s.relative_path
+             FROM media_sources s
+             JOIN library_roots r ON r.id = s.root_id
+             WHERE r.library_id = ?",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(path,)| {
+                Path::new(&path)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or(&path)
+                    .to_string()
+            })
+            .collect())
+    }
+
     /// Every file behind one work, newest first.
     ///
     /// A work can have several: the same film in two definitions is two files

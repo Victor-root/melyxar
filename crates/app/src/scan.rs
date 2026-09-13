@@ -199,6 +199,9 @@ pub async fn scan_library(
 ) -> Result<ScanReport> {
     let mut report = ScanReport::default();
     let database = state.database();
+    // Read before anything is recorded, so a file added today is named by the
+    // same rules as the ones already here.
+    let marks = marks_of(state, library).await?;
 
     for root in &library.roots {
         if handle.is_cancelled() {
@@ -230,7 +233,7 @@ pub async fn scan_library(
             .into_iter()
             .partition(|file| file.companion_kind.is_none());
 
-        record_changes(state, library, root.id, &media, &mut report).await?;
+        record_changes(state, library, root.id, &media, &marks, &mut report).await?;
         attach_companions(database, root.id, &companions, &media, &mut report).await?;
         attach_subtitles(database, root.id, &outcome.subtitles, &mut report).await?;
 
@@ -279,6 +282,7 @@ async fn record_changes(
     library: &Library,
     root_id: LibraryRootId,
     media: &[FoundFile],
+    marks: &std::collections::BTreeSet<String>,
     report: &mut ScanReport,
 ) -> Result<()> {
     let database = state.database();
@@ -300,7 +304,7 @@ async fn record_changes(
         .collect();
 
     for file in &changes.added {
-        let work_id = work_for(state, library, &file.relative_path).await?;
+        let work_id = work_for(state, library, &file.relative_path, marks).await?;
         database
             .insert_source(
                 work_id,
@@ -360,6 +364,7 @@ pub(crate) async fn reread_names_of_nameless_works(
 ) -> Result<usize> {
     let database = state.database();
     let year = melyxar_core::time::current_year();
+    let marks = marks_of(state, library).await?;
     let mut renamed = 0;
 
     for work in database.works_named_after_their_file(library.id).await? {
@@ -368,7 +373,7 @@ pub(crate) async fn reread_names_of_nameless_works(
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or_default();
-        let parsed = naming::parse(file_name, year);
+        let parsed = naming::parse_signed(file_name, year, &marks);
         if parsed.title == work.title && parsed.year == work.release_year {
             continue;
         }
@@ -392,14 +397,35 @@ pub(crate) async fn reread_names_of_nameless_works(
     Ok(renamed)
 }
 
+/// What this library signs its files with, read off the library itself.
+///
+/// Asked for once per scan rather than per file: a signature is only visible
+/// across the whole set of names, and reading them again for every file would
+/// be a query per film.
+async fn marks_of(
+    state: &AppState,
+    library: &Library,
+) -> Result<std::collections::BTreeSet<String>> {
+    let names = state
+        .database()
+        .source_names_of_library(library.id)
+        .await?;
+    Ok(naming::markers_in(&names))
+}
+
 /// Finds the work a file belongs to, or creates it.
-async fn work_for(state: &AppState, library: &Library, relative_path: &Path) -> Result<WorkId> {
+async fn work_for(
+    state: &AppState,
+    library: &Library,
+    relative_path: &Path,
+    marks: &std::collections::BTreeSet<String>,
+) -> Result<WorkId> {
     let database = state.database();
     let file_name = relative_path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_default();
-    let parsed = naming::parse(file_name, melyxar_core::time::current_year());
+    let parsed = naming::parse_signed(file_name, melyxar_core::time::current_year(), marks);
     let sort_title = naming::sort_title(&parsed.title);
 
     if let Some(existing) = database
@@ -1029,6 +1055,75 @@ mod tests {
         assert_eq!(
             settled.renamed, 0,
             "a name that already reads correctly is not written again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_library_learns_the_word_its_owner_signs_files_with() {
+        // The case no rule of shape can reach: a title written wholly in
+        // capitals, signed with a word that is also in capitals. What tells
+        // them apart is that the signature is on the other films too.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "QUIET HARBOUR CONTRE ATTAQUE SOMEGROUP.mkv", b"x");
+        write(&media, "Amber Field (2020) 1080p SOMEGROUP.mkv", b"x");
+        write(&media, "Winter Signal 2160p SOMEGROUP.mkv", b"x");
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        // The first scan has nothing to read the signature off yet, and the
+        // pass that reads names again, which runs at the end of that same
+        // scan, is what puts it right.
+        scan(&state, &library).await;
+
+        let titles: Vec<String> = state
+            .database()
+            .recent_works(library.id, 10)
+            .await
+            .expect("read")
+            .into_iter()
+            .map(|work| work.title)
+            .collect();
+        assert!(
+            titles.contains(&"QUIET HARBOUR CONTRE ATTAQUE".to_string()),
+            "{titles:?}"
+        );
+        assert!(
+            !titles.iter().any(|title| title.contains("SOMEGROUP")),
+            "the signature belongs to no title: {titles:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_second_copy_of_a_film_joins_the_first_rather_than_doubling_it() {
+        // The reason the signature has to be known while a file is recorded
+        // and not only afterwards: a copy added later must read as the same
+        // title, or it becomes a second film in the grid.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "QUIET HARBOUR SOMEGROUP.mkv", b"x");
+        write(&media, "Amber Field (2020) 1080p SOMEGROUP.mkv", b"x");
+        write(&media, "Winter Signal 2160p SOMEGROUP.mkv", b"x");
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media.clone())])
+            .await;
+        scan(&state, &library).await;
+        let before = state
+            .database()
+            .count_works(library.id)
+            .await
+            .expect("read");
+
+        write(&media, "QUIET HARBOUR SOMEGROUP 1080p.mkv", b"xx");
+        scan(&state, &library).await;
+
+        assert_eq!(
+            state
+                .database()
+                .count_works(library.id)
+                .await
+                .expect("read"),
+            before,
+            "one film, two files"
         );
     }
 

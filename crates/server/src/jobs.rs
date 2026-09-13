@@ -5,11 +5,12 @@
 //! whole point of the job layer, and it is why nothing here does any work of
 //! its own beyond translating.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
+use melyxar_app::metadata::MetadataProvider;
 use melyxar_app::AppState;
 use melyxar_core::id::{JobId, LibraryId};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
 
@@ -26,6 +27,11 @@ pub fn router() -> Router<AppState> {
             "/api/v1/libraries/{id}/identify",
             axum::routing::post(start_identification),
         )
+        .route(
+            "/api/v1/works/{id}/candidates",
+            axum::routing::get(candidates),
+        )
+        .route("/api/v1/works/{id}/identify", axum::routing::post(choose))
 }
 
 #[derive(Debug, Serialize)]
@@ -137,6 +143,118 @@ async fn start_identification(
     Ok(Json(StartedView {
         job_id: job.id().to_string(),
     }))
+}
+
+#[derive(Debug, Deserialize)]
+struct Asked {
+    /// What to look for. Empty falls back to what the work is called, which is
+    /// the first thing anybody would try.
+    query: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CandidateView {
+    external_id: String,
+    title: String,
+    original_title: Option<String>,
+    year: Option<i32>,
+    overview: Option<String>,
+    /// Full address of a small poster, so the list is recognisable at a glance
+    /// rather than being a column of titles that all look alike.
+    poster: Option<String>,
+}
+
+/// Films a person could mean, for a work nobody recognised.
+async fn candidates(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(asked): Query<Asked>,
+) -> Result<Json<Vec<CandidateView>>> {
+    let work_id = parse_work(&id)?;
+    let provider = provider_of(&state)?;
+
+    let query = match asked.query.map(|value| value.trim().to_string()) {
+        Some(query) if !query.is_empty() => query,
+        _ => state
+            .database()
+            .work(work_id)
+            .await
+            .map_err(internal)?
+            .ok_or_else(|| ServerError::not_found("no work with that identifier"))?
+            .title,
+    };
+
+    let found = melyxar_app::identify::candidates_for(&state, &provider, work_id, &query).await?;
+    Ok(Json(
+        found
+            .iter()
+            .map(|candidate| CandidateView {
+                external_id: candidate.external_id.clone(),
+                title: candidate.title.clone(),
+                original_title: candidate.original_title.clone(),
+                year: candidate.release_year,
+                overview: candidate.overview.clone(),
+                poster: candidate
+                    .poster_path
+                    .as_deref()
+                    .map(|path| provider.image_url(path)),
+            })
+            .collect(),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct Chosen {
+    external_id: String,
+}
+
+/// Records the film a person picked, which no later run undoes.
+async fn choose(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(chosen): Json<Chosen>,
+) -> Result<Json<ChosenView>> {
+    let work_id = parse_work(&id)?;
+    let provider = provider_of(&state)?;
+    let work = state
+        .database()
+        .work(work_id)
+        .await
+        .map_err(internal)?
+        .ok_or_else(|| ServerError::not_found("no work with that identifier"))?;
+
+    melyxar_app::identify::identify_by_hand(
+        &state,
+        &provider,
+        work.library_id,
+        work_id,
+        &chosen.external_id,
+    )
+    .await?;
+
+    Ok(Json(ChosenView { identified: true }))
+}
+
+#[derive(Debug, Serialize)]
+struct ChosenView {
+    identified: bool,
+}
+
+fn parse_work(id: &str) -> Result<melyxar_core::id::WorkId> {
+    id.parse()
+        .map_err(|_| ServerError::invalid_input("the work identifier is malformed"))
+}
+
+fn provider_of(
+    state: &AppState,
+) -> Result<std::sync::Arc<impl melyxar_app::metadata::MetadataProvider + 'static>> {
+    state.metadata_provider().ok_or_else(|| {
+        ServerError::new(
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            melyxar_core::error::ErrorCode::ExternalServiceUnavailable,
+            "no metadata provider is available",
+        )
+    })
 }
 
 /// Asks a job to stop.

@@ -37,6 +37,14 @@ pub mod picture {
     pub use melyxar_database::images::StoredImage;
 }
 
+/// What a metadata provider is and what it answers.
+///
+/// Re-exported for the same reason as the rest: the layer above asks this
+/// crate for a provider and never reaches past it for the trait it satisfies.
+pub mod metadata {
+    pub use melyxar_metadata::{MetadataProvider, MovieCandidate};
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error(transparent)]

@@ -642,6 +642,109 @@
   color: var(--accent-bright);
 }
 
+/* Saying by hand what a film is. Sits inside the page rather than in a window
+   of its own: the poster and the name being wrong are right there next to it,
+   which is what somebody is comparing against. */
+.byhand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin: var(--gap) 0;
+  max-width: 640px;
+}
+
+.byhand-ask {
+  display: flex;
+  gap: var(--gap-tight);
+}
+
+.byhand-ask input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.byhand-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.byhand-choice {
+  display: flex;
+  gap: var(--gap);
+  width: 100%;
+  padding: var(--gap-tight);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.byhand-choice:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.byhand-choice:disabled {
+  opacity: 0.5;
+}
+
+.byhand-choice img,
+.byhand-blank {
+  width: 60px;
+  height: 90px;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.byhand-words {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.byhand-title {
+  font-weight: 600;
+}
+
+.byhand-year {
+  color: var(--text-soft);
+  font-weight: 400;
+}
+
+.byhand-original {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/* Enough to recognise the film, never the whole synopsis: the list has to
+   stay a list. */
+.byhand-overview {
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .work-actions {
   display: flex;
   gap: var(--gap);

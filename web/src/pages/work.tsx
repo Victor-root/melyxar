@@ -11,6 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, pictureSet } from "../api";
 import type { Credit, Version, Work } from "../api";
+import { IdentifyByHand } from "../components/byhand";
 import { useSettings } from "../settings";
 import { Player } from "../player/player";
 import { TrailerPlayer } from "../player/trailer";
@@ -30,6 +31,9 @@ export function WorkPage() {
      when play is pressed: the button has to say what it will do before it is
      pressed. */
   const [resumeFrom, setResumeFrom] = useState<number | null>(null);
+  /* Counted up when the page has to read the film again, which is what a
+     match chosen by hand asks for. */
+  const [again, setAgain] = useState(0);
 
   useEffect(() => {
     if (!id) {
@@ -48,7 +52,7 @@ export function WorkPage() {
         }
       });
     return () => controller.abort();
-  }, [id]);
+  }, [id, again]);
 
   useEffect(() => {
     const version = work?.versions[chosen];
@@ -159,6 +163,17 @@ export function WorkPage() {
               act on without opening a terminal. */}
           {work.identification_note && (
             <p className="notice">{t(`note.${work.identification_note}`)}</p>
+          )}
+
+          {/* The last word, for the films no rule could work out. Only offered
+              where it is needed: a film that already has its name has nothing
+              to correct. */}
+          {id && work.identification !== "identified" && work.identification !== "manual" && (
+            <IdentifyByHand
+              workId={id}
+              title={work.title}
+              onIdentified={() => setAgain((count) => count + 1)}
+            />
           )}
 
           <div className="work-actions">

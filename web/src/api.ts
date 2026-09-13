@@ -25,6 +25,16 @@ export interface Card {
   poster: Picture[];
 }
 
+/** A film a person could have meant, as the provider describes it. */
+export interface Candidate {
+  external_id: string;
+  title: string;
+  original_title: string | null;
+  year: number | null;
+  overview: string | null;
+  poster: string | null;
+}
+
 export type IdentificationNote =
   | "no_match"
   | "provider_unreachable"
@@ -363,6 +373,17 @@ export const api = {
   identify: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/identify`),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
   forgetFinishedJobs: () => remove<{ forgotten: number }>("/api/v1/jobs/finished"),
+  /* For the films the rules could not name: what a person could have meant,
+     and the one they say it is. */
+  candidates: (work: string, query: string, signal?: AbortSignal) =>
+    get<Candidate[]>(
+      `/api/v1/works/${work}/candidates?query=${encodeURIComponent(query)}`,
+      signal,
+    ),
+  identifyByHand: (work: string, externalId: string) =>
+    post<{ identified: boolean }>(`/api/v1/works/${work}/identify`, {
+      external_id: externalId,
+    }),
   /* Everything worth asking about this installation, in one block of text
      rendered by the server so that it says exactly what the command line
      says. */
