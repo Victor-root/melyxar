@@ -175,18 +175,25 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
         }
     }
 
-    let chosen = |index: Option<i32>| -> Option<String> {
+    // Looked up by kind as well as by number. A subtitle sitting in a file of
+    // its own is stream zero of that file, which is also the number of the
+    // picture: matching on the number alone hands back the picture and leaves
+    // the viewer with subtitles that never appear.
+    let chosen = |index: Option<i32>, subtitle: bool| -> Option<String> {
         let index = index?;
         plan.tracks
             .iter()
-            .find(|track| track.stream_index == index)
+            .find(|track| {
+                track.stream_index == index
+                    && matches!(track.kind, TrackKind::Subtitle(_)) == subtitle
+            })
             .map(|track| track.id.to_string())
     };
 
     PlanView {
         url: format!("/api/v1/playback/{}/stream", plan.source_id),
-        chosen_audio_id: chosen(plan.decision.audio_stream_index),
-        chosen_subtitle_id: chosen(plan.decision.subtitle_stream_index),
+        chosen_audio_id: chosen(plan.decision.audio_stream_index, false),
+        chosen_subtitle_id: chosen(plan.decision.subtitle_stream_index, true),
         method: plan.decision.method.as_str(),
         expensive: plan.decision.method.is_expensive(),
         reasons: plan
@@ -610,6 +617,133 @@ mod tests {
         )
         .is_ok());
         assert!(parse_track("../../etc/passwd").is_err());
+    }
+
+    /// A film with a picture and a subtitle sitting in a file of its own.
+    ///
+    /// Both are stream zero: the picture of the film, the subtitle of its own
+    /// file. That is the ordinary shape of a film with an .srt beside it.
+    fn film_with_a_separate_subtitle() -> PlayPlan {
+        use melyxar_core::media::{SubtitleDetails, SubtitleLayout, Track, VideoDetails};
+
+        let source_id = MediaSourceId::new();
+        let picture = Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: 0,
+            language: None,
+            title: None,
+            is_default: true,
+            is_forced: false,
+            kind: TrackKind::Video(VideoDetails {
+                codec: "h264".into(),
+                profile: None,
+                level: None,
+                width: 1920,
+                height: 1080,
+                aspect_ratio: None,
+                is_interlaced: false,
+                frame_rate: Some(24.0),
+                bitrate: None,
+                pixel_format: None,
+                reference_frames: None,
+                color: Default::default(),
+                hdr: None,
+            }),
+        };
+        let words = Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: 0,
+            language: Some("fre".into()),
+            title: None,
+            is_default: false,
+            is_forced: false,
+            kind: TrackKind::Subtitle(SubtitleDetails {
+                codec: "subrip".into(),
+                layout: SubtitleLayout::Text,
+                is_hearing_impaired: false,
+                is_external: true,
+                external_relative_path: Some("Quiet.Harbour.2019.fr.srt".into()),
+            }),
+        };
+
+        PlayPlan {
+            source_id,
+            work_id: WorkId::new(),
+            path: "Quiet.Harbour.2019.mkv".into(),
+            size_bytes: 12_000,
+            duration: Some(Millis::new(7_200_000)),
+            decision: melyxar_app::playback::PlaybackDecision {
+                method: melyxar_app::playback::PlaybackMethod::Remux,
+                video: melyxar_app::playback::StreamAction::Copy,
+                audio: melyxar_app::playback::StreamAction::Copy,
+                subtitles: melyxar_app::playback::SubtitleDelivery::External,
+                audio_stream_index: None,
+                subtitle_stream_index: Some(0),
+                video_stream_index: Some(0),
+                scale_to_height: None,
+                tone_map: false,
+                reasons: Vec::new(),
+            },
+            resume_from: None,
+            tracks: vec![picture.clone(), words.clone()],
+        }
+    }
+
+    #[test]
+    fn the_chosen_subtitle_is_the_subtitle_and_not_the_picture() {
+        // A subtitle in a file of its own is stream zero of that file, which
+        // is also the number of the picture. Matching on the number alone
+        // hands back the picture, and the viewer gets subtitles that never
+        // appear with no hint as to why.
+        let plan = film_with_a_separate_subtitle();
+        let view = plan_view(&plan);
+
+        assert_eq!(
+            view.chosen_subtitle_id.as_deref(),
+            Some(view.subtitles[0].id.as_str())
+        );
+        assert_ne!(
+            view.chosen_subtitle_id.as_deref(),
+            Some(plan.tracks[0].id.to_string().as_str()),
+            "the picture is not a subtitle"
+        );
+    }
+
+    #[test]
+    fn a_subtitle_made_of_words_carries_the_address_of_its_words() {
+        let view = plan_view(&film_with_a_separate_subtitle());
+        let words = &view.subtitles[0];
+        assert_eq!(words.burns_in, Some(false));
+        assert_eq!(
+            words.url.as_deref(),
+            Some(
+                format!(
+                    "/api/v1/playback/{}/subtitles/{}.vtt",
+                    view.url
+                        .trim_start_matches("/api/v1/playback/")
+                        .trim_end_matches("/stream"),
+                    words.id
+                )
+                .as_str()
+            )
+        );
+    }
+
+    #[test]
+    fn a_subtitle_made_of_pictures_carries_no_address() {
+        // There is no text in one to hand over: it is drawn into the film.
+        use melyxar_core::media::SubtitleLayout;
+
+        let mut plan = film_with_a_separate_subtitle();
+        if let TrackKind::Subtitle(details) = &mut plan.tracks[1].kind {
+            details.layout = SubtitleLayout::Bitmap;
+        }
+
+        let view = plan_view(&plan);
+        assert_eq!(view.subtitles[0].burns_in, Some(true));
+        assert_eq!(view.subtitles[0].url, None);
     }
 
     #[test]

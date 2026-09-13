@@ -862,6 +862,76 @@
   background: #000;
 }
 
+/* How the subtitles look.
+ *
+ * A browser draws them inside the video itself, so the only way in is the cue
+ * pseudo element. Each choice says one thing and nothing else, so the five of
+ * them combine without any combination needing a rule of its own.
+ *
+ * Every value here is fixed rather than derived from the theme: these words sit
+ * on top of a film, not on top of a page, and a dark theme does not make a
+ * night scene any brighter. */
+.player-video::cue {
+  background: transparent;
+  color: #fff;
+  /* Every player settles on this, because it stays readable over both a bright
+     sky and a night scene. */
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+}
+
+.subtitles-size-small .player-video::cue {
+  font-size: 80%;
+}
+.subtitles-size-normal .player-video::cue {
+  font-size: 100%;
+}
+.subtitles-size-large .player-video::cue {
+  font-size: 135%;
+}
+.subtitles-size-huge .player-video::cue {
+  font-size: 175%;
+}
+
+.subtitles-colour-white .player-video::cue {
+  color: #fff;
+}
+/* The colour of a cinema subtitle, and the one that stands out best against a
+   picture that is mostly white or mostly grey. */
+.subtitles-colour-yellow .player-video::cue {
+  color: #f5e050;
+}
+.subtitles-colour-cyan .player-video::cue {
+  color: #7fe8f0;
+}
+
+.subtitles-edge-outline .player-video::cue {
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+}
+.subtitles-edge-shadow .player-video::cue {
+  text-shadow: 2px 2px 3px #000;
+}
+.subtitles-edge-none .player-video::cue {
+  text-shadow: none;
+}
+
+.subtitles-background-none .player-video::cue {
+  background: transparent;
+}
+.subtitles-background-dim .player-video::cue {
+  background: rgba(0, 0, 0, 0.55);
+}
+.subtitles-background-solid .player-video::cue {
+  background: #000;
+}
+
 /* What the viewer can change while watching: the soundtrack, the subtitles,
    the speed. Under the picture rather than over it, so nothing is hidden
    behind a panel that has to be opened first. */
