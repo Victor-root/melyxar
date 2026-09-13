@@ -104,6 +104,9 @@ export interface Trailer {
   name: string | null;
   remote_url: string | null;
   local: boolean;
+  /** Where to fetch a local one. Absent for a link, which is watched where it
+   *  lives: this server does not go and fetch someone else's video. */
+  url: string | null;
 }
 
 export interface Work {

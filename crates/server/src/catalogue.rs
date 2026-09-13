@@ -5,7 +5,10 @@
 //! draws and nothing else, because a page of sixty cards carrying a synopsis
 //! each is ten times the weight for text nobody reads there.
 
+use axum::body::Body;
 use axum::extract::{Path, Query, State};
+use axum::http::Request;
+use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::browse::{BrowseRequest, WorkCard, WorkOrder, DEFAULT_PAGE};
 use melyxar_app::detail::{Credit, Version, WorkDetail};
@@ -15,6 +18,8 @@ use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::Millis;
 use serde::{Deserialize, Serialize};
+use tower::ServiceExt;
+use tower_http::services::ServeFile;
 
 use crate::error::{Result, ServerError};
 
@@ -27,7 +32,54 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/v1/works", axum::routing::get(works))
         .route("/api/v1/works/{id}", axum::routing::get(work))
+        .route(
+            "/api/v1/works/{id}/trailers/{rank}",
+            axum::routing::get(trailer),
+        )
         .route("/api/v1/home", axum::routing::get(home))
+}
+
+/// Hands over a trailer sitting next to the film.
+///
+/// Named by its place in the list the detail page was given, so nothing a
+/// client sends is ever treated as a path. A trailer hosted elsewhere never
+/// comes through here: it is watched where it lives, and this server does not
+/// go and fetch someone else's video.
+async fn trailer(
+    State(state): State<AppState>,
+    Path((id, rank)): Path<(String, usize)>,
+    request: Request<Body>,
+) -> Response {
+    match serve_trailer(&state, &id, rank, request).await {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
+async fn serve_trailer(
+    state: &AppState,
+    id: &str,
+    rank: usize,
+    request: Request<Body>,
+) -> Result<Response> {
+    let work_id: WorkId = id
+        .parse()
+        .map_err(|_| ServerError::invalid_input("the work identifier is malformed"))?;
+    let detail = melyxar_app::detail::work_detail(state, work_id)
+        .await?
+        .ok_or_else(|| ServerError::not_found("no work with that identifier"))?;
+
+    let file = detail
+        .trailers
+        .get(rank)
+        .and_then(|trailer| trailer.local.as_ref())
+        .ok_or_else(|| ServerError::not_found("no trailer of this work sits on the disk"))?;
+
+    ServeFile::new(&file.path)
+        .oneshot(request)
+        .await
+        .map(IntoResponse::into_response)
+        .map_err(|error| ServerError::internal(error.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -354,6 +406,9 @@ struct TrailerView {
     remote_url: Option<String>,
     /// Set when the file sits next to the film.
     local: bool,
+    /// Where to fetch a local one. Absent for a link, which is watched where
+    /// it lives: this server does not go and fetch someone else's video.
+    url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -418,10 +473,18 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         trailers: detail
             .trailers
             .iter()
-            .map(|trailer| TrailerView {
+            .enumerate()
+            .map(|(rank, trailer)| TrailerView {
                 name: trailer.name.clone(),
                 remote_url: trailer.remote_url.clone(),
                 local: trailer.local.is_some(),
+                // Named by its place in the list this very answer carries,
+                // which is what keeps a path on someone's disk out of a page
+                // and out of anything a client could send back.
+                url: trailer
+                    .local
+                    .is_some()
+                    .then(|| format!("/api/v1/works/{}/trailers/{rank}", detail.work.id)),
             })
             .collect(),
         external_ids: detail
