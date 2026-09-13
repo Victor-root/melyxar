@@ -49,10 +49,6 @@ pub struct IdentifyReport {
 
 /// How many works one run looks at.
 ///
-/// A run that never ends cannot be followed, and the next one continues where
-/// this one stopped.
-const BATCH: i64 = 200;
-
 /// Identifies the works of a library that are still waiting.
 pub async fn identify_library<P>(
     state: &AppState,
@@ -70,17 +66,14 @@ where
     // by yesterday's rules is the commonest reason a provider answers nothing.
     let renamed = crate::scan::reread_names_of_nameless_works(state, library).await?;
 
-    let waiting = database
-        .works_awaiting_identification(library.id, BATCH)
-        .await?;
-
     let mut report = IdentifyReport {
         renamed,
         ..IdentifyReport::default()
     };
-    // A library with nothing left to name still has the rest of this to do:
-    // the films that were named on a day their pictures could not be had are
-    // exactly the ones nothing is asking about any more.
+    // Everything waiting, read once. A run deals with all of it: a library of
+    // four disks must not need the button pressing three times, with nothing
+    // to say why.
+    let waiting = database.works_awaiting_identification(library.id).await?;
     handle.set_total(waiting.len() as i64).await;
 
     for work in waiting {
@@ -185,12 +178,6 @@ async fn fill_in_the_synopsis(
     }
 }
 
-/// How many films one run tries to fill the holes of.
-///
-/// Bounded like the look up itself: a run that never ends cannot be followed,
-/// and the next one continues where this one stopped.
-const FILLED_PER_RUN: i64 = 200;
-
 /// What one pass over the holes managed to fill.
 #[derive(Debug, Default)]
 struct Filled {
@@ -218,9 +205,10 @@ where
     P: MetadataProvider + 'static,
 {
     let language = &library.metadata_language;
+    // Every one of them, read once, for the same reason as the look up above.
     let waiting = state
         .database()
-        .works_missing_their_metadata(library.id, provider.name(), language, FILLED_PER_RUN)
+        .works_missing_their_metadata(library.id, provider.name(), language)
         .await?;
     if waiting.is_empty() {
         return Ok(Filled::default());
@@ -476,8 +464,7 @@ fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a Movie
             _ => false,
         };
 
-    let carrying_the_name: Vec<&MovieCandidate> =
-        candidates.iter().filter(matches_title).collect();
+    let carrying_the_name: Vec<&MovieCandidate> = candidates.iter().filter(matches_title).collect();
 
     carrying_the_name
         .iter()
@@ -826,7 +813,8 @@ mod tests {
             }
             if self.exact {
                 let asked = melyxar_library::naming::fold_accents(title);
-                let holds_an_unread_mark = title.chars().any(|c| ('\u{300}'..='\u{36f}').contains(&c));
+                let holds_an_unread_mark =
+                    title.chars().any(|c| ('\u{300}'..='\u{36f}').contains(&c));
                 if holds_an_unread_mark
                     || !self.candidates.iter().any(|candidate| {
                         melyxar_library::naming::fold_accents(&candidate.title) == asked
@@ -1419,7 +1407,9 @@ mod tests {
         // nothing, so the film is marked rather than left on the waiting list
         // for ever.
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = Arc::new(StandIn::failing(|| ProviderError::Unexpected("not json at all".into())));
+        let provider = Arc::new(StandIn::failing(|| {
+            ProviderError::Unexpected("not json at all".into())
+        }));
 
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.unidentified, 1);
@@ -1511,7 +1501,9 @@ mod tests {
     #[tokio::test]
     async fn a_provider_that_is_down_leaves_the_work_waiting_rather_than_marking_it() {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
-        let provider = Arc::new(StandIn::failing(|| ProviderError::Unreachable("timed out".into())));
+        let provider = Arc::new(StandIn::failing(|| {
+            ProviderError::Unreachable("timed out".into())
+        }));
 
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.postponed, 1);
@@ -1536,7 +1528,7 @@ mod tests {
         assert_eq!(
             state
                 .database()
-                .works_awaiting_identification(library.id, 10)
+                .works_awaiting_identification(library.id)
                 .await
                 .expect("read")
                 .len(),
@@ -1585,6 +1577,62 @@ mod tests {
             IdentificationState::Pending,
             "the film is not the problem, and nothing about it was learnt"
         );
+    }
+
+    #[tokio::test]
+    async fn a_library_bigger_than_one_handful_is_named_in_one_run() {
+        // Four disks make a library several times the size of what is read
+        // from the table at once. Stopping at the first handful would mean
+        // pressing the button again and again, with nothing to say why.
+        let (_directory, state, library, _) = state_with_work("Quiet Harbour", Some(2019)).await;
+
+        let more = 240;
+        let mut candidates = vec![candidate("0", "Quiet Harbour", Some(2019))];
+        let mut described = vec![details("0", "Quiet Harbour", Some(2019))];
+        for index in 1..more {
+            let title = format!("Invented Film {index}");
+            state
+                .database()
+                .create_work(
+                    library.id,
+                    WorkKind::Movie,
+                    &title,
+                    &naming::sort_title(&title),
+                    Some(2019),
+                )
+                .await
+                .expect("work created");
+            candidates.push(candidate(&index.to_string(), &title, Some(2019)));
+            described.push(details(&index.to_string(), &title, Some(2019)));
+        }
+
+        let provider = Arc::new(StandIn::new(candidates, described));
+        let report = run(&state, &provider, &library).await;
+
+        assert_eq!(report.identified, more, "every one of them, in one run");
+        assert!(
+            state
+                .database()
+                .works_awaiting_identification(library.id)
+                .await
+                .expect("read")
+                .is_empty(),
+            "nothing is left waiting"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_provider_that_is_down_stops_the_run_rather_than_reading_for_ever() {
+        // Every film comes back postponed, so every film stays in the table.
+        // Reading the table again would hand back the same ones for ever.
+        let (_directory, state, library, _) = state_with_work("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(StandIn::failing(|| {
+            ProviderError::Unreachable("timed out".into())
+        }));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.postponed, 1);
+        assert_eq!(report.identified, 0);
     }
 
     #[tokio::test]
@@ -1743,23 +1791,27 @@ mod tests {
 
         let (_directory, state, library, work) =
             state_with_tools("Quiet Harbour", Some(2019)).await;
-        let provider = Arc::new(StandIn::new(
-            vec![candidate("111", "Quiet Harbour", Some(2019))],
-            vec![details("111", "Quiet Harbour", Some(2019))],
-        )
-        .serving(picture));
+        let provider = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture),
+        );
 
         // The count is what the log reports, so it is worth an answer of its
         // own: one picture prepared the first time, none the second, since the
         // poster has not changed.
         let details = details("111", "Quiet Harbour", Some(2019));
         assert_eq!(
-            crate::images::store_provider_images(&state, provider.as_ref(), work.id, &details).await,
+            crate::images::store_provider_images(&state, provider.as_ref(), work.id, &details)
+                .await,
             1,
             "the film has a poster and no backdrop, so one picture is prepared"
         );
         assert_eq!(
-            crate::images::store_provider_images(&state, provider.as_ref(), work.id, &details).await,
+            crate::images::store_provider_images(&state, provider.as_ref(), work.id, &details)
+                .await,
             0,
             "a picture already here is not prepared a second time"
         );
@@ -1825,11 +1877,13 @@ mod tests {
 
         let (_directory, state, library, work) =
             state_with_tools("Quiet Harbour", Some(2019)).await;
-        let provider = Arc::new(StandIn::new(
-            vec![candidate("111", "Quiet Harbour", Some(2019))],
-            vec![details("111", "Quiet Harbour", Some(2019))],
-        )
-        .serving(picture));
+        let provider = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture),
+        );
 
         run(&state, &provider, &library).await;
 
@@ -1891,11 +1945,13 @@ mod tests {
             })
             .collect();
 
-        let provider = Arc::new(StandIn::new(
-            vec![candidate("111", "Quiet Harbour", Some(2019))],
-            vec![crowded],
-        )
-        .serving(picture));
+        let provider = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![crowded],
+            )
+            .serving(picture),
+        );
         run(&state, &provider, &library).await;
 
         let faces: Vec<String> = provider
@@ -1922,11 +1978,13 @@ mod tests {
         };
         let (_directory, state, library, work) =
             state_with_tools("Quiet Harbour", Some(2019)).await;
-        let provider = Arc::new(StandIn::new(
-            vec![candidate("111", "Quiet Harbour", Some(2019))],
-            vec![details("111", "Quiet Harbour", Some(2019))],
-        )
-        .serving(picture));
+        let provider = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture),
+        );
 
         run(&state, &provider, &library).await;
         let people = state
@@ -1973,11 +2031,13 @@ mod tests {
         };
         let (_directory, state, library, work) =
             state_with_tools("Quiet Harbour", Some(2019)).await;
-        let provider = Arc::new(StandIn::new(
-            vec![candidate("111", "Quiet Harbour", Some(2019))],
-            vec![details("111", "Quiet Harbour", Some(2019))],
-        )
-        .serving(picture));
+        let provider = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture),
+        );
 
         run(&state, &provider, &library).await;
         let before = state
@@ -2039,6 +2099,54 @@ mod tests {
         assert!(
             detail.overview.is_some_and(|text| !text.is_empty()),
             "the library is in French and the film is described in English, which is a synopsis"
+        );
+    }
+
+    #[tokio::test]
+    async fn every_film_with_a_hole_in_it_is_dealt_with_however_many_there_are() {
+        // The same bound as the look up, and the same reason it must not stop
+        // a run: a library of four disks is several handfuls. Told through the
+        // synopsis rather than the pictures, which are the same loop and cost
+        // a run of the media tool each.
+        let (_directory, state, library, _) = state_with_work("Quiet Harbour", Some(2019)).await;
+
+        let more = 205;
+        let mut candidates = vec![candidate("0", "Quiet Harbour", Some(2019))];
+        let mut described = vec![details("0", "Quiet Harbour", Some(2019))];
+        for index in 1..more {
+            let title = format!("Invented Film {index}");
+            state
+                .database()
+                .create_work(
+                    library.id,
+                    WorkKind::Movie,
+                    &title,
+                    &naming::sort_title(&title),
+                    Some(2019),
+                )
+                .await
+                .expect("work created");
+            candidates.push(candidate(&index.to_string(), &title, Some(2019)));
+            described.push(details(&index.to_string(), &title, Some(2019)));
+        }
+
+        // Named on a day the provider had no words for any of them.
+        let wordless: Vec<MovieDetails> = described
+            .iter()
+            .cloned()
+            .map(|details| MovieDetails {
+                overview: None,
+                ..details
+            })
+            .collect();
+        let silent = Arc::new(StandIn::new(candidates.clone(), wordless));
+        assert_eq!(run(&state, &silent, &library).await.identified, more);
+
+        let talking = Arc::new(StandIn::new(candidates, described));
+        assert_eq!(
+            run(&state, &talking, &library).await.synopses_filled,
+            more,
+            "every one of them, in one run"
         );
     }
 

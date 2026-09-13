@@ -125,10 +125,17 @@ pub struct IdentifiedWork {
 
 impl Database {
     /// Works of a library that are still waiting to be looked up.
+    /// Every one of them, in the order they arrived.
+    ///
+    /// Read in one go rather than a handful at a time. Reading in handfuls
+    /// means saying where to start again, and what is left to do changes while
+    /// the run goes on: a film the provider could not be reached about stays
+    /// in the list, so the same handful comes back and everything behind it is
+    /// never reached. A library is bounded by the disks it sits on, and these
+    /// rows are small.
     pub async fn works_awaiting_identification(
         &self,
         library_id: melyxar_core::id::LibraryId,
-        limit: i64,
     ) -> Result<Vec<melyxar_core::work::Work>> {
         let rows = sqlx::query(
             "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
@@ -136,11 +143,9 @@ impl Database {
                     dominant_color, added_at, updated_at
              FROM works
              WHERE library_id = ? AND identification IN ('pending', 'unidentified')
-             ORDER BY added_at
-             LIMIT ?",
+             ORDER BY added_at",
         )
         .bind(library_id.to_db_string())
-        .bind(limit)
         .fetch_all(self.reader())
         .await?;
 
@@ -176,7 +181,7 @@ impl Database {
     /// it. Counted here so the report can name them, which is the only way to
     /// tell a film the provider has no picture of from one whose picture never
     /// arrived.
-    pub async fn works_missing_something(&self, limit: i64) -> Result<Vec<IncompleteWork>> {
+    pub async fn works_missing_something(&self) -> Result<Vec<IncompleteWork>> {
         let rows = sqlx::query(
             "SELECT w.title, w.release_year,
                     (SELECT count(*) FROM images i
@@ -217,9 +222,6 @@ impl Database {
                 release_year: row.try_get("release_year")?,
                 missing,
             });
-            if incomplete.len() as i64 >= limit {
-                break;
-            }
         }
         Ok(incomplete)
     }
@@ -233,7 +235,6 @@ impl Database {
         library_id: LibraryId,
         provider: &str,
         language: &str,
-        limit: i64,
     ) -> Result<Vec<IncompleteNamedWork>> {
         let rows = sqlx::query(
             "SELECT w.id, e.external_id,
@@ -276,9 +277,6 @@ impl Database {
                 wants_pictures,
                 wants_a_synopsis,
             });
-            if waiting.len() as i64 >= limit {
-                break;
-            }
         }
         Ok(waiting)
     }
@@ -1318,7 +1316,7 @@ mod tests {
         );
         assert_eq!(
             database
-                .works_awaiting_identification(work.library_id, 10)
+                .works_awaiting_identification(work.library_id)
                 .await
                 .expect("read")
                 .len(),
@@ -1397,7 +1395,7 @@ mod tests {
             .expect("identification applied");
 
         let incomplete = database
-            .works_missing_something(10)
+            .works_missing_something()
             .await
             .expect("read");
         assert_eq!(incomplete.len(), 1);
@@ -1434,7 +1432,7 @@ mod tests {
             .expect("picture stored");
 
         let after = database
-            .works_missing_something(10)
+            .works_missing_something()
             .await
             .expect("read");
         assert!(
@@ -1452,7 +1450,7 @@ mod tests {
             .expect("identification applied");
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -1488,7 +1486,7 @@ mod tests {
 
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr")
                 .await
                 .expect("read")
                 .is_empty(),
@@ -1507,7 +1505,7 @@ mod tests {
             .expect("identification applied");
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -1531,7 +1529,7 @@ mod tests {
         );
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr")
                 .await
                 .expect("read")
                 .iter()
@@ -1556,7 +1554,7 @@ mod tests {
 
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr")
                 .await
                 .expect("read")
                 .is_empty(),
@@ -1569,7 +1567,7 @@ mod tests {
         // There is nothing to ask with: no provider ever named it.
         let (database, work) = work_in_library().await;
         assert!(database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
             .await
             .expect("read")
             .is_empty());
@@ -1581,7 +1579,7 @@ mod tests {
         // title at all. Counting its holes a second time says nothing new.
         let (database, _) = work_in_library().await;
         assert!(database
-            .works_missing_something(10)
+            .works_missing_something()
             .await
             .expect("read")
             .is_empty());
@@ -1732,7 +1730,7 @@ mod tests {
         let (database, work) = work_in_library().await;
         assert_eq!(
             database
-                .works_awaiting_identification(work.library_id, 10)
+                .works_awaiting_identification(work.library_id)
                 .await
                 .expect("read")
                 .len(),
@@ -1744,7 +1742,7 @@ mod tests {
             .await
             .expect("applied");
         assert!(database
-            .works_awaiting_identification(work.library_id, 10)
+            .works_awaiting_identification(work.library_id)
             .await
             .expect("read")
             .is_empty());
