@@ -214,6 +214,49 @@ impl Database {
         Ok(incomplete)
     }
 
+    /// Films that were named and have no picture at all.
+    ///
+    /// A picture is fetched when a film is named and never again, so one that
+    /// did not arrive that day never arrives: a full disk, a folder the server
+    /// could not write to, a provider that was down for a minute. The film
+    /// keeps its title and its grey rectangle for ever, and nothing says so.
+    /// This is the list that puts that right.
+    pub async fn works_missing_their_pictures(
+        &self,
+        library_id: LibraryId,
+        provider: &str,
+        limit: i64,
+    ) -> Result<Vec<(WorkId, String)>> {
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT w.id, e.external_id
+             FROM works w
+             JOIN work_external_ids e ON e.work_id = w.id AND e.provider = ?
+             WHERE w.library_id = ?
+               AND w.identification IN ('identified', 'manual')
+               AND NOT EXISTS (
+                   SELECT 1 FROM images i
+                    WHERE i.owner_kind = 'work' AND i.owner_id = w.id
+                      AND i.image_kind = 'poster')
+             ORDER BY w.added_at
+             LIMIT ?",
+        )
+        .bind(provider)
+        .bind(library_id.to_db_string())
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.into_iter()
+            .map(|(id, external_id)| {
+                Ok((
+                    id.parse()
+                        .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?,
+                    external_id,
+                ))
+            })
+            .collect()
+    }
+
     /// Records why the last look up did not name a work.
     ///
     /// Kept apart from the state on purpose: a work the provider could not be
@@ -1344,6 +1387,65 @@ mod tests {
             !after[0].missing.contains(&"poster"),
             "a film that got its picture stops being counted for it: {after:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn a_film_whose_picture_never_arrived_is_offered_for_another_try() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+
+        let waiting = database
+            .works_missing_their_pictures(work.library_id, "tmdb", 10)
+            .await
+            .expect("read");
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(waiting[0].0, work.id);
+        assert_eq!(
+            waiting[0].1, "111",
+            "the identifier is what lets the provider be asked again"
+        );
+
+        database
+            .replace_images(
+                "work",
+                &work.id.to_db_string(),
+                "poster",
+                &[crate::images::StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: work.id.to_db_string(),
+                    image_kind: "poster".to_string(),
+                    relative_path: "works/x/poster-200.webp".to_string(),
+                    width: Some(200),
+                    height: Some(300),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("picture stored");
+
+        assert!(
+            database
+                .works_missing_their_pictures(work.library_id, "tmdb", 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "a film that has its picture is never asked about again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_nobody_could_name_is_never_asked_about_for_its_pictures() {
+        // There is nothing to ask with: no provider ever named it.
+        let (database, work) = work_in_library().await;
+        assert!(database
+            .works_missing_their_pictures(work.library_id, "tmdb", 10)
+            .await
+            .expect("read")
+            .is_empty());
     }
 
     #[tokio::test]
