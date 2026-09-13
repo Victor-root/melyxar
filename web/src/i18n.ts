@@ -147,6 +147,11 @@ const en: Dictionary = {
   "refused.unreachable": "The server did not answer.",
   "refused.generic": "The server would not start it.",
 
+  "byhand.open": "Find this film",
+  "byhand.field": "Title to look for",
+  "byhand.look": "Search",
+  "byhand.nothing": "Nothing came back under that name. Try another spelling, or the title it was shot under.",
+
   "credit.actor": "Actor",
   "credit.director": "Director",
   "credit.writer": "Writer",
@@ -357,6 +362,11 @@ const fr: Dictionary = {
   "refused.not_found": "Cette bibliothèque n'existe plus.",
   "refused.unreachable": "Le serveur n'a pas répondu.",
   "refused.generic": "Le serveur n'a pas voulu le lancer.",
+
+  "byhand.open": "Chercher ce film",
+  "byhand.field": "Titre à chercher",
+  "byhand.look": "Chercher",
+  "byhand.nothing": "Rien ne revient sous ce nom. Essayez une autre orthographe, ou le titre original.",
 
   "credit.actor": "Acteur",
   "credit.director": "Réalisation",

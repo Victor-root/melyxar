@@ -10,10 +10,11 @@
 //! far more robust than trying to recognise every technical tag, because the
 //! list of tags is endless and grows, whereas a four digit year is a year.
 //!
-//! Two fallbacks, and only for a name that carries no year at all, since such
-//! a name would otherwise hand a provider the file name whole: the title stops
-//! at the first word that can only describe a file, and a marker shouting in
-//! capitals at the end of a title that does not is dropped by its shape.
+//! For a name carrying no year at all, which would otherwise hand a provider
+//! the file name whole, the title stops at the first word that can only
+//! describe a file. And whatever the name, two things are trimmed off the end
+//! of the title: the word naming which cut of the film this is, and a marker
+//! shouting in capitals at the end of a title that does not.
 
 use std::collections::BTreeSet;
 
@@ -43,6 +44,19 @@ pub struct ParsedName {
 /// `current_year` is passed in rather than read from the clock, so the same
 /// name always parses the same way in a test.
 pub fn parse(file_name: &str, current_year: i32) -> ParsedName {
+    parse_signed(file_name, current_year, &BTreeSet::new())
+}
+
+/// Reads a file name, knowing what this library signs its files with.
+///
+/// `markers` comes from `markers_in`, which reads them off the library rather
+/// than from any list: whoever named these files put the same word at the end
+/// of many of them, and that word is never part of a title.
+pub fn parse_signed(
+    file_name: &str,
+    current_year: i32,
+    markers: &BTreeSet<String>,
+) -> ParsedName {
     let stem = strip_extension(file_name);
     // The underscore separates words just like the dot does. Personal markers
     // attach themselves to the previous tag with one, and without this rule
@@ -52,7 +66,7 @@ pub fn parse(file_name: &str, current_year: i32) -> ParsedName {
 
     if let Some(position) = find_year(&words, current_year) {
         return ParsedName {
-            title: join_title(&words[..position]),
+            title: join_title(trim_the_end(&words[..position], markers)),
             year: bare(words[position]).parse().ok(),
             tags: tags_from(&words[position + 1..]),
         };
@@ -62,12 +76,127 @@ pub fn parse(file_name: &str, current_year: i32) -> ParsedName {
     // with nothing technical in it at all would have been found by now, so
     // what is left is the two shapes a year would have handled.
     let boundary = first_technical_tag(&words).unwrap_or(words.len());
-    let kept = trim_trailing_marker(&words[..boundary]);
     ParsedName {
-        title: join_title(kept),
+        title: join_title(trim_the_end(&words[..boundary], markers)),
         year: None,
         tags: tags_from(&words[boundary..]),
     }
+}
+
+/// How many names a word must end before it counts as this library's mark.
+///
+/// Three is low enough to catch a mark on a handful of files and high enough
+/// that a word two titles happen to share is not mistaken for one.
+const REPEATED_ENOUGH: usize = 3;
+
+/// The words this library signs its files with.
+///
+/// Everyone who names files by hand ends up with a signature, and no list
+/// could hold them all: they are somebody's initials, a site, a group. What
+/// can be said generally is that a signature repeats and a title does not, so
+/// the last word of every name is counted and the ones that keep coming back
+/// are the marks.
+///
+/// Deliberately learnt rather than written down: a mark written into this file
+/// would name whoever uses it, and would only ever fit one library.
+pub fn markers_in<S: AsRef<str>>(file_names: &[S]) -> BTreeSet<String> {
+    let mut counted: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+
+    for name in file_names {
+        let stem = strip_extension(name.as_ref());
+        let normalised = stem.replace(['.', '_'], " ");
+        let Some(last) = normalised
+            .split_whitespace()
+            .next_back()
+            .map(bare)
+            .and_then(|word| word.rsplit('-').next())
+        else {
+            continue;
+        };
+        if !could_be_a_mark(last) {
+            continue;
+        }
+        *counted.entry(last.to_lowercase()).or_default() += 1;
+    }
+
+    counted
+        .into_iter()
+        .filter(|(_, seen)| *seen >= REPEATED_ENOUGH)
+        .map(|(word, _)| word)
+        .collect()
+}
+
+/// Whether a word is the sort of thing a signature is made of.
+///
+/// A number is a sequel, a roman numeral is a sequel, and a word already known
+/// to describe the file is handled elsewhere. What is left is a word, and a
+/// word that ends many names is a signature.
+fn could_be_a_mark(word: &str) -> bool {
+    let lowered = word.to_lowercase();
+    word.chars().count() >= 2
+        && word.chars().any(|c| c.is_alphabetic())
+        && !word.chars().all(|c| "IVXLCDMivxlcdm".contains(c))
+        && !TECHNICAL_TAGS.contains(&lowered.as_str())
+        && !EDITION_WORDS.contains(&lowered.as_str())
+}
+
+/// Drops what a title picked up at its end and never had.
+///
+/// Both kinds are trailing by nature: the word naming which cut of the film
+/// this is, and the marker a release or a person signs with. Neither belongs
+/// to a title, and a provider asked about either finds nothing.
+fn trim_the_end<'a>(words: &'a [&'a str], markers: &BTreeSet<String>) -> &'a [&'a str] {
+    trim_trailing_marker(trim_edition_words(trim_known_marks(words, markers)))
+}
+
+/// Drops the marks this library signs with, however many are stacked up.
+///
+/// Knowing the mark is what lets it go from a title written wholly in
+/// capitals, where nothing about its shape tells it apart from a word.
+fn trim_known_marks<'a>(words: &'a [&'a str], markers: &BTreeSet<String>) -> &'a [&'a str] {
+    let mut kept = words;
+    while let Some((last, rest)) = kept.split_last() {
+        // Never the whole title: a film with no title left is a film nobody
+        // finds again.
+        if rest.is_empty() || !markers.contains(&bare(last).to_lowercase()) {
+            break;
+        }
+        kept = rest;
+    }
+    kept
+}
+
+/// Words that say which cut of a film this copy is, never what it is called.
+///
+/// Short and unambiguous on purpose: a word here is dropped from the end of a
+/// title, and a word dropped wrongly is a film nobody finds again. Anything
+/// that could begin or sit inside a real title stays out of this list.
+const EDITION_WORDS: &[&str] = &[
+    "extended",
+    "unrated",
+    "uncut",
+    "uncensored",
+    "uncensured",
+    "remastered",
+    "remaster",
+    "theatrical",
+    "redux",
+    "integrale",
+];
+
+/// Drops the words naming the cut, however many of them are stacked up.
+fn trim_edition_words<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
+    let mut kept = words;
+    while let Some((last, rest)) = kept.split_last() {
+        // Never the whole title: a name made only of these says nothing, and
+        // an empty title is a film nobody finds again.
+        if rest.is_empty() || !EDITION_WORDS.contains(&bare(last).to_lowercase().as_str()) {
+            break;
+        }
+        kept = rest;
+    }
+    kept
 }
 
 /// Lowercased technical markers, with any release group split off.
@@ -463,6 +592,87 @@ mod tests {
     }
 
     #[test]
+    fn the_word_naming_the_cut_is_not_part_of_the_title() {
+        // Written before the year, where the boundary rule cannot reach it.
+        let shouted = parsed("Quiet Harbour EXTENDED (2019) MULTi 1080p.mkv");
+        assert_eq!(shouted.title, "Quiet Harbour");
+        assert_eq!(shouted.year, Some(2019));
+
+        let spoken = parsed("Quiet Harbour Extended.mkv");
+        assert_eq!(spoken.title, "Quiet Harbour");
+
+        let stacked = parsed("Quiet Harbour Remastered Uncut (2019) 1080p.mkv");
+        assert_eq!(stacked.title, "Quiet Harbour", "however many are piled up");
+    }
+
+    #[test]
+    fn a_title_made_only_of_such_words_keeps_them_rather_than_vanishing() {
+        // Whatever it is, a film with no title left is a film nobody finds.
+        assert_eq!(parsed("Extended.mkv").title, "Extended");
+    }
+
+    #[test]
+    fn the_mark_a_library_signs_with_is_learnt_from_the_library() {
+        // Nothing about the shape of a word tells a signature from a title, so
+        // it is read off the names themselves: whatever keeps ending them is
+        // not part of any title.
+        let names = [
+            "Quiet Harbour (2019) MULTi 1080p SOMEGROUP.mkv",
+            "Amber Field (2020) 1080p SOMEGROUP.mkv",
+            "Winter Signal 2160p SOMEGROUP.mkv",
+            "The Long Road North (2018) x264.mkv",
+        ];
+        let marks = markers_in(&names);
+        assert!(marks.contains("somegroup"), "{marks:?}");
+        assert!(!marks.contains("x264"), "a definition is not a signature");
+    }
+
+    #[test]
+    fn a_sequel_number_is_never_taken_for_a_signature() {
+        // Several titles end in the same number, which is exactly what a
+        // signature looks like from a distance and is the opposite of one.
+        let names = [
+            "Quiet Harbour 2.mkv",
+            "Amber Field 2.mkv",
+            "Winter Signal 2.mkv",
+            "Harbour Rising II.mkv",
+            "Amber Rising II.mkv",
+            "Signal Rising II.mkv",
+        ];
+        let marks = markers_in(&names);
+        assert!(marks.is_empty(), "{marks:?}");
+    }
+
+    #[test]
+    fn a_known_mark_leaves_a_title_that_is_shouting_as_loudly_as_it_is() {
+        // The case nothing else can reach: every word is in capitals, so no
+        // rule of shape can tell the signature from the title. Knowing the
+        // mark is what makes it possible.
+        let marks = markers_in(&[
+            "QUIET HARBOUR CONTRE ATTAQUE SOMEGROUP.mkv",
+            "Amber Field (2020) 1080p SOMEGROUP.mkv",
+            "Winter Signal 2160p SOMEGROUP.mkv",
+        ]);
+
+        let read = parse_signed("QUIET HARBOUR CONTRE ATTAQUE SOMEGROUP.mkv", NOW, &marks);
+        assert_eq!(read.title, "QUIET HARBOUR CONTRE ATTAQUE");
+        assert_eq!(
+            parsed("QUIET HARBOUR CONTRE ATTAQUE SOMEGROUP.mkv").title,
+            "QUIET HARBOUR CONTRE ATTAQUE SOMEGROUP",
+            "and without knowing the mark there is nothing to go on"
+        );
+    }
+
+    #[test]
+    fn a_title_made_only_of_the_mark_keeps_it_rather_than_vanishing() {
+        let marks: BTreeSet<String> = ["somegroup".to_string()].into_iter().collect();
+        assert_eq!(
+            parse_signed("SOMEGROUP.mkv", NOW, &marks).title,
+            "SOMEGROUP"
+        );
+    }
+
+    #[test]
     fn a_title_written_wholly_in_capitals_keeps_every_word() {
         // Nothing stands out, so nothing is dropped: guessing here would cost
         // a word of the title itself.
@@ -503,12 +713,16 @@ mod tests {
 
     #[test]
     fn a_name_starting_with_a_year_keeps_it_rather_than_ending_up_untitled() {
+        // The year is the whole title here, and the word after it names the
+        // cut. Both rules agree on what is left, and what is left is not
+        // nothing: a film with no title is a film nobody finds again.
         let result = parse("2019.Remastered.mkv", NOW);
-        assert_eq!(
-            result.title, "2019 Remastered",
-            "a film with no title left is a film nobody finds again"
-        );
+        assert_eq!(result.title, "2019");
         assert_eq!(result.year, None);
+
+        let plain = parse("2019.Harbour.mkv", NOW);
+        assert_eq!(plain.title, "2019 Harbour");
+        assert_eq!(plain.year, None);
     }
 
     #[test]

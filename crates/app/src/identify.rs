@@ -456,6 +456,45 @@ where
     Ok(IdentifyJob { started, outcome })
 }
 
+/// Films a person could mean, for a work no provider recognised.
+///
+/// The rules that read a file name do their best and sometimes there is
+/// nothing to be done: a copy named after the wrong film, a title the provider
+/// spells differently, a name that is only a marker. Somebody looking at the
+/// film knows what it is, and this is how they say so.
+pub async fn candidates_for<P>(
+    state: &AppState,
+    provider: &Arc<P>,
+    work_id: WorkId,
+    query: &str,
+) -> Result<Vec<MovieCandidate>>
+where
+    P: MetadataProvider + 'static,
+{
+    let work = state
+        .database()
+        .work(work_id)
+        .await?
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("work")))?;
+
+    let language = state
+        .database()
+        .list_libraries()
+        .await?
+        .into_iter()
+        .find(|library| library.id == work.library_id)
+        .map(|library| library.metadata_language)
+        .unwrap_or_else(|| "en".to_string());
+
+    // Whatever was typed, and never the year: a person searching by hand is
+    // already saying the automatic attempt was wrong, and the year it used
+    // came from the same file name that was wrong.
+    provider
+        .search_movie(query, None, &language)
+        .await
+        .map_err(|error| AppError::Domain(melyxar_core::Error::invalid_input(error.to_string())))
+}
+
 /// Chooses a match by hand, and remembers that a person chose it.
 pub async fn identify_by_hand<P>(
     state: &AppState,
