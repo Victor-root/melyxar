@@ -97,6 +97,18 @@ pub struct ProbeStream {
     pub sample_rate: Option<String>,
     #[serde(default)]
     pub bits_per_sample: Option<i32>,
+    /// Where this stream starts, in seconds, as the container declares it.
+    ///
+    /// Two streams that do not start together are the commonest reason a film
+    /// plays with the sound ahead of the picture, and nothing about the file
+    /// says so anywhere else.
+    #[serde(default)]
+    pub start_time: Option<String>,
+    /// How long this stream runs, in seconds. Two streams of noticeably
+    /// different lengths drift apart as the film goes on, which is the other
+    /// shape the same complaint takes.
+    #[serde(default)]
+    pub duration: Option<String>,
     #[serde(default)]
     pub disposition: HashMap<String, i32>,
     #[serde(default)]
@@ -118,6 +130,16 @@ impl ProbeStream {
 
     pub fn is_subtitle(&self) -> bool {
         self.codec_type.as_deref() == Some("subtitle")
+    }
+
+    /// Where the stream starts, in milliseconds, when the container says.
+    pub fn starts_at_ms(&self) -> Option<i64> {
+        seconds_to_ms(self.start_time.as_deref()?)
+    }
+
+    /// How long the stream runs, in milliseconds, when the container says.
+    pub fn runs_for_ms(&self) -> Option<i64> {
+        seconds_to_ms(self.duration.as_deref()?)
     }
 
     /// Reads one of the disposition markers, such as default or forced.
@@ -172,6 +194,17 @@ impl ProbeChapter {
             .find(|(key, _)| key.eq_ignore_ascii_case("title"))
             .map(|(_, value)| value.as_str())
     }
+}
+
+/// Reads a count of seconds the analyser wrote, as milliseconds.
+///
+/// The analyser writes these as decimal text, and "N/A" when it has nothing to
+/// say, which is not a number and must not be read as zero.
+fn seconds_to_ms(value: &str) -> Option<i64> {
+    let seconds: f64 = value.trim().parse().ok()?;
+    seconds
+        .is_finite()
+        .then(|| (seconds * 1000.0).round() as i64)
 }
 
 /// Runs the analyser on a file and parses its report.

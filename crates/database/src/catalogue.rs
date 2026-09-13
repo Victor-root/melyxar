@@ -599,6 +599,28 @@ impl Database {
         Ok(groups)
     }
 
+    /// Forgets what the analyser found, so the next scan reads every file
+    /// again.
+    ///
+    /// An analysis is kept once it is done, which is what makes a second scan
+    /// cost almost nothing. But what the analyser is asked to read grows: a
+    /// collection analysed by an older build carries the gaps that build left,
+    /// and nothing would ever look at those files again. This is how somebody
+    /// asks for them to be read once more, and it costs one scan.
+    ///
+    /// The files themselves are untouched, and so is everything attached to
+    /// them: only what was read out of them goes.
+    pub async fn forget_analysis(&self, library_id: LibraryId) -> Result<u64> {
+        let done = sqlx::query(
+            "UPDATE media_sources SET analysed_at = NULL
+             WHERE root_id IN (SELECT id FROM library_roots WHERE library_id = ?)",
+        )
+        .bind(library_id.to_db_string())
+        .execute(self.writer())
+        .await?;
+        Ok(done.rows_affected())
+    }
+
     /// Marks a file absent. Never a deletion: a disconnected disk must not
     /// cost a library.
     pub async fn mark_source_missing(&self, id: MediaSourceId) -> Result<()> {
