@@ -534,6 +534,29 @@ fn is_a_combining_mark(c: char) -> bool {
     ('\u{0300}'..='\u{036f}').contains(&c)
 }
 
+/// The form two titles are compared in when deciding whether they are the
+/// same title.
+///
+/// Only the words survive: accents are folded, capitals go, and everything
+/// that is neither a letter nor a number becomes a space. Whoever named a file
+/// dropped a colon, wrote an apostrophe another way or spelled a hyphenated
+/// name as two words, and none of that makes it another film. What it never
+/// does is join two words into one, because two words and one word are two
+/// different names.
+///
+/// Kept apart from the ordering title, which has to leave a title readable and
+/// therefore cannot go this far.
+pub fn matchable_title(title: &str) -> String {
+    let folded = fold_accents(title).to_lowercase();
+    folded
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ")
+}
+
 /// Whether a title is written in plain letters, which decides whether asking a
 /// provider for its folded form is a second question or the same one twice.
 pub fn carries_accents(title: &str) -> bool {
@@ -1054,6 +1077,30 @@ mod tests {
             "or the same film sorts in two places and never matches itself"
         );
         assert!(sort_title(letter_then_accent).is_ascii());
+    }
+
+    #[test]
+    fn two_spellings_of_one_title_compare_as_the_same_title() {
+        // What whoever named the file did to the punctuation, and what no
+        // provider ever does: a colon dropped, a hyphenated name written as
+        // two words, an apostrophe of another shape.
+        let same = |left: &str, right: &str| matchable_title(left) == matchable_title(right);
+        assert!(same(
+            "Quiet Harbour: Rising Tide",
+            "Quiet Harbour Rising Tide"
+        ));
+        assert!(same("Amber-Field", "Amber Field"));
+        assert!(same("L'Auberge du Nord", "L\u{2019}Auberge du Nord"));
+        assert!(same("Le Dernier Été", "le dernier ete"));
+        assert!(same("Harbour  Rising ", "Harbour Rising"));
+    }
+
+    #[test]
+    fn two_words_never_become_one_when_titles_are_compared() {
+        // The line this must not cross: dropping a hyphen without leaving a
+        // space would make two different names look like one.
+        assert!(matchable_title("Amber-Field") != matchable_title("Amberfield"));
+        assert_eq!(matchable_title("Amber-Field"), "amber field");
     }
 
     #[test]

@@ -481,32 +481,38 @@ async fn find_candidate(
 /// films a year apart.
 const YEARS_APART: i32 = 1;
 
-/// Picks the candidate a person would pick.
+/// Picks the candidate a person would pick, or none at all.
 ///
-/// Two things are known about the candidates and neither is enough alone. The
-/// year says which films this cannot be, and says it well: a film from 1978 is
-/// not the one a file dated 2019 holds. It says almost nothing about which of
-/// two films a year apart it is, since the two years are as likely to be two
-/// dates of one film as two different films.
+/// **The name is what identifies a film here, and nothing else does.** A
+/// candidate is only ever taken when it carries the name that was searched
+/// for, under the title it was released under or the one it was shot under.
 ///
-/// The provider's order is the other way round. It ranks by how famous a film
-/// is, which rules nothing out, and picks well among films that are otherwise
-/// indistinguishable: twenty films carry the same common title and one of them
-/// is the one nearly everybody means.
+/// The year then decides among films of that same name, and it is good at
+/// that: a film from 1978 is not the one a file dated 2019 holds. It says
+/// almost nothing about two films a year apart, since the two years are as
+/// likely to be two dates of one film, so the provider's order settles those:
+/// it ranks by how famous a film is, and on twenty films of one common title
+/// one of them is the one nearly everybody means.
 ///
-/// So the year narrows the field and the order decides inside it.
+/// What is deliberately not done is taking the first answer when nothing
+/// matches. A search made of a name the provider does not know still comes
+/// back with something, and that something is a film picked at random as far
+/// as this library is concerned. It used to be taken, which put a making-of on
+/// two films of a series and then, both carrying one identifier, put those two
+/// films on one page. A film nobody could name says so and waits, which is
+/// visible, correctable, and the whole reason the report names them.
 fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a MovieCandidate> {
     if candidates.is_empty() {
         return None;
     }
-    let wanted = naming::sort_title(&work.title);
+    let wanted = naming::matchable_title(&work.title);
 
     let matches_title = |candidate: &&MovieCandidate| {
-        naming::sort_title(&candidate.title) == wanted
+        naming::matchable_title(&candidate.title) == wanted
             || candidate
                 .original_title
                 .as_deref()
-                .is_some_and(|title| naming::sort_title(title) == wanted)
+                .is_some_and(|title| naming::matchable_title(title) == wanted)
     };
     let near_the_year =
         |candidate: &&MovieCandidate| match (work.release_year, candidate.release_year) {
@@ -523,13 +529,6 @@ fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a Movie
         // Every film of this name is from another time. The name is still the
         // strongest thing there is, so the best of them is taken anyway.
         .or_else(|| carrying_the_name.first().copied())
-        // No film carries the name. A year that fits is still something, and
-        // with neither, the provider's first answer is all there is.
-        .or_else(|| {
-            work.release_year
-                .and_then(|_| candidates.iter().find(near_the_year))
-        })
-        .or_else(|| candidates.first())
 }
 
 /// Turns what the provider said into what the storage takes.
@@ -1008,15 +1007,18 @@ mod tests {
     }
 
     #[test]
-    fn the_year_decides_when_no_title_matches() {
+    fn a_year_that_fits_is_not_an_identification_on_its_own() {
+        // Two films of that year came back, and neither is called anything
+        // like what was searched for. Taking one used to be what happened,
+        // and a film wrongly named looks exactly like a film correctly named.
         let wanted = work_named("Quiet Harbour", Some(2019));
         let offered = vec![
-            candidate("1", "Something Invented", Some(1978)),
+            candidate("1", "Something Invented", Some(2019)),
             candidate("2", "Something Else", Some(2019)),
         ];
-        assert_eq!(
-            choose(&offered, &wanted).expect("one of them").external_id,
-            "2"
+        assert!(
+            choose(&offered, &wanted).is_none(),
+            "a date in common is a coincidence, not a name"
         );
     }
 
@@ -1086,19 +1088,32 @@ mod tests {
     }
 
     #[test]
-    fn with_nothing_to_go_on_the_first_answer_is_all_there_is() {
+    fn with_nothing_to_go_on_no_film_is_chosen_at_all() {
+        // What a search made of a name the provider does not know comes back
+        // with: films, because a search always comes back with films. Taking
+        // the first of them is picking one at random, and it is how a
+        // making-of ended up on two films of a series at once.
         let wanted = work_named("Something Invented", None);
         let offered = vec![
             candidate("1", "Amber Field", Some(2020)),
             candidate("2", "Winter Signal", Some(2021)),
         ];
+        assert!(
+            choose(&offered, &wanted).is_none(),
+            "a film nobody could name says so and waits, which is visible and correctable"
+        );
+        assert!(choose(&[], &wanted).is_none());
+    }
+
+    #[test]
+    fn a_title_spelled_with_other_punctuation_is_the_same_title() {
+        // The reason the name can be made to decide on its own: whoever named
+        // the file dropped a colon, and no provider ever does.
+        let wanted = work_named("Quiet Harbour Rising Tide", Some(2019));
+        let offered = vec![candidate("1", "Quiet Harbour: Rising Tide", Some(2019))];
         assert_eq!(
             choose(&offered, &wanted).expect("one of them").external_id,
             "1"
-        );
-        assert!(
-            choose(&[], &wanted).is_none(),
-            "nothing offered is nothing chosen, not the first of nothing"
         );
     }
 
@@ -1253,6 +1268,46 @@ mod tests {
         identify_library(state, provider, library, &handle)
             .await
             .expect("the run finished")
+    }
+
+    #[tokio::test]
+    async fn two_films_the_provider_knows_nothing_about_stay_two_films() {
+        // Two different films of one series, whose names carry a word the
+        // provider has never heard of. A search always comes back with
+        // something, and taking that something named both after the same
+        // stranger; both then carried one identifier, so they were put on one
+        // page, and one film of the series was gone from the library.
+        let (_directory, state, library, _) =
+            state_with_work("Studio Invented Harbour", Some(2009)).await;
+        state
+            .database()
+            .create_work(
+                library.id,
+                WorkKind::Movie,
+                "Studio Invented Harbour",
+                "studio invented harbour 2013",
+                Some(2013),
+            )
+            .await
+            .expect("work created");
+
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("999", "The Making Of Something Else", Some(2024))],
+            vec![details("999", "The Making Of Something Else", Some(2024))],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 0, "neither is that film");
+        assert_eq!(report.unidentified, 2);
+        assert_eq!(report.merged, 0, "two films are two films");
+        assert_eq!(
+            state
+                .database()
+                .count_works(library.id)
+                .await
+                .expect("read"),
+            2
+        );
     }
 
     #[tokio::test]
