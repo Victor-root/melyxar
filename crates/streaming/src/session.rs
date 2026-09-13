@@ -378,6 +378,15 @@ mod tests {
 
     /// A real clip, since what is being tested is what a real tool produces.
     async fn clip(path: &Path, seconds: u32) {
+        clip_with_key_frames_every(path, seconds, 24).await
+    }
+
+    /// The same, with a say in how far apart its key frames are.
+    ///
+    /// How far apart they are decides where a tool can start reading, so a
+    /// clip with one every second hides every fault that only shows on a real
+    /// film, where they are seconds or tens of seconds apart.
+    async fn clip_with_key_frames_every(path: &Path, seconds: u32, frames: u32) {
         let made = tokio::process::Command::new("ffmpeg")
             .args([
                 "-hide_banner",
@@ -397,7 +406,9 @@ mod tests {
                 "-preset",
                 "ultrafast",
                 "-g",
-                "24",
+                &frames.to_string(),
+                "-sc_threshold",
+                "0",
                 "-c:a",
                 "aac",
                 "-shortest",
@@ -650,6 +661,96 @@ mod tests {
             .trim()
             .parse()
             .expect("a start time")
+    }
+
+    #[tokio::test]
+    async fn a_film_rebuilt_whole_lands_on_the_second_the_playlist_says() {
+        // How far apart the key frames are decides where the tool can start
+        // reading, and a real film has one every several seconds rather than
+        // every second. A stream being rebuilt is decoded from the key frame
+        // before the point asked for and the frames before it are dropped, so
+        // the segment lands where it says however far apart they are. A stream
+        // being copied cannot do that, which the test below measures.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip_with_key_frames_every(&source, 60, 240).await;
+
+        let mut encode = melyxar_ffmpeg::command::VideoEncode::software_h264();
+        encode.keyframe_interval = Some(crate::playlist::SEGMENT_DURATION);
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(60_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Encode(encode),
+                audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
+                    "aac",
+                )),
+            },
+            directory.path().join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+
+        // Twelve segments in is forty eight seconds, which sits between two
+        // key frames of this clip rather than on one.
+        session.segment(12).await.expect("the segment landed on");
+        let announced = clock_of(&session, 12).await;
+        let expected = session.playlist().start_of(12).as_seconds_f64();
+        assert!(
+            (announced - expected).abs() < 0.5,
+            "the playlist says this segment covers second {expected}, and it \
+             announces itself at {announced}"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_stream_being_copied_can_only_start_where_its_key_frames_are() {
+        // Not a fault to fix here, a limit to know, and the one that decides
+        // what a jump feels like on most films: a stream carried over
+        // untouched has to start on one of its own key frames, so a jump lands
+        // on the one before the point asked for. The viewer sees the film from
+        // slightly earlier and it plays on correctly from there.
+        //
+        // What it costs is exactly how far apart those key frames are: six
+        // seconds, measured on a film with one every ten. It applies to any
+        // stream that is copied, so it covers repackaging and rebuilding the
+        // sound alone as well. Writing the playlist on the real key frames
+        // instead of on a fixed grid is the way out, and it needs the analysis
+        // to record where they are, which is a decision of its own.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip_with_key_frames_every(&source, 60, 240).await;
+
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(60_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Copy,
+                audio: AudioOutput::Copy,
+            },
+            directory.path().join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+
+        session.segment(12).await.expect("the segment landed on");
+        let announced = clock_of(&session, 12).await;
+        let expected = session.playlist().start_of(12).as_seconds_f64();
+        let early = expected - announced;
+        assert!(
+            (0.0..=10.5).contains(&early),
+            "a copy starts on a key frame at or before the point asked for, \
+             and this clip has one every ten seconds: asked for {expected}, \
+             got {announced}"
+        );
+        session.close().await;
     }
 
     #[tokio::test]
