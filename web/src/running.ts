@@ -15,7 +15,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import type { Job, Library } from "./api";
 
 /** How often the server is asked while it is busy. */
@@ -91,23 +91,47 @@ export function useRunning(): Running {
   return useContext(RunningContext);
 }
 
-/** How a scan of every library is asked for, wherever the button lives. */
-export function useStartScan(libraries: Library[]): {
+/** A button that asks the server to start something, and what became of it. */
+export interface Starter {
   start: () => Promise<void>;
   starting: boolean;
-} {
+  /** Why the server refused, as a code to be translated. A button that fails
+      in silence is the same thing as a button that does nothing, and sends
+      somebody to a terminal. */
+  refused: string | null;
+}
+
+/** Asks the server to start one kind of work on every library. */
+function useStartWork(
+  libraries: Library[],
+  ask: (library: string) => Promise<unknown>,
+): Starter {
   const { watch } = useRunning();
   const [starting, setStarting] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
 
   const start = useCallback(async () => {
     setStarting(true);
+    setRefused(null);
     try {
-      await Promise.all(libraries.map((library) => api.scan(library.id)));
+      await Promise.all(libraries.map((library) => ask(library.id)));
       watch();
+    } catch (error) {
+      setRefused(error instanceof ApiError ? error.code : "generic");
     } finally {
       setStarting(false);
     }
-  }, [libraries, watch]);
+  }, [libraries, ask, watch]);
 
-  return { start, starting };
+  return { start, starting, refused };
+}
+
+/** How a scan is asked for, wherever the button lives. */
+export function useStartScan(libraries: Library[]): Starter {
+  return useStartWork(libraries, api.scan);
+}
+
+/** How a look up of what is still nameless is asked for. */
+export function useStartIdentification(libraries: Library[]): Starter {
+  return useStartWork(libraries, api.identify);
 }

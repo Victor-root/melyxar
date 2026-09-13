@@ -122,6 +122,17 @@
   }
 }
 
+/* A refusal sits where the button was, so it is read rather than hovered. */
+.header-refused {
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-bright);
+  font-size: 13px;
+  max-width: 340px;
+}
+
 /* A viewer who asked for less movement gets a steady dot rather than none:
    the point is that something is happening, not that it blinks. */
 @media (prefers-reduced-motion: reduce) {

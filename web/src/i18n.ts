@@ -135,6 +135,14 @@ const en: Dictionary = {
   "error.not_found": "Nothing there.",
   "error.retry": "Try again",
 
+  // Why the server would not start what a button asked for.
+  "refused.conflict": "That work is already running. Wait for it to finish.",
+  "refused.external_service_unavailable":
+    "No metadata provider key is set, so nothing can be looked up.",
+  "refused.not_found": "That library is no longer there.",
+  "refused.unreachable": "The server did not answer.",
+  "refused.generic": "The server would not start it.",
+
   "credit.actor": "Actor",
   "credit.director": "Director",
   "credit.writer": "Writer",
@@ -335,6 +343,13 @@ const fr: Dictionary = {
   "error.not_found": "Il n'y a rien ici.",
   "error.retry": "Réessayer",
 
+  "refused.conflict": "Ce travail est déjà en cours. Attendez qu'il se termine.",
+  "refused.external_service_unavailable":
+    "Aucune clé de fournisseur de métadonnées n'est renseignée, rien ne peut être identifié.",
+  "refused.not_found": "Cette bibliothèque n'existe plus.",
+  "refused.unreachable": "Le serveur n'a pas répondu.",
+  "refused.generic": "Le serveur n'a pas voulu le lancer.",
+
   "credit.actor": "Acteur",
   "credit.director": "Réalisation",
   "credit.writer": "Scénario",
@@ -445,6 +460,17 @@ export function translate(
     (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
     wording,
   );
+}
+
+/**
+ * The key that says why the server refused.
+ *
+ * A code nobody wrote a sentence for falls back to the general one: showing
+ * somebody the word `internal` helps nobody.
+ */
+export function refusalKey(code: string): string {
+  const key = `refused.${code}`;
+  return key in dictionaries.en ? key : "refused.generic";
 }
 
 /** Reading and writing what the browser remembers, which can be forbidden. */
