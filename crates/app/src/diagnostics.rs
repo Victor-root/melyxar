@@ -523,8 +523,13 @@ mod tests {
 
         let text = render_text(&collect(&state).await.expect("report collected"));
         assert!(
-            text.contains("yes") || text.contains("no"),
-            "a question in the report is answered, not left empty: {text}"
+            text.contains("(exists: yes, writable: yes)"),
+            "the folders were just prepared, so the report says so in as many words: {text}"
+        );
+        assert!(
+            text.contains("readers never wait on the writer: no"),
+            "and the other answer too: this database is in memory, where the \
+             journal the real one uses does not apply: {text}"
         );
         assert!(
             !text.contains("waiting to be looked up"),
