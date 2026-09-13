@@ -324,6 +324,20 @@ export interface PlaybackPlan {
   resume_from_seconds: number | null;
   audio: PlaybackTrack[];
   subtitles: PlaybackTrack[];
+  /** What is rebuilding the picture, when something is. */
+  rebuild: PictureRebuild | null;
+}
+
+/** What is rebuilding the picture, and into what. */
+export interface PictureRebuild {
+  /** card or processor. */
+  by: "card" | "processor";
+  /** The device the card is, when it is one. */
+  device: string | null;
+  codec: string;
+  height: number | null;
+  /** Rate the picture is held to, in bits per second. */
+  bitrate: number | null;
 }
 
 /** A film being converted as it is watched. */
