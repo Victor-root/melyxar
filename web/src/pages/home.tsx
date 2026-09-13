@@ -10,14 +10,14 @@ import type { Home as HomeData, Library } from "../api";
 import { Card } from "../components/card";
 import { Grid } from "../components/grid";
 import { JobLine } from "../components/job";
-import { useRunning, useStartScan } from "../running";
+import { useRunning, useStartIdentification, useStartScan } from "../running";
+import { refusalKey } from "../i18n";
 import { useSettings } from "../settings";
 
 export function HomePage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
   const [home, setHome] = useState<HomeData | null>(null);
   const [failed, setFailed] = useState(false);
-  const [working, setWorking] = useState(false);
 
   const load = useCallback((signal?: AbortSignal) => {
     setFailed(false);
@@ -40,25 +40,17 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   /* Work takes minutes on a real library, so the page reads again what it
      produced when it ends. Without this, pressing a button looks exactly like
      pressing a button that does nothing. */
-  const { jobs, watch, finished } = useRunning();
-  const { start: startScan, starting } = useStartScan(libraries);
+  const { jobs, finished } = useRunning();
+  const scan = useStartScan(libraries);
+  /* Asked for on its own, for the films a previous look up did not name:
+     a provider that was down, a title nobody recognised, a key added since. */
+  const lookUp = useStartIdentification(libraries);
+  const refused = lookUp.refused ?? scan.refused;
   useEffect(() => {
     if (finished > 0) {
       load();
     }
   }, [finished, load]);
-
-  /* Asked for on its own, for the films a previous look up did not name:
-     a provider that was down, a title nobody recognised, a key added since. */
-  const startIdentification = async () => {
-    setWorking(true);
-    try {
-      await Promise.all(libraries.map((library) => api.identify(library.id)));
-      watch();
-    } finally {
-      setWorking(false);
-    }
-  };
 
   if (failed) {
     return (
@@ -96,7 +88,11 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
             <>
               <p>{t("home.empty.body")}</p>
               {libraries.length > 0 && (
-                <button className="button button-accent" onClick={startScan} disabled={starting}>
+                <button
+                  className="button button-accent"
+                  onClick={scan.start}
+                  disabled={scan.starting}
+                >
                   {t("home.scan")}
                 </button>
               )}
@@ -135,8 +131,8 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
               {jobs.length === 0 && (
                 <button
                   className="button button-small"
-                  onClick={startIdentification}
-                  disabled={working}
+                  onClick={lookUp.start}
+                  disabled={lookUp.starting}
                 >
                   {t("home.identify")}
                 </button>
@@ -150,6 +146,14 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
           ))}
         </Grid>
       </section>
+
+      {/* The server said no, which is an answer and belongs on the screen that
+          asked rather than in a log nobody is reading. */}
+      {refused && (
+        <section className="section">
+          <p className="notice">{t(refusalKey(refused))}</p>
+        </section>
+      )}
 
       <section className="section">
         <div className="section-head">
