@@ -66,11 +66,12 @@ pub fn parse_signed(file_name: &str, current_year: i32, signs: &LibrarySigns) ->
     // attach themselves to the previous tag with one, and without this rule
     // the tag becomes unrecognisable and can land in the title.
     let normalised = stem.replace(['.', '_'], " ");
-    let words: Vec<&str> = normalised.split_whitespace().collect();
+    let separated: Vec<&str> = normalised.split_whitespace().collect();
+    let words = separate_a_year_from_what_is_glued_to_it(&separated, current_year);
 
     if let Some(position) = find_year(&words, current_year) {
         return ParsedName {
-            title: join_title(trim_the_end(&words[..position], markers)),
+            title: title_of(&words[..position], markers),
             year: bare(words[position]).parse().ok(),
             tags: tags_from(&words[position + 1..]),
         };
@@ -81,10 +82,78 @@ pub fn parse_signed(file_name: &str, current_year: i32, signs: &LibrarySigns) ->
     // what is left is the two shapes a year would have handled.
     let boundary = first_technical_tag(&words).unwrap_or(words.len());
     ParsedName {
-        title: join_title(trim_the_end(&words[..boundary], markers)),
+        title: title_of(&words[..boundary], markers),
         year: None,
         tags: tags_from(&words[boundary..]),
     }
+}
+
+/// Builds the title out of the words that came before the boundary.
+fn title_of(words: &[&str], markers: &BTreeSet<String>) -> String {
+    let spoken = drop_bracketed_asides(words);
+    join_title(trim_the_end(&spoken, markers))
+}
+
+/// Separates a year that lost the dot between it and what follows.
+///
+/// A name written by hand loses a separator now and then, and a year welded to
+/// the word after it is no longer a year: the boundary is gone and the whole
+/// description lands in the title. Only ever split when what follows is a word
+/// already known to describe a file, so a title carrying a number keeps it.
+fn separate_a_year_from_what_is_glued_to_it<'a>(
+    words: &[&'a str],
+    current_year: i32,
+) -> Vec<&'a str> {
+    let latest = current_year + YEARS_AHEAD;
+    let mut separated = Vec::with_capacity(words.len());
+
+    for word in words {
+        let (head, rest) = word.split_at(word.len().min(4));
+        let is_a_year = head.len() == 4
+            && head.chars().all(|c| c.is_ascii_digit())
+            && head
+                .parse::<i32>()
+                .is_ok_and(|year| (EARLIEST_YEAR..=latest).contains(&year));
+
+        if is_a_year && TECHNICAL_TAGS.contains(&rest.to_lowercase().as_str()) {
+            separated.push(head);
+            separated.push(rest);
+        } else {
+            separated.push(word);
+        }
+    }
+    separated
+}
+
+/// Drops an aside somebody put in square brackets or braces inside a title.
+///
+/// The commonest is the title in another language, written next to the one the
+/// file is named after. It is never part of either title, and handing both to a
+/// provider at once finds nothing.
+///
+/// A single bracketed word is left alone: that is how a year is written, and
+/// how a tag is written, and both are already read elsewhere.
+fn drop_bracketed_asides<'a>(words: &[&'a str]) -> Vec<&'a str> {
+    let opens = |word: &str| word.starts_with('[') || word.starts_with('{');
+    let closes = |word: &str| word.ends_with(']') || word.ends_with('}');
+
+    let mut kept = Vec::with_capacity(words.len());
+    let mut index = 0;
+    while index < words.len() {
+        let word = words[index];
+        let ends_at = (opens(word) && !closes(word))
+            .then(|| words[index + 1..].iter().position(|word| closes(word)))
+            .flatten();
+
+        match ends_at {
+            Some(length) => index += length + 2,
+            None => {
+                kept.push(word);
+                index += 1;
+            }
+        }
+    }
+    kept
 }
 
 /// What the names of one library carry that no title ever does.
@@ -274,16 +343,51 @@ const EDITION_WORDS: &[&str] = &[
     "integrale",
 ];
 
+/// Words that name the cut only together with the word before them.
+///
+/// `Edition` takes whatever qualifies it: no film is called anything Edition,
+/// and the word in front of it belongs to the edition rather than to the film.
+/// `Cut` is the opposite, since a real title can end in it, so only the two
+/// spellings that can mean nothing else are listed.
+const EDITION_ENDINGS: &[(&str, Option<&str>)] = &[
+    ("edition", None),
+    ("cut", Some("directors")),
+    ("cut", Some("director's")),
+];
+
 /// Drops the words naming the cut, however many of them are stacked up.
 fn trim_edition_words<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
     let mut kept = words;
-    while let Some((last, rest)) = kept.split_last() {
+    loop {
+        let Some((last, rest)) = kept.split_last() else {
+            break;
+        };
         // Never the whole title: a name made only of these says nothing, and
         // an empty title is a film nobody finds again.
-        if rest.is_empty() || !EDITION_WORDS.contains(&bare(last).to_lowercase().as_str()) {
+        if rest.is_empty() {
             break;
         }
-        kept = rest;
+        let lowered = bare(last).to_lowercase();
+
+        if EDITION_WORDS.contains(&lowered.as_str()) {
+            kept = rest;
+            continue;
+        }
+
+        // Two words, and the one in front has to be there: on its own the last
+        // of them is an ordinary word that titles really do end in.
+        let paired = EDITION_ENDINGS.iter().any(|(ending, qualifier)| {
+            *ending == lowered
+                && rest.len() > 1
+                && qualifier.is_none_or(|expected| {
+                    rest.last()
+                        .is_some_and(|word| bare(word).eq_ignore_ascii_case(expected))
+                })
+        });
+        if !paired {
+            break;
+        }
+        kept = &rest[..rest.len() - 1];
     }
     kept
 }
@@ -346,6 +450,8 @@ const TECHNICAL_TAGS: &[&str] = &[
     "720p",
     "576p",
     "480p",
+    "4k",
+    "uhd",
     "4klight",
     "hdlight",
     "bluray",
@@ -815,6 +921,82 @@ mod tests {
 
         let stacked = parsed("Quiet Harbour Remastered Uncut (2019) 1080p.mkv");
         assert_eq!(stacked.title, "Quiet Harbour", "however many are piled up");
+    }
+
+    #[test]
+    fn the_two_words_naming_a_cut_go_together() {
+        // The second word on its own is an ordinary word, and the first is
+        // what makes the pair mean an edition rather than a title.
+        assert_eq!(
+            parsed("Quiet Harbour Directors Cut (2019) 1080p.mkv").title,
+            "Quiet Harbour"
+        );
+        assert_eq!(
+            parsed("Quiet Harbour 2 Director's Cut (2020) 1080p.mkv").title,
+            "Quiet Harbour 2"
+        );
+        assert_eq!(
+            parsed("Quiet Harbour 3 Extreme Edition (2021) 1080p.mkv").title,
+            "Quiet Harbour 3"
+        );
+        assert_eq!(
+            parsed("Quiet Harbour Collectors Edition.mkv").title,
+            "Quiet Harbour",
+            "whatever qualifies an edition belongs to the edition"
+        );
+    }
+
+    #[test]
+    fn a_title_that_really_ends_in_such_a_word_keeps_it() {
+        // The reason only two spellings are listed for the last word: films
+        // are called this, and a word dropped wrongly is a film nobody finds.
+        assert_eq!(
+            parsed("The Final Cut (2004) 1080p.mkv").title,
+            "The Final Cut"
+        );
+        assert_eq!(parsed("The Last Cut.mkv").title, "The Last Cut");
+    }
+
+    #[test]
+    fn a_year_welded_to_the_word_after_it_is_still_a_year() {
+        // A name written by hand loses a separator now and then. Without this
+        // the boundary is gone and the whole description lands in the title.
+        let result = parsed("Quiet.Harbour.2019MULTi.TRUEFRENCH.1080p.x264.mkv");
+        assert_eq!(result.title, "Quiet Harbour");
+        assert_eq!(result.year, Some(2019));
+        assert!(result.tags.contains("multi"));
+    }
+
+    #[test]
+    fn a_number_welded_to_an_ordinary_word_is_left_alone() {
+        // Only ever split when what follows is already known to describe a
+        // file: a title carrying a number keeps it, whatever it is glued to.
+        let result = parsed("Quiet Harbour 2019Nights.mkv");
+        assert_eq!(result.title, "Quiet Harbour 2019Nights");
+        assert_eq!(result.year, None);
+    }
+
+    #[test]
+    fn a_second_title_in_brackets_is_an_aside_and_not_part_of_the_title() {
+        // The commonest is the title in another language written next to the
+        // one the file is named after. Handing both to a provider at once
+        // finds nothing at all.
+        let result = parsed("Quiet Harbour [Le Port Tranquille] (2019) 1080p x264.mkv");
+        assert_eq!(result.title, "Quiet Harbour");
+        assert_eq!(result.year, Some(2019));
+
+        assert_eq!(
+            parsed("Quiet Harbour {Le Port Tranquille} (2019).mkv").title,
+            "Quiet Harbour"
+        );
+    }
+
+    #[test]
+    fn a_single_bracketed_word_is_left_to_the_rules_that_already_read_it() {
+        // That is how a year is written, and how a tag is written.
+        let result = parsed("Quiet Harbour [2019] 1080p.mkv");
+        assert_eq!(result.title, "Quiet Harbour");
+        assert_eq!(result.year, Some(2019));
     }
 
     #[test]
