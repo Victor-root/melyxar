@@ -196,6 +196,27 @@ impl ProbeChapter {
     }
 }
 
+/// How many characters of a refused report are worth keeping.
+///
+/// Enough to see whether it began a description at all and where it stopped,
+/// short enough that a log line stays a line.
+const ENOUGH_TO_SEE: usize = 200;
+
+/// What the analyser managed to print before it gave up.
+fn what_it_printed(output: &std::process::Output) -> String {
+    let printed = String::from_utf8_lossy(&output.stdout);
+    let printed = printed.trim();
+    if printed.is_empty() {
+        return "nothing at all".to_string();
+    }
+
+    let beginning: String = printed.chars().take(ENOUGH_TO_SEE).collect();
+    format!(
+        "{} characters, beginning {beginning:?}",
+        printed.chars().count()
+    )
+}
+
 /// Reads a count of seconds the analyser wrote, as milliseconds.
 ///
 /// The analyser writes these as decimal text, and "N/A" when it has nothing to
@@ -255,10 +276,15 @@ pub async fn probe(analyser: &Path, media: &Path) -> Result<ProbeReport> {
             );
             Ok(report)
         }
+        // What it printed matters as much as what it complained about. An
+        // analyser that described the streams and then gave up is one thing;
+        // one that printed nothing at all gave up before reading the file, and
+        // the two need different answers. Without saying which, the only way
+        // to find out is to run the analyser by hand on the film.
         _ => Err(FfmpegError::Failed {
             tool: "analyser",
             status: output.status.to_string(),
-            output: complaint(),
+            output: format!("{}; it described {}", complaint(), what_it_printed(&output)),
         }),
     }
 }

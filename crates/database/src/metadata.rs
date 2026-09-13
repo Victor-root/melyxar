@@ -214,6 +214,34 @@ impl Database {
             .collect()
     }
 
+    /// The files nothing has managed to describe.
+    ///
+    /// A scan tries every file it has no analysis for, so once one has run to
+    /// its end these are the ones it could not read. Named rather than
+    /// counted: such a file is in the library, has a card, and fails the
+    /// moment somebody presses play, and the count alone sends whoever reads
+    /// it to a terminal.
+    pub async fn files_nothing_could_describe(&self, limit: i64) -> Result<Vec<String>> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT relative_path FROM media_sources
+             WHERE analysed_at IS NULL AND missing_since IS NULL
+             ORDER BY relative_path
+             LIMIT ?",
+        )
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(path,)| {
+                Path::new(&path)
+                    .file_name()
+                    .map_or(path.clone(), |name| name.to_string_lossy().into_owned())
+            })
+            .collect())
+    }
+
     /// Films held in more than one copy, with the name of each copy.
     ///
     /// Several copies of one film are ordinary and wanted: that is what puts a
@@ -1838,6 +1866,74 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_files_nothing_could_describe_are_the_ones_with_no_analysis() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Films"))],
+            )
+            .await
+            .expect("library created");
+        let work = database
+            .create_work(
+                library.id,
+                WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+
+        let described = database
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Quiet Harbour 1080p.mkv"),
+                1_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+        database
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Anciens/Quiet Harbour BD Rip.avi"),
+                2_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+
+        database
+            .store_analysis(
+                described,
+                &crate::catalogue::SourceAnalysis {
+                    container: Some("matroska".to_string()),
+                    duration: Some(melyxar_core::time::Millis::new(7_200_000)),
+                    overall_bitrate: Some(8_000_000),
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        assert_eq!(
+            database
+                .files_nothing_could_describe(15)
+                .await
+                .expect("read"),
+            vec!["Quiet Harbour BD Rip.avi".to_string()],
+            "the name of the file, and never the folders leading to it"
+        );
     }
 
     #[tokio::test]
