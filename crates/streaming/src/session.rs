@@ -332,7 +332,8 @@ impl Session {
         }
 
         let mut ready = 0;
-        while ready < on_disk && self.finished_being_written(from + ready, reached, tool_gone) {
+        while ready < on_disk && self.finished_being_written(from + ready, from, reached, tool_gone)
+        {
             ready += 1;
         }
 
@@ -381,10 +382,37 @@ impl Session {
     /// thing, and it is what this used to rely on alone, at the price of
     /// producing a whole extra segment before handing over the one somebody is
     /// waiting for.
-    fn finished_being_written(&self, index: u32, reached: Millis, tool_gone: bool) -> bool {
-        reached >= self.playlist.start_of(index + 1)
-            || self.path_of(index + 1).exists()
-            || tool_gone
+    fn finished_being_written(
+        &self,
+        index: u32,
+        from: u32,
+        reached: Millis,
+        tool_gone: bool,
+    ) -> bool {
+        // The tool counts from where it was set going, not from the beginning
+        // of the film: set going at the twentieth minute, its first word is
+        // zero. Measured, because it is the opposite of what the copied clock
+        // elsewhere would suggest. So what it has written is compared with what
+        // it would have to write to pass the end of this segment, never with
+        // where that segment sits in the film.
+        let has_to_write =
+            self.playlist.start_of(index + 1).get() - self.playlist.start_of(from).get();
+        let said_so = self.the_clock_can_be_trusted(from) && reached.get() >= has_to_write;
+
+        said_so || self.path_of(index + 1).exists() || tool_gone
+    }
+
+    /// Whether the tool's account of itself can be compared with the playlist.
+    ///
+    /// It counts from where it was set going, which is only the same thing as
+    /// where it was asked to start when the tool really started there. A copied
+    /// picture can only begin on one of its own key frames, so it is
+    /// deliberately let to begin early, and nothing here knows how early:
+    /// against that clock a segment would be called finished before it was.
+    /// Such a session waits for the next file to appear, as everything did
+    /// before.
+    fn the_clock_can_be_trusted(&self, from: u32) -> bool {
+        from == 0 || !matches!(self.video_now(), melyxar_ffmpeg::command::VideoOutput::Copy)
     }
 
     /// How many segments make a comfortable start from here.
@@ -584,12 +612,12 @@ impl Session {
         let deadline = began + PATIENCE;
         let mut appeared: Option<Instant> = None;
         loop {
-            let (reached, tool_is_gone) = self.where_the_tool_has_got_to().await;
+            let (from, reached, tool_is_gone) = self.where_the_tool_has_got_to().await;
             let there = path.exists();
             if there && appeared.is_none() {
                 appeared = Some(Instant::now());
             }
-            if there && self.finished_being_written(index, reached, tool_is_gone) {
+            if there && self.finished_being_written(index, from, reached, tool_is_gone) {
                 let appeared = appeared.unwrap_or(began);
                 return Ok(WhatItTook {
                     appearing: appeared.saturating_duration_since(began),
@@ -662,11 +690,15 @@ impl Session {
     ///
     /// Both under one lock: asking twice would let the tool exit between the
     /// two answers, which is exactly the moment a segment finishes.
-    async fn where_the_tool_has_got_to(&self) -> (Millis, bool) {
+    async fn where_the_tool_has_got_to(&self) -> (u32, Millis, bool) {
         let mut running = self.running.lock().await;
         match running.as_mut() {
-            Some(at_work) => (at_work.reached(), at_work.process.has_exited()),
-            None => (Millis::ZERO, true),
+            Some(at_work) => (
+                at_work.from,
+                at_work.reached(),
+                at_work.process.has_exited(),
+            ),
+            None => (0, Millis::ZERO, true),
         }
     }
 
@@ -1067,7 +1099,7 @@ mod tests {
         let next_one = session.folder().join("segment-1.m4s");
 
         assert!(
-            !next_one.exists() || session.where_the_tool_has_got_to().await.1,
+            !next_one.exists() || session.where_the_tool_has_got_to().await.2,
             "a segment was handed over only once the one after it had been \
              produced on top of it, which is twice the wait for nothing"
         );
@@ -1164,22 +1196,98 @@ mod tests {
         let start_of = |index: u32| session.playlist().start_of(index);
 
         assert!(
-            !session.finished_being_written(3, start_of(3), false),
+            !session.finished_being_written(3, 0, start_of(3), false),
             "the tool is inside this segment, so it is still writing it"
         );
         assert!(
-            session.finished_being_written(3, start_of(4), false),
+            session.finished_being_written(3, 0, start_of(4), false),
             "it has passed the end of it, so it has closed it"
         );
         assert!(
-            session.finished_being_written(3, Millis::ZERO, true),
+            session.finished_being_written(3, 0, Millis::ZERO, true),
             "nothing is writing any more, so nothing is growing"
         );
 
         // The old signal still counts, for a tool that has not spoken yet.
         std::fs::write(session.folder().join("segment-4.m4s"), b"a segment")
             .expect("the next one is written");
-        assert!(session.finished_being_written(3, Millis::ZERO, false));
+        assert!(session.finished_being_written(3, 0, Millis::ZERO, false));
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn the_tool_counts_from_where_it_was_set_going_and_not_from_the_film() {
+        // Measured: set going at the twentieth minute, its first word is zero,
+        // which is the opposite of what the copied clock on its segments would
+        // suggest. Compared with where the segment sits in the film, its
+        // account never caught up, every jump fell back on waiting for the
+        // next file, and half the saving was quietly not happening.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip(&source, 60).await;
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(600_000),
+                streams: StreamSelection::default(),
+                // Rebuilt, so the tool really starts where it was asked to.
+                video: VideoOutput::Encode(melyxar_ffmpeg::command::VideoEncode::software_h264()),
+                audio: AudioOutput::Copy,
+                if_the_card_refuses: Vec::new(),
+            },
+            directory.path().join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+        let start_of = |index: u32| session.playlist().start_of(index);
+
+        // Set going at segment 100, asked about segment 103: four segments
+        // written, not a hundred and four.
+        assert!(!session.finished_being_written(103, 100, start_of(3), false));
+        assert!(
+            session.finished_being_written(103, 100, start_of(4), false),
+            "sixteen seconds written from where it started is past the end of it"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_copied_picture_begins_early_on_purpose_so_its_clock_is_not_believed() {
+        // It can only begin on one of its own key frames, so it is let to
+        // begin before the point asked for and nothing here knows how far
+        // before. Against that clock a segment would be called finished before
+        // it was, and a truncated segment breaks playback unreadably.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip(&source, 60).await;
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(60_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Copy,
+                audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
+                    "aac",
+                )),
+                if_the_card_refuses: Vec::new(),
+            },
+            directory.path().join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+
+        assert!(
+            !session.the_clock_can_be_trusted(5),
+            "a copied picture is let to begin early, so its account is short by that much"
+        );
+        assert!(
+            session.the_clock_can_be_trusted(0),
+            "nothing was skipped, so there was nothing to begin early of"
+        );
         session.close().await;
     }
 
