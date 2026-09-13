@@ -29,6 +29,12 @@ pub struct SharedIdentity {
     pub others: Vec<WorkId>,
 }
 
+/// How much of a refusal is worth keeping.
+///
+/// Long enough to carry what the tool named and where, short enough that a
+/// report stays a report.
+const LONGEST_FAILURE_REASON: usize = 400;
+
 /// A file as it is recorded, reduced to what a scan compares.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredSource {
@@ -463,7 +469,8 @@ impl Database {
         sqlx::query(
             "UPDATE media_sources
              SET size_bytes = ?, modified_at = ?, missing_since = NULL, analysed_at = NULL,
-                 container = NULL, duration_ms = NULL, overall_bitrate = NULL
+                 container = NULL, duration_ms = NULL, overall_bitrate = NULL,
+                 analysis_failure = NULL
              WHERE id = ?",
         )
         .bind(size_bytes)
@@ -599,6 +606,28 @@ impl Database {
         Ok(groups)
     }
 
+    /// Writes down why the analyser could not describe a file.
+    ///
+    /// Kept rather than logged: a reason in a log line is gone by the time
+    /// anybody asks, and this is the one thing that says what to do about a
+    /// file that has a card in the library and fails when it is played.
+    ///
+    /// Cut to a length a report can show. What the tool says first is what
+    /// says why; the rest is the same complaint again.
+    pub async fn record_analysis_failure(
+        &self,
+        source_id: MediaSourceId,
+        reason: &str,
+    ) -> Result<()> {
+        let reason: String = reason.chars().take(LONGEST_FAILURE_REASON).collect();
+        sqlx::query("UPDATE media_sources SET analysis_failure = ? WHERE id = ?")
+            .bind(reason)
+            .bind(source_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// Forgets what the analyser found, so the next scan reads every file
     /// again.
     ///
@@ -656,7 +685,8 @@ impl Database {
 
         sqlx::query(
             "UPDATE media_sources
-             SET container = ?, duration_ms = ?, overall_bitrate = ?, analysed_at = ?
+             SET container = ?, duration_ms = ?, overall_bitrate = ?, analysed_at = ?,
+                 analysis_failure = NULL
              WHERE id = ?",
         )
         .bind(analysis.container.as_deref())

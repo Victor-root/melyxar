@@ -898,6 +898,12 @@ async fn analyse_one(database: &Database, analyser: &Path, file: &PendingFile) -
                 error = %error,
                 "the analyser could not read this file"
             );
+            // Written down rather than only said: a reason in a log line is
+            // gone by the time anybody asks, and this is the one thing that
+            // says what to do about a film that fails when it is played.
+            database
+                .record_analysis_failure(file.source_id, &error.to_string())
+                .await?;
             return Ok(Outcome::Unreadable);
         }
     };
