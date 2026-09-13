@@ -42,6 +42,9 @@ pub struct ScanReport {
     /// Files the analyser could not read. Recorded rather than hidden: a file
     /// nobody can analyse is a file nobody will be able to play either.
     pub unreadable_files: usize,
+    /// Works whose title was read again from their file name and came out
+    /// different, because the rules that read file names improved.
+    pub renamed: usize,
     pub extras: usize,
     /// Subtitle files attached to the film they sit next to.
     pub external_subtitles: usize,
@@ -60,7 +63,11 @@ impl ScanReport {
     /// Whether anything at all moved, which is what decides if the version
     /// counter of the library has to be bumped.
     pub fn changed_anything(&self) -> bool {
-        self.added > 0 || self.changed > 0 || self.missing > 0 || self.restored > 0
+        self.added > 0
+            || self.changed > 0
+            || self.missing > 0
+            || self.restored > 0
+            || self.renamed > 0
     }
 }
 
@@ -240,6 +247,7 @@ pub async fn scan_library(
         }
     }
 
+    report.renamed = reread_names_of_nameless_works(state, library).await?;
     analyse_pending(state, library, handle, &mut report).await?;
 
     if report.changed_anything() {
@@ -335,6 +343,50 @@ async fn record_changes(
     }
 
     Ok(())
+}
+
+/// Reads the file names of the works nobody has named, and keeps what changed.
+///
+/// A work waiting to be identified has never been given anything but the name
+/// of its file, and the rules that read those names get better. Without this,
+/// a collection scanned before an improvement keeps for ever the mangled
+/// titles that are exactly why a provider recognised none of it, and the only
+/// way out would be to throw the database away.
+///
+/// A title a provider gave, or a person chose by hand, is never touched.
+async fn reread_names_of_nameless_works(state: &AppState, library: &Library) -> Result<usize> {
+    let database = state.database();
+    let year = melyxar_core::time::current_year();
+    let mut renamed = 0;
+
+    for work in database.works_named_after_their_file(library.id).await? {
+        let file_name = work
+            .relative_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        let parsed = naming::parse(file_name, year);
+        if parsed.title == work.title && parsed.year == work.release_year {
+            continue;
+        }
+
+        database
+            .rename_work(
+                work.id,
+                &parsed.title,
+                &naming::sort_title(&parsed.title),
+                parsed.year,
+            )
+            .await?;
+        tracing::info!(
+            was = %MediaName::new(&work.title),
+            now = %MediaName::new(&parsed.title),
+            "a film still waiting to be named reads differently now"
+        );
+        renamed += 1;
+    }
+
+    Ok(renamed)
 }
 
 /// Finds the work a file belongs to, or creates it.
@@ -829,6 +881,30 @@ mod tests {
         report.expect("a finished scan has a report")
     }
 
+    /// The little a provider has to say for a work to stop being described by
+    /// its file name.
+    fn named(title: &str) -> melyxar_database::metadata::IdentifiedWork {
+        melyxar_database::metadata::IdentifiedWork {
+            provider: "tmdb".to_string(),
+            external_id: "111".to_string(),
+            imdb_id: None,
+            language: "fr".to_string(),
+            sort_title: naming::sort_title(title),
+            title: title.to_string(),
+            tagline: None,
+            overview: None,
+            release_year: Some(1999),
+            runtime: None,
+            community_rating: None,
+            age_rating_label: None,
+            genres: Vec::new(),
+            studios: Vec::new(),
+            credits: Vec::new(),
+            collection: None,
+            trailers: Vec::new(),
+        }
+    }
+
     fn write(root: &Path, relative: &str, contents: &[u8]) {
         let path = root.join(relative);
         if let Some(parent) = path.parent() {
@@ -899,6 +975,93 @@ mod tests {
         assert!(works.iter().any(|work| work.title == "Quiet Harbour"
             && work.release_year == Some(2019)
             && work.kind == WorkKind::Movie));
+    }
+
+    #[tokio::test]
+    async fn a_film_still_waiting_to_be_named_has_its_file_name_read_again() {
+        // What a collection scanned before the rules improved looks like: the
+        // work carries the whole file name, which is exactly why no provider
+        // recognised it. The file has not moved, so nothing else would ever
+        // look at its name again.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet Harbour 2160p SOMEGROUP.mkv", b"x");
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+
+        let work = state
+            .database()
+            .recent_works(library.id, 10)
+            .await
+            .expect("read")
+            .pop()
+            .expect("one film");
+        state
+            .database()
+            .rename_work(
+                work.id,
+                "Quiet Harbour 2160p SOMEGROUP",
+                "quiet harbour 2160p somegroup",
+                None,
+            )
+            .await
+            .expect("renamed to what the old rules read");
+
+        let report = scan(&state, &library).await;
+        assert_eq!(report.renamed, 1);
+        assert_eq!(
+            state
+                .database()
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .title,
+            "Quiet Harbour",
+            "the film keeps its identifier, its file and its history, and gains a name"
+        );
+
+        let settled = scan(&state, &library).await;
+        assert_eq!(
+            settled.renamed, 0,
+            "a name that already reads correctly is not written again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_a_provider_named_is_never_renamed_after_its_file() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet Harbour 2160p SOMEGROUP.mkv", b"x");
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let work = state
+            .database()
+            .recent_works(library.id, 10)
+            .await
+            .expect("read")
+            .pop()
+            .expect("one film");
+        state
+            .database()
+            .apply_identification(work.id, &named("Un Autre Titre"), true)
+            .await
+            .expect("chosen by hand");
+
+        assert_eq!(scan(&state, &library).await.renamed, 0);
+        assert_eq!(
+            state
+                .database()
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .title,
+            "Un Autre Titre",
+            "a title somebody chose is never undone by a file name"
+        );
     }
 
     #[tokio::test]

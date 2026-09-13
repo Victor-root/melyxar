@@ -212,13 +212,14 @@ async fn scan(config: Config, only: Option<String>, then_identify: bool) -> anyh
 
         match report {
             Some(report) => println!(
-                "{name}: {} added, {} changed, {} absent, {} back, {} unchanged, {} analysed, \
-                 {} unreadable, {} extra videos, {} subtitle files",
+                "{name}: {} added, {} changed, {} absent, {} back, {} unchanged, {} renamed, \
+                 {} analysed, {} unreadable, {} extra videos, {} subtitle files",
                 report.added,
                 report.changed,
                 report.missing,
                 report.restored,
                 report.unchanged,
+                report.renamed,
                 report.analysed,
                 report.unreadable_files,
                 report.extras,
