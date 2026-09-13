@@ -1117,6 +1117,7 @@ dependencies = [
  "melyxar-media-probe",
  "melyxar-metadata",
  "melyxar-playback",
+ "melyxar-streaming",
  "serde",
  "sqlx",
  "tempfile",

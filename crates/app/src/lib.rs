@@ -38,6 +38,8 @@ pub mod picture {
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error(transparent)]
+    Streaming(#[from] melyxar_streaming::StreamingError),
+    #[error(transparent)]
     Database(#[from] melyxar_database::DatabaseError),
     #[error(transparent)]
     MediaTools(#[from] melyxar_ffmpeg::FfmpegError),

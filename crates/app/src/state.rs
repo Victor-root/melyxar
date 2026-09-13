@@ -10,6 +10,7 @@ use melyxar_database::Database;
 use melyxar_ffmpeg::{Capabilities, ToolPaths};
 use melyxar_jobs::JobRunner;
 use melyxar_metadata::TmdbProvider;
+use melyxar_streaming::registry::Sessions;
 
 /// The server, assembled.
 #[derive(Clone)]
@@ -34,6 +35,10 @@ struct Inner {
     /// stays open instead of being made again for every film. Absent when no
     /// key was configured: the library still scans and browses without one.
     provider: Option<Arc<TmdbProvider>>,
+    /// The films being watched right now. Absent when the media tools are, for
+    /// the same reason: without them nothing can be converted, and a session
+    /// that could never produce a segment is worse than none.
+    sessions: Option<Arc<Sessions>>,
 }
 
 impl AppState {
@@ -53,10 +58,19 @@ impl AppState {
             }
         });
 
+        let sessions = tools.clone().map(|tools| {
+            Arc::new(Sessions::new(
+                config.directories.transcodes.clone(),
+                tools,
+                config.limits.max_transcoding_sessions,
+            ))
+        });
+
         Self {
             inner: Arc::new(Inner {
                 jobs: JobRunner::new(database.clone()),
                 provider,
+                sessions,
                 config,
                 database,
                 tools,
@@ -115,6 +129,11 @@ impl AppState {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// The films being watched right now, when this server can convert at all.
+    pub fn sessions(&self) -> Option<&Arc<Sessions>> {
+        self.inner.sessions.as_ref()
     }
 
     /// Whether wide gamut colour can be converted without a card.

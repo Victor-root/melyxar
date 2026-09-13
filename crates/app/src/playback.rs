@@ -9,6 +9,7 @@
 //! is the only part that knows what a range request is.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::media::Track;
@@ -25,6 +26,13 @@ use crate::{AppError, AppState, Result};
 /// that it does.
 pub use melyxar_playback::decision::{PlaybackMethod, Reason, StreamAction, SubtitleDelivery};
 pub use melyxar_playback::profile::ClientProfile;
+
+/// A film being converted as it is watched, as the layer above handles it.
+///
+/// Re-exported for the same reason as the decision: the HTTP layer talks to
+/// one crate, and where a session really lives stays this crate's business.
+pub use melyxar_streaming::session::{Recipe, Session};
+pub use melyxar_streaming::StreamingError;
 
 /// What a viewer asked to play, in the words of a client.
 #[derive(Debug, Clone, PartialEq)]
@@ -246,6 +254,88 @@ pub async fn remember_chosen_tracks(
         database.save_preferences(user_id, &preferences).await?;
     }
     Ok(())
+}
+
+/// Opens a session that produces this film in a form the client can play.
+///
+/// Everything about what to produce was already decided; this turns that
+/// decision into the recipe a session carries out. A film the client could
+/// play as it is never reaches here: it is served as a file, which costs
+/// nothing at all.
+pub async fn open_session(state: &AppState, plan: &PlayPlan) -> Result<Arc<Session>> {
+    let sessions = state.sessions().ok_or_else(|| {
+        AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::DependencyMissing,
+            "this server has no media tools, so nothing can be converted",
+        ))
+    })?;
+    let capabilities = state.capabilities().ok_or_else(|| {
+        AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::DependencyMissing,
+            "this server has no media tools, so nothing can be converted",
+        ))
+    })?;
+
+    let recipe = recipe_for(plan, capabilities)?;
+    let expensive = plan.decision.method.is_expensive();
+    Ok(sessions.open(recipe, expensive).await?)
+}
+
+/// Turns a decision into what the tool is asked to do.
+fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> Result<Recipe> {
+    use melyxar_ffmpeg::command::{AudioOutput, StreamSelection, VideoOutput};
+    use melyxar_playback::decision::StreamAction;
+
+    let duration = plan.duration.ok_or_else(|| {
+        // Without a duration there is no playlist to write: a film nobody has
+        // looked inside cannot be cut into segments.
+        AppError::Domain(melyxar_core::Error::invalid_input(
+            "this file has not been analysed yet",
+        ))
+    })?;
+
+    let video = match plan.decision.video {
+        StreamAction::Drop => VideoOutput::None,
+        StreamAction::Copy => VideoOutput::Copy,
+        StreamAction::Transcode => {
+            let mut encode = melyxar_ffmpeg::command::VideoEncode::software_h264();
+            encode.scale_to_height = plan.decision.scale_to_height;
+            encode.tone_map = plan.decision.tone_map;
+            // Key frames on the segment boundaries, which is what lets any
+            // segment be produced on its own rather than only after the one
+            // before it.
+            encode.keyframe_interval = Some(melyxar_streaming::playlist::SEGMENT_DURATION);
+            VideoOutput::Encode(encode)
+        }
+    };
+
+    let audio = match plan.decision.audio {
+        StreamAction::Drop => AudioOutput::None,
+        StreamAction::Copy => AudioOutput::Copy,
+        StreamAction::Transcode => {
+            let encoder = capabilities.audio_encoder().ok_or_else(|| {
+                AppError::Domain(melyxar_core::Error::new(
+                    melyxar_core::error::ErrorCode::DependencyMissing,
+                    "these media tools cannot build a soundtrack a browser reads",
+                ))
+            })?;
+            AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
+                encoder,
+            ))
+        }
+    };
+
+    Ok(Recipe {
+        source: plan.path.clone(),
+        duration,
+        streams: StreamSelection {
+            video_index: plan.decision.video_stream_index,
+            audio_index: plan.decision.audio_stream_index,
+            subtitle_index: None,
+        },
+        video,
+        audio,
+    })
 }
 
 /// Records where a viewer got to.
@@ -819,6 +909,120 @@ mod tests {
             )),
             "and the answer says it was asked for: {:?}",
             folded.decision.reasons
+        );
+    }
+
+    fn capabilities_of_a_usual_tool() -> melyxar_ffmpeg::Capabilities {
+        melyxar_ffmpeg::Capabilities {
+            version: "ffmpeg version invented".to_string(),
+            encoders: ["libx264", "aac"].iter().map(|v| v.to_string()).collect(),
+            decoders: Default::default(),
+            filters: Default::default(),
+            hardware: Default::default(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_rebuilt_picture_is_cut_where_the_segments_are() {
+        // Without key frames on the boundaries, a segment can only be produced
+        // after the one before it, and jumping stops working: the whole reason
+        // the server owns the playlist would be lost.
+        use melyxar_ffmpeg::command::VideoOutput;
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![video(id, "hevc", 2160), audio(id, "eac3", 6, true)]
+            })
+            .await;
+
+        let plan = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: None,
+            },
+        )
+        .await
+        .expect("a plan");
+        assert_eq!(plan.decision.method, PlaybackMethod::FullTranscode);
+
+        let recipe = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
+        let VideoOutput::Encode(encode) = recipe.video else {
+            panic!("a picture no browser reads is rebuilt");
+        };
+        assert_eq!(
+            encode.keyframe_interval,
+            Some(melyxar_streaming::playlist::SEGMENT_DURATION),
+            "a key frame on every segment boundary"
+        );
+        assert!(matches!(
+            recipe.audio,
+            melyxar_ffmpeg::command::AudioOutput::Encode(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_picture_a_browser_reads_is_copied_and_only_the_sound_is_rebuilt() {
+        use melyxar_ffmpeg::command::{AudioOutput, VideoOutput};
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![video(id, "h264", 1080), audio(id, "eac3", 6, true)]
+            })
+            .await;
+
+        let plan = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: None,
+            },
+        )
+        .await
+        .expect("a plan");
+
+        let recipe = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
+        assert_eq!(
+            recipe.video,
+            VideoOutput::Copy,
+            "rebuilding a picture that plays perfectly well costs an hour of a machine"
+        );
+        assert!(matches!(recipe.audio, AudioOutput::Encode(_)));
+        assert_eq!(recipe.duration, Millis::new(7_200_000));
+    }
+
+    #[tokio::test]
+    async fn a_film_nobody_has_looked_inside_cannot_be_cut_into_segments() {
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![video(id, "h264", 1080), audio(id, "eac3", 6, true)]
+            })
+            .await;
+
+        let mut plan = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: None,
+            },
+        )
+        .await
+        .expect("a plan");
+        plan.duration = None;
+
+        assert!(
+            recipe_for(&plan, &capabilities_of_a_usual_tool()).is_err(),
+            "without a length there is no playlist to write, and a player would \
+             be handed a film of no duration"
         );
     }
 
