@@ -135,9 +135,21 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         );
     }
 
-    melyxar_server::serve(address, state, shutdown_signal())
+    // Only the server does this, and only before it serves anything: what it
+    // removes belongs to sessions of a run that is over, and nothing of this
+    // run exists yet to be confused with them.
+    melyxar_app::playback::tidy_up_after_a_previous_run(&state).await;
+    let sweeper = melyxar_app::playback::keep_sessions_swept(&state);
+
+    melyxar_server::serve(address, state.clone(), shutdown_signal())
         .await
         .context("serving")?;
+
+    // The listener has stopped accepting: nothing new can open a session, so
+    // closing them all is the last thing left to do.
+    sweeper.abort();
+    melyxar_app::playback::close_every_session(&state).await;
+    state.database().close().await;
 
     tracing::info!("stopped");
     Ok(())

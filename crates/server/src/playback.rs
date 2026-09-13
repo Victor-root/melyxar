@@ -15,7 +15,7 @@ use axum::extract::{Path as RoutePath, State};
 use axum::http::{header, HeaderValue, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use melyxar_app::playback::{ClientProfile, PlayPlan, PlayRequest, Session, StreamingError};
+use melyxar_app::playback::{ClientProfile, PlayPlan, PlayRequest, Session};
 use melyxar_app::AppState;
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::media::TrackKind;
@@ -353,7 +353,7 @@ async fn header_file(state: &AppState, id: &str, request: Request<Body>) -> Resp
     match live_session(state, id).await {
         Ok(session) => match session.initialisation().await {
             Ok(path) => serve(path, request, "video/mp4").await,
-            Err(error) => streaming_failure(error).into_response(),
+            Err(error) => ServerError::from(error).into_response(),
         },
         Err(error) => error.into_response(),
     }
@@ -364,7 +364,7 @@ async fn segment(state: &AppState, id: &str, index: u32, request: Request<Body>)
     match live_session(state, id).await {
         Ok(session) => match session.segment(index).await {
             Ok(path) => serve(path, request, "video/iso.segment").await,
-            Err(error) => streaming_failure(error).into_response(),
+            Err(error) => ServerError::from(error).into_response(),
         },
         Err(error) => error.into_response(),
     }
@@ -391,24 +391,7 @@ async fn live_session(state: &AppState, id: &str) -> Result<std::sync::Arc<Sessi
     let sessions = state
         .sessions()
         .ok_or_else(|| ServerError::not_found("this server converts nothing"))?;
-    sessions.get(session_id).await.map_err(streaming_failure)
-}
-
-/// Turns a streaming failure into something a client can act on.
-fn streaming_failure(error: StreamingError) -> ServerError {
-    use StreamingError as Failure;
-    match error {
-        Failure::NoSuchSession => {
-            // The session was swept away while nobody was watching. A player
-            // that comes back asks for a new one rather than failing outright.
-            ServerError::not_found("that session is over")
-        }
-        Failure::NoSuchSegment => ServerError::not_found("that segment is not part of this film"),
-        Failure::TooManyAtOnce => {
-            ServerError::busy("this server is already converting all it can at once")
-        }
-        other => ServerError::internal(other.to_string()),
-    }
+    sessions.get(session_id).await.map_err(ServerError::from)
 }
 
 /// Hands over a file the session produced.
