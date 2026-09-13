@@ -11,6 +11,12 @@
 //! start-up, for each codec worth having. What the tool printed when it
 //! refused is kept word for word, because that sentence is the whole
 //! difference between "the card is not being used" and knowing why.
+//!
+//! One trial needs more than pixels. Converting wide gamut colour starts from
+//! the numbers describing the screen a film was graded on, so a picture made on
+//! the spot is no witness at all: it carries none, the filter refuses it, and
+//! the answer would be that no card converts colour. A sample is encoded with
+//! those numbers written in, which is the shape a real film arrives in.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -61,18 +67,36 @@ const ENOUGH_TO_READ: usize = 400;
 /// The name the trial gives the card inside one invocation.
 const DEVICE_NAME: &str = "card";
 
-/// What labels a generated picture as a wide gamut one, for the trial alone.
-///
-/// The conversion filter refuses anything that is not wide gamut, and rightly:
-/// there would be nothing to convert. A real film arrives carrying these
-/// labels, and a test pattern does not, so the trial puts them on. It is the
-/// one thing the trial adds to the chain a real film goes through.
-const LABELLED_WIDE_GAMUT: &str =
-    "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc";
-
 /// Size the trial works at. Small enough to take no time, large enough that a
 /// driver does not refuse it for being absurd.
 const TRIAL_HEIGHT: i32 = 180;
+
+/// The picture every trial is run on, made on the spot.
+const A_GENERATED_PICTURE: &str = "testsrc2=size=640x360:rate=25:duration=0.4";
+
+/// The screen a wide gamut sample says it was graded on.
+///
+/// The conversion filter does not ask for a picture labelled wide gamut: it
+/// asks for the numbers describing the screen the film was graded on, because
+/// those are what it converts from. No filter can add them to a picture made on
+/// the spot, so a sample is encoded once with them written in, which is the
+/// shape a real wide gamut film arrives in. The numbers themselves are the
+/// ordinary ones for a reference screen; nothing here depends on their values.
+const A_REFERENCE_SCREEN: &str = "master-display=G(8500,39850)B(6550,2300)R(35400,14600)\
+     WP(15635,16450)L(40000000,50):max-cll=1000,400:log-level=none";
+
+/// The encoder that writes those numbers into a sample.
+const WRITES_THE_SCREEN: &str = "libx265";
+
+/// What a trial reads.
+enum TrialInput<'a> {
+    /// A picture made on the spot, which costs nothing and suits every trial
+    /// that only asks whether the driver accepts the work.
+    Generated,
+    /// A file written for the purpose, for the one trial that needs a picture
+    /// carrying more than pixels.
+    File(&'a Path),
+}
 
 /// A card this machine can really rebuild a picture on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -274,8 +298,15 @@ impl CardSearch {
             if !built_with.contains(&encoder) {
                 continue;
             }
-            let (worked, said) =
-                try_it(ffmpeg, way, &device, &encoder, "format=nv12,hwupload").await;
+            let (worked, said) = try_it(
+                ffmpeg,
+                way,
+                &device,
+                &encoder,
+                TrialInput::Generated,
+                "format=nv12,hwupload",
+            )
+            .await;
             self.trials.push(Trial {
                 what: format!("rebuild_{codec}"),
                 device: named.clone(),
@@ -307,7 +338,15 @@ impl CardSearch {
         };
 
         let chain = card.filters_for(Some(TRIAL_HEIGHT), false).join(",");
-        let (can_scale, said) = try_it(ffmpeg, way, &card.device, &floor, &chain).await;
+        let (can_scale, said) = try_it(
+            ffmpeg,
+            way,
+            &card.device,
+            &floor,
+            TrialInput::Generated,
+            &chain,
+        )
+        .await;
         self.trials.push(Trial {
             what: "make_it_smaller".to_string(),
             device: named.clone(),
@@ -316,17 +355,34 @@ impl CardSearch {
         });
         card.can_scale = can_scale;
 
-        let mut chain = card.filters_for(Some(TRIAL_HEIGHT), true);
-        chain.insert(1, LABELLED_WIDE_GAMUT.to_string());
-        let (can_tone_map, said) =
-            try_it(ffmpeg, way, &card.device, &floor, &chain.join(",")).await;
-        self.trials.push(Trial {
-            what: "convert_wide_gamut".to_string(),
-            device: named,
-            worked: can_tone_map,
-            said,
-        });
-        card.can_tone_map = can_tone_map;
+        // The one trial that cannot be run on a picture made on the spot.
+        match wide_gamut_sample(ffmpeg).await {
+            Err(said) => self.trials.push(Trial {
+                what: "make_a_wide_gamut_sample".to_string(),
+                device: String::new(),
+                worked: false,
+                said,
+            }),
+            Ok(sample) => {
+                let chain = card.filters_for(Some(TRIAL_HEIGHT), true).join(",");
+                let (can_tone_map, said) = try_it(
+                    ffmpeg,
+                    way,
+                    &card.device,
+                    &floor,
+                    TrialInput::File(sample.path()),
+                    &chain,
+                )
+                .await;
+                self.trials.push(Trial {
+                    what: "convert_wide_gamut".to_string(),
+                    device: named,
+                    worked: can_tone_map,
+                    said,
+                });
+                card.can_tone_map = can_tone_map;
+            }
+        }
 
         Some(card)
     }
@@ -356,18 +412,111 @@ fn working_devices() -> Vec<PathBuf> {
     devices
 }
 
-/// Encodes a fraction of a second of a generated picture through one chain.
+/// A wide gamut sample on disk, removed when the trial is done with it.
 ///
-/// A generated picture rather than a film: what is being established is
-/// whether the driver accepts the work, and no film on the disk is a better
-/// witness to that than four hundred milliseconds of test pattern.
+/// Tied to its own removal rather than deleted by hand: the trial can fail at
+/// several points, and a file left in a temporary folder every time a server
+/// starts is a file left there for ever.
+struct Sample(PathBuf);
+
+impl Sample {
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Sample {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Writes a fraction of a second of wide gamut picture carrying the numbers of
+/// the screen it says it was graded on.
+///
+/// The conversion filter asks for those numbers rather than for a label, and
+/// no filter can add them to a picture made on the spot. Encoding a sample is
+/// the only way to ask the card the question a real film will ask it.
+async fn wide_gamut_sample(ffmpeg: &Path) -> std::result::Result<Sample, String> {
+    let sample =
+        Sample(std::env::temp_dir().join(format!("melyxar-card-trial-{}.mp4", std::process::id())));
+
+    let arguments = [
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        A_GENERATED_PICTURE,
+        "-an",
+        "-c:v",
+        WRITES_THE_SCREEN,
+        "-preset",
+        "ultrafast",
+        "-pix_fmt",
+        "yuv420p10le",
+        "-color_primaries",
+        "bt2020",
+        "-color_trc",
+        "smpte2084",
+        "-colorspace",
+        "bt2020nc",
+        "-x265-params",
+        A_REFERENCE_SCREEN,
+        &sample.path().display().to_string(),
+    ]
+    .map(str::to_string);
+
+    let spawned = TokioCommand::new(ffmpeg)
+        .args(arguments)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn();
+
+    let Ok(child) = spawned else {
+        return Err("the media tool could not be started".to_string());
+    };
+
+    match tokio::time::timeout(TRIAL_PATIENCE, child.wait_with_output()).await {
+        Ok(Ok(output)) if output.status.success() => Ok(sample),
+        Ok(Ok(output)) => Err(format!(
+            "a wide gamut sample could not be made, so the card was never asked whether it \
+             converts colour: {}",
+            shortened(&String::from_utf8_lossy(&output.stderr))
+        )),
+        Ok(Err(error)) => Err(error.to_string()),
+        Err(_) => Err("making a wide gamut sample took too long".to_string()),
+    }
+}
+
+/// Encodes a fraction of a second of picture through one chain on the card.
+///
+/// What is being established is whether the driver accepts the work, and for
+/// all but one of these a picture made on the spot is as good a witness as any
+/// film on the disk.
 async fn try_it(
     ffmpeg: &Path,
     way: HardwareAcceleration,
     device: &Path,
     encoder: &str,
+    input: TrialInput<'_>,
     filters: &str,
 ) -> (bool, String) {
+    let read = match input {
+        TrialInput::Generated => vec![
+            "-f".to_string(),
+            "lavfi".to_string(),
+            "-i".to_string(),
+            A_GENERATED_PICTURE.to_string(),
+        ],
+        TrialInput::File(path) => vec!["-i".to_string(), path.display().to_string()],
+    };
+
     let arguments = [
         "-hide_banner",
         "-nostdin",
@@ -377,19 +526,11 @@ async fn try_it(
         &format!("{}={DEVICE_NAME}:{}", way.as_str(), device.display()),
         "-filter_hw_device",
         DEVICE_NAME,
-        "-f",
-        "lavfi",
-        "-i",
-        "testsrc2=size=640x360:rate=25:duration=0.4",
-        "-vf",
-        filters,
-        "-c:v",
-        encoder,
-        "-f",
-        "null",
-        "-",
     ]
-    .map(str::to_string);
+    .map(str::to_string)
+    .into_iter()
+    .chain(read)
+    .chain(["-vf", filters, "-c:v", encoder, "-f", "null", "-"].map(str::to_string));
 
     let spawned = TokioCommand::new(ffmpeg)
         .args(arguments)
@@ -539,6 +680,49 @@ mod tests {
         assert_eq!(search.trials.len(), 1);
         assert_eq!(search.trials[0].what, "built_with_the_path");
         assert!(search.trials[0].said.contains("h264_vaapi"));
+    }
+
+    #[tokio::test]
+    async fn a_wide_gamut_sample_carries_the_screen_it_says_it_was_graded_on() {
+        // The whole reason the sample exists. The conversion filter does not
+        // ask for a picture labelled wide gamut, it asks for these numbers,
+        // and a picture made on the spot has none: the trial was establishing
+        // that a card cannot convert colour on every card that can.
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let sample = wide_gamut_sample(&tools.ffmpeg)
+            .await
+            .expect("a sample is written");
+        let kept = sample.path().to_path_buf();
+
+        let read = tokio::process::Command::new(&tools.ffprobe)
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-read_intervals",
+                "%+#1",
+                "-show_entries",
+                "frame=color_transfer:side_data=side_data_type",
+            ])
+            .arg(sample.path())
+            .output()
+            .await
+            .expect("the analyser runs");
+        let described = String::from_utf8_lossy(&read.stdout);
+
+        assert!(
+            described.contains("Mastering display metadata"),
+            "without these the filter refuses, and refuses rightly: {described}"
+        );
+        assert!(described.contains("smpte2084"), "{described}");
+
+        drop(sample);
+        assert!(
+            !kept.exists(),
+            "a file left behind every time a server starts is a file left there for ever"
+        );
     }
 
     #[test]
