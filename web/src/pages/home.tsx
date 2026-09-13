@@ -105,6 +105,33 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
   return (
     <main className="page">
+      {/* The libraries come first: they are the way in. Everything under them
+          is a suggestion, and a suggestion belongs below the door. */}
+      <section className="section">
+        <div className="section-head">
+          <h1>{t("nav.libraries")}</h1>
+        </div>
+        <div className="library-row">
+          {libraries.map((library) => (
+            <Link key={library.id} className="library-tile" to={`/library/${library.id}`}>
+              <span className="library-name">{library.name}</span>
+              <span className="library-count">
+                {t("library.count", { count: library.works })}
+              </span>
+              {library.roots.map((root) => (
+                <span
+                  key={root.label}
+                  className={`root-state root-${root.access}`}
+                  title={t(`root.${root.explanation_code}`)}
+                >
+                  {root.label}
+                </span>
+              ))}
+            </Link>
+          ))}
+        </div>
+      </section>
+
       {/* Work the server is doing, shown where somebody lands rather than on a
           page they have to think of opening. */}
       {jobs.length > 0 && (
@@ -119,7 +146,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
       <section className="section">
         <div className="section-head">
-          <h1>{t("home.recently_added")}</h1>
+          <h2>{t("home.recently_added")}</h2>
           {home.awaiting_identification > 0 && (
             <>
               <Link className="pill" to="/search?unidentified=true">
@@ -155,30 +182,6 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
         </section>
       )}
 
-      <section className="section">
-        <div className="section-head">
-          <h2>{t("nav.libraries")}</h2>
-        </div>
-        <div className="library-row">
-          {libraries.map((library) => (
-            <Link key={library.id} className="library-tile" to={`/library/${library.id}`}>
-              <span className="library-name">{library.name}</span>
-              <span className="library-count">
-                {t("library.count", { count: library.works })}
-              </span>
-              {library.roots.map((root) => (
-                <span
-                  key={root.label}
-                  className={`root-state root-${root.access}`}
-                  title={t(`root.${root.explanation_code}`)}
-                >
-                  {root.label}
-                </span>
-              ))}
-            </Link>
-          ))}
-        </div>
-      </section>
     </main>
   );
 }

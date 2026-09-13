@@ -434,39 +434,63 @@ async fn find_candidate(
     Ok(None)
 }
 
+/// How far a year read off a file name may be from the year a provider gives.
+///
+/// A film has several release dates: a festival, a country, a streaming
+/// service, each a different year. Whoever named the file wrote down one of
+/// them and the provider publishes another, so a year is trustworthy for
+/// ruling out a film from another decade and worthless for telling apart two
+/// films a year apart.
+const YEARS_APART: i32 = 1;
+
 /// Picks the candidate a person would pick.
 ///
-/// A title that matches exactly wins, and among equals the year decides. The
-/// provider's own ordering is the last word, never the first: it ranks by how
-/// famous a film is, which says nothing about which one this file holds.
+/// Two things are known about the candidates and neither is enough alone. The
+/// year says which films this cannot be, and says it well: a film from 1978 is
+/// not the one a file dated 2019 holds. It says almost nothing about which of
+/// two films a year apart it is, since the two years are as likely to be two
+/// dates of one film as two different films.
+///
+/// The provider's order is the other way round. It ranks by how famous a film
+/// is, which rules nothing out, and picks well among films that are otherwise
+/// indistinguishable: twenty films carry the same common title and one of them
+/// is the one nearly everybody means.
+///
+/// So the year narrows the field and the order decides inside it.
 fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a MovieCandidate> {
     if candidates.is_empty() {
         return None;
     }
     let wanted = naming::sort_title(&work.title);
 
-    let matches_title = |candidate: &MovieCandidate| {
+    let matches_title = |candidate: &&MovieCandidate| {
         naming::sort_title(&candidate.title) == wanted
             || candidate
                 .original_title
                 .as_deref()
                 .is_some_and(|title| naming::sort_title(title) == wanted)
     };
-    let matches_year =
-        |candidate: &MovieCandidate| match (work.release_year, candidate.release_year) {
-            (Some(wanted), Some(found)) => wanted == found,
+    let near_the_year =
+        |candidate: &&MovieCandidate| match (work.release_year, candidate.release_year) {
+            (Some(wanted), Some(found)) => (wanted - found).abs() <= YEARS_APART,
             _ => false,
         };
 
-    candidates
+    let carrying_the_name: Vec<&MovieCandidate> =
+        candidates.iter().filter(matches_title).collect();
+
+    carrying_the_name
         .iter()
-        .find(|candidate| matches_title(candidate) && matches_year(candidate))
-        .or_else(|| candidates.iter().find(|candidate| matches_title(candidate)))
+        .copied()
+        .find(near_the_year)
+        // Every film of this name is from another time. The name is still the
+        // strongest thing there is, so the best of them is taken anyway.
+        .or_else(|| carrying_the_name.first().copied())
+        // No film carries the name. A year that fits is still something, and
+        // with neither, the provider's first answer is all there is.
         .or_else(|| {
-            // No title matched. A year that matches is still something; with
-            // neither, the provider's first answer is all there is.
             work.release_year
-                .and_then(|_| candidates.iter().find(|candidate| matches_year(candidate)))
+                .and_then(|_| candidates.iter().find(near_the_year))
         })
         .or_else(|| candidates.first())
 }
@@ -973,6 +997,53 @@ mod tests {
         assert_eq!(
             choose(&offered, &wanted).expect("one of them").external_id,
             "2"
+        );
+    }
+
+    #[test]
+    fn a_common_title_is_settled_by_the_provider_and_not_by_a_year_off_a_file() {
+        // Twenty films share a common word for a title. One of them is the one
+        // nearly everybody means, and the provider lists it first. A file
+        // dated by its festival showing matches the year of an obscure other
+        // one exactly, which used to be enough to pick it.
+        let wanted = work_named("Quiet Harbour", Some(2024));
+        let offered = vec![
+            candidate("1", "Quiet Harbour", Some(2025)),
+            candidate("2", "Quiet Harbour", Some(2022)),
+            candidate("3", "Quiet Harbour", Some(2024)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "1",
+            "a year and a half apart tells two dates of one film from two films"
+        );
+    }
+
+    #[test]
+    fn a_film_from_another_time_is_still_ruled_out_by_the_year() {
+        // What the year is good at, and the reason it is asked first.
+        let wanted = work_named("Quiet Harbour", Some(2019));
+        let offered = vec![
+            candidate("1", "Quiet Harbour", Some(1978)),
+            candidate("2", "Quiet Harbour", Some(2019)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "2"
+        );
+    }
+
+    #[test]
+    fn when_every_film_of_that_name_is_from_another_time_the_name_still_wins() {
+        let wanted = work_named("Quiet Harbour", Some(2019));
+        let offered = vec![
+            candidate("1", "Amber Field", Some(2019)),
+            candidate("2", "Quiet Harbour", Some(1978)),
+        ];
+        assert_eq!(
+            choose(&offered, &wanted).expect("one of them").external_id,
+            "2",
+            "a remake is still the film somebody named, a different film is not"
         );
     }
 

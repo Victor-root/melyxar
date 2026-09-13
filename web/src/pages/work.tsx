@@ -165,10 +165,10 @@ export function WorkPage() {
             <p className="notice">{t(`note.${work.identification_note}`)}</p>
           )}
 
-          {/* The last word, for the films no rule could work out. Only offered
-              where it is needed: a film that already has its name has nothing
-              to correct. */}
-          {id && work.identification !== "identified" && work.identification !== "manual" && (
+          {/* The last word, on every film and not only the nameless ones: a
+              film named wrongly looks exactly like one named rightly, and the
+              person looking at it is the only one who can tell. */}
+          {id && (
             <IdentifyByHand
               workId={id}
               title={work.title}
