@@ -309,6 +309,23 @@ impl Command {
             // in the wrong place.
             if matches!(self.output, Output::Segments { .. }) {
                 push!("-copyts");
+
+                // A copied picture can only begin at a key frame, so the tool
+                // rewinds to the one before the position asked for. Left to
+                // itself it then trims the sound to that position, because the
+                // sound is being decoded and can start anywhere. The segment
+                // then carries a picture from one moment and a sound from
+                // another: measured at ten seconds apart on a film with key
+                // frames ten seconds apart, which is a film with no sound on
+                // it as far as anyone watching is concerned.
+                //
+                // Asking for no trimming keeps them together. Only ever when
+                // the picture is copied: a picture being rebuilt starts
+                // exactly where it was asked to, and trimming is what makes
+                // that true.
+                if matches!(self.video, VideoOutput::Copy) {
+                    push!("-noaccurate_seek");
+                }
             }
             push!("-ss");
             push!(&format_seconds(start));
@@ -952,6 +969,55 @@ mod tests {
         assert!(
             !arguments(&plain_file).contains(&"-copyts".to_string()),
             "a file that starts part way through starts at nothing, as a file does"
+        );
+    }
+
+    #[test]
+    fn after_a_jump_a_copied_picture_keeps_its_sound_with_it() {
+        // Measured, on a film with key frames ten seconds apart: the picture
+        // began at the key frame before the jump and the sound ten seconds
+        // later, in the same segment. It only happens when the picture is
+        // copied and the sound is rebuilt, which is the commonest film of all:
+        // a picture any browser reads and a soundtrack none of them do.
+        let segments = || Output::Segments {
+            pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
+            initialisation: PathBuf::from("/tmp/session/init.mp4"),
+            tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
+            duration: Millis::new(4000),
+            start_number: 5,
+        };
+
+        let copied = Command::new(
+            Input::new("/media/film.mkv").starting_at(Millis::new(20_000)),
+            segments(),
+        )
+        .with_video(VideoOutput::Copy)
+        .with_audio(AudioOutput::Encode(AudioEncode::browser_stereo("aac")));
+        let args = arguments(&copied);
+        assert!(args.contains(&"-noaccurate_seek".to_string()));
+        assert!(
+            position(&args, "-noaccurate_seek") < position(&args, "-i"),
+            "it has to reach the reading of the file, not the writing"
+        );
+
+        let rebuilt = Command::new(
+            Input::new("/media/film.mkv").starting_at(Millis::new(20_000)),
+            segments(),
+        )
+        .with_video(VideoOutput::Encode(VideoEncode {
+            keyframe_interval: Some(Millis::new(4000)),
+            ..VideoEncode::software_h264()
+        }));
+        assert!(
+            !arguments(&rebuilt).contains(&"-noaccurate_seek".to_string()),
+            "a picture being rebuilt starts exactly where it was asked to, and trimming is what makes that true"
+        );
+
+        let from_the_start =
+            Command::new(Input::new("/media/film.mkv"), segments()).with_video(VideoOutput::Copy);
+        assert!(
+            !arguments(&from_the_start).contains(&"-noaccurate_seek".to_string()),
+            "nothing was skipped, so there is nothing to trim"
         );
     }
 
