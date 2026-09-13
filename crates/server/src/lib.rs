@@ -13,6 +13,7 @@ pub mod images;
 pub mod interface;
 pub mod jobs;
 pub mod playback;
+pub mod preferences;
 pub mod routes;
 
 use std::net::SocketAddr;

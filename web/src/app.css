@@ -868,10 +868,16 @@
  * pseudo element. Each choice says one thing and nothing else, so the five of
  * them combine without any combination needing a rule of its own.
  *
+ * Every rule also names the sample on the settings page, so the two are one
+ * declaration rather than two lists of values that drift apart. It is written
+ * as a second selector rather than as a variable the cue reads, because what a
+ * cue inherits from the page around it is not something to rely on.
+ *
  * Every value here is fixed rather than derived from the theme: these words sit
  * on top of a film, not on top of a page, and a dark theme does not make a
  * night scene any brighter. */
-.player-video::cue {
+.player-video::cue,
+.subtitle-sample-words {
   background: transparent;
   color: #fff;
   /* Every player settles on this, because it stays readable over both a bright
@@ -883,52 +889,65 @@
     1px 1px 0 #000;
 }
 
-.subtitles-size-small .player-video::cue {
+.subtitles-size-small .player-video::cue,
+.subtitles-size-small .subtitle-sample-words {
   font-size: 80%;
 }
-.subtitles-size-normal .player-video::cue {
+.subtitles-size-normal .player-video::cue,
+.subtitles-size-normal .subtitle-sample-words {
   font-size: 100%;
 }
-.subtitles-size-large .player-video::cue {
+.subtitles-size-large .player-video::cue,
+.subtitles-size-large .subtitle-sample-words {
   font-size: 135%;
 }
-.subtitles-size-huge .player-video::cue {
+.subtitles-size-huge .player-video::cue,
+.subtitles-size-huge .subtitle-sample-words {
   font-size: 175%;
 }
 
-.subtitles-colour-white .player-video::cue {
+.subtitles-colour-white .player-video::cue,
+.subtitles-colour-white .subtitle-sample-words {
   color: #fff;
 }
 /* The colour of a cinema subtitle, and the one that stands out best against a
    picture that is mostly white or mostly grey. */
-.subtitles-colour-yellow .player-video::cue {
+.subtitles-colour-yellow .player-video::cue,
+.subtitles-colour-yellow .subtitle-sample-words {
   color: #f5e050;
 }
-.subtitles-colour-cyan .player-video::cue {
+.subtitles-colour-cyan .player-video::cue,
+.subtitles-colour-cyan .subtitle-sample-words {
   color: #7fe8f0;
 }
 
-.subtitles-edge-outline .player-video::cue {
+.subtitles-edge-outline .player-video::cue,
+.subtitles-edge-outline .subtitle-sample-words {
   text-shadow:
     -1px -1px 0 #000,
     1px -1px 0 #000,
     -1px 1px 0 #000,
     1px 1px 0 #000;
 }
-.subtitles-edge-shadow .player-video::cue {
+.subtitles-edge-shadow .player-video::cue,
+.subtitles-edge-shadow .subtitle-sample-words {
   text-shadow: 2px 2px 3px #000;
 }
-.subtitles-edge-none .player-video::cue {
+.subtitles-edge-none .player-video::cue,
+.subtitles-edge-none .subtitle-sample-words {
   text-shadow: none;
 }
 
-.subtitles-background-none .player-video::cue {
+.subtitles-background-none .player-video::cue,
+.subtitles-background-none .subtitle-sample-words {
   background: transparent;
 }
-.subtitles-background-dim .player-video::cue {
+.subtitles-background-dim .player-video::cue,
+.subtitles-background-dim .subtitle-sample-words {
   background: rgba(0, 0, 0, 0.55);
 }
-.subtitles-background-solid .player-video::cue {
+.subtitles-background-solid .player-video::cue,
+.subtitles-background-solid .subtitle-sample-words {
   background: #000;
 }
 
@@ -971,6 +990,83 @@
 .player-reasons {
   display: block;
   color: color-mix(in srgb, #fff 40%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+ * The settings
+ * ----------------------------------------------------------------------- */
+
+.settings-block {
+  margin-bottom: var(--gap-section);
+  padding-bottom: var(--gap-wide);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-block:last-child {
+  border-bottom: none;
+}
+
+.settings-block h2 {
+  margin: 0 0 var(--gap-tight);
+  font-size: 17px;
+  font-weight: 650;
+}
+
+/* Why a setting exists, in one line. Faint on purpose: it answers a question
+   somebody only asks once. */
+.settings-why {
+  margin: 0 0 var(--gap);
+  color: var(--text-faint);
+  font-size: 13px;
+  max-width: 62ch;
+}
+
+.settings-value {
+  margin-left: var(--gap-tight);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The words as they will appear, over something dark enough to judge them
+   against: a size named "very large" means nothing until it is seen.
+   Proportions of the box rather than fixed heights, so the words sit where
+   they would on a picture of any size. */
+.subtitle-sample {
+  position: relative;
+  aspect-ratio: 16 / 5;
+  max-height: 220px;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: linear-gradient(135deg, #1c2530, #05070a 60%, #241a12);
+}
+
+/* Placed from the bottom of the box rather than padded away from it: a
+   percentage padding is measured against the width, which put the words off
+   the picture entirely. Held to its own width so the backdrop hugs the words
+   the way a real one does. */
+.subtitle-sample-words {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 2px 8px;
+}
+
+.subtitles-height-bottom .subtitle-sample-words {
+  bottom: 8%;
+}
+.subtitles-height-raised .subtitle-sample-words {
+  bottom: 24%;
+}
+.subtitles-height-high .subtitle-sample-words {
+  bottom: 44%;
+}
+
+/* A native slider takes the colour of the browser unless it is told the one
+   this interface uses. */
+.settings input[type="range"] {
+  accent-color: var(--accent);
+  width: 160px;
 }
 
 /* --------------------------------------------------------------------------

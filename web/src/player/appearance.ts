@@ -105,6 +105,10 @@ export function appearanceClasses(appearance: Appearance): string {
     `subtitles-colour-${appearance.colour}`,
     `subtitles-edge-${appearance.edge}`,
     `subtitles-background-${appearance.background}`,
+    // How high the words sit is set on each cue rather than by a stylesheet,
+    // so nothing in the player reads this one. The sample on the settings page
+    // does: without it, a viewer moves the words and sees nothing move.
+    `subtitles-height-${appearance.height}`,
   ].join(" ");
 }
 

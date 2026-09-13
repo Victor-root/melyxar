@@ -13,6 +13,13 @@ use std::str::FromStr;
 use crate::convert::{bool_to_int, int_to_bool, parse_timestamp, timestamp_to_text};
 use crate::{Database, DatabaseError, Result};
 
+/// The languages a library holds, ready to fill a picker.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AvailableLanguages {
+    pub audio: Vec<String>,
+    pub subtitle: Vec<String>,
+}
+
 impl Database {
     /// Creates an account along with its preferences row.
     pub async fn create_user(
@@ -177,6 +184,32 @@ impl Database {
             users.push(build_user(row, &allowed)?);
         }
         Ok(users)
+    }
+
+    /// Every language the library actually holds, told apart by kind.
+    ///
+    /// A picker built from this offers what someone can really choose. A list
+    /// of five hundred languages, or a fixed handful decided in advance, both
+    /// end with someone picking one no film in the house carries.
+    pub async fn languages_in_use(&self) -> Result<AvailableLanguages> {
+        let rows = sqlx::query(
+            "SELECT DISTINCT kind, language FROM tracks
+             WHERE language IS NOT NULL AND language <> ''
+               AND kind IN ('audio', 'subtitle')
+             ORDER BY kind, language",
+        )
+        .fetch_all(self.reader())
+        .await?;
+
+        let mut available = AvailableLanguages::default();
+        for row in rows {
+            let language: String = row.try_get("language")?;
+            match row.try_get::<String, _>("kind")?.as_str() {
+                "audio" => available.audio.push(language),
+                _ => available.subtitle.push(language),
+            }
+        }
+        Ok(available)
     }
 
     /// Saves the preferences of one account, after clamping the values a
@@ -452,6 +485,142 @@ mod tests {
             .map(|user| user.name)
             .collect();
         assert_eq!(names, vec!["Alice", "marc", "zoe"]);
+    }
+
+    #[tokio::test]
+    async fn the_languages_offered_are_the_ones_the_library_really_holds() {
+        use melyxar_core::id::{MediaSourceId, TrackId};
+        use melyxar_core::library::LibraryKind;
+        use melyxar_core::media::{
+            AudioDetails, Loudness, SubtitleDetails, SubtitleLayout, Track, TrackKind, VideoDetails,
+        };
+        use melyxar_core::work::WorkKind;
+        use std::path::{Path, PathBuf};
+
+        let database = database().await;
+        let library = database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Films"))],
+            )
+            .await
+            .expect("library created");
+        let work = database
+            .create_work(
+                library.id,
+                WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        let source_id = database
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                Path::new("Quiet.Harbour.2019.mkv"),
+                12_000,
+                now(),
+            )
+            .await
+            .expect("source recorded");
+
+        let sound = |source_id: MediaSourceId, index: i32, language: Option<&str>| Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: index,
+            language: language.map(str::to_string),
+            title: None,
+            is_default: false,
+            is_forced: false,
+            kind: TrackKind::Audio(AudioDetails {
+                codec: "aac".into(),
+                profile: None,
+                channels: 2,
+                channel_layout: None,
+                sample_rate: None,
+                bit_depth: None,
+                bitrate: None,
+                loudness: Loudness::default(),
+            }),
+        };
+        let words = |source_id: MediaSourceId, index: i32, language: &str| Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: index,
+            language: Some(language.to_string()),
+            title: None,
+            is_default: false,
+            is_forced: false,
+            kind: TrackKind::Subtitle(SubtitleDetails {
+                codec: "subrip".into(),
+                layout: SubtitleLayout::Text,
+                is_hearing_impaired: false,
+                is_external: false,
+                external_relative_path: None,
+            }),
+        };
+
+        database
+            .store_analysis(
+                source_id,
+                &crate::catalogue::SourceAnalysis {
+                    container: Some("matroska,webm".into()),
+                    duration: None,
+                    overall_bitrate: None,
+                },
+                &[
+                    // The picture carries a language in some files, and it is
+                    // never something anyone picks.
+                    Track {
+                        id: TrackId::new(),
+                        source_id,
+                        stream_index: 0,
+                        language: Some("jpn".into()),
+                        title: None,
+                        is_default: true,
+                        is_forced: false,
+                        kind: TrackKind::Video(VideoDetails {
+                            codec: "h264".into(),
+                            profile: None,
+                            level: None,
+                            width: 1920,
+                            height: 1080,
+                            aspect_ratio: None,
+                            is_interlaced: false,
+                            frame_rate: None,
+                            bitrate: None,
+                            pixel_format: None,
+                            reference_frames: None,
+                            color: Default::default(),
+                            hdr: None,
+                        }),
+                    },
+                    sound(source_id, 1, Some("fre")),
+                    sound(source_id, 2, Some("eng")),
+                    // Said twice on purpose: two soundtracks in one language
+                    // are one choice, not two identical lines in a picker.
+                    sound(source_id, 3, Some("fre")),
+                    // A track whose language nobody wrote down.
+                    sound(source_id, 4, None),
+                    words(source_id, 5, "fre"),
+                ],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        let available = database.languages_in_use().await.expect("read");
+        assert_eq!(available.audio, vec!["eng", "fre"]);
+        assert_eq!(
+            available.subtitle,
+            vec!["fre"],
+            "a subtitle language is not a soundtrack language: a film can be \
+             subtitled in a language nobody speaks in it"
+        );
     }
 
     #[tokio::test]

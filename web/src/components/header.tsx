@@ -52,6 +52,9 @@ export function Header({ libraries }: { libraries: Library[] }) {
           <NavLink to="/activity" className="header-link">
             {t("nav.jobs")}
           </NavLink>
+          <NavLink to="/settings" className="header-link">
+            {t("nav.settings")}
+          </NavLink>
         </nav>
 
         <form
