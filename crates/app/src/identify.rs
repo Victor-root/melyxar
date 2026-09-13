@@ -275,6 +275,19 @@ async fn find_candidate(
             return Ok(Some(found.clone()));
         }
     }
+
+    // An accent reaches us written one of two ways, and a provider that
+    // matches text exactly answers nothing to the one it did not expect. The
+    // two spellings look identical on any screen, so nobody would ever guess
+    // that is what went wrong. Asking again in plain letters costs one request
+    // and settles it, whichever way the file was written.
+    if naming::carries_accents(&work.title) {
+        let plain = naming::fold_accents(&work.title);
+        let folded = provider.search_movie(&plain, None, language).await?;
+        if let Some(found) = choose(&folded, work) {
+            return Ok(Some(found.clone()));
+        }
+    }
     Ok(None)
 }
 
@@ -560,6 +573,8 @@ mod tests {
         fetched: Mutex<Vec<String>>,
         /// Bytes handed back for any picture asked for, when there are any.
         picture: Option<Vec<u8>>,
+        /// Whether a title has to be spelled exactly as held to match.
+        exact: bool,
     }
 
     impl StandIn {
@@ -571,6 +586,18 @@ mod tests {
                 searches: Mutex::new(Vec::new()),
                 fetched: Mutex::new(Vec::new()),
                 picture: None,
+                exact: false,
+            }
+        }
+
+        /// A provider that answers the way the real one was measured to:
+        /// accents folded on its side, so a title spelled with them or without
+        /// matches, and nothing at all for an accent written as a separate
+        /// mark, which it does not know how to read.
+        fn matching_exactly(candidates: Vec<MovieCandidate>, details: Vec<MovieDetails>) -> Self {
+            Self {
+                exact: true,
+                ..Self::new(candidates, details)
             }
         }
 
@@ -582,6 +609,7 @@ mod tests {
                 searches: Mutex::new(Vec::new()),
                 fetched: Mutex::new(Vec::new()),
                 picture: None,
+                exact: false,
             }
         }
 
@@ -618,6 +646,18 @@ mod tests {
             if let Some(failure) = self.failure {
                 return Err(failure());
             }
+            if self.exact {
+                let asked = melyxar_library::naming::fold_accents(title);
+                let holds_an_unread_mark = title.chars().any(|c| ('\u{300}'..='\u{36f}').contains(&c));
+                if holds_an_unread_mark
+                    || !self.candidates.iter().any(|candidate| {
+                        melyxar_library::naming::fold_accents(&candidate.title) == asked
+                    })
+                {
+                    return Ok(Vec::new());
+                }
+            }
+
             // A search with a year only returns what matches it, the way the
             // provider itself behaves.
             Ok(match year {
@@ -1070,6 +1110,43 @@ mod tests {
 
         assert_eq!(report.identified, 1);
         assert!(provider.searches().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_accent_written_as_a_mark_of_its_own_still_finds_its_film() {
+        // The file carries the plain letter followed by the accent, which
+        // looks the same on any screen and is not the same text. A provider
+        // that matches exactly answers nothing to it, so the title is asked
+        // again in plain letters.
+        let (_directory, state, library, work) =
+            state_with_work("La rue\u{301}e vers l'or", Some(1925)).await;
+        let provider = Arc::new(StandIn::matching_exactly(
+            vec![candidate("111", "La ru\u{e9}e vers l'or", Some(1925))],
+            vec![details("111", "La ru\u{e9}e vers l'or", Some(1925))],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 1, "searches: {:?}", provider.searches());
+        assert_eq!(
+            state
+                .database()
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification,
+            IdentificationState::Identified
+        );
+
+        let asked: Vec<String> = provider
+            .searches()
+            .into_iter()
+            .map(|(title, _)| title)
+            .collect();
+        assert!(
+            asked.iter().any(|title| title.is_ascii()),
+            "the last question is asked in plain letters: {asked:?}"
+        );
     }
 
     #[tokio::test]
