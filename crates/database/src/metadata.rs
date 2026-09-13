@@ -1204,6 +1204,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn two_people_who_happen_to_share_a_name_are_two_people() {
+        // Namesakes are ordinary, and a provider lists them as the different
+        // people they are. Refusing the second one used to stop the whole run,
+        // which meant one pair of namesakes left a library nameless.
+        let (database, work) = work_in_library().await;
+        let mut crowded = found();
+        crowded.credits.push(CreditRecord {
+            external_id: "9".to_string(),
+            name: "Alix Moreau".to_string(),
+            sort_name: "alix moreau".to_string(),
+            role: "actor".to_string(),
+            character: Some("Le voisin".to_string()),
+            ordinal: 1,
+            photo_path: None,
+        });
+
+        let people = database
+            .apply_identification(work.id, &crowded, false)
+            .await
+            .expect("a namesake is not a reason to give up on a film");
+
+        let namesakes: Vec<_> = people
+            .iter()
+            .filter(|person| person.name == "Alix Moreau")
+            .collect();
+        assert_eq!(namesakes.len(), 2);
+        assert_ne!(
+            namesakes[0].person_id, namesakes[1].person_id,
+            "the same name is not the same person, and their filmographies must not merge"
+        );
+    }
+
+    #[tokio::test]
     async fn a_work_still_named_after_its_file_is_listed_with_that_file() {
         let database = Database::open_in_memory().await.expect("database opens");
         let library = database
