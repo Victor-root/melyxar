@@ -21,7 +21,11 @@ export function WorkPage() {
   const [work, setWork] = useState<Work | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [chosen, setChosen] = useState(0);
-  const [playing, setPlaying] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<{ source: string; fromTheStart: boolean } | null>(null);
+  /* Where this viewer stopped, asked for once the page is open rather than
+     when play is pressed: the button has to say what it will do before it is
+     pressed. */
+  const [resumeFrom, setResumeFrom] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -41,6 +45,20 @@ export function WorkPage() {
       });
     return () => controller.abort();
   }, [id]);
+
+  useEffect(() => {
+    const version = work?.versions[chosen];
+    if (!version || version.missing) {
+      setResumeFrom(null);
+      return;
+    }
+    const controller = new AbortController();
+    api
+      .plan(version.id, {}, controller.signal)
+      .then((plan) => setResumeFrom(plan.resume_from_seconds))
+      .catch(() => setResumeFrom(null));
+    return () => controller.abort();
+  }, [work, chosen]);
 
   // Escape goes back, which is what a remote control and a keyboard both
   // expect after opening something.
@@ -78,9 +96,10 @@ export function WorkPage() {
   if (playing) {
     return (
       <Player
-        sourceId={playing}
+        sourceId={playing.source}
         workId={work.id}
         title={work.title}
+        fromTheStart={playing.fromTheStart}
         onClose={() => setPlaying(null)}
       />
     );
@@ -130,11 +149,26 @@ export function WorkPage() {
             <button
               className="button button-accent button-large"
               disabled={!version || version.missing}
-              onClick={() => version && setPlaying(version.id)}
+              onClick={() =>
+                version && setPlaying({ source: version.id, fromTheStart: false })
+              }
             >
               <span className="play-mark" aria-hidden="true" />
-              {t("work.play")}
+              {resumeFrom === null ? t("work.play") : t("player.resume")}
             </button>
+            {/* A separate button rather than a choice inside the player: a
+                viewer who wants to start again should not have to start where
+                they left off first. */}
+            {resumeFrom !== null && (
+              <button
+                className="button"
+                onClick={() =>
+                  version && setPlaying({ source: version.id, fromTheStart: true })
+                }
+              >
+                {t("player.from_the_start")}
+              </button>
+            )}
             {work.trailers.length > 0 && work.trailers[0].remote_url && (
               <a
                 className="button"

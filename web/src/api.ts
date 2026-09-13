@@ -225,6 +225,9 @@ export interface PlaybackTrack {
 
 export interface PlaybackPlan {
   url: string;
+  /** The tracks this answer was worked out for, chosen or fallen back to. */
+  chosen_audio_id: string | null;
+  chosen_subtitle_id: string | null;
   /** direct_play, remux, transcode_audio or full_transcode. */
   method: string;
   expensive: boolean;
@@ -277,6 +280,12 @@ export const api = {
   scan: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/scan`),
   identify: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/identify`),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
+  rememberTracks: (body: {
+    work_id: string;
+    source_id: string;
+    audio_track_id: string | null;
+    subtitle_track_id: string | null;
+  }) => post<{ remembered: boolean }>("/api/v1/playback/tracks", body),
   plan: (source: string, body: unknown, signal?: AbortSignal) =>
     post<PlaybackPlan>(`/api/v1/playback/${source}/plan`, body, signal),
   /**
