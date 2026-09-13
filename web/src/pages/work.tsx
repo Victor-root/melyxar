@@ -13,6 +13,7 @@ import { api, pictureSet } from "../api";
 import type { Credit, Version, Work } from "../api";
 import { useSettings } from "../settings";
 import { Player } from "../player/player";
+import { TrailerPlayer } from "../player/trailer";
 
 export function WorkPage() {
   const { id } = useParams();
@@ -22,6 +23,9 @@ export function WorkPage() {
   const [failed, setFailed] = useState<string | null>(null);
   const [chosen, setChosen] = useState(0);
   const [playing, setPlaying] = useState<{ source: string; fromTheStart: boolean } | null>(null);
+  /* A trailer sitting next to the film, which plays from here. One hosted
+     elsewhere is watched where it lives instead. */
+  const [trailer, setTrailer] = useState<string | null>(null);
   /* Where this viewer stopped, asked for once the page is open rather than
      when play is pressed: the button has to say what it will do before it is
      pressed. */
@@ -105,6 +109,12 @@ export function WorkPage() {
     );
   }
 
+  if (trailer) {
+    return (
+      <TrailerPlayer url={trailer} title={work.title} onClose={() => setTrailer(null)} />
+    );
+  }
+
   return (
     <main className="work" style={{ ["--work-color" as string]: work.color ?? "var(--surface)" }}>
       {backdrop && (
@@ -169,16 +179,30 @@ export function WorkPage() {
                 {t("player.from_the_start")}
               </button>
             )}
-            {work.trailers.length > 0 && work.trailers[0].remote_url && (
-              <a
-                className="button"
-                href={work.trailers[0].remote_url}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                {t("work.trailer")}
-              </a>
-            )}
+            {/* One sitting next to the film plays here; failing that, a link
+                is opened where it lives. This server never goes and fetches
+                someone else's video to pass it on. */}
+            {(() => {
+              const here = work.trailers.find((one) => one.url);
+              if (here?.url) {
+                return (
+                  <button className="button" onClick={() => setTrailer(here.url)}>
+                    {t("work.trailer")}
+                  </button>
+                );
+              }
+              const elsewhere = work.trailers.find((one) => one.remote_url);
+              return elsewhere?.remote_url ? (
+                <a
+                  className="button"
+                  href={elsewhere.remote_url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {t("work.trailer")}
+                </a>
+              ) : null;
+            })()}
           </div>
 
           <Synopsis text={work.overview} />

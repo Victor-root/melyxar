@@ -9,7 +9,7 @@ use melyxar_core::id::{MediaSourceId, PersonId, WorkId};
 use melyxar_core::media::{Chapter, Track};
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::Work;
-use melyxar_database::catalogue::{LocalExtraVideo, SourceAnalysis};
+use melyxar_database::catalogue::{PlayableExtraVideo, SourceAnalysis};
 use melyxar_database::images::StoredImage;
 
 use crate::{AppState, Result};
@@ -103,7 +103,7 @@ impl Version {
 pub struct TrailerLink {
     pub name: Option<String>,
     /// Set for a file sitting next to the film, which plays from here.
-    pub local: Option<LocalExtraVideo>,
+    pub local: Option<PlayableExtraVideo>,
     /// Set for a link, which leaves this server.
     pub remote_url: Option<String>,
 }

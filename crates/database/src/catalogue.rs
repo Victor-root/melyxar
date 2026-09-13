@@ -53,12 +53,25 @@ pub struct CatalogueSummary {
 }
 
 /// A video that belongs to a work without being the work itself.
+///
+/// Recorded relative to a root, which is what lets a disk be mounted
+/// somewhere else without rewriting a database.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalExtraVideo {
     pub kind: String,
     pub name: Option<String>,
     pub root_id: LibraryRootId,
     pub relative_path: PathBuf,
+}
+
+/// The same video, read back with its root joined on so it can be opened.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlayableExtraVideo {
+    pub kind: String,
+    pub name: Option<String>,
+    /// Where the file is, root included. Never sent to a client: a viewer is
+    /// given an address, not a path on someone's disk.
+    pub path: PathBuf,
 }
 
 impl Database {
@@ -600,10 +613,14 @@ impl Database {
     }
 
     /// Videos attached to a work, such as its trailers.
-    pub async fn extra_videos_of_work(&self, work_id: WorkId) -> Result<Vec<LocalExtraVideo>> {
+    pub async fn extra_videos_of_work(&self, work_id: WorkId) -> Result<Vec<PlayableExtraVideo>> {
         let rows = sqlx::query(
-            "SELECT kind, name, root_id, relative_path FROM extra_videos
-             WHERE work_id = ? AND relative_path IS NOT NULL ORDER BY kind, relative_path",
+            "SELECT extra_videos.kind, extra_videos.name, extra_videos.relative_path,
+                    library_roots.path AS root_path
+             FROM extra_videos
+             JOIN library_roots ON library_roots.id = extra_videos.root_id
+             WHERE extra_videos.work_id = ? AND extra_videos.relative_path IS NOT NULL
+             ORDER BY extra_videos.kind, extra_videos.relative_path",
         )
         .bind(work_id.to_db_string())
         .fetch_all(self.reader())
@@ -611,11 +628,12 @@ impl Database {
 
         let mut extras = Vec::with_capacity(rows.len());
         for row in rows {
-            extras.push(LocalExtraVideo {
+            let root: String = row.try_get("root_path")?;
+            let relative: String = row.try_get("relative_path")?;
+            extras.push(PlayableExtraVideo {
                 kind: row.try_get("kind")?,
                 name: row.try_get("name")?,
-                root_id: parse_id(&row.try_get::<String, _>("root_id")?)?,
-                relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
+                path: PathBuf::from(root).join(relative),
             });
         }
         Ok(extras)
@@ -1631,7 +1649,18 @@ mod tests {
         }
 
         let stored = database.extra_videos_of_work(work_id).await.expect("read");
-        assert_eq!(stored, vec![extra]);
+        assert_eq!(
+            stored,
+            vec![PlayableExtraVideo {
+                kind: "trailer".to_string(),
+                name: None,
+                // Read back with its root joined on: the database holds the
+                // path relative to the root so a disk can be mounted somewhere
+                // else, and nothing can be opened until the two are put back
+                // together.
+                path: PathBuf::from("/mnt/one/Films/Quiet.Harbour.2019-trailer.mkv"),
+            }]
+        );
     }
 
     #[tokio::test]
