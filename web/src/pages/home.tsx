@@ -9,6 +9,8 @@ import { api } from "../api";
 import type { Home as HomeData, Library } from "../api";
 import { Card } from "../components/card";
 import { Grid } from "../components/grid";
+import { JobLine } from "../components/job";
+import { useRunning } from "../running";
 import { useSettings } from "../settings";
 
 export function HomePage({ libraries }: { libraries: Library[] }) {
@@ -35,10 +37,28 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
     return () => controller.abort();
   }, [load]);
 
+  /* A scan takes minutes on a real library, so the page watches the one it
+     started and fetches what it produced when it ends. Without this, pressing
+     the button looks exactly like pressing a button that does nothing. */
+  const { jobs, watch } = useRunning(() => load());
+
   const startScan = async () => {
     setWorking(true);
     try {
       await Promise.all(libraries.map((library) => api.scan(library.id)));
+      watch();
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  /* Asked for on its own, for the films a previous look up did not name:
+     a provider that was down, a title nobody recognised, a key added since. */
+  const startIdentification = async () => {
+    setWorking(true);
+    try {
+      await Promise.all(libraries.map((library) => api.identify(library.id)));
+      watch();
     } finally {
       setWorking(false);
     }
@@ -64,11 +84,27 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       <main className="page">
         <section className="empty">
           <h1>{t("home.empty.title")}</h1>
-          <p>{t("home.empty.body")}</p>
-          {libraries.length > 0 && (
-            <button className="button button-accent" onClick={startScan} disabled={working}>
-              {t("home.scan")}
-            </button>
+          {/* While the scan runs, what it is doing replaces the invitation to
+              start one: reading "run a scan" during a scan is what sends
+              somebody to press the button a second time. */}
+          {jobs.length > 0 ? (
+            <>
+              <p>{t("home.scanning")}</p>
+              <div className="jobs">
+                {jobs.map((job) => (
+                  <JobLine key={job.id} job={job} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <p>{t("home.empty.body")}</p>
+              {libraries.length > 0 && (
+                <button className="button button-accent" onClick={startScan} disabled={working}>
+                  {t("home.scan")}
+                </button>
+              )}
+            </>
           )}
         </section>
       </main>
@@ -77,13 +113,35 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
   return (
     <main className="page">
+      {/* Work the server is doing, shown where somebody lands rather than on a
+          page they have to think of opening. */}
+      {jobs.length > 0 && (
+        <section className="section">
+          <div className="jobs">
+            {jobs.map((job) => (
+              <JobLine key={job.id} job={job} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="section">
         <div className="section-head">
           <h1>{t("home.recently_added")}</h1>
           {home.awaiting_identification > 0 && (
-            <Link className="pill" to="/search?unidentified=true">
-              {t("home.awaiting", { count: home.awaiting_identification })}
-            </Link>
+            <>
+              <Link className="pill" to="/search?unidentified=true">
+                {t("home.awaiting", { count: home.awaiting_identification })}
+              </Link>
+              {/* The one way to ask for it from a screen. Without this the
+                  films sit there named after their file for ever, and the
+                  only way out is a terminal. */}
+              {jobs.length === 0 && (
+                <button className="button button-small" onClick={startIdentification}>
+                  {t("home.identify")}
+                </button>
+              )}
+            </>
           )}
         </div>
         <Grid>

@@ -142,6 +142,45 @@ pub async fn start_scan(state: &AppState, library: Library) -> Result<ScanJob> {
     Ok(ScanJob { started, outcome })
 }
 
+/// Scans a library and looks up what the scan found.
+///
+/// Answers the scan's own job, which is what a client follows: the look up is
+/// a second job that appears when the first ends. They stay apart because they
+/// fail for different reasons, and a provider that is down must not make a
+/// scan look failed.
+///
+/// Chained because a scan that finds forty films and leaves every one of them
+/// unnamed has done half of what anybody wanted. Nothing is looked up when no
+/// provider key is configured, which is a server that browses without one
+/// rather than a server that is broken.
+pub async fn start_scan_and_identification(state: &AppState, library: Library) -> Result<JobId> {
+    let scan = start_scan(state, library.clone()).await?;
+    let id = scan.id();
+
+    // Without a provider key there is nothing to look anything up with. The
+    // scan still runs, and the library still browses: that is a server
+    // configured without a key, not a broken one.
+    let Some(provider) = state.metadata_provider() else {
+        return Ok(id);
+    };
+
+    let waiting = state.clone();
+    tokio::spawn(async move {
+        let (ended, _) = scan.wait().await;
+        if ended != JobState::Succeeded {
+            // A scan that did not finish leaves nothing dependable to look up,
+            // and whoever reads the list of jobs can already see why.
+            return;
+        }
+        if let Err(error) = crate::identify::start_identification(&waiting, provider, library).await
+        {
+            tracing::warn!(%error, "the scan finished but the look up would not start");
+        }
+    });
+
+    Ok(id)
+}
+
 /// Scans every root of a library.
 ///
 /// The handle is what the job layer gives a running job: it carries progress
