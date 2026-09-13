@@ -12,10 +12,10 @@
 
 use axum::body::Body;
 use axum::extract::{Path as RoutePath, State};
-use axum::http::Request;
+use axum::http::{header, HeaderValue, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use melyxar_app::playback::{ClientProfile, PlayPlan, PlayRequest};
+use melyxar_app::playback::{ClientProfile, PlayPlan, PlayRequest, Session, StreamingError};
 use melyxar_app::AppState;
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::media::TrackKind;
@@ -37,6 +37,21 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/playback/tracks",
             axum::routing::post(remember_tracks),
+        )
+        .route(
+            "/api/v1/playback/{id}/session",
+            axum::routing::post(open_session),
+        )
+        // One route for the three things a session hands out. A router allows
+        // one name per part of a path, and a segment is named after its
+        // number in a way a player builds itself from the playlist.
+        .route(
+            "/api/v1/stream/{session}/{file}",
+            axum::routing::get(session_file),
+        )
+        .route(
+            "/api/v1/stream/{session}",
+            axum::routing::delete(close_session),
         )
 }
 
@@ -219,6 +234,200 @@ async fn serve_file(state: &AppState, id: &str, request: Request<Body>) -> Resul
 }
 
 // ---------------------------------------------------------------------------
+// A film being converted as it is watched
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+struct SessionView {
+    id: String,
+    /// What a player is pointed at. The playlist lists the whole film before
+    /// any of it has been produced, so a viewer can jump anywhere at once.
+    playlist_url: String,
+    duration_minutes: Option<i64>,
+    /// Where this viewer stopped last time, in seconds, when they did.
+    resume_from_seconds: Option<f64>,
+}
+
+/// Opens a session for a film this client cannot play as it is.
+async fn open_session(
+    State(state): State<AppState>,
+    RoutePath(id): RoutePath<String>,
+    body: Option<Json<PlanBody>>,
+) -> Result<Json<SessionView>> {
+    let source_id = parse_source(&id)?;
+    let body = body.map(|Json(body)| body).unwrap_or_default();
+
+    let plan = melyxar_app::playback::plan(
+        &state,
+        viewer(&state).await?,
+        &PlayRequest {
+            source_id,
+            profile: body.profile,
+            audio_track_id: body
+                .audio_track_id
+                .as_deref()
+                .map(parse_track)
+                .transpose()?,
+            subtitle_track_id: body
+                .subtitle_track_id
+                .as_deref()
+                .map(parse_track)
+                .transpose()?,
+        },
+    )
+    .await?;
+
+    let session = melyxar_app::playback::open_session(&state, &plan).await?;
+    Ok(Json(SessionView {
+        id: session.id.to_string(),
+        playlist_url: format!("/api/v1/stream/{}/playlist.m3u8", session.id),
+        duration_minutes: plan.duration.map(whole_minutes),
+        resume_from_seconds: plan.resume_from.map(|position| position.as_seconds_f64()),
+    }))
+}
+
+/// What a player is asking a session for.
+#[derive(Debug, PartialEq, Eq)]
+enum Wanted {
+    /// The list of every segment, which the server writes.
+    Playlist,
+    /// The header every segment needs.
+    Header,
+    /// One segment, by its number.
+    Segment(u32),
+}
+
+/// Reads the name a player asked for.
+///
+/// Only the three shapes a session produces are recognised. Anything else is
+/// refused rather than looked for: this is a name from outside, and the only
+/// safe way to use one is to not use it at all.
+fn wanted_from(name: &str) -> Option<Wanted> {
+    match name {
+        "playlist.m3u8" => Some(Wanted::Playlist),
+        "init.mp4" => Some(Wanted::Header),
+        other => other
+            .strip_prefix("segment-")
+            .and_then(|rest| rest.strip_suffix(".m4s"))
+            .and_then(|number| number.parse().ok())
+            .map(Wanted::Segment),
+    }
+}
+
+async fn session_file(
+    State(state): State<AppState>,
+    RoutePath((id, name)): RoutePath<(String, String)>,
+    request: Request<Body>,
+) -> Response {
+    match wanted_from(&name) {
+        Some(Wanted::Playlist) => playlist(&state, &id).await,
+        Some(Wanted::Header) => header_file(&state, &id, request).await,
+        Some(Wanted::Segment(index)) => segment(&state, &id, index, request).await,
+        None => ServerError::not_found("a session hands out nothing by that name").into_response(),
+    }
+}
+
+/// The playlist, which the server writes and the tool never sees.
+async fn playlist(state: &AppState, id: &str) -> Response {
+    match live_session(state, id).await {
+        Ok(session) => (
+            StatusCode::OK,
+            [
+                (
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/vnd.apple.mpegurl"),
+                ),
+                // The film is already cut: the list never changes, but it
+                // belongs to a session that will not outlive the evening.
+                (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
+            ],
+            session.playlist().to_text(),
+        )
+            .into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// The header every segment needs.
+async fn header_file(state: &AppState, id: &str, request: Request<Body>) -> Response {
+    match live_session(state, id).await {
+        Ok(session) => match session.initialisation().await {
+            Ok(path) => serve(path, request, "video/mp4").await,
+            Err(error) => streaming_failure(error).into_response(),
+        },
+        Err(error) => error.into_response(),
+    }
+}
+
+/// One segment of the film, produced now if it is not there yet.
+async fn segment(state: &AppState, id: &str, index: u32, request: Request<Body>) -> Response {
+    match live_session(state, id).await {
+        Ok(session) => match session.segment(index).await {
+            Ok(path) => serve(path, request, "video/iso.segment").await,
+            Err(error) => streaming_failure(error).into_response(),
+        },
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Closes a session, which a player asks for when it is done with a film.
+async fn close_session(
+    State(state): State<AppState>,
+    RoutePath(id): RoutePath<String>,
+) -> Result<Json<serde_json::Value>> {
+    let session_id = id
+        .parse()
+        .map_err(|_| ServerError::invalid_input("the session identifier is malformed"))?;
+    if let Some(sessions) = state.sessions() {
+        sessions.close(session_id).await;
+    }
+    Ok(Json(serde_json::json!({ "closed": true })))
+}
+
+async fn live_session(state: &AppState, id: &str) -> Result<std::sync::Arc<Session>> {
+    let session_id = id
+        .parse()
+        .map_err(|_| ServerError::invalid_input("the session identifier is malformed"))?;
+    let sessions = state
+        .sessions()
+        .ok_or_else(|| ServerError::not_found("this server converts nothing"))?;
+    sessions.get(session_id).await.map_err(streaming_failure)
+}
+
+/// Turns a streaming failure into something a client can act on.
+fn streaming_failure(error: StreamingError) -> ServerError {
+    use StreamingError as Failure;
+    match error {
+        Failure::NoSuchSession => {
+            // The session was swept away while nobody was watching. A player
+            // that comes back asks for a new one rather than failing outright.
+            ServerError::not_found("that session is over")
+        }
+        Failure::NoSuchSegment => ServerError::not_found("that segment is not part of this film"),
+        Failure::TooManyAtOnce => {
+            ServerError::busy("this server is already converting all it can at once")
+        }
+        other => ServerError::internal(other.to_string()),
+    }
+}
+
+/// Hands over a file the session produced.
+async fn serve(path: std::path::PathBuf, request: Request<Body>, kind: &str) -> Response {
+    let mut response = match ServeFile::new(&path).oneshot(request).await {
+        Ok(response) => response.into_response(),
+        Err(error) => return ServerError::internal(error.to_string()).into_response(),
+    };
+    if let Ok(value) = HeaderValue::from_str(kind) {
+        response.headers_mut().insert(header::CONTENT_TYPE, value);
+    }
+    // A segment belongs to one session and outlives nothing.
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+// ---------------------------------------------------------------------------
 // Where the viewer got to
 // ---------------------------------------------------------------------------
 
@@ -340,6 +549,30 @@ fn parse_track(value: &str) -> Result<TrackId> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_route_this_module_declares_is_one_a_router_accepts() {
+        // Built at start-up, so a route a router refuses brings the whole
+        // server down rather than failing one request. That is exactly what
+        // happened, and only when it was run.
+        let _ = router();
+    }
+
+    #[test]
+    fn a_session_hands_out_three_things_and_nothing_else() {
+        assert_eq!(wanted_from("playlist.m3u8"), Some(Wanted::Playlist));
+        assert_eq!(wanted_from("init.mp4"), Some(Wanted::Header));
+        assert_eq!(wanted_from("segment-0.m4s"), Some(Wanted::Segment(0)));
+        assert_eq!(wanted_from("segment-1799.m4s"), Some(Wanted::Segment(1799)));
+
+        // A name from outside is only ever recognised, never used.
+        assert_eq!(wanted_from("segment-.m4s"), None);
+        assert_eq!(wanted_from("segment--1.m4s"), None);
+        assert_eq!(wanted_from("segment-abc.m4s"), None);
+        assert_eq!(wanted_from("../../etc/passwd"), None);
+        assert_eq!(wanted_from("init.mp4.bak"), None);
+        assert_eq!(wanted_from(""), None);
+    }
 
     #[test]
     fn a_malformed_identifier_is_refused_rather_than_looked_up() {

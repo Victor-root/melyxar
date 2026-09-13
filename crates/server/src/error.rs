@@ -73,6 +73,15 @@ impl ServerError {
         Self::new(StatusCode::BAD_REQUEST, ErrorCode::InvalidInput, detail)
     }
 
+    /// The server cannot do this right now, though the request is sound.
+    ///
+    /// Told apart from a refusal: a client that waits and asks again will get
+    /// an answer, and one that is told plainly can say so rather than showing
+    /// a spinner that never resolves.
+    pub fn busy(detail: impl Into<String>) -> Self {
+        Self::new(StatusCode::SERVICE_UNAVAILABLE, ErrorCode::Conflict, detail)
+    }
+
     pub fn unauthenticated(detail: impl Into<String>) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, ErrorCode::Unauthenticated, detail)
     }
