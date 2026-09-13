@@ -144,6 +144,14 @@ struct AtWork {
     /// somebody is waiting for. On a jump that is the difference between one
     /// wait and two.
     reached: Arc<AtomicI64>,
+    /// How fast the tool says it is working, as thousandths of real time.
+    ///
+    /// A whole number because it lives in the same place as the position, read
+    /// from another task while a viewer waits. Below a thousand means the
+    /// machine is producing the film more slowly than somebody can watch it,
+    /// which is the one thing that turns into stuttering rather than into a
+    /// wait at the start.
+    speed: Arc<AtomicI64>,
 }
 
 impl AtWork {
@@ -151,6 +159,26 @@ impl AtWork {
     fn reached(&self) -> Millis {
         Millis::new(self.reached.load(Ordering::Relaxed))
     }
+
+    /// How fast the tool says it is working, relative to real time.
+    fn speed(&self) -> f64 {
+        self.speed.load(Ordering::Relaxed) as f64 / 1000.0
+    }
+}
+
+/// What had to happen before a segment could be handed over.
+///
+/// Named slices rather than one total. A total says a jump is slow, which
+/// whoever jumped already knows; the slices say which part to attack, and they
+/// live in four different places: the tool being stopped, the tool being
+/// started, the tool reading its way to the point asked for, and the segment
+/// being finished once it exists.
+#[derive(Debug, Default, Clone, Copy)]
+struct WhatItTook {
+    stopping: Duration,
+    starting: Duration,
+    appearing: Duration,
+    settling: Duration,
 }
 
 /// One film being watched.
@@ -336,50 +364,104 @@ impl Session {
             return Ok(path);
         }
 
-        self.make_sure_someone_is_producing(index).await?;
-        match self.wait_for(&path, index).await {
-            Ok(()) => Ok(path),
+        let started = self.make_sure_someone_is_producing(index).await?;
+        let waited = match self.wait_for(&path, index).await {
+            Ok(waited) => waited,
             Err(error) if self.step_down_from_the_card(&error) => {
                 self.make_sure_someone_is_producing(index).await?;
-                self.wait_for(&path, index).await?;
-                Ok(path)
+                self.wait_for(&path, index).await?
             }
-            Err(error) => Err(error),
-        }
+            Err(error) => return Err(error),
+        };
+
+        self.say_what_it_took(index, started, waited).await;
+        Ok(path)
+    }
+
+    /// Writes down where the wait for one segment actually went.
+    ///
+    /// Only when the tool had to be set going, which is a film starting or a
+    /// viewer jumping: those are the waits anybody notices, and one line every
+    /// four seconds of ordinary playback would bury them. The ordinary case is
+    /// still written down, quietly, for a session being looked at closely.
+    async fn say_what_it_took(&self, index: u32, started: Option<WhatItTook>, waited: WhatItTook) {
+        let speed = {
+            let running = self.running.lock().await;
+            running.as_ref().map(AtWork::speed)
+        };
+        let Some(getting_going) = started else {
+            tracing::debug!(
+                session = %self.id,
+                index,
+                appearing_ms = waited.appearing.as_millis(),
+                settling_ms = waited.settling.as_millis(),
+                speed,
+                "waited for a segment already on its way"
+            );
+            return;
+        };
+
+        let total =
+            getting_going.stopping + getting_going.starting + waited.appearing + waited.settling;
+        tracing::info!(
+            session = %self.id,
+            index,
+            at_second = self.playlist.start_of(index).as_seconds_f64(),
+            stopping_ms = getting_going.stopping.as_millis(),
+            starting_ms = getting_going.starting.as_millis(),
+            appearing_ms = waited.appearing.as_millis(),
+            settling_ms = waited.settling.as_millis(),
+            total_ms = total.as_millis(),
+            speed,
+            "a segment was produced from a standing start"
+        );
     }
 
     /// Starts the tool at this segment, unless one is already on its way here.
-    async fn make_sure_someone_is_producing(&self, index: u32) -> Result<()> {
+    ///
+    /// Answers nothing when one already was, and how long each part of getting
+    /// one going took when it was not.
+    async fn make_sure_someone_is_producing(&self, index: u32) -> Result<Option<WhatItTook>> {
         let mut running = self.running.lock().await;
 
         if let Some(at_work) = running.as_mut() {
             // A tool that has finished is started again wherever the request
             // is: there is nothing on its way any more.
             if already_on_its_way(at_work.from, index) && !at_work.process.has_exited() {
-                return Ok(());
+                return Ok(None);
             }
         }
 
         // Either nothing is running, or what is running is working on another
         // part of the film. A viewer who jumped is not waiting for the piece
         // in between to be produced first.
+        let stopping = Instant::now();
         if let Some(at_work) = running.take() {
             at_work.process.stop().await?;
         }
+        let stopping = stopping.elapsed();
 
+        let starting = Instant::now();
         let command = self.command_from(index);
 
         // The tool is asked to say where it has got to, and one task keeps the
         // latest answer. That answer is what lets a finished segment be handed
         // over the moment it is finished, rather than once the next one has
-        // been produced on top of it.
+        // been produced on top of it. How fast it says it is working rides
+        // along, because a jump that is slow because the machine cannot keep
+        // up and a jump that is slow because the tool spent the time opening a
+        // large file are two different problems.
         let reached = Arc::new(AtomicI64::new(0));
+        let speed = Arc::new(AtomicI64::new(0));
         let (reports, mut incoming) =
             tokio::sync::mpsc::channel::<melyxar_ffmpeg::process::Progress>(4);
-        let mirror = reached.clone();
+        let mirrored = (reached.clone(), speed.clone());
         tokio::spawn(async move {
             while let Some(report) = incoming.recv().await {
-                mirror.store(report.position.get(), Ordering::Relaxed);
+                mirrored.0.store(report.position.get(), Ordering::Relaxed);
+                if let Some(rate) = report.speed {
+                    mirrored.1.store((rate * 1000.0) as i64, Ordering::Relaxed);
+                }
             }
         });
 
@@ -389,8 +471,13 @@ impl Session {
             process,
             from: index,
             reached,
+            speed,
         });
-        Ok(())
+        Ok(Some(WhatItTook {
+            stopping,
+            starting: starting.elapsed(),
+            ..WhatItTook::default()
+        }))
     }
 
     fn command_from(&self, index: u32) -> Command {
@@ -419,12 +506,28 @@ impl Session {
     }
 
     /// Waits for a file to appear, giving up rather than hanging for ever.
-    async fn wait_for(&self, path: &Path, index: u32) -> Result<()> {
-        let deadline = Instant::now() + PATIENCE;
+    ///
+    /// Answers how the wait divided: how long until the segment was there at
+    /// all, and how long from there until it was finished. The first is the
+    /// tool opening the film and reading its way to the point asked for, the
+    /// second is the segment itself, and they are attacked in different ways.
+    async fn wait_for(&self, path: &Path, index: u32) -> Result<WhatItTook> {
+        let began = Instant::now();
+        let deadline = began + PATIENCE;
+        let mut appeared: Option<Instant> = None;
         loop {
             let (reached, tool_is_gone) = self.where_the_tool_has_got_to().await;
-            if path.exists() && self.finished_being_written(index, reached, tool_is_gone) {
-                return Ok(());
+            let there = path.exists();
+            if there && appeared.is_none() {
+                appeared = Some(Instant::now());
+            }
+            if there && self.finished_being_written(index, reached, tool_is_gone) {
+                let appeared = appeared.unwrap_or(began);
+                return Ok(WhatItTook {
+                    appearing: appeared.saturating_duration_since(began),
+                    settling: appeared.elapsed(),
+                    ..WhatItTook::default()
+                });
             }
 
             // The tool is gone and what was asked for is not there. Waiting
