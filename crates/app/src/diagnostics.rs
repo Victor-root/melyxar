@@ -30,8 +30,9 @@ pub struct Diagnostics {
     /// and the title shown is the very thing the provider was asked about, so
     /// reading it is usually enough to see what went wrong.
     ///
-    /// Titles, never paths: what is guarded elsewhere is where somebody's
-    /// files live, and the name of a film is not that.
+    /// Titles and the names on disk they were read from, never paths: what is
+    /// guarded elsewhere is where somebody's files live, and the name of a
+    /// film is not that.
     pub nameless: Vec<NamelessReport>,
     /// Films that were named and are still missing something a page shows.
     ///
@@ -54,6 +55,12 @@ pub struct NamelessReport {
     pub year: Option<i32>,
     /// Why the last look up failed, when one has run.
     pub reason: Option<&'static str>,
+    /// The name on disk the title was read from.
+    ///
+    /// A title that reads oddly leaves exactly one question, and this is the
+    /// answer to it. Shown only when it says something the title does not, so
+    /// the list stays readable.
+    pub file_name: Option<String>,
 }
 
 /// One named film and the holes left in it.
@@ -234,12 +241,17 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             .works_still_nameless(NAMELESS_SHOWN)
             .await?
             .iter()
-            .map(|work| NamelessReport {
-                title: work.title.clone(),
-                year: work.release_year,
-                reason: work
+            .map(|nameless| NamelessReport {
+                title: nameless.work.title.clone(),
+                year: nameless.work.release_year,
+                reason: nameless
+                    .work
                     .identification_note
                     .map(melyxar_core::work::IdentificationNote::as_str),
+                file_name: nameless
+                    .file_name
+                    .clone()
+                    .filter(|name| name_says_more_than(name, &nameless.work.title)),
             })
             .collect(),
         incomplete: database
@@ -259,6 +271,17 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             .map(work_report)
             .collect(),
     })
+}
+
+/// Whether the name on disk says anything the title does not.
+///
+/// A file called exactly after the title would only repeat the line it sits
+/// on, and the list is meant to be read in one go.
+fn name_says_more_than(file_name: &str, title: &str) -> bool {
+    let stem = file_name
+        .rsplit_once('.')
+        .map_or(file_name, |(stem, _)| stem);
+    stem != title
 }
 
 /// How many nameless films the report names.
@@ -453,10 +476,14 @@ pub fn render_text(report: &Diagnostics) -> String {
                 Some(year) => format!(" ({year})"),
                 None => String::new(),
             };
+            let read_from = match &film.file_name {
+                Some(name) => format!("  read from {name}"),
+                None => String::new(),
+            };
             line!(
                 "!",
                 format!(
-                    "{}{year}  {}",
+                    "{}{year}  {}{read_from}",
                     film.title,
                     film.reason.unwrap_or("never looked up")
                 ),
@@ -505,7 +532,11 @@ pub fn render_text(report: &Diagnostics) -> String {
             None => work.done.to_string(),
         };
         line!(
-            if work.failure_reason.is_some() { "x" } else { "+" },
+            if work.failure_reason.is_some() {
+                "x"
+            } else {
+                "+"
+            },
             format!("{:<15} {:<10} {progress}", work.kind, work.state),
         );
         // On a line of its own and never shortened: this is the sentence that
@@ -732,6 +763,102 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_film_nobody_could_name_shows_the_name_on_disk_it_was_read_from() {
+        // The title is only ever as good as the name it was read from, so a
+        // title that reads oddly leaves one question. Answering it used to
+        // mean opening the database by hand, and the whole point of this
+        // report is that nothing needs a terminal.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .pop()
+            .expect("one library");
+        let work = state
+            .database()
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                None,
+            )
+            .await
+            .expect("work created");
+        state
+            .database()
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Anciens/xyQuiet Harbour BD Rip.avi"),
+                1_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(
+            text.contains("read from xyQuiet Harbour BD Rip.avi"),
+            "the name behind the title is the one thing that explains it: {text}"
+        );
+        assert!(
+            !text.contains("Anciens"),
+            "the name of the file, and never the folders leading to it: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_whose_file_is_named_exactly_after_it_says_so_once() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .pop()
+            .expect("one library");
+        let work = state
+            .database()
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                None,
+            )
+            .await
+            .expect("work created");
+        state
+            .database()
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Quiet Harbour.mkv"),
+                1_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(
+            !text.contains("read from"),
+            "repeating the title as a file name adds nothing: {text}"
+        );
+    }
+
+    #[tokio::test]
     async fn a_film_that_was_named_and_still_has_holes_in_it_is_named_too() {
         // Nothing anywhere says this out loud: the film has its title, the run
         // succeeded, and the only sign is a grey rectangle somebody scrolls
@@ -769,7 +896,11 @@ mod tests {
         let report = collect(&state).await.expect("report collected");
         assert_eq!(report.incomplete.len(), 1);
         assert_eq!(report.incomplete[0].title, "Quiet Harbour");
-        assert!(report.incomplete[0].missing.contains(&"poster"), "{:?}", report.incomplete[0]);
+        assert!(
+            report.incomplete[0].missing.contains(&"poster"),
+            "{:?}",
+            report.incomplete[0]
+        );
 
         let text = render_text(&report);
         assert!(text.contains("Films missing something"), "{text}");

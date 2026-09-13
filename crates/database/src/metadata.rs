@@ -5,11 +5,9 @@
 //! edited by hand, and anything a person made themselves. A refresh that wipes
 //! what its owner arranged is a refresh nobody dares run twice.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use melyxar_core::id::{
-    CollectionId, CreditId, ExtraVideoId, LibraryId, NameId, PersonId, WorkId,
-};
+use melyxar_core::id::{CollectionId, CreditId, ExtraVideoId, LibraryId, NameId, PersonId, WorkId};
 use melyxar_core::time::{now, Millis};
 use melyxar_core::work::{IdentificationNote, IdentificationState};
 use sqlx::{Row, Sqlite, Transaction};
@@ -25,6 +23,17 @@ pub struct WorkNamedAfterItsFile {
     pub release_year: Option<i32>,
     /// The file the title was read from, relative to its root.
     pub relative_path: PathBuf,
+}
+
+/// A work nobody has been able to name, and the name on disk behind it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NamelessWork {
+    pub work: melyxar_core::work::Work,
+    /// The name of one of its files, without the folders leading to it.
+    ///
+    /// Absent only for a work that has no file recorded at all, which is not
+    /// something a scan produces.
+    pub file_name: Option<String>,
 }
 
 /// One person's part in a work, as a provider described it.
@@ -157,21 +166,43 @@ impl Database {
     /// For the diagnostic, which has to say which films are waiting and why
     /// rather than only how many: a count sends whoever reads it to a
     /// terminal, which is the one thing the report exists to avoid.
-    pub async fn works_still_nameless(&self, limit: i64) -> Result<Vec<melyxar_core::work::Work>> {
+    ///
+    /// The name on disk comes with it. A title read off a file name is only
+    /// ever as good as the name it was read from, so a title that looks wrong
+    /// leaves one question, and the answer to it has to be in the same report
+    /// rather than a query away.
+    pub async fn works_still_nameless(&self, limit: i64) -> Result<Vec<NamelessWork>> {
         let rows = sqlx::query(
-            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
-                    community_rating, age_rating_label, identification, identification_note,
-                    dominant_color, added_at, updated_at
-             FROM works
-             WHERE identification IN ('pending', 'unidentified')
-             ORDER BY sort_title
+            "SELECT w.id, w.library_id, w.parent_id, w.kind, w.title, w.sort_title,
+                    w.release_year, w.runtime_ms, w.community_rating, w.age_rating_label,
+                    w.identification, w.identification_note, w.dominant_color,
+                    w.added_at, w.updated_at,
+                    min(s.relative_path) AS relative_path
+             FROM works w
+             LEFT JOIN media_sources s ON s.work_id = w.id
+             WHERE w.identification IN ('pending', 'unidentified')
+             GROUP BY w.id
+             ORDER BY w.sort_title
              LIMIT ?",
         )
         .bind(limit)
         .fetch_all(self.reader())
         .await?;
 
-        rows.iter().map(crate::catalogue::work_from_row).collect()
+        rows.iter()
+            .map(|row| {
+                Ok(NamelessWork {
+                    work: crate::catalogue::work_from_row(row)?,
+                    file_name: row.try_get::<Option<String>, _>("relative_path")?.and_then(
+                        |path| {
+                            Path::new(&path)
+                                .file_name()
+                                .map(|name| name.to_string_lossy().into_owned())
+                        },
+                    ),
+                })
+            })
+            .collect()
     }
 
     /// Films that were named and are still missing something.
@@ -1394,15 +1425,15 @@ mod tests {
             .await
             .expect("identification applied");
 
-        let incomplete = database
-            .works_missing_something()
-            .await
-            .expect("read");
+        let incomplete = database.works_missing_something().await.expect("read");
         assert_eq!(incomplete.len(), 1);
         assert_eq!(incomplete[0].title, "Quiet Harbour");
         assert_eq!(incomplete[0].release_year, Some(2019));
         assert!(incomplete[0].missing.contains(&"poster"), "{incomplete:?}");
-        assert!(incomplete[0].missing.contains(&"backdrop"), "{incomplete:?}");
+        assert!(
+            incomplete[0].missing.contains(&"backdrop"),
+            "{incomplete:?}"
+        );
         assert!(
             !incomplete[0].missing.contains(&"overview"),
             "the provider gave one: {incomplete:?}"
@@ -1431,10 +1462,7 @@ mod tests {
             .await
             .expect("picture stored");
 
-        let after = database
-            .works_missing_something()
-            .await
-            .expect("read");
+        let after = database.works_missing_something().await.expect("read");
         assert!(
             !after[0].missing.contains(&"poster"),
             "a film that got its picture stops being counted for it: {after:?}"
@@ -1687,6 +1715,82 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_film_nobody_could_name_is_listed_with_the_name_on_disk_behind_it() {
+        // A title read off a file name is only ever as good as that name, so
+        // the report has to carry both: the title alone leaves whoever reads
+        // it with a question and a terminal to go and answer it in.
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Films"))],
+            )
+            .await
+            .expect("library created");
+        let work = database
+            .create_work(
+                library.id,
+                WorkKind::Movie,
+                "Quiet Harbour BD Rip",
+                "quiet harbour bd rip",
+                None,
+            )
+            .await
+            .expect("work created");
+        database
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Anciens/Quiet Harbour BD Rip.avi"),
+                1_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+        database
+            .set_identification_note(work.id, IdentificationNote::NoMatch)
+            .await
+            .expect("note written");
+
+        let listed = database.works_still_nameless(25).await.expect("read");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].work.id, work.id);
+        assert_eq!(
+            listed[0].work.identification_note,
+            Some(IdentificationNote::NoMatch)
+        );
+        assert_eq!(
+            listed[0].file_name.as_deref(),
+            Some("Quiet Harbour BD Rip.avi"),
+            "the name of the file, and never the folders leading to it"
+        );
+
+        // A film a provider named is no longer waiting for anything.
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+        assert!(database
+            .works_still_nameless(25)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_film_waiting_with_no_file_recorded_is_still_listed() {
+        // Nothing a scan produces, and a list that dropped it would hide the
+        // very film whose state is hardest to explain.
+        let (database, work) = work_in_library().await;
+        let listed = database.works_still_nameless(25).await.expect("read");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].work.id, work.id);
+        assert_eq!(listed[0].file_name, None);
     }
 
     #[tokio::test]
