@@ -164,6 +164,31 @@ impl Database {
         Ok(roots)
     }
 
+    /// How many files each root holds, by root.
+    ///
+    /// A root that holds none is the question the report exists to answer: the
+    /// disk is there and readable, and nothing on it was recognised. Nothing
+    /// else says so, and a count of zero next to a label says it at a glance.
+    pub async fn file_counts_by_root(&self) -> Result<Vec<(LibraryRootId, i64)>> {
+        let rows = sqlx::query(
+            "SELECT r.id, count(s.id) AS files
+             FROM library_roots r
+             LEFT JOIN media_sources s ON s.root_id = r.id
+             GROUP BY r.id",
+        )
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                Ok((
+                    parse_id(&row.try_get::<String, _>("id")?)?,
+                    row.try_get("files")?,
+                ))
+            })
+            .collect()
+    }
+
     /// Records what a real access test found for one root.
     pub async fn set_root_access(&self, root_id: LibraryRootId, access: RootAccess) -> Result<()> {
         sqlx::query(
@@ -297,6 +322,52 @@ mod tests {
         assert_eq!(reloaded.len(), 1);
         assert_eq!(reloaded[0].roots.len(), 2);
         assert_eq!(reloaded[0].kind, LibraryKind::Movies);
+    }
+
+    #[tokio::test]
+    async fn a_root_that_holds_nothing_is_counted_as_holding_nothing() {
+        // A disk added and left out of every count looks exactly like a disk
+        // that worked, which is the whole reason this is counted at all.
+        let database = database().await;
+        let library = database
+            .create_library("Films", LibraryKind::Movies, "fr", &roots())
+            .await
+            .expect("library created");
+        let work = database
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        database
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Quiet Harbour 1080p.mkv"),
+                1_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+
+        let counts: std::collections::HashMap<_, _> = database
+            .file_counts_by_root()
+            .await
+            .expect("read")
+            .into_iter()
+            .collect();
+
+        assert_eq!(
+            counts.len(),
+            2,
+            "every root is counted, empty ones included"
+        );
+        assert_eq!(counts.get(&library.roots[0].id), Some(&1));
+        assert_eq!(counts.get(&library.roots[1].id), Some(&0));
     }
 
     #[tokio::test]

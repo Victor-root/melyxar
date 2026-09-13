@@ -159,11 +159,50 @@ pub struct RootReport {
     /// language.
     pub explanation_code: &'static str,
     pub checked: bool,
+    /// How many files of the library sit on this root.
+    pub files: i64,
+    /// A few of the names the folder holds, when it gave up no file at all.
+    ///
+    /// A disk that is there, readable, and yields nothing leaves one question:
+    /// is it the wrong folder, or is it full of files this server does not
+    /// recognise? Reading a handful of names answers it without a terminal.
+    pub holds: Vec<String>,
 }
 
 /// Path of the graphics device an unprivileged container has to be given
 /// before hardware acceleration can work.
 const GRAPHICS_DEVICE: &str = "/dev/dri";
+
+/// How many names are read out of a folder that gave up no file.
+///
+/// Enough to tell a folder holding other folders from one holding files of a
+/// kind this server does not read, few enough that the report stays a report.
+const NAMES_SHOWN: usize = 6;
+
+/// A few of the names a folder holds, for a root that yielded nothing.
+///
+/// One listing of one folder, never a walk: this runs while somebody waits for
+/// a page. It is not trying to find the films, only to say what is there, and
+/// a folder name or an unfamiliar extension is the whole answer.
+fn what_the_folder_holds(path: &std::path::Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return Vec::new();
+    };
+
+    let mut names: Vec<String> = entries
+        .filter_map(std::result::Result::ok)
+        .map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            match entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                true => format!("{name}/"),
+                false => name,
+            }
+        })
+        .take(NAMES_SHOWN)
+        .collect();
+    names.sort();
+    names
+}
 
 /// Builds the report.
 pub async fn collect(state: &AppState) -> Result<Diagnostics> {
@@ -173,6 +212,9 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
     let journal_mode = database.journal_mode().await?;
     let libraries = database.list_libraries().await?;
 
+    let counts: std::collections::HashMap<_, _> =
+        database.file_counts_by_root().await?.into_iter().collect();
+
     let mut roots = Vec::new();
     for entry in database.roots_with_access().await? {
         let library = libraries
@@ -180,12 +222,18 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             .find(|library| library.id == entry.root.library_id)
             .map(|library| library.name.clone())
             .unwrap_or_else(|| "unknown".to_string());
+        let files = counts.get(&entry.root.id).copied().unwrap_or_default();
         roots.push(RootReport {
             library,
             label: entry.root.label.clone(),
             access: entry.access.as_str(),
             explanation_code: entry.access.explanation_code(),
             checked: entry.checked_at.is_some(),
+            files,
+            holds: match files {
+                0 => what_the_folder_holds(&entry.root.path),
+                _ => Vec::new(),
+            },
         });
     }
 
@@ -621,15 +669,29 @@ pub fn render_text(report: &Diagnostics) -> String {
     }
     for root in &report.roots {
         line!(
-            match root.access {
-                "read_write" | "read_only" => "+",
+            match (root.access, root.files) {
+                // A disk that is there and gave up nothing is not a disk that
+                // is working, whatever its permissions say.
+                ("read_write" | "read_only", 1..) => "+",
+                ("read_write" | "read_only", _) => "!",
                 _ => "x",
             },
             format!(
-                "{:<12} {:<12} {}",
-                root.library, root.label, root.explanation_code
+                "{:<12} {:<16} {:<20} {} files",
+                root.library, root.label, root.explanation_code, root.files
             ),
         );
+        // A root that gave up nothing is the one case where the line above
+        // says nothing useful, so this one says what is actually there.
+        if root.files == 0 {
+            line!(
+                " ",
+                match root.holds.is_empty() {
+                    true => "    this folder is empty".to_string(),
+                    false => format!("    it holds: {}", root.holds.join(", ")),
+                },
+            );
+        }
     }
 
     out
@@ -861,6 +923,76 @@ mod tests {
             !text.contains("Anciens"),
             "the name of the file, and never the folders leading to it: {text}"
         );
+    }
+
+    #[tokio::test]
+    async fn a_root_that_gave_up_nothing_says_so_and_says_what_is_there() {
+        // A disk that is plugged in, readable, and holds no film the server
+        // recognised used to look exactly like a disk that worked. The numbers
+        // simply did not move, and nothing anywhere said why.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(media.join("Films")).expect("media folder");
+        std::fs::write(media.join("readme.txt"), b"x").expect("file written");
+        let state = state_with_root(directory.path(), media).await;
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(text.contains("0 files"), "{text}");
+        assert!(text.contains("it holds: Films/, readme.txt"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn a_root_whose_folder_is_empty_says_that_plainly() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(text.contains("this folder is empty"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn a_root_holding_films_is_not_asked_what_is_in_it() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .pop()
+            .expect("one library");
+        let work = state
+            .database()
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        state
+            .database()
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Quiet Harbour 1080p.mkv"),
+                1_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(text.contains("1 files"), "{text}");
+        assert!(!text.contains("it holds:"), "{text}");
+        assert!(!text.contains("this folder is empty"), "{text}");
     }
 
     #[tokio::test]
