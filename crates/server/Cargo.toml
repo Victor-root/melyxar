@@ -13,11 +13,13 @@ melyxar-jobs = { workspace = true }
 melyxar-config = { workspace = true }
 melyxar-app = { workspace = true }
 axum = { workspace = true }
+tower = { workspace = true }
 tower-http = { workspace = true }
 rust-embed = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
+time = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]

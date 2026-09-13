@@ -47,6 +47,7 @@ uuid = { version = "1", features = ["v7", "serde"] }
 time = { version = "0.3", features = ["formatting", "parsing", "serde", "macros"] }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "uuid", "time"] }
 axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "compression-gzip"] }
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"

@@ -15,9 +15,16 @@ use melyxar_core::media::Track;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::{state_for_position, PlaybackState, DEFAULT_WATCHED_THRESHOLD};
 use melyxar_playback::decision::{decide, PlaybackDecision, PlaybackRequest};
-use melyxar_playback::profile::ClientProfile;
 
 use crate::{AppError, AppState, Result};
+
+/// What a client says it can open, and the shape of the answer.
+///
+/// Re-exported here so the layer above talks to one crate: the decision lives
+/// where it can be tested without a database, and nothing outside has to know
+/// that it does.
+pub use melyxar_playback::decision::{PlaybackMethod, Reason, StreamAction, SubtitleDelivery};
+pub use melyxar_playback::profile::ClientProfile;
 
 /// What a viewer asked to play, in the words of a client.
 #[derive(Debug, Clone, PartialEq)]
