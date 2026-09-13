@@ -45,6 +45,12 @@ pub struct Diagnostics {
     /// grouping leaves behind. Reading the names side by side is what settles
     /// which of the two it is.
     pub copies: Vec<CopiesReport>,
+    /// Files nothing has managed to describe, by name.
+    ///
+    /// Such a file is in the library, has a card, and fails the moment
+    /// somebody presses play. It was only ever visible to whoever happened to
+    /// be watching a scan in a terminal.
+    pub undescribed: Vec<String>,
     /// The last pieces of work and what became of them.
     ///
     /// In the report rather than only in a log, because a run that failed says
@@ -316,6 +322,9 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                     .filter(|name| name_says_more_than(name, &nameless.work.title)),
             })
             .collect(),
+        undescribed: database
+            .files_nothing_could_describe(UNDESCRIBED_SHOWN)
+            .await?,
         copies: database
             .works_held_in_several_copies()
             .await?
@@ -365,6 +374,10 @@ const NAMELESS_SHOWN: i64 = 25;
 /// How many films held in several copies the report names before saying how
 /// many more. The list behind it is not cut.
 const COPIES_SHOWN: usize = 15;
+
+/// How many undescribed files the report names. A collection where this runs
+/// long has something wrong with it that naming more would not explain.
+const UNDESCRIBED_SHOWN: i64 = 15;
 
 /// How many incomplete films the report names before saying how many more.
 ///
@@ -616,6 +629,18 @@ pub fn render_text(report: &Diagnostics) -> String {
                 format!("  and {} more", report.copies.len() - COPIES_SHOWN),
             );
         }
+        out.push('\n');
+    }
+
+    if !report.undescribed.is_empty() {
+        line!("#", "Files nothing could describe");
+        for name in &report.undescribed {
+            line!("!", name.clone());
+        }
+        line!(
+            " ",
+            "    these are in the library and fail the moment somebody presses play",
+        );
         out.push('\n');
     }
 
@@ -919,6 +944,55 @@ mod tests {
             text.contains("read from xyQuiet Harbour BD Rip.avi"),
             "the name behind the title is the one thing that explains it: {text}"
         );
+        assert!(
+            !text.contains("Anciens"),
+            "the name of the file, and never the folders leading to it: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_nothing_could_describe_is_named_rather_than_counted() {
+        // Such a file sits in the library with a card, and fails the moment
+        // somebody presses play. It was only ever visible to whoever happened
+        // to be watching a scan go by in a terminal.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .pop()
+            .expect("one library");
+        let work = state
+            .database()
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        state
+            .database()
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Anciens/Quiet Harbour 1080p.mkv"),
+                1_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+
+        let text = render_text(&collect(&state).await.expect("report collected"));
+        assert!(text.contains("Files nothing could describe"), "{text}");
+        assert!(text.contains("Quiet Harbour 1080p.mkv"), "{text}");
         assert!(
             !text.contains("Anciens"),
             "the name of the file, and never the folders leading to it: {text}"
