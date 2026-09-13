@@ -118,10 +118,18 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
         });
     }
 
+    // Every folder the server writes to, not only the three it is configured
+    // with: a folder created once by another account is readable, looks fine
+    // from above, and refuses every write made inside it. A picture that never
+    // arrives is then a warning in a log nobody reads.
     let directories = vec![
         directory_report("data", &config.directories.data),
         directory_report("cache", &config.directories.cache),
         directory_report("transcodes", &config.directories.transcodes),
+        directory_report("images", &config.directories.images()),
+        directory_report("subtitles", &config.directories.subtitles()),
+        directory_report("uploads", &config.directories.uploads()),
+        directory_report("backups", &config.directories.backups()),
     ];
 
     let capabilities = state.capabilities();
@@ -457,8 +465,15 @@ mod tests {
         assert_eq!(report.roots.len(), 1);
         assert_eq!(report.roots[0].library, "Films");
         assert!(report.roots[0].checked);
-        assert_eq!(report.directories.len(), 3);
+        assert_eq!(report.directories.len(), 7);
         assert!(report.directories.iter().all(|entry| entry.exists));
+        assert!(
+            report
+                .directories
+                .iter()
+                .any(|entry| entry.purpose == "images"),
+            "the folder the pictures are written in is one a person has to be told about"
+        );
     }
 
     #[tokio::test]
