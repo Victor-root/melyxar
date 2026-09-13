@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import type { Jobs, Library } from "../api";
 import { JobLine } from "../components/job";
+import { CopyReport } from "../components/report";
 import { useSettings } from "../settings";
 
 /** How often a page showing running work asks again. */
@@ -49,6 +50,10 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
     <main className="page">
       <div className="section-head">
         <h1>{t("jobs.title")}</h1>
+        {/* Next to the work it describes: this is the page somebody lands on
+            when something did not happen, and one button beats knowing which
+            question to ask. */}
+        <CopyReport />
       </div>
 
       <div className="controls">
@@ -85,7 +90,17 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
 
       {jobs && jobs.recent.length > 0 && (
         <section className="section">
-          <h2>{t("jobs.recent")}</h2>
+          <div className="section-head">
+            <h2>{t("jobs.recent")}</h2>
+            {/* Kept next to the list it empties, and only shown when there is
+                something to empty. */}
+            <button
+              className="button button-small"
+              onClick={() => api.forgetFinishedJobs().then(() => load())}
+            >
+              {t("jobs.forget")}
+            </button>
+          </div>
           {jobs.recent.map((job) => (
             <JobLine key={job.id} job={job} />
           ))}

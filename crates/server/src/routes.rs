@@ -24,6 +24,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/system/info", get(system_info))
         .route("/api/v1/system/health", get(health))
         .route("/api/v1/system/diagnostics", get(diagnostics))
+        .route("/api/v1/system/diagnostics/text", get(diagnostics_text))
         .route("/api/v1/public/branding", get(public_branding))
         .merge(crate::catalogue::router())
         .merge(crate::images::router())
@@ -99,6 +100,20 @@ async fn diagnostics(
     State(state): State<AppState>,
 ) -> Result<Json<melyxar_app::diagnostics::Diagnostics>> {
     Ok(Json(melyxar_app::diagnostics::collect(&state).await?))
+}
+
+/// The same report as plain text, exactly as the command line prints it.
+///
+/// So that somebody who cannot read a log copies one block from a screen and
+/// it holds everything worth asking about. Rendered by the same code as the
+/// command line, because two renderings of one report drift apart and the
+/// second one is always the one nobody checked.
+async fn diagnostics_text(State(state): State<AppState>) -> Result<([(&'static str, &'static str); 1], String)> {
+    let report = melyxar_app::diagnostics::collect(&state).await?;
+    Ok((
+        [("content-type", "text/plain; charset=utf-8")],
+        melyxar_app::diagnostics::render_text(&report),
+    ))
 }
 
 /// The visual identity, before anyone has signed in.
