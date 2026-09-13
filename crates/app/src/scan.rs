@@ -902,6 +902,30 @@ async fn analyse_one(database: &Database, analyser: &Path, file: &PendingFile) -
         }
     };
 
+    // Said out loud for every file that has anything to say, because nothing
+    // else ever will: the container declares where each stream starts and how
+    // long it runs, and until now nobody read either. The complaint that
+    // follows is always about one film in particular, so the name travels with
+    // it, censored like every other name in a log.
+    let lining_up = melyxar_media_probe::HowTheStreamsLineUp::of(&report);
+    if lining_up.is_worth_saying() {
+        tracing::info!(
+            file = %MediaName::new(
+                file.relative_path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default()
+            ),
+            video_starts_at_ms = lining_up.video_starts_at,
+            audio_starts_at_ms = lining_up.audio_starts_at,
+            sound_after_picture_ms = lining_up.offset(),
+            video_runs_for_ms = lining_up.video_runs_for,
+            audio_runs_for_ms = lining_up.audio_runs_for,
+            sound_longer_by_ms = lining_up.drift(),
+            "the picture and the sound of this file do not line up"
+        );
+    }
+
     let analysed = melyxar_media_probe::AnalysedFile::from_report(&report, file.source_id);
     database
         .store_analysis(
@@ -1495,6 +1519,52 @@ mod tests {
         let second = scan(&state, &library).await;
         assert_eq!(second.missing, 0);
         assert_eq!(second.unchanged, 1);
+    }
+
+    #[tokio::test]
+    async fn a_file_can_be_asked_for_again_without_being_touched() {
+        // What the analyser is asked to read grows, and a collection analysed
+        // by an older build keeps the gaps that build left. Nothing would ever
+        // look at those files again, since an analysis is kept once it is done.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        std::fs::create_dir_all(&media).expect("folder created");
+        if !write_real_video(&media.join("Quiet.Harbour.2019.MULTi.1080p.mkv")) {
+            eprintln!("no media tool here, reading a real file again was not exercised");
+            return;
+        }
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        assert_eq!(scan(&state, &library).await.analysed, 1);
+        assert_eq!(scan(&state, &library).await.analysed, 0, "kept once done");
+
+        let forgotten = state
+            .database()
+            .forget_analysis(library.id)
+            .await
+            .expect("the analysis is forgotten");
+        assert_eq!(forgotten, 1);
+
+        let again = scan(&state, &library).await;
+        assert_eq!(again.analysed, 1, "and read again when asked");
+        assert_eq!(again.added, 0, "the file itself was never touched");
+
+        let source = state
+            .database()
+            .sources_of_root(library.roots[0].id)
+            .await
+            .expect("read")[0]
+            .clone();
+        assert_eq!(
+            state
+                .database()
+                .tracks_of_source(source.id)
+                .await
+                .expect("read")
+                .len(),
+            2,
+            "reading a file again replaces what it said, and never doubles it"
+        );
     }
 
     #[tokio::test]

@@ -20,6 +20,70 @@ use melyxar_core::media::{
 use melyxar_core::time::Millis;
 use melyxar_ffmpeg::probe::{parse_rational, ProbeChapter, ProbeReport, ProbeStream};
 
+/// How the picture and the sound of one file line up against each other.
+///
+/// The sound running ahead of the picture takes two shapes, and neither is
+/// visible anywhere but here. A constant offset, which the container declares
+/// and which nothing was reading. And a drift, where the two streams are
+/// simply not the same length, so they part company as the film goes on.
+///
+/// Everything is in milliseconds, counted from the picture: a positive offset
+/// means the sound starts after the picture.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct HowTheStreamsLineUp {
+    pub video_starts_at: Option<i64>,
+    pub audio_starts_at: Option<i64>,
+    pub video_runs_for: Option<i64>,
+    pub audio_runs_for: Option<i64>,
+}
+
+impl HowTheStreamsLineUp {
+    /// Reads it off a report, from the first stream of each kind.
+    ///
+    /// The first of each kind rather than the chosen ones: this is about the
+    /// file, and it is read once when the file is analysed, long before
+    /// anybody picks a soundtrack.
+    pub fn of(report: &ProbeReport) -> Self {
+        let video = report.streams.iter().find(|stream| stream.is_video());
+        let audio = report.streams.iter().find(|stream| stream.is_audio());
+        Self {
+            video_starts_at: video.and_then(ProbeStream::starts_at_ms),
+            audio_starts_at: audio.and_then(ProbeStream::starts_at_ms),
+            video_runs_for: video.and_then(ProbeStream::runs_for_ms),
+            audio_runs_for: audio.and_then(ProbeStream::runs_for_ms),
+        }
+    }
+
+    /// How far the sound starts after the picture, when both say.
+    pub fn offset(&self) -> Option<i64> {
+        Some(self.audio_starts_at? - self.video_starts_at?)
+    }
+
+    /// How much longer the sound runs than the picture, when both say.
+    ///
+    /// Two streams of different lengths were recorded at rates that do not
+    /// quite agree, and they part company steadily rather than all at once.
+    pub fn drift(&self) -> Option<i64> {
+        Some(self.audio_runs_for? - self.video_runs_for?)
+    }
+
+    /// Whether either of them is worth reading.
+    ///
+    /// A file whose streams start together and run the same length has
+    /// nothing to say, and saying it for every film would bury the ones that
+    /// do.
+    pub fn is_worth_saying(&self) -> bool {
+        let past = |value: Option<i64>| value.is_some_and(|value| value.abs() >= NOTICEABLE_MS);
+        past(self.offset()) || past(self.drift())
+    }
+}
+
+/// How far apart two streams have to be before it is worth a word.
+///
+/// A frame at twenty five pictures a second is forty milliseconds, and a
+/// difference smaller than that cannot be seen or heard by anyone.
+const NOTICEABLE_MS: i64 = 40;
+
 /// What a file turned out to be.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalysedFile {
@@ -267,6 +331,93 @@ mod tests {
     fn analyse(json: &str) -> AnalysedFile {
         let report = parse_report(json).expect("the report parses");
         AnalysedFile::from_report(&report, MediaSourceId::new())
+    }
+
+    fn lining_up(json: &str) -> HowTheStreamsLineUp {
+        HowTheStreamsLineUp::of(&parse_report(json).expect("the report parses"))
+    }
+
+    #[test]
+    fn a_sound_that_starts_after_the_picture_is_measured() {
+        let found = lining_up(
+            r#"{"streams":[
+                {"index":0,"codec_type":"video","codec_name":"h264",
+                 "start_time":"0.000000","duration":"7200.000000"},
+                {"index":1,"codec_type":"audio","codec_name":"eac3",
+                 "start_time":"0.320000","duration":"7200.000000"}]}"#,
+        );
+        assert_eq!(found.offset(), Some(320));
+        assert_eq!(found.drift(), Some(0));
+        assert!(
+            found.is_worth_saying(),
+            "a third of a second is eight frames and plainly visible"
+        );
+    }
+
+    #[test]
+    fn a_sound_that_starts_before_the_picture_is_measured_the_other_way() {
+        let found = lining_up(
+            r#"{"streams":[
+                {"index":0,"codec_type":"video","codec_name":"h264","start_time":"0.500000"},
+                {"index":1,"codec_type":"audio","codec_name":"aac","start_time":"0.000000"}]}"#,
+        );
+        assert_eq!(found.offset(), Some(-500));
+    }
+
+    #[test]
+    fn two_streams_of_different_lengths_part_company_as_the_film_goes_on() {
+        let found = lining_up(
+            r#"{"streams":[
+                {"index":0,"codec_type":"video","codec_name":"h264",
+                 "start_time":"0.000000","duration":"7200.000000"},
+                {"index":1,"codec_type":"audio","codec_name":"aac",
+                 "start_time":"0.000000","duration":"7205.300000"}]}"#,
+        );
+        assert_eq!(found.offset(), Some(0));
+        assert_eq!(found.drift(), Some(5300));
+        assert!(found.is_worth_saying());
+    }
+
+    #[test]
+    fn a_file_whose_streams_agree_has_nothing_to_say() {
+        // Said for every film, it would bury the ones that do.
+        let found = lining_up(
+            r#"{"streams":[
+                {"index":0,"codec_type":"video","codec_name":"h264",
+                 "start_time":"0.000000","duration":"7200.000000"},
+                {"index":1,"codec_type":"audio","codec_name":"aac",
+                 "start_time":"0.010000","duration":"7200.000000"}]}"#,
+        );
+        assert_eq!(found.offset(), Some(10));
+        assert!(
+            !found.is_worth_saying(),
+            "ten milliseconds is a quarter of a frame and nobody can see it"
+        );
+    }
+
+    #[test]
+    fn a_file_that_says_nothing_about_its_timing_is_not_made_to() {
+        // "N/A" and a missing field are both absences, and neither is zero.
+        let found = lining_up(
+            r#"{"streams":[
+                {"index":0,"codec_type":"video","codec_name":"h264","start_time":"N/A"},
+                {"index":1,"codec_type":"audio","codec_name":"aac"}]}"#,
+        );
+        assert_eq!(found.video_starts_at, None);
+        assert_eq!(found.audio_starts_at, None);
+        assert_eq!(found.offset(), None);
+        assert!(!found.is_worth_saying());
+    }
+
+    #[test]
+    fn a_file_with_no_sound_at_all_has_nothing_to_line_up() {
+        let found = lining_up(
+            r#"{"streams":[{"index":0,"codec_type":"video","codec_name":"h264",
+                "start_time":"0.000000"}]}"#,
+        );
+        assert_eq!(found.video_starts_at, Some(0));
+        assert_eq!(found.audio_starts_at, None);
+        assert_eq!(found.offset(), None);
     }
 
     #[test]

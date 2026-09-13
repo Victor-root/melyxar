@@ -52,6 +52,13 @@ enum Command {
         /// Stop after the scan, without looking anything up.
         #[arg(long)]
         without_identification: bool,
+        /// Read every file again, even the ones already analysed.
+        ///
+        /// What the analyser is asked to read grows, and a collection
+        /// analysed by an older build keeps the gaps that build left. This
+        /// costs one full scan and touches no file on disk.
+        #[arg(long)]
+        analyse_again: bool,
     },
     /// Look up the works that are still waiting to be identified.
     ///
@@ -89,7 +96,8 @@ async fn main() -> anyhow::Result<()> {
         Command::Scan {
             library,
             without_identification,
-        } => scan(config, library, !without_identification).await,
+            analyse_again,
+        } => scan(config, library, !without_identification, analyse_again).await,
         Command::Identify { library } => identify(config, library).await,
         Command::PrintDefaultConfig => unreachable!("handled above"),
     }
@@ -201,7 +209,12 @@ async fn chosen_libraries(
     Ok(chosen)
 }
 
-async fn scan(config: Config, only: Option<String>, then_identify: bool) -> anyhow::Result<()> {
+async fn scan(
+    config: Config,
+    only: Option<String>,
+    then_identify: bool,
+    analyse_again: bool,
+) -> anyhow::Result<()> {
     let state = melyxar_app::startup::bring_up(config)
         .await
         .context("bringing the server up for the scan")?;
@@ -209,6 +222,14 @@ async fn scan(config: Config, only: Option<String>, then_identify: bool) -> anyh
 
     for library in chosen {
         let name = library.name.clone();
+        if analyse_again {
+            let forgotten = state
+                .database()
+                .forget_analysis(library.id)
+                .await
+                .with_context(|| format!("forgetting the analysis of {name}"))?;
+            println!("{name}: {forgotten} files will be read again");
+        }
         let job = melyxar_app::scan::start_scan(&state, library)
             .await
             .with_context(|| format!("starting the scan of {name}"))?;
