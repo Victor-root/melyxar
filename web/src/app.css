@@ -889,6 +889,16 @@
   color: var(--text-faint);
 }
 
+/* Only ever on a film held in several copies, and quiet: it is a correction,
+   not something anybody came here to do. */
+.version-detach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+  align-items: center;
+  margin: 0 0 var(--gap);
+}
+
 /* Where the file is and what it weighs, before anything about its insides:
    that is the order somebody reads in when something is wrong with it. */
 .media-facts {

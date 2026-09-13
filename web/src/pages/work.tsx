@@ -318,10 +318,52 @@ export function WorkPage() {
               ))}
             </div>
           )}
-          {version && <VersionDetails version={version} />}
+          {version && (
+            <VersionDetails
+              version={version}
+              /* A film held once has nothing to take this copy away from. */
+              separable={work.versions.length > 1}
+              onDetached={() => setAgain((count) => count + 1)}
+            />
+          )}
         </section>
       )}
     </main>
+  );
+}
+
+/**
+ * Saying that a copy is not the same film as the one it sits on.
+ *
+ * Copies are put together without anybody asking, by the rules that read names
+ * and by what the provider answers, and both can be wrong about one file.
+ * Whoever is looking at the page can see it at a glance, so the way to say so
+ * belongs on that page.
+ */
+function DetachCopy({ copy, onDetached }: { copy: string; onDetached: () => void }) {
+  const { t } = useSettings();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const detach = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await api.detachCopy(copy);
+      onDetached();
+    } catch {
+      setFailed(true);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <p className="version-detach">
+      <button className="button button-small" onClick={detach} disabled={busy}>
+        {busy ? t("detach.busy") : t("detach.open")}
+      </button>
+      {failed && <span className="notice">{t("detach.failed")}</span>}
+    </p>
   );
 }
 
@@ -395,7 +437,15 @@ function Synopsis({ text }: { text: string | null }) {
   );
 }
 
-function VersionDetails({ version }: { version: Version }) {
+function VersionDetails({
+  version,
+  separable,
+  onDetached,
+}: {
+  version: Version;
+  separable: boolean;
+  onDetached: () => void;
+}) {
   const { t, language } = useSettings();
 
   /* Everything about one file, laid out the way somebody reads it when
@@ -414,6 +464,8 @@ function VersionDetails({ version }: { version: Version }) {
         {version.missing && <span className="fact fact-warning">{t("work.missing")}</span>}
         {!version.analysed && <span className="fact">{t("work.not_analysed")}</span>}
       </p>
+
+      {separable && <DetachCopy copy={version.id} onDetached={onDetached} />}
 
       <dl className="media-facts">
         <Fact label={t("media.path")} value={version.path} wide />

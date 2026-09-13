@@ -432,6 +432,51 @@ pub(crate) async fn join_work_into(state: &AppState, from: WorkId, into: WorkId)
     Ok(())
 }
 
+/// Takes one copy away from the film it sits on, as a film of its own.
+///
+/// Copies are put together on their own, by the rules that read names and by
+/// what the provider answers, and both can be wrong about a file. Whoever is
+/// looking at the page can see that two copies are not the same film at all,
+/// and this is how they say so: the copy leaves, named after its own file, and
+/// waits to be looked up like any film a scan has just found.
+///
+/// Answers nothing when the film holds this one copy and no other, which is a
+/// film to identify again rather than one to take apart.
+pub async fn detach_copy(state: &AppState, source_id: MediaSourceId) -> Result<Option<WorkId>> {
+    let database = state.database();
+    let Some((relative_path, library_id)) = database.where_a_source_lives(source_id).await? else {
+        return Ok(None);
+    };
+    let library = database
+        .list_libraries()
+        .await?
+        .into_iter()
+        .find(|library| library.id == library_id)
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("library")))?;
+
+    let signs = signs_of(state, &library).await?;
+    let file_name = relative_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let parsed = naming::parse_signed(file_name, melyxar_core::time::current_year(), &signs);
+
+    let detached = database
+        .detach_source(
+            source_id,
+            work_kind_for(library.kind),
+            &parsed.title,
+            &naming::sort_title(&parsed.title),
+            parsed.year,
+        )
+        .await?;
+
+    if detached.is_some() {
+        database.bump_library_version(library.id).await?;
+    }
+    Ok(detached.map(|work| work.id))
+}
+
 /// What reading the file names again changed.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Reread {
@@ -1172,6 +1217,58 @@ mod tests {
         let settled = scan(&state, &library).await;
         assert_eq!(settled.merged, 0, "there is nothing left to merge");
         assert_eq!(settled.renamed, 0);
+    }
+
+    #[tokio::test]
+    async fn a_copy_taken_away_becomes_a_film_named_after_its_own_file() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet Harbour (2019) 1080p.mkv", b"x");
+        write(&media, "Amber Field (2020) 1080p.mkv", b"xx");
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+
+        // The state a grouping that got it wrong leaves behind: two files that
+        // are not the same film at all, on one film.
+        let works = state
+            .database()
+            .recent_works(library.id, 10)
+            .await
+            .expect("read");
+        let (kept, wrong) = (works[0].id, works[1].id);
+        let leaving = state.database().sources_of_work(wrong).await.expect("read")[0].id;
+        state
+            .database()
+            .merge_work_into(wrong, kept)
+            .await
+            .expect("put together, wrongly");
+
+        let detached = detach_copy(&state, leaving)
+            .await
+            .expect("the copy leaves")
+            .expect("a film held twice can give one of them up");
+
+        let film = state
+            .database()
+            .work(detached)
+            .await
+            .expect("read")
+            .expect("present");
+        assert!(
+            film.title == "Quiet Harbour" || film.title == "Amber Field",
+            "named after its own file and nothing else: {}",
+            film.title
+        );
+        assert_eq!(
+            state
+                .database()
+                .count_works(library.id)
+                .await
+                .expect("read"),
+            2,
+            "two films again"
+        );
     }
 
     #[tokio::test]

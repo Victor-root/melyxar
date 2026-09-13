@@ -186,6 +186,11 @@ const en: Dictionary = {
   "byhand.look": "Search",
   "byhand.nothing": "Nothing came back under that name. Try another spelling, or the title it was shot under.",
 
+  "detach.open": "This copy is another film",
+  "detach.busy": "Separating...",
+  "detach.done": "Separated. It is waiting to be identified.",
+  "detach.failed": "This copy could not be separated.",
+
   "credit.actor": "Actor",
   "credit.director": "Director",
   "credit.writer": "Writer",
@@ -435,6 +440,11 @@ const fr: Dictionary = {
   "byhand.field": "Titre à chercher",
   "byhand.look": "Chercher",
   "byhand.nothing": "Rien ne revient sous ce nom. Essayez une autre orthographe, ou le titre original.",
+
+  "detach.open": "Cette copie est un autre film",
+  "detach.busy": "Séparation...",
+  "detach.done": "Séparée. Elle attend d'être identifiée.",
+  "detach.failed": "Cette copie n'a pas pu être séparée.",
 
   "credit.actor": "Acteur",
   "credit.director": "Réalisation",

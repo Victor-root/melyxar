@@ -32,6 +32,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::get(candidates),
         )
         .route("/api/v1/works/{id}/identify", axum::routing::post(choose))
+        .route(
+            "/api/v1/copies/{id}/detach",
+            axum::routing::post(detach_copy),
+        )
 }
 
 #[derive(Debug, Serialize)]
@@ -240,6 +244,35 @@ async fn choose(
 #[derive(Debug, Serialize)]
 struct ChosenView {
     identified: bool,
+}
+
+/// Takes one copy away from the film it sits on, as a film of its own.
+///
+/// Copies are put together without anybody asking, so somebody has to be able
+/// to say it was wrong from the page that shows it.
+async fn detach_copy(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<DetachedView>> {
+    let source_id = id
+        .parse()
+        .map_err(|_| ServerError::invalid_input("the copy identifier is malformed"))?;
+
+    let detached = melyxar_app::scan::detach_copy(&state, source_id)
+        .await?
+        .ok_or_else(|| {
+            ServerError::invalid_input("this film holds one copy, so there is nothing to take away")
+        })?;
+
+    Ok(Json(DetachedView {
+        work_id: detached.to_string(),
+    }))
+}
+
+#[derive(Debug, Serialize)]
+struct DetachedView {
+    /// Where the copy went, so a page can go and look at it.
+    work_id: String,
 }
 
 fn parse_work(id: &str) -> Result<melyxar_core::id::WorkId> {
