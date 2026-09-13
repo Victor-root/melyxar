@@ -35,6 +35,13 @@ import {
 import type { Appearance } from "./appearance";
 import { languageName } from "./languages";
 import { clientProfile } from "./profile";
+import {
+  QUALITIES,
+  qualityCalled,
+  qualityName,
+  rememberQuality,
+  storedQuality,
+} from "./quality";
 
 /** The speeds offered. Whole steps: nobody asks for 1.17 times. */
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -171,6 +178,10 @@ export function Player({
   const [audioId, setAudioId] = useState<string | null>(null);
   const [subtitleId, setSubtitleId] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
+  /* What the viewer asked the picture to be held to. Kept across films rather
+     than per film: somebody watching on a thin connection is on a thin
+     connection for the next one too. */
+  const [quality, setQualityState] = useState(storedQuality);
   const [appearance, setAppearanceState] = useState<Appearance>(storedAppearance);
   /* Which picture the browser has actually opened. Null until it has: the
      words are hung on the picture, and only once it is there. */
@@ -209,7 +220,7 @@ export function Player({
       .plan(
         sourceId,
         {
-          profile: clientProfile(),
+          profile: clientProfile(quality),
           audio_track_id: audioId,
           subtitle_track_id: subtitleId,
         },
@@ -229,7 +240,7 @@ export function Player({
         }
       });
     return () => controller.abort();
-  }, [sourceId, audioId, subtitleId, fromTheStart]);
+  }, [sourceId, audioId, subtitleId, fromTheStart, quality]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
   /* What the server would actually be asked to produce. A subtitle handed
@@ -237,7 +248,7 @@ export function Player({
      must not throw away a conversion already under way and make the viewer
      wait through it again. One that can only be drawn into the picture does
      change it, and says so by changing the method. */
-  const beingProduced = rebuilt ? `${plan.method}:${audioId ?? ""}` : null;
+  const beingProduced = rebuilt ? `${plan.method}:${audioId ?? ""}:${quality.key}` : null;
   /* Which picture is on screen: the file itself, or one session of segments.
      A change here means a fresh element rather than a new address on the old
      one, because the two are fed in ways that cannot be swapped. */
@@ -269,7 +280,7 @@ export function Player({
         {
           // No subtitle is named: a session produces the picture and the
           // sound, and the words travel on their own beside them.
-          profile: clientProfile(),
+          profile: clientProfile(quality),
           audio_track_id: audioId,
         },
         controller.signal,
@@ -296,7 +307,7 @@ export function Player({
         session.current = null;
       }
     };
-  }, [beingProduced, sourceId, audioId]);
+  }, [beingProduced, sourceId, audioId, quality]);
 
   /* Asked for while the picture is not there yet, and not a moment longer:
      once the film is playing this would be a request a second for something
@@ -493,6 +504,15 @@ export function Player({
       ? plan?.subtitles.find((track) => track.id === plan.chosen_subtitle_id && track.url)
       : undefined;
 
+  /* Remembered as it is chosen, not on the way in: what a player opens with
+     is what the viewer left it on, and writing that back would be a decision
+     nobody made. */
+  const setQuality = (key: string) => {
+    const chosen = qualityCalled(key);
+    setQualityState(chosen);
+    rememberQuality(chosen);
+  };
+
   const setAppearance = (change: Partial<Appearance>) => {
     const next = { ...appearance, ...change };
     setAppearanceState(next);
@@ -671,6 +691,21 @@ export function Player({
             </label>
           )}
 
+          {/* Offered on every film, not only on one being rebuilt: asking for
+              a lighter stream is exactly what turns a film that was handed
+              over whole into one that is rebuilt, so hiding the picker until
+              then would hide the way in. */}
+          <label className="choice">
+            <span className="choice-label">{t("player.quality")}</span>
+            <select value={quality.key} onChange={(event) => setQuality(event.target.value)}>
+              {QUALITIES.map((one) => (
+                <option key={one.key} value={one.key}>
+                  {qualityName(one, t("player.quality.as_it_is"))}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="choice">
             <span className="choice-label">{t("player.speed")}</span>
             <select
@@ -761,6 +796,18 @@ export function Player({
           {plan.reasons.length > 0 && (
             <span className="player-reasons">
               {plan.reasons.map((reason) => t(`reason.${reason.code}`)).join(" · ")}
+            </span>
+          )}
+          {/* Who is rebuilding the picture, and into what. This is the only
+              question anybody asks about a film that stutters, and the answer
+              used to be somewhere between a process listing and a guess. */}
+          {plan.rebuild && (
+            <span className="player-reasons">
+              {t(`player.rebuilt_by.${plan.rebuild.by}`)}
+              {` · ${plan.rebuild.codec.toUpperCase()}`}
+              {plan.rebuild.height !== null && ` · ${plan.rebuild.height}p`}
+              {plan.rebuild.bitrate !== null &&
+                ` · ${Math.round(plan.rebuild.bitrate / 100_000) / 10} Mb/s`}
             </span>
           )}
         </p>
