@@ -423,7 +423,8 @@ mod tests {
             Input::new(&source),
             Output::Segments {
                 pattern: session.join("segment-%05d.m4s"),
-                initialisation: session.join("segments.csv"),
+                initialisation: session.join("init.mp4"),
+                tool_playlist: session.join("tool.m3u8"),
                 duration: Millis::new(2000),
                 start_number: 7,
             },
@@ -447,6 +448,17 @@ mod tests {
         assert!(
             produced[0].contains("00007"),
             "numbering must start where asked, got {produced:?}"
+        );
+        assert!(
+            session.join("init.mp4").exists(),
+            "the header every segment needs is written beside them, or a player \
+             has nothing to put the segments together with"
+        );
+        assert!(
+            std::fs::metadata(session.join("init.mp4"))
+                .expect("the header is there")
+                .len()
+                > 0
         );
     }
 }

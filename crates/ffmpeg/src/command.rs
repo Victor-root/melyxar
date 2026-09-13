@@ -151,16 +151,20 @@ impl AudioEncode {
 pub enum Output {
     /// A plain file.
     File(PathBuf),
-    /// Numbered segments plus the fragment header, for streaming.
+    /// Numbered segments plus the header they share, for streaming.
     ///
-    /// The tool only ever produces segments here. The playlist is written by
-    /// the server, which knows the whole duration from the analysis and can
-    /// therefore hand out any segment on demand.
+    /// The tool only ever produces files here. The playlist a player reads is
+    /// written by the server, which knows the whole duration from the analysis
+    /// and can therefore hand out any segment on demand. The tool writes one
+    /// of its own as a byproduct, which is never served.
     Segments {
         /// Pattern the numbered files follow.
         pattern: PathBuf,
-        /// Shared header written once.
+        /// The header every segment needs, written once beside them.
         initialisation: PathBuf,
+        /// Where the tool writes its own playlist. A byproduct: the server
+        /// writes the one a player reads.
+        tool_playlist: PathBuf,
         /// Nominal length of one segment.
         duration: Millis,
         /// Number the first produced segment carries, so that a jump starts
@@ -404,29 +408,33 @@ impl Command {
             Output::Segments {
                 pattern,
                 initialisation,
+                tool_playlist,
                 duration,
                 start_number,
             } => {
                 push!("-f");
-                push!("segment");
-                push!("-segment_format");
-                push!("mp4");
-                // Fragmented output, which is what a browser can append to a
-                // running stream and what modern codecs require.
-                push!("-segment_format_options");
-                push!("movflags=+frag_keyframe+empty_moov+default_base_moof");
-                push!("-segment_time");
+                push!("hls");
+                push!("-hls_time");
                 push!(&format_seconds(*duration));
-                push!("-segment_start_number");
-                push!(&start_number.to_string());
-                push!("-segment_list_type");
-                push!("csv");
-                push!("-segment_list");
-                args.push(initialisation.clone().into_os_string());
-                push!("-reset_timestamps");
+                // The whole film, start to finish: nothing is dropped from the
+                // list as it goes, which is what a viewer jumping backwards
+                // would otherwise fall off the end of.
+                push!("-hls_playlist_type");
+                push!("vod");
+                push!("-hls_list_size");
                 push!("0");
-                push!("-y");
+                // Fragmented segments, which is what a browser can append to a
+                // running stream and what the modern codecs require.
+                push!("-hls_segment_type");
+                push!("fmp4");
+                push!("-hls_fmp4_init_filename");
+                args.push(file_name_of(initialisation));
+                push!("-hls_segment_filename");
                 args.push(pattern.clone().into_os_string());
+                push!("-start_number");
+                push!(&start_number.to_string());
+                push!("-y");
+                args.push(tool_playlist.clone().into_os_string());
             }
             Output::StillImage(path) => {
                 push!("-frames:v");
@@ -525,6 +533,15 @@ fn downmix_matrix(method: DownmixMethod, channels: Option<i32>) -> Option<String
         }
     };
     Some(format!("pan=stereo|{coefficients}"))
+}
+
+/// The last part of a path, which is what the tool wants for the shared
+/// header: it writes it beside the playlist, and a full path there would be
+/// taken for a name rather than a place.
+fn file_name_of(path: &std::path::Path) -> OsString {
+    path.file_name()
+        .map(std::ffi::OsStr::to_os_string)
+        .unwrap_or_else(|| path.to_path_buf().into_os_string())
 }
 
 /// Renders a position the way the tool expects it, in seconds.
@@ -723,13 +740,14 @@ mod tests {
             Input::new("/media/film.mkv").starting_at(Millis::new(1_248_000)),
             Output::Segments {
                 pattern: PathBuf::from("/tmp/session/segment-%05d.m4s"),
-                initialisation: PathBuf::from("/tmp/session/list.csv"),
+                initialisation: PathBuf::from("/tmp/session/init.mp4"),
+                tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
                 duration: Millis::new(4000),
                 start_number: 312,
             },
         );
         let args = arguments(&command);
-        let index = position(&args, "-segment_start_number").expect("a start number is present");
+        let index = position(&args, "-start_number").expect("a start number is present");
         assert_eq!(args[index + 1], "312");
     }
 
@@ -742,7 +760,8 @@ mod tests {
             Input::new("/media/film.mkv"),
             Output::Segments {
                 pattern: PathBuf::from("/tmp/session/segment-%05d.m4s"),
-                initialisation: PathBuf::from("/tmp/session/list.csv"),
+                initialisation: PathBuf::from("/tmp/session/init.mp4"),
+                tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
                 duration: Millis::new(4000),
                 start_number: 0,
             },
