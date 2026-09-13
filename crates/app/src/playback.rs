@@ -87,6 +87,12 @@ pub struct PictureRebuild {
     pub codec: String,
     /// The card doing the work. Absent means the processor is.
     pub card: Option<melyxar_ffmpeg::Card>,
+    /// Whether that card reads the film for itself as well.
+    ///
+    /// A film in a codec the card was never proved to read is decoded by the
+    /// processor and handed up. That still moves the expensive half of the
+    /// work, and it is what works whatever the film holds.
+    pub reads_the_film: bool,
     /// Height it comes out at. Absent means the size is left alone.
     pub height: Option<i32>,
     /// Rate it is held to, in bits per second.
@@ -245,6 +251,10 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         }),
         rebuilt_on = rebuild.as_ref().and_then(PictureRebuild::card_name),
         rebuilt_into = rebuild.as_ref().map(|rebuild| rebuild.codec.as_str()),
+        read_by = rebuild.as_ref().map(|rebuild| match rebuild.reads_the_film {
+            true => "card",
+            false => "processor",
+        }),
         rebuilt_height = rebuild.as_ref().and_then(|rebuild| rebuild.height),
         rebuilt_bitrate = rebuild.as_ref().and_then(|rebuild| rebuild.bitrate),
         reasons = ?decision.reasons,
@@ -498,6 +508,7 @@ fn how_to_rebuild(
         return Some(PictureRebuild {
             codec: melyxar_playback::profile::ALWAYS_READ.to_string(),
             card: None,
+            reads_the_film: false,
             height: height_to_rebuild_at(source_height, decision.scale_to_height),
             bitrate: decision.bitrate_ceiling,
         });
@@ -512,9 +523,18 @@ fn how_to_rebuild(
                 .bitrate_ceiling
                 .unwrap_or_else(|| rate_for(height.or(source_height), &codec)),
         ),
+        reads_the_film: codec_of(tracks).is_some_and(|codec| card.reads(&codec)),
         codec,
         card: Some(card.clone()),
         height,
+    })
+}
+
+/// What the picture of a film is written in, when it holds one.
+fn codec_of(tracks: &[Track]) -> Option<String> {
+    tracks.iter().find_map(|track| match &track.kind {
+        melyxar_core::media::TrackKind::Video(details) => Some(details.codec.to_lowercase()),
+        _ => None,
     })
 }
 
@@ -524,6 +544,7 @@ fn without_the_card(plan: &PlayPlan) -> PictureRebuild {
     PictureRebuild {
         codec: melyxar_playback::profile::ALWAYS_READ.to_string(),
         card: None,
+        reads_the_film: false,
         height: height_to_rebuild_at(height_of(&plan.tracks), plan.decision.scale_to_height),
         bitrate: plan.decision.bitrate_ceiling,
     }
@@ -560,14 +581,28 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
     // Only when a card is doing the work. A card is proved at start-up on a
     // generated picture, which does not prove every film, and a refusal must
     // not reach a viewer as a black screen.
-    let if_the_card_refuses = match plan.rebuild.as_ref().is_some_and(PictureRebuild::on_a_card) {
-        true => Some(VideoOutput::Encode(encode_for(
+    //
+    // Two rungs where the card was also reading the film, because the rungs
+    // are not equal: a card that will not read one film will still rebuild its
+    // picture perfectly well, and giving up on it entirely at the first
+    // refusal would throw away most of what it was doing.
+    let mut if_the_card_refuses = Vec::new();
+    if let Some(rebuild) = plan.rebuild.as_ref().filter(|rebuild| rebuild.on_a_card()) {
+        if rebuild.reads_the_film {
+            let handed_up = PictureRebuild {
+                reads_the_film: false,
+                ..rebuild.clone()
+            };
+            if_the_card_refuses.push(VideoOutput::Encode(encode_for(
+                &handed_up, plan, painted_on,
+            )?));
+        }
+        if_the_card_refuses.push(VideoOutput::Encode(encode_for(
             &without_the_card(plan),
             plan,
             painted_on,
-        )?)),
-        false => None,
-    };
+        )?));
+    }
 
     let audio = match plan.decision.audio {
         StreamAction::Drop => AudioOutput::None,
@@ -610,12 +645,16 @@ fn encode_for(
     painted_on: Option<i32>,
 ) -> Result<melyxar_ffmpeg::command::VideoEncode> {
     let mut encode = match &rebuild.card {
-        Some(card) => melyxar_ffmpeg::command::VideoEncode::on_a_card(card, &rebuild.codec)
-            .ok_or_else(|| {
-                AppError::Domain(melyxar_core::Error::invalid_input(
-                    "this card was never proved to produce that codec",
-                ))
-            })?,
+        Some(card) => melyxar_ffmpeg::command::VideoEncode::on_a_card(
+            card,
+            &rebuild.codec,
+            rebuild.reads_the_film,
+        )
+        .ok_or_else(|| {
+            AppError::Domain(melyxar_core::Error::invalid_input(
+                "this card was never proved to produce that codec",
+            ))
+        })?,
         None => melyxar_ffmpeg::command::VideoEncode::software_h264(),
     };
     encode.scale_to_height = rebuild.height;
@@ -1595,7 +1634,7 @@ mod tests {
                     streams: melyxar_ffmpeg::command::StreamSelection::default(),
                     video: melyxar_ffmpeg::command::VideoOutput::Copy,
                     audio: melyxar_ffmpeg::command::AudioOutput::Copy,
-                    if_the_card_refuses: None,
+                    if_the_card_refuses: Vec::new(),
                 },
                 false,
             )
@@ -1626,7 +1665,7 @@ mod tests {
                     streams: melyxar_ffmpeg::command::StreamSelection::default(),
                     video: melyxar_ffmpeg::command::VideoOutput::Copy,
                     audio: melyxar_ffmpeg::command::AudioOutput::Copy,
-                    if_the_card_refuses: None,
+                    if_the_card_refuses: Vec::new(),
                 },
                 false,
             )
@@ -1735,7 +1774,8 @@ mod tests {
         }
     }
 
-    /// A card, with a say in what it was proved able to do.
+    /// A card, with a say in what it was proved able to do. It reads every
+    /// codec it writes here; the tests that care say otherwise themselves.
     fn a_card(codecs: &[&str], can_tone_map: bool) -> melyxar_ffmpeg::Card {
         melyxar_ffmpeg::Card {
             way: melyxar_ffmpeg::HardwareAcceleration::Vaapi,
@@ -1744,6 +1784,7 @@ mod tests {
                 .iter()
                 .map(|codec| ((*codec).to_string(), format!("{codec}_vaapi")))
                 .collect(),
+            decoders: codecs.iter().map(|codec| (*codec).to_string()).collect(),
             can_scale: true,
             can_tone_map,
         }
@@ -1901,6 +1942,76 @@ mod tests {
             unasked.bitrate < Some(rate_for(Some(2160), "h264")),
             "needing less is the whole point of the newer codec"
         );
+    }
+
+    #[tokio::test]
+    async fn a_card_reads_the_film_itself_only_in_a_codec_it_was_proved_to_read() {
+        // Reading and writing are separate abilities and separate lists. A
+        // film in a codec the card never proved it reads is decoded by the
+        // processor and handed up, which works whatever the film holds.
+        use melyxar_ffmpeg::command::VideoOutput;
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![video(id, "hevc", 2160), audio(id, "eac3", 6, true)]
+            })
+            .await;
+        let mut plan = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: None,
+            },
+        )
+        .await
+        .expect("a plan");
+
+        let tracks = plan.tracks.clone();
+        let profile = ClientProfile::conservative_browser();
+        let reads_hevc = capabilities_with(Some(a_card(&["h264", "hevc"], true)));
+        let reads_nothing_useful = capabilities_with(Some(melyxar_ffmpeg::Card {
+            decoders: Default::default(),
+            ..a_card(&["h264", "hevc"], true)
+        }));
+
+        let on_the_card =
+            how_to_rebuild(&plan.decision, &tracks, &profile, Some(&reads_hevc), false)
+                .expect("this picture is rebuilt");
+        assert!(on_the_card.reads_the_film, "the card was proved to read it");
+
+        let handed_up = how_to_rebuild(
+            &plan.decision,
+            &tracks,
+            &profile,
+            Some(&reads_nothing_useful),
+            false,
+        )
+        .expect("this picture is rebuilt");
+        assert!(handed_up.on_a_card(), "it still rebuilds the picture");
+        assert!(!handed_up.reads_the_film);
+
+        // A card reading the film has one more way to step down than a card
+        // that is only rebuilding the picture: a card that will not read one
+        // film will still rebuild it, and giving up entirely at the first
+        // refusal would throw away most of what it was doing.
+        plan.rebuild = Some(on_the_card);
+        let reading = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
+        assert_eq!(reading.if_the_card_refuses.len(), 2);
+        assert!(matches!(
+            &reading.if_the_card_refuses[0],
+            VideoOutput::Encode(encode) if encode.card().is_some()
+        ));
+        assert!(matches!(
+            &reading.if_the_card_refuses[1],
+            VideoOutput::Encode(encode) if encode.card().is_none()
+        ));
+
+        plan.rebuild = Some(handed_up);
+        let handed = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
+        assert_eq!(handed.if_the_card_refuses.len(), 1);
     }
 
     #[test]

@@ -178,10 +178,11 @@ Fait :
 - Conversion HDR vers SDR sur la carte (`tonemap_vaapi`), avec repli complet sur le logiciel si la carte ne sait pas la faire : une carte qui ne convertit pas rendrait un film gris, ce qui est pire qu'un film plus petit.
 - Repli automatique sur le processeur quand la carte refuse un film en cours de session, une seule fois, avec la phrase de l'outil au journal.
 - Choix de qualité par le spectateur (taille et débit), qui devient un plafond dans le profil client.
+- Décodage sur la carte dans les codecs qu'elle a prouvé savoir lire, établis un par un, avec repli sur le processeur pour les autres.
+- Un segment rendu dès que l'outil annonce l'avoir dépassé, au lieu d'attendre que le suivant soit produit par-dessus.
 
 Reste à faire :
 
-- **Décodage sur la carte.** Aujourd'hui l'image est décodée par le processeur puis remontée sur la carte, qui filtre et encode. C'est le choix sûr : il marche quel que soit le codec du fichier, et il déplace la moitié chère du travail. Décoder aussi sur la carte dépend du codec de chaque film et demande un essai par codec de décodage.
 - **NVENC pour Nvidia et VAAPI vérifié pour AMD.** Le mainteneur possède les deux. VAAPI couvre déjà AMD sur le papier, et rien ne l'a prouvé sur une vraie carte AMD ; Nvidia demande un chemin distinct. Les deux se branchent au même endroit : `HardwareAcceleration`, le nom de l'encodeur, et les filtres correspondants.
 - **QSV pour Intel.** VAAPI marche sur l'Arc ; QSV est parfois plus rapide sur les cartes Intel récentes. À mesurer avant de l'ajouter, pas à supposer.
 - Vignettes de chapitres et aperçu de la barre de lecture en planches, **toujours converties en SDR quand la source est HDR** pour éviter des images délavées. Intervalle et résolution configurables, génération activable par bibliothèque.

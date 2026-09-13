@@ -171,6 +171,10 @@ pub struct CardReport {
     pub way: &'static str,
     /// The codecs it was proved to produce.
     pub codecs: Vec<String>,
+    /// The codecs it was proved to read for itself. A film in any other codec
+    /// is read by the processor and handed up, which still moves the expensive
+    /// half of the work.
+    pub reads: Vec<String>,
     pub can_scale: bool,
     pub can_tone_map: bool,
 }
@@ -337,6 +341,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                     device: card.device.display().to_string(),
                     way: card.way.as_str(),
                     codecs: card.encoders.keys().cloned().collect(),
+                    reads: card.decoders.iter().cloned().collect(),
                     can_scale: card.can_scale,
                     can_tone_map: card.can_tone_map,
                 }),
@@ -577,11 +582,15 @@ pub fn render_text(report: &Diagnostics) -> String {
             Some(card) => line!(
                 "+",
                 format!(
-                    "a card is rebuilding pictures: {} ({}), codecs {}, can make a picture \
-                     smaller: {}, can convert wide gamut colour: {}",
+                    "a card is rebuilding pictures: {} ({}), writes {}, reads {}, can make a \
+                     picture smaller: {}, can convert wide gamut colour: {}",
                     card.device,
                     card.way,
                     card.codecs.join(", "),
+                    match card.reads.is_empty() {
+                        true => "nothing, so the processor reads every film".to_string(),
+                        false => card.reads.join(", "),
+                    },
                     yes_no(card.can_scale),
                     yes_no(card.can_tone_map)
                 ),
