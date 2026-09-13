@@ -216,6 +216,7 @@ Vérifié sur le serveur en vrai : un film HEVC que le navigateur ne sait pas d�
 
 - Séries : modèle série, saison, épisode, compteurs visibles, navigation dédiée, enchaînement automatique de l'épisode suivant, saut d'intro et de générique (chapitres du fichier, détection par comparaison des empreintes sonores d'une saison, correction manuelle).
 - Animés : fournisseur de métadonnées adapté et numérotation propre au domaine.
+- Plusieurs fournisseurs de métadonnées : un second catalogue interrogé quand le premier ne connaît pas un film, des règles claires pour départager deux réponses, et la provenance restant visible champ par champ. Constaté en conditions réelles : un téléfilm rattaché à une série existe chez le fournisseur actuel du côté des séries et pas du côté des films, donc aucune recherche de film ne le trouvera jamais, alors qu'un catalogue construit sur les données IMDb le classe comme film. Les autres serveurs y arrivent parce qu'ils ont un second catalogue sous la main, pas parce que leur lecture des noms est meilleure.
 - Bibliothèque musicale : modèle artiste, album, morceau, fournisseur MusicBrainz, navigation dédiée, listes de lecture.
 - Normalisation audio : mesure de sonie au scan, application au gain à la lecture, modes morceau et album, compression de plage dynamique pour les films.
 - Plusieurs utilisateurs avec écran de connexion complet et gestion des droits.
