@@ -889,47 +889,101 @@
   color: var(--text-faint);
 }
 
-.tracks {
+/* Where the file is and what it weighs, before anything about its insides:
+   that is the order somebody reads in when something is wrong with it. */
+.media-facts {
+  margin: 0 0 var(--gap-wide);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--gap-wide);
+  gap: 2px var(--gap-wide);
 }
 
-.track-group h3 {
-  margin: 0 0 6px;
+/* One card per track, as many as the file holds. They wrap rather than
+   scroll: reading them side by side is the whole point. */
+.track-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--gap);
+}
+
+.track-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: var(--gap);
+  background: var(--surface-raised);
+}
+
+.track-card h3 {
+  margin: 0 0 8px;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
 }
 
-.track {
-  margin: 0 0 4px;
+.track-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fact-line {
+  display: flex;
+  gap: var(--gap-tight);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.fact-line dt {
+  color: var(--text-faint);
+  flex: none;
+  min-width: 40%;
+}
+
+.fact-line dd {
+  margin: 0;
+  color: var(--text);
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* A path is long and is read whole, so it takes a line of its own. */
+.fact-line-wide {
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 0;
+}
+
+.fact-line-wide dd {
+  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  font-size: 12px;
+}
+
+.work-studios,
+.work-links {
+  margin: var(--gap-tight) 0 0;
   font-size: 14px;
   color: var(--text-soft);
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  gap: var(--gap-tight);
+  align-items: baseline;
 }
 
-.badge {
-  font-size: 11px;
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
+.work-studios-label {
   color: var(--text-faint);
+  font-size: 13px;
 }
 
-.badge-hdr {
-  border-color: var(--accent);
+.work-link {
   color: var(--accent-bright);
 }
 
-.badge-warning {
-  border-color: #d99000;
-  color: #d99000;
+.work-link:hover {
+  text-decoration: underline;
 }
+
 
 /* --------------------------------------------------------------------------
  * Activity

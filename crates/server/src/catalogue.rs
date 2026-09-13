@@ -359,8 +359,17 @@ struct VersionView {
     id: String,
     /// The short line shown above a play button.
     summary: String,
+    /// Where the file is, root included, and the disk it is on. On a page
+    /// about a file, the first thing wanted when something is wrong with it
+    /// is where it is.
+    path: String,
+    root_label: String,
+    /// When a scan first saw it, which is not when the file was made.
+    added_at: String,
     size_bytes: i64,
     duration_minutes: Option<i64>,
+    /// Of the whole file, every track together.
+    overall_bitrate: Option<i64>,
     container: Option<String>,
     /// False while nothing has looked inside the file yet.
     analysed: bool,
@@ -375,27 +384,49 @@ struct VersionView {
 
 #[derive(Debug, Serialize)]
 struct VideoTrackView {
+    /// The title the file itself carries, when it carries one.
+    title: Option<String>,
     codec: String,
+    profile: Option<String>,
+    level: Option<i32>,
     width: i32,
     height: i32,
+    aspect_ratio: Option<String>,
+    is_interlaced: bool,
     /// hdr10, hlg or dolby_vision. Absent for an ordinary picture.
     hdr: Option<&'static str>,
     frame_rate: Option<f64>,
-}
-
-#[derive(Debug, Serialize)]
-struct AudioTrackView {
-    codec: String,
-    language: Option<String>,
-    channels: i32,
-    channel_layout: Option<String>,
+    bitrate: Option<i64>,
+    pixel_format: Option<String>,
+    reference_frames: Option<i32>,
+    color_primaries: Option<String>,
+    color_space: Option<String>,
+    color_transfer: Option<String>,
+    bit_depth: Option<i32>,
     is_default: bool,
 }
 
 #[derive(Debug, Serialize)]
+struct AudioTrackView {
+    title: Option<String>,
+    codec: String,
+    profile: Option<String>,
+    language: Option<String>,
+    channels: i32,
+    channel_layout: Option<String>,
+    sample_rate: Option<i32>,
+    bit_depth: Option<i32>,
+    bitrate: Option<i64>,
+    is_default: bool,
+    is_forced: bool,
+}
+
+#[derive(Debug, Serialize)]
 struct SubtitleTrackView {
+    title: Option<String>,
     codec: String,
     language: Option<String>,
+    is_default: bool,
     is_forced: bool,
     is_hearing_impaired: bool,
     /// True for a file sitting next to the film rather than a stream inside it.
@@ -522,26 +553,47 @@ fn version_view(version: &Version) -> VersionView {
     for track in &version.tracks {
         match &track.kind {
             TrackKind::Video(details) => video.push(VideoTrackView {
+                title: track.title.clone(),
                 codec: details.codec.clone(),
+                profile: details.profile.clone(),
+                level: details.level,
                 width: details.width,
                 height: details.height,
+                aspect_ratio: details.aspect_ratio.clone(),
+                is_interlaced: details.is_interlaced,
                 hdr: details.hdr.map(|hdr| match hdr {
                     melyxar_core::media::HdrFormat::Hdr10 => "hdr10",
                     melyxar_core::media::HdrFormat::Hlg => "hlg",
                     melyxar_core::media::HdrFormat::DolbyVision { .. } => "dolby_vision",
                 }),
                 frame_rate: details.frame_rate,
+                bitrate: details.bitrate,
+                pixel_format: details.pixel_format.clone(),
+                reference_frames: details.reference_frames,
+                color_primaries: details.color.primaries.clone(),
+                color_space: details.color.space.clone(),
+                color_transfer: details.color.transfer.clone(),
+                bit_depth: details.color.bit_depth,
+                is_default: track.is_default,
             }),
             TrackKind::Audio(details) => audio.push(AudioTrackView {
+                title: track.title.clone(),
                 codec: details.codec.clone(),
+                profile: details.profile.clone(),
                 language: track.language.clone(),
                 channels: details.channels,
                 channel_layout: details.channel_layout.clone(),
+                sample_rate: details.sample_rate,
+                bit_depth: details.bit_depth,
+                bitrate: details.bitrate,
                 is_default: track.is_default,
+                is_forced: track.is_forced,
             }),
             TrackKind::Subtitle(details) => subtitles.push(SubtitleTrackView {
+                title: track.title.clone(),
                 codec: details.codec.clone(),
                 language: track.language.clone(),
+                is_default: track.is_default,
                 is_forced: track.is_forced,
                 is_hearing_impaired: details.is_hearing_impaired,
                 is_external: details.is_external,
@@ -553,8 +605,12 @@ fn version_view(version: &Version) -> VersionView {
     VersionView {
         id: version.source_id.to_string(),
         summary: version.summary(),
+        path: version.path.clone(),
+        root_label: version.root_label.clone(),
+        added_at: melyxar_core::time::to_text(version.added_at),
         size_bytes: version.size_bytes,
         duration_minutes: version.duration.map(whole_minutes),
+        overall_bitrate: version.overall_bitrate,
         container: version.container.clone(),
         analysed: version.analysed,
         missing: version.missing_since.is_some(),
@@ -588,6 +644,9 @@ mod tests {
     fn version_with(tracks: Vec<Track>) -> Version {
         Version {
             source_id: MediaSourceId::new(),
+            root_label: "disk-one".to_string(),
+            path: "/mnt/disk-one/films/a.mkv".to_string(),
+            added_at: melyxar_core::time::now(),
             relative_path: "Quiet.Harbour.2019.mkv".to_string(),
             size_bytes: 12_000_000_000,
             missing_since: None,

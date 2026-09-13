@@ -244,6 +244,32 @@ export function WorkPage() {
             </p>
           )}
 
+          {/* What Emby calls "about": the things that belong to the film rather
+              than to the copy of it on disk. */}
+          {work.studios.length > 0 && (
+            <p className="work-studios">
+              <span className="work-studios-label">{t("media.studios")}</span>
+              {work.studios.join(", ")}
+            </p>
+          )}
+
+          {work.external_ids.length > 0 && (
+            <p className="work-links">
+              <span className="work-studios-label">{t("media.links")}</span>
+              {work.external_ids.map((entry) => (
+                <a
+                  key={entry.provider}
+                  className="work-link"
+                  href={elsewhere(entry.provider, entry.id)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {t(`provider.${entry.provider}`)}
+                </a>
+              ))}
+            </p>
+          )}
+
           {work.crew.length > 0 && (
             <dl className="work-crew">
               {groupCrew(work.crew).map(([role, names]) => (
@@ -370,8 +396,12 @@ function Synopsis({ text }: { text: string | null }) {
 }
 
 function VersionDetails({ version }: { version: Version }) {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
 
+  /* Everything about one file, laid out the way somebody reads it when
+     something is wrong with that file: where it is first, then one card per
+     track with every field the analysis recorded. Nothing is hidden behind a
+     summary: a summary is what the line above the play button is for. */
   return (
     <div className="version">
       <p className="version-line">
@@ -385,51 +415,144 @@ function VersionDetails({ version }: { version: Version }) {
         {!version.analysed && <span className="fact">{t("work.not_analysed")}</span>}
       </p>
 
-      <div className="tracks">
-        {version.video.length > 0 && (
-          <div className="track-group">
-            <h3>{t("work.video")}</h3>
-            {version.video.map((track, index) => (
-              <p key={index} className="track">
-                {track.width}×{track.height} · {track.codec.toUpperCase()}
-                {track.hdr && <span className="badge badge-hdr">{track.hdr.toUpperCase()}</span>}
-                {track.frame_rate && ` · ${track.frame_rate.toFixed(3)} fps`}
-              </p>
-            ))}
-          </div>
-        )}
+      <dl className="media-facts">
+        <Fact label={t("media.path")} value={version.path} wide />
+        <Fact label={t("media.disk")} value={version.root_label} />
+        <Fact label={t("media.added")} value={readableDate(version.added_at, language)} />
+        <Fact label={t("media.bitrate")} value={readableBitrate(version.overall_bitrate)} />
+      </dl>
 
-        {version.audio.length > 0 && (
-          <div className="track-group">
-            <h3>{t("work.audio")}</h3>
-            {version.audio.map((track, index) => (
-              <p key={index} className="track">
-                {track.language ?? "?"} · {track.codec.toUpperCase()} ·{" "}
-                {track.channel_layout ?? `${track.channels}`}
-              </p>
-            ))}
-          </div>
-        )}
+      <div className="track-cards">
+        {version.video.map((track, index) => (
+          <TrackCard key={`v${index}`} heading={t("work.video")}>
+            <Fact label={t("track.title")} value={track.title} />
+            <Fact label={t("track.codec")} value={track.codec.toUpperCase()} />
+            <Fact label={t("track.profile")} value={track.profile} />
+            <Fact label={t("track.level")} value={track.level} />
+            <Fact label={t("track.resolution")} value={`${track.width}\u00d7${track.height}`} />
+            <Fact label={t("track.aspect")} value={track.aspect_ratio} />
+            <Fact label={t("track.interlaced")} value={t(track.is_interlaced ? "yes" : "no")} />
+            <Fact
+              label={t("track.frame_rate")}
+              value={track.frame_rate === null ? null : track.frame_rate.toFixed(3)}
+            />
+            <Fact label={t("track.bitrate")} value={readableBitrate(track.bitrate)} />
+            <Fact label={t("track.hdr")} value={track.hdr?.toUpperCase()} />
+            <Fact label={t("track.primaries")} value={track.color_primaries} />
+            <Fact label={t("track.space")} value={track.color_space} />
+            <Fact label={t("track.transfer")} value={track.color_transfer} />
+            <Fact
+              label={t("track.depth")}
+              value={track.bit_depth === null ? null : t("track.bits", { count: track.bit_depth })}
+            />
+            <Fact label={t("track.pixels")} value={track.pixel_format} />
+            <Fact label={t("track.reference_frames")} value={track.reference_frames} />
+            <Fact label={t("track.default")} value={t(track.is_default ? "yes" : "no")} />
+          </TrackCard>
+        ))}
 
-        {version.subtitles.length > 0 && (
-          <div className="track-group">
-            <h3>{t("work.subtitles")}</h3>
-            {version.subtitles.map((track, index) => (
-              <p key={index} className="track">
-                {track.language ?? "?"} · {track.codec}
-                {track.is_forced && <span className="badge">{t("work.forced")}</span>}
-                {track.is_hearing_impaired && (
-                  <span className="badge">{t("work.hearing_impaired")}</span>
-                )}
-                {track.is_external && <span className="badge">{t("work.external")}</span>}
-                {track.burns_in && <span className="badge badge-warning">{t("work.burns_in")}</span>}
-              </p>
-            ))}
-          </div>
-        )}
+        {version.audio.map((track, index) => (
+          <TrackCard key={`a${index}`} heading={t("work.audio")}>
+            <Fact label={t("track.title")} value={track.title} />
+            <Fact label={t("track.language")} value={track.language} />
+            <Fact label={t("track.codec")} value={track.codec.toUpperCase()} />
+            <Fact label={t("track.profile")} value={track.profile} />
+            <Fact label={t("track.layout")} value={track.channel_layout} />
+            <Fact label={t("track.channels")} value={t("track.ch", { count: track.channels })} />
+            <Fact label={t("track.bitrate")} value={readableBitrate(track.bitrate)} />
+            <Fact
+              label={t("track.sample_rate")}
+              value={
+                track.sample_rate === null ? null : `${track.sample_rate.toLocaleString(language)} Hz`
+              }
+            />
+            <Fact
+              label={t("track.depth")}
+              value={track.bit_depth === null ? null : t("track.bits", { count: track.bit_depth })}
+            />
+            <Fact label={t("track.default")} value={t(track.is_default ? "yes" : "no")} />
+            <Fact label={t("track.forced")} value={t(track.is_forced ? "yes" : "no")} />
+          </TrackCard>
+        ))}
+
+        {version.subtitles.map((track, index) => (
+          <TrackCard key={`s${index}`} heading={t("work.subtitles")}>
+            <Fact label={t("track.title")} value={track.title} />
+            <Fact label={t("track.language")} value={track.language} />
+            <Fact label={t("track.codec")} value={track.codec.toUpperCase()} />
+            <Fact label={t("track.default")} value={t(track.is_default ? "yes" : "no")} />
+            <Fact label={t("track.forced")} value={t(track.is_forced ? "yes" : "no")} />
+            <Fact
+              label={t("track.hearing_impaired")}
+              value={t(track.is_hearing_impaired ? "yes" : "no")}
+            />
+            <Fact label={t("track.external")} value={t(track.is_external ? "yes" : "no")} />
+            {/* Not a property of the file but of what playing it would cost,
+                and the one thing here worth knowing before pressing play. */}
+            {track.burns_in && <Fact label={t("track.burns_in")} value={t("yes")} />}
+          </TrackCard>
+        ))}
       </div>
     </div>
   );
+}
+
+function TrackCard({ heading, children }: { heading: string; children: React.ReactNode }) {
+  return (
+    <div className="track-card">
+      <h3>{heading}</h3>
+      <dl className="track-facts">{children}</dl>
+    </div>
+  );
+}
+
+/** One line of a card, left out entirely when the analysis found nothing. */
+function Fact({
+  label,
+  value,
+  wide,
+}: {
+  label: string;
+  value: string | number | null | undefined;
+  wide?: boolean;
+}) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  return (
+    <div className={wide ? "fact-line fact-line-wide" : "fact-line"}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+/** Where a film lives at the site that named it. */
+function elsewhere(provider: string, id: string): string {
+  switch (provider) {
+    case "tmdb":
+      return `https://www.themoviedb.org/movie/${id}`;
+    case "imdb":
+      return `https://www.imdb.com/title/${id}/`;
+    default:
+      return "";
+  }
+}
+
+function readableBitrate(bits: number | null): string | null {
+  if (bits === null || bits <= 0) {
+    return null;
+  }
+  return bits >= 1_000_000
+    ? `${(bits / 1_000_000).toFixed(1)} Mb/s`
+    : `${Math.round(bits / 1000)} kb/s`;
+}
+
+function readableDate(value: string, language: string): string | null {
+  const moment = new Date(value);
+  return Number.isNaN(moment.getTime())
+    ? null
+    : moment.toLocaleString(language, { dateStyle: "medium", timeStyle: "short" });
 }
 
 /**

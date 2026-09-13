@@ -74,6 +74,17 @@ pub fn now() -> Timestamp {
     OffsetDateTime::now_utc()
 }
 
+/// An instant written the one way everything reads it: sortable, and in UTC.
+///
+/// The same form is what goes in the database and what goes out to a client,
+/// so nobody has to know which of the two they are looking at.
+pub fn to_text(value: Timestamp) -> String {
+    value
+        .to_offset(time::UtcOffset::UTC)
+        .format(&time::format_description::well_known::Rfc3339)
+        .expect("an instant always formats")
+}
+
 /// The year it is now.
 ///
 /// Reading a file name needs to know how far ahead a year is still plausible.
