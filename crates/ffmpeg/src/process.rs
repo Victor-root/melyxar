@@ -142,6 +142,19 @@ impl RunningProcess {
         }
     }
 
+    /// Stops the process where it stands, without asking first.
+    ///
+    /// For the one case where politeness buys nothing: a viewer has jumped
+    /// somewhere else, so everything this process was doing is worthless, and
+    /// waiting the best part of a second for it to finish writing a segment
+    /// nobody will watch is that second taken from the viewer. What it leaves
+    /// half written is the caller's to clear away, which costs a file removal
+    /// rather than a wait.
+    pub async fn stop_now(mut self) -> Result<()> {
+        self.child.kill().await?;
+        Ok(())
+    }
+
     /// Waits for the process and fails when it exited badly.
     ///
     /// The tail of the error output travels with the failure, because a
