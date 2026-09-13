@@ -21,6 +21,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api";
 import type { PlaybackPlan, PlaybackSession, PlaybackTrack } from "../api";
 import { useSettings } from "../settings";
+import {
+  appearanceClasses,
+  BACKGROUNDS,
+  COLOURS,
+  EDGES,
+  HEIGHTS,
+  lineFor,
+  rememberAppearance,
+  SIZES,
+  storedAppearance,
+} from "./appearance";
+import type { Appearance } from "./appearance";
 import { languageName } from "./languages";
 import { clientProfile } from "./profile";
 
@@ -91,6 +103,42 @@ function trackName(
   return parts.join(" · ");
 }
 
+/**
+ * One picker among a short list of named choices.
+ *
+ * Five of these sit side by side for the subtitles alone, and writing each of
+ * them out would be the same twenty lines five times over.
+ */
+function Choice<T extends string>({
+  label,
+  value,
+  among,
+  naming,
+  onPick,
+  t,
+}: {
+  label: string;
+  value: T;
+  among: readonly T[];
+  /** What the wording of each choice is keyed on. */
+  naming: string;
+  onPick: (value: T) => void;
+  t: (key: string) => string;
+}) {
+  return (
+    <label className="choice">
+      <span className="choice-label">{label}</span>
+      <select value={value} onChange={(event) => onPick(event.target.value as T)}>
+        {among.map((one) => (
+          <option key={one} value={one}>
+            {t(`player.${naming}.${one}`)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function Player({
   sourceId,
   workId,
@@ -113,6 +161,10 @@ export function Player({
   const [audioId, setAudioId] = useState<string | null>(null);
   const [subtitleId, setSubtitleId] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
+  const [appearance, setAppearanceState] = useState<Appearance>(storedAppearance);
+  /* Which picture the browser has actually opened. Null until it has: the
+     words are hung on the picture, and only once it is there. */
+  const [readyPicture, setReadyPicture] = useState<string | null>(null);
   /* The last position seen, kept apart from the element. On the way out the
      element is already gone, and that is exactly the moment the position is
      worth sending. */
@@ -129,6 +181,9 @@ export function Player({
      reason as the position: on the way out there is nothing left to read it
      from, and that is exactly when it has to be closed. */
   const session = useRef<string | null>(null);
+  /* The element carrying the words, so the moment they finish being read can
+     be waited for. */
+  const subtitleTrack = useRef<HTMLTrackElement | null>(null);
 
   /* Asked again whenever a track changes: which tracks are wanted is part of
      the question, and the answer can change with it. A film played as it is
@@ -163,13 +218,23 @@ export function Player({
   }, [sourceId, audioId, subtitleId, fromTheStart]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
+  /* What the server would actually be asked to produce. A subtitle handed
+     over alongside the picture changes none of it, so turning subtitles on
+     must not throw away a conversion already under way and make the viewer
+     wait through it again. One that can only be drawn into the picture does
+     change it, and says so by changing the method. */
+  const beingProduced = rebuilt ? `${plan.method}:${audioId ?? ""}` : null;
+  /* Which picture is on screen: the file itself, or one session of segments.
+     A change here means a fresh element rather than a new address on the old
+     one, because the two are fed in ways that cannot be swapped. */
+  const pictureKey = plan === null ? null : canBePlayedAsItIs(plan) ? "file" : (stream?.id ?? null);
 
   /* A film this browser cannot open is rebuilt by the server, which needs a
      session to rebuild it into. The session is closed on the way out, and by
      the server itself if that never arrives: a viewer who closes a tab says
      nothing, and a tool left running is a core spent on nobody. */
   useEffect(() => {
-    if (!rebuilt) {
+    if (!beingProduced) {
       setStream(null);
       return;
     }
@@ -188,9 +253,10 @@ export function Player({
       .openSession(
         sourceId,
         {
+          // No subtitle is named: a session produces the picture and the
+          // sound, and the words travel on their own beside them.
           profile: clientProfile(),
           audio_track_id: audioId,
-          subtitle_track_id: subtitleId,
         },
         controller.signal,
       )
@@ -216,7 +282,7 @@ export function Player({
         session.current = null;
       }
     };
-  }, [rebuilt, sourceId, audioId, subtitleId]);
+  }, [beingProduced, sourceId, audioId]);
 
   /* Feeding the segments in. Apple's browsers read a playlist on their own,
      so there the address goes straight to the element and nothing else is
@@ -246,7 +312,14 @@ export function Player({
         setFailed("player.cannot_play");
         return;
       }
-      feed = new Library({ fragLoadingTimeOut: SEGMENT_PATIENCE });
+      feed = new Library({
+        fragLoadingTimeOut: SEGMENT_PATIENCE,
+        // The segments carry no words, so the library has no business
+        // touching the subtitles on the picture: left to itself it takes
+        // charge of every one it finds there and empties ours as it goes.
+        renderTextTracksNatively: false,
+      });
+      feed.subtitleDisplay = false;
       feed.on(Library.Events.ERROR, (_event, trouble) => {
         // Anything short of fatal is retried on its own, and saying so would
         // turn an invisible hiccup into an error the viewer has to read.
@@ -366,6 +439,73 @@ export function Player({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  /* The subtitle being shown, when there is one, it is words rather than
+     pictures, and there is a picture ready to hang it on.
+
+     Waiting for the picture is not tidiness. A film being rebuilt is fed in by
+     a library, and setting that up resets the element: words hung on it before
+     that are wiped without a word, and the viewer is left with a track that is
+     switched on and empty. */
+  const shownSubtitle =
+    readyPicture !== null && readyPicture === pictureKey
+      ? plan?.subtitles.find((track) => track.id === plan.chosen_subtitle_id && track.url)
+      : undefined;
+
+  const setAppearance = (change: Partial<Appearance>) => {
+    const next = { ...appearance, ...change };
+    setAppearanceState(next);
+    rememberAppearance(next);
+  };
+
+  /* How high the words sit belongs to each cue rather than to a stylesheet,
+     so it is applied to them as they are read, and again whenever the viewer
+     moves them. Counted from the bottom, which keeps them in the same place
+     whatever the size of the picture. */
+  const placeCues = useCallback(() => {
+    const tracks = video.current?.textTracks;
+    if (!tracks) {
+      return;
+    }
+    const line = lineFor(appearance.height);
+    for (const track of Array.from(tracks)) {
+      for (const cue of Array.from(track.cues ?? [])) {
+        (cue as VTTCue).line = line;
+      }
+    }
+  }, [appearance.height]);
+
+  /* Placed again whenever the viewer moves them, and kept where the words
+     themselves can reach it: the listener below is attached once per element
+     and must not have to be replaced every time a choice changes. */
+  const placing = useRef(placeCues);
+  useEffect(() => {
+    placing.current = placeCues;
+    placeCues();
+  }, [placeCues]);
+
+  const whenTheWordsAreRead = useCallback(() => placing.current(), []);
+
+  /* Waited for on the element itself, and re-attached whenever the element is
+     a different one: a film being rebuilt gets a fresh picture whenever the
+     soundtrack changes, and the words come with it. Before the words are read
+     there are no cues to place, and the browser goes on putting them wherever
+     it likes. */
+  const holdTheWords = useCallback(
+    (element: HTMLTrackElement | null) => {
+      subtitleTrack.current?.removeEventListener("load", whenTheWordsAreRead);
+      subtitleTrack.current = element;
+      if (!element) {
+        return;
+      }
+      element.addEventListener("load", whenTheWordsAreRead);
+      // Said outright rather than left to the default mark: that mark is read
+      // when the picture itself is first read, and words added to a picture
+      // already playing would simply stay switched off.
+      element.track.mode = "showing";
+    },
+    [whenTheWordsAreRead],
+  );
+
   /* Where the viewer stopped, applied once the browser knows how long the
      film is. Setting it earlier is ignored, silently, and the film starts
      from the beginning as though nothing had been watched. */
@@ -380,10 +520,15 @@ export function Player({
     if (target !== null && target > 0) {
       element.currentTime = target;
     }
+    setReadyPicture(pictureKey);
   };
 
   return (
-    <div className="player" role="dialog" aria-label={title}>
+    <div
+      className={`player ${appearanceClasses(appearance)}`}
+      role="dialog"
+      aria-label={title}
+    >
       <div className="player-bar">
         <button className="button" onClick={onClose}>
           {t("player.close")}
@@ -404,7 +549,7 @@ export function Player({
           than from one still holding the other's address. */}
       {plan && !failed && (canBePlayedAsItIs(plan) || stream) && (
         <video
-          key={canBePlayedAsItIs(plan) ? "file" : stream?.id}
+          key={pictureKey ?? undefined}
           ref={video}
           className="player-video"
           src={canBePlayedAsItIs(plan) ? plan.url : undefined}
@@ -417,7 +562,19 @@ export function Player({
           onPause={report}
           onEnded={report}
           onError={() => setFailed("player.cannot_play")}
-        />
+        >
+          {shownSubtitle?.url && (
+            <track
+              key={shownSubtitle.id}
+              ref={holdTheWords}
+              kind="subtitles"
+              src={shownSubtitle.url}
+              srcLang={shownSubtitle.language ?? undefined}
+              label={trackName(shownSubtitle, t, language)}
+              default
+            />
+          )}
+        </video>
       )}
 
       {/* Shown even when the film cannot be played as it is: choosing a track
@@ -477,6 +634,54 @@ export function Player({
               ))}
             </select>
           </label>
+
+          {/* Only while subtitles are actually showing: offering to restyle
+              words that are not on screen is a row of pickers that do
+              nothing. */}
+          {shownSubtitle && (
+            <>
+              <Choice
+                label={t("player.subtitle_size")}
+                value={appearance.size}
+                among={SIZES}
+                naming="subtitle_size"
+                onPick={(size) => setAppearance({ size })}
+                t={t}
+              />
+              <Choice
+                label={t("player.subtitle_colour")}
+                value={appearance.colour}
+                among={COLOURS}
+                naming="subtitle_colour"
+                onPick={(colour) => setAppearance({ colour })}
+                t={t}
+              />
+              <Choice
+                label={t("player.subtitle_edge")}
+                value={appearance.edge}
+                among={EDGES}
+                naming="subtitle_edge"
+                onPick={(edge) => setAppearance({ edge })}
+                t={t}
+              />
+              <Choice
+                label={t("player.subtitle_background")}
+                value={appearance.background}
+                among={BACKGROUNDS}
+                naming="subtitle_background"
+                onPick={(background) => setAppearance({ background })}
+                t={t}
+              />
+              <Choice
+                label={t("player.subtitle_height")}
+                value={appearance.height}
+                among={HEIGHTS}
+                naming="subtitle_height"
+                onPick={(height) => setAppearance({ height })}
+                t={t}
+              />
+            </>
+          )}
 
           {/* The picture in a corner while the viewer does something else.
               Not every browser offers it, so the button only appears where

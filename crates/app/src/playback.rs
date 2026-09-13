@@ -15,7 +15,7 @@ use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::media::Track;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::{state_for_position, PlaybackState, DEFAULT_WATCHED_THRESHOLD};
-use melyxar_playback::decision::{decide, PlaybackDecision, PlaybackRequest};
+use melyxar_playback::decision::{decide, PlaybackRequest};
 
 use crate::{AppError, AppState, Result};
 
@@ -24,7 +24,9 @@ use crate::{AppError, AppState, Result};
 /// Re-exported here so the layer above talks to one crate: the decision lives
 /// where it can be tested without a database, and nothing outside has to know
 /// that it does.
-pub use melyxar_playback::decision::{PlaybackMethod, Reason, StreamAction, SubtitleDelivery};
+pub use melyxar_playback::decision::{
+    PlaybackDecision, PlaybackMethod, Reason, StreamAction, SubtitleDelivery,
+};
 pub use melyxar_playback::profile::ClientProfile;
 
 /// A film being converted as it is watched, as the layer above handles it.

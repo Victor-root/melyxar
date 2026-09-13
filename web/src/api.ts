@@ -221,6 +221,9 @@ export interface PlaybackTrack {
   channels: number | null;
   /** Subtitles only: showing it means rebuilding the picture. */
   burns_in: boolean | null;
+  /** Where to fetch the words. Absent for a soundtrack, and for a subtitle
+   *  made of pictures: there is no text in one to hand over. */
+  url: string | null;
 }
 
 export interface PlaybackPlan {
