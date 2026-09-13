@@ -10,7 +10,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::Request;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use melyxar_app::browse::{BrowseRequest, WorkCard, WorkOrder, DEFAULT_PAGE};
+use melyxar_app::browse::{BrowseRequest, Initial, WorkCard, WorkOrder, DEFAULT_PAGE};
 use melyxar_app::detail::{Credit, Version, WorkDetail};
 use melyxar_app::picture::StoredImage;
 use melyxar_app::AppState;
@@ -141,6 +141,9 @@ struct FiltersView {
     /// to an empty grid and looks like a fault.
     genres: Vec<CountedView>,
     decades: Vec<CountedDecade>,
+    /// The letters titles really start with, in order, the bucket for
+    /// everything else first.
+    initials: Vec<CountedView>,
 }
 
 #[derive(Debug, Serialize)]
@@ -171,6 +174,11 @@ async fn filters(
             .into_iter()
             .map(|(decade, works)| CountedDecade { decade, works })
             .collect(),
+        initials: found
+            .initials
+            .into_iter()
+            .map(|(name, works)| CountedView { name, works })
+            .collect(),
     }))
 }
 
@@ -193,6 +201,8 @@ struct BrowseParams {
     search: Option<String>,
     #[serde(default)]
     unidentified: bool,
+    /// One letter, or the sign standing for everything that starts with none.
+    initial: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -243,6 +253,17 @@ async fn works(
         decade: params.decade,
         search: params.search.filter(|value| !value.trim().is_empty()),
         unidentified_only: params.unidentified,
+        // A letter nobody could mean is refused rather than quietly ignored:
+        // a grid that answers everything to a narrowing looks broken.
+        initial: params
+            .initial
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                Initial::parse(value)
+                    .ok_or_else(|| ServerError::invalid_input("that is not a letter"))
+            })
+            .transpose()?,
     };
 
     let page = melyxar_app::catalogue::browse(&state, &request).await?;

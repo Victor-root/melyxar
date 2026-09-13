@@ -28,7 +28,7 @@ pub use state::AppState;
 /// the storage, which is what keeps the dependencies pointing one way.
 pub mod browse {
     pub use melyxar_database::browse::{
-        BrowseRequest, WorkCard, WorkOrder, WorkPage, DEFAULT_PAGE, LARGEST_PAGE,
+        BrowseRequest, Initial, WorkCard, WorkOrder, WorkPage, DEFAULT_PAGE, LARGEST_PAGE,
     };
 }
 

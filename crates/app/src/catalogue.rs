@@ -37,6 +37,8 @@ pub struct RootSummary {
 pub struct Filters {
     pub genres: Vec<(String, i64)>,
     pub decades: Vec<(i32, i64)>,
+    /// The letters titles actually start with, with how many start with each.
+    pub initials: Vec<(String, i64)>,
 }
 
 /// What a home page leads with.
@@ -90,6 +92,7 @@ pub async fn filters(state: &AppState, library_id: Option<LibraryId>) -> Result<
     Ok(Filters {
         genres: database.genres_in_use(library_id).await?,
         decades: database.decades_in_use(library_id).await?,
+        initials: database.initials_in_use(library_id).await?,
     })
 }
 
