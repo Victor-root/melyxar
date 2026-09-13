@@ -115,6 +115,10 @@ fn install_logging(config: &Config) {
         .init();
 
     melyxar_core::privacy::set_reveal_media_names(config.logging.reveal_media_names);
+    // The first line of every log says which build wrote it. Without it, a
+    // journal and a question about a fix cannot be put together.
+    tracing::info!(build = melyxar_core::BUILD, "melyxar starting");
+
     if config.logging.reveal_media_names {
         tracing::warn!(
             "media names appear in full in the logs; turn this off once the problem is found"
@@ -290,8 +294,12 @@ async fn identify_one_library(
         Some(report) => {
             println!(
                 "{name}: {} identified, {} not recognised, {} put off until the provider \
-                 answers, {} renamed after their file",
-                report.identified, report.unidentified, report.postponed, report.renamed
+                 answers, {} renamed after their file, {} given the pictures they were missing",
+                report.identified,
+                report.unidentified,
+                report.postponed,
+                report.renamed,
+                report.pictures_filled
             );
             Ok(true)
         }

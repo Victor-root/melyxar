@@ -40,6 +40,8 @@ pub struct IdentifyReport {
     /// Works whose title was read again from their file name before anything
     /// was asked about them, and came out different.
     pub renamed: usize,
+    /// Films that had a name but no picture, and have one now.
+    pub pictures_filled: usize,
     pub cancelled: bool,
 }
 
@@ -74,9 +76,9 @@ where
         renamed,
         ..IdentifyReport::default()
     };
-    if waiting.is_empty() {
-        return Ok(report);
-    }
+    // A library with nothing left to name still has the rest of this to do:
+    // the films that were named on a day their pictures could not be had are
+    // exactly the ones nothing is asking about any more.
     handle.set_total(waiting.len() as i64).await;
 
     for work in waiting {
@@ -110,7 +112,13 @@ where
         handle.advance(1).await;
     }
 
-    if report.identified > 0 {
+    // A picture is fetched when a film is named and never again, so one that
+    // did not arrive that day would never arrive: the film keeps its title and
+    // its grey rectangle for ever. Asked for here, where somebody has just
+    // pressed the button that says look up what is missing.
+    report.pictures_filled = fill_in_missing_pictures(state, provider, library, handle).await?;
+
+    if report.identified > 0 || report.pictures_filled > 0 {
         database.bump_library_version(library.id).await?;
     }
 
@@ -120,10 +128,118 @@ where
         unidentified = report.unidentified,
         postponed = report.postponed,
         renamed = report.renamed,
+        pictures_filled = report.pictures_filled,
         cancelled = report.cancelled,
         "identification finished"
     );
     Ok(report)
+}
+
+/// The language a provider describes a film in when nobody translated it.
+const THE_LANGUAGE_MOST_FILMS_ARE_DESCRIBED_IN: &str = "en";
+
+/// Gives a film a synopsis when the language asked for has none.
+///
+/// Plenty of films are described in one language and not yet in another, and a
+/// page with an empty half is worse than a page with a paragraph somebody can
+/// read. The title stays in the language the library was asked for: it is the
+/// synopsis that is missing, not the film.
+async fn fill_in_the_synopsis(
+    provider: &impl MetadataProvider,
+    details: MovieDetails,
+    language: &str,
+) -> MovieDetails {
+    let has_one = details
+        .overview
+        .as_deref()
+        .is_some_and(|text| !text.trim().is_empty());
+    if has_one || melyxar_core::media::normalise_language(language) == "eng" {
+        return details;
+    }
+
+    match provider
+        .movie_details(
+            &details.external_id,
+            THE_LANGUAGE_MOST_FILMS_ARE_DESCRIBED_IN,
+        )
+        .await
+    {
+        Ok(elsewhere) => {
+            tracing::debug!(
+                work = %MediaName::new(&details.title),
+                "no synopsis in the language asked for; the original one is used"
+            );
+            MovieDetails {
+                overview: elsewhere.overview,
+                tagline: details.tagline.clone().or(elsewhere.tagline),
+                ..details
+            }
+        }
+        // A film with no synopsis is still a film.
+        Err(_) => details,
+    }
+}
+
+/// How many films one run tries to fetch missing pictures for.
+///
+/// Bounded like the look up itself: a run that never ends cannot be followed,
+/// and the next one continues where this one stopped.
+const PICTURES_PER_RUN: i64 = 200;
+
+/// Asks again for the pictures of films that have a name and no picture.
+///
+/// Answers how many came back with one. Nothing here can fail the run: a
+/// picture is a comfort, and a film without one is still a film.
+async fn fill_in_missing_pictures<P>(
+    state: &AppState,
+    provider: &Arc<P>,
+    library: &Library,
+    handle: &JobHandle,
+) -> Result<usize>
+where
+    P: MetadataProvider + 'static,
+{
+    let waiting = state
+        .database()
+        .works_missing_their_pictures(library.id, provider.name(), PICTURES_PER_RUN)
+        .await?;
+    if waiting.is_empty() {
+        return Ok(0);
+    }
+
+    tracing::info!(
+        films = waiting.len(),
+        "some films have a name and no picture; asking again"
+    );
+
+    let mut filled = 0;
+    for (work_id, external_id) in waiting {
+        if handle.is_cancelled() {
+            break;
+        }
+        let details = match provider
+            .movie_details(&external_id, &library.metadata_language)
+            .await
+        {
+            Ok(details) => details,
+            Err(error) => {
+                tracing::warn!(reason = %error, "the provider would not describe a film again");
+                continue;
+            }
+        };
+
+        let prepared = crate::images::store_provider_images(
+            state,
+            provider.as_ref(),
+            work_id,
+            &details,
+        )
+        .await;
+        if prepared > 0 {
+            filled += 1;
+        }
+    }
+    Ok(filled)
 }
 
 enum Outcome {
@@ -173,7 +289,7 @@ where
     };
 
     let details = match provider.movie_details(&chosen, language).await {
-        Ok(details) => details,
+        Ok(details) => fill_in_the_synopsis(provider.as_ref(), details, language).await,
         Err(error) => return Ok(postpone(work, &error)),
     };
 
@@ -575,6 +691,9 @@ mod tests {
         picture: Option<Vec<u8>>,
         /// Whether a title has to be spelled exactly as held to match.
         exact: bool,
+        /// Whether this film has only ever been described in English, which
+        /// is the ordinary state of a film nobody has translated yet.
+        only_in_english: bool,
     }
 
     impl StandIn {
@@ -587,6 +706,7 @@ mod tests {
                 fetched: Mutex::new(Vec::new()),
                 picture: None,
                 exact: false,
+                only_in_english: false,
             }
         }
 
@@ -601,6 +721,12 @@ mod tests {
             }
         }
 
+        /// A film described in English and in no other language.
+        fn described_only_in_english(mut self) -> Self {
+            self.only_in_english = true;
+            self
+        }
+
         fn failing(failure: fn() -> ProviderError) -> Self {
             Self {
                 candidates: Vec::new(),
@@ -610,6 +736,7 @@ mod tests {
                 fetched: Mutex::new(Vec::new()),
                 picture: None,
                 exact: false,
+                only_in_english: false,
             }
         }
 
@@ -674,16 +801,28 @@ mod tests {
         async fn movie_details(
             &self,
             external_id: &str,
-            _language: &str,
+            language: &str,
         ) -> melyxar_metadata::provider::Result<MovieDetails> {
             if let Some(failure) = self.failure {
                 return Err(failure());
             }
-            self.details
+            let found = self
+                .details
                 .iter()
                 .find(|details| details.external_id == external_id)
                 .cloned()
-                .ok_or_else(|| ProviderError::Unexpected("not found".into()))
+                .ok_or_else(|| ProviderError::Unexpected("not found".into()))?;
+
+            // A provider answers with what it holds in the language it was
+            // asked for, and with nothing where nobody has written it yet.
+            match self.only_in_english && language != "en" {
+                true => Ok(MovieDetails {
+                    overview: None,
+                    tagline: None,
+                    ..found
+                }),
+                false => Ok(found),
+            }
         }
 
         fn image_url(&self, path: &str) -> String {
@@ -1777,6 +1916,84 @@ mod tests {
             before,
             "a poster that did not change must not be fetched or written again"
         );
+    }
+
+    #[tokio::test]
+    async fn a_film_nobody_translated_still_gets_a_synopsis() {
+        // Plenty of films are described in one language and not yet in
+        // another. A page with an empty half is worse than a page with a
+        // paragraph somebody can read.
+        let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .described_only_in_english(),
+        );
+
+        assert_eq!(run(&state, &provider, &library).await.identified, 1);
+
+        let detail = crate::detail::work_detail(&state, work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert!(
+            detail.overview.is_some_and(|text| !text.is_empty()),
+            "the library is in French and the film is described in English, which is a synopsis"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_picture_that_did_not_arrive_that_day_is_asked_for_again() {
+        // The case this exists for: the film was named on a day the pictures
+        // could not be written, so it kept its title and a grey rectangle, and
+        // nothing ever asked a second time.
+        let Some(picture) = a_real_poster() else {
+            eprintln!("no media tool here, the preparation of a picture was not exercised");
+            return;
+        };
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+
+        // Named by a provider that could serve no picture at all.
+        let empty_handed = Arc::new(StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        ));
+        assert_eq!(run(&state, &empty_handed, &library).await.identified, 1);
+        assert!(state
+            .database()
+            .images_of("work", &work.id.to_db_string())
+            .await
+            .expect("read")
+            .is_empty());
+
+        // The same library on a day the pictures can be had. Nothing is left
+        // to identify, so only the pictures are the point.
+        let serving = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture),
+        );
+        let report = run(&state, &serving, &library).await;
+        assert_eq!(report.identified, 0);
+        assert_eq!(report.pictures_filled, 1);
+
+        let posters: Vec<_> = state
+            .database()
+            .images_of("work", &work.id.to_db_string())
+            .await
+            .expect("read")
+            .into_iter()
+            .filter(|image| image.image_kind == "poster")
+            .collect();
+        assert_eq!(posters.len(), 3, "one size per width the interface serves");
+
+        // And a third run has nothing left to do, so nobody is asked again.
+        assert_eq!(run(&state, &serving, &library).await.pictures_filled, 0);
     }
 
     #[tokio::test]

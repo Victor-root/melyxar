@@ -72,7 +72,7 @@ async fn system_info(State(state): State<AppState>) -> Result<Json<SystemInfo>> 
 
     Ok(Json(SystemInfo {
         server_name: settings.server_name,
-        version: env!("CARGO_PKG_VERSION"),
+        version: melyxar_core::BUILD,
         api_version: API_VERSION,
         // A server whose only account still has no password has not been set
         // up, which is what the wizard keys on.

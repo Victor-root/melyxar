@@ -185,7 +185,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
     let capabilities = state.capabilities();
 
     Ok(Diagnostics {
-        version: env!("CARGO_PKG_VERSION"),
+        version: melyxar_core::BUILD,
         media_tools: MediaToolsReport {
             found: state.tools().is_some(),
             encoder_path: state
