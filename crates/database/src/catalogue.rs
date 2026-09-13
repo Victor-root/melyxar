@@ -14,7 +14,7 @@ use melyxar_core::media::{
 };
 use melyxar_core::time::{now, Millis, Timestamp};
 use melyxar_core::work::{IdentificationNote, IdentificationState, Work, WorkKind};
-use sqlx::Row;
+use sqlx::{Row, Sqlite};
 
 use crate::convert::{
     bool_to_int, int_to_bool, parse_optional_timestamp, parse_timestamp, timestamp_to_text,
@@ -99,42 +99,73 @@ impl Database {
         sort_title: &str,
         release_year: Option<i32>,
     ) -> Result<Work> {
-        let id = WorkId::new();
-        let moment = now();
-        let timestamp = timestamp_to_text(moment);
-
-        sqlx::query(
-            "INSERT INTO works (id, library_id, kind, title, sort_title, release_year, added_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(id.to_db_string())
-        .bind(library_id.to_db_string())
-        .bind(kind.as_str())
-        .bind(title)
-        .bind(sort_title)
-        .bind(release_year)
-        .bind(&timestamp)
-        .bind(&timestamp)
-        .execute(self.writer())
-        .await?;
-
-        Ok(Work {
-            id,
+        insert_work(
+            self.writer(),
             library_id,
-            parent_id: None,
             kind,
-            title: title.to_string(),
-            sort_title: sort_title.to_string(),
+            title,
+            sort_title,
             release_year,
-            runtime: None,
-            community_rating: None,
-            age_rating_label: None,
-            identification: IdentificationState::Pending,
-            identification_note: None,
-            dominant_color: None,
-            added_at: moment,
-            updated_at: moment,
-        })
+        )
+        .await
+    }
+
+    /// Takes one copy away from the film it sits on and makes it a film of its
+    /// own, named after its file and waiting to be looked up.
+    ///
+    /// The other half of putting copies together. Whatever joins them does so
+    /// on its own, and anything that acts on its own has to be undoable by
+    /// hand, or a grouping that got it wrong costs a film nobody can get back.
+    ///
+    /// Refused when the film holds this one copy and no other: there would be
+    /// nothing to take it away from, and the film would be left with no file
+    /// at all.
+    pub async fn detach_source(
+        &self,
+        source_id: MediaSourceId,
+        kind: WorkKind,
+        title: &str,
+        sort_title: &str,
+        release_year: Option<i32>,
+    ) -> Result<Option<Work>> {
+        let Some(row) = sqlx::query(
+            "SELECT w.id AS work_id, w.library_id,
+                    (SELECT count(*) FROM media_sources o WHERE o.work_id = w.id) AS copies
+             FROM media_sources s
+             JOIN works w ON w.id = s.work_id
+             WHERE s.id = ?",
+        )
+        .bind(source_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?
+        else {
+            return Ok(None);
+        };
+        if row.try_get::<i64, _>("copies")? < 2 {
+            return Ok(None);
+        }
+        let library_id: LibraryId = row
+            .try_get::<String, _>("library_id")?
+            .parse()
+            .map_err(|_| DatabaseError::Corrupt("library identifier".to_string()))?;
+
+        let mut transaction = self.begin().await?;
+        let work = insert_work(
+            &mut *transaction,
+            library_id,
+            kind,
+            title,
+            sort_title,
+            release_year,
+        )
+        .await?;
+        sqlx::query("UPDATE media_sources SET work_id = ? WHERE id = ?")
+            .bind(work.id.to_db_string())
+            .bind(source_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(Some(work))
     }
 
     /// One work by identifier.
@@ -307,6 +338,35 @@ impl Database {
         .fetch_all(self.reader())
         .await?;
         rows.iter().map(stored_source_from_row).collect()
+    }
+
+    /// The name of one file and the library it belongs to.
+    ///
+    /// What is needed to read a file name again by the rules of its own
+    /// library, without reading everything that library holds.
+    pub async fn where_a_source_lives(
+        &self,
+        source_id: MediaSourceId,
+    ) -> Result<Option<(PathBuf, LibraryId)>> {
+        let row = sqlx::query(
+            "SELECT s.relative_path, r.library_id
+             FROM media_sources s
+             JOIN library_roots r ON r.id = s.root_id
+             WHERE s.id = ?",
+        )
+        .bind(source_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+
+        row.map(|row| {
+            Ok((
+                PathBuf::from(row.try_get::<String, _>("relative_path")?),
+                row.try_get::<String, _>("library_id")?
+                    .parse()
+                    .map_err(|_| DatabaseError::Corrupt("library identifier".to_string()))?,
+            ))
+        })
+        .transpose()
     }
 
     /// What one file is, beyond what identifies it.
@@ -938,6 +998,57 @@ fn stored_source_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredSource>
             row.try_get::<Option<String>, _>("missing_since")?
                 .as_deref(),
         )?,
+    })
+}
+
+/// Writes a new work, wherever the caller is writing: on the pool for a plain
+/// creation, inside a transaction when something else has to land with it.
+async fn insert_work<'e, E>(
+    executor: E,
+    library_id: LibraryId,
+    kind: WorkKind,
+    title: &str,
+    sort_title: &str,
+    release_year: Option<i32>,
+) -> Result<Work>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
+    let id = WorkId::new();
+    let moment = now();
+    let timestamp = timestamp_to_text(moment);
+
+    sqlx::query(
+        "INSERT INTO works (id, library_id, kind, title, sort_title, release_year, added_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(id.to_db_string())
+    .bind(library_id.to_db_string())
+    .bind(kind.as_str())
+    .bind(title)
+    .bind(sort_title)
+    .bind(release_year)
+    .bind(&timestamp)
+    .bind(&timestamp)
+    .execute(executor)
+    .await?;
+
+    Ok(Work {
+        id,
+        library_id,
+        parent_id: None,
+        kind,
+        title: title.to_string(),
+        sort_title: sort_title.to_string(),
+        release_year,
+        runtime: None,
+        community_rating: None,
+        age_rating_label: None,
+        identification: IdentificationState::Pending,
+        identification_note: None,
+        dominant_color: None,
+        added_at: moment,
+        updated_at: moment,
     })
 }
 
@@ -1967,6 +2078,85 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_copy_that_is_another_film_can_be_taken_away_as_one() {
+        // The other half of putting copies together. What acts on its own has
+        // to be undoable by hand, or a grouping that got it wrong costs a film
+        // nobody can get back.
+        let (database, library_id, root_id) = library().await;
+        let (held, _) =
+            work_with_source(&database, library_id, root_id, "Quiet Harbour 1080p.mkv").await;
+        let leaving = database
+            .insert_source(
+                held,
+                root_id,
+                Path::new("Amber Field 1080p.mkv"),
+                2_000,
+                now(),
+            )
+            .await
+            .expect("source recorded");
+
+        let detached = database
+            .detach_source(
+                leaving,
+                WorkKind::Movie,
+                "Amber Field",
+                "amber field",
+                Some(2020),
+            )
+            .await
+            .expect("read")
+            .expect("a film held twice can give one of them up");
+
+        assert_eq!(detached.title, "Amber Field");
+        assert_eq!(detached.library_id, library_id);
+        assert_eq!(
+            detached.identification,
+            IdentificationState::Pending,
+            "it waits to be looked up like any film a scan has just found"
+        );
+        assert_eq!(
+            database
+                .sources_of_work(detached.id)
+                .await
+                .expect("read")
+                .len(),
+            1
+        );
+        assert_eq!(
+            database.sources_of_work(held).await.expect("read").len(),
+            1,
+            "the film it left keeps the copy that really is it"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_only_copy_of_a_film_is_never_taken_away_from_it() {
+        // There would be nothing to take it away from, and the film it left
+        // would be a card with no file behind it.
+        let (database, library_id, root_id) = library().await;
+        let (_, only_copy) =
+            work_with_source(&database, library_id, root_id, "Quiet Harbour 1080p.mkv").await;
+
+        assert!(database
+            .detach_source(
+                only_copy,
+                WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019)
+            )
+            .await
+            .expect("read")
+            .is_none());
+        assert_eq!(
+            database.count_works(library_id).await.expect("read"),
+            1,
+            "and no empty film is left behind by the attempt"
+        );
     }
 
     #[tokio::test]

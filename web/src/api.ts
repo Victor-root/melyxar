@@ -411,6 +411,9 @@ export const api = {
     post<{ identified: boolean }>(`/api/v1/works/${work}/identify`, {
       external_id: externalId,
     }),
+  /* When two copies on one film turn out not to be the same film at all. */
+  detachCopy: (copy: string) =>
+    post<{ work_id: string }>(`/api/v1/copies/${copy}/detach`),
   /* Everything worth asking about this installation, in one block of text
      rendered by the server so that it says exactly what the command line
      says. */
