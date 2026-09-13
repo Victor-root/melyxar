@@ -42,9 +42,14 @@ export function Card({ card }: { card: CardData }) {
             {card.title.slice(0, 1)}
           </span>
         )}
+        {/* The reason wins over the state: knowing a film is not identified is
+            what the grid already showed, knowing why is what sends somebody to
+            rename a file rather than to press the button again. */}
         {unknown && (
           <span className="card-flag">
-            {t(card.identification === "pending" ? "work.pending" : "work.unidentified")}
+            {card.identification_note
+              ? t(`note.short.${card.identification_note}`)
+              : t(card.identification === "pending" ? "work.pending" : "work.unidentified")}
           </span>
         )}
         {card.rating !== null && <span className="card-rating">{card.rating.toFixed(1)}</span>}

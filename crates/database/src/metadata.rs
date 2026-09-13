@@ -7,7 +7,7 @@
 
 use melyxar_core::id::{CollectionId, CreditId, ExtraVideoId, NameId, PersonId, WorkId};
 use melyxar_core::time::{now, Millis};
-use melyxar_core::work::IdentificationState;
+use melyxar_core::work::{IdentificationNote, IdentificationState};
 use sqlx::{Row, Sqlite, Transaction};
 
 use crate::convert::timestamp_to_text;
@@ -99,8 +99,8 @@ impl Database {
     ) -> Result<Vec<melyxar_core::work::Work>> {
         let rows = sqlx::query(
             "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
-                    community_rating, age_rating_label, identification, dominant_color,
-                    added_at, updated_at
+                    community_rating, age_rating_label, identification, identification_note,
+                    dominant_color, added_at, updated_at
              FROM works
              WHERE library_id = ? AND identification IN ('pending', 'unidentified')
              ORDER BY added_at
@@ -112,6 +112,24 @@ impl Database {
         .await?;
 
         rows.iter().map(crate::catalogue::work_from_row).collect()
+    }
+
+    /// Records why the last look up did not name a work.
+    ///
+    /// Kept apart from the state on purpose: a work the provider could not be
+    /// reached about is still waiting, and must carry its reason without being
+    /// marked as one nobody recognised.
+    pub async fn set_identification_note(
+        &self,
+        work_id: WorkId,
+        note: IdentificationNote,
+    ) -> Result<()> {
+        sqlx::query("UPDATE works SET identification_note = ? WHERE id = ?")
+            .bind(note.as_str())
+            .bind(work_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
     }
 
     /// Records that a work was looked up and not recognised.
@@ -162,6 +180,9 @@ impl Database {
                 community_rating = ?8,
                 age_rating_label = ?9,
                 identification = ?10,
+                -- Named at last, so whatever the last failure was stops being
+                -- shown next to a film that now has a title.
+                identification_note = NULL,
                 updated_at = ?11
              WHERE id = ?12",
         )
@@ -1040,6 +1061,66 @@ mod tests {
                 .expect("read")
                 .len(),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn the_reason_a_look_up_failed_is_read_back_beside_the_work() {
+        let (database, work) = work_in_library().await;
+        assert_eq!(
+            database
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification_note,
+            None,
+            "a film nobody has looked up owes no explanation"
+        );
+
+        database
+            .set_identification_note(work.id, IdentificationNote::NoMatch)
+            .await
+            .expect("note written");
+
+        let stored = database
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(
+            stored.identification_note,
+            Some(IdentificationNote::NoMatch)
+        );
+        assert_eq!(
+            stored.identification,
+            IdentificationState::Pending,
+            "saying why nothing happened is not deciding that nothing will"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_that_finally_got_a_name_stops_carrying_why_it_had_none() {
+        let (database, work) = work_in_library().await;
+        database
+            .set_identification_note(work.id, IdentificationNote::ProviderUnreachable)
+            .await
+            .expect("note written");
+
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+
+        assert_eq!(
+            database
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification_note,
+            None,
+            "a reason that outlives its cause is a lie on a screen"
         );
     }
 

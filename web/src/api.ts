@@ -18,9 +18,18 @@ export interface Card {
   runtime_minutes: number | null;
   rating: number | null;
   identification: "pending" | "identified" | "unidentified" | "manual";
+  /* Why the last look up failed, when one has run. Absent for a film nobody
+     has looked up yet, which is itself the answer. */
+  identification_note: IdentificationNote | null;
   color: string | null;
   poster: Picture[];
 }
+
+export type IdentificationNote =
+  | "no_match"
+  | "provider_unreachable"
+  | "provider_busy"
+  | "provider_unreadable";
 
 export interface Page {
   cards: Card[];
@@ -121,6 +130,7 @@ export interface Work {
   rating: number | null;
   age_rating: string | null;
   identification: Card["identification"];
+  identification_note: IdentificationNote | null;
   color: string | null;
   genres: string[];
   studios: string[];

@@ -17,6 +17,7 @@ use melyxar_app::AppState;
 use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::Millis;
+use melyxar_core::work::IdentificationNote;
 use serde::{Deserialize, Serialize};
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
@@ -212,6 +213,9 @@ struct CardView {
     /// anything but identified, so a film nobody recognised stays visible
     /// instead of being quietly set aside.
     identification: &'static str,
+    /// Why the last look up did not name it, when one has run and failed.
+    /// Absent for a film nobody has looked up yet, which is itself the answer.
+    identification_note: Option<&'static str>,
     /// Drawn under the picture while it loads, so a grid has colour from the
     /// first moment rather than grey holes.
     color: Option<String>,
@@ -256,6 +260,7 @@ fn card_view(card: &WorkCard) -> CardView {
         runtime_minutes: card.runtime.map(whole_minutes),
         rating: card.community_rating,
         identification: card.identification.as_str(),
+        identification_note: card.identification_note.map(IdentificationNote::as_str),
         color: card.dominant_color.clone(),
         poster: card.poster.iter().map(image_view).collect(),
     }
@@ -325,6 +330,7 @@ struct WorkView {
     rating: Option<f64>,
     age_rating: Option<String>,
     identification: &'static str,
+    identification_note: Option<&'static str>,
     color: Option<String>,
     genres: Vec<String>,
     studios: Vec<String>,
@@ -451,6 +457,7 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         rating: detail.work.community_rating,
         age_rating: detail.work.age_rating_label.clone(),
         identification: detail.work.identification.as_str(),
+        identification_note: detail.work.identification_note.map(IdentificationNote::as_str),
         color: detail.work.dominant_color.clone(),
         genres: detail.genres.clone(),
         studios: detail.studios.clone(),
