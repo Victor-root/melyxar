@@ -1249,6 +1249,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_description_file_belongs_to_the_folder_it_sits_in() {
+        // The one some tools write under a fixed name in a folder holding a
+        // single film. A rule that takes it from anywhere would give one
+        // film's identifiers to another.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
+        write(
+            &media.join("elsewhere"),
+            "movie.nfo",
+            b"<movie><tmdbid>99999</tmdbid></movie>",
+        );
+        write(&media.join("elsewhere"), "Amber.Field.2020.mkv", b"x");
+
+        let (state, library) = state_with(directory.path(), vec![("disk-one", media)], true).await;
+        scan(&state, &library).await;
+
+        let works = state
+            .database()
+            .recent_works(library.id, 10)
+            .await
+            .expect("read");
+        for work in &works {
+            let ids = state
+                .database()
+                .work_external_ids(work.id)
+                .await
+                .expect("read");
+            match work.title.starts_with("Amber") {
+                true => assert_eq!(
+                    ids,
+                    vec![("tmdb".to_string(), "99999".to_string())],
+                    "the film the description file sits beside"
+                ),
+                false => assert!(
+                    ids.is_empty(),
+                    "a film in another folder has nothing to do with it"
+                ),
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn a_file_the_analyser_cannot_read_is_counted_and_the_scan_carries_on() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let media = directory.path().join("films");
