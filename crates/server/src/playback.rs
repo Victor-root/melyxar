@@ -108,10 +108,11 @@ struct PlanView {
 #[derive(Debug, Serialize)]
 struct RebuildView {
     /// card or processor.
+    ///
+    /// Which card is deliberately not said: that is a fact about the machine,
+    /// and it belongs in the report and the log where the administrator reads
+    /// it, not in an answer handed to every viewer.
     by: &'static str,
-    /// The device the card is, when it is one. Only ever shown to whoever
-    /// administers the server: it is a fact about the machine.
-    device: Option<String>,
     codec: String,
     height: Option<i32>,
     /// Rate the picture is held to, in bits per second.
@@ -233,7 +234,6 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
                 true => "card",
                 false => "processor",
             },
-            device: rebuild.card_name(),
             codec: rebuild.codec.clone(),
             height: rebuild.height,
             bitrate: rebuild.bitrate,
