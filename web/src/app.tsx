@@ -13,11 +13,15 @@ import { SearchPage } from "./pages/search";
 import { WorkPage } from "./pages/work";
 import { ActivityPage } from "./pages/activity";
 import { SettingsPage } from "./pages/settings";
+import { RunningContext, useWatchedWork } from "./running";
 import { useSettings } from "./settings";
 
 export function App() {
   const { t } = useSettings();
   const [libraries, setLibraries] = useState<Library[]>([]);
+  // Watched here, where the bar that starts the work and the pages that show
+  // what it produced can both read it.
+  const running = useWatchedWork();
 
   // The libraries are what the whole navigation is built from, so they are
   // fetched once here rather than by every page that mentions them.
@@ -31,7 +35,7 @@ export function App() {
   }, []);
 
   return (
-    <>
+    <RunningContext.Provider value={running}>
       <Header libraries={libraries} />
       <Routes>
         <Route path="/" element={<HomePage libraries={libraries} />} />
@@ -45,6 +49,6 @@ export function App() {
       <footer className="footer">
         <span>{t("attribution.tmdb")}</span>
       </footer>
-    </>
+    </RunningContext.Provider>
   );
 }

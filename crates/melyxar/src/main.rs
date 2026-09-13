@@ -289,8 +289,9 @@ async fn identify_one_library(
     match report {
         Some(report) => {
             println!(
-                "{name}: {} identified, {} not recognised, {} put off until the provider answers",
-                report.identified, report.unidentified, report.postponed
+                "{name}: {} identified, {} not recognised, {} put off until the provider \
+                 answers, {} renamed after their file",
+                report.identified, report.unidentified, report.postponed, report.renamed
             );
             Ok(true)
         }

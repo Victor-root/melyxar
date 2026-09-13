@@ -354,7 +354,10 @@ async fn record_changes(
 /// way out would be to throw the database away.
 ///
 /// A title a provider gave, or a person chose by hand, is never touched.
-async fn reread_names_of_nameless_works(state: &AppState, library: &Library) -> Result<usize> {
+pub(crate) async fn reread_names_of_nameless_works(
+    state: &AppState,
+    library: &Library,
+) -> Result<usize> {
     let database = state.database();
     let year = melyxar_core::time::current_year();
     let mut renamed = 0;

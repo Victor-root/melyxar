@@ -1,19 +1,22 @@
 /*
- * What the server is busy with, for any page that wants to show it.
+ * What the server is busy with, watched once for the whole interface.
  *
  * A scan takes minutes on a real library. Starting one and seeing nothing
  * happen is the same thing as a broken button: somebody presses it again, then
- * goes looking in a terminal. So whoever starts work watches it, and the page
- * fills itself in when it is done rather than waiting to be reloaded.
+ * goes looking in a terminal. So whoever starts work watches it, and the pages
+ * fill themselves in when it is done rather than waiting to be reloaded.
  *
- * Asked for again only while something is actually running. A page with
- * nothing to watch asks once and then leaves the server alone, which is the
- * same rule the activity page already follows.
+ * Watched in one place rather than per page: the bar at the top offers the
+ * work and every page shows it, and two of them asking the same question twice
+ * a second is one too many.
+ *
+ * Asked for again only while something is actually running. With nothing to
+ * watch it asks once and then leaves the server alone.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api } from "./api";
-import type { Job } from "./api";
+import type { Job, Library } from "./api";
 
 /** How often the server is asked while it is busy. */
 const WHILE_BUSY_MS = 1500;
@@ -21,23 +24,24 @@ const WHILE_BUSY_MS = 1500;
 export interface Running {
   /** What is running right now, newest first as the server lists it. */
   jobs: Job[];
-  /** Told to look again now, after starting something from this page. */
+  /** Told to look again now, after starting something. */
   watch: () => void;
+  /** Counted up each time the last running job ends, so that a page which
+      wants what the work produced asks for it again and nothing else does. */
+  finished: number;
 }
 
-/**
- * Watches what the server is doing, and says when it has finished.
- *
- * `onFinished` is called once each time the last running job ends, which is
- * what a page uses to fetch what the work produced.
- */
-export function useRunning(onFinished?: () => void): Running {
+export const RunningContext = createContext<Running>({
+  jobs: [],
+  watch: () => {},
+  finished: 0,
+});
+
+/** What the provider at the top of the interface holds. */
+export function useWatchedWork(): Running {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [watching, setWatching] = useState(true);
-  /* Kept in a ref so that a page passing a fresh function on every render
-     does not restart the watching each time. */
-  const finished = useRef(onFinished);
-  finished.current = onFinished;
+  const [finished, setFinished] = useState(0);
   const wasBusy = useRef(false);
 
   const look = useCallback(async (signal?: AbortSignal) => {
@@ -50,7 +54,7 @@ export function useRunning(onFinished?: () => void): Running {
       }
       if (wasBusy.current) {
         wasBusy.current = false;
-        finished.current?.();
+        setFinished((count) => count + 1);
       }
       // Nothing is running, so there is nothing to come back for until
       // somebody starts something.
@@ -79,5 +83,31 @@ export function useRunning(onFinished?: () => void): Running {
     setWatching(true);
   }, []);
 
-  return { jobs, watch };
+  return { jobs, watch, finished };
+}
+
+/** What the server is doing, for any page or part of the bar that shows it. */
+export function useRunning(): Running {
+  return useContext(RunningContext);
+}
+
+/** How a scan of every library is asked for, wherever the button lives. */
+export function useStartScan(libraries: Library[]): {
+  start: () => Promise<void>;
+  starting: boolean;
+} {
+  const { watch } = useRunning();
+  const [starting, setStarting] = useState(false);
+
+  const start = useCallback(async () => {
+    setStarting(true);
+    try {
+      await Promise.all(libraries.map((library) => api.scan(library.id)));
+      watch();
+    } finally {
+      setStarting(false);
+    }
+  }, [libraries, watch]);
+
+  return { start, starting };
 }
