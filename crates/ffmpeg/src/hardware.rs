@@ -61,6 +61,19 @@ const ENOUGH_TO_READ: usize = 400;
 /// The name the trial gives the card inside one invocation.
 const DEVICE_NAME: &str = "card";
 
+/// What labels a generated picture as a wide gamut one, for the trial alone.
+///
+/// The conversion filter refuses anything that is not wide gamut, and rightly:
+/// there would be nothing to convert. A real film arrives carrying these
+/// labels, and a test pattern does not, so the trial puts them on. It is the
+/// one thing the trial adds to the chain a real film goes through.
+const LABELLED_WIDE_GAMUT: &str =
+    "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc";
+
+/// Size the trial works at. Small enough to take no time, large enough that a
+/// driver does not refuse it for being absurd.
+const TRIAL_HEIGHT: i32 = 180;
+
 /// A card this machine can really rebuild a picture on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Card {
@@ -237,43 +250,41 @@ impl CardSearch {
         }
         let floor = encoders[THE_FLOOR].clone();
 
-        let (can_scale, said) = try_it(
-            ffmpeg,
+        // The two remaining trials run the chain a real film will run, rather
+        // than something that resembles it: a filter that works on its own and
+        // refuses what comes out of the one before it is exactly the failure
+        // that only shows up in the middle of somebody's film.
+        let mut card = Card {
             way,
-            &device,
-            &floor,
-            &format!("format=nv12,hwupload,scale_{}=w=-2:h=180", way.as_str()),
-        )
-        .await;
+            device,
+            encoders,
+            can_scale: true,
+            can_tone_map: false,
+        };
+
+        let chain = card.filters_for(Some(TRIAL_HEIGHT), false).join(",");
+        let (can_scale, said) = try_it(ffmpeg, way, &card.device, &floor, &chain).await;
         self.trials.push(Trial {
             what: "make_it_smaller".to_string(),
             device: named.clone(),
             worked: can_scale,
             said,
         });
+        card.can_scale = can_scale;
 
-        let (can_tone_map, said) = try_it(
-            ffmpeg,
-            way,
-            &device,
-            &floor,
-            &format!("format=p010,hwupload,tonemap_{}=format=nv12", way.as_str()),
-        )
-        .await;
+        let mut chain = card.filters_for(Some(TRIAL_HEIGHT), true);
+        chain.insert(1, LABELLED_WIDE_GAMUT.to_string());
+        let (can_tone_map, said) =
+            try_it(ffmpeg, way, &card.device, &floor, &chain.join(",")).await;
         self.trials.push(Trial {
             what: "convert_wide_gamut".to_string(),
             device: named,
             worked: can_tone_map,
             said,
         });
+        card.can_tone_map = can_tone_map;
 
-        Some(Card {
-            way,
-            device,
-            encoders,
-            can_scale,
-            can_tone_map,
-        })
+        Some(card)
     }
 }
 

@@ -330,10 +330,9 @@ export interface PlaybackPlan {
 
 /** What is rebuilding the picture, and into what. */
 export interface PictureRebuild {
-  /** card or processor. */
+  /** card or processor. Which card is a fact about the machine, and stays in
+   *  the report where the administrator reads it. */
   by: "card" | "processor";
-  /** The device the card is, when it is one. */
-  device: string | null;
   codec: string;
   height: number | null;
   /** Rate the picture is held to, in bits per second. */
