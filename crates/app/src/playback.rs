@@ -349,6 +349,36 @@ fn subtitle_to_paint_on(plan: &PlayPlan) -> Option<i32> {
         .map(|track| track.stream_index)
 }
 
+/// The tallest picture a processor rebuilds while somebody watches it.
+///
+/// Measured on a four thread machine with a real wide gamut film: rebuilt at
+/// its own size it ran at a third of real time, which is a slideshow with
+/// sound. At this height the same film ran faster than real time, and a smooth
+/// picture beats a larger one nobody can watch.
+///
+/// Only ever true of a rebuild done in software. A card does this without
+/// noticing, and the day one is used the ceiling is not its.
+const TALLEST_SOFTWARE_REBUILD: i32 = 1080;
+
+/// How tall the rebuilt picture should be.
+///
+/// What the client asked for, and never more than the ceiling above. Absent
+/// when the picture is no taller than that already, since resizing a picture
+/// to its own size is work for nothing.
+fn height_to_rebuild_at(plan: &PlayPlan) -> Option<i32> {
+    let source_height = plan.tracks.iter().find_map(|track| match &track.kind {
+        melyxar_core::media::TrackKind::Video(details) => Some(details.height),
+        _ => None,
+    })?;
+    let ceiling = plan
+        .decision
+        .scale_to_height
+        .unwrap_or(i32::MAX)
+        .min(TALLEST_SOFTWARE_REBUILD);
+
+    (ceiling < source_height).then_some(ceiling)
+}
+
 /// Turns a decision into what the tool is asked to do.
 fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> Result<Recipe> {
     use melyxar_ffmpeg::command::{AudioOutput, StreamSelection, VideoOutput};
@@ -369,7 +399,7 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
         StreamAction::Copy => VideoOutput::Copy,
         StreamAction::Transcode => {
             let mut encode = melyxar_ffmpeg::command::VideoEncode::software_h264();
-            encode.scale_to_height = plan.decision.scale_to_height;
+            encode.scale_to_height = height_to_rebuild_at(plan);
             encode.tone_map = plan.decision.tone_map;
             encode.burn_in_subtitle = painted_on;
             // Key frames on the segment boundaries, which is what lets any
@@ -1473,6 +1503,50 @@ mod tests {
             outcome.is_err(),
             "a viewer is told before pressing play, not halfway through"
         );
+    }
+
+    #[test]
+    fn a_picture_rebuilt_in_software_is_never_rebuilt_larger_than_one_can_be() {
+        let plan = |height: i32, asked: Option<i32>| PlayPlan {
+            source_id: MediaSourceId::new(),
+            work_id: WorkId::new(),
+            path: PathBuf::from("/mnt/one/Films/Quiet.Harbour.mkv"),
+            size_bytes: 1_000,
+            duration: Some(Millis::new(7_200_000)),
+            decision: PlaybackDecision {
+                method: PlaybackMethod::FullTranscode,
+                video: StreamAction::Transcode,
+                audio: StreamAction::Transcode,
+                subtitles: SubtitleDelivery::None,
+                audio_stream_index: None,
+                subtitle_stream_index: None,
+                video_stream_index: Some(0),
+                scale_to_height: asked,
+                tone_map: true,
+                reasons: Vec::new(),
+            },
+            resume_from: None,
+            tracks: vec![video(MediaSourceId::new(), "hevc", height)],
+            downmix: DownmixMethod::BroadcastStandard,
+            downmix_gain: 2.0,
+        };
+
+        assert_eq!(
+            height_to_rebuild_at(&plan(2160, None)),
+            Some(1080),
+            "a processor cannot rebuild a picture that size while somebody watches it"
+        );
+        assert_eq!(
+            height_to_rebuild_at(&plan(2160, Some(720))),
+            Some(720),
+            "a client asking for less is asking for less, not for the ceiling"
+        );
+        assert_eq!(
+            height_to_rebuild_at(&plan(1080, None)),
+            None,
+            "resizing a picture to its own size is work for nothing"
+        );
+        assert_eq!(height_to_rebuild_at(&plan(720, None)), None);
     }
 
     #[tokio::test]
