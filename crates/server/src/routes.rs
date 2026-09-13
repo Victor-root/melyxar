@@ -108,7 +108,9 @@ async fn diagnostics(
 /// it holds everything worth asking about. Rendered by the same code as the
 /// command line, because two renderings of one report drift apart and the
 /// second one is always the one nobody checked.
-async fn diagnostics_text(State(state): State<AppState>) -> Result<([(&'static str, &'static str); 1], String)> {
+async fn diagnostics_text(
+    State(state): State<AppState>,
+) -> Result<([(&'static str, &'static str); 1], String)> {
     let report = melyxar_app::diagnostics::collect(&state).await?;
     Ok((
         [("content-type", "text/plain; charset=utf-8")],

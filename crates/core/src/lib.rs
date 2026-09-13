@@ -25,9 +25,4 @@ pub use error::{Error, Result};
 /// Carried so that a report says which build produced it. A version number
 /// alone changes when somebody remembers to change it, and every account of a
 /// problem would otherwise begin by asking whether the fix is even in there.
-pub const BUILD: &str = concat!(
-    env!("CARGO_PKG_VERSION"),
-    " (",
-    env!("MELYXAR_BUILD"),
-    ")"
-);
+pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("MELYXAR_BUILD"), ")");

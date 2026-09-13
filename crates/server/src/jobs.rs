@@ -175,13 +175,15 @@ async fn candidates(
 
     let query = match asked.query.map(|value| value.trim().to_string()) {
         Some(query) if !query.is_empty() => query,
-        _ => state
-            .database()
-            .work(work_id)
-            .await
-            .map_err(internal)?
-            .ok_or_else(|| ServerError::not_found("no work with that identifier"))?
-            .title,
+        _ => {
+            state
+                .database()
+                .work(work_id)
+                .await
+                .map_err(internal)?
+                .ok_or_else(|| ServerError::not_found("no work with that identifier"))?
+                .title
+        }
     };
 
     let found = melyxar_app::identify::candidates_for(&state, &provider, work_id, &query).await?;

@@ -488,7 +488,10 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         rating: detail.work.community_rating,
         age_rating: detail.work.age_rating_label.clone(),
         identification: detail.work.identification.as_str(),
-        identification_note: detail.work.identification_note.map(IdentificationNote::as_str),
+        identification_note: detail
+            .work
+            .identification_note
+            .map(IdentificationNote::as_str),
         color: detail.work.dominant_color.clone(),
         genres: detail.genres.clone(),
         studios: detail.studios.clone(),

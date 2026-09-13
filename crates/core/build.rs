@@ -15,7 +15,11 @@ fn main() {
 
     // Without these the answer is computed once and then frozen into the
     // cached build for ever, which is the one thing this must not do.
-    for path in [".git/HEAD", ".git/refs/heads/develop", ".git/refs/heads/main"] {
+    for path in [
+        ".git/HEAD",
+        ".git/refs/heads/develop",
+        ".git/refs/heads/main",
+    ] {
         println!("cargo:rerun-if-changed=../../{path}");
     }
 }

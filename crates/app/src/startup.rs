@@ -160,7 +160,10 @@ pub async fn reconcile_libraries(database: &Database, config: &Config) -> Result
                 // Only add roots that are new. Removing one is an explicit
                 // action, never a side effect of editing a file.
                 for root in &declared.roots {
-                    let Some(stored) = existing.roots.iter().find(|stored| stored.path == root.path)
+                    let Some(stored) = existing
+                        .roots
+                        .iter()
+                        .find(|stored| stored.path == root.path)
                     else {
                         database
                             .add_root(existing.id, &root.label, &root.path)
