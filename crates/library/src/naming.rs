@@ -52,11 +52,7 @@ pub fn parse(file_name: &str, current_year: i32) -> ParsedName {
 /// `markers` comes from `markers_in`, which reads them off the library rather
 /// than from any list: whoever named these files put the same word at the end
 /// of many of them, and that word is never part of a title.
-pub fn parse_signed(
-    file_name: &str,
-    current_year: i32,
-    markers: &BTreeSet<String>,
-) -> ParsedName {
+pub fn parse_signed(file_name: &str, current_year: i32, markers: &BTreeSet<String>) -> ParsedName {
     let stem = strip_extension(file_name);
     // The underscore separates words just like the dot does. Personal markers
     // attach themselves to the previous tag with one, and without this rule
@@ -100,8 +96,7 @@ const REPEATED_ENOUGH: usize = 3;
 /// Deliberately learnt rather than written down: a mark written into this file
 /// would name whoever uses it, and would only ever fit one library.
 pub fn markers_in<S: AsRef<str>>(file_names: &[S]) -> BTreeSet<String> {
-    let mut counted: std::collections::BTreeMap<String, usize> =
-        std::collections::BTreeMap::new();
+    let mut counted: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
 
     for name in file_names {
         let stem = strip_extension(name.as_ref());
@@ -250,11 +245,53 @@ fn find_year(words: &[&str], current_year: i32) -> Option<usize> {
 /// one is not trying to be complete: it only has to hold the words that no
 /// title contains, so that a name carrying no year still has a boundary.
 const TECHNICAL_TAGS: &[&str] = &[
-    "2160p", "1440p", "1080p", "1080i", "720p", "576p", "480p", "4klight", "hdlight", "bluray",
-    "brrip", "bdrip", "webrip", "web-dl", "webdl", "hdtv", "dvdrip", "dvdscr", "remux", "x264",
-    "x265", "h264", "h265", "hevc", "xvid", "divx", "av1", "10bit", "8bit", "hdr", "hdr10",
-    "truehd", "atmos", "dts", "ac3", "eac3", "aac", "multi", "vostfr", "vff", "vfq", "vfi", "vf2",
-    "subfrench", "truefrench", "proper", "repack",
+    "2160p",
+    "1440p",
+    "1080p",
+    "1080i",
+    "720p",
+    "576p",
+    "480p",
+    "4klight",
+    "hdlight",
+    "bluray",
+    "brrip",
+    "bdrip",
+    "webrip",
+    "web-dl",
+    "webdl",
+    "hdtv",
+    "dvdrip",
+    "dvdscr",
+    "remux",
+    "x264",
+    "x265",
+    "h264",
+    "h265",
+    "hevc",
+    "xvid",
+    "divx",
+    "av1",
+    "10bit",
+    "8bit",
+    "hdr",
+    "hdr10",
+    "truehd",
+    "atmos",
+    "dts",
+    "ac3",
+    "eac3",
+    "aac",
+    "multi",
+    "vostfr",
+    "vff",
+    "vfq",
+    "vfi",
+    "vf2",
+    "subfrench",
+    "truefrench",
+    "proper",
+    "repack",
 ];
 
 /// Where the description of the file starts, in a name that has no year.
@@ -262,10 +299,20 @@ const TECHNICAL_TAGS: &[&str] = &[
 /// The first word that can only be technical ends the title. Everything after
 /// it is description, whatever it happens to be, which is what makes this work
 /// on markers the list has never heard of.
+///
+/// A tag is also recognised when whoever named the file wrote it in two words.
+/// The same marker turns up both ways, and a name where it went unrecognised
+/// hands a provider a title with a description stuck on the end, which finds
+/// nothing at all.
 fn first_technical_tag(words: &[&str]) -> Option<usize> {
     words.iter().enumerate().skip(1).find_map(|(index, word)| {
         let lowered = bare(word).to_lowercase();
-        TECHNICAL_TAGS.contains(&lowered.as_str()).then_some(index)
+        let is_a_tag = TECHNICAL_TAGS.contains(&lowered.as_str())
+            || words
+                .get(index + 1)
+                .map(|next| format!("{lowered}{}", bare(next).to_lowercase()))
+                .is_some_and(|joined| TECHNICAL_TAGS.contains(&joined.as_str()));
+        is_a_tag.then_some(index)
     })
 }
 
@@ -606,6 +653,33 @@ mod tests {
     }
 
     #[test]
+    fn a_technical_tag_written_in_two_words_is_cut_at_like_any_other() {
+        // The same marker is written both ways, and one of them used to leave
+        // the title with a description stuck on the end. A provider asked
+        // about that answers nothing at all, which is the whole cost.
+        for name in [
+            "Quiet Harbour BD Rip.avi",
+            "Quiet Harbour Blu Ray.mkv",
+            "Quiet Harbour Web Rip.mp4",
+            "Quiet Harbour DVD Rip.avi",
+        ] {
+            let result = parsed(name);
+            assert_eq!(result.title, "Quiet Harbour", "title of {name}");
+            assert_eq!(result.year, None, "year of {name}");
+        }
+    }
+
+    #[test]
+    fn two_words_that_only_look_like_a_tag_side_by_side_leave_the_title_alone() {
+        // The second word is what makes it a tag; on its own the first is an
+        // ordinary word, and dropping it would cost the rest of the title.
+        assert_eq!(
+            parsed("Quiet Harbour Web Of Lies.mkv").title,
+            "Quiet Harbour Web Of Lies"
+        );
+    }
+
+    #[test]
     fn a_marker_shouting_at_the_end_of_a_title_is_not_part_of_it() {
         let result = parsed("Quiet Harbour By The Sea SOMEGROUP.mkv");
         assert_eq!(result.title, "Quiet Harbour By The Sea");
@@ -796,7 +870,10 @@ mod tests {
         let letter_then_accent = "La rue\u{301}e vers l'or";
         assert_ne!(one_character, letter_then_accent, "different text");
 
-        assert_eq!(fold_accents(one_character), fold_accents(letter_then_accent));
+        assert_eq!(
+            fold_accents(one_character),
+            fold_accents(letter_then_accent)
+        );
         assert_eq!(
             sort_title(one_character),
             sort_title(letter_then_accent),
@@ -918,7 +995,12 @@ mod tests {
     fn every_shape_the_collection_actually_uses_parses_correctly() {
         // One case per shape observed in the real collection, written with
         // invented titles. Extended whenever a new shape turns up.
-        let cases: [(&str, &str, Option<i32>); 6] = [
+        let cases: [(&str, &str, Option<i32>); 7] = [
+            (
+                "Amber Field BD Rip.avi",
+                "Amber Field",
+                None,
+            ),
             (
                 "Quiet.Harbour.Rising.2019.MULTi.TRUEFRENCH.1080p.BluRay.x264_MYTAG.mkv",
                 "Quiet Harbour Rising",
