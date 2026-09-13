@@ -1,13 +1,14 @@
 //! Playing: what the answer is, and the bytes themselves.
 //!
-//! Two routes. One says how a film reaches this client and where the viewer
-//! stopped, with the reasons behind the answer so a page can explain itself.
-//! The other hands over the file.
+//! One route says how a film reaches this client and where the viewer stopped,
+//! with the reasons behind the answer so a page can explain itself. The rest
+//! hand over bytes: the file as it lies on the disk, a session of segments for
+//! a film this client cannot open, and the words that go on top.
 //!
-//! Handing it over is done by `tower-http`, which already speaks the part of
-//! the protocol that matters here: a player asks for the stretch of the film
-//! it is about to show rather than the whole thing, so moving the cursor to
-//! the last ten minutes fetches the last ten minutes. Writing that by hand
+//! Handing a file over is done by `tower-http`, which already speaks the part
+//! of the protocol that matters here: a player asks for the stretch of the
+//! film it is about to show rather than the whole thing, so moving the cursor
+//! to the last ten minutes fetches the last ten minutes. Writing that by hand
 //! would mean writing an entire specification by hand.
 
 use axum::body::Body;
@@ -41,6 +42,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/playback/{id}/session",
             axum::routing::post(open_session),
+        )
+        .route(
+            "/api/v1/playback/{id}/subtitles/{track}",
+            axum::routing::get(subtitle),
         )
         // One route for the three things a session hands out. A router allows
         // one name per part of a path, and a segment is named after its
@@ -104,6 +109,9 @@ struct TrackView {
     channels: Option<i32>,
     /// Subtitles only: showing it means rebuilding the picture.
     burns_in: Option<bool>,
+    /// Where to fetch the words. Absent for a soundtrack, and for a subtitle
+    /// made of pictures: there is no text in one to hand over.
+    url: Option<String>,
 }
 
 async fn plan(
@@ -146,6 +154,7 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
                 is_default: track.is_default,
                 channels: Some(details.channels),
                 burns_in: None,
+                url: None,
             }),
             TrackKind::Subtitle(details) => subtitles.push(TrackView {
                 id: track.id.to_string(),
@@ -155,6 +164,12 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
                 is_default: track.is_default,
                 channels: None,
                 burns_in: Some(details.forces_full_transcode()),
+                url: (!details.forces_full_transcode()).then(|| {
+                    format!(
+                        "/api/v1/playback/{}/subtitles/{}.vtt",
+                        plan.source_id, track.id
+                    )
+                }),
             }),
             TrackKind::Video(_) => {}
         }
@@ -231,6 +246,49 @@ async fn serve_file(state: &AppState, id: &str, request: Request<Body>) -> Resul
         .await
         .map(IntoResponse::into_response)
         .map_err(|error| ServerError::internal(error.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// The words on top of it
+// ---------------------------------------------------------------------------
+
+/// Hands over one subtitle track in the form a browser draws.
+///
+/// Converted on the first request and read from the cache afterwards, so a
+/// viewer turning subtitles on waits once and nobody waits again.
+async fn subtitle(
+    State(state): State<AppState>,
+    RoutePath((id, track)): RoutePath<(String, String)>,
+    request: Request<Body>,
+) -> Response {
+    match serve_subtitle(&state, &id, &track, request).await {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
+async fn serve_subtitle(
+    state: &AppState,
+    id: &str,
+    track: &str,
+    request: Request<Body>,
+) -> Result<Response> {
+    let source_id = parse_source(id)?;
+    // The name a client sends carries the suffix a browser expects to see on
+    // the address; what it names is an identifier, never a path.
+    let track_id = parse_track(track.strip_suffix(".vtt").unwrap_or(track))?;
+
+    let path = melyxar_app::subtitles::as_web_vtt(state, source_id, track_id).await?;
+    let mut response = ServeFile::new(&path)
+        .oneshot(request)
+        .await
+        .map(IntoResponse::into_response)
+        .map_err(|error| ServerError::internal(error.to_string()))?;
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/vtt; charset=utf-8"),
+    );
+    Ok(response)
 }
 
 // ---------------------------------------------------------------------------
@@ -539,6 +597,19 @@ mod tests {
         // server down rather than failing one request. That is exactly what
         // happened, and only when it was run.
         let _ = router();
+    }
+
+    #[test]
+    fn a_subtitle_is_asked_for_by_a_name_that_ends_the_way_a_browser_expects() {
+        // The suffix belongs to the address, not to what it names: a client
+        // sends an identifier, and it is read as one.
+        assert!(parse_track(
+            "01a09a58-ebee-75e5-aac2-00082f6b86de.vtt"
+                .strip_suffix(".vtt")
+                .expect("the suffix is there")
+        )
+        .is_ok());
+        assert!(parse_track("../../etc/passwd").is_err());
     }
 
     #[test]

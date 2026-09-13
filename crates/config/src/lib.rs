@@ -92,6 +92,15 @@ impl Directories {
         self.cache.join("images")
     }
 
+    /// Directory holding subtitles converted to the form a browser draws.
+    ///
+    /// In the cache rather than with the film: the media folders are read only
+    /// as far as this server is concerned, and a converted subtitle is made
+    /// again in a moment from the file it came from.
+    pub fn subtitles(&self) -> PathBuf {
+        self.cache.join("subtitles")
+    }
+
     pub fn backups(&self) -> PathBuf {
         self.data.join("backups")
     }

@@ -18,6 +18,7 @@ pub mod command;
 pub mod images;
 pub mod probe;
 pub mod process;
+pub mod subtitles;
 
 use std::path::PathBuf;
 

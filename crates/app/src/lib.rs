@@ -17,6 +17,7 @@ pub mod playback;
 pub mod scan;
 pub mod startup;
 pub mod state;
+pub mod subtitles;
 
 pub use state::AppState;
 
