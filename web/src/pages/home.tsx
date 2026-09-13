@@ -8,11 +8,25 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import type { Home as HomeData, Library } from "../api";
 import { Card } from "../components/card";
-import { Grid } from "../components/grid";
+import { Row } from "../components/row";
 import { JobLine } from "../components/job";
 import { useRunning, useStartIdentification, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
 import { useSettings } from "../settings";
+
+/**
+ * How far into a film somebody is, between nothing and one.
+ *
+ * Absent when the film has no length recorded, since a fraction of an unknown
+ * is not a fraction. Capped, because a position past the end is a report that
+ * arrived oddly and not a film watched twice over.
+ */
+function howFarIn(seconds: number, runtimeMinutes: number | null): number | undefined {
+  if (!runtimeMinutes || runtimeMinutes <= 0) {
+    return undefined;
+  }
+  return Math.min(1, seconds / (runtimeMinutes * 60));
+}
 
 export function HomePage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
@@ -111,7 +125,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
         <div className="section-head">
           <h1>{t("nav.libraries")}</h1>
         </div>
-        <div className="library-row">
+        <Row>
           {libraries.map((library) => (
             <Link key={library.id} className="library-tile" to={`/library/${library.id}`}>
               <span className="library-name">{library.name}</span>
@@ -129,8 +143,28 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
               ))}
             </Link>
           ))}
-        </div>
+        </Row>
       </section>
+
+      {/* What was left halfway, before anything else on the page: it is the
+          one thing somebody comes back for, and finding it used to mean
+          remembering the title and hunting it down in the whole library. */}
+      {home.carry_on.length > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <h2>{t("home.carry_on")}</h2>
+          </div>
+          <Row>
+            {home.carry_on.map((card) => (
+              <Card
+                key={card.id}
+                card={card}
+                watched={howFarIn(card.position_seconds, card.runtime_minutes)}
+              />
+            ))}
+          </Row>
+        </section>
+      )}
 
       {/* Work the server is doing, shown where somebody lands rather than on a
           page they have to think of opening. */}
@@ -167,11 +201,11 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
             </>
           )}
         </div>
-        <Grid>
+        <Row>
           {home.recently_added.map((card) => (
             <Card key={card.id} card={card} />
           ))}
-        </Grid>
+        </Row>
       </section>
 
       {/* The server said no, which is an answer and belongs on the screen that

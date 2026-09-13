@@ -312,6 +312,8 @@ struct HomeParams {
 
 #[derive(Debug, Serialize)]
 struct HomeView {
+    /// Films this viewer started and has not finished, the latest first.
+    carry_on: Vec<CarryOnView>,
     /// What a home page leads with, newest first.
     recently_added: Vec<CardView>,
     works: i64,
@@ -320,14 +322,33 @@ struct HomeView {
     awaiting_identification: i64,
 }
 
+/// One film somebody started and has not finished.
+#[derive(Debug, Serialize)]
+struct CarryOnView {
+    #[serde(flatten)]
+    card: CardView,
+    /// Where they got to, so a card can draw how far in it is rather than
+    /// asking again for every film in the row.
+    position_seconds: f64,
+}
+
 async fn home(
     State(state): State<AppState>,
     Query(params): Query<HomeParams>,
 ) -> Result<Json<HomeView>> {
     let library_id = params.library.as_deref().map(parse_library).transpose()?;
-    let page = melyxar_app::catalogue::home(&state, library_id).await?;
+    let page =
+        melyxar_app::catalogue::home(&state, library_id, crate::viewer(&state).await?).await?;
 
     Ok(Json(HomeView {
+        carry_on: page
+            .carry_on
+            .iter()
+            .map(|entry| CarryOnView {
+                card: card_view(&entry.card),
+                position_seconds: entry.position.get() as f64 / 1000.0,
+            })
+            .collect(),
         recently_added: page.recently_added.cards.iter().map(card_view).collect(),
         works: page.works,
         awaiting_identification: page.awaiting_identification,

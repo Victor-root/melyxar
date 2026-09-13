@@ -5,11 +5,12 @@
 //! a second entry point, a command line or a television client, behave exactly
 //! like the browser without any rule being written twice.
 
-use melyxar_core::id::LibraryId;
+use melyxar_core::id::{LibraryId, UserId};
 use melyxar_core::library::{LibraryKind, RootAccess};
 
 use crate::browse::{BrowseRequest, WorkOrder, WorkPage};
 use crate::{AppState, Result};
+use melyxar_database::playback::WorkToCarryOn;
 
 /// A library as a menu shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +45,12 @@ pub struct Filters {
 /// What a home page leads with.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Home {
+    /// Films this viewer started and has not finished, the latest first.
+    ///
+    /// First on the page, before anything else: a film left halfway is the one
+    /// thing somebody comes back for, and finding it meant remembering its
+    /// title and hunting it down in the whole library.
+    pub carry_on: Vec<WorkToCarryOn>,
     pub recently_added: WorkPage,
     pub works: i64,
     pub awaiting_identification: i64,
@@ -53,6 +60,12 @@ pub struct Home {
 ///
 /// Enough to fill a wide screen twice over, few enough to arrive at once.
 const RECENTLY_ADDED: i64 = 24;
+
+/// How many unfinished films the home page offers.
+///
+/// A row, not a library: past a certain number these are films somebody
+/// abandoned rather than films they mean to come back to.
+const CARRY_ON: i64 = 20;
 
 /// Every library, with what it holds and what the server can reach.
 pub async fn libraries(state: &AppState) -> Result<Vec<LibrarySummary>> {
@@ -102,7 +115,7 @@ pub async fn browse(state: &AppState, request: &BrowseRequest) -> Result<WorkPag
 }
 
 /// What a home page opens on.
-pub async fn home(state: &AppState, library_id: Option<LibraryId>) -> Result<Home> {
+pub async fn home(state: &AppState, library_id: Option<LibraryId>, viewer: UserId) -> Result<Home> {
     let database = state.database();
     let recently_added = database
         .browse_works(&BrowseRequest {
@@ -115,6 +128,7 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>) -> Result<Hom
         .await?;
 
     Ok(Home {
+        carry_on: database.works_to_carry_on(viewer, CARRY_ON).await?,
         recently_added,
         works: database.count_browsable(library_id).await?,
         awaiting_identification: database.catalogue_summary().await?.awaiting_identification,
@@ -128,7 +142,7 @@ mod tests {
     use melyxar_core::work::WorkKind;
     use melyxar_database::Database;
 
-    async fn state_with_films(titles: &[&str]) -> (tempfile::TempDir, AppState, LibraryId) {
+    async fn state_with_films(titles: &[&str]) -> (tempfile::TempDir, AppState, LibraryId, UserId) {
         let directory = tempfile::tempdir().expect("temporary directory");
         let media = directory.path().join("films");
         std::fs::create_dir_all(&media).expect("media folder");
@@ -178,13 +192,24 @@ mod tests {
                 .expect("work created");
         }
 
+        // A home page shows what somebody left halfway, so there has to be a
+        // somebody. The server makes this account for itself at first start.
+        let viewer = database
+            .create_user(
+                crate::startup::DEFAULT_ACCOUNT_NAME,
+                None,
+                &melyxar_core::user::Permissions::administrator(),
+            )
+            .await
+            .expect("account created");
+
         let state = AppState::new(config, database, None, None);
-        (directory, state, library.id)
+        (directory, state, library.id, viewer.id)
     }
 
     #[tokio::test]
     async fn a_menu_is_told_what_each_library_holds_and_what_it_can_reach() {
-        let (_directory, state, library_id) =
+        let (_directory, state, library_id, _viewer) =
             state_with_films(&["Quiet Harbour", "Amber Field"]).await;
 
         let summaries = libraries(&state).await.expect("read");
@@ -241,11 +266,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_home_page_offers_back_what_was_left_halfway() {
+        let (_directory, state, library_id, viewer) =
+            state_with_films(&["Quiet Harbour", "Amber Field"]).await;
+        let started = state
+            .database()
+            .recent_works(library_id, 10)
+            .await
+            .expect("read")
+            .pop()
+            .expect("a film");
+
+        assert!(
+            home(&state, Some(library_id), viewer)
+                .await
+                .expect("read")
+                .carry_on
+                .is_empty(),
+            "nothing was started, so there is nothing to carry on"
+        );
+
+        state
+            .database()
+            .record_playback_progress(
+                viewer,
+                started.id,
+                melyxar_core::time::Millis::new(1_800_000),
+                melyxar_core::work::PlaybackState::InProgress,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("recorded");
+
+        let page = home(&state, Some(library_id), viewer).await.expect("read");
+        assert_eq!(page.carry_on.len(), 1);
+        assert_eq!(page.carry_on[0].card.id, started.id);
+        assert_eq!(
+            page.carry_on[0].position,
+            melyxar_core::time::Millis::new(1_800_000),
+            "a card has to know how far in it is without asking again per film"
+        );
+    }
+
+    #[tokio::test]
     async fn a_home_page_leads_with_what_arrived_last() {
-        let (_directory, state, library_id) =
+        let (_directory, state, library_id, viewer) =
             state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
 
-        let page = home(&state, Some(library_id)).await.expect("read");
+        let page = home(&state, Some(library_id), viewer).await.expect("read");
         assert_eq!(page.works, 3);
         assert_eq!(page.recently_added.cards.len(), 3);
         assert_eq!(
@@ -260,7 +328,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_grid_reads_one_page_at_a_time() {
-        let (_directory, state, library_id) =
+        let (_directory, state, library_id, _viewer) =
             state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
 
         let page = browse(
@@ -279,7 +347,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_filter_menu_of_an_empty_library_offers_nothing_rather_than_failing() {
-        let (_directory, state, library_id) = state_with_films(&[]).await;
+        let (_directory, state, library_id, _viewer) = state_with_films(&[]).await;
         assert_eq!(
             filters(&state, Some(library_id)).await.expect("read"),
             Filters::default()
@@ -288,7 +356,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_filter_menu_offers_what_the_library_actually_holds() {
-        let (_directory, state, library_id) = state_with_films(&["Quiet Harbour"]).await;
+        let (_directory, state, library_id, _viewer) = state_with_films(&["Quiet Harbour"]).await;
         let work = state
             .database()
             .browse_works(&BrowseRequest {
@@ -344,7 +412,7 @@ mod tests {
     async fn a_home_page_shows_one_library_rather_than_the_whole_server() {
         // Two libraries, and the page was asked about one of them: a home page
         // that answers with everything puts films from elsewhere on it.
-        let (_directory, state, library_id) = state_with_films(&["Quiet Harbour"]).await;
+        let (_directory, state, library_id, viewer) = state_with_films(&["Quiet Harbour"]).await;
         let elsewhere = state
             .database()
             .create_library(
@@ -370,12 +438,12 @@ mod tests {
             .await
             .expect("work created");
 
-        let page = home(&state, Some(library_id)).await.expect("read");
+        let page = home(&state, Some(library_id), viewer).await.expect("read");
         assert_eq!(page.works, 1);
         assert_eq!(page.recently_added.cards.len(), 1);
         assert_eq!(page.recently_added.cards[0].title, "Quiet Harbour");
 
-        let everything = home(&state, None).await.expect("read");
+        let everything = home(&state, None, viewer).await.expect("read");
         assert_eq!(
             everything.works, 2,
             "without a library named, a home page covers the whole server"
@@ -390,9 +458,9 @@ mod tests {
             .map(|index| format!("Invented Title {:02}", 29 - index))
             .collect();
         let borrowed: Vec<&str> = titles.iter().map(String::as_str).collect();
-        let (_directory, state, library_id) = state_with_films(&borrowed).await;
+        let (_directory, state, library_id, viewer) = state_with_films(&borrowed).await;
 
-        let page = home(&state, Some(library_id)).await.expect("read");
+        let page = home(&state, Some(library_id), viewer).await.expect("read");
         assert_eq!(page.works, 30, "the count covers everything");
         assert_eq!(
             page.recently_added.cards.len(),

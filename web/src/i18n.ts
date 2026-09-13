@@ -186,6 +186,10 @@ const en: Dictionary = {
   "byhand.look": "Search",
   "byhand.nothing": "Nothing came back under that name. Try another spelling, or the title it was shot under.",
 
+  "home.carry_on": "Carry on watching",
+  "row.back": "Earlier in this row",
+  "row.on": "Further along this row",
+
   "library.letters": "Jump to a letter",
   "library.letters.all": "All",
 
@@ -444,6 +448,10 @@ const fr: Dictionary = {
   "byhand.field": "Titre à chercher",
   "byhand.look": "Chercher",
   "byhand.nothing": "Rien ne revient sous ce nom. Essayez une autre orthographe, ou le titre original.",
+
+  "home.carry_on": "Reprendre la lecture",
+  "row.back": "Revenir en arrière dans cette rangée",
+  "row.on": "Avancer dans cette rangée",
 
   "library.letters": "Aller à une lettre",
   "library.letters.all": "Tout",

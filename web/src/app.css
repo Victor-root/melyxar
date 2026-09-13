@@ -454,6 +454,23 @@
   border: 1px solid var(--border-strong);
 }
 
+/* Drawn on the poster itself: it is the one thing that tells two cards of a
+   row apart at a glance. */
+.card-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.card-progress-done {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
 .card-rating {
   position: absolute;
   right: 8px;
@@ -485,6 +502,80 @@
 /* --------------------------------------------------------------------------
  * Libraries on the home page
  * ----------------------------------------------------------------------- */
+
+/* A row that scrolls sideways rather than spilling onto four lines. A section
+   of a home page is a suggestion, and a suggestion four lines tall is a page
+   to scroll past before reaching the next one. */
+.row {
+  position: relative;
+}
+
+.row-track {
+  display: flex;
+  gap: var(--gap);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  /* Room for the focus ring and the raised state of a card, which a hidden
+     overflow would otherwise clip. */
+  padding: 4px 4px var(--gap-tight);
+  margin: -4px -4px calc(var(--gap-tight) * -1);
+  scrollbar-width: none;
+}
+
+.row-track::-webkit-scrollbar {
+  display: none;
+}
+
+.row-track > * {
+  flex: 0 0 var(--card-width);
+  scroll-snap-align: start;
+}
+
+@media (min-width: 1400px) {
+  .row-track > * {
+    flex-basis: var(--card-width-wide);
+  }
+}
+
+/* A tile is as wide as its words, never a card's width. */
+.row-track > .library-tile {
+  flex: 0 0 auto;
+}
+
+.row-arrow {
+  position: absolute;
+  top: 0;
+  bottom: var(--gap-tight);
+  z-index: 2;
+  width: 44px;
+  border: none;
+  border-radius: var(--radius-card);
+  background: linear-gradient(to right, var(--surface-deep), transparent);
+  color: var(--text);
+  font-size: 26px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+.row-arrow:hover {
+  opacity: 1;
+}
+
+.row-arrow-back {
+  left: calc(var(--gap-tight) * -1);
+}
+
+.row-arrow-on {
+  right: calc(var(--gap-tight) * -1);
+  background: linear-gradient(to left, var(--surface-deep), transparent);
+}
+
+/* Nothing to hover on a touch screen, and a finger swipes the row anyway. */
+@media (hover: none) {
+  .row-arrow {
+    display: none;
+  }
+}
 
 .library-row {
   display: flex;

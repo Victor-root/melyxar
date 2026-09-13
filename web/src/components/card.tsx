@@ -12,7 +12,7 @@ import type { Card as CardData } from "../api";
 import { pictureSet } from "../api";
 import { useSettings } from "../settings";
 
-export function Card({ card }: { card: CardData }) {
+export function Card({ card, watched }: { card: CardData; watched?: number }) {
   const { t } = useSettings();
   const poster = pictureSet(card.poster);
   const unknown = card.identification === "unidentified" || card.identification === "pending";
@@ -53,6 +53,13 @@ export function Card({ card }: { card: CardData }) {
           </span>
         )}
         {card.rating !== null && <span className="card-rating">{card.rating.toFixed(1)}</span>}
+        {/* How far in this film already is, drawn on the poster itself: it is
+            the one thing that tells two cards of a row apart at a glance. */}
+        {watched !== undefined && watched > 0 && (
+          <span className="card-progress" aria-hidden="true">
+            <span className="card-progress-done" style={{ width: `${watched * 100}%` }} />
+          </span>
+        )}
       </div>
       <span className="card-title">{card.title}</span>
       <span className="card-year">{card.year ?? ""}</span>
