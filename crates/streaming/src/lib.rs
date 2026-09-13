@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 pub mod playlist;
+pub mod registry;
 pub mod session;
 
 #[derive(Debug, thiserror::Error)]
