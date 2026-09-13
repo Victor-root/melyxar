@@ -10,7 +10,8 @@
 //! A picture that will not come is never a failure of the film: the work is
 //! identified, the card shows its colour, and the picture arrives another day.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use melyxar_core::fingerprint;
 use melyxar_core::id::WorkId;
@@ -35,6 +36,11 @@ impl Kind {
             Self::Backdrop => "backdrop",
             Self::Photo => "photo",
         }
+    }
+
+    /// Whether the colour of this picture is what a card is painted with.
+    fn carries_the_colour_of_its_work(self) -> bool {
+        matches!(self, Self::Poster)
     }
 
     fn widths(self) -> &'static [u32] {
@@ -130,11 +136,14 @@ const FACES_FETCHED: usize = 18;
 /// Only the actors, and only the first of them: nobody scrolls to the
 /// forty-third name, and a face already fetched for another film is never
 /// fetched again, since people are shared.
-pub async fn store_person_photos(
+pub async fn store_person_photos<P>(
     state: &AppState,
-    provider: &impl MetadataProvider,
+    provider: &Arc<P>,
     people: &[CreditedPerson],
-) -> usize {
+) -> usize
+where
+    P: MetadataProvider + 'static,
+{
     let Some(tools) = state.tools() else {
         return 0;
     };
@@ -145,22 +154,61 @@ pub async fn store_person_photos(
         .collect();
     cast.sort_by_key(|person| person.ordinal);
 
-    let mut prepared = 0;
-    for person in cast.into_iter().take(FACES_FETCHED) {
-        let owner_id = person.person_id.to_db_string();
-        let path = person.photo_path.as_deref().unwrap_or_default();
-        match store_one(state, provider, &tools.ffmpeg, Kind::Photo, &owner_id, path).await {
-            Ok(Some(_)) => prepared += 1,
-            Ok(None) => {}
-            Err(error) => {
-                tracing::warn!(
-                    error = %error,
-                    "a face could not be prepared; the page shows the name on its own"
-                );
+    let wanted: Vec<(String, String)> = cast
+        .into_iter()
+        .take(FACES_FETCHED)
+        .map(|person| {
+            (
+                person.person_id.to_db_string(),
+                person.photo_path.clone().unwrap_or_default(),
+            )
+        })
+        .collect();
+    if wanted.is_empty() {
+        return 0;
+    }
+
+    // A film brings up to eighteen faces, and a face is mostly a wait on
+    // somebody else's server. Fetched one after another they decide how long
+    // naming a whole library takes, so several are in flight at once, bounded
+    // by what the configuration allows for picture work: the bound is what
+    // keeps a first fill from taking the machine away from whoever is watching
+    // something.
+    let limit = state.config().limits.concurrent_image_jobs;
+    let owned_state = state.clone();
+    let tool = tools.ffmpeg.clone();
+    let shared = Arc::clone(provider);
+
+    let prepared = melyxar_jobs::for_each_bounded(wanted, limit, move |(owner_id, path)| {
+        let state = owned_state.clone();
+        let tool = tool.clone();
+        let provider = Arc::clone(&shared);
+        async move {
+            match store_one(
+                &state,
+                provider.as_ref(),
+                &tool,
+                Kind::Photo,
+                &owner_id,
+                &path,
+            )
+            .await
+            {
+                Ok(Some(_)) => 1,
+                Ok(None) => 0,
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "a face could not be prepared; the page shows the name on its own"
+                    );
+                    0
+                }
             }
         }
-    }
-    prepared
+    })
+    .await;
+
+    prepared.iter().sum()
 }
 
 /// What preparing one picture left behind.
@@ -213,36 +261,59 @@ async fn store_one(
     let original = folder.join(format!("{}-{fingerprint}.source", kind.as_str()));
     tokio::fs::write(&original, &bytes).await?;
 
-    let colour = melyxar_ffmpeg::images::average_colour(tool, &original)
-        .await
-        .ok();
+    // Read only where it is used. A card is painted with the colour of its
+    // poster; nothing anywhere shows the average colour of a backdrop or of a
+    // face, and reading one costs a run of the tool per picture.
+    let colour = match kind.carries_the_colour_of_its_work() {
+        true => melyxar_ffmpeg::images::average_colour(tool, &original)
+            .await
+            .ok(),
+        false => None,
+    };
     let source_size = source_dimensions(state, &original).await;
 
+    let names: Vec<(u32, String)> = kind
+        .widths()
+        .iter()
+        .map(|width| {
+            (
+                *width,
+                format!("{}-{fingerprint}-{width}.webp", kind.as_str()),
+            )
+        })
+        .collect();
+    let destinations: Vec<(u32, PathBuf)> = names
+        .iter()
+        .map(|(width, name)| (*width, folder.join(name)))
+        .collect();
+    let borrowed: Vec<(u32, &Path)> = destinations
+        .iter()
+        .map(|(width, path)| (*width, path.as_path()))
+        .collect();
+
     let mut prepared = Vec::new();
-    for width in kind.widths() {
-        let name = format!("{}-{fingerprint}-{width}.webp", kind.as_str());
-        let destination = folder.join(&name);
-        if let Err(error) =
-            melyxar_ffmpeg::images::resize(tool, &original, &destination, *width).await
-        {
+    match melyxar_ffmpeg::images::resize(tool, &original, &borrowed).await {
+        Ok(()) => {
+            for (width, name) in &names {
+                prepared.push(StoredImage {
+                    owner_kind: kind.owner_kind().to_string(),
+                    owner_id: owner_id.to_string(),
+                    image_kind: kind.as_str().to_string(),
+                    relative_path: format!("{}/{owner_id}/{name}", kind.folder()),
+                    width: Some(*width as i32),
+                    height: source_size.map(|(w, h)| scaled_height(*width, w, h)),
+                    fingerprint: fingerprint.clone(),
+                    dominant_color: colour.clone(),
+                });
+            }
+        }
+        Err(error) => {
             tracing::warn!(
                 kind = kind.as_str(),
-                width = width,
                 error = %error,
-                "one size of a picture could not be written"
+                "a picture could not be written in the sizes the interface serves"
             );
-            continue;
         }
-        prepared.push(StoredImage {
-            owner_kind: kind.owner_kind().to_string(),
-            owner_id: owner_id.to_string(),
-            image_kind: kind.as_str().to_string(),
-            relative_path: format!("{}/{owner_id}/{name}", kind.folder()),
-            width: Some(*width as i32),
-            height: source_size.map(|(w, h)| scaled_height(*width, w, h)),
-            fingerprint: fingerprint.clone(),
-            dominant_color: colour.clone(),
-        });
     }
 
     // The picture as it arrived has done its work.
