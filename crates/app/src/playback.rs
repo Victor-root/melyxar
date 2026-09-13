@@ -91,7 +91,17 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         )));
     }
 
+    // Nothing ever managed to describe this file: no container, no streams.
+    // There is nothing to decide with, and a conversion started anyway would
+    // be refused by the tool after a wait. Saying so here puts the answer on
+    // the screen that asked for it, and the report names the file and why.
     let tracks = database.tracks_of_source(request.source_id).await?;
+    if source.container.is_none() && tracks.is_empty() {
+        return Err(AppError::Domain(melyxar_core::Error::not_described(
+            "nothing has managed to read this file, so there is nothing to play it with",
+        )));
+    }
+
     let media = melyxar_core::media::MediaSource {
         id: source.id,
         work_id: source.work_id,
@@ -1463,6 +1473,42 @@ mod tests {
             outcome.is_err(),
             "a viewer is told before pressing play, not halfway through"
         );
+    }
+
+    #[tokio::test]
+    async fn a_file_nothing_could_read_is_refused_with_a_reason_of_its_own() {
+        // Such a file has no container and no streams recorded, so there is
+        // nothing to decide with. Left to go ahead it was described as a
+        // repackaging, for no reason anybody could read, and the tool then
+        // refused it after a wait.
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Le.Cirque.mkv", "matroska,webm", |_| Vec::new()).await;
+        state
+            .database()
+            .forget_analysis(state.database().list_libraries().await.expect("read")[0].id)
+            .await
+            .expect("the analysis is forgotten");
+
+        let outcome = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: None,
+            },
+        )
+        .await;
+
+        match outcome {
+            Err(AppError::Domain(error)) => assert_eq!(
+                error.code,
+                melyxar_core::error::ErrorCode::NotDescribed,
+                "a viewer has to be told it is the file, not the server"
+            ),
+            other => panic!("a file nothing could read is not playable: {other:?}"),
+        }
     }
 
     #[tokio::test]
