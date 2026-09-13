@@ -199,7 +199,9 @@ mod tests {
         assert!(line.contains("[in0]scale=200:-1"), "{line}");
         assert!(line.contains("[in1]scale=800:-1"), "{line}");
         assert!(
-            line.contains("-map [out0] -frames:v 1 -c:v libwebp -quality 80 /cache/poster-200.webp"),
+            line.contains(
+                "-map [out0] -frames:v 1 -c:v libwebp -quality 80 /cache/poster-200.webp"
+            ),
             "each width is an output of its own: {line}"
         );
         assert!(line.ends_with("/cache/poster-800.webp"), "{line}");
