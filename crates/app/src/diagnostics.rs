@@ -243,7 +243,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             })
             .collect(),
         incomplete: database
-            .works_missing_something(INCOMPLETE_SHOWN)
+            .works_missing_something()
             .await?
             .into_iter()
             .map(|work| IncompleteReport {
@@ -267,8 +267,10 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
 /// block somebody reads.
 const NAMELESS_SHOWN: i64 = 25;
 
-/// How many incomplete films the report names.
-const INCOMPLETE_SHOWN: i64 = 25;
+/// How many incomplete films the report names before saying how many more.
+///
+/// The report is one block somebody reads; the list behind it is not cut.
+const INCOMPLETE_SHOWN: usize = 25;
 
 /// How many finished pieces of work the report carries.
 ///
@@ -474,7 +476,7 @@ pub fn render_text(report: &Diagnostics) -> String {
 
     if !report.incomplete.is_empty() {
         line!("#", "Films missing something");
-        for film in &report.incomplete {
+        for film in report.incomplete.iter().take(INCOMPLETE_SHOWN) {
             let year = match film.year {
                 Some(year) => format!(" ({year})"),
                 None => String::new(),
@@ -482,6 +484,12 @@ pub fn render_text(report: &Diagnostics) -> String {
             line!(
                 "!",
                 format!("{}{year}  no {}", film.title, film.missing.join(", no ")),
+            );
+        }
+        if report.incomplete.len() > INCOMPLETE_SHOWN {
+            line!(
+                " ",
+                format!("  and {} more", report.incomplete.len() - INCOMPLETE_SHOWN),
             );
         }
         out.push('\n');

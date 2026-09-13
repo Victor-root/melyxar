@@ -406,10 +406,7 @@ async fn marks_of(
     state: &AppState,
     library: &Library,
 ) -> Result<std::collections::BTreeSet<String>> {
-    let names = state
-        .database()
-        .source_names_of_library(library.id)
-        .await?;
+    let names = state.database().source_names_of_library(library.id).await?;
     Ok(naming::markers_in(&names))
 }
 
@@ -1104,8 +1101,8 @@ mod tests {
         write(&media, "Amber Field (2020) 1080p SOMEGROUP.mkv", b"x");
         write(&media, "Winter Signal 2160p SOMEGROUP.mkv", b"x");
 
-        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media.clone())])
-            .await;
+        let (state, library) =
+            state_with_roots(directory.path(), vec![("disk-one", media.clone())]).await;
         scan(&state, &library).await;
         let before = state
             .database()
