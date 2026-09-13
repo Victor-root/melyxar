@@ -110,11 +110,15 @@ Vérifié dans l'environnement de travail, sur de vrais films : la grille et la 
 
 Fait : la décision pure avec ses raisons, le profil demandé au navigateur lui-même (chaque combinaison essayée, jamais devinée d'après le nom du navigateur), le fichier servi par morceaux, le lecteur, la position enregistrée pendant la lecture et une dernière fois en partant, la reprise et le bouton distinct pour repartir du début, le choix des pistes pendant la lecture avec mémoire du choix (par film jusqu'à la piste, par langue pour les films suivants), le repliement stéréo comme entrée de la décision, la vitesse de lecture, l'image dans un coin et les raccourcis clavier.
 
+Fait aussi : l'écran de réglages qui permet enfin de choisir tout cela. Le repliement, le niveau qui le suit, et les langues audio et sous-titres préférées vivaient dans la base avec leur valeur par défaut, sans écran ni route pour les changer. Les langues proposées sont celles que la bibliothèque contient vraiment, lues dans les pistes elles-mêmes.
+
 Reste : la courbe de volume, à vérifier à l'oreille par le mainteneur. Un film que le navigateur ne sait pas ouvrir tel quel le dit clairement : le convertir est le jalon 5.
 
 À savoir : par défaut le serveur replie lui-même un son multicanal en stéréo plutôt que de laisser le navigateur le faire, parce que le repliement des navigateurs enterre les dialogues sous les effets. Cela coûte une reconstruction du son, la page le dit, et le réglage permet de laisser faire le navigateur.
 
 Vérifié dans un vrai navigateur : le film se lit, la page explique pourquoi il se lit de cette façon, quitter à douze secondes et revenir repart à douze secondes, repartir du début repart bien de zéro, la piste audio choisie revient à la visite suivante, et un rapport de position qui arrive en retard est refusé.
+
+Vérifié de bout en bout, de l'écran jusqu'au son : sur un film 5.1 que le navigateur sait lire tel quel, choisir « laisser faire l'outil » donne une lecture directe, choisir « dialogues, le soir » la transforme en reconstruction du son avec la raison affichée, et la commande réellement envoyée à FFmpeg porte la matrice de ce repliement, le gain choisi, puis la limitation, dans cet ordre.
 
 - Crate `playback` avec la décision pure et ses raisons.
 - Profil de capacités construit par le client web et envoyé au serveur.
