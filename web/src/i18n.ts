@@ -105,7 +105,7 @@ const en: Dictionary = {
   "credit.composer": "Composer",
 
   "player.close": "Back",
-  "player.not_yet": "Not playable as it is",
+  "player.rebuilt": "Prepared by the server",
   "player.resume": "Resume",
   "player.from_the_start": "From the beginning",
   "player.no_subtitle": "None",
@@ -113,9 +113,11 @@ const en: Dictionary = {
   "player.corner": "Corner",
   "player.unknown_language": "Language not stated",
   "player.burns_in_short": "drawn into the picture",
-  "player.conversion_not_built": "This film has to be converted for this browser, and converting is not built yet. It plays as it is on a player that opens the file.",
+  "player.preparing": "Preparing the film...",
   "player.missing": "The file is not on the disk at the moment.",
   "player.cannot_play": "This browser could not play the film.",
+  "player.too_busy": "The server is already rebuilding as many films as it can at once. Try again in a moment.",
+  "player.no_conversion": "This server has no media tools, so a film it cannot hand over as it is cannot be played.",
 
   "playback.direct_play": "Played as it is on the disk.",
   "playback.remux": "Repackaged on the way out, without touching the picture or the sound.",
@@ -241,7 +243,7 @@ const fr: Dictionary = {
   "credit.composer": "Musique",
 
   "player.close": "Retour",
-  "player.not_yet": "Pas lisible tel quel",
+  "player.rebuilt": "Préparé par le serveur",
   "player.resume": "Reprendre",
   "player.from_the_start": "Depuis le début",
   "player.no_subtitle": "Aucun",
@@ -249,9 +251,11 @@ const fr: Dictionary = {
   "player.corner": "Dans un coin",
   "player.unknown_language": "Langue non précisée",
   "player.burns_in_short": "incrustés dans l’image",
-  "player.conversion_not_built": "Ce film doit être converti pour ce navigateur, et la conversion n’est pas encore faite. Il se lit tel quel sur un lecteur qui ouvre le fichier.",
+  "player.preparing": "Préparation du film...",
   "player.missing": "Le fichier n'est pas sur le disque en ce moment.",
   "player.cannot_play": "Ce navigateur n'a pas réussi à lire le film.",
+  "player.too_busy": "Le serveur reconstruit déjà autant de films qu'il peut à la fois. Réessayez dans un instant.",
+  "player.no_conversion": "Ce serveur n'a pas les outils multimédias : un film qu'il ne peut pas transmettre tel quel ne peut pas être lu.",
 
   "playback.direct_play": "Lu tel quel depuis le disque.",
   "playback.remux": "Remis dans une autre boîte en sortant, sans toucher à l'image ni au son.",

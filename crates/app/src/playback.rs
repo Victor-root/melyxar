@@ -263,18 +263,13 @@ pub async fn remember_chosen_tracks(
 /// play as it is never reaches here: it is served as a file, which costs
 /// nothing at all.
 pub async fn open_session(state: &AppState, plan: &PlayPlan) -> Result<Arc<Session>> {
-    let sessions = state.sessions().ok_or_else(|| {
-        AppError::Domain(melyxar_core::Error::new(
-            melyxar_core::error::ErrorCode::DependencyMissing,
+    let no_tools = || {
+        AppError::Domain(melyxar_core::Error::dependency_missing(
             "this server has no media tools, so nothing can be converted",
         ))
-    })?;
-    let capabilities = state.capabilities().ok_or_else(|| {
-        AppError::Domain(melyxar_core::Error::new(
-            melyxar_core::error::ErrorCode::DependencyMissing,
-            "this server has no media tools, so nothing can be converted",
-        ))
-    })?;
+    };
+    let sessions = state.sessions().ok_or_else(no_tools)?;
+    let capabilities = state.capabilities().ok_or_else(no_tools)?;
 
     let recipe = recipe_for(plan, capabilities)?;
     let expensive = plan.decision.method.is_expensive();
@@ -314,8 +309,7 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
         StreamAction::Copy => AudioOutput::Copy,
         StreamAction::Transcode => {
             let encoder = capabilities.audio_encoder().ok_or_else(|| {
-                AppError::Domain(melyxar_core::Error::new(
-                    melyxar_core::error::ErrorCode::DependencyMissing,
+                AppError::Domain(melyxar_core::Error::dependency_missing(
                     "these media tools cannot build a soundtrack a browser reads",
                 ))
             })?;
@@ -336,6 +330,69 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
         video,
         audio,
     })
+}
+
+/// How often sessions nobody is watching are looked for.
+///
+/// Often enough that a closed tab is forgotten within a minute or so of the
+/// idle limit, rarely enough that a server doing nothing is doing nothing.
+const SWEEP_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Removes what a previous run left on the disk.
+///
+/// Only ever called by the server on its way up, never by a command run
+/// alongside a live server: the folders it removes belong to sessions nobody
+/// will come back for, and telling them apart is knowing that nothing of this
+/// run exists yet.
+pub async fn tidy_up_after_a_previous_run(state: &AppState) {
+    if let Some(sessions) = state.sessions() {
+        sessions.sweep_what_a_previous_run_left().await;
+    }
+}
+
+/// Keeps sweeping away sessions nobody is watching, for as long as it runs.
+///
+/// A viewer never says goodbye: they close a tab, lose a connection, put a
+/// telephone in a pocket. Without this, the media tool started for them would
+/// keep producing a film nobody will ever see.
+pub fn keep_sessions_swept(state: &AppState) -> tokio::task::JoinHandle<()> {
+    sweep_repeatedly(
+        state,
+        SWEEP_EVERY,
+        melyxar_streaming::registry::KEPT_WHILE_IDLE,
+    )
+}
+
+/// The loop itself, with both delays given rather than assumed.
+///
+/// Written this way so a test can watch a real session be swept by the real
+/// loop in a moment, instead of waiting two minutes or trusting that the loop
+/// says what it means.
+fn sweep_repeatedly(
+    state: &AppState,
+    every: std::time::Duration,
+    idle_for: std::time::Duration,
+) -> tokio::task::JoinHandle<()> {
+    let state = state.clone();
+    tokio::spawn(async move {
+        let mut ticks = tokio::time::interval(every);
+        loop {
+            ticks.tick().await;
+            if let Some(sessions) = state.sessions() {
+                sessions.sweep(idle_for).await;
+            }
+        }
+    })
+}
+
+/// Closes every session, which is what a server does on its way out.
+///
+/// This is the point of a clean stop: a session owns an external process, and
+/// leaving one behind is exactly the failure this project set out to avoid.
+pub async fn close_every_session(state: &AppState) {
+    if let Some(sessions) = state.sessions() {
+        sessions.close_all().await;
+    }
 }
 
 /// Records where a viewer got to.
@@ -1024,6 +1081,121 @@ mod tests {
             "without a length there is no playlist to write, and a player would \
              be handed a film of no duration"
         );
+    }
+
+    /// The same server, but able to convert: the sessions only exist when the
+    /// media tools do.
+    async fn state_that_can_convert() -> (tempfile::TempDir, AppState) {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let config = melyxar_config::Config {
+            directories: melyxar_config::Directories {
+                data: directory.path().join("data"),
+                cache: directory.path().join("cache"),
+                transcodes: directory.path().join("cache/transcodes"),
+            },
+            ..melyxar_config::Config::default()
+        };
+        crate::startup::prepare_directories(&config).expect("directories prepared");
+        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        assert!(tools.is_some(), "the tools are installed here");
+
+        let database = Database::open_in_memory().await.expect("database opens");
+        let state = AppState::new(config, database, tools, capabilities);
+        (directory, state)
+    }
+
+    #[tokio::test]
+    async fn folders_of_a_run_that_is_over_are_gone_before_this_one_serves() {
+        // A crash, a power cut, a container killed outright: nothing else ever
+        // comes back for these, and the disk fills up quietly.
+        let (directory, state) = state_that_can_convert().await;
+        let left_behind = directory
+            .path()
+            .join("cache/transcodes")
+            .join("01a0-left-behind");
+        std::fs::create_dir_all(&left_behind).expect("an old folder");
+
+        tidy_up_after_a_previous_run(&state).await;
+
+        assert!(!left_behind.exists());
+    }
+
+    #[tokio::test]
+    async fn stopping_closes_every_session_rather_than_leaving_a_tool_running() {
+        let (_directory, state) = state_that_can_convert().await;
+        let sessions = state.sessions().expect("this server converts").clone();
+        sessions
+            .open(
+                Recipe {
+                    source: std::path::PathBuf::from("Quiet.Harbour.2019.mkv"),
+                    duration: Millis::new(20_000),
+                    streams: melyxar_ffmpeg::command::StreamSelection::default(),
+                    video: melyxar_ffmpeg::command::VideoOutput::Copy,
+                    audio: melyxar_ffmpeg::command::AudioOutput::Copy,
+                },
+                false,
+            )
+            .await
+            .expect("a session");
+        assert_eq!(sessions.live_count().await, 1);
+
+        close_every_session(&state).await;
+
+        assert_eq!(
+            sessions.live_count().await,
+            0,
+            "a session outliving the server is the failure this project set out to avoid"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_session_nobody_came_back_for_is_swept_while_the_server_runs() {
+        // The viewer closed the tab, so nothing will ever ask this session for
+        // anything again. Nobody is coming to clean up but this loop.
+        let (_directory, state) = state_that_can_convert().await;
+        let sessions = state.sessions().expect("this server converts").clone();
+        sessions
+            .open(
+                Recipe {
+                    source: std::path::PathBuf::from("Quiet.Harbour.2019.mkv"),
+                    duration: Millis::new(20_000),
+                    streams: melyxar_ffmpeg::command::StreamSelection::default(),
+                    video: melyxar_ffmpeg::command::VideoOutput::Copy,
+                    audio: melyxar_ffmpeg::command::AudioOutput::Copy,
+                },
+                false,
+            )
+            .await
+            .expect("a session");
+
+        let sweeper = sweep_repeatedly(
+            &state,
+            std::time::Duration::from_millis(10),
+            std::time::Duration::from_millis(20),
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        sweeper.abort();
+
+        assert_eq!(
+            sessions.live_count().await,
+            0,
+            "a session nobody came back for has to go on its own"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_server_that_converts_nothing_stops_and_tidies_without_trouble() {
+        // No media tools, so no sessions at all. Both must be a quiet no-op
+        // rather than something the binary has to guard against.
+        let (_directory, state, _user_id, _source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080), audio(id, "aac", 2, true)]
+            })
+            .await;
+        assert!(state.sessions().is_none());
+
+        tidy_up_after_a_previous_run(&state).await;
+        close_every_session(&state).await;
     }
 
     #[tokio::test]

@@ -239,6 +239,16 @@ export interface PlaybackPlan {
   subtitles: PlaybackTrack[];
 }
 
+/** A film being converted as it is watched. */
+export interface PlaybackSession {
+  id: string;
+  /** What the player is pointed at: the whole film, listed before any of it
+   *  has been produced, so a viewer can jump anywhere at once. */
+  playlist_url: string;
+  duration_minutes: number | null;
+  resume_from_seconds: number | null;
+}
+
 export interface BrowseOptions {
   library?: string;
   order?: string;
@@ -288,6 +298,21 @@ export const api = {
   }) => post<{ remembered: boolean }>("/api/v1/playback/tracks", body),
   plan: (source: string, body: unknown, signal?: AbortSignal) =>
     post<PlaybackPlan>(`/api/v1/playback/${source}/plan`, body, signal),
+  openSession: (source: string, body: unknown, signal?: AbortSignal) =>
+    post<PlaybackSession>(`/api/v1/playback/${source}/session`, body, signal),
+  /**
+   * Closes a session, including while the page is going away.
+   *
+   * A request started as a tab closes is normally dropped, and a dropped one
+   * here means a media tool converting a film nobody is watching until the
+   * server notices on its own. Kept alive, the browser delivers it anyway.
+   */
+  closeSession: (session: string) => {
+    void fetch(`/api/v1/stream/${session}`, { method: "DELETE", keepalive: true }).catch(() => {
+      // A session that could not be closed is swept by the server once
+      // nobody has asked it for anything, so there is nothing to say here.
+    });
+  },
   /**
    * The same, handed to the browser to deliver while the page goes away.
    *

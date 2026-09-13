@@ -117,7 +117,52 @@ impl IntoResponse for ServerError {
 
 impl From<melyxar_app::AppError> for ServerError {
     fn from(error: melyxar_app::AppError) -> Self {
-        Self::internal(error.to_string())
+        match error {
+            // A domain failure already says what kind of thing went wrong, in
+            // a word a client keys its own wording on. Flattening it into one
+            // generic failure would leave every client saying "something went
+            // wrong" for a disk that is merely unplugged.
+            melyxar_app::AppError::Domain(domain) => {
+                Self::new(status_for(domain.code), domain.code, domain.detail.clone())
+            }
+            melyxar_app::AppError::Streaming(trouble) => Self::from(trouble),
+            other => Self::internal(other.to_string()),
+        }
+    }
+}
+
+/// What a domain failure looks like over HTTP.
+fn status_for(code: ErrorCode) -> StatusCode {
+    match code {
+        ErrorCode::NotFound => StatusCode::NOT_FOUND,
+        ErrorCode::AlreadyExists | ErrorCode::Conflict => StatusCode::CONFLICT,
+        ErrorCode::InvalidInput => StatusCode::BAD_REQUEST,
+        ErrorCode::Unauthenticated => StatusCode::UNAUTHORIZED,
+        ErrorCode::Forbidden | ErrorCode::PathNotAllowed => StatusCode::FORBIDDEN,
+        // Both will work again once a disk is plugged back in or a tool is
+        // installed, which is what tells a client to say so rather than to
+        // announce a failure of the server itself.
+        ErrorCode::RootUnavailable | ErrorCode::DependencyMissing => {
+            StatusCode::SERVICE_UNAVAILABLE
+        }
+        ErrorCode::ExternalServiceUnavailable => StatusCode::BAD_GATEWAY,
+        ErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+impl From<melyxar_app::playback::StreamingError> for ServerError {
+    fn from(error: melyxar_app::playback::StreamingError) -> Self {
+        use melyxar_app::playback::StreamingError as Failure;
+        match error {
+            // The session was swept away while nobody was watching. A player
+            // that comes back asks for a new one rather than failing outright.
+            Failure::NoSuchSession => Self::not_found("that session is over"),
+            Failure::NoSuchSegment => Self::not_found("that segment is not part of this film"),
+            Failure::TooManyAtOnce => {
+                Self::busy("this server is already converting all it can at once")
+            }
+            other => Self::internal(other.to_string()),
+        }
     }
 }
 
@@ -154,5 +199,57 @@ mod tests {
         let rendered =
             serde_json::to_string(&ApiError::new(ErrorCode::Internal)).expect("serialises");
         assert!(!rendered.contains("details"));
+    }
+
+    #[test]
+    fn a_domain_failure_keeps_the_word_a_client_reads() {
+        // Flattening these into one generic failure would leave every client
+        // saying "something went wrong" for a disk that is merely unplugged.
+        for (code, status) in [
+            (ErrorCode::NotFound, StatusCode::NOT_FOUND),
+            (ErrorCode::AlreadyExists, StatusCode::CONFLICT),
+            (ErrorCode::Conflict, StatusCode::CONFLICT),
+            (ErrorCode::InvalidInput, StatusCode::BAD_REQUEST),
+            (ErrorCode::Unauthenticated, StatusCode::UNAUTHORIZED),
+            (ErrorCode::Forbidden, StatusCode::FORBIDDEN),
+            (ErrorCode::PathNotAllowed, StatusCode::FORBIDDEN),
+            (ErrorCode::RootUnavailable, StatusCode::SERVICE_UNAVAILABLE),
+            (
+                ErrorCode::DependencyMissing,
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (
+                ErrorCode::ExternalServiceUnavailable,
+                StatusCode::BAD_GATEWAY,
+            ),
+            (ErrorCode::Internal, StatusCode::INTERNAL_SERVER_ERROR),
+        ] {
+            let error = ServerError::from(melyxar_app::AppError::Domain(melyxar_core::Error::new(
+                code,
+                "what went wrong, for the log",
+            )));
+            assert_eq!(error.code(), code.as_str());
+            assert_eq!(error.status, status, "for {code}");
+        }
+    }
+
+    #[test]
+    fn a_machine_converting_all_it_can_says_so_rather_than_failing() {
+        let error = ServerError::from(melyxar_app::AppError::Streaming(
+            melyxar_app::playback::StreamingError::TooManyAtOnce,
+        ));
+        assert_eq!(error.code(), "conflict");
+        assert_eq!(error.status, StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn a_session_that_is_over_is_not_reported_as_a_broken_server() {
+        // A player that comes back after a pause asks for a new session; it
+        // must not be told the server itself is broken.
+        let error = ServerError::from(melyxar_app::AppError::Streaming(
+            melyxar_app::playback::StreamingError::NoSuchSession,
+        ));
+        assert_eq!(error.code(), "not_found");
+        assert_eq!(error.status, StatusCode::NOT_FOUND);
     }
 }
