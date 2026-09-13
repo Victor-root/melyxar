@@ -160,6 +160,19 @@ impl Database {
         .await?;
         Ok(result.rows_affected())
     }
+
+    /// Forgets the work that is over, and answers how much it forgot.
+    ///
+    /// The history is there to be read, and a history nobody can clear stops
+    /// being readable: what matters is the last failure, not the four hundred
+    /// runs before it. What is still running is never touched, since it is not
+    /// history yet.
+    pub async fn forget_finished_jobs(&self) -> Result<u64> {
+        let result = sqlx::query("DELETE FROM jobs WHERE state NOT IN ('queued', 'running')")
+            .execute(self.writer())
+            .await?;
+        Ok(result.rows_affected())
+    }
 }
 
 fn job_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Job> {
@@ -349,6 +362,52 @@ mod tests {
                 .state,
             JobState::Succeeded,
             "a job that already ended is left alone"
+        );
+    }
+
+    #[tokio::test]
+    async fn clearing_the_history_keeps_what_is_still_running() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let running = database
+            .create_job(JobKind::ScanLibrary, JobPriority::REQUESTED, None)
+            .await
+            .expect("job created");
+        database
+            .mark_job_running(running.id)
+            .await
+            .expect("job running");
+        for state in [JobState::Succeeded, JobState::Failed, JobState::Cancelled] {
+            let job = database
+                .create_job(JobKind::Backup, JobPriority::BACKGROUND, None)
+                .await
+                .expect("job created");
+            database
+                .finish_job(job.id, state, None)
+                .await
+                .expect("job finished");
+        }
+
+        assert_eq!(
+            database
+                .forget_finished_jobs()
+                .await
+                .expect("history cleared"),
+            3
+        );
+        assert_eq!(database.recent_jobs(50).await.expect("read").len(), 1);
+        assert_eq!(
+            database
+                .job(running.id)
+                .await
+                .expect("read")
+                .expect("a scan under way is not history"),
+            database
+                .unfinished_jobs()
+                .await
+                .expect("read")
+                .into_iter()
+                .next()
+                .expect("still there")
         );
     }
 

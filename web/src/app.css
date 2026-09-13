@@ -216,6 +216,34 @@
   padding: var(--gap) 0;
 }
 
+/* The button and, when a browser refuses the clipboard, the report itself. */
+.report {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--gap-tight);
+}
+
+.report-open {
+  flex: 1 0 100%;
+}
+
+.report-text {
+  width: 100%;
+  min-width: 0;
+  padding: var(--gap);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+  resize: vertical;
+}
+
 .notice-faint {
   color: var(--text-faint);
   font-size: 13px;

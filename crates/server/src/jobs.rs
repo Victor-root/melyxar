@@ -17,6 +17,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/jobs", axum::routing::get(jobs))
         .route("/api/v1/jobs/{id}/cancel", axum::routing::post(cancel))
+        .route("/api/v1/jobs/finished", axum::routing::delete(forget))
         .route(
             "/api/v1/libraries/{id}/scan",
             axum::routing::post(start_scan),
@@ -157,6 +158,26 @@ async fn cancel(
 #[derive(Debug, Serialize)]
 struct StoppedView {
     stopped: bool,
+}
+
+/// Forgets the work that is over.
+///
+/// A history that cannot be cleared stops being read: the run that matters is
+/// the last one, not the four hundred before it. What is still running stays,
+/// because it is not history yet.
+async fn forget(State(state): State<AppState>) -> Result<Json<ForgottenView>> {
+    Ok(Json(ForgottenView {
+        forgotten: state
+            .database()
+            .forget_finished_jobs()
+            .await
+            .map_err(internal)?,
+    }))
+}
+
+#[derive(Debug, Serialize)]
+struct ForgottenView {
+    forgotten: u64,
 }
 
 async fn library_of(state: &AppState, id: &str) -> Result<melyxar_core::library::Library> {

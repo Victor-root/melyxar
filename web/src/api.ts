@@ -202,8 +202,28 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** The same as above for a report the server renders itself. */
+async function getText(path: string, signal?: AbortSignal): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(path, { signal, headers: { accept: "text/plain" } });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") {
+      throw cause;
+    }
+    throw new ApiError("unreachable", 0);
+  }
+
+  if (!response.ok) {
+    throw new ApiError("generic", response.status);
+  }
+  return response.text();
+}
+
 const post = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
   send<T>("POST", path, body, signal);
+const remove = <T>(path: string, signal?: AbortSignal) =>
+  send<T>("DELETE", path, undefined, signal);
 const put = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
   send<T>("PUT", path, body, signal);
 
@@ -342,6 +362,11 @@ export const api = {
   scan: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/scan`),
   identify: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/identify`),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
+  forgetFinishedJobs: () => remove<{ forgotten: number }>("/api/v1/jobs/finished"),
+  /* Everything worth asking about this installation, in one block of text
+     rendered by the server so that it says exactly what the command line
+     says. */
+  report: (signal?: AbortSignal) => getText("/api/v1/system/diagnostics/text", signal),
   rememberTracks: (body: {
     work_id: string;
     source_id: string;

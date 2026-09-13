@@ -24,6 +24,23 @@ pub struct Diagnostics {
     pub accounts: i64,
     pub libraries: usize,
     pub catalogue: CatalogueReport,
+    /// The last pieces of work and what became of them.
+    ///
+    /// In the report rather than only in a log, because a run that failed says
+    /// why it failed here, and that is the first question worth asking when
+    /// something did not happen.
+    pub recent_work: Vec<WorkReport>,
+}
+
+/// One piece of background work, as the diagnostic shows it.
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkReport {
+    pub kind: &'static str,
+    pub state: &'static str,
+    pub done: i64,
+    pub total: Option<i64>,
+    /// Why it failed, when it did. This is the line that is worth reading.
+    pub failure_reason: Option<String>,
 }
 
 /// What the library actually holds, which is the first thing anyone asks
@@ -180,7 +197,29 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                 awaiting_identification: summary.awaiting_identification,
                 metadata_available: state.metadata_provider().is_some(),
             })?,
+        recent_work: database
+            .recent_jobs(WORK_SHOWN)
+            .await?
+            .iter()
+            .map(work_report)
+            .collect(),
     })
+}
+
+/// How many finished pieces of work the report carries.
+///
+/// Enough to show a failure and the runs around it, few enough that the report
+/// stays something a person reads in one go.
+const WORK_SHOWN: i64 = 10;
+
+fn work_report(job: &melyxar_core::job::Job) -> WorkReport {
+    WorkReport {
+        kind: job.kind.as_str(),
+        state: job.state.as_str(),
+        done: job.progress_done,
+        total: job.progress_total,
+        failure_reason: job.failure_reason.clone(),
+    }
 }
 
 fn directory_report(purpose: &'static str, path: &std::path::Path) -> DirectoryReport {
@@ -338,6 +377,27 @@ pub fn render_text(report: &Diagnostics) -> String {
                 report.catalogue.awaiting_identification
             ),
         );
+    }
+    out.push('\n');
+
+    line!("#", "Recent work");
+    if report.recent_work.is_empty() {
+        line!("+", "nothing has run yet");
+    }
+    for work in &report.recent_work {
+        let progress = match work.total {
+            Some(total) => format!("{} of {total}", work.done),
+            None => work.done.to_string(),
+        };
+        line!(
+            if work.failure_reason.is_some() { "x" } else { "+" },
+            format!("{:<15} {:<10} {progress}", work.kind, work.state),
+        );
+        // On a line of its own and never shortened: this is the sentence that
+        // says what went wrong, and it is the whole reason the section exists.
+        if let Some(reason) = &work.failure_reason {
+            line!(" ", format!("  {reason}"));
+        }
     }
     out.push('\n');
 
@@ -509,6 +569,44 @@ mod tests {
         assert!(
             !text.contains('\u{1b}'),
             "no escape codes: the output gets pasted into a conversation"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_run_that_failed_says_why_in_the_report_itself() {
+        // The one sentence worth having, and the reason the report exists: a
+        // person who cannot read a log copies this and it names the fault.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let runner = melyxar_jobs::JobRunner::new(state.database().clone());
+        runner
+            .start(
+                melyxar_core::job::JobKind::IdentifyWork,
+                melyxar_core::job::JobPriority::BACKGROUND,
+                None,
+                |_| async move { Err("the provider refused the key".to_string()) },
+            )
+            .await
+            .expect("job started")
+            .completion
+            .await
+            .expect("the job ran");
+
+        let report = collect(&state).await.expect("report collected");
+        assert_eq!(report.recent_work[0].state, "failed");
+        assert_eq!(
+            report.recent_work[0].failure_reason.as_deref(),
+            Some("the provider refused the key")
+        );
+
+        let text = render_text(&report);
+        assert!(text.contains("Recent work"), "{text}");
+        assert!(
+            text.contains("the provider refused the key"),
+            "the reason is never shortened away: {text}"
         );
     }
 
