@@ -128,6 +128,28 @@ impl Database {
         rows.iter().map(crate::catalogue::work_from_row).collect()
     }
 
+    /// Every work still without a name, whatever library it is in.
+    ///
+    /// For the diagnostic, which has to say which films are waiting and why
+    /// rather than only how many: a count sends whoever reads it to a
+    /// terminal, which is the one thing the report exists to avoid.
+    pub async fn works_still_nameless(&self, limit: i64) -> Result<Vec<melyxar_core::work::Work>> {
+        let rows = sqlx::query(
+            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
+                    community_rating, age_rating_label, identification, identification_note,
+                    dominant_color, added_at, updated_at
+             FROM works
+             WHERE identification IN ('pending', 'unidentified')
+             ORDER BY sort_title
+             LIMIT ?",
+        )
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter().map(crate::catalogue::work_from_row).collect()
+    }
+
     /// Records why the last look up did not name a work.
     ///
     /// Kept apart from the state on purpose: a work the provider could not be

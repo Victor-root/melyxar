@@ -24,12 +24,31 @@ pub struct Diagnostics {
     pub accounts: i64,
     pub libraries: usize,
     pub catalogue: CatalogueReport,
+    /// The films still without a name, and what stopped each of them.
+    ///
+    /// Named rather than counted. A count is a question; these are the answer,
+    /// and the title shown is the very thing the provider was asked about, so
+    /// reading it is usually enough to see what went wrong.
+    ///
+    /// Titles, never paths: what is guarded elsewhere is where somebody's
+    /// files live, and the name of a film is not that.
+    pub nameless: Vec<NamelessReport>,
     /// The last pieces of work and what became of them.
     ///
     /// In the report rather than only in a log, because a run that failed says
     /// why it failed here, and that is the first question worth asking when
     /// something did not happen.
     pub recent_work: Vec<WorkReport>,
+}
+
+/// One film nobody has been able to name.
+#[derive(Debug, Clone, Serialize)]
+pub struct NamelessReport {
+    /// What it is called now, which is what was searched for.
+    pub title: String,
+    pub year: Option<i32>,
+    /// Why the last look up failed, when one has run.
+    pub reason: Option<&'static str>,
 }
 
 /// One piece of background work, as the diagnostic shows it.
@@ -197,6 +216,18 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                 awaiting_identification: summary.awaiting_identification,
                 metadata_available: state.metadata_provider().is_some(),
             })?,
+        nameless: database
+            .works_still_nameless(NAMELESS_SHOWN)
+            .await?
+            .iter()
+            .map(|work| NamelessReport {
+                title: work.title.clone(),
+                year: work.release_year,
+                reason: work
+                    .identification_note
+                    .map(melyxar_core::work::IdentificationNote::as_str),
+            })
+            .collect(),
         recent_work: database
             .recent_jobs(WORK_SHOWN)
             .await?
@@ -205,6 +236,12 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             .collect(),
     })
 }
+
+/// How many nameless films the report names.
+///
+/// Enough to see a pattern in them, few enough that the report stays one
+/// block somebody reads.
+const NAMELESS_SHOWN: i64 = 25;
 
 /// How many finished pieces of work the report carries.
 ///
@@ -379,6 +416,34 @@ pub fn render_text(report: &Diagnostics) -> String {
         );
     }
     out.push('\n');
+
+    if !report.nameless.is_empty() {
+        line!("#", "Films still without a name");
+        for film in &report.nameless {
+            let year = match film.year {
+                Some(year) => format!(" ({year})"),
+                None => String::new(),
+            };
+            line!(
+                "!",
+                format!(
+                    "{}{year}  {}",
+                    film.title,
+                    film.reason.unwrap_or("never looked up")
+                ),
+            );
+        }
+        if report.catalogue.awaiting_identification > report.nameless.len() as i64 {
+            line!(
+                " ",
+                format!(
+                    "  and {} more",
+                    report.catalogue.awaiting_identification - report.nameless.len() as i64
+                ),
+            );
+        }
+        out.push('\n');
+    }
 
     line!("#", "Recent work");
     if report.recent_work.is_empty() {
@@ -570,6 +635,50 @@ mod tests {
             !text.contains('\u{1b}'),
             "no escape codes: the output gets pasted into a conversation"
         );
+    }
+
+    #[tokio::test]
+    async fn the_films_still_without_a_name_are_named_rather_than_counted() {
+        // A count is a question. Reading the title that was searched, next to
+        // the reason it failed, is usually the whole answer.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .pop()
+            .expect("one library");
+        let work = state
+            .database()
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour Extended",
+                "quiet harbour extended",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        state
+            .database()
+            .set_identification_note(work.id, melyxar_core::work::IdentificationNote::NoMatch)
+            .await
+            .expect("note written");
+
+        let report = collect(&state).await.expect("report collected");
+        assert_eq!(report.nameless.len(), 1);
+        assert_eq!(report.nameless[0].title, "Quiet Harbour Extended");
+        assert_eq!(report.nameless[0].year, Some(2019));
+        assert_eq!(report.nameless[0].reason, Some("no_match"));
+
+        let text = render_text(&report);
+        assert!(text.contains("Quiet Harbour Extended (2019)"), "{text}");
+        assert!(text.contains("no_match"), "{text}");
     }
 
     #[tokio::test]
