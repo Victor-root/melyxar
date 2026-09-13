@@ -135,7 +135,8 @@ fn report_the_card(capabilities: &Capabilities) {
         Some(card) => tracing::info!(
             device = %card.device.display(),
             way = card.way.as_str(),
-            codecs = ?card.encoders.keys().collect::<Vec<_>>(),
+            writes = ?card.encoders.keys().collect::<Vec<_>>(),
+            reads = ?card.decoders.iter().collect::<Vec<_>>(),
             can_scale = card.can_scale,
             can_tone_map = card.can_tone_map,
             "a card is rebuilding pictures"

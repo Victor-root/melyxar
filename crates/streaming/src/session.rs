@@ -11,6 +11,8 @@
 //! number.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use melyxar_core::time::Millis;
@@ -50,14 +52,20 @@ pub struct Recipe {
     pub streams: StreamSelection,
     pub video: melyxar_ffmpeg::command::VideoOutput,
     pub audio: melyxar_ffmpeg::command::AudioOutput,
-    /// What to rebuild the picture with if the card will not have it.
+    /// What to rebuild the picture with if the card will not have it, in
+    /// order, each one asking less of the card than the one before.
     ///
     /// A card is proved at start-up on a generated picture, which is the right
     /// way round but does not prove every film: a driver refuses a size, a
     /// colour layout, a film nobody thought of. That refusal must not reach a
-    /// viewer as a black screen, so it costs one restart on the processor and
-    /// a line in the log naming what the tool said.
-    pub if_the_card_refuses: Option<melyxar_ffmpeg::command::VideoOutput>,
+    /// viewer as a black screen, so it costs one restart and a line in the log
+    /// naming what the tool said.
+    ///
+    /// A ladder rather than a single step because the rungs are not equal. A
+    /// card that will not read one film will still rebuild its picture, and
+    /// giving up on the card entirely at the first refusal would throw away
+    /// most of what it was doing.
+    pub if_the_card_refuses: Vec<melyxar_ffmpeg::command::VideoOutput>,
 }
 
 /// Where the preparation of a film has got to.
@@ -108,20 +116,6 @@ fn already_on_its_way(from: u32, index: u32) -> bool {
     index >= from && index < from + WORTH_WAITING_FOR
 }
 
-/// How many of the segments on the disk a player can actually read.
-///
-/// While the tool runs, the newest file is the one it is writing: a file that
-/// is merely there may still be growing, and a truncated segment breaks
-/// playback in a way nobody can read. Once the tool has stopped, nothing is
-/// growing any more and all of them count.
-fn settled(on_disk: u32, tool_finished: bool) -> u32 {
-    if tool_finished {
-        on_disk
-    } else {
-        on_disk.saturating_sub(1)
-    }
-}
-
 /// Which step a running tool is on, from what it has produced so far.
 fn step_for(ready: u32, wanted: u32) -> PreparationStep {
     if ready >= wanted {
@@ -141,6 +135,22 @@ struct AtWork {
     /// The segment number it was started on, so a request can tell whether it
     /// is ahead of the tool or somewhere else entirely.
     from: u32,
+    /// How far into the film the tool says it has written, in milliseconds.
+    ///
+    /// The tool's own account of itself rather than anything read off the
+    /// disk. A file that exists may still be growing, and the only way to tell
+    /// without asking the tool is to wait for the next one to appear, which
+    /// means producing a whole extra segment before handing over the one
+    /// somebody is waiting for. On a jump that is the difference between one
+    /// wait and two.
+    reached: Arc<AtomicI64>,
+}
+
+impl AtWork {
+    /// How far into the film the tool says it has written.
+    fn reached(&self) -> Millis {
+        Millis::new(self.reached.load(Ordering::Relaxed))
+    }
 }
 
 /// One film being watched.
@@ -151,11 +161,12 @@ pub struct Session {
     folder: PathBuf,
     tools: ToolPaths,
     running: Mutex<Option<AtWork>>,
-    /// Set once the card has refused this film and the picture is being
-    /// rebuilt on the processor instead. One way only: a card that refused
-    /// this film refuses it again, and trying twice would cost a viewer two
-    /// waits to reach the same place.
-    stepped_down: std::sync::atomic::AtomicBool,
+    /// How many rungs down the ladder this session has already gone.
+    ///
+    /// One way only: a card that refused this film refuses it the same way
+    /// again, and trying a rung twice would cost a viewer two waits to reach
+    /// the same place.
+    stepped_down: std::sync::atomic::AtomicUsize,
     /// When this session was last asked for anything. A session nobody is
     /// watching any more is swept away, tool and folder together.
     touched: Mutex<Instant>,
@@ -181,24 +192,26 @@ impl Session {
             folder,
             tools,
             running: Mutex::new(None),
-            stepped_down: std::sync::atomic::AtomicBool::new(false),
+            stepped_down: std::sync::atomic::AtomicUsize::new(0),
             touched: Mutex::new(Instant::now()),
         })
     }
 
     /// What the picture is being rebuilt with right now.
     fn video_now(&self) -> melyxar_ffmpeg::command::VideoOutput {
-        match self.stepped_down.load(std::sync::atomic::Ordering::SeqCst) {
-            true => self
+        let rungs_down = self.stepped_down.load(Ordering::SeqCst);
+        match rungs_down.checked_sub(1) {
+            None => self.recipe.video.clone(),
+            Some(index) => self
                 .recipe
                 .if_the_card_refuses
-                .clone()
+                .get(index)
+                .cloned()
                 .unwrap_or_else(|| self.recipe.video.clone()),
-            false => self.recipe.video.clone(),
         }
     }
 
-    /// Whether this failure is worth one more try on the processor.
+    /// Whether this failure is worth one more try, asking less of the card.
     ///
     /// Only a tool that refused: a machine that was merely slow would be just
     /// as slow the second time, and a segment outside the film is not there
@@ -207,19 +220,16 @@ impl Session {
         if !matches!(error, StreamingError::MediaTool(_)) {
             return false;
         }
-        if self.recipe.if_the_card_refuses.is_none() {
-            return false;
-        }
-        if self
-            .stepped_down
-            .swap(true, std::sync::atomic::Ordering::SeqCst)
-        {
+        let rungs_down = self.stepped_down.fetch_add(1, Ordering::SeqCst);
+        if rungs_down >= self.recipe.if_the_card_refuses.len() {
             return false;
         }
         tracing::error!(
             session = %self.id,
             reason = %error,
-            "the card would not rebuild this film; falling back to the processor"
+            rung = rungs_down + 1,
+            of = self.recipe.if_the_card_refuses.len(),
+            "the card would not rebuild this film that way; asking it for less"
         );
         true
     }
@@ -251,13 +261,17 @@ impl Session {
     /// is actually true: a count kept alongside would drift the first time a
     /// tool died between two segments.
     pub async fn preparation(&self) -> Preparation {
-        let from = self
-            .running
-            .lock()
-            .await
-            .as_ref()
-            .map(|at_work| at_work.from);
-        let Some(from) = from else {
+        let at_work = {
+            let mut running = self.running.lock().await;
+            running.as_mut().map(|at_work| {
+                (
+                    at_work.from,
+                    at_work.reached(),
+                    at_work.process.has_exited(),
+                )
+            })
+        };
+        let Some((from, reached, tool_gone)) = at_work else {
             return Preparation {
                 step: PreparationStep::Starting,
                 ready: 0,
@@ -272,7 +286,10 @@ impl Session {
             on_disk += 1;
         }
 
-        let ready = settled(on_disk, self.tool_has_finished().await);
+        let mut ready = 0;
+        while ready < on_disk && self.finished_being_written(from + ready, reached, tool_gone) {
+            ready += 1;
+        }
 
         let wanted = self.enough_from(from);
         Preparation {
@@ -280,6 +297,21 @@ impl Session {
             ready,
             wanted,
         }
+    }
+
+    /// Whether the tool has finished writing one segment.
+    ///
+    /// Three ways of knowing the same thing, cheapest and soonest first. The
+    /// tool's own account is the one that matters: a file that is merely there
+    /// may still be growing, and a truncated segment breaks playback in a way
+    /// nobody can read. Waiting for the next file to appear says the same
+    /// thing, and it is what this used to rely on alone, at the price of
+    /// producing a whole extra segment before handing over the one somebody is
+    /// waiting for.
+    fn finished_being_written(&self, index: u32, reached: Millis, tool_gone: bool) -> bool {
+        reached >= self.playlist.start_of(index + 1)
+            || self.path_of(index + 1).exists()
+            || tool_gone
     }
 
     /// How many segments make a comfortable start from here.
@@ -336,11 +368,27 @@ impl Session {
         }
 
         let command = self.command_from(index);
-        let process = RunningProcess::start(&self.tools.ffmpeg, &command, None)?;
+
+        // The tool is asked to say where it has got to, and one task keeps the
+        // latest answer. That answer is what lets a finished segment be handed
+        // over the moment it is finished, rather than once the next one has
+        // been produced on top of it.
+        let reached = Arc::new(AtomicI64::new(0));
+        let (reports, mut incoming) =
+            tokio::sync::mpsc::channel::<melyxar_ffmpeg::process::Progress>(4);
+        let mirror = reached.clone();
+        tokio::spawn(async move {
+            while let Some(report) = incoming.recv().await {
+                mirror.store(report.position.get(), Ordering::Relaxed);
+            }
+        });
+
+        let process = RunningProcess::start(&self.tools.ffmpeg, &command, Some(reports))?;
         tracing::debug!(session = %self.id, index, "producing from here");
         *running = Some(AtWork {
             process,
             from: index,
+            reached,
         });
         Ok(())
     }
@@ -365,18 +413,17 @@ impl Session {
         .with_streams(self.recipe.streams)
         .with_video(self.video_now())
         .with_audio(self.recipe.audio.clone())
+        // Asked for so that a segment can be handed over as soon as the tool
+        // says it has passed the end of it.
+        .reporting_progress()
     }
 
     /// Waits for a file to appear, giving up rather than hanging for ever.
     async fn wait_for(&self, path: &Path, index: u32) -> Result<()> {
         let deadline = Instant::now() + PATIENCE;
         loop {
-            let tool_is_gone = self.tool_has_finished().await;
-            // The next segment existing means this one is finished being
-            // written: a file that is merely there may still be growing, and
-            // a truncated segment breaks playback in a way nobody can read.
-            let finished_being_written = self.path_of(index + 1).exists() || tool_is_gone;
-            if finished_being_written && path.exists() {
+            let (reached, tool_is_gone) = self.where_the_tool_has_got_to().await;
+            if path.exists() && self.finished_being_written(index, reached, tool_is_gone) {
                 return Ok(());
             }
 
@@ -440,11 +487,15 @@ impl Session {
         }
     }
 
-    async fn tool_has_finished(&self) -> bool {
+    /// How far the tool says it has written, and whether it is still there.
+    ///
+    /// Both under one lock: asking twice would let the tool exit between the
+    /// two answers, which is exactly the moment a segment finishes.
+    async fn where_the_tool_has_got_to(&self) -> (Millis, bool) {
         let mut running = self.running.lock().await;
         match running.as_mut() {
-            Some(at_work) => at_work.process.has_exited(),
-            None => true,
+            Some(at_work) => (at_work.reached(), at_work.process.has_exited()),
+            None => (Millis::ZERO, true),
         }
     }
 
@@ -545,7 +596,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
-                if_the_card_refuses: None,
+                if_the_card_refuses: Vec::new(),
             },
             directory.join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -651,7 +702,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
-                if_the_card_refuses: None,
+                if_the_card_refuses: Vec::new(),
             },
             folder.clone(),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -690,7 +741,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
-                if_the_card_refuses: None,
+                if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -745,9 +796,9 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Encode(refused),
                 audio: AudioOutput::Copy,
-                if_the_card_refuses: Some(VideoOutput::Encode(
+                if_the_card_refuses: vec![VideoOutput::Encode(
                     melyxar_ffmpeg::command::VideoEncode::software_h264(),
-                )),
+                )],
             },
             directory.path().join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -760,11 +811,10 @@ mod tests {
             .await
             .expect("a refused card costs a restart, never the film");
         assert!(segment.exists());
-        assert!(
-            session
-                .stepped_down
-                .load(std::sync::atomic::Ordering::SeqCst),
-            "and the session stays on the processor rather than asking again every segment"
+        assert_eq!(
+            session.stepped_down.load(Ordering::SeqCst),
+            1,
+            "one rung down, and it stays there rather than asking again every segment"
         );
         session.close().await;
     }
@@ -786,9 +836,9 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Encode(melyxar_ffmpeg::command::VideoEncode::software_h264()),
                 audio: AudioOutput::Copy,
-                if_the_card_refuses: Some(VideoOutput::Encode(
+                if_the_card_refuses: vec![VideoOutput::Encode(
                     melyxar_ffmpeg::command::VideoEncode::software_h264(),
-                )),
+                )],
             },
             directory.path().join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -801,6 +851,54 @@ mod tests {
         assert!(
             started.elapsed() < PATIENCE,
             "two refusals are two refusals, not two waits"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_segment_is_handed_over_without_producing_the_one_after_it_first() {
+        // The whole point of asking the tool where it has got to. Waiting for
+        // the next file to appear says the same thing and costs a whole extra
+        // segment, which on a jump is the difference between one wait and two.
+        //
+        // Made slow on purpose: a machine that produces four seconds of film
+        // in a tenth of a second would have written the next one either way,
+        // and the test would pass without testing anything.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip(&source, 60).await;
+
+        let mut encode = melyxar_ffmpeg::command::VideoEncode::software_h264();
+        encode.how = melyxar_ffmpeg::command::Rebuilding::InSoftware {
+            quality: 18,
+            preset: "veryslow".to_string(),
+        };
+        encode.scale_to_height = Some(720);
+        encode.keyframe_interval = Some(crate::playlist::SEGMENT_DURATION);
+
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(60_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Encode(encode),
+                audio: AudioOutput::Copy,
+                if_the_card_refuses: Vec::new(),
+            },
+            directory.path().join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+
+        session.segment(0).await.expect("the first segment");
+        let next_one = session.folder().join("segment-1.m4s");
+
+        assert!(
+            !next_one.exists() || session.where_the_tool_has_got_to().await.1,
+            "a segment was handed over only once the one after it had been \
+             produced on top of it, which is twice the wait for nothing"
         );
         session.close().await;
     }
@@ -843,17 +941,34 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_segment_still_being_written_is_not_counted_as_ready() {
-        // A file that is merely there may still be growing, and a player
-        // handed a truncated segment fails in a way nobody can read.
-        assert_eq!(settled(4, false), 3, "the newest one is being written");
-        assert_eq!(settled(1, false), 0, "one file means nothing readable yet");
-        assert_eq!(settled(0, false), 0);
+    #[tokio::test]
+    async fn a_segment_is_finished_the_moment_the_tool_says_it_passed_the_end_of_it() {
+        // What this replaced waited for the next file to appear, which says
+        // the same thing and costs a whole extra segment before the one
+        // somebody is waiting for can be handed over. On a jump that is the
+        // difference between one wait and two.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 60).await;
+        let start_of = |index: u32| session.playlist().start_of(index);
 
-        // Once the tool has stopped, nothing is growing any more.
-        assert_eq!(settled(4, true), 4);
-        assert_eq!(settled(0, true), 0);
+        assert!(
+            !session.finished_being_written(3, start_of(3), false),
+            "the tool is inside this segment, so it is still writing it"
+        );
+        assert!(
+            session.finished_being_written(3, start_of(4), false),
+            "it has passed the end of it, so it has closed it"
+        );
+        assert!(
+            session.finished_being_written(3, Millis::ZERO, true),
+            "nothing is writing any more, so nothing is growing"
+        );
+
+        // The old signal still counts, for a tool that has not spoken yet.
+        std::fs::write(session.folder().join("segment-4.m4s"), b"a segment")
+            .expect("the next one is written");
+        assert!(session.finished_being_written(3, Millis::ZERO, false));
+        session.close().await;
     }
 
     #[tokio::test]
@@ -1016,7 +1131,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
-                if_the_card_refuses: None,
+                if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -1063,7 +1178,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
-                if_the_card_refuses: None,
+                if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
             ToolPaths::discover(None, None).expect("the tools are installed here"),

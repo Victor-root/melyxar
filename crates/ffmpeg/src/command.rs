@@ -85,7 +85,16 @@ pub enum Rebuilding {
     /// codec counts quality on its own scale there, and the same number means
     /// three different things across the three codecs a card produces. A rate
     /// means the same thing to all of them.
-    OnACard(Card),
+    OnACard {
+        card: Card,
+        /// Whether the card reads the film for itself as well.
+        ///
+        /// Only ever true of a codec it was proved to read. It changes the
+        /// whole shape of the invocation rather than adding an option: the
+        /// picture then arrives already on the card, and everything that would
+        /// have handed it up is work that must not be asked for.
+        reads_the_film: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,11 +166,14 @@ impl VideoEncode {
     /// Absent when this card was not proved to produce that codec: a card that
     /// refused a codec at start-up is a card that will refuse it in the middle
     /// of a film.
-    pub fn on_a_card(card: &Card, codec: &str) -> Option<Self> {
+    pub fn on_a_card(card: &Card, codec: &str, reads_the_film: bool) -> Option<Self> {
         let encoder = card.encoder_for(codec)?.to_string();
         Some(Self {
             encoder,
-            how: Rebuilding::OnACard(card.clone()),
+            how: Rebuilding::OnACard {
+                card: card.clone(),
+                reads_the_film,
+            },
             max_bitrate: None,
             scale_to_height: None,
             tone_map: false,
@@ -170,10 +182,13 @@ impl VideoEncode {
         })
     }
 
-    /// The card doing the work, when one is.
-    pub fn card(&self) -> Option<&Card> {
+    /// The card doing the work, and whether it reads the film as well.
+    pub fn card(&self) -> Option<(&Card, bool)> {
         match &self.how {
-            Rebuilding::OnACard(card) => Some(card),
+            Rebuilding::OnACard {
+                card,
+                reads_the_film,
+            } => Some((card, *reads_the_film)),
             Rebuilding::InSoftware { .. } => None,
         }
     }
@@ -318,7 +333,7 @@ impl Command {
     }
 
     /// The card this command works on, when it works on one.
-    pub fn card(&self) -> Option<&Card> {
+    pub fn card(&self) -> Option<(&Card, bool)> {
         match &self.video {
             VideoOutput::Encode(encode) => encode.card(),
             _ => None,
@@ -369,8 +384,8 @@ impl Command {
         // The card is opened before anything is read: a device named after the
         // input is a device the filters cannot reach, and the tool says so in
         // a sentence that names neither.
-        if let Some(card) = self.card() {
-            for argument in card.opening_arguments() {
+        if let Some((card, reads_the_film)) = self.card() {
+            for argument in card.opening_arguments(reads_the_film) {
                 push!(&argument);
             }
         }
@@ -507,7 +522,7 @@ impl Command {
                     // A rate rather than a quality, because the three codecs a
                     // card produces count quality on three different scales
                     // and a rate means the same thing to all of them.
-                    Rebuilding::OnACard(_) => {
+                    Rebuilding::OnACard { .. } => {
                         if let Some(bitrate) = encode.max_bitrate {
                             push!("-b:v");
                             push!(&bitrate.to_string());
@@ -648,8 +663,8 @@ const PAINTED_PICTURE: &str = "[painted]";
 /// on a card the picture is handed up and worked on there, in software it is
 /// worked on where it already is.
 fn picture_filter_chain(encode: &VideoEncode) -> Option<String> {
-    if let Some(card) = encode.card() {
-        let filters = card.filters_for(encode.scale_to_height, encode.tone_map);
+    if let Some((card, reads_the_film)) = encode.card() {
+        let filters = card.filters_for(encode.scale_to_height, encode.tone_map, reads_the_film);
         return (!filters.is_empty()).then(|| filters.join(","));
     }
 
@@ -959,6 +974,10 @@ mod tests {
             .into_iter()
             .map(|(codec, encoder)| (codec.to_string(), encoder.to_string()))
             .collect(),
+            decoders: ["h264", "hevc", "av1"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
             can_scale: true,
             can_tone_map: true,
         }
@@ -968,7 +987,8 @@ mod tests {
     fn a_card_is_opened_before_the_film_is_read() {
         // A device named after the input is a device the filters cannot reach,
         // and the tool then refuses in a sentence naming neither.
-        let mut encode = VideoEncode::on_a_card(&a_card(), "av1").expect("this card produces it");
+        let mut encode =
+            VideoEncode::on_a_card(&a_card(), "av1", false).expect("this card produces it");
         encode.max_bitrate = Some(8_000_000);
         let command = Command::new(
             Input::new("/media/film.mkv").starting_at(Millis::new(20_000)),
@@ -988,7 +1008,8 @@ mod tests {
         // Neither accepts the other's, and a card handed a speed preset or a
         // picture layout it does not hold refuses a film it was perfectly able
         // to rebuild.
-        let mut encode = VideoEncode::on_a_card(&a_card(), "h264").expect("this card produces it");
+        let mut encode =
+            VideoEncode::on_a_card(&a_card(), "h264", false).expect("this card produces it");
         encode.max_bitrate = Some(6_000_000);
         let args = arguments(
             &Command::new(
@@ -1012,7 +1033,8 @@ mod tests {
 
     #[test]
     fn a_picture_rebuilt_on_a_card_is_handed_up_to_it_first() {
-        let mut encode = VideoEncode::on_a_card(&a_card(), "hevc").expect("this card produces it");
+        let mut encode =
+            VideoEncode::on_a_card(&a_card(), "hevc", false).expect("this card produces it");
         encode.scale_to_height = Some(1080);
         encode.tone_map = true;
         let args = arguments(
@@ -1035,13 +1057,66 @@ mod tests {
     }
 
     #[test]
+    fn a_card_that_reads_the_film_is_never_asked_to_be_handed_it_as_well() {
+        // The picture then arrives already up there. Asking to hand it up
+        // again is how a card refuses a film it was reading perfectly well.
+        let mut encode = VideoEncode::on_a_card(&a_card(), "av1", true).expect("proved");
+        encode.scale_to_height = Some(1080);
+        encode.tone_map = true;
+        let args = arguments(
+            &Command::new(
+                Input::new("/media/film.mkv"),
+                Output::File(PathBuf::from("/tmp/out.mp4")),
+            )
+            .with_video(VideoOutput::Encode(encode)),
+        );
+
+        let reading = position(&args, "-hwaccel").expect("the card reads the film");
+        assert!(
+            reading < position(&args, "-i").expect("an input is present"),
+            "reading is an option of the input, and one placed after it applies to nothing"
+        );
+        assert_eq!(
+            args[position(&args, "-hwaccel_output_format").expect("frames stay on the card") + 1],
+            "vaapi",
+            "without this the card hands every frame back down, which is the whole cost"
+        );
+
+        let filters = &args[position(&args, "-vf").expect("a filter chain is present") + 1];
+        assert_eq!(filters, "scale_vaapi=w=-2:h=1080,tonemap_vaapi=format=nv12");
+        assert!(!filters.contains("hwupload"), "{filters}");
+    }
+
+    #[test]
+    fn a_film_the_card_cannot_read_is_still_rebuilt_on_it() {
+        // Decoded by the processor and handed up. That still moves the
+        // expensive half of the work, and it is what works whatever the film
+        // holds.
+        let encode = VideoEncode::on_a_card(&a_card(), "h264", false).expect("proved");
+        let args = arguments(
+            &Command::new(
+                Input::new("/media/film.mkv"),
+                Output::File(PathBuf::from("/tmp/out.mp4")),
+            )
+            .with_video(VideoOutput::Encode(encode)),
+        );
+
+        assert!(!args.iter().any(|value| value == "-hwaccel"), "{args:?}");
+        assert!(args.contains(&"-init_hw_device".to_string()));
+        assert_eq!(
+            args[position(&args, "-vf").expect("a filter chain is present") + 1],
+            "format=nv12,hwupload"
+        );
+    }
+
+    #[test]
     fn a_card_that_was_never_proved_to_produce_a_codec_is_not_asked_for_it() {
         // A card that refused a codec at start-up is a card that refuses it in
         // the middle of a film, and by then somebody is watching.
         let mut card = a_card();
         card.encoders.remove("av1");
-        assert!(VideoEncode::on_a_card(&card, "av1").is_none());
-        assert!(VideoEncode::on_a_card(&card, "h264").is_some());
+        assert!(VideoEncode::on_a_card(&card, "av1", false).is_none());
+        assert!(VideoEncode::on_a_card(&card, "h264", false).is_some());
     }
 
     #[test]

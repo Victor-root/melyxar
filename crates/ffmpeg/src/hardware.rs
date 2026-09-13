@@ -88,6 +88,13 @@ const A_REFERENCE_SCREEN: &str = "master-display=G(8500,39850)B(6550,2300)R(3540
 /// The encoder that writes those numbers into a sample.
 const WRITES_THE_SCREEN: &str = "libx265";
 
+/// The codec that sample comes out in.
+///
+/// It doubles as the witness for reading that codec, and it is the better one:
+/// it carries ten bits to a channel, which is what every film worth a card is,
+/// and reading eight proves nothing about reading ten.
+const WIDE_GAMUT_CODEC: &str = "hevc";
+
 /// What a trial reads.
 enum TrialInput<'a> {
     /// A picture made on the spot, which costs nothing and suits every trial
@@ -108,6 +115,14 @@ pub struct Card {
     /// driver that accepts it, and this generation of cards differs from the
     /// last one in exactly that.
     pub encoders: BTreeMap<String, String>,
+    /// Codecs the card was proved to read for itself.
+    ///
+    /// Kept apart from what it writes, because they are not the same list and
+    /// never have been: a card reads codecs it cannot write, and the generation
+    /// that first wrote one had been reading it for years. A film in a codec
+    /// that is not here is decoded by the processor and handed up, which works
+    /// whatever the film holds.
+    pub decoders: BTreeSet<String>,
     /// Whether the card can also make the picture smaller. It nearly always
     /// can; a card that cannot is used at the size of the film rather than not
     /// used at all.
@@ -126,40 +141,67 @@ impl Card {
         self.encoders.get(codec).map(String::as_str)
     }
 
-    /// What to put before the input so the tool opens the card.
-    pub fn opening_arguments(&self) -> Vec<String> {
-        vec![
-            "-init_hw_device".to_string(),
-            format!(
-                "{}={DEVICE_NAME}:{}",
-                self.way.as_str(),
-                self.device.display()
-            ),
-            "-filter_hw_device".to_string(),
-            DEVICE_NAME.to_string(),
-        ]
+    /// Whether the card was proved to read one codec for itself.
+    pub fn reads(&self, codec: &str) -> bool {
+        self.decoders.contains(codec)
     }
 
-    /// The filters that put a picture onto the card, and what happens to it
-    /// there.
+    /// What to put before the input so the tool opens the card.
     ///
-    /// The picture is decoded in software and handed up. Decoding on the card
-    /// as well is a further step: it depends on the codec of each film, where
-    /// this works whatever the film holds, and the expensive half of the work
-    /// is the half that moves here.
-    pub fn filters_for(&self, scale_to_height: Option<i32>, tone_map: bool) -> Vec<String> {
+    /// When the card reads the film too, that is said here rather than
+    /// anywhere else: reading is an option of the input, and an option of the
+    /// input placed after it applies to nothing.
+    pub fn opening_arguments(&self, reads_the_film: bool) -> Vec<String> {
+        let way = self.way.as_str();
+        let mut arguments = vec![
+            "-init_hw_device".to_string(),
+            format!("{way}={DEVICE_NAME}:{}", self.device.display()),
+            "-filter_hw_device".to_string(),
+            DEVICE_NAME.to_string(),
+        ];
+        if reads_the_film {
+            arguments.extend([
+                "-hwaccel".to_string(),
+                way.to_string(),
+                // Without this the card decodes and then hands every frame
+                // back down to the processor, which is most of the cost of
+                // decoding and all of the point of not doing it there.
+                "-hwaccel_output_format".to_string(),
+                way.to_string(),
+                "-hwaccel_device".to_string(),
+                DEVICE_NAME.to_string(),
+            ]);
+        }
+        arguments
+    }
+
+    /// The filters the picture goes through on the card.
+    ///
+    /// Where the picture comes from changes the chain entirely. A film the card
+    /// read itself is already up there, and asking to hand it up again is how a
+    /// card refuses a film it was reading perfectly well. A film the processor
+    /// read has to be handed up first, and in the layout the work needs.
+    pub fn filters_for(
+        &self,
+        scale_to_height: Option<i32>,
+        tone_map: bool,
+        reads_the_film: bool,
+    ) -> Vec<String> {
         let mut filters = Vec::new();
 
-        // Wide gamut colour arrives with ten bits to a channel, and handing it
-        // up as eight would throw away exactly what is about to be converted.
-        filters.push(
-            match tone_map {
-                true => "format=p010",
-                false => "format=nv12",
-            }
-            .to_string(),
-        );
-        filters.push("hwupload".to_string());
+        if !reads_the_film {
+            // Wide gamut colour arrives with ten bits to a channel, and handing
+            // it up as eight would throw away exactly what is about to be
+            // converted.
+            filters.push(
+                match tone_map {
+                    true => "format=p010",
+                    false => "format=nv12",
+                }
+                .to_string(),
+            );
+            filters.push("hwupload".to_string());
+        }
 
         // Made smaller first for the same reason as in software: converting
         // colours is the most expensive thing done to a picture, so doing it
@@ -333,11 +375,12 @@ impl CardSearch {
             way,
             device,
             encoders,
+            decoders: BTreeSet::new(),
             can_scale: true,
             can_tone_map: false,
         };
 
-        let chain = card.filters_for(Some(TRIAL_HEIGHT), false).join(",");
+        let chain = card.filters_for(Some(TRIAL_HEIGHT), false, false).join(",");
         let (can_scale, said) = try_it(
             ffmpeg,
             way,
@@ -355,16 +398,19 @@ impl CardSearch {
         });
         card.can_scale = can_scale;
 
-        // The one trial that cannot be run on a picture made on the spot.
-        match wide_gamut_sample(ffmpeg).await {
+        // The one trial that cannot be run on a picture made on the spot. It
+        // also stands in for a real wide gamut film everywhere below: it is
+        // one, down to the ten bits and the screen it says it was graded on.
+        let wide_gamut = wide_gamut_sample(ffmpeg).await;
+        match &wide_gamut {
             Err(said) => self.trials.push(Trial {
                 what: "make_a_wide_gamut_sample".to_string(),
                 device: String::new(),
                 worked: false,
-                said,
+                said: said.clone(),
             }),
             Ok(sample) => {
-                let chain = card.filters_for(Some(TRIAL_HEIGHT), true).join(",");
+                let chain = card.filters_for(Some(TRIAL_HEIGHT), true, false).join(",");
                 let (can_tone_map, said) = try_it(
                     ffmpeg,
                     way,
@@ -376,7 +422,7 @@ impl CardSearch {
                 .await;
                 self.trials.push(Trial {
                     what: "convert_wide_gamut".to_string(),
-                    device: named,
+                    device: named.clone(),
                     worked: can_tone_map,
                     said,
                 });
@@ -384,7 +430,85 @@ impl CardSearch {
             }
         }
 
+        card.decoders = self
+            .which_codecs_it_reads(ffmpeg, &card, &floor, wide_gamut.ok(), &named)
+            .await;
+
         Some(card)
+    }
+
+    /// Establishes which codecs the card reads for itself.
+    ///
+    /// Reading is asked separately from writing because they are separate
+    /// abilities, and the only honest way to ask is to hand the card a film in
+    /// that codec and see. Each sample is written first, by the card itself
+    /// where it can, so the question does not become "is this build carrying a
+    /// software encoder for that codec".
+    async fn which_codecs_it_reads(
+        &mut self,
+        ffmpeg: &Path,
+        card: &Card,
+        floor: &str,
+        wide_gamut: Option<Sample>,
+        named: &str,
+    ) -> BTreeSet<String> {
+        let mut reads = BTreeSet::new();
+
+        for codec in WORTH_TRYING {
+            // A wide gamut sample carries ten bits to a channel, which is what
+            // every film worth the card is, and reading eight proves nothing
+            // about reading ten. Where one exists it is the better witness.
+            let sample = match (*codec == WIDE_GAMUT_CODEC, &wide_gamut) {
+                (true, Some(sample)) => Some(Kept::Borrowed(sample)),
+                _ => match card.encoder_for(codec) {
+                    Some(encoder) => match sample_in(ffmpeg, card, encoder).await {
+                        Ok(made) => Some(Kept::Owned(made)),
+                        Err(said) => {
+                            self.trials.push(Trial {
+                                what: format!("make_a_{codec}_sample"),
+                                device: named.to_string(),
+                                worked: false,
+                                said,
+                            });
+                            None
+                        }
+                    },
+                    // Nothing here can write this codec, so nothing here can
+                    // ask whether the card reads it. Said plainly rather than
+                    // recorded as a refusal it never made.
+                    None => None,
+                },
+            };
+            let Some(sample) = sample else { continue };
+
+            let (worked, said) = try_reading(ffmpeg, card, floor, sample.path()).await;
+            self.trials.push(Trial {
+                what: format!("read_{codec}"),
+                device: named.to_string(),
+                worked,
+                said,
+            });
+            if worked {
+                reads.insert((*codec).to_string());
+            }
+        }
+
+        reads
+    }
+}
+
+/// A sample this trial owns, or one it was lent.
+enum Kept<'a> {
+    Owned(Sample),
+    Borrowed(&'a Sample),
+}
+
+impl Kept<'_> {
+    fn path(&self) -> &Path {
+        match self {
+            Self::Owned(sample) => sample.path(),
+            Self::Borrowed(sample) => sample.path(),
+        }
     }
 }
 
@@ -470,11 +594,33 @@ async fn wide_gamut_sample(ffmpeg: &Path) -> std::result::Result<Sample, String>
     ]
     .map(str::to_string);
 
+    match run_briefly(ffmpeg, arguments).await {
+        Ok((true, _)) => Ok(sample),
+        Ok((false, said)) => Err(format!(
+            "a wide gamut sample could not be made, so the card was never asked whether it \
+             converts colour: {said}"
+        )),
+        Err(said) => Err(said),
+    }
+}
+
+/// Runs the tool once and says whether it was happy and what it printed.
+///
+/// Every trial here is a fraction of a second of work, so the only thing worth
+/// guarding against is a driver that has locked up: the run is dropped when its
+/// time is up, and the process goes with it.
+async fn run_briefly(
+    ffmpeg: &Path,
+    arguments: impl IntoIterator<Item = String>,
+) -> std::result::Result<(bool, String), String> {
     let spawned = TokioCommand::new(ffmpeg)
         .args(arguments)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
+        // A driver that has locked up must not hold the server down: this is
+        // what makes dropping the run put an end to the process rather than
+        // orphan it.
         .kill_on_drop(true)
         .spawn();
 
@@ -483,14 +629,86 @@ async fn wide_gamut_sample(ffmpeg: &Path) -> std::result::Result<Sample, String>
     };
 
     match tokio::time::timeout(TRIAL_PATIENCE, child.wait_with_output()).await {
-        Ok(Ok(output)) if output.status.success() => Ok(sample),
-        Ok(Ok(output)) => Err(format!(
-            "a wide gamut sample could not be made, so the card was never asked whether it \
-             converts colour: {}",
-            shortened(&String::from_utf8_lossy(&output.stderr))
+        Ok(Ok(output)) => Ok((
+            output.status.success(),
+            shortened(&String::from_utf8_lossy(&output.stderr)),
         )),
         Ok(Err(error)) => Err(error.to_string()),
-        Err(_) => Err("making a wide gamut sample took too long".to_string()),
+        Err(_) => Err(format!(
+            "the card did not answer within {} seconds",
+            TRIAL_PATIENCE.as_secs()
+        )),
+    }
+}
+
+/// Writes a fraction of a second of film in one codec, on the card itself.
+///
+/// Made by the card rather than by a software encoder so the question stays
+/// the one being asked. A build lacking a software encoder for a codec would
+/// otherwise come out as a card that cannot read it.
+async fn sample_in(
+    ffmpeg: &Path,
+    card: &Card,
+    encoder: &str,
+) -> std::result::Result<Sample, String> {
+    let sample = Sample(std::env::temp_dir().join(format!(
+        "melyxar-card-reads-{encoder}-{}.mp4",
+        std::process::id()
+    )));
+
+    let arguments = ["-hide_banner", "-nostdin", "-loglevel", "error", "-y"]
+        .map(str::to_string)
+        .into_iter()
+        .chain(card.opening_arguments(false))
+        .chain(
+            [
+                "-f",
+                "lavfi",
+                "-i",
+                A_GENERATED_PICTURE,
+                "-an",
+                "-vf",
+                "format=nv12,hwupload",
+                "-c:v",
+                encoder,
+                &sample.path().display().to_string(),
+            ]
+            .map(str::to_string),
+        );
+
+    match run_briefly(ffmpeg, arguments).await {
+        Ok((true, _)) => Ok(sample),
+        Ok((false, said)) => Err(said),
+        Err(said) => Err(said),
+    }
+}
+
+/// Hands the card a film and asks it to read it for itself.
+///
+/// Nothing is filtered: what is being established is whether the card takes
+/// the film in, and the frames come out of it already up there, so the encoder
+/// takes them as they are.
+async fn try_reading(ffmpeg: &Path, card: &Card, encoder: &str, sample: &Path) -> (bool, String) {
+    let arguments = ["-hide_banner", "-nostdin", "-loglevel", "error"]
+        .map(str::to_string)
+        .into_iter()
+        .chain(card.opening_arguments(true))
+        .chain(
+            [
+                "-i",
+                &sample.display().to_string(),
+                "-c:v",
+                encoder,
+                "-f",
+                "null",
+                "-",
+            ]
+            .map(str::to_string),
+        );
+
+    match run_briefly(ffmpeg, arguments).await {
+        Ok(outcome) => outcome,
+        Err(said) => (false, said),
     }
 }
 
@@ -532,34 +750,9 @@ async fn try_it(
     .chain(read)
     .chain(["-vf", filters, "-c:v", encoder, "-f", "null", "-"].map(str::to_string));
 
-    let spawned = TokioCommand::new(ffmpeg)
-        .args(arguments)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        // A driver that has locked up must not hold the server down: the trial
-        // is dropped when its time is up, and this is what makes dropping it
-        // put an end to the process rather than orphan it.
-        .kill_on_drop(true)
-        .spawn();
-
-    let Ok(child) = spawned else {
-        return (false, "the media tool could not be started".to_string());
-    };
-
-    match tokio::time::timeout(TRIAL_PATIENCE, child.wait_with_output()).await {
-        Ok(Ok(output)) => {
-            let said = shortened(&String::from_utf8_lossy(&output.stderr));
-            (output.status.success(), said)
-        }
-        Ok(Err(error)) => (false, error.to_string()),
-        Err(_) => (
-            false,
-            format!(
-                "the card did not answer within {} seconds",
-                TRIAL_PATIENCE.as_secs()
-            ),
-        ),
+    match run_briefly(ffmpeg, arguments).await {
+        Ok(outcome) => outcome,
+        Err(said) => (false, said),
     }
 }
 
@@ -588,6 +781,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
+            decoders: ["hevc".to_string()].into_iter().collect(),
             can_scale,
             can_tone_map,
         }
@@ -598,7 +792,7 @@ mod tests {
         // The tool has to be told about the card before it reads anything: a
         // device named afterwards is a device the filters cannot reach.
         assert_eq!(
-            card(true, true).opening_arguments(),
+            card(true, true).opening_arguments(false),
             vec![
                 "-init_hw_device".to_string(),
                 "vaapi=card:/dev/dri/renderD128".to_string(),
@@ -624,12 +818,12 @@ mod tests {
     fn wide_gamut_colour_is_handed_to_the_card_with_all_its_bits() {
         // Handing it up as eight bits would throw away exactly what is about
         // to be converted, and the conversion would have nothing to work with.
-        let filters = card(true, true).filters_for(Some(1080), true);
+        let filters = card(true, true).filters_for(Some(1080), true, false);
         assert_eq!(filters[0], "format=p010");
         assert_eq!(filters[1], "hwupload");
         assert!(filters.iter().any(|value| value.contains("tonemap_vaapi")));
 
-        let plain = card(true, true).filters_for(None, false);
+        let plain = card(true, true).filters_for(None, false, false);
         assert_eq!(
             plain,
             vec!["format=nv12".to_string(), "hwupload".to_string()]
@@ -640,7 +834,7 @@ mod tests {
     fn the_picture_is_made_smaller_before_its_colours_are_converted() {
         // The same reason as in software: converting colours is the most
         // expensive thing done to a picture, so it is done on fewer pixels.
-        let filters = card(true, true).filters_for(Some(1080), true);
+        let filters = card(true, true).filters_for(Some(1080), true, false);
         let scale = filters
             .iter()
             .position(|value| value.starts_with("scale_vaapi"))
@@ -654,7 +848,7 @@ mod tests {
 
     #[test]
     fn a_card_that_cannot_make_a_picture_smaller_is_still_used_at_full_size() {
-        let filters = card(false, true).filters_for(Some(1080), false);
+        let filters = card(false, true).filters_for(Some(1080), false, false);
         assert!(
             !filters.iter().any(|value| value.starts_with("scale_")),
             "asking for something the card refused is how a film stops playing: {filters:?}"
