@@ -747,6 +747,82 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_fold_to_stereo_someone_asked_for_is_a_reason_of_its_own() {
+        // The preference has to reach the decision, or it quietly does nothing
+        // on every film a client could have played as it is. The client here
+        // accepts six channels, so nothing else explains the rebuild.
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080), audio(id, "aac", 6, true)]
+            })
+            .await;
+
+        let mut profile = ClientProfile::conservative_browser();
+        profile.max_audio_channels = Some(6);
+        let request = PlayRequest {
+            source_id,
+            profile: Some(profile),
+            audio_track_id: None,
+            subtitle_track_id: None,
+        };
+
+        // A server nobody has configured already folds the sound its own way
+        // rather than leaving it to the browser, whose fold buries the
+        // dialogue under the effects. That costs a rebuild of the sound, and
+        // the answer says as much.
+        let out_of_the_box = plan(&state, user_id, &request).await.expect("a plan");
+        assert_eq!(
+            out_of_the_box.decision.method,
+            PlaybackMethod::TranscodeAudio
+        );
+
+        let mut preferences = state
+            .database()
+            .user(user_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .preferences;
+        preferences.downmix_method = melyxar_core::user::DownmixMethod::None;
+        state
+            .database()
+            .save_preferences(user_id, &preferences)
+            .await
+            .expect("preferences saved");
+        assert_eq!(
+            plan(&state, user_id, &request)
+                .await
+                .expect("a plan")
+                .decision
+                .method,
+            PlaybackMethod::DirectPlay,
+            "a viewer who leaves the fold to the browser gets the file untouched"
+        );
+
+        preferences.downmix_method = melyxar_core::user::DownmixMethod::NightDialogue;
+        state
+            .database()
+            .save_preferences(user_id, &preferences)
+            .await
+            .expect("preferences saved");
+
+        let folded = plan(&state, user_id, &request).await.expect("a plan");
+        assert_eq!(
+            folded.decision.method,
+            PlaybackMethod::TranscodeAudio,
+            "a way of folding to stereo can only be applied by rebuilding the sound"
+        );
+        assert!(
+            folded.decision.reasons.iter().any(|reason| matches!(
+                reason,
+                melyxar_playback::decision::Reason::DownmixRequested { .. }
+            )),
+            "and the answer says it was asked for: {:?}",
+            folded.decision.reasons
+        );
+    }
+
+    #[tokio::test]
     async fn a_file_that_is_not_on_the_disk_is_refused_rather_than_opened() {
         let (_directory, state, user_id, source_id) =
             state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
