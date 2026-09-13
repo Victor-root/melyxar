@@ -13,6 +13,7 @@ pub mod detail;
 pub mod diagnostics;
 pub mod identify;
 pub mod images;
+pub mod playback;
 pub mod scan;
 pub mod startup;
 pub mod state;
