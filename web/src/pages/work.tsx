@@ -12,6 +12,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, pictureSet } from "../api";
 import type { Credit, Version, Work } from "../api";
 import { useSettings } from "../settings";
+import { Player } from "../player/player";
 
 export function WorkPage() {
   const { id } = useParams();
@@ -20,6 +21,7 @@ export function WorkPage() {
   const [work, setWork] = useState<Work | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [chosen, setChosen] = useState(0);
+  const [playing, setPlaying] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -73,6 +75,17 @@ export function WorkPage() {
     work.rating !== null ? `${work.rating.toFixed(1)} / 10` : null,
   ].filter((fact): fact is string => Boolean(fact));
 
+  if (playing) {
+    return (
+      <Player
+        sourceId={playing}
+        workId={work.id}
+        title={work.title}
+        onClose={() => setPlaying(null)}
+      />
+    );
+  }
+
   return (
     <main className="work" style={{ ["--work-color" as string]: work.color ?? "var(--surface)" }}>
       {backdrop && (
@@ -114,7 +127,11 @@ export function WorkPage() {
           </div>
 
           <div className="work-actions">
-            <button className="button button-accent button-large" disabled={!version || version.missing}>
+            <button
+              className="button button-accent button-large"
+              disabled={!version || version.missing}
+              onClick={() => version && setPlaying(version.id)}
+            >
               <span className="play-mark" aria-hidden="true" />
               {t("work.play")}
             </button>

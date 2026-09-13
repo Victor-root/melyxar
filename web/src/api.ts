@@ -189,10 +189,18 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function post<T>(path: string): Promise<T> {
+async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, { method: "POST", headers: { accept: "application/json" } });
+    response = await fetch(path, {
+      method: "POST",
+      headers:
+        body === undefined
+          ? { accept: "application/json" }
+          : { accept: "application/json", "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
   } catch {
     throw new ApiError("unreachable", 0);
   }
@@ -201,6 +209,31 @@ async function post<T>(path: string): Promise<T> {
     throw new ApiError(body?.code ?? "generic", response.status);
   }
   return (await response.json()) as T;
+}
+
+export interface PlaybackTrack {
+  id: string;
+  language: string | null;
+  title: string | null;
+  codec: string;
+  is_default: boolean;
+  /** Audio only. */
+  channels: number | null;
+  /** Subtitles only: showing it means rebuilding the picture. */
+  burns_in: boolean | null;
+}
+
+export interface PlaybackPlan {
+  url: string;
+  /** direct_play, remux, transcode_audio or full_transcode. */
+  method: string;
+  expensive: boolean;
+  /** Codes with their values, which this interface turns into sentences. */
+  reasons: { code: string; [key: string]: unknown }[];
+  duration_minutes: number | null;
+  resume_from_seconds: number | null;
+  audio: PlaybackTrack[];
+  subtitles: PlaybackTrack[];
 }
 
 export interface BrowseOptions {
@@ -244,6 +277,34 @@ export const api = {
   scan: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/scan`),
   identify: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/identify`),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
+  plan: (source: string, body: unknown, signal?: AbortSignal) =>
+    post<PlaybackPlan>(`/api/v1/playback/${source}/plan`, body, signal),
+  /**
+   * The same, handed to the browser to deliver while the page goes away.
+   *
+   * A request started as a tab closes is usually dropped; this one is not,
+   * which is what keeps the position of a film someone simply closed.
+   */
+  reportPositionOnTheWayOut: (work: string, seconds: number) => {
+    const body = JSON.stringify({
+      work_id: work,
+      position_seconds: seconds,
+      reported_at: new Date().toISOString(),
+    });
+    navigator.sendBeacon?.(
+      "/api/v1/playback/progress",
+      new Blob([body], { type: "application/json" }),
+    );
+  },
+  reportPosition: (work: string, seconds: number) =>
+    post<{ kept: boolean }>("/api/v1/playback/progress", {
+      work_id: work,
+      position_seconds: seconds,
+      // The instant this client measured it. A report that arrives after a
+      // fresher one is refused, so coming back online cannot undo progress
+      // made elsewhere in the meantime.
+      reported_at: new Date().toISOString(),
+    }),
 };
 
 /**
