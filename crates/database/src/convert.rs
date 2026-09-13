@@ -11,10 +11,7 @@ use crate::{DatabaseError, Result};
 
 /// Renders an instant in the stored form.
 pub fn timestamp_to_text(value: Timestamp) -> String {
-    value
-        .to_offset(time::UtcOffset::UTC)
-        .format(&Rfc3339)
-        .expect("an instant always formats")
+    melyxar_core::time::to_text(value)
 }
 
 /// Reads an instant back from the stored form.

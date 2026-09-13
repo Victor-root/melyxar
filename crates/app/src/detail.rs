@@ -54,6 +54,15 @@ pub struct Credit {
 pub struct Version {
     pub source_id: MediaSourceId,
     pub relative_path: String,
+    /// The disk this copy lives on, by the name the configuration gives it.
+    pub root_label: String,
+    /// Where the file is, root included. Shown to whoever runs the server: on
+    /// a page about a file, the first thing wanted when something is wrong
+    /// with it is where it is. Never used to reach it: playback goes through
+    /// the identifier, which is what keeps a path from being an address.
+    pub path: String,
+    /// When a scan first saw it, which is not when the file was made.
+    pub added_at: Timestamp,
     pub size_bytes: i64,
     /// Set while the file is not on disk. A version that cannot be played is
     /// shown as such rather than offered and failing.
@@ -140,6 +149,13 @@ pub async fn work_detail(state: &AppState, work_id: WorkId) -> Result<Option<Wor
         versions.push(Version {
             source_id: source.id,
             relative_path: source.relative_path.to_string_lossy().into_owned(),
+            root_label: source.root_label.clone(),
+            path: source
+                .root_path
+                .join(&source.relative_path)
+                .to_string_lossy()
+                .into_owned(),
+            added_at: source.added_at,
             size_bytes: source.size_bytes,
             missing_since: source.missing_since,
             container: analysis.container,
@@ -294,6 +310,9 @@ mod tests {
     fn version(tracks: Vec<Track>) -> Version {
         Version {
             source_id: MediaSourceId::new(),
+            root_label: "disk-one".to_string(),
+            path: "/mnt/disk-one/films/a.mkv".to_string(),
+            added_at: melyxar_core::time::now(),
             relative_path: "Quiet.Harbour.2019.mkv".to_string(),
             size_bytes: 1_000,
             missing_since: None,

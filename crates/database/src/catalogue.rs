@@ -27,8 +27,15 @@ pub struct StoredSource {
     pub id: MediaSourceId,
     pub work_id: WorkId,
     pub relative_path: PathBuf,
+    /// The disk this file lives on, by the name the configuration gives it.
+    pub root_label: String,
+    /// Where that disk is mounted, so the whole path can be shown to whoever
+    /// runs the server and has to find the file.
+    pub root_path: PathBuf,
     pub size_bytes: i64,
     pub modified_at: Timestamp,
+    /// When the scan first saw it, which is not when the file was made.
+    pub added_at: Timestamp,
     /// Set while the file is not on disk. A file that comes back keeps its
     /// identifier, and with it everything attached to it.
     pub missing_since: Option<Timestamp>,
@@ -235,8 +242,11 @@ impl Database {
     /// small as the comparison needs.
     pub async fn sources_of_root(&self, root_id: LibraryRootId) -> Result<Vec<StoredSource>> {
         let rows = sqlx::query(
-            "SELECT id, work_id, relative_path, size_bytes, modified_at, missing_since
-             FROM media_sources WHERE root_id = ? ORDER BY relative_path",
+            "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
+                    s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
+             FROM media_sources s
+             JOIN library_roots r ON r.id = s.root_id
+             WHERE s.root_id = ? ORDER BY s.relative_path",
         )
         .bind(root_id.to_db_string())
         .fetch_all(self.reader())
@@ -279,8 +289,11 @@ impl Database {
     /// of one work, and the page offers a choice between them.
     pub async fn sources_of_work(&self, work_id: WorkId) -> Result<Vec<StoredSource>> {
         let rows = sqlx::query(
-            "SELECT id, work_id, relative_path, size_bytes, modified_at, missing_since
-             FROM media_sources WHERE work_id = ? ORDER BY added_at",
+            "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
+                    s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
+             FROM media_sources s
+             JOIN library_roots r ON r.id = s.root_id
+             WHERE s.work_id = ? ORDER BY s.added_at",
         )
         .bind(work_id.to_db_string())
         .fetch_all(self.reader())
@@ -327,10 +340,12 @@ impl Database {
         root_id: LibraryRootId,
     ) -> Result<Vec<StoredSource>> {
         let rows = sqlx::query(
-            "SELECT id, work_id, relative_path, size_bytes, modified_at, missing_since
-             FROM media_sources
-             WHERE root_id = ? AND analysed_at IS NULL AND missing_since IS NULL
-             ORDER BY relative_path",
+            "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
+                    s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
+             FROM media_sources s
+             JOIN library_roots r ON r.id = s.root_id
+             WHERE s.root_id = ? AND s.analysed_at IS NULL AND s.missing_since IS NULL
+             ORDER BY s.relative_path",
         )
         .bind(root_id.to_db_string())
         .fetch_all(self.reader())
@@ -792,8 +807,11 @@ fn stored_source_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredSource>
         id: parse_id(&row.try_get::<String, _>("id")?)?,
         work_id: parse_id(&row.try_get::<String, _>("work_id")?)?,
         relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
+        root_label: row.try_get("root_label")?,
+        root_path: PathBuf::from(row.try_get::<String, _>("root_path")?),
         size_bytes: row.try_get("size_bytes")?,
         modified_at: parse_timestamp(&row.try_get::<String, _>("modified_at")?)?,
+        added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
         missing_since: parse_optional_timestamp(
             row.try_get::<Option<String>, _>("missing_since")?
                 .as_deref(),

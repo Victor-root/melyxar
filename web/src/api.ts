@@ -81,24 +81,46 @@ export interface Credit {
 }
 
 export interface VideoTrack {
+  /** The title the file itself carries, when it carries one. */
+  title: string | null;
   codec: string;
+  profile: string | null;
+  level: number | null;
   width: number;
   height: number;
+  aspect_ratio: string | null;
+  is_interlaced: boolean;
   hdr: string | null;
   frame_rate: number | null;
-}
-
-export interface AudioTrack {
-  codec: string;
-  language: string | null;
-  channels: number;
-  channel_layout: string | null;
+  bitrate: number | null;
+  pixel_format: string | null;
+  reference_frames: number | null;
+  color_primaries: string | null;
+  color_space: string | null;
+  color_transfer: string | null;
+  bit_depth: number | null;
   is_default: boolean;
 }
 
+export interface AudioTrack {
+  title: string | null;
+  codec: string;
+  profile: string | null;
+  language: string | null;
+  channels: number;
+  channel_layout: string | null;
+  sample_rate: number | null;
+  bit_depth: number | null;
+  bitrate: number | null;
+  is_default: boolean;
+  is_forced: boolean;
+}
+
 export interface SubtitleTrack {
+  title: string | null;
   codec: string;
   language: string | null;
+  is_default: boolean;
   is_forced: boolean;
   is_hearing_impaired: boolean;
   is_external: boolean;
@@ -108,8 +130,13 @@ export interface SubtitleTrack {
 export interface Version {
   id: string;
   summary: string;
+  /** Where the file is, root included, and the disk it is on. */
+  path: string;
+  root_label: string;
+  added_at: string;
   size_bytes: number;
   duration_minutes: number | null;
+  overall_bitrate: number | null;
   container: string | null;
   analysed: boolean;
   missing: boolean;
