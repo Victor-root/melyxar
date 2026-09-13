@@ -110,6 +110,12 @@ where
         handle.advance(1).await;
     }
 
+    // Two copies can carry names nothing could ever match, and the provider
+    // then answers the same film for both. That only becomes visible once both
+    // have been asked about, which is here.
+    report.merged +=
+        join_what_the_provider_says_is_one_film(state, library, provider.name()).await?;
+
     // A picture is fetched when a film is named and never again, so one that
     // did not arrive that day would never arrive: the film keeps its title and
     // its grey rectangle for ever. Asked for here, where somebody has just
@@ -118,7 +124,11 @@ where
     report.pictures_filled = filled.pictures;
     report.synopses_filled = filled.synopses;
 
-    if report.identified > 0 || report.pictures_filled > 0 || report.synopses_filled > 0 {
+    if report.identified > 0
+        || report.merged > 0
+        || report.pictures_filled > 0
+        || report.synopses_filled > 0
+    {
         database.bump_library_version(library.id).await?;
     }
 
@@ -135,6 +145,42 @@ where
         "identification finished"
     );
     Ok(report)
+}
+
+/// Joins the copies the provider says are one and the same film.
+///
+/// Two files can carry names no rule could ever bring together, and hold the
+/// same film: one named after its original title and one after the title it
+/// was released under here, one carrying a mark the other does not. Only the
+/// provider can say they are one film, and it says so by answering the same
+/// identifier for both.
+///
+/// Left apart they are the same title, the same poster and the same synopsis
+/// twice in a grid, which is exactly what a version chooser exists to avoid.
+async fn join_what_the_provider_says_is_one_film(
+    state: &AppState,
+    library: &Library,
+    provider: &str,
+) -> Result<usize> {
+    let shared = state
+        .database()
+        .works_sharing_an_identity(library.id, provider)
+        .await?;
+
+    let mut joined = 0;
+    for film in shared {
+        for other in film.others {
+            crate::scan::join_work_into(state, other, film.keep).await?;
+            joined += 1;
+        }
+    }
+    if joined > 0 {
+        tracing::info!(
+            copies = joined,
+            "copies the provider calls one film were put together"
+        );
+    }
+    Ok(joined)
 }
 
 /// The language a provider describes a film in when nobody translated it.
@@ -1207,6 +1253,81 @@ mod tests {
         identify_library(state, provider, library, &handle)
             .await
             .expect("the run finished")
+    }
+
+    #[tokio::test]
+    async fn two_copies_the_provider_calls_one_film_become_one_film() {
+        // One copy named after the title the film was shot under, the other
+        // after the title it was released under here. No rule reading names
+        // could ever bring those two together; the provider answers the same
+        // film for both, and that is the whole proof.
+        let (_directory, state, library, first) =
+            state_with_work("Quiet Harbour", Some(2019)).await;
+        let second = state
+            .database()
+            .create_work(
+                library.id,
+                WorkKind::Movie,
+                "Port Tranquille",
+                "port tranquille",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        for (work_id, name) in [
+            (first.id, "Quiet Harbour 2019 1080p.mkv"),
+            (second.id, "Port Tranquille 2019 1080p.mkv"),
+        ] {
+            state
+                .database()
+                .insert_source(
+                    work_id,
+                    library.roots[0].id,
+                    std::path::Path::new(name),
+                    1_000,
+                    melyxar_core::time::now(),
+                )
+                .await
+                .expect("source recorded");
+        }
+
+        let provider = Arc::new(StandIn::new(
+            vec![
+                candidate("111", "Quiet Harbour", Some(2019)),
+                candidate("111", "Port Tranquille", Some(2019)),
+            ],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 2);
+        assert_eq!(report.merged, 1);
+
+        assert_eq!(
+            state
+                .database()
+                .count_works(library.id)
+                .await
+                .expect("read"),
+            1,
+            "the same title, poster and synopsis twice in a grid is the defect this avoids"
+        );
+        let kept = state
+            .database()
+            .work(first.id)
+            .await
+            .expect("read")
+            .expect("the one that has been here longest stays");
+        let sources = state
+            .database()
+            .sources_of_root(library.roots[0].id)
+            .await
+            .expect("read");
+        assert_eq!(sources.len(), 2, "not one copy is lost in the move");
+        assert!(sources.iter().all(|source| source.work_id == kept.id));
+
+        // And a second run has nothing left to put together.
+        assert_eq!(run(&state, &provider, &library).await.merged, 0);
     }
 
     #[tokio::test]
