@@ -19,7 +19,7 @@
 import type Hls from "hls.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api";
-import type { PlaybackPlan, PlaybackSession, PlaybackTrack } from "../api";
+import type { PlaybackPlan, PlaybackSession, PlaybackTrack, Preparation } from "../api";
 import { useSettings } from "../settings";
 import {
   appearanceClasses,
@@ -53,6 +53,14 @@ const WORTH_REPORTING = 5;
  * twice.
  */
 const SEGMENT_PATIENCE = 40_000;
+
+/**
+ * How often the server is asked where the preparation has got to.
+ *
+ * A segment lasts four seconds and is produced faster than that, so a look
+ * every second is often enough to move and rare enough to cost nothing.
+ */
+const PREPARATION_EVERY = 1_000;
 
 /** Whether the film can reach this browser without being rebuilt. */
 function canBePlayedAsItIs(plan: PlaybackPlan): boolean {
@@ -165,6 +173,10 @@ export function Player({
   /* Which picture the browser has actually opened. Null until it has: the
      words are hung on the picture, and only once it is there. */
   const [readyPicture, setReadyPicture] = useState<string | null>(null);
+  /* How far the server has got, asked for only while the picture is not there
+     yet: once the film is playing, the answer is a request a second for
+     something nobody is looking at. */
+  const [preparing, setPreparing] = useState<Preparation | null>(null);
   /* The last position seen, kept apart from the element. On the way out the
      element is already gone, and that is exactly the moment the position is
      worth sending. */
@@ -283,6 +295,34 @@ export function Player({
       }
     };
   }, [beingProduced, sourceId, audioId]);
+
+  /* Asked for while the picture is not there yet, and not a moment longer:
+     once the film is playing this would be a request a second for something
+     nobody is looking at. */
+  useEffect(() => {
+    const name = stream?.id;
+    if (!name || readyPicture === pictureKey) {
+      setPreparing(null);
+      return;
+    }
+    const controller = new AbortController();
+    const look = () => {
+      api
+        .preparation(name, controller.signal)
+        .then(setPreparing)
+        .catch(() => {
+          // A step that could not be read is not worth troubling a viewer
+          // with: the film is on its way either way, and the next look
+          // carries the same news.
+        });
+    };
+    look();
+    const timer = window.setInterval(look, PREPARATION_EVERY);
+    return () => {
+      window.clearInterval(timer);
+      controller.abort();
+    };
+  }, [stream?.id, readyPicture, pictureKey]);
 
   /* Feeding the segments in. Apple's browsers read a playlist on their own,
      so there the address goes straight to the element and nothing else is
@@ -539,9 +579,23 @@ export function Player({
 
       {failed && <p className="notice">{t(failed)}</p>}
 
-      {/* The session is asked for and the first segments are produced, which
-          takes a moment on a film nobody has played yet. */}
-      {rebuilt && !stream && !failed && <p className="notice">{t("player.preparing")}</p>}
+      {/* What the server is doing while the picture is not there yet. Named
+          steps rather than a bar alone: a bar filling at an unknown rate says
+          only that something is happening, while "reading the film" says which
+          part is slow when one of them is. */}
+      {rebuilt && readyPicture !== pictureKey && !failed && (
+        <p className="notice">
+          {t(`player.step.${preparing?.step ?? "starting"}`)}
+          {preparing && preparing.wanted > 0 && (
+            <span className="player-reasons">
+              {t("player.segments_ready", {
+                ready: preparing.ready,
+                wanted: preparing.wanted,
+              })}
+            </span>
+          )}
+        </p>
+      )}
 
       {/* One element for both, told apart by its key: a film handed over as a
           file carries its address, a rebuilt one is fed by the library, and

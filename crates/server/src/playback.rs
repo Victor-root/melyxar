@@ -47,9 +47,9 @@ pub fn router() -> Router<AppState> {
             "/api/v1/playback/{id}/subtitles/{track}",
             axum::routing::get(subtitle),
         )
-        // One route for the three things a session hands out. A router allows
-        // one name per part of a path, and a segment is named after its
-        // number in a way a player builds itself from the playlist.
+        // One route for everything a session hands out. A router allows one
+        // name per part of a path, and a segment is named after its number in
+        // a way a player builds itself from the playlist.
         .route(
             "/api/v1/stream/{session}/{file}",
             axum::routing::get(session_file),
@@ -360,6 +360,8 @@ enum Wanted {
     Header,
     /// One segment, by its number.
     Segment(u32),
+    /// How far the preparation has got, which a page shows while waiting.
+    Preparation,
 }
 
 /// Reads the name a player asked for.
@@ -371,6 +373,7 @@ fn wanted_from(name: &str) -> Option<Wanted> {
     match name {
         "playlist.m3u8" => Some(Wanted::Playlist),
         "init.mp4" => Some(Wanted::Header),
+        "preparation" => Some(Wanted::Preparation),
         other => other
             .strip_prefix("segment-")
             .and_then(|rest| rest.strip_suffix(".m4s"))
@@ -388,7 +391,38 @@ async fn session_file(
         Some(Wanted::Playlist) => playlist(&state, &id).await,
         Some(Wanted::Header) => header_file(&state, &id, request).await,
         Some(Wanted::Segment(index)) => segment(&state, &id, index, request).await,
+        Some(Wanted::Preparation) => preparation(&state, &id).await,
         None => ServerError::not_found("a session hands out nothing by that name").into_response(),
+    }
+}
+
+/// Where the preparation has got to.
+///
+/// Named steps rather than a proportion alone: a page that says "reading the
+/// film" says which part is slow, where a bar filling at an unknown rate says
+/// only that something is happening.
+#[derive(Debug, Serialize)]
+struct PreparationView {
+    /// starting, reading, producing or ready.
+    step: &'static str,
+    /// Segments on the disk that a player can actually read.
+    ready: u32,
+    /// How many make a comfortable start from where the tool was set going.
+    wanted: u32,
+}
+
+async fn preparation(state: &AppState, id: &str) -> Response {
+    match live_session(state, id).await {
+        Ok(session) => {
+            let seen = session.preparation().await;
+            Json(PreparationView {
+                step: seen.step.as_str(),
+                ready: seen.ready,
+                wanted: seen.wanted,
+            })
+            .into_response()
+        }
+        Err(error) => error.into_response(),
     }
 }
 
@@ -749,9 +783,10 @@ mod tests {
     }
 
     #[test]
-    fn a_session_hands_out_three_things_and_nothing_else() {
+    fn a_session_hands_out_four_things_and_nothing_else() {
         assert_eq!(wanted_from("playlist.m3u8"), Some(Wanted::Playlist));
         assert_eq!(wanted_from("init.mp4"), Some(Wanted::Header));
+        assert_eq!(wanted_from("preparation"), Some(Wanted::Preparation));
         assert_eq!(wanted_from("segment-0.m4s"), Some(Wanted::Segment(0)));
         assert_eq!(wanted_from("segment-1799.m4s"), Some(Wanted::Segment(1799)));
 

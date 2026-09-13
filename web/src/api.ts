@@ -255,6 +255,16 @@ export interface PlaybackSession {
   resume_from_seconds: number | null;
 }
 
+/** How far the preparation of a film has got. */
+export interface Preparation {
+  /** starting, reading, producing or ready. */
+  step: "starting" | "reading" | "producing" | "ready";
+  /** Segments on the disk that a player can actually read. */
+  ready: number;
+  /** How many make a comfortable start. */
+  wanted: number;
+}
+
 export interface BrowseOptions {
   library?: string;
   order?: string;
@@ -306,6 +316,8 @@ export const api = {
     post<PlaybackPlan>(`/api/v1/playback/${source}/plan`, body, signal),
   openSession: (source: string, body: unknown, signal?: AbortSignal) =>
     post<PlaybackSession>(`/api/v1/playback/${source}/session`, body, signal),
+  preparation: (session: string, signal?: AbortSignal) =>
+    get<Preparation>(`/api/v1/stream/${session}/preparation`, signal),
   /**
    * Closes a session, including while the page is going away.
    *

@@ -52,6 +52,81 @@ pub struct Recipe {
     pub audio: melyxar_ffmpeg::command::AudioOutput,
 }
 
+/// Where the preparation of a film has got to.
+///
+/// Named steps rather than a proportion alone: "three seconds of nineteen" is
+/// a number nobody can act on, while "reading the film" and "building the
+/// picture" say which part is slow when one of them is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreparationStep {
+    /// Nothing has been asked of the tool yet.
+    Starting,
+    /// The tool is running and has not written anything here yet. On a large
+    /// film this is the tool reading its way to the point asked for.
+    Reading,
+    /// Segments are appearing, and there are not enough of them yet.
+    Producing,
+    /// Enough is on the disk for the film to start without stopping again.
+    Ready,
+}
+
+impl PreparationStep {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Starting => "starting",
+            Self::Reading => "reading",
+            Self::Producing => "producing",
+            Self::Ready => "ready",
+        }
+    }
+}
+
+/// How far the preparation has got, in a form a page can show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Preparation {
+    pub step: PreparationStep,
+    /// Segments on the disk, counted from where the tool was started.
+    pub ready: u32,
+    /// How many make a comfortable start.
+    pub wanted: u32,
+}
+
+/// Whether a tool started at `from` will reach `index` soon enough that
+/// waiting beats starting again.
+///
+/// Behind is never worth waiting for: the tool only moves forward, so a
+/// request for something it has already passed is a viewer who went back.
+fn already_on_its_way(from: u32, index: u32) -> bool {
+    index >= from && index < from + WORTH_WAITING_FOR
+}
+
+/// How many of the segments on the disk a player can actually read.
+///
+/// While the tool runs, the newest file is the one it is writing: a file that
+/// is merely there may still be growing, and a truncated segment breaks
+/// playback in a way nobody can read. Once the tool has stopped, nothing is
+/// growing any more and all of them count.
+fn settled(on_disk: u32, tool_finished: bool) -> u32 {
+    if tool_finished {
+        on_disk
+    } else {
+        on_disk.saturating_sub(1)
+    }
+}
+
+/// Which step a running tool is on, from what it has produced so far.
+fn step_for(ready: u32, wanted: u32) -> PreparationStep {
+    if ready >= wanted {
+        PreparationStep::Ready
+    } else if ready == 0 {
+        // The tool is running and nothing is readable yet. On a large file
+        // this is it reading its way to the point asked for.
+        PreparationStep::Reading
+    } else {
+        PreparationStep::Producing
+    }
+}
+
 /// The tool at work, and where it started.
 struct AtWork {
     process: RunningProcess,
@@ -118,6 +193,52 @@ impl Session {
         Ok(path)
     }
 
+    /// How far the preparation has got.
+    ///
+    /// Read from the folder rather than remembered, because the folder is what
+    /// is actually true: a count kept alongside would drift the first time a
+    /// tool died between two segments.
+    pub async fn preparation(&self) -> Preparation {
+        let from = self
+            .running
+            .lock()
+            .await
+            .as_ref()
+            .map(|at_work| at_work.from);
+        let Some(from) = from else {
+            return Preparation {
+                step: PreparationStep::Starting,
+                ready: 0,
+                wanted: self.enough_from(0),
+            };
+        };
+
+        // Counted as a run rather than a total: a segment on its own with a
+        // hole before it does not let a film start.
+        let mut on_disk = 0;
+        while self.path_of(from + on_disk).exists() {
+            on_disk += 1;
+        }
+
+        let ready = settled(on_disk, self.tool_has_finished().await);
+
+        let wanted = self.enough_from(from);
+        Preparation {
+            step: step_for(ready, wanted),
+            ready,
+            wanted,
+        }
+    }
+
+    /// How many segments make a comfortable start from here.
+    ///
+    /// The usual handful, or whatever is left of the film when the viewer
+    /// landed near the end: waiting for six segments of a film with three left
+    /// would be waiting for ever.
+    fn enough_from(&self, index: u32) -> u32 {
+        WORTH_WAITING_FOR.min(self.playlist.segment_count().saturating_sub(index))
+    }
+
     /// Hands over one segment, producing it if it is not there yet.
     pub async fn segment(&self, index: u32) -> Result<PathBuf> {
         self.touch().await;
@@ -141,9 +262,9 @@ impl Session {
         let mut running = self.running.lock().await;
 
         if let Some(at_work) = running.as_mut() {
-            let ahead_of_it = index >= at_work.from;
-            let near_enough = index < at_work.from + WORTH_WAITING_FOR;
-            if ahead_of_it && near_enough && !at_work.process.has_exited() {
+            // A tool that has finished is started again wherever the request
+            // is: there is nothing on its way any more.
+            if already_on_its_way(at_work.from, index) && !at_work.process.has_exited() {
                 return Ok(());
             }
         }
@@ -309,6 +430,93 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_session_nobody_has_asked_anything_of_has_not_started() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 40).await;
+
+        let waiting = session.preparation().await;
+        assert_eq!(waiting.step, PreparationStep::Starting);
+        assert_eq!(waiting.ready, 0);
+        assert_eq!(waiting.wanted, WORTH_WAITING_FOR);
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_film_produced_to_its_end_is_ready() {
+        // Twelve seconds is three segments, fewer than makes a comfortable
+        // start anywhere else: waiting for six of them would be waiting for
+        // ever.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 12).await;
+        assert_eq!(session.playlist().segment_count(), 3);
+
+        session.segment(0).await.expect("the first segment");
+        for _ in 0..100 {
+            if session.preparation().await.step == PreparationStep::Ready {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        let ready = session.preparation().await;
+        assert_eq!(ready.step, PreparationStep::Ready, "{ready:?}");
+        assert_eq!(ready.wanted, 3, "the whole of what is left: {ready:?}");
+        assert_eq!(ready.ready, 3, "{ready:?}");
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_viewer_landing_near_the_end_is_not_made_to_wait_for_what_is_not_there() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 40).await;
+        assert_eq!(session.playlist().segment_count(), 10);
+
+        assert_eq!(session.enough_from(0), WORTH_WAITING_FOR);
+        assert_eq!(
+            session.enough_from(8),
+            2,
+            "two segments left, so two is all there is to wait for"
+        );
+        assert_eq!(session.enough_from(10), 0);
+        session.close().await;
+    }
+
+    #[test]
+    fn every_step_is_one_a_viewer_can_actually_land_on() {
+        // A machine that copies faster than it can be watched goes from
+        // nothing to ready in under a second, so the two steps in between are
+        // only ever seen on a slow one. They still have to be right.
+        assert_eq!(step_for(0, 6), PreparationStep::Reading);
+        assert_eq!(step_for(1, 6), PreparationStep::Producing);
+        assert_eq!(step_for(5, 6), PreparationStep::Producing);
+        assert_eq!(step_for(6, 6), PreparationStep::Ready);
+        assert_eq!(step_for(80, 6), PreparationStep::Ready);
+
+        // A viewer who landed on the last segment of the film waits for that
+        // one and nothing else.
+        assert_eq!(step_for(0, 1), PreparationStep::Reading);
+        assert_eq!(step_for(1, 1), PreparationStep::Ready);
+        assert_eq!(
+            step_for(0, 0),
+            PreparationStep::Ready,
+            "nothing left to wait for is not a wait"
+        );
+    }
+
+    #[test]
+    fn a_segment_still_being_written_is_not_counted_as_ready() {
+        // A file that is merely there may still be growing, and a player
+        // handed a truncated segment fails in a way nobody can read.
+        assert_eq!(settled(4, false), 3, "the newest one is being written");
+        assert_eq!(settled(1, false), 0, "one file means nothing readable yet");
+        assert_eq!(settled(0, false), 0);
+
+        // Once the tool has stopped, nothing is growing any more.
+        assert_eq!(settled(4, true), 4);
+        assert_eq!(settled(0, true), 0);
+    }
+
+    #[tokio::test]
     async fn the_first_segment_asked_for_is_what_starts_the_tool() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let session = session_of(directory.path(), 12).await;
@@ -372,17 +580,45 @@ mod tests {
         session.segment(0).await.expect("the first segment");
         assert_eq!(producing_from(&session).await, Some(0));
 
-        // Far past what the tool is working on: this is a viewer dragging the
-        // cursor towards the end. Producing everything in between first would
-        // mean minutes of waiting for a film nobody is watching yet.
-        let landed = session.segment(12).await.expect("the segment landed on");
-        assert!(landed.exists());
+        // The rule is asked directly rather than through a request for the
+        // segment. Copying a short clip finishes in well under a second, so a
+        // request that far ahead usually finds the file already on the disk
+        // and rightly hands it over without restarting anything: going through
+        // it would test how fast this machine is, not what the rule says.
+        session
+            .make_sure_someone_is_producing(12)
+            .await
+            .expect("the tool starts again");
         assert_eq!(
             producing_from(&session).await,
             Some(12),
-            "the tool was started again where the viewer landed"
+            "a viewer dragging the cursor towards the end must not wait for \
+             everything in between to be produced first"
         );
+
+        let landed = session.segment(12).await.expect("the segment landed on");
+        assert!(landed.exists());
         session.close().await;
+    }
+
+    #[test]
+    fn what_is_nearly_ready_is_waited_for_and_the_rest_is_a_jump() {
+        // The other half of the same rule, asked as the question it is.
+        // Restarting costs a second or two and throws away work already done,
+        // so a request for what is nearly ready waits.
+        assert!(already_on_its_way(0, 0), "the one being produced");
+        assert!(already_on_its_way(0, WORTH_WAITING_FOR - 1), "nearly there");
+        assert!(
+            !already_on_its_way(0, WORTH_WAITING_FOR),
+            "beyond that, the viewer has jumped"
+        );
+        assert!(!already_on_its_way(0, 400), "the end of a long film");
+
+        // The tool only moves forward, so anything behind it is a viewer who
+        // went back and will never be reached by waiting.
+        assert!(!already_on_its_way(10, 9));
+        assert!(!already_on_its_way(10, 0));
+        assert!(already_on_its_way(10, 12), "the window travels with it");
     }
 
     /// Where a produced segment says it belongs in the film, read back from
