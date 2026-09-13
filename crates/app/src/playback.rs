@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::media::Track;
+use melyxar_core::privacy::MediaName;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::user::DownmixMethod;
 use melyxar_core::work::{state_for_position, PlaybackState, DEFAULT_WATCHED_THRESHOLD};
@@ -166,6 +167,26 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
             // goes here, and the answer will say it was asked for.
             level_loudness: false,
         },
+    );
+
+    // The one line that explains a playback afterwards. The reasons are worked
+    // out here, travel to the page, and used to go nowhere else: a viewer who
+    // says "it would not play" left nothing behind to look at.
+    tracing::info!(
+        file = %MediaName::new(
+            source
+                .path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+        ),
+        method = decision.method.as_str(),
+        video = ?decision.video,
+        audio = ?decision.audio,
+        subtitles = ?decision.subtitles,
+        tone_map = decision.tone_map,
+        reasons = ?decision.reasons,
+        "playback decided"
     );
 
     let resume_from = remembered

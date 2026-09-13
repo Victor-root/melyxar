@@ -312,18 +312,72 @@ impl Session {
     async fn wait_for(&self, path: &Path, index: u32) -> Result<()> {
         let deadline = Instant::now() + PATIENCE;
         loop {
+            let tool_is_gone = self.tool_has_finished().await;
             // The next segment existing means this one is finished being
             // written: a file that is merely there may still be growing, and
             // a truncated segment breaks playback in a way nobody can read.
-            let finished_being_written =
-                self.path_of(index + 1).exists() || self.tool_has_finished().await;
+            let finished_being_written = self.path_of(index + 1).exists() || tool_is_gone;
             if finished_being_written && path.exists() {
                 return Ok(());
             }
+
+            // The tool is gone and what was asked for is not there. Waiting
+            // out the deadline only delays the same answer, and answers it
+            // with the wrong reason: a tool that died on its first frame
+            // looked exactly like a machine that was merely slow.
+            if tool_is_gone {
+                return Err(self.why_nothing_came(index).await);
+            }
+
             if Instant::now() >= deadline {
                 return Err(StreamingError::TooSlow);
             }
             tokio::time::sleep(LOOK_AGAIN_EVERY).await;
+        }
+    }
+
+    /// What the tool said before it stopped without producing a segment.
+    ///
+    /// Its error output is the only place the answer lives, and nothing was
+    /// reading it: the process was left where it was and the wait ran to its
+    /// deadline. Reading it is the difference between a fix and an evening.
+    async fn why_nothing_came(&self, index: u32) -> StreamingError {
+        let mut running = self.running.lock().await;
+        let stopped = running
+            .as_mut()
+            .is_some_and(|at_work| at_work.process.has_exited());
+        let at_work = stopped.then(|| running.take()).flatten();
+        drop(running);
+
+        let Some(at_work) = at_work else {
+            tracing::error!(
+                session = %self.id,
+                index,
+                "a segment was asked for, nothing is producing it, and nothing said why"
+            );
+            return StreamingError::TooSlow;
+        };
+
+        match at_work.process.wait().await {
+            // It ran to its end and this segment is still not there, which
+            // means it was never going to produce it.
+            Ok(()) => {
+                tracing::error!(
+                    session = %self.id,
+                    index,
+                    "the media tool finished without producing this segment"
+                );
+                StreamingError::TooSlow
+            }
+            Err(error) => {
+                tracing::error!(
+                    session = %self.id,
+                    index,
+                    reason = %error,
+                    "the media tool stopped without producing this segment"
+                );
+                StreamingError::MediaTool(error)
+            }
         }
     }
 
@@ -473,6 +527,52 @@ mod tests {
         assert_eq!(ready.step, PreparationStep::Ready, "{ready:?}");
         assert_eq!(ready.wanted, 3, "the whole of what is left: {ready:?}");
         assert_eq!(ready.ready, 3, "{ready:?}");
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_tool_that_cannot_read_the_film_says_so_instead_of_being_waited_out() {
+        // What a viewer meets when a film cannot be converted at all. The tool
+        // dies on its first frame, and the wait used to run to its deadline
+        // and then blame the machine for being slow, throwing away the one
+        // thing worth reading.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("not-a-film.mkv");
+        std::fs::write(&source, b"this is not a film at all").expect("file written");
+
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(40_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Copy,
+                audio: AudioOutput::Copy,
+            },
+            directory.path().join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+
+        let started = Instant::now();
+        let outcome = session.segment(0).await;
+        let waited = started.elapsed();
+
+        match outcome {
+            Err(StreamingError::MediaTool(error)) => {
+                let said = error.to_string();
+                assert!(
+                    said.len() > "the media tool failed: ".len(),
+                    "what the tool said has to travel with the failure: {said}"
+                );
+            }
+            other => panic!("the tool cannot read this and the failure must say so: {other:?}"),
+        }
+        assert!(
+            waited < PATIENCE,
+            "a tool that is already gone is not worth waiting {PATIENCE:?} for, waited {waited:?}"
+        );
         session.close().await;
     }
 
