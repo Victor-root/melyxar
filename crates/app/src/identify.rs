@@ -42,6 +42,8 @@ pub struct IdentifyReport {
     pub renamed: usize,
     /// Films that had a name but no picture, and have one now.
     pub pictures_filled: usize,
+    /// Films that had a name but no synopsis, and have one now.
+    pub synopses_filled: usize,
     pub cancelled: bool,
 }
 
@@ -116,9 +118,11 @@ where
     // did not arrive that day would never arrive: the film keeps its title and
     // its grey rectangle for ever. Asked for here, where somebody has just
     // pressed the button that says look up what is missing.
-    report.pictures_filled = fill_in_missing_pictures(state, provider, library, handle).await?;
+    let filled = fill_in_what_is_missing(state, provider, library, handle).await?;
+    report.pictures_filled = filled.pictures;
+    report.synopses_filled = filled.synopses;
 
-    if report.identified > 0 || report.pictures_filled > 0 {
+    if report.identified > 0 || report.pictures_filled > 0 || report.synopses_filled > 0 {
         database.bump_library_version(library.id).await?;
     }
 
@@ -129,6 +133,7 @@ where
         postponed = report.postponed,
         renamed = report.renamed,
         pictures_filled = report.pictures_filled,
+        synopses_filled = report.synopses_filled,
         cancelled = report.cancelled,
         "identification finished"
     );
@@ -180,63 +185,85 @@ async fn fill_in_the_synopsis(
     }
 }
 
-/// How many films one run tries to fetch missing pictures for.
+/// How many films one run tries to fill the holes of.
 ///
 /// Bounded like the look up itself: a run that never ends cannot be followed,
 /// and the next one continues where this one stopped.
-const PICTURES_PER_RUN: i64 = 200;
+const FILLED_PER_RUN: i64 = 200;
 
-/// Asks again for the pictures of films that have a name and no picture.
+/// What one pass over the holes managed to fill.
+#[derive(Debug, Default)]
+struct Filled {
+    pictures: usize,
+    synopses: usize,
+}
+
+/// Asks again about films that have a name and are still missing something.
 ///
-/// Answers how many came back with one. Nothing here can fail the run: a
-/// picture is a comfort, and a film without one is still a film.
-async fn fill_in_missing_pictures<P>(
+/// What a provider is asked for is only ever fetched when a film is named, so
+/// anything that did not arrive that day would never arrive: a folder that
+/// could not be written to, a disk that was full, a provider down for a
+/// minute. The film keeps its title and its holes for ever, and nothing says
+/// so. One question per film serves every hole it has.
+///
+/// Nothing here can fail the run: these are comforts, and a film without them
+/// is still a film.
+async fn fill_in_what_is_missing<P>(
     state: &AppState,
     provider: &Arc<P>,
     library: &Library,
     handle: &JobHandle,
-) -> Result<usize>
+) -> Result<Filled>
 where
     P: MetadataProvider + 'static,
 {
+    let language = &library.metadata_language;
     let waiting = state
         .database()
-        .works_missing_their_pictures(library.id, provider.name(), PICTURES_PER_RUN)
+        .works_missing_their_metadata(library.id, provider.name(), language, FILLED_PER_RUN)
         .await?;
     if waiting.is_empty() {
-        return Ok(0);
+        return Ok(Filled::default());
     }
 
     tracing::info!(
         films = waiting.len(),
-        "some films have a name and no picture; asking again"
+        "some films have a name and are missing something; asking again"
     );
 
-    let mut filled = 0;
-    for (work_id, external_id) in waiting {
+    let mut filled = Filled::default();
+    for work in waiting {
         if handle.is_cancelled() {
             break;
         }
-        let details = match provider
-            .movie_details(&external_id, &library.metadata_language)
-            .await
-        {
-            Ok(details) => details,
+        let details = match provider.movie_details(&work.external_id, language).await {
+            Ok(details) => fill_in_the_synopsis(provider.as_ref(), details, language).await,
             Err(error) => {
                 tracing::warn!(reason = %error, "the provider would not describe a film again");
                 continue;
             }
         };
 
-        let prepared = crate::images::store_provider_images(
-            state,
-            provider.as_ref(),
-            work_id,
-            &details,
-        )
-        .await;
-        if prepared > 0 {
-            filled += 1;
+        if work.wants_pictures
+            && crate::images::store_provider_images(state, provider.as_ref(), work.id, &details)
+                .await
+                > 0
+        {
+            filled.pictures += 1;
+        }
+
+        if work.wants_a_synopsis {
+            if let Some(synopsis) = details
+                .overview
+                .as_deref()
+                .filter(|text| !text.trim().is_empty())
+            {
+                state
+                    .database()
+                    .set_work_synopsis(work.id, language, details.tagline.as_deref(), synopsis)
+                    .await?;
+                filled.synopses += 1;
+            }
         }
     }
     Ok(filled)
@@ -1942,6 +1969,49 @@ mod tests {
             detail.overview.is_some_and(|text| !text.is_empty()),
             "the library is in French and the film is described in English, which is a synopsis"
         );
+    }
+
+    #[tokio::test]
+    async fn a_synopsis_that_did_not_arrive_that_day_is_asked_for_again() {
+        // The same hole as a missing picture, and the same reason nothing ever
+        // filled it: a provider is only ever asked at the moment a film is
+        // named. A film described in another language since, or one whose
+        // answer came back empty that day, stays empty for ever.
+        let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
+        let mut wordless = details("111", "Quiet Harbour", Some(2019));
+        wordless.overview = None;
+        let silent = Arc::new(StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![wordless],
+        ));
+        assert_eq!(run(&state, &silent, &library).await.identified, 1);
+        assert!(crate::detail::work_detail(&state, work.id)
+            .await
+            .expect("read")
+            .expect("present")
+            .overview
+            .is_none());
+
+        // The same film, a day the provider has words for it.
+        let talking = Arc::new(StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        ));
+        let report = run(&state, &talking, &library).await;
+        assert_eq!(report.identified, 0);
+        assert_eq!(report.synopses_filled, 1);
+
+        let detail = crate::detail::work_detail(&state, work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert!(detail.overview.is_some_and(|text| !text.is_empty()));
+        assert_eq!(
+            detail.work.title, "Quiet Harbour",
+            "only the hole is filled; nothing else about the film is written again"
+        );
+
+        assert_eq!(run(&state, &talking, &library).await.synopses_filled, 0);
     }
 
     #[tokio::test]

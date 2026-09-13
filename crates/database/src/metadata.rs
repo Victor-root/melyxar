@@ -14,7 +14,7 @@ use melyxar_core::time::{now, Millis};
 use melyxar_core::work::{IdentificationNote, IdentificationState};
 use sqlx::{Row, Sqlite, Transaction};
 
-use crate::convert::timestamp_to_text;
+use crate::convert::{int_to_bool, timestamp_to_text};
 use crate::{Database, DatabaseError, Result};
 
 /// A work that still carries the name of the file it was found in.
@@ -70,6 +70,16 @@ pub struct CreditedPerson {
     pub photo_path: Option<String>,
     /// Billing order, so only the faces a page actually shows are fetched.
     pub ordinal: i32,
+}
+
+/// A named film, what to ask the provider about, and what is worth writing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncompleteNamedWork {
+    pub id: WorkId,
+    /// What the provider calls it, which is how it is asked about again.
+    pub external_id: String,
+    pub wants_pictures: bool,
+    pub wants_a_synopsis: bool,
 }
 
 /// A film that has a name and is still missing something a page shows.
@@ -214,47 +224,91 @@ impl Database {
         Ok(incomplete)
     }
 
-    /// Films that were named and have no picture at all.
+    /// A film that was named and is still missing something a provider has.
     ///
-    /// A picture is fetched when a film is named and never again, so one that
-    /// did not arrive that day never arrives: a full disk, a folder the server
-    /// could not write to, a provider that was down for a minute. The film
-    /// keeps its title and its grey rectangle for ever, and nothing says so.
-    /// This is the list that puts that right.
-    pub async fn works_missing_their_pictures(
+    /// Carries what to ask about and what is worth writing when the answer
+    /// comes back, so that one question serves both.
+    pub async fn works_missing_their_metadata(
         &self,
         library_id: LibraryId,
         provider: &str,
+        language: &str,
         limit: i64,
-    ) -> Result<Vec<(WorkId, String)>> {
-        let rows: Vec<(String, String)> = sqlx::query_as(
-            "SELECT w.id, e.external_id
+    ) -> Result<Vec<IncompleteNamedWork>> {
+        let rows = sqlx::query(
+            "SELECT w.id, e.external_id,
+                    NOT EXISTS (
+                        SELECT 1 FROM images i
+                         WHERE i.owner_kind = 'work' AND i.owner_id = w.id
+                           AND i.image_kind = 'poster') AS wants_pictures,
+                    NOT EXISTS (
+                        SELECT 1 FROM work_translations t
+                         WHERE t.work_id = w.id AND t.language = ?
+                           AND t.overview IS NOT NULL AND t.overview <> '') AS wants_a_synopsis
              FROM works w
              JOIN work_external_ids e ON e.work_id = w.id AND e.provider = ?
              WHERE w.library_id = ?
                AND w.identification IN ('identified', 'manual')
                AND NOT EXISTS (
-                   SELECT 1 FROM images i
-                    WHERE i.owner_kind = 'work' AND i.owner_id = w.id
-                      AND i.image_kind = 'poster')
-             ORDER BY w.added_at
-             LIMIT ?",
+                   SELECT 1 FROM work_locked_fields l
+                    WHERE l.work_id = w.id AND l.field = 'overview')
+             ORDER BY w.added_at",
         )
+        .bind(language)
         .bind(provider)
         .bind(library_id.to_db_string())
-        .bind(limit)
         .fetch_all(self.reader())
         .await?;
 
-        rows.into_iter()
-            .map(|(id, external_id)| {
-                Ok((
-                    id.parse()
-                        .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?,
-                    external_id,
-                ))
-            })
-            .collect()
+        let mut waiting = Vec::new();
+        for row in &rows {
+            let wants_pictures: bool = int_to_bool(row.try_get("wants_pictures")?);
+            let wants_a_synopsis: bool = int_to_bool(row.try_get("wants_a_synopsis")?);
+            if !wants_pictures && !wants_a_synopsis {
+                continue;
+            }
+            waiting.push(IncompleteNamedWork {
+                id: row
+                    .try_get::<String, _>("id")?
+                    .parse()
+                    .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?,
+                external_id: row.try_get("external_id")?,
+                wants_pictures,
+                wants_a_synopsis,
+            });
+            if waiting.len() as i64 >= limit {
+                break;
+            }
+        }
+        Ok(waiting)
+    }
+
+    /// Gives a work the synopsis it was missing, and nothing else.
+    ///
+    /// Narrow on purpose: this runs on films a provider already named, so the
+    /// title they carry is the right one and must not be written again from an
+    /// answer given in another language.
+    pub async fn set_work_synopsis(
+        &self,
+        work_id: WorkId,
+        language: &str,
+        tagline: Option<&str>,
+        overview: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO work_translations (work_id, language, tagline, overview)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (work_id, language) DO UPDATE SET
+                tagline = coalesce(work_translations.tagline, excluded.tagline),
+                overview = excluded.overview",
+        )
+        .bind(work_id.to_db_string())
+        .bind(language)
+        .bind(tagline)
+        .bind(overview)
+        .execute(self.writer())
+        .await?;
+        Ok(())
     }
 
     /// Records why the last look up did not name a work.
@@ -1398,14 +1452,19 @@ mod tests {
             .expect("identification applied");
 
         let waiting = database
-            .works_missing_their_pictures(work.library_id, "tmdb", 10)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
-        assert_eq!(waiting[0].0, work.id);
+        assert_eq!(waiting[0].id, work.id);
         assert_eq!(
-            waiting[0].1, "111",
+            waiting[0].external_id, "111",
             "the identifier is what lets the provider be asked again"
+        );
+        assert!(waiting[0].wants_pictures);
+        assert!(
+            !waiting[0].wants_a_synopsis,
+            "the provider gave one: {waiting:?}"
         );
 
         database
@@ -1429,11 +1488,79 @@ mod tests {
 
         assert!(
             database
-                .works_missing_their_pictures(work.library_id, "tmdb", 10)
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
                 .await
                 .expect("read")
                 .is_empty(),
-            "a film that has its picture is never asked about again"
+            "a film with nothing missing is never asked about again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_with_no_synopsis_is_offered_one_and_keeps_its_title() {
+        let (database, work) = work_in_library().await;
+        let mut wordless = found();
+        wordless.overview = None;
+        database
+            .apply_identification(work.id, &wordless, false)
+            .await
+            .expect("identification applied");
+
+        let waiting = database
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
+            .await
+            .expect("read");
+        assert_eq!(waiting.len(), 1);
+        assert!(waiting[0].wants_a_synopsis);
+
+        database
+            .set_work_synopsis(work.id, "fr", None, "Un port, une nuit.")
+            .await
+            .expect("synopsis written");
+
+        let (title, _, overview) = database
+            .work_translation(work.id, "fr")
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(overview.as_deref(), Some("Un port, une nuit."));
+        assert_eq!(
+            title.as_deref(),
+            Some("Quiet Harbour"),
+            "the title a provider already gave is never written again from another answer"
+        );
+        assert!(
+            database
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
+                .await
+                .expect("read")
+                .iter()
+                .all(|waiting| !waiting.wants_a_synopsis),
+            "a film that has its synopsis stops being asked about for it"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_synopsis_somebody_wrote_themselves_is_never_replaced() {
+        let (database, work) = work_in_library().await;
+        let mut wordless = found();
+        wordless.overview = None;
+        database
+            .apply_identification(work.id, &wordless, false)
+            .await
+            .expect("identification applied");
+        database
+            .lock_field(work.id, "overview")
+            .await
+            .expect("field locked");
+
+        assert!(
+            database
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "a field somebody edited is theirs, empty or not"
         );
     }
 
@@ -1442,7 +1569,7 @@ mod tests {
         // There is nothing to ask with: no provider ever named it.
         let (database, work) = work_in_library().await;
         assert!(database
-            .works_missing_their_pictures(work.library_id, "tmdb", 10)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", 10)
             .await
             .expect("read")
             .is_empty());
