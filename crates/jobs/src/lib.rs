@@ -447,6 +447,25 @@ mod tests {
                     handle.set_total(400).await;
                     handle.advance(400).await;
 
+                    // What a pass picking up where it left off does: it counts
+                    // what is already done, then says how much there is. The
+                    // size is what writes both down, so the screen never shows
+                    // nought while nine tenths of the work is behind it.
+                    handle.at_step(JobStep::ReadingKeyFrames).await;
+                    handle.advance(317).await;
+                    handle.set_total(347).await;
+                    let caught_up = database
+                        .job(handle.id())
+                        .await
+                        .expect("read")
+                        .expect("the row of a running job is there");
+                    assert_eq!(
+                        (caught_up.progress_done, caught_up.progress_total),
+                        (317, Some(347)),
+                        "what is already done has to reach the screen at once, not \
+                         once the first film of this run has been read through"
+                    );
+
                     handle.at_step(JobStep::ReadingKeyFrames).await;
                     let moved = database
                         .job(handle.id())

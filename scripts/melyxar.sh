@@ -30,6 +30,14 @@ DEFAULT_PORT="2100"
 # Backups kept before the oldest is dropped.
 BACKUP_KEEP="7"
 
+# Whether every command shows its own output as it goes.
+#
+# Off by default: a tidy screen is what somebody installing this wants, and
+# what fails is printed in full anyway. On while something is being worked on,
+# because "it did not work" with nothing to show is not a bug report. Set with
+# --verbose on the command line, or MELYXAR_VERBOSE=1 in the environment.
+VERBOSE="${MELYXAR_VERBOSE:-0}"
+
 # ── Language ──────────────────────────────────────────────────────────────────
 # The script speaks the language of the system, English by default. Same
 # mechanism as the other scripts of the author: the locale decides, and English
@@ -61,6 +69,8 @@ en|err_need_root|Run this script as root.
 fr|err_need_root|Exécutez ce script en root.
 en|err_command_output|Command output:
 fr|err_command_output|Sortie de la commande :
+en|verbose_on|Verbose: every command shows its own output as it runs.
+fr|verbose_on|Mode détaillé : chaque commande affiche sa sortie au fur et à mesure.
 en|err_aborted|Stopped at line %s. Nothing else was changed.
 fr|err_aborted|Arrêt à la ligne %s. Rien d'autre n'a été modifié.
 en|err_missing_command|Missing command: %s
@@ -387,6 +397,27 @@ step() {
   local log
   log="$(mktemp)"
   local rc=0
+
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    # Everything on screen as it happens, the command included. No spinner:
+    # it would fight with the output for the same line.
+    printf "%b▸%b %s\n" "${RED_SOFT}" "${RESET}" "$label"
+    printf "%b  $ %s%b\n" "${GRAY}" "$*" "${RESET}"
+    # Indented so what a command says is never mistaken for what the script
+    # says. The status read is the command's own, not the one the pipe ends on.
+    set +e
+    "$@" 2>&1 | tee "$log" | sed -e 's/^/    /'
+    rc="${PIPESTATUS[0]}"
+    set -e
+    if [[ "$rc" -eq 0 ]]; then
+      printf "%b✓%b %s\n" "${GREEN}" "${RESET}" "$label"
+    else
+      printf "%b✗%b %s\n" "${RED}" "${RESET}" "$label"
+    fi
+    # Already on screen, so it is not printed a second time below.
+    rm -f "$log"
+    return "$rc"
+  fi
 
   if [[ -t 1 ]]; then
     "$@" >"$log" 2>&1 &
@@ -984,7 +1015,20 @@ main() {
   need_command awk
   need_command sed
 
+  # Switches are read first and taken out, so the action stays the first word
+  # whether or not one was given.
+  local rest=()
+  while (($#)); do
+    case "$1" in
+      -v | --verbose) VERBOSE=1 ;;
+      *) rest+=("$1") ;;
+    esac
+    shift
+  done
+  set -- ${rest[@]+"${rest[@]}"}
+
   banner
+  [[ "$VERBOSE" -eq 1 ]] && info "$(tr_msg verbose_on)"
 
   # A named action runs straight away, which is what the update entry in a
   # scheduled job needs.
