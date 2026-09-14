@@ -6,9 +6,10 @@
  * let someone scrub, and nothing here improves on that.
  *
  * A film it cannot open is rebuilt by the server as it is watched, and arrives
- * cut into segments listed in a playlist. Only Apple's browsers read that on
- * their own, so everywhere else a library feeds the segments in. That is the
- * only reason it is here.
+ * cut into segments listed in a playlist. A library feeds those in, because a
+ * browser left to read the playlist itself does none of what is decided here.
+ * Some browsers can read one all the same, and that is what answers when the
+ * library has no parts to run on, and when it gives up on a film.
  *
  * The position is reported while watching, so closing the tab in the middle of
  * a film does not lose it. It is reported on a timer rather than on every
@@ -389,6 +390,10 @@ export function Player({
 
     let feed: Hls | null = null;
     let gone = false;
+    /* Whether the library has already given up. One failure comes back as
+       three: it cannot make room for the film, then it cannot put anything in
+       the room it did not make. Only the first says anything. */
+    let gaveUp = false;
 
     /* Fetched only now, and only by the viewer who needs it. Most films play
        as they are and never touch this, so carrying it in every page would
@@ -419,14 +424,36 @@ export function Player({
       feed.on(Library.Events.ERROR, (_event, trouble) => {
         // Anything short of fatal is retried on its own, and saying so would
         // turn an invisible hiccup into an error the viewer has to read.
-        if (trouble.fatal) {
-          setFailed("player.cannot_play");
-          setRefusal(
-            [trouble.type, trouble.details, trouble.error?.message, trouble.reason]
-              .filter(Boolean)
-              .join(" · "),
-          );
+        if (!trouble.fatal || gaveUp) {
+          return;
         }
+        gaveUp = true;
+        const because = [
+          trouble.type,
+          trouble.details,
+          trouble.error?.message,
+          trouble.reason,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+        /* A browser that reads a playlist on its own is handed the address
+           rather than the viewer being handed an error. It has its own way
+           through a film, which is not this one: measured on a film rebuilt
+           into AV1, the library could not even make room for it while the
+           browser played it. A film that plays the plain way beats a film
+           that does not play. */
+        const browserTakesOver = element.canPlayType("application/vnd.apple.mpegurl") !== "";
+        sayItGaveUp(stream.id, because, browserTakesOver);
+        if (browserTakesOver) {
+          feed?.destroy();
+          feed = null;
+          element.src = stream.playlist_url;
+          return;
+        }
+
+        setFailed("player.cannot_play");
+        setRefusal(because);
       });
       feed.loadSource(stream.playlist_url);
       feed.attachMedia(element);
@@ -915,4 +942,18 @@ function sayWhereItBegan(Library: HlsLibrary, feed: Hls, session: string) {
       // plays matters more than knowing where it started.
       .catch(() => {});
   });
+}
+
+/**
+ * Tells the journal that the library gave up on a film, in its own words.
+ *
+ * The one thing the page reports that is not a number, because the wording is
+ * the answer: the library naming what it could not do with a film this server
+ * produced. Without it, a film that plays the plain way looks like a film that
+ * plays, and the reason it had to is nowhere.
+ */
+function sayItGaveUp(session: string, because: string, browserTookOver: boolean) {
+  api
+    .tellTheJournal({ session, saw: "playback_refused", because, browser_took_over: browserTookOver })
+    .catch(() => {});
 }

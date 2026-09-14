@@ -237,16 +237,25 @@ export interface JournalQuery {
  * when a film starts happens here rather than on the server, and the journal
  * showed none of it.
  */
-export type PageSaw = {
-  session: string;
-  saw: "playback_began";
-  /** What the playlist told the library, when it read it. */
-  playlist_said_second: number | null;
-  /** Where it settled on beginning. */
-  began_at_second: number;
-  /** The first segment it asked the server for. */
-  first_segment: number;
-};
+export type PageSaw =
+  | {
+      session: string;
+      saw: "playback_began";
+      /** What the playlist told the library, when it read it. */
+      playlist_said_second: number | null;
+      /** Where it settled on beginning. */
+      began_at_second: number;
+      /** The first segment it asked the server for. */
+      first_segment: number;
+    }
+  | {
+      session: string;
+      saw: "playback_refused";
+      /** Why the library gave up, in its own words. Cut short by the server. */
+      because: string;
+      /** Whether the film went on playing, read by the browser itself. */
+      browser_took_over: boolean;
+    };
 
 export interface SystemInfo {
   server_name: string;
