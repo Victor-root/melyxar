@@ -1213,12 +1213,17 @@
   transition: width var(--calm) var(--ease);
 }
 
-.job-bar-text {
-  position: absolute;
-  right: 0;
-  top: -18px;
-  font-size: 12px;
-  color: var(--text-faint);
+/* Where the work has got to, in numbers. On the line rather than floating
+   above it: hung eighteen pixels over the bar in the faintest grey there is,
+   it was the one thing on the screen nobody could read, and in the case where
+   there is no total it had no positioned parent at all and went wherever the
+   page took it. Figures of a fixed width so the count does not jitter as it
+   climbs. */
+.job-count {
+  font-size: 13px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .job-reason {
