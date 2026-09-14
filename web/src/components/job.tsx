@@ -22,14 +22,16 @@ export function JobLine({ job, onCancel }: { job: Job; onCancel?: () => void }) 
       {job.step && <span className="job-step">{t(`jobs.step.${job.step}`)}</span>}
 
       {job.ratio !== null ? (
-        <span className="job-bar">
-          <span className="job-bar-fill" style={{ width: `${Math.round(job.ratio * 100)}%` }} />
-          <span className="job-bar-text">
+        <>
+          <span className="job-bar">
+            <span className="job-bar-fill" style={{ width: `${Math.round(job.ratio * 100)}%` }} />
+          </span>
+          <span className="job-count">
             {job.done} / {job.total} · {Math.round(job.ratio * 100)} %
           </span>
-        </span>
+        </>
       ) : (
-        job.done > 0 && <span className="job-bar-text">{job.done}</span>
+        job.done > 0 && <span className="job-count">{job.done}</span>
       )}
 
       {job.failure_reason && <span className="job-reason">{job.failure_reason}</span>}
