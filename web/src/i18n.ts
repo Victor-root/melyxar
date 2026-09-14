@@ -265,6 +265,8 @@ const en: Dictionary = {
 
   "player.missing": "The file is not on the disk at the moment.",
   "player.cannot_play": "This browser could not play the film.",
+  "player.words_coming": "Preparing the subtitles. They are read out of the film itself, which takes a moment the first time.",
+  "player.words_refused": "These subtitles could not be prepared.",
   "player.not_described": "The server could not read this file, so it cannot play it. The file itself is damaged.",
   "player.too_busy": "The server is already rebuilding as many films as it can at once. Try again in a moment.",
   "player.no_conversion": "This server has no media tools, so a film it cannot hand over as it is cannot be played.",
@@ -550,6 +552,8 @@ const fr: Dictionary = {
 
   "player.missing": "Le fichier n'est pas sur le disque en ce moment.",
   "player.cannot_play": "Ce navigateur n'a pas réussi à lire le film.",
+  "player.words_coming": "Préparation des sous-titres. Ils sont extraits du film lui-même, ce qui prend un moment la première fois.",
+  "player.words_refused": "Ces sous-titres n'ont pas pu être préparés.",
   "player.not_described": "Le serveur n'a pas réussi à lire ce fichier, il ne peut donc pas le jouer. C'est le fichier lui-même qui est abîmé.",
   "player.too_busy": "Le serveur reconstruit déjà autant de films qu'il peut à la fois. Réessayez dans un instant.",
   "player.no_conversion": "Ce serveur n'a pas les outils multimédias : un film qu'il ne peut pas transmettre tel quel ne peut pas être lu.",
