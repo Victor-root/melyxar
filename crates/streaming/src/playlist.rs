@@ -258,7 +258,9 @@ mod tests {
             "a film beginning at its beginning is what a player does anyway"
         );
         assert!(
-            !playlist.to_text(Millis::new(90_000)).contains("#EXT-X-START"),
+            !playlist
+                .to_text(Millis::new(90_000))
+                .contains("#EXT-X-START"),
             "past the end is not a place to begin"
         );
     }

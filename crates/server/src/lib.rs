@@ -12,6 +12,7 @@ pub mod error;
 pub mod images;
 pub mod interface;
 pub mod jobs;
+pub mod page;
 pub mod playback;
 pub mod preferences;
 pub mod routes;

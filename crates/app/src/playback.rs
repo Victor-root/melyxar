@@ -35,7 +35,7 @@ pub use melyxar_playback::profile::ClientProfile;
 ///
 /// Re-exported for the same reason as the decision: the HTTP layer talks to
 /// one crate, and where a session really lives stays this crate's business.
-pub use melyxar_streaming::session::{Preparation, PreparationStep, Recipe, Session};
+pub use melyxar_streaming::session::{Preparation, PreparationStep, Recipe, Session, SessionId};
 pub use melyxar_streaming::StreamingError;
 
 /// What a viewer asked to play, in the words of a client.

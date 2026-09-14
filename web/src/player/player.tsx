@@ -43,6 +43,9 @@ import {
   storedQuality,
 } from "./quality";
 
+/** The library itself, as the dynamic import hands it over. */
+type HlsLibrary = Awaited<typeof import("hls.js")>["default"];
+
 /** The speeds offered. Whole steps: nobody asks for 1.17 times. */
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -399,6 +402,7 @@ export function Player({
         renderTextTracksNatively: false,
       });
       feed.subtitleDisplay = false;
+      sayWhereItBegan(Library, feed, stream.id);
       feed.on(Library.Events.ERROR, (_event, trouble) => {
         // Anything short of fatal is retried on its own, and saying so would
         // turn an invisible hiccup into an error the viewer has to read.
@@ -856,4 +860,46 @@ export function Player({
       )}
     </div>
   );
+}
+
+/**
+ * Tells the journal where the library decided to begin the film.
+ *
+ * Half of what happens when a film starts happens here rather than on the
+ * server, and the journal showed none of it: the server could say it had been
+ * asked for the seventeenth minute while this asked for the opening of the
+ * film, with nothing anywhere saying which of the two was wrong.
+ *
+ * Three numbers, and only those three: what the playlist told the library, the
+ * second it settled on, and the segment it asked for first. The server names
+ * the facts it accepts and refuses anything else, so this is never a way of
+ * putting a page's own words in somebody's journal.
+ */
+function sayWhereItBegan(Library: HlsLibrary, feed: Hls, session: string) {
+  let playlistSaid: number | null = null;
+  let told = false;
+
+  feed.on(Library.Events.LEVEL_LOADED, (_event, level) => {
+    playlistSaid = level.details.startTimeOffset;
+  });
+
+  feed.on(Library.Events.FRAG_LOADING, (_event, loading) => {
+    // The header is fetched as a fragment too and is numbered by name rather
+    // than by place, which is exactly what is not being asked here.
+    if (told || typeof loading.frag.sn !== "number") {
+      return;
+    }
+    told = true;
+    api
+      .tellTheJournal({
+        session,
+        saw: "playback_began",
+        playlist_said_second: playlistSaid,
+        began_at_second: loading.frag.start,
+        first_segment: loading.frag.sn,
+      })
+      // Nothing waits on this: it is a line in a journal, and a film that
+      // plays matters more than knowing where it started.
+      .catch(() => {});
+  });
 }
