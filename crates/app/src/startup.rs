@@ -24,10 +24,6 @@ pub const DEFAULT_ACCOUNT_NAME: &str = "admin";
 /// What bringing the server up turned up, besides the server itself.
 pub struct BroughtUp {
     pub state: AppState,
-    /// Jobs a restart cut short. They come back only here: a later restart
-    /// finds those rows long since closed, so this is the one moment anything
-    /// can be started again from them.
-    pub cut_short: Vec<Job>,
     /// Libraries whose language changed in the configuration. Their films have
     /// been put back in the queue and are waiting to be asked about again.
     pub waiting_on_a_new_language: Vec<Library>,
@@ -58,18 +54,27 @@ pub async fn bring_up_and_say_what_is_waiting(config: Config) -> Result<BroughtU
     let waiting_on_a_new_language = reconcile_libraries(&database, &config).await?;
     refresh_root_access(&database).await?;
 
-    let state = AppState::new(config, database, tools, capabilities);
-
-    // Nothing is running yet, so a job still marked as running is a leftover
-    // from a stop or a crash. Saying so beats a progress bar that will never
-    // move again.
-    let cut_short = state.jobs().close_interrupted().await?;
-
+    // Deliberately not closing the jobs that are still marked as running.
+    // "Nothing is running" is only true for a server that is starting to
+    // serve, and this runs for the diagnostic and the command line as well: a
+    // report asked for while a scan is under way would close that scan's row
+    // under a server that is very much alive and still working. See
+    // `close_what_a_previous_run_left`, which the server alone calls.
     Ok(BroughtUp {
-        state,
-        cut_short,
+        state: AppState::new(config, database, tools, capabilities),
         waiting_on_a_new_language,
     })
+}
+
+/// Closes the jobs a previous run left hanging, and says what they were.
+///
+/// Only the server calls this, and only before it serves anything: what it
+/// closes belongs to a run that is over, and nothing of this run exists yet to
+/// be confused with it. Anything else that opens the database, a report or a
+/// scan from a terminal, runs alongside a server that may be busy, and has no
+/// way of telling a leftover row from work happening right now.
+pub async fn close_what_a_previous_run_left(state: &AppState) -> Result<Vec<Job>> {
+    Ok(state.jobs().close_interrupted().await?)
 }
 
 /// Asks a provider about every film of the libraries whose language changed.
@@ -495,12 +500,78 @@ mod tests {
         config
     }
 
-    /// A server standing up on a temporary folder, with one library.
+    /// A server standing up on a temporary folder, with one library, the way
+    /// the server itself does it: brought up, then what a previous run left is
+    /// closed.
     async fn server_with_a_library(directory: &std::path::Path) -> (AppState, Vec<Job>) {
         let brought_up = bring_up_and_say_what_is_waiting(config_on(directory))
             .await
             .expect("the server comes up");
-        (brought_up.state, brought_up.cut_short)
+        let cut_short = close_what_a_previous_run_left(&brought_up.state)
+            .await
+            .expect("what a previous run left is closed");
+        (brought_up.state, cut_short)
+    }
+
+    #[tokio::test]
+    async fn a_report_asked_for_during_a_scan_does_not_mark_that_scan_finished() {
+        // What happened on the real server: the maintainer asked for the
+        // report while a scan was reading his films. The report opens the
+        // database too, closed every job it found running, and the scan went
+        // on working for another hour with its row marked as ended. The screen
+        // said nothing was running while two analysers were reading a disk.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let (state, _) = server_with_a_library(directory.path()).await;
+        let library = state
+            .database()
+            .library_by_name("Films")
+            .await
+            .expect("read")
+            .expect("declared");
+
+        let running = state
+            .database()
+            .create_job(
+                JobKind::ScanLibrary,
+                JobPriority::REQUESTED,
+                Some(&library.id.to_string()),
+            )
+            .await
+            .expect("a scan is under way");
+        state
+            .database()
+            .mark_job_running(running.id)
+            .await
+            .expect("and it is running");
+
+        // The report, the scan and the identification from a terminal all come
+        // through here, alongside a server that is very much alive.
+        let alongside = bring_up_and_say_what_is_waiting(config_on(directory.path()))
+            .await
+            .expect("the report opens the database too");
+
+        let seen = alongside
+            .state
+            .database()
+            .job(running.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(
+            seen.state,
+            JobState::Running,
+            "a scan that is working right now was marked as ended by a report"
+        );
+        assert!(
+            !alongside
+                .state
+                .database()
+                .unfinished_jobs()
+                .await
+                .expect("read")
+                .is_empty(),
+            "and the screen would have said nothing was running"
+        );
     }
 
     #[tokio::test]

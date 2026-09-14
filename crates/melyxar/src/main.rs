@@ -148,18 +148,20 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         );
     }
 
-    // Only the server does this, and only before it serves anything: what it
-    // removes belongs to sessions of a run that is over, and nothing of this
-    // run exists yet to be confused with them.
+    // Only the server does these, and only before it serves anything: what
+    // they close belongs to a run that is over, and nothing of this run exists
+    // yet to be confused with it. A report or a scan asked for from a terminal
+    // runs alongside a server that may be busy, and closing its rows from
+    // there marks work that is happening right now as finished.
     melyxar_app::playback::tidy_up_after_a_previous_run(&state).await;
     let sweeper = melyxar_app::playback::keep_sessions_swept(&state);
 
     // A scan of a whole collection runs for hours, so an update in the middle
     // of one must not mean starting it over by hand, or worse, forgetting to.
-    // Only the server does this: the diagnostic and the command line have no
-    // business starting work nobody asked them for.
-    melyxar_app::startup::take_up_again_what_a_restart_cut_short(&state, &brought_up.cut_short)
-        .await;
+    let cut_short = melyxar_app::startup::close_what_a_previous_run_left(&state)
+        .await
+        .context("closing what a previous run left")?;
+    melyxar_app::startup::take_up_again_what_a_restart_cut_short(&state, &cut_short).await;
 
     // A language changed in the configuration puts every film of that library
     // back in the queue. Asking about them now is what makes the change
