@@ -229,6 +229,25 @@ export interface JournalQuery {
   most?: number;
 }
 
+/**
+ * A fact the page may tell the journal.
+ *
+ * The server defines the list and refuses anything outside it, so this type is
+ * that list and never a message of the page's own making. Half of what happens
+ * when a film starts happens here rather than on the server, and the journal
+ * showed none of it.
+ */
+export type PageSaw = {
+  session: string;
+  saw: "playback_began";
+  /** What the playlist told the library, when it read it. */
+  playlist_said_second: number | null;
+  /** Where it settled on beginning. */
+  began_at_second: number;
+  /** The first segment it asked the server for. */
+  first_segment: number;
+};
+
 export interface SystemInfo {
   server_name: string;
   version: string;
@@ -483,6 +502,11 @@ export const api = {
   journalText: (query: JournalQuery, signal?: AbortSignal) =>
     getText(`/api/v1/system/journal/text?${journalQuery(query)}`, signal),
   forgetJournal: () => remove<{ forgotten: number }>("/api/v1/system/journal"),
+  /* One fact the page saw, for the journal. The server names the facts and
+     refuses anything else, so this cannot become a way of writing whatever
+     into it: see the `page` module on the server for the whole list. */
+  tellTheJournal: (said: PageSaw) =>
+    post<{ written: boolean }>("/api/v1/system/journal/page", said),
   /* For trying the slow path again: a subtitle already converted is served in
      a millisecond and proves nothing about the minute it took to get there. */
   forgetConvertedSubtitles: () =>

@@ -52,6 +52,9 @@ pub fn tag_of(module: &str) -> &'static str {
         ("melyxar_app::diagnostics", "report"),
         ("melyxar_server::playback", "playback"),
         ("melyxar_server::jobs", "jobs"),
+        // What the browser itself saw, kept apart from everything the server
+        // saw: the two disagreeing is the whole reason the page says anything.
+        ("melyxar_server::page", "page"),
         ("melyxar_server", "http"),
         ("melyxar_streaming", "streaming"),
         ("melyxar_ffmpeg::hardware", "card"),
@@ -190,6 +193,26 @@ pub fn forget() -> usize {
 mod tests {
     use super::*;
 
+    /// Held by every test that empties the journal and writes into it.
+    ///
+    /// There is one journal for the whole process, and tests run beside each
+    /// other: without this, one test empties what another has just written and
+    /// the failure lands on whichever of them looked second. Measured: one run
+    /// in six. A test that fails for a reason that is not the code teaches the
+    /// wrong lesson, which is to run it again.
+    static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Empties the journal and keeps every other test out until this one ends.
+    fn alone() -> std::sync::MutexGuard<'static, ()> {
+        // A test that fails while holding it poisons it, and every test after
+        // would then fail for that reason instead of its own.
+        let held = ONE_AT_A_TIME
+            .lock()
+            .unwrap_or_else(|held| held.into_inner());
+        forget();
+        held
+    }
+
     #[test]
     fn a_line_is_tagged_with_the_part_of_the_server_that_wrote_it() {
         assert_eq!(tag_of("melyxar_streaming::session"), "streaming");
@@ -218,7 +241,7 @@ mod tests {
 
     #[test]
     fn a_screen_asking_for_two_tags_gets_those_two_and_nothing_else() {
-        forget();
+        let _alone = alone();
         remember("info", "melyxar_app::subtitles", "a subtitle".into());
         remember("warn", "melyxar_app::scan", "a scan".into());
         remember("info", "melyxar_streaming::session", "a segment".into());
@@ -239,7 +262,7 @@ mod tests {
 
     #[test]
     fn what_is_asked_for_can_be_narrowed_to_a_word_whatever_its_case() {
-        forget();
+        let _alone = alone();
         remember(
             "warn",
             "melyxar_app::subtitles",
@@ -261,7 +284,7 @@ mod tests {
 
     #[test]
     fn only_the_newest_are_handed_over_when_a_number_is_given() {
-        forget();
+        let _alone = alone();
         for line in 0..10 {
             remember("info", "melyxar_app::scan", format!("line {line}"));
         }
@@ -276,7 +299,7 @@ mod tests {
 
     #[test]
     fn the_tags_offered_are_the_ones_really_written() {
-        forget();
+        let _alone = alone();
         remember("info", "melyxar_app::scan", "one".into());
         remember("info", "melyxar_app::scan", "two".into());
         remember("info", "melyxar_streaming::session", "three".into());

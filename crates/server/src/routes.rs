@@ -41,6 +41,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::catalogue::router())
         .merge(crate::images::router())
         .merge(crate::jobs::router())
+        .merge(crate::page::router())
         .merge(crate::playback::router())
         .merge(crate::preferences::router())
         // Last: anything that is not an address of the interface proper is

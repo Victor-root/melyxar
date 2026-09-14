@@ -1656,9 +1656,20 @@ mod tests {
 
         assert!(header.is_ok(), "the header: {header:?}");
         assert!(beside_it.is_ok(), "the segment beside it: {beside_it:?}");
-        assert!(
-            !session.path_of(12).exists(),
-            "the header takes what the player asked for and produces nothing of its own"
+        // Where the tool was set going, which is the whole question. Looking
+        // for the header's own segment on the disk would prove nothing: the
+        // tool set going at the opening runs on through the film and reaches
+        // it on its own, sooner or later depending on how busy the machine is.
+        let set_going_at = session
+            .running
+            .lock()
+            .await
+            .as_ref()
+            .map(|at_work| at_work.from);
+        assert_eq!(
+            set_going_at,
+            Some(0),
+            "the header takes what the player asked for and sets nothing going of its own"
         );
         session.close().await;
     }
