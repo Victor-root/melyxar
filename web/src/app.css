@@ -1275,11 +1275,184 @@
   font-weight: 600;
 }
 
+/* The picture and the bar under it, together.
+ *
+ * One box rather than two because this is what goes fullscreen: a video element
+ * sent fullscreen on its own leaves every control behind it, on a page nobody
+ * can see any more. */
+.player-stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #000;
+}
+
 .player-video {
   flex: 1;
   width: 100%;
   min-height: 0;
   background: #000;
+}
+
+/* The bar, drawn here rather than by the browser.
+ *
+ * Every value in it is fixed rather than taken from the theme: it sits on top
+ * of a film, not on top of a page, and a light theme does not make a night
+ * scene any brighter. */
+/* On top of the picture rather than beside it, and out of the way when nothing
+   is moving: a bar that takes a strip of its own leaves that strip black in
+   fullscreen, for the whole film. */
+.player-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transition: opacity var(--calm) var(--ease);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  padding: var(--gap-tight) var(--gap) var(--gap);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.35));
+  color: #fff;
+}
+
+/* The bar itself. Tall enough to be caught by a moving cursor without the
+   picture losing the room: the part that shows is thinner than the part that
+   answers. */
+.player-controls-away {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.player-rail {
+  position: relative;
+  height: 18px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.player-rail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.player-rail-loaded,
+.player-rail-played {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+}
+
+/* What the browser already holds, which is what says whether a jump will be
+   instant or a wait. The browser's own bar showed it and losing it would be a
+   step backwards. */
+.player-rail-loaded {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.player-rail-played {
+  background: var(--accent);
+}
+
+.player-rail-handle {
+  position: absolute;
+  top: 3px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.player-rail:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The picture of the moment under the cursor, standing above the bar and
+   following it. Kept clear of the pointer so it never swallows a click. */
+.player-preview {
+  position: absolute;
+  bottom: 46px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  /* Inside the bar at both ends rather than half off the screen. */
+  max-width: 100%;
+}
+
+.player-preview-picture {
+  display: block;
+  border-radius: var(--radius-control);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background-repeat: no-repeat;
+  box-shadow: var(--shadow-raised);
+}
+
+.player-preview-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.player-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.player-button {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.player-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.player-clock {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.player-clock-total {
+  opacity: 0.7;
+}
+
+/* The sound, and nothing else, is pushed to the far end: what is left of the
+   row is where anything added later goes. */
+.player-sound {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.player-loudness {
+  width: 90px;
+  accent-color: var(--accent);
 }
 
 /* How the subtitles look.
