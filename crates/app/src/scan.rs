@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use melyxar_core::id::{JobId, LibraryRootId, MediaSourceId, TrackId, WorkId};
-use melyxar_core::job::{JobKind, JobPriority, JobState};
+use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
 use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::media::{SubtitleDetails, Track, TrackKind};
 use melyxar_core::privacy::{MediaName, MediaPath};
@@ -212,6 +212,11 @@ pub async fn scan_library(
     // same rules as the ones already here.
     let signs = signs_of(state, library).await?;
 
+    // Counted by root rather than by file: how many files there are is exactly
+    // what this pass is finding out, and a disk is what it stops between.
+    handle.at_step(JobStep::WalkingFolders).await;
+    handle.set_total(library.roots.len() as i64).await;
+
     for root in &library.roots {
         if handle.is_cancelled() {
             report.cancelled = true;
@@ -232,6 +237,7 @@ pub async fn scan_library(
                     "root skipped; the other roots of this library are scanned as usual"
                 );
                 report.unusable_roots.push(root.label.clone());
+                handle.advance(1).await;
                 continue;
             }
         };
@@ -257,13 +263,15 @@ pub async fn scan_library(
             )
             .await?;
         }
+        handle.advance(1).await;
     }
 
+    handle.at_step(JobStep::ReadingNamesAgain).await;
     let reread = reread_names_of_nameless_works(state, library).await?;
     report.renamed = reread.renamed;
     report.merged = reread.merged;
     analyse_pending(state, library, handle, &mut report).await?;
-    read_where_films_can_be_started(state, handle, &mut report).await?;
+    read_where_films_can_be_started(state, library, handle, &mut report).await?;
 
     if report.changed_anything() {
         database.bump_library_version(library.id).await?;
@@ -841,6 +849,10 @@ async fn analyse_pending(
         return Ok(());
     }
 
+    // Announced once there is something to announce: a pass with nothing to do
+    // is over before anybody reads its name, and a name that flashes past is
+    // worse than no name at all.
+    handle.at_step(JobStep::AnalysingFiles).await;
     handle.set_total(pending.len() as i64).await;
     let analyser = tools.ffprobe.clone();
     let limit = state.config().limits.concurrent_probes;
@@ -899,6 +911,7 @@ const READ_IN_ONE_SCAN: i64 = 5_000;
 /// once, here, and never while somebody is watching.
 async fn read_where_films_can_be_started(
     state: &AppState,
+    library: &Library,
     handle: &JobHandle,
     report: &mut ScanReport,
 ) -> Result<()> {
@@ -907,13 +920,22 @@ async fn read_where_films_can_be_started(
     };
     let database = state.database();
     let waiting = database
-        .sources_without_key_frames(READ_IN_ONE_SCAN)
+        .sources_without_key_frames(library.id, READ_IN_ONE_SCAN)
         .await?;
     if waiting.is_empty() {
         return Ok(());
     }
 
-    handle.set_total(waiting.len() as i64).await;
+    handle.at_step(JobStep::ReadingKeyFrames).await;
+    // Counted against the whole pass rather than against this run of it. A
+    // pass picking up where it left off and one starting again from nothing
+    // look exactly alike from a bar that always begins at zero, and the
+    // difference between them is two hours.
+    let already_read = database.count_read_for_key_frames(library.id).await?;
+    handle.set_total(already_read + waiting.len() as i64).await;
+    if already_read > 0 {
+        handle.advance(already_read).await;
+    }
     let analyser = tools.ffprobe.clone();
     let owned_database = database.clone();
     let owned_handle = handle.clone();

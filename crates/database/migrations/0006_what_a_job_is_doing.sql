@@ -1,0 +1,13 @@
+-- Which part of its work a job is on.
+--
+-- A scan is four passes end to end: walking the folders, reading the names
+-- again, analysing the files, and reading where each film can be started. The
+-- last two take hours on a collection of any size, and until now the only
+-- thing on the screen was a bar that went to the end, dropped back to nothing
+-- and set off again, with no word anywhere saying why. That looks exactly like
+-- a server that has crashed and started over, which is the one thing it must
+-- never look like.
+--
+-- Kept on the job rather than worked out from the counters, because nothing in
+-- the counters says what is being counted.
+ALTER TABLE jobs ADD COLUMN step TEXT;

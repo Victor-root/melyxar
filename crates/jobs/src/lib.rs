@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use melyxar_core::id::JobId;
-use melyxar_core::job::{JobKind, JobPriority, JobState};
+use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
 use melyxar_database::Database;
 use tokio::task::{JoinHandle, JoinSet};
 
@@ -73,6 +73,29 @@ impl JobHandle {
     /// files is what makes cancellation leave the library in a sound state.
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::Relaxed)
+    }
+
+    /// Says which pass the job has moved on to.
+    ///
+    /// Written straight away rather than at the next beat: a pass is announced
+    /// precisely when the one before it stopped moving, and that is the moment
+    /// somebody is looking at the screen wondering whether anything is still
+    /// happening.
+    ///
+    /// The count starts over with it, since the new pass counts something else.
+    pub async fn at_step(&self, step: JobStep) {
+        {
+            let mut progress = self
+                .progress
+                .lock()
+                .expect("the progress lock is never held across an await");
+            progress.done = 0;
+            progress.total = None;
+            progress.last_written = Instant::now();
+        }
+        if let Err(error) = self.database.start_job_step(self.id, step).await {
+            tracing::warn!(job = %self.id, error = %error, "the step of a job could not be recorded");
+        }
     }
 
     /// Says how much work there turned out to be.
@@ -398,6 +421,60 @@ mod tests {
             stored.progress_done, 50,
             "what was held back during the run is written down at the end"
         );
+    }
+
+    #[tokio::test]
+    async fn a_job_that_moves_on_says_so_at_once_and_counts_the_new_pass() {
+        // The defect this exists for: the long passes of a scan are at the
+        // end, and a bar that fills up, drops back to nothing and sets off
+        // again with no word anywhere looks like a server that crashed.
+        let runner = runner().await;
+        let database = runner.database().clone();
+
+        let started = runner
+            .start(
+                JobKind::ScanLibrary,
+                JobPriority::REQUESTED,
+                Some("films".to_string()),
+                move |handle| async move {
+                    handle.at_step(JobStep::AnalysingFiles).await;
+                    handle.set_total(400).await;
+                    handle.advance(400).await;
+
+                    handle.at_step(JobStep::ReadingKeyFrames).await;
+                    let moved = database
+                        .job(handle.id())
+                        .await
+                        .expect("read")
+                        .expect("the row of a running job is there");
+                    assert_eq!(
+                        moved.step,
+                        Some(JobStep::ReadingKeyFrames),
+                        "a pass is written down the moment the one before it stopped moving"
+                    );
+                    assert_eq!(moved.progress_done, 0);
+                    assert_eq!(moved.progress_total, None);
+
+                    handle.set_total(340).await;
+                    handle.advance(340).await;
+                    Ok(())
+                },
+            )
+            .await
+            .expect("job started");
+
+        assert_eq!(
+            started.completion.await.expect("the task ran"),
+            JobState::Succeeded
+        );
+        let stored = runner
+            .database()
+            .job(started.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.progress_done, 340, "and not the two passes added up");
+        assert_eq!(stored.progress_total, Some(340));
     }
 
     #[tokio::test]

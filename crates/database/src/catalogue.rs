@@ -715,18 +715,25 @@ impl Database {
     /// Reading one means reading the whole file through once, so this is a
     /// background pass bounded like the analysis, and it is picked up again by
     /// the next one rather than run to the end in a single sitting.
-    pub async fn sources_without_key_frames(&self, limit: i64) -> Result<Vec<MediaSourceId>> {
+    pub async fn sources_without_key_frames(
+        &self,
+        library_id: LibraryId,
+        limit: i64,
+    ) -> Result<Vec<MediaSourceId>> {
         let rows = sqlx::query(
             "SELECT media_sources.id
              FROM media_sources
+             JOIN library_roots ON library_roots.id = media_sources.root_id
              LEFT JOIN media_source_key_frames
                     ON media_source_key_frames.source_id = media_sources.id
-             WHERE media_sources.analysed_at IS NOT NULL
+             WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
                AND media_sources.missing_since IS NULL
                AND media_source_key_frames.source_id IS NULL
              ORDER BY media_sources.added_at
              LIMIT ?",
         )
+        .bind(library_id.to_db_string())
         .bind(limit)
         .fetch_all(self.reader())
         .await?;
@@ -739,6 +746,27 @@ impl Database {
                 })
             })
             .collect()
+    }
+
+    /// How many files of one library have already been read for where their
+    /// picture can be started.
+    ///
+    /// Counted so that a scan can say how far the whole pass has got rather
+    /// than how far this one run of it has. A pass that picks up where it left
+    /// off and one that starts again from nothing look exactly alike from a
+    /// bar that always begins at zero.
+    pub async fn count_read_for_key_frames(&self, library_id: LibraryId) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(*)
+             FROM media_source_key_frames
+             JOIN media_sources ON media_sources.id = media_source_key_frames.source_id
+             JOIN library_roots ON library_roots.id = media_sources.root_id
+             WHERE library_roots.library_id = ?",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0)
     }
 
     /// Marks a file absent. Never a deletion: a disconnected disk must not
@@ -1536,7 +1564,7 @@ mod tests {
 
         assert!(
             database
-                .sources_without_key_frames(10)
+                .sources_without_key_frames(library_id, 10)
                 .await
                 .expect("read")
                 .is_empty(),
@@ -1557,7 +1585,10 @@ mod tests {
             .await
             .expect("analysis stored");
         assert_eq!(
-            database.sources_without_key_frames(10).await.expect("read"),
+            database
+                .sources_without_key_frames(library_id, 10)
+                .await
+                .expect("read"),
             vec![source_id]
         );
 
@@ -1567,7 +1598,7 @@ mod tests {
             .expect("kept");
         assert!(
             database
-                .sources_without_key_frames(10)
+                .sources_without_key_frames(library_id, 10)
                 .await
                 .expect("read")
                 .is_empty(),
@@ -1593,10 +1624,85 @@ mod tests {
             .await
             .expect("marked");
         assert!(database
-            .sources_without_key_frames(10)
+            .sources_without_key_frames(library_id, 10)
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn reading_for_key_frames_stays_inside_the_library_being_scanned() {
+        // Scanning the films must not set the tool reading through the series,
+        // and the count a scan shows its progress against must not be the
+        // whole server's.
+        let (database, films, films_root) = library().await;
+        let series = database
+            .create_library(
+                "Series",
+                LibraryKind::Series,
+                "fr",
+                &[("disk-two".to_string(), PathBuf::from("/mnt/two/Series"))],
+            )
+            .await
+            .expect("library created");
+        let series_root = series.roots[0].id;
+
+        let analysis = SourceAnalysis {
+            container: Some("matroska,webm".to_string()),
+            duration: Some(Millis::new(7_200_000)),
+            overall_bitrate: None,
+        };
+        let (_, in_films) =
+            work_with_source(&database, films, films_root, "Quiet.Harbour.2019.mkv").await;
+        let (_, in_series) =
+            work_with_source(&database, series.id, series_root, "Amber.Field.S01E01.mkv").await;
+        for source in [in_films, in_series] {
+            database
+                .store_analysis(source, &analysis, &[], &[])
+                .await
+                .expect("analysis stored");
+        }
+
+        assert_eq!(
+            database
+                .sources_without_key_frames(films, 10)
+                .await
+                .expect("read"),
+            vec![in_films],
+            "a scan of the films reads the films and nothing else"
+        );
+        assert_eq!(
+            database
+                .count_read_for_key_frames(films)
+                .await
+                .expect("read"),
+            0
+        );
+
+        database
+            .store_key_frames(in_films, &[Millis::ZERO])
+            .await
+            .expect("kept");
+        database
+            .store_key_frames(in_series, &[Millis::ZERO])
+            .await
+            .expect("kept");
+
+        assert_eq!(
+            database
+                .count_read_for_key_frames(films)
+                .await
+                .expect("read"),
+            1,
+            "one film read, and the episode belongs to another scan's count"
+        );
+        assert_eq!(
+            database
+                .count_read_for_key_frames(series.id)
+                .await
+                .expect("read"),
+            1
+        );
     }
 
     #[test]
