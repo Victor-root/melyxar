@@ -373,7 +373,11 @@ pub async fn remember_chosen_tracks(
 /// decision into the recipe a session carries out. A film the client could
 /// play as it is never reaches here: it is served as a file, which costs
 /// nothing at all.
-pub async fn open_session(state: &AppState, plan: &PlayPlan) -> Result<Arc<Session>> {
+pub async fn open_session(
+    state: &AppState,
+    plan: &PlayPlan,
+    starting_at: Option<Millis>,
+) -> Result<Arc<Session>> {
     let no_tools = || {
         AppError::Domain(melyxar_core::Error::dependency_missing(
             "this server has no media tools, so nothing can be converted",
@@ -383,6 +387,11 @@ pub async fn open_session(state: &AppState, plan: &PlayPlan) -> Result<Arc<Sessi
     let capabilities = state.capabilities().ok_or_else(no_tools)?;
 
     let mut recipe = recipe_for(plan, capabilities)?;
+
+    // What the client says, and what the server remembers of this viewer when
+    // it says nothing. Either way the first segment produced is the one about
+    // to be watched, rather than the beginning of a film nobody is at.
+    recipe.where_the_viewer_starts = starting_at.or(plan.resume_from).unwrap_or(Millis::ZERO);
 
     // Only for a picture carried over untouched. One the server rebuilds gets
     // a key frame on every boundary, put there by the server itself, so the
@@ -712,8 +721,10 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
         },
         video,
         audio,
-        // Filled in by whoever opens the session, which is the only place that
-        // can read the film's own answer back.
+        // Both filled in by whoever opens the session: one is the film's own
+        // answer read back, the other is what the viewer asked for, and
+        // neither belongs to the decision this turns into a command.
+        where_the_viewer_starts: Millis::ZERO,
         where_it_can_be_started: Vec::new(),
         if_the_card_refuses,
     })
@@ -1715,6 +1726,7 @@ mod tests {
                     streams: melyxar_ffmpeg::command::StreamSelection::default(),
                     video: melyxar_ffmpeg::command::VideoOutput::Copy,
                     audio: melyxar_ffmpeg::command::AudioOutput::Copy,
+                    where_the_viewer_starts: Millis::ZERO,
                     where_it_can_be_started: Vec::new(),
                     if_the_card_refuses: Vec::new(),
                 },
@@ -1747,6 +1759,7 @@ mod tests {
                     streams: melyxar_ffmpeg::command::StreamSelection::default(),
                     video: melyxar_ffmpeg::command::VideoOutput::Copy,
                     audio: melyxar_ffmpeg::command::AudioOutput::Copy,
+                    where_the_viewer_starts: Millis::ZERO,
                     where_it_can_be_started: Vec::new(),
                     if_the_card_refuses: Vec::new(),
                 },
