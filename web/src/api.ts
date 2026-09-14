@@ -391,6 +391,29 @@ export interface PlaybackPlan {
   subtitles: PlaybackTrack[];
   /** What is rebuilding the picture, when something is. */
   rebuild: PictureRebuild | null;
+  /** The little pictures of the bar, when this film has been read for them. */
+  thumbnails: PlaybackThumbnails | null;
+}
+
+/**
+ * The little pictures shown while dragging along the bar.
+ *
+ * They come as sheets of many, and the page cuts one out with a background
+ * offset: one request covers a hundred of them.
+ */
+export interface PlaybackThumbnails {
+  /** Where the sheets are. A slash, the sheet number and `.jpg` go after it. */
+  url: string;
+  /** How far apart in the film two of them stand. */
+  every_seconds: number;
+  /** Size of one thumbnail on a sheet, in pixels. */
+  width: number;
+  height: number;
+  /** How many stand across one sheet and how many down it. */
+  columns: number;
+  rows: number;
+  /** How many the film has. Past the last one a sheet holds only black. */
+  counted: number;
 }
 
 /** What is rebuilding the picture, and into what. */

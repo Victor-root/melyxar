@@ -34,6 +34,7 @@ import {
   storedAppearance,
 } from "./appearance";
 import type { Appearance } from "./appearance";
+import { Controls } from "./controls";
 import { languageName } from "./languages";
 import { clientProfile } from "./profile";
 import {
@@ -176,6 +177,10 @@ export function Player({
 }) {
   const { t, language } = useSettings();
   const video = useRef<HTMLVideoElement>(null);
+  /* What is sent fullscreen. The bar is ours now, so it has to come with the
+     picture: a video element sent fullscreen on its own leaves every control
+     behind it on a page nobody can see. */
+  const stage = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
   const [stream, setStream] = useState<PlaybackSession | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -569,7 +574,11 @@ export function Player({
           element.currentTime += 10;
           break;
         case "f":
-          void element.requestFullscreen?.();
+          if (document.fullscreenElement) {
+            void document.exitFullscreen();
+          } else {
+            void stage.current?.requestFullscreen?.();
+          }
           break;
         default:
           break;
@@ -734,12 +743,12 @@ export function Player({
           switching between the two has to start from a fresh element rather
           than from one still holding the other's address. */}
       {plan && !failed && (canBePlayedAsItIs(plan) || stream) && (
+        <div className="player-stage" ref={stage}>
         <video
           key={pictureKey ?? undefined}
           ref={video}
           className="player-video"
           src={canBePlayedAsItIs(plan) ? plan.url : undefined}
-          controls
           autoPlay
           onLoadedMetadata={onReady}
           onTimeUpdate={(event) => {
@@ -767,6 +776,18 @@ export function Player({
             />
           )}
         </video>
+
+        {/* Ours rather than the browser's, because showing the picture of the
+            moment under the cursor means knowing where the cursor is on the
+            bar, and the browser's bar says nothing about that. */}
+        <Controls
+          video={video}
+          pictureKey={pictureKey}
+          stage={stage}
+          thumbnails={plan.thumbnails}
+          t={t}
+        />
+        </div>
       )}
 
       {/* Shown even when the film cannot be played as it is: choosing a track
