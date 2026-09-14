@@ -175,6 +175,11 @@ export function Player({
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
   const [stream, setStream] = useState<PlaybackSession | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  /* What the browser itself said when it refused, word for word. The message
+     above is this interface's wording and says only that something went
+     wrong; this is the sentence that says which thing, and without it the
+     answer lives in a console nobody opens. */
+  const [refusal, setRefusal] = useState<string | null>(null);
   const [audioId, setAudioId] = useState<string | null>(null);
   const [subtitleId, setSubtitleId] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
@@ -378,6 +383,11 @@ export function Player({
         // turn an invisible hiccup into an error the viewer has to read.
         if (trouble.fatal) {
           setFailed("player.cannot_play");
+          setRefusal(
+            [trouble.type, trouble.details, trouble.error?.message, trouble.reason]
+              .filter(Boolean)
+              .join(" · "),
+          );
         }
       });
       feed.loadSource(stream.playlist_url);
@@ -599,7 +609,12 @@ export function Player({
         {rebuilt && <span className="fact">{t("player.rebuilt")}</span>}
       </div>
 
-      {failed && <p className="notice">{t(failed)}</p>}
+      {failed && (
+        <p className="notice">
+          {t(failed)}
+          {refusal && <span className="player-reasons">{refusal}</span>}
+        </p>
+      )}
 
       {/* What the server is doing while the picture is not there yet. Named
           steps rather than a bar alone: a bar filling at an unknown rate says
@@ -637,7 +652,13 @@ export function Player({
           }}
           onPause={report}
           onEnded={report}
-          onError={() => setFailed("player.cannot_play")}
+          onError={(event) => {
+            setFailed("player.cannot_play");
+            const refused = event.currentTarget.error;
+            setRefusal(
+              refused ? `${refused.code} · ${refused.message || "no reason given"}` : null,
+            );
+          }}
         >
           {shownSubtitle?.url && (
             <track
