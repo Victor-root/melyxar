@@ -27,6 +27,20 @@ Les actions sont `install`, `update`, `status`, `backup`, `restore` et
 `uninstall`. C'est cette forme qu'attend une tâche planifiée, puisqu'elle ne
 pose aucune question.
 
+### Quand quelque chose ne va pas
+
+Par défaut le script reste sobre : une ligne par étape, et la sortie complète
+seulement de ce qui échoue. Avec `--verbose`, chaque commande affiche la sienne
+au fur et à mesure, la compilation comprise. C'est ce qu'il faut joindre à un
+rapport de problème, parce qu'une étape qui a réussi peut très bien avoir dit
+quelque chose d'utile en chemin.
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Victor-root/melyxar/develop/scripts/melyxar.sh) update --verbose
+```
+
+`MELYXAR_VERBOSE=1` dans l'environnement fait la même chose.
+
 ## Où vivent les choses
 
 | | |

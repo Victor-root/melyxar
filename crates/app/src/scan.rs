@@ -943,10 +943,15 @@ async fn read_where_films_can_be_started(
     // look exactly alike from a bar that always begins at zero, and the
     // difference between them is two hours.
     let already_read = database.count_read_for_key_frames(library.id).await?;
-    handle.set_total(already_read + waiting.len() as i64).await;
+    // Counted before the size is given, because giving the size is what writes
+    // both of them down. The other way round, what is already done is held
+    // back until the first film of this run has been read through, and a pass
+    // that is nine tenths finished says nought per cent for as long as that
+    // takes, which is exactly the lie this pass exists to stop telling.
     if already_read > 0 {
         handle.advance(already_read).await;
     }
+    handle.set_total(already_read + waiting.len() as i64).await;
     let analyser = tools.ffprobe.clone();
     let owned_database = database.clone();
     let owned_handle = handle.clone();
