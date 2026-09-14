@@ -31,6 +31,19 @@ fn cached_at(state: &AppState, track_id: TrackId) -> PathBuf {
         .join(format!("{track_id}.vtt"))
 }
 
+/// Where a subtitle is written while the tool is still writing it.
+///
+/// The cache holds whole subtitles and nothing else. The tool writes as it
+/// reads the film, so a file already under its final name is one the next
+/// request finds, calls converted, and hands to a browser with the end of the
+/// film missing from it. Written aside and moved into place in one step once
+/// the reading is over, a subtitle is either absent or complete, and whoever
+/// asks for it meanwhile waits for the reading rather than reading over its
+/// shoulder.
+fn while_it_is_written(destination: &Path) -> PathBuf {
+    destination.with_extension("vtt.part")
+}
+
 /// Converts one subtitle track to WebVTT, unless it was converted already.
 ///
 /// Answers where the file is. The caller serves it; nothing here knows what a
@@ -53,6 +66,13 @@ pub async fn as_web_vtt(
     // whole cost and it is the same reading. Whoever picks the second track
     // then waits for nothing at all.
     let _ = pull_them_all_out(state, source_id).await;
+
+    // One conversion of a given film at a time, the cache looked at once more
+    // under it. Two viewers turning the same subtitle on at the same moment
+    // would otherwise both convert it, into the same file, at the same time.
+    // Whoever arrives second finds it finished and converts nothing.
+    let alone = one_reading_at_a_time(source_id);
+    let _converting = alone.lock().await;
     if tokio::fs::metadata(&destination)
         .await
         .is_ok_and(|file| file.len() > 0)
@@ -121,10 +141,12 @@ pub async fn as_web_vtt(
         "converting a subtitle for the browser"
     );
 
+    let being_written = while_it_is_written(&destination);
     if let Err(error) =
-        melyxar_ffmpeg::subtitles::to_web_vtt(&tools.ffmpeg, &file, &destination, stream_index)
+        melyxar_ffmpeg::subtitles::to_web_vtt(&tools.ffmpeg, &file, &being_written, stream_index)
             .await
     {
+        let _ = tokio::fs::remove_file(&being_written).await;
         tracing::warn!(
             track = %track_id,
             codec = details.codec,
@@ -138,11 +160,12 @@ pub async fn as_web_vtt(
     // with a player that shows no subtitle and a server that reported no
     // fault. Measured rather than assumed, because that silence is exactly
     // what nobody can work out from a screen.
-    let written = tokio::fs::metadata(&destination)
+    let written = tokio::fs::metadata(&being_written)
         .await
         .map(|file| file.len())
         .unwrap_or(0);
     if written == 0 {
+        let _ = tokio::fs::remove_file(&being_written).await;
         tracing::warn!(
             track = %track_id,
             codec = details.codec,
@@ -153,6 +176,19 @@ pub async fn as_web_vtt(
         return Err(AppError::Domain(melyxar_core::Error::new(
             melyxar_core::error::ErrorCode::Internal,
             "this subtitle came back empty",
+        )));
+    }
+
+    if let Err(error) = tokio::fs::rename(&being_written, &destination).await {
+        let _ = tokio::fs::remove_file(&being_written).await;
+        tracing::warn!(
+            track = %track_id,
+            %error,
+            "this subtitle was converted and could not be put in the cache"
+        );
+        return Err(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::Internal,
+            "this subtitle could not be put in the cache",
         )));
     }
     tracing::info!(track = %track_id, bytes = written, "a subtitle is ready for the browser");
@@ -245,13 +281,21 @@ pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Re
         subtitles = wanted.len(),
         "pulling every subtitle out of this film in one reading"
     );
+    let being_written: Vec<PathBuf> = wanted
+        .iter()
+        .map(|(_, destination)| while_it_is_written(destination))
+        .collect();
     let asked: Vec<(i32, &Path)> = wanted
         .iter()
-        .map(|(index, path)| (*index, path.as_path()))
+        .zip(&being_written)
+        .map(|((index, _), aside)| (*index, aside.as_path()))
         .collect();
     if let Err(error) =
         melyxar_ffmpeg::subtitles::all_to_web_vtt(&tools.ffmpeg, &source.path, &asked).await
     {
+        for aside in &being_written {
+            let _ = tokio::fs::remove_file(aside).await;
+        }
         tracing::warn!(
             %error,
             subtitles = wanted.len(),
@@ -263,14 +307,27 @@ pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Re
 
     // What really landed, rather than what was asked for. A tool that answers
     // "it went well" and writes nothing leaves a viewer with a player showing
-    // no subtitle and a server reporting no fault.
+    // no subtitle and a server reporting no fault. Each one enters the cache
+    // whole, at the end of the reading and in a single step, so nobody is
+    // handed half a film's worth of words.
     let mut pulled = 0;
-    for (_, destination) in &wanted {
-        if tokio::fs::metadata(destination)
+    for ((_, destination), aside) in wanted.iter().zip(&being_written) {
+        if !tokio::fs::metadata(aside)
             .await
             .is_ok_and(|file| file.len() > 0)
         {
-            pulled += 1;
+            continue;
+        }
+        match tokio::fs::rename(aside, destination).await {
+            Ok(()) => pulled += 1,
+            Err(error) => {
+                let _ = tokio::fs::remove_file(aside).await;
+                tracing::warn!(
+                    %error,
+                    "a subtitle was pulled out and could not be put in the cache, so it will \
+                     be pulled out again when somebody asks for it"
+                );
+            }
         }
     }
     tracing::info!(
@@ -288,10 +345,11 @@ pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Re
 /// nothing about the minute it took to get there, so trying the slow path
 /// again means being able to empty this.
 ///
-/// Only the files this writes: named after a track and ending in `.vtt`, in
-/// the folder this owns. Nothing else in there is touched, and a folder that
-/// does not exist yet is not an error, it is a server nobody has asked for a
-/// subtitle from.
+/// Only the files this writes: named after a track, in the folder this owns,
+/// whether they are finished or were left half written by a reading that did
+/// not finish. Nothing else in there is touched, and a folder that does not
+/// exist yet is not an error, it is a server nobody has asked for a subtitle
+/// from.
 pub async fn forget_what_was_converted(state: &AppState) -> Result<usize> {
     let folder = state.config().directories.subtitles();
     let mut reading = match tokio::fs::read_dir(&folder).await {
@@ -303,15 +361,20 @@ pub async fn forget_what_was_converted(state: &AppState) -> Result<usize> {
     let mut thrown_away = 0;
     while let Ok(Some(entry)) = reading.next_entry().await {
         let path = entry.path();
-        if path.extension().and_then(|kind| kind.to_str()) != Some("vtt") {
-            continue;
-        }
-        match tokio::fs::remove_file(&path).await {
-            Ok(()) => thrown_away += 1,
-            Err(error) => tracing::warn!(
-                %error,
-                "a converted subtitle could not be thrown away; it will be served from the cache again"
-            ),
+        match path.extension().and_then(|kind| kind.to_str()) {
+            Some("vtt") => match tokio::fs::remove_file(&path).await {
+                Ok(()) => thrown_away += 1,
+                Err(error) => tracing::warn!(
+                    %error,
+                    "a converted subtitle could not be thrown away; it will be served from the cache again"
+                ),
+            },
+            // Left behind by a reading that did not finish. Never served and
+            // never counted, so there is nothing to keep it for.
+            Some("part") => {
+                let _ = tokio::fs::remove_file(&path).await;
+            }
+            _ => continue,
         }
     }
     tracing::info!(
@@ -590,6 +653,187 @@ mod tests {
             failure,
             AppError::Domain(error) if error.code == melyxar_core::error::ErrorCode::NotFound
         ));
+    }
+
+    /// Writes a real film carrying one subtitle track per set of words.
+    ///
+    /// The video stream is the file's first, so the tracks are the ones after
+    /// it: whoever calls this says so when recording them.
+    async fn a_film_carrying(tool: &Path, film: &Path, said: &[&str]) {
+        let beside = film.parent().expect("the film sits somewhere");
+        let mut making = tokio::process::Command::new(tool);
+        making.args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+        ]);
+        making.arg("testsrc2=size=160x90:rate=8:duration=4");
+        for (which, words) in said.iter().enumerate() {
+            let path = beside.join(format!("words-{which}.srt"));
+            std::fs::write(
+                &path,
+                format!("1\n00:00:01,000 --> 00:00:03,500\n{words}\n"),
+            )
+            .expect("a subtitle file");
+            making.arg("-i").arg(&path);
+        }
+        making.args(["-map", "0:v"]);
+        for which in 0..said.len() {
+            making.args(["-map", &format!("{}:s", which + 1)]);
+        }
+        making.args(["-c:v", "libx264", "-preset", "ultrafast", "-c:s", "srt"]);
+        making.arg(film);
+        assert!(
+            making.status().await.expect("the tool runs").success(),
+            "a film carrying its subtitle tracks"
+        );
+    }
+
+    /// What the cache holds, by the end of each name.
+    fn in_the_cache(state: &AppState, ending: &str) -> usize {
+        std::fs::read_dir(state.config().directories.subtitles())
+            .expect("the cache folder")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().extension().and_then(|kind| kind.to_str()) == Some(ending))
+            .count()
+    }
+
+    #[test]
+    fn a_subtitle_being_written_is_not_under_the_name_the_cache_reads() {
+        // The whole point: a request that goes looking for a converted
+        // subtitle must not find one the tool is still writing.
+        let cached = PathBuf::from("/cache/subtitles/one.vtt");
+        let aside = while_it_is_written(&cached);
+        assert_ne!(aside, cached);
+        assert_ne!(
+            aside.extension().and_then(|kind| kind.to_str()),
+            Some("vtt")
+        );
+    }
+
+    #[tokio::test]
+    async fn every_subtitle_enters_the_cache_whole_and_none_half_written() {
+        // The tool writes as it reads the film, so a file put straight under
+        // its final name is one the next request calls converted and hands to
+        // a browser with the end of the film missing from it.
+        let (directory, state, source_id, tracks) = state_with(
+            |id| {
+                vec![
+                    subtitle_track(id, 1, SubtitleLayout::Text, None),
+                    subtitle_track(id, 2, SubtitleLayout::Text, None),
+                ]
+            },
+            &[],
+        )
+        .await;
+
+        let said = ["Bonsoir.", "Good evening."];
+        let film = directory
+            .path()
+            .join("films")
+            .join("Quiet.Harbour.2019.mkv");
+        let tool = state
+            .tools()
+            .expect("the tools are installed here")
+            .ffmpeg
+            .clone();
+        a_film_carrying(&tool, &film, &said).await;
+
+        assert_eq!(
+            pull_them_all_out(&state, source_id)
+                .await
+                .expect("both come out"),
+            2
+        );
+
+        for (which, words) in said.iter().enumerate() {
+            let text = std::fs::read_to_string(cached_at(&state, tracks[which].id))
+                .expect("read back from the cache");
+            assert!(text.starts_with("WEBVTT"), "{text}");
+            assert!(
+                text.contains(words),
+                "track {which} holds its own words: {text}"
+            );
+        }
+        assert_eq!(
+            in_the_cache(&state, "part"),
+            0,
+            "nothing is left behind half written"
+        );
+    }
+
+    #[tokio::test]
+    async fn two_viewers_turning_the_same_subtitle_on_at_once_both_get_it_whole() {
+        let (_directory, state, source_id, tracks) = state_with(
+            |id| {
+                vec![subtitle_track(
+                    id,
+                    0,
+                    SubtitleLayout::Text,
+                    Some("Quiet.Harbour.2019.fr.srt"),
+                )]
+            },
+            &[(
+                "Quiet.Harbour.2019.fr.srt",
+                "1\n00:00:01,000 --> 00:00:03,500\nBonsoir.\n",
+            )],
+        )
+        .await;
+
+        let (first, second) = tokio::join!(
+            as_web_vtt(&state, source_id, tracks[0].id),
+            as_web_vtt(&state, source_id, tracks[0].id)
+        );
+        for handed in [first.expect("converted"), second.expect("converted")] {
+            let text = std::fs::read_to_string(&handed).expect("read back");
+            assert!(text.starts_with("WEBVTT"), "{text}");
+            assert!(text.contains("Bonsoir."), "{text}");
+        }
+        assert_eq!(in_the_cache(&state, "part"), 0);
+    }
+
+    #[tokio::test]
+    async fn a_conversion_that_goes_wrong_leaves_nothing_in_the_cache() {
+        // The film in this one is not a film, so the tool refuses it. What it
+        // began must not stay: half a subtitle in the cache is one the next
+        // viewer is handed as though it were whole.
+        let (_directory, state, source_id, tracks) = state_with(
+            |id| vec![subtitle_track(id, 2, SubtitleLayout::Text, None)],
+            &[],
+        )
+        .await;
+
+        assert!(as_web_vtt(&state, source_id, tracks[0].id).await.is_err());
+        assert_eq!(in_the_cache(&state, "part"), 0);
+        assert_eq!(in_the_cache(&state, "vtt"), 0);
+    }
+
+    #[tokio::test]
+    async fn a_subtitle_left_half_written_is_thrown_away_without_being_counted() {
+        let (_directory, state, _source_id, _tracks) = state_with(
+            |id| vec![subtitle_track(id, 2, SubtitleLayout::Text, None)],
+            &[],
+        )
+        .await;
+
+        let folder = state.config().directories.subtitles();
+        std::fs::create_dir_all(&folder).expect("the cache folder");
+        std::fs::write(folder.join("one.vtt"), "WEBVTT\n\n").expect("a finished subtitle");
+        std::fs::write(folder.join("two.vtt.part"), "WEBVTT\n\n").expect("a reading cut short");
+
+        assert_eq!(
+            forget_what_was_converted(&state)
+                .await
+                .expect("thrown away"),
+            1,
+            "only the finished one was ever a converted subtitle"
+        );
+        assert_eq!(in_the_cache(&state, "part"), 0);
+        assert_eq!(in_the_cache(&state, "vtt"), 0);
     }
 
     #[tokio::test]
