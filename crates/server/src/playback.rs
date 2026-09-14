@@ -48,6 +48,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/playback/{id}/subtitles/{track}",
             axum::routing::get(subtitle),
         )
+        .route(
+            "/api/v1/playback/{id}/thumbnails/{sheet}",
+            axum::routing::get(thumbnail_sheet),
+        )
         // One route for everything a session hands out. A router allows one
         // name per part of a path, and a segment is named after its number in
         // a way a player builds itself from the playlist.
@@ -112,6 +116,32 @@ struct PlanView {
     subtitles: Vec<TrackView>,
     /// How the picture is being rebuilt, when it is. Absent when nothing is.
     rebuild: Option<RebuildView>,
+    /// The little pictures shown while dragging along the bar, when this film
+    /// has been read for them.
+    thumbnails: Option<ThumbnailsView>,
+}
+
+/// Everything a page needs to put a thumbnail under the cursor.
+///
+/// The sheets are handed over whole and the page cuts them itself: one request
+/// covers a hundred thumbnails, and cutting a picture is something a browser
+/// does without being asked twice.
+#[derive(Debug, Serialize)]
+struct ThumbnailsView {
+    /// Where the sheets are. The page adds a slash, the number of the sheet it
+    /// wants and `.jpg`.
+    url: String,
+    /// How far apart in the film two of them stand.
+    every_seconds: f64,
+    /// Size of one thumbnail on a sheet.
+    width: u32,
+    height: u32,
+    /// How many stand across one sheet and how many down it.
+    columns: u32,
+    rows: u32,
+    /// How many the film has. Past the last one there is nothing: a sheet is
+    /// filled to the end with black whatever the film gave.
+    counted: u32,
 }
 
 /// What is rebuilding the picture, and into what.
@@ -243,6 +273,18 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
         resume_from_seconds: plan.resume_from.map(|position| position.as_seconds_f64()),
         audio,
         subtitles,
+        thumbnails: plan
+            .thumbnails
+            .filter(|made| made.counted > 0)
+            .map(|made| ThumbnailsView {
+                url: format!("/api/v1/playback/{}/thumbnails", plan.source_id),
+                every_seconds: made.every.as_seconds_f64(),
+                width: made.width,
+                height: made.height,
+                columns: made.columns,
+                rows: made.rows,
+                counted: made.counted,
+            }),
         rebuild: plan.rebuild.as_ref().map(|rebuild| RebuildView {
             by: match rebuild.on_a_card() {
                 true => "card",
@@ -342,6 +384,59 @@ async fn serve_subtitle(
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/vtt; charset=utf-8"),
+    );
+    Ok(response)
+}
+
+// ---------------------------------------------------------------------------
+// The little pictures of the bar
+// ---------------------------------------------------------------------------
+
+/// Hands over one sheet of thumbnails.
+///
+/// Made by a background pass of the scan, never here: reading a film for them
+/// takes minutes, and a request that would take minutes is a request nobody
+/// should be able to make.
+async fn thumbnail_sheet(
+    State(state): State<AppState>,
+    RoutePath((id, sheet)): RoutePath<(String, String)>,
+    request: Request<Body>,
+) -> Response {
+    match serve_sheet(&state, &id, &sheet, request).await {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
+async fn serve_sheet(
+    state: &AppState,
+    id: &str,
+    sheet: &str,
+    request: Request<Body>,
+) -> Result<Response> {
+    let source_id = parse_source(id)?;
+    // The name a client sends carries the suffix a browser expects to see on
+    // the address; what it names is a number, never a path.
+    let number: u32 = sheet
+        .strip_suffix(".jpg")
+        .unwrap_or(sheet)
+        .parse()
+        .map_err(|_| ServerError::not_found("that sheet of thumbnails"))?;
+
+    let path = melyxar_app::thumbnails::sheet_of(state, source_id, number).await?;
+    let mut response = ServeFile::new(&path)
+        .oneshot(request)
+        .await
+        .map(IntoResponse::into_response)
+        .map_err(|error| ServerError::internal(error.to_string()))?;
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static("image/jpeg"));
+    // A sheet never changes: it is named after a film that was read once, and
+    // a film read again is written down again with as many sheets as it gave.
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=604800, immutable"),
     );
     Ok(response)
 }
@@ -799,6 +894,7 @@ mod tests {
             downmix: Default::default(),
             downmix_gain: melyxar_core::user::DEFAULT_DOWNMIX_GAIN,
             rebuild: None,
+            thumbnails: None,
         }
     }
 
@@ -855,6 +951,71 @@ mod tests {
         let view = plan_view(&plan);
         assert_eq!(view.subtitles[0].burns_in, Some(true));
         assert_eq!(view.subtitles[0].url, None);
+    }
+
+    #[test]
+    fn a_film_read_for_its_bar_says_where_its_sheets_are_and_how_to_cut_them() {
+        use melyxar_core::thumbnails::Thumbnails;
+
+        let mut plan = film_with_a_separate_subtitle();
+        plan.thumbnails = Some(Thumbnails {
+            every: Millis::new(10_000),
+            width: 320,
+            height: 180,
+            columns: 10,
+            rows: 10,
+            counted: 720,
+            sheets: 8,
+        });
+
+        let view = plan_view(&plan);
+        let shown = view.thumbnails.expect("the film has them");
+        assert_eq!(
+            shown.url,
+            format!("/api/v1/playback/{}/thumbnails", plan.source_id),
+            "the page adds the number of the sheet it wants"
+        );
+        assert_eq!(shown.every_seconds, 10.0);
+        assert_eq!((shown.width, shown.height), (320, 180));
+        assert_eq!((shown.columns, shown.rows), (10, 10));
+        assert_eq!(shown.counted, 720);
+    }
+
+    #[test]
+    fn a_film_nobody_has_read_for_its_bar_offers_no_pictures_at_all() {
+        // Rather than an address that answers nothing: a page told there are
+        // thumbnails asks for one on every movement of the cursor.
+        use melyxar_core::thumbnails::Thumbnails;
+
+        assert!(plan_view(&film_with_a_separate_subtitle())
+            .thumbnails
+            .is_none());
+
+        let mut nothing_in_it = film_with_a_separate_subtitle();
+        nothing_in_it.thumbnails = Some(Thumbnails {
+            every: Millis::new(10_000),
+            width: 0,
+            height: 0,
+            columns: 10,
+            rows: 10,
+            counted: 0,
+            sheets: 0,
+        });
+        assert!(
+            plan_view(&nothing_in_it).thumbnails.is_none(),
+            "a file that holds no picture has been read and has none"
+        );
+    }
+
+    #[test]
+    fn a_sheet_is_asked_for_by_a_number_and_never_by_a_path() {
+        let number = |sheet: &str| -> Option<u32> {
+            sheet.strip_suffix(".jpg").unwrap_or(sheet).parse().ok()
+        };
+        assert_eq!(number("0000.jpg"), Some(0));
+        assert_eq!(number("12.jpg"), Some(12));
+        assert_eq!(number("../../etc/passwd"), None);
+        assert_eq!(number("../0000.jpg"), None);
     }
 
     #[test]

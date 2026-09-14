@@ -132,6 +132,9 @@ pub struct CatalogueReport {
     /// several scans. This against the file count is the only way to tell a
     /// pass still going from one that finished.
     pub read_for_key_frames: i64,
+    /// Files that have the thumbnails of the playback bar. Another whole
+    /// reading of every file, reported for the same reason.
+    pub with_thumbnails: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -389,6 +392,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                 awaiting_identification: summary.awaiting_identification,
                 metadata_available: state.metadata_provider().is_some(),
                 read_for_key_frames: summary.read_for_key_frames,
+                with_thumbnails: summary.with_thumbnails,
             })?,
         nameless: database
             .works_still_nameless(NAMELESS_SHOWN)
@@ -725,6 +729,27 @@ pub fn render_text(report: &Diagnostics) -> String {
             false => format!(
                 "read for where a jump can land: all {} of them",
                 report.catalogue.read_for_key_frames
+            ),
+        },
+    );
+
+    // The same again for the little pictures of the playback bar, and for the
+    // same reason: another whole reading of every file, spread over several
+    // scans, and a bar with nothing on it is the only sign either way.
+    let waiting_for_thumbnails =
+        report.catalogue.files - report.catalogue.missing_files - report.catalogue.with_thumbnails;
+    line!(
+        if waiting_for_thumbnails > 0 { "!" } else { "+" },
+        match waiting_for_thumbnails > 0 {
+            true => format!(
+                "read for the thumbnails of the playback bar {} of {}, so {} still show a bare bar; another scan carries on",
+                report.catalogue.with_thumbnails,
+                report.catalogue.files - report.catalogue.missing_files,
+                waiting_for_thumbnails
+            ),
+            false => format!(
+                "read for the thumbnails of the playback bar: all {} of them",
+                report.catalogue.with_thumbnails
             ),
         },
     );

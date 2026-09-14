@@ -44,6 +44,9 @@ pub struct ScanReport {
     /// Reading one means reading the whole file through once, so a scan that
     /// was stopped leaves the rest for the next one.
     pub key_frames_read: usize,
+    /// Files read for the thumbnails of the playback bar. Another whole
+    /// reading of each file, and stopped the same way.
+    pub thumbnails_made: usize,
     /// Files the analyser could not read. Recorded rather than hidden: a file
     /// nobody can analyse is a file nobody will be able to play either.
     pub unreadable_files: usize,
@@ -283,6 +286,7 @@ pub async fn scan_library(
     report.merged = reread.merged;
     analyse_pending(state, library, handle, &mut report).await?;
     read_where_films_can_be_started(state, library, handle, &mut report).await?;
+    make_the_thumbnails_of_the_bar(state, library, handle, &mut report).await?;
 
     if report.changed_anything() {
         database.bump_library_version(library.id).await?;
@@ -300,6 +304,7 @@ pub async fn scan_library(
         unchanged = report.unchanged,
         analysed = report.analysed,
         key_frames_read = report.key_frames_read,
+        thumbnails_made = report.thumbnails_made,
         extras = report.extras,
         subtitles = report.external_subtitles,
         cancelled = report.cancelled,
@@ -981,6 +986,73 @@ async fn read_where_films_can_be_started(
     Ok(())
 }
 
+/// Reads every described film for the thumbnails of its playback bar.
+///
+/// A pass of its own, last, for the same reason as the one before it: it reads
+/// each file through from end to end, and it has to survive being stopped. A
+/// film that has none shows a bar with no pictures on it, which is what every
+/// film did until this pass had run, so nothing here is ever worth holding a
+/// scan up for.
+async fn make_the_thumbnails_of_the_bar(
+    state: &AppState,
+    library: &Library,
+    handle: &JobHandle,
+    report: &mut ScanReport,
+) -> Result<()> {
+    if state.tools().is_none() {
+        return Ok(());
+    }
+    let Some(layout) = crate::thumbnails::wanted(state) else {
+        return Ok(());
+    };
+    let database = state.database();
+    let waiting = database
+        .sources_without_thumbnails(library.id, layout, READ_IN_ONE_SCAN)
+        .await?;
+    if waiting.is_empty() {
+        return Ok(());
+    }
+
+    handle.at_step(JobStep::MakingThumbnails).await;
+    // Counted against the whole pass rather than against this run of it, for
+    // the same reason as the pass before: a bar that always begins at zero
+    // cannot tell a pass picking up where it left off from one starting again.
+    let already_made = database.count_made_thumbnails(library.id, layout).await?;
+    if already_made > 0 {
+        handle.advance(already_made).await;
+    }
+    handle.set_total(already_made + waiting.len() as i64).await;
+
+    let owned_state = state.clone();
+    let owned_handle = handle.clone();
+    // Bounded like the two passes before it: this is the disk from end to end,
+    // and a scan must leave the film somebody is watching alone.
+    let made = melyxar_jobs::for_each_bounded(
+        waiting,
+        state.config().limits.concurrent_probes,
+        move |source_id| {
+            let state = owned_state.clone();
+            let handle = owned_handle.clone();
+            async move {
+                if handle.is_cancelled() {
+                    return false;
+                }
+                // Every way this fails has already said so with the file it was
+                // about, which is what a refusal has to carry to be read.
+                let done = crate::thumbnails::make_for(&state, source_id)
+                    .await
+                    .is_ok_and(|made| made.counted > 0);
+                handle.advance(1).await;
+                done
+            }
+        },
+    )
+    .await;
+
+    report.thumbnails_made = made.into_iter().filter(|done| *done).count();
+    Ok(())
+}
+
 /// Reads one film, and says whether it gave up anything usable.
 async fn read_one_film_for_its_key_frames(
     database: &Database,
@@ -1280,6 +1352,92 @@ mod tests {
         assert!(works.iter().any(|work| work.title == "Quiet Harbour"
             && work.release_year == Some(2019)
             && work.kind == WorkKind::Movie));
+    }
+
+    #[tokio::test]
+    async fn a_scan_leaves_every_film_with_the_thumbnails_of_its_bar() {
+        // The whole chain on a real film: walked, described, read for where a
+        // jump can land, then read for the little pictures of the bar.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        std::fs::create_dir_all(&media).expect("the media folder");
+        let film = media.join("Quiet.Harbour.2019.mkv");
+        let made = tokio::process::Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x180:rate=12:duration=25",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-g",
+                "24",
+            ])
+            .arg(&film)
+            .output()
+            .await;
+        if !made.is_ok_and(|output| output.status.success()) {
+            eprintln!("no media tool here, the thumbnails were not exercised");
+            return;
+        }
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        let report = scan(&state, &library).await;
+        assert_eq!(report.added, 1);
+        assert_eq!(report.thumbnails_made, 1, "the film was read for its bar");
+
+        let source_id = state
+            .database()
+            .sources_of_root(library.roots[0].id)
+            .await
+            .expect("read")
+            .first()
+            .map(|source| source.id)
+            .expect("the film was recorded");
+        let thumbnails = state
+            .database()
+            .thumbnails_of(source_id)
+            .await
+            .expect("read")
+            .expect("written down");
+        // Twenty five seconds of film, and two thumbnails rather than three.
+        // Only the pictures standing on their own are read, and the slot the
+        // last of them falls in is never closed: measured, and the whole
+        // reason the thumbnails are counted rather than worked out from the
+        // running time. On a film of two hours it is the last ten seconds.
+        assert_eq!(thumbnails.counted, 2, "nought and ten seconds");
+        assert_eq!(thumbnails.sheets, 1);
+        assert!(thumbnails.width > 0 && thumbnails.height > 0);
+
+        assert!(crate::thumbnails::sheet_of(&state, source_id, 0)
+            .await
+            .expect("the sheet is in the cache")
+            .exists());
+        assert!(
+            crate::thumbnails::sheet_of(&state, source_id, 1)
+                .await
+                .is_err(),
+            "there is no second sheet to ask for"
+        );
+
+        // Nothing half written is left behind in the cache.
+        let folder = state.config().directories.thumbnails();
+        let left = std::fs::read_dir(&folder)
+            .expect("the cache folder")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".making"))
+            .count();
+        assert_eq!(left, 0);
+
+        // A second scan reads nothing again: the film already has them.
+        let again = scan(&state, &library).await;
+        assert_eq!(again.thumbnails_made, 0);
     }
 
     #[tokio::test]

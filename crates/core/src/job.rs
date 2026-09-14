@@ -71,6 +71,8 @@ pub enum JobStep {
     AnalysingFiles,
     /// Reading each film through for the places its picture can be started.
     ReadingKeyFrames,
+    /// Reading each film through for the thumbnails of its playback bar.
+    MakingThumbnails,
     /// Asking the metadata provider about the works that are waiting.
     AskingTheProvider,
     /// Asking again about the films that have a name and are missing the rest.
@@ -84,6 +86,7 @@ impl JobStep {
             Self::ReadingNamesAgain => "reading_names_again",
             Self::AnalysingFiles => "analysing_files",
             Self::ReadingKeyFrames => "reading_key_frames",
+            Self::MakingThumbnails => "making_thumbnails",
             Self::AskingTheProvider => "asking_the_provider",
             Self::FillingInWhatIsMissing => "filling_in_what_is_missing",
         }
@@ -95,6 +98,7 @@ impl JobStep {
             "reading_names_again" => Some(Self::ReadingNamesAgain),
             "analysing_files" => Some(Self::AnalysingFiles),
             "reading_key_frames" => Some(Self::ReadingKeyFrames),
+            "making_thumbnails" => Some(Self::MakingThumbnails),
             "asking_the_provider" => Some(Self::AskingTheProvider),
             "filling_in_what_is_missing" => Some(Self::FillingInWhatIsMissing),
             _ => None,
@@ -266,6 +270,7 @@ mod tests {
             JobStep::ReadingNamesAgain,
             JobStep::AnalysingFiles,
             JobStep::ReadingKeyFrames,
+            JobStep::MakingThumbnails,
             JobStep::AskingTheProvider,
             JobStep::FillingInWhatIsMissing,
         ] {

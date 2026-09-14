@@ -1,4 +1,7 @@
-//! The little pictures shown while somebody drags along the bar.
+//! The little pictures shown while somebody drags along the playback bar.
+//!
+//! Not the pictures of a film's artwork, which are resized next door: these
+//! are read out of the film itself, hundreds at a time.
 //!
 //! A film of two hours holds seven hundred of them at one every ten seconds.
 //! Written one to a file, dragging along the bar would mean seven hundred
