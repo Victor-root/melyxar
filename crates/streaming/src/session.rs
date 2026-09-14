@@ -320,39 +320,57 @@ impl Session {
         if path.exists() {
             return Ok(path);
         }
-        // The header is written with the first segment produced, whichever one
-        // that is, so the tool is set going where the viewer is about to watch
-        // and the header itself is waited for. Never one particular segment:
-        // a player asks for the header and for a segment at the same moment,
-        // and the second request moves the tool. Waiting for a segment the
-        // tool has just been taken away from is waiting for something nobody
-        // is producing, which is how the whole film failed to start.
-        let index = self.where_the_viewer_starts();
-        tracing::debug!(session = %self.id, index, "the header was asked for");
-        self.make_sure_someone_is_producing(index).await?;
+        tracing::debug!(session = %self.id, "the header was asked for");
         self.wait_for_the_header(&path).await?;
         Ok(path)
     }
 
-    /// Waits for the header, whoever ends up writing it.
+    /// Waits for the header, produced by whoever the tool ends up working for.
+    ///
+    /// The header never picks a part of the film of its own. A player asks for
+    /// it and for the segment it belongs to at the same moment, and it is that
+    /// segment which sets the tool going; the header is the same bytes whatever
+    /// is produced. Choosing as well is how the two requests of one player came
+    /// to disagree about where the film starts, and each then waited out its
+    /// patience for what the other had taken the tool away from.
+    ///
+    /// A player that asked for the header alone is still answered: one look
+    /// later, with nothing running, the tool is set going where the viewer is.
     async fn wait_for_the_header(&self, path: &Path) -> Result<()> {
         let deadline = Instant::now() + PATIENCE;
+        let mut looked_once = false;
         loop {
-            let (from, _, tool_is_gone) = self.where_the_tool_has_got_to().await;
-            // A header that merely exists may still be being written, and half
-            // a header is not something a browser can say anything useful
-            // about: it refuses the film outright. The tool closes it before
-            // opening the first segment of its run, so that segment appearing
-            // is what says the header is whole.
-            if path.exists() && self.path_of(from).exists() {
-                return Ok(());
+            let at_work = {
+                let mut running = self.running.lock().await;
+                running
+                    .as_mut()
+                    .map(|at_work| (at_work.from, at_work.process.has_exited()))
+            };
+
+            match at_work {
+                Some((from, tool_is_gone)) => {
+                    // A header that merely exists may still be being written,
+                    // and half a header is not something a browser can say
+                    // anything useful about: it refuses the film outright. The
+                    // tool closes the header before opening the first segment
+                    // of its run, so that segment appearing is what says so.
+                    if path.exists() && self.path_of(from).exists() {
+                        return Ok(());
+                    }
+                    // The tool is gone and the header is still not whole.
+                    // Waiting out the patience answers the same thing far
+                    // later, and with the wrong reason.
+                    if tool_is_gone {
+                        return Err(self.why_nothing_came(from).await);
+                    }
+                }
+                None if looked_once => {
+                    self.make_sure_someone_is_producing(self.where_the_viewer_starts())
+                        .await?;
+                }
+                None => looked_once = true,
             }
-            // Nothing is running and the header is still not there. Waiting
-            // out the deadline would answer the same thing far later, and
-            // with the wrong reason.
-            if tool_is_gone {
-                return Err(self.why_nothing_came(self.where_the_viewer_starts()).await);
-            }
+
             if Instant::now() >= deadline {
                 return Err(StreamingError::TooSlow);
             }
@@ -1548,11 +1566,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_header_is_produced_where_the_viewer_is_and_not_at_the_opening() {
-        // The header used to be asked for by producing the first segment of
-        // the film, whoever was watching and wherever they were. That segment
-        // was thrown away and the tool started again at the real place, which
-        // put a whole production in front of every picture.
+    async fn the_header_alone_sets_the_tool_going_where_the_viewer_is() {
+        // A player that asks for the header alone, which no ordinary one does:
+        // the header comes with the segment it belongs to. Nothing else is
+        // going to set the tool going, so the header does it, and where the
+        // viewer is rather than at the opening of a film nobody is at.
         let directory = tempfile::tempdir().expect("temporary directory");
         let source = directory.path().join("source.mp4");
         clip(&source, 40).await;
@@ -1586,6 +1604,61 @@ mod tests {
         assert!(
             !session.path_of(0).exists(),
             "nothing is produced at the opening of a film nobody is at"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn the_header_follows_the_segment_a_player_asks_for_beside_it() {
+        // What a player really does: the header and the segment it belongs to,
+        // at the same moment. The header picking a part of the film of its own
+        // made the two requests of one player fight over the tool, and a
+        // viewer changing a subtitle then waited out the patience for a
+        // segment nobody was producing any more.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip(&source, 60).await;
+        let session = Arc::new(
+            Session::open(
+                SessionId::new(),
+                Recipe {
+                    source,
+                    duration: Millis::new(60_000),
+                    streams: StreamSelection::default(),
+                    video: VideoOutput::Copy,
+                    audio: AudioOutput::Copy,
+                    where_the_viewer_starts: Millis::new(48_000),
+                    where_it_can_be_started: Vec::new(),
+                    if_the_card_refuses: Vec::new(),
+                },
+                directory.path().join("session"),
+                ToolPaths::discover(None, None).expect("the tools are installed here"),
+            )
+            .await
+            .expect("the session opens"),
+        );
+
+        let asked_beside_it = {
+            let session = session.clone();
+            tokio::spawn(async move { session.segment(0).await })
+        };
+        // In the order a player really asks: the segment sets the tool going,
+        // and the header arrives beside it.
+        for _ in 0..1_000 {
+            if session.running.lock().await.is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        let header = session.initialisation().await;
+        let beside_it = asked_beside_it.await.expect("the request finished");
+
+        assert!(header.is_ok(), "the header: {header:?}");
+        assert!(beside_it.is_ok(), "the segment beside it: {beside_it:?}");
+        assert!(
+            !session.path_of(12).exists(),
+            "the header takes what the player asked for and produces nothing of its own"
         );
         session.close().await;
     }
