@@ -181,8 +181,11 @@ Fait :
 - Décodage sur la carte dans les codecs qu'elle a prouvé savoir lire, établis un par un, avec repli sur le processeur pour les autres.
 - Un segment rendu dès que l'outil annonce l'avoir dépassé, au lieu d'attendre que le suivant soit produit par-dessus.
 - Relevé des images clés à l'analyse, playlist découpée dessus quand l'image est recopiée : un saut atterrit où il vise au lieu de plusieurs secondes trop tôt. Passe de fond reprise par le scan suivant, comptée dans le rapport.
+- Étape nommée sur chaque tâche, avec son compte à elle : on voit sur quelle passe le scan travaille et combien de films il a traités, au lieu d'une barre qui retombe à zéro sans explication.
 
 Reste à faire :
+
+- **Relance automatique des tâches après un redémarrage.** Le travail reprend déjà où il en était, parce que chaque passe demande ce qui reste à faire, mais il faut appuyer soi-même sur le bouton : une mise à jour du serveur en plein scan laisse deux lignes « Échouée » et rien qui reparte. À faire en priorité basse et annulable, pour qu'un serveur qui redémarre ne se mette pas à lire quatre disques pendant qu'on lance un film.
 
 - **NVENC pour Nvidia et VAAPI vérifié pour AMD.** Le mainteneur possède les deux. VAAPI couvre déjà AMD sur le papier, et rien ne l'a prouvé sur une vraie carte AMD ; Nvidia demande un chemin distinct. Les deux se branchent au même endroit : `HardwareAcceleration`, le nom de l'encodeur, et les filtres correspondants.
 - **Lecture directe de l'index du conteneur** pour relever les images clés : Jellyfin lit la structure d'un fichier Matroska, ce qui est quasi instantané, et garde l'analyseur en repli. Ici tout passe par l'analyseur, qui lit le fichier de bout en bout. Mesuré à 283 Mo/s, soit une passe unique de l'ordre de deux heures sur une collection de trois cents films.
