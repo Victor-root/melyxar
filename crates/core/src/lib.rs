@@ -10,6 +10,7 @@ pub mod error;
 pub mod fingerprint;
 pub mod id;
 pub mod job;
+pub mod journal;
 pub mod library;
 pub mod media;
 pub mod privacy;

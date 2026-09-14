@@ -4,11 +4,11 @@
 //! and render the answer. No rule about media, playback or scanning lives
 //! here, which is what lets a second entry point reuse the same behaviour.
 
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::AppState;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 
@@ -25,6 +25,14 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/system/health", get(health))
         .route("/api/v1/system/diagnostics", get(diagnostics))
         .route("/api/v1/system/diagnostics/text", get(diagnostics_text))
+        // One name, two verbs: reading what was said and forgetting it are the
+        // same thing seen from either end. Two calls to `route` on one path
+        // would take the server down as it starts.
+        .route(
+            "/api/v1/system/journal",
+            get(journal).delete(forget_journal),
+        )
+        .route("/api/v1/system/journal/text", get(journal_text))
         .route("/api/v1/public/branding", get(public_branding))
         .merge(crate::catalogue::router())
         .merge(crate::images::router())
@@ -116,6 +124,106 @@ async fn diagnostics_text(
         [("content-type", "text/plain; charset=utf-8")],
         melyxar_app::diagnostics::render_text(&report),
     ))
+}
+
+/// What the server has been saying, sorted by tag.
+///
+/// The point of the whole thing: somebody testing is told "send me `playback`
+/// and `subtitles`", ticks those two, and copies. Neither of them has to
+/// explain a filter syntax or the name of a service.
+#[derive(Debug, Deserialize)]
+struct WhatIsWanted {
+    /// Tags to keep, separated by commas. Absent keeps every tag.
+    tags: Option<String>,
+    /// Keep only lines holding this text.
+    holding: Option<String>,
+    /// At most this many, newest first. Absent means everything kept.
+    most: Option<usize>,
+}
+
+impl WhatIsWanted {
+    fn asked(&self) -> melyxar_core::journal::Wanted {
+        melyxar_core::journal::Wanted {
+            tags: self
+                .tags
+                .as_deref()
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .filter(|tag| !tag.is_empty())
+                .map(str::to_string)
+                .collect(),
+            holding: self
+                .holding
+                .as_deref()
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+                .map(str::to_string),
+            most: self.most.unwrap_or(0),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct JournalView {
+    /// Every tag this server has really written, with how many lines carry it.
+    /// What the screen puts on its buttons, rather than a list that drifts.
+    tags: Vec<TagView>,
+    lines: Vec<melyxar_core::journal::Line>,
+}
+
+#[derive(Debug, Serialize)]
+struct TagView {
+    name: &'static str,
+    lines: usize,
+}
+
+async fn journal(Query(wanted): Query<WhatIsWanted>) -> Json<JournalView> {
+    Json(JournalView {
+        tags: melyxar_core::journal::tags()
+            .into_iter()
+            .map(|(name, lines)| TagView { name, lines })
+            .collect(),
+        lines: melyxar_core::journal::lines(&wanted.asked()),
+    })
+}
+
+/// The same, as one block of text ready to paste.
+async fn journal_text(
+    Query(wanted): Query<WhatIsWanted>,
+) -> ([(&'static str, &'static str); 1], String) {
+    let lines = melyxar_core::journal::lines(&wanted.asked());
+    let mut text = String::with_capacity(lines.len() * 120);
+    // The build first: a journal and a question about a fix cannot be put
+    // together without knowing which one wrote it.
+    text.push_str(&format!(
+        "melyxar {} ({})\n\n",
+        env!("CARGO_PKG_VERSION"),
+        melyxar_core::BUILD
+    ));
+    for line in &lines {
+        text.push_str(&format!(
+            "{}  {:<5} [{}] {}\n",
+            melyxar_core::time::to_text(line.at),
+            line.level,
+            line.tag,
+            line.message
+        ));
+    }
+    ([("content-type", "text/plain; charset=utf-8")], text)
+}
+
+/// Forgets what was said, so that what is copied after a test is about that
+/// test and nothing else.
+#[derive(Debug, Serialize)]
+struct ForgottenView {
+    forgotten: usize,
+}
+
+async fn forget_journal() -> Json<ForgottenView> {
+    Json(ForgottenView {
+        forgotten: melyxar_core::journal::forget(),
+    })
 }
 
 /// The visual identity, before anyone has signed in.
