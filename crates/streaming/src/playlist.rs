@@ -140,11 +140,17 @@ impl Playlist {
         }
     }
 
-    /// The playlist as a player reads it.
+    /// The playlist as a player reads it, beginning where the viewer left off.
     ///
     /// Written out here rather than handed to the media tool, which is the
     /// whole point: every segment is listed before any of them exists.
-    pub fn to_text(&self) -> String {
+    ///
+    /// The starting point is said in the playlist rather than settled by each
+    /// player on its own. It is the protocol's own way of saying it, so a
+    /// browser reading the playlist itself and a library doing it for one are
+    /// told the same thing by the same line, and the server is producing the
+    /// part of the film that is about to be asked for.
+    pub fn to_text(&self, begin_at: Millis) -> String {
         let mut text = String::new();
         // The longest segment, rounded up, which is what the marker means.
         // A film cut where its own pictures allow can hold one longer than the
@@ -167,6 +173,15 @@ impl Playlist {
         text.push_str("#EXT-X-MEDIA-SEQUENCE:0\n");
         // The header shared by every segment, produced once with the first.
         text.push_str("#EXT-X-MAP:URI=\"init.mp4\"\n");
+        // Nothing at all for a film starting at its beginning, which is what
+        // a player does when told nothing.
+        if begin_at > Millis::ZERO && begin_at < self.total {
+            let _ = writeln!(
+                text,
+                "#EXT-X-START:TIME-OFFSET={:.3}",
+                begin_at.as_seconds_f64()
+            );
+        }
 
         for index in 0..self.segment_count() {
             let seconds = self
@@ -225,8 +240,32 @@ mod tests {
     }
 
     #[test]
+    fn the_playlist_says_where_the_viewer_left_off() {
+        // Said here so every player is told the same thing by the same line.
+        // Left to work it out for itself, a player asks for the opening of a
+        // film nobody is at, and the server produces a segment that will never
+        // be seen before it can produce the one that will.
+        let playlist = Playlist::on_a_fixed_grid(Millis::new(60_000));
+
+        let from_the_middle = playlist.to_text(Millis::new(20_500));
+        assert!(
+            from_the_middle.contains("#EXT-X-START:TIME-OFFSET=20.500"),
+            "{from_the_middle}"
+        );
+
+        assert!(
+            !playlist.to_text(Millis::ZERO).contains("#EXT-X-START"),
+            "a film beginning at its beginning is what a player does anyway"
+        );
+        assert!(
+            !playlist.to_text(Millis::new(90_000)).contains("#EXT-X-START"),
+            "past the end is not a place to begin"
+        );
+    }
+
+    #[test]
     fn the_whole_film_is_listed_before_any_of_it_exists() {
-        let text = Playlist::on_a_fixed_grid(Millis::new(10_000)).to_text();
+        let text = Playlist::on_a_fixed_grid(Millis::new(10_000)).to_text(Millis::ZERO);
 
         assert!(text.starts_with("#EXTM3U\n"));
         assert!(text.contains("#EXT-X-PLAYLIST-TYPE:VOD"));
@@ -283,7 +322,7 @@ mod tests {
             Millis::new(35_000),
             &[Millis::new(0), Millis::new(10_000), Millis::new(20_000)],
         )
-        .to_text();
+        .to_text(Millis::ZERO);
         assert!(
             text.contains("#EXT-X-TARGETDURATION:15"),
             "the longest here is fifteen seconds: {text}"
@@ -331,7 +370,7 @@ mod tests {
         let playlist = Playlist::on_a_fixed_grid(Millis::new(2 * 3_600_000));
         assert_eq!(playlist.segment_count(), 1_800);
         assert!(
-            playlist.to_text().len() < 64 * 1024,
+            playlist.to_text(Millis::ZERO).len() < 64 * 1024,
             "a playlist is fetched before anything plays, so it stays small"
         );
     }

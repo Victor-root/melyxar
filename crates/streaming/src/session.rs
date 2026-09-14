@@ -305,6 +305,11 @@ impl Session {
         &self.playlist
     }
 
+    /// The playlist a player is handed, which says where to begin.
+    pub fn playlist_text(&self) -> String {
+        self.playlist.to_text(self.recipe.where_the_viewer_starts)
+    }
+
     pub fn folder(&self) -> &Path {
         &self.folder
     }
@@ -333,10 +338,15 @@ impl Session {
     async fn wait_for_the_header(&self, path: &Path) -> Result<()> {
         let deadline = Instant::now() + PATIENCE;
         loop {
-            if path.exists() {
+            let (from, _, tool_is_gone) = self.where_the_tool_has_got_to().await;
+            // A header that merely exists may still be being written, and half
+            // a header is not something a browser can say anything useful
+            // about: it refuses the film outright. The tool closes it before
+            // opening the first segment of its run, so that segment appearing
+            // is what says the header is whole.
+            if path.exists() && self.path_of(from).exists() {
                 return Ok(());
             }
-            let (_, _, tool_is_gone) = self.where_the_tool_has_got_to().await;
             // Nothing is running and the header is still not there. Waiting
             // out the deadline would answer the same thing far later, and
             // with the wrong reason.
@@ -1621,7 +1631,32 @@ mod tests {
 
         assert!(header.is_ok(), "the header: {header:?}");
         assert!(elsewhere.is_ok(), "the other segment: {elsewhere:?}");
+        assert!(
+            every_box_is_whole(&header.expect("the header")),
+            "half a header is not something a browser can say anything about: \
+             it refuses the film outright"
+        );
         session.close().await;
+    }
+
+    /// Whether a file of boxes ends exactly where its last box does.
+    ///
+    /// What "finished being written" means for a header: each box says its own
+    /// length, so walking them lands on the end of the file when nothing was
+    /// cut off and past it or short of it when something was.
+    fn every_box_is_whole(path: &Path) -> bool {
+        let bytes = std::fs::read(path).expect("the header is there");
+        let mut at = 0usize;
+        while at + 8 <= bytes.len() {
+            let length = u32::from_be_bytes(bytes[at..at + 4].try_into().expect("four bytes"));
+            // Nothing this file holds uses the two lengths that mean anything
+            // other than themselves, and a length of nothing would not move.
+            if length < 8 {
+                return false;
+            }
+            at += length as usize;
+        }
+        at == bytes.len() && !bytes.is_empty()
     }
 
     #[tokio::test]

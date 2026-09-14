@@ -214,10 +214,11 @@ export function Player({
   /* The element carrying the words, so the moment they finish being read can
      be waited for. */
   const subtitleTrack = useRef<HTMLTrackElement | null>(null);
-  /* Where the session about to be watched was opened at, told to the server
-     and to the library alike. Both used to be left to find out for
-     themselves, and both began at the opening of the film: the server built a
-     segment nobody would see, then started again where the viewer was. */
+  /* Where the session about to be watched is opened at, told to the server
+     when it is opened. The server then puts it in the playlist it writes, and
+     every player reads it from there: left to find out for itself, one asks
+     for the opening of a film nobody is at and the server builds a segment
+     that will never be seen. */
   const openedAt = useRef(0);
 
   /* Asked again whenever a track changes: which tracks are wanted is part of
@@ -372,14 +373,7 @@ export function Player({
     }
 
     if (element.canPlayType("application/vnd.apple.mpegurl")) {
-      // The starting point is said in the address, which is the only way to
-      // say it to a browser reading the playlist on its own. Without it the
-      // server is asked for the opening of the film before the jump, and
-      // produces a segment nobody will ever see.
-      element.src =
-        openedAt.current > 0
-          ? `${stream.playlist_url}#t=${openedAt.current}`
-          : stream.playlist_url;
+      element.src = stream.playlist_url;
       return;
     }
 
@@ -399,10 +393,6 @@ export function Player({
       }
       feed = new Library({
         fragLoadingTimeOut: SEGMENT_PATIENCE,
-        // Where to begin. Left unsaid, the library asks for the opening of
-        // the film and only jumps once the picture has started, which has the
-        // server produce a segment nobody will ever see first.
-        startPosition: openedAt.current,
         // The segments carry no words, so the library has no business
         // touching the subtitles on the picture: left to itself it takes
         // charge of every one it finds there and empties ours as it goes.
