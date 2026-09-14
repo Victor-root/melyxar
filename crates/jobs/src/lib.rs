@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use melyxar_core::id::JobId;
-use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
+use melyxar_core::job::{Job, JobKind, JobPriority, JobState, JobStep};
 use melyxar_database::Database;
 use tokio::task::{JoinHandle, JoinSet};
 
@@ -160,14 +160,20 @@ impl JobRunner {
         }
     }
 
-    /// Closes whatever a previous run left hanging.
+    /// Closes whatever a previous run left hanging, and says what it was.
     ///
     /// Nothing is running when the server comes up, so a row still saying
-    /// otherwise is a leftover from a stop or a crash.
-    pub async fn close_interrupted(&self, reason: &str) -> Result<u64> {
-        let closed = self.database.close_interrupted_jobs(reason).await?;
-        if closed > 0 {
-            tracing::info!(jobs = closed, "jobs interrupted by a restart were closed");
+    /// otherwise is a leftover from a stop or a crash. What was closed comes
+    /// back so the caller can start it again: this is the only moment that
+    /// knowledge exists, since the next restart will find these rows long
+    /// since closed.
+    pub async fn close_interrupted(&self) -> Result<Vec<Job>> {
+        let closed = self.database.close_interrupted_jobs().await?;
+        if !closed.is_empty() {
+            tracing::info!(
+                jobs = closed.len(),
+                "jobs interrupted by a restart were closed"
+            );
         }
         Ok(closed)
     }
@@ -608,13 +614,7 @@ mod tests {
             .await
             .expect("job created");
 
-        assert_eq!(
-            runner
-                .close_interrupted("the server restarted")
-                .await
-                .expect("closed"),
-            1
-        );
+        assert_eq!(runner.close_interrupted().await.expect("closed").len(), 1);
         assert!(runner
             .database()
             .unfinished_jobs()

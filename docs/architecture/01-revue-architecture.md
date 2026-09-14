@@ -172,7 +172,7 @@ Trois sujets structurent tout : le **modèle de données** (une œuvre n'est pas
 | `metadata` | Fournisseurs externes derrière un trait (TMDb d'abord), téléchargement et cache des images, provenance de chaque champ. |
 | `playback` | Pur, sans entrée-sortie : profil client + source média + choix de pistes donnent une décision (Direct Play, remux, partiel, complet) avec la liste des raisons. |
 | `streaming` (remplace `transcoder`) | Sessions de lecture : dossier temporaire, playlist générée par le serveur, segments à la demande, limite de transcodages simultanés, battement de cœur, nettoyage. Utilise `ffmpeg`. |
-| `jobs` | File de tâches en mémoire persistée en base : scan, identification, images. Priorités, annulation, progression par étape. Après un redémarrage, le travail reprend là où il en était parce que chaque passe demande ce qui reste à faire ; la tâche elle-même est close et doit être relancée. |
+| `jobs` | File de tâches en mémoire persistée en base : scan, identification, images. Priorités, annulation, progression par étape. Une tâche coupée par un redémarrage est marquée comme telle, et relancée seule en priorité basse : le travail reprend là où il en était parce que chaque passe demande ce qui reste à faire. |
 | `app` (nouveau) | Cas d'usage : « scanner cette bibliothèque », « démarrer une lecture », « enregistrer la progression ». Assemble les modules. |
 | `auth` | Utilisateurs, mots de passe, jetons. Dès la V0.1 sous forme minimale (un utilisateur par défaut). |
 | `server` | Axum : routes, objets de transfert (jamais les types de la base), OpenAPI, service du frontend statique, authentification. |

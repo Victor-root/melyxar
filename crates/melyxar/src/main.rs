@@ -136,7 +136,7 @@ fn install_logging(config: &Config) {
 
 async fn serve(config: Config) -> anyhow::Result<()> {
     let address = SocketAddr::new(config.bind_address, config.port);
-    let state = melyxar_app::startup::bring_up(config)
+    let (state, cut_short) = melyxar_app::startup::bring_up_and_say_what_was_cut_short(config)
         .await
         .context("bringing the server up")?;
 
@@ -152,6 +152,12 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     // run exists yet to be confused with them.
     melyxar_app::playback::tidy_up_after_a_previous_run(&state).await;
     let sweeper = melyxar_app::playback::keep_sessions_swept(&state);
+
+    // A scan of a whole collection runs for hours, so an update in the middle
+    // of one must not mean starting it over by hand, or worse, forgetting to.
+    // Only the server does this: the diagnostic and the command line have no
+    // business starting work nobody asked them for.
+    melyxar_app::startup::take_up_again_what_a_restart_cut_short(&state, &cut_short).await;
 
     melyxar_server::serve(address, state.clone(), shutdown_signal())
         .await
@@ -230,9 +236,14 @@ async fn scan(
                 .with_context(|| format!("forgetting the analysis of {name}"))?;
             println!("{name}: {forgotten} files will be read again");
         }
-        let job = melyxar_app::scan::start_scan(&state, library)
-            .await
-            .with_context(|| format!("starting the scan of {name}"))?;
+        // Somebody is at a terminal watching this one.
+        let job = melyxar_app::scan::start_scan(
+            &state,
+            library,
+            melyxar_core::job::JobPriority::REQUESTED,
+        )
+        .await
+        .with_context(|| format!("starting the scan of {name}"))?;
         let (job_state, report) = job.wait().await;
 
         match report {
