@@ -162,22 +162,52 @@ impl Database {
         Ok(())
     }
 
-    /// Closes the jobs a restart cut short.
+    /// Closes the jobs a restart cut short, and says which ones they were.
     ///
     /// Nothing is running when the server comes up, so a row still saying
-    /// otherwise is a leftover. Calling it failed with a plain reason beats
-    /// showing a progress bar that will never move again.
-    pub async fn close_interrupted_jobs(&self, reason: &str) -> Result<u64> {
-        let result = sqlx::query(
-            "UPDATE jobs SET state = ?, failure_reason = ?, finished_at = ?
+    /// otherwise is a leftover. Recorded as interrupted rather than failed:
+    /// the work was not going wrong, the server went away under it, and that
+    /// is the one ending worth taking up again on its own.
+    ///
+    /// What was closed is handed back rather than counted, because the caller
+    /// that means to start these again has no other way of knowing which they
+    /// were: a restart later on would find them long since closed.
+    ///
+    /// No reason is written: the state already says a restart did this, and it
+    /// says it in a word a screen can translate, where a sentence stored here
+    /// would reach every screen in English whatever language it was set to.
+    pub async fn close_interrupted_jobs(&self) -> Result<Vec<Job>> {
+        let rows = sqlx::query("SELECT * FROM jobs WHERE state IN ('queued', 'running')")
+            .fetch_all(self.reader())
+            .await?;
+        if rows.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // The rows were read as they stood a moment ago, so what comes back
+        // carries the ending this call is about to write rather than the state
+        // it found. One moment for both, so the two never disagree.
+        let moment = now();
+        let cut_short: Vec<Job> = rows
+            .iter()
+            .map(|row| {
+                job_from_row(row).map(|job| Job {
+                    state: JobState::Interrupted,
+                    finished_at: Some(moment),
+                    ..job
+                })
+            })
+            .collect::<Result<_>>()?;
+
+        sqlx::query(
+            "UPDATE jobs SET state = ?, finished_at = ?
              WHERE state IN ('queued', 'running')",
         )
-        .bind(JobState::Failed.as_str())
-        .bind(reason)
-        .bind(timestamp_to_text(now()))
+        .bind(JobState::Interrupted.as_str())
+        .bind(timestamp_to_text(moment))
         .execute(self.writer())
         .await?;
-        Ok(result.rows_affected())
+        Ok(cut_short)
     }
 
     /// Forgets the work that is over, and answers how much it forgot.
@@ -426,22 +456,45 @@ mod tests {
             .expect("job finished");
 
         let closed = database
-            .close_interrupted_jobs("the server restarted")
+            .close_interrupted_jobs()
             .await
             .expect("jobs closed");
-        assert_eq!(closed, 2);
+        assert_eq!(closed.len(), 2);
+        assert!(
+            closed.iter().any(|job| job.id == queued.id)
+                && closed.iter().any(|job| job.id == running.id),
+            "what was closed has to come back, or nothing can start it again"
+        );
+        assert!(
+            !closed.iter().any(|job| job.id == done.id),
+            "a job that already ended was not cut short by anything"
+        );
+        assert!(
+            closed
+                .iter()
+                .all(|job| job.state.is_worth_taking_up_again()),
+            "what comes back carries the ending just written, not the state it \
+             was read in: on the old state nothing would ever be taken up again"
+        );
 
         assert!(database.unfinished_jobs().await.expect("read").is_empty());
+        let cut_short = database
+            .job(queued.id)
+            .await
+            .expect("read")
+            .expect("present");
         assert_eq!(
-            database
-                .job(queued.id)
-                .await
-                .expect("read")
-                .expect("present")
-                .failure_reason
-                .as_deref(),
-            Some("the server restarted")
+            cut_short.state,
+            JobState::Interrupted,
+            "the work was not going wrong, the server went away under it"
         );
+        assert!(cut_short.state.is_worth_taking_up_again());
+        assert_eq!(
+            cut_short.failure_reason, None,
+            "the state says a restart did this, in a word a screen can translate; \
+             a sentence stored here would reach every screen in English"
+        );
+        assert!(cut_short.finished_at.is_some());
         assert_eq!(
             database
                 .job(done.id)

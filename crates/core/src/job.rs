@@ -111,6 +111,10 @@ pub enum JobState {
     Succeeded,
     Failed,
     Cancelled,
+    /// Cut short by a restart. Neither a failure nor a stop somebody asked
+    /// for: the work was fine and the server went away under it, which is why
+    /// it is the one ending that is taken up again on its own.
+    Interrupted,
 }
 
 impl JobState {
@@ -121,6 +125,7 @@ impl JobState {
             Self::Succeeded => "succeeded",
             Self::Failed => "failed",
             Self::Cancelled => "cancelled",
+            Self::Interrupted => "interrupted",
         }
     }
 
@@ -131,13 +136,26 @@ impl JobState {
             "succeeded" => Some(Self::Succeeded),
             "failed" => Some(Self::Failed),
             "cancelled" => Some(Self::Cancelled),
+            "interrupted" => Some(Self::Interrupted),
             _ => None,
         }
     }
 
     /// Whether the job is over, whatever the outcome.
     pub fn is_finished(self) -> bool {
-        matches!(self, Self::Succeeded | Self::Failed | Self::Cancelled)
+        matches!(
+            self,
+            Self::Succeeded | Self::Failed | Self::Cancelled | Self::Interrupted
+        )
+    }
+
+    /// Whether this ending is one the server takes up again on its own.
+    ///
+    /// Only a restart. A job that failed would fail again, and a job somebody
+    /// stopped was stopped on purpose: starting either back up would be the
+    /// server arguing with the person using it.
+    pub fn is_worth_taking_up_again(self) -> bool {
+        matches!(self, Self::Interrupted)
     }
 }
 
@@ -239,6 +257,7 @@ mod tests {
             JobState::Succeeded,
             JobState::Failed,
             JobState::Cancelled,
+            JobState::Interrupted,
         ] {
             assert_eq!(JobState::parse(state.as_str()), Some(state));
         }
@@ -267,6 +286,18 @@ mod tests {
         assert!(JobState::Succeeded.is_finished());
         assert!(JobState::Failed.is_finished());
         assert!(JobState::Cancelled.is_finished());
+        assert!(JobState::Interrupted.is_finished());
+    }
+
+    #[test]
+    fn only_a_job_a_restart_cut_short_is_taken_up_again() {
+        // A job that failed would fail again, and one somebody stopped was
+        // stopped on purpose: starting either back up would be the server
+        // arguing with the person using it.
+        assert!(JobState::Interrupted.is_worth_taking_up_again());
+        assert!(!JobState::Failed.is_worth_taking_up_again());
+        assert!(!JobState::Cancelled.is_worth_taking_up_again());
+        assert!(!JobState::Succeeded.is_worth_taking_up_again());
     }
 
     fn job(done: i64, total: Option<i64>) -> Job {

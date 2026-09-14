@@ -119,7 +119,14 @@ impl ScanJob {
 /// at a terminal or from a button, so both get the same guarantees: it shows
 /// up in the list of what is running, it can be stopped, and a second scan of
 /// the same library is refused rather than run alongside the first.
-pub async fn start_scan(state: &AppState, library: Library) -> Result<ScanJob> {
+///
+/// The priority says who is waiting: a person who pressed a button, or nobody
+/// at all, which is what a scan taken up again after a restart is.
+pub async fn start_scan(
+    state: &AppState,
+    library: Library,
+    priority: JobPriority,
+) -> Result<ScanJob> {
     let outcome: Arc<Mutex<Option<ScanReport>>> = Arc::new(Mutex::new(None));
     let recorded = Arc::clone(&outcome);
     let state = state.clone();
@@ -130,7 +137,7 @@ pub async fn start_scan(state: &AppState, library: Library) -> Result<ScanJob> {
         .clone()
         .start(
             JobKind::ScanLibrary,
-            JobPriority::REQUESTED,
+            priority,
             Some(target),
             move |handle| async move {
                 match scan_library(&state, &library, &handle).await {
@@ -169,8 +176,12 @@ pub async fn start_scan(state: &AppState, library: Library) -> Result<ScanJob> {
 /// unnamed has done half of what anybody wanted. Nothing is looked up when no
 /// provider key is configured, which is a server that browses without one
 /// rather than a server that is broken.
-pub async fn start_scan_and_identification(state: &AppState, library: Library) -> Result<JobId> {
-    let scan = start_scan(state, library.clone()).await?;
+pub async fn start_scan_and_identification(
+    state: &AppState,
+    library: Library,
+    priority: JobPriority,
+) -> Result<JobId> {
+    let scan = start_scan(state, library.clone(), priority).await?;
     let id = scan.id();
 
     // Without a provider key there is nothing to look anything up with. The
@@ -1161,7 +1172,7 @@ mod tests {
 
     /// Runs a scan the way the server does, and gives back what it did.
     async fn scan(state: &AppState, library: &Library) -> ScanReport {
-        let (job_state, report) = start_scan(state, library.clone())
+        let (job_state, report) = start_scan(state, library.clone(), JobPriority::REQUESTED)
             .await
             .expect("job started")
             .wait()
@@ -2104,7 +2115,7 @@ mod tests {
         write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
 
         let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
-        let job = start_scan(&state, library.clone())
+        let job = start_scan(&state, library.clone(), JobPriority::REQUESTED)
             .await
             .expect("job started");
         // What a client follows the scan by, so it has to name a real row.
@@ -2137,10 +2148,10 @@ mod tests {
         write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
 
         let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
-        let first = start_scan(&state, library.clone())
+        let first = start_scan(&state, library.clone(), JobPriority::REQUESTED)
             .await
             .expect("job started");
-        let second = start_scan(&state, library.clone()).await;
+        let second = start_scan(&state, library.clone(), JobPriority::REQUESTED).await;
         assert!(
             second.is_err(),
             "two scans of one library would walk over each other"

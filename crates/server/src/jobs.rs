@@ -124,9 +124,13 @@ async fn start_scan(
     // A scan asked for from a screen looks up what it found, because a person
     // pressing one button expects one thing to happen and that thing is a
     // filled library, not a list of file names.
-    let job = melyxar_app::scan::start_scan_and_identification(&state, library)
-        .await
-        .map_err(already_running)?;
+    let job = melyxar_app::scan::start_scan_and_identification(
+        &state,
+        library,
+        melyxar_core::job::JobPriority::REQUESTED,
+    )
+    .await
+    .map_err(already_running)?;
     Ok(Json(StartedView {
         job_id: job.to_string(),
     }))

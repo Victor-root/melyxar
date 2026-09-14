@@ -188,7 +188,7 @@ export interface Work {
 export interface Job {
   id: string;
   kind: string;
-  state: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  state: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
   target: string | null;
   /** Which pass the job is on. The counters below count that pass alone, so
    *  a bar dropping back to nothing is a pass ending, not a crash. */

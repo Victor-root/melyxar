@@ -8,6 +8,7 @@
 //! the real problem.
 
 use melyxar_config::Config;
+use melyxar_core::job::{Job, JobKind, JobPriority};
 use melyxar_core::library::{LibraryKind, RootAccess};
 use melyxar_core::user::Permissions;
 use melyxar_database::Database;
@@ -19,7 +20,19 @@ use crate::{AppError, AppState, Result};
 pub const DEFAULT_ACCOUNT_NAME: &str = "admin";
 
 /// Opens everything and returns the assembled server.
+///
+/// What a restart cut short is closed and then forgotten here, which is what
+/// the diagnostic and the command line want. The server itself wants to know,
+/// and asks for it by name.
 pub async fn bring_up(config: Config) -> Result<AppState> {
+    Ok(bring_up_and_say_what_was_cut_short(config).await?.0)
+}
+
+/// The same, handing back the jobs a restart cut short.
+///
+/// They come back only here: a later restart finds those rows long since
+/// closed, so this is the one moment anything can be started again from them.
+pub async fn bring_up_and_say_what_was_cut_short(config: Config) -> Result<(AppState, Vec<Job>)> {
     prepare_directories(&config)?;
 
     // Log redaction is switched on before anything is logged, so a media name
@@ -39,12 +52,89 @@ pub async fn bring_up(config: Config) -> Result<AppState> {
     // Nothing is running yet, so a job still marked as running is a leftover
     // from a stop or a crash. Saying so beats a progress bar that will never
     // move again.
-    state
-        .jobs()
-        .close_interrupted("the server restarted before this job finished")
-        .await?;
+    let cut_short = state.jobs().close_interrupted().await?;
 
-    Ok(state)
+    Ok((state, cut_short))
+}
+
+/// Starts again what a restart cut short, and says how many that was.
+///
+/// Only the server calls this, and only for a job a restart ended: one that
+/// failed would fail again, and one somebody stopped was stopped on purpose.
+/// Nobody is waiting on any of it, so it all goes in at the low priority,
+/// behind anything asked for from a button.
+///
+/// Nothing is picked up from where it stopped, because nothing needs to be:
+/// every pass of a scan asks what is left to do rather than walking a list
+/// drawn up at the start, so a scan started again simply does not redo what
+/// was already done.
+pub async fn take_up_again_what_a_restart_cut_short(state: &AppState, cut_short: &[Job]) -> usize {
+    let libraries = match state.database().list_libraries().await {
+        Ok(libraries) => libraries,
+        Err(error) => {
+            tracing::warn!(%error, "the libraries could not be read, so nothing was taken up again");
+            return 0;
+        }
+    };
+
+    let mut taken_up = 0;
+    for job in cut_short {
+        if !job.state.is_worth_taking_up_again() {
+            continue;
+        }
+        // Every job worth taking up again is about one library, and says which
+        // by name. One that is about nothing, or about a library that has since
+        // been taken out of the configuration, has nothing to be started on.
+        let Some(library) = job.target_id.as_deref().and_then(|target| {
+            libraries
+                .iter()
+                .find(|library| library.id.to_string() == target)
+        }) else {
+            continue;
+        };
+
+        let started = match job.kind {
+            JobKind::ScanLibrary => crate::scan::start_scan_and_identification(
+                state,
+                library.clone(),
+                JobPriority::BACKGROUND,
+            )
+            .await
+            .map(|_| ()),
+            JobKind::IdentifyWork => match state.metadata_provider() {
+                Some(provider) => {
+                    crate::identify::start_identification(state, provider, library.clone())
+                        .await
+                        .map(|_| ())
+                }
+                None => continue,
+            },
+            // Everything else is short enough that the next thing to ask for
+            // it will do it, and starting it here would only be guessing at
+            // what somebody wanted an hour ago.
+            _ => continue,
+        };
+
+        match started {
+            Ok(()) => {
+                tracing::info!(
+                    library = library.name,
+                    kind = job.kind.as_str(),
+                    "a job a restart cut short was taken up again"
+                );
+                taken_up += 1;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    library = library.name,
+                    kind = job.kind.as_str(),
+                    %error,
+                    "a job a restart cut short would not start again"
+                );
+            }
+        }
+    }
+    taken_up
 }
 
 /// Creates the three directories the server writes to.
@@ -287,6 +377,7 @@ pub async fn refresh_root_access(database: &Database) -> Result<()> {
 mod tests {
     use super::*;
     use melyxar_config::{LibraryConfig, RootConfig};
+    use melyxar_core::job::JobState;
     use std::path::PathBuf;
 
     fn config_with_library(root: &std::path::Path) -> Config {
@@ -302,6 +393,138 @@ mod tests {
             }],
             ..Config::default()
         }
+    }
+
+    /// A server standing up on a temporary folder, with one library.
+    async fn server_with_a_library(directory: &std::path::Path) -> (AppState, Vec<Job>) {
+        let mut config = config_with_library(&directory.join("films"));
+        config.directories = melyxar_config::Directories {
+            data: directory.join("data"),
+            cache: directory.join("cache"),
+            transcodes: directory.join("cache/transcodes"),
+        };
+        std::fs::create_dir_all(directory.join("films")).expect("folder created");
+        bring_up_and_say_what_was_cut_short(config)
+            .await
+            .expect("the server comes up")
+    }
+
+    #[tokio::test]
+    async fn a_scan_a_restart_cut_short_is_taken_up_again_on_its_own() {
+        // An update in the middle of a scan of the whole collection must not
+        // mean starting it over by hand, or worse, forgetting to.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let (state, nothing) = server_with_a_library(directory.path()).await;
+        assert!(nothing.is_empty(), "a first start cut nothing short");
+
+        let library = state
+            .database()
+            .library_by_name("Films")
+            .await
+            .expect("read")
+            .expect("the library was declared");
+        state
+            .database()
+            .create_job(
+                JobKind::ScanLibrary,
+                JobPriority::REQUESTED,
+                Some(&library.id.to_string()),
+            )
+            .await
+            .expect("a scan was under way when the server went away");
+
+        let cut_short = state
+            .jobs()
+            .close_interrupted()
+            .await
+            .expect("the restart closed it");
+        assert_eq!(cut_short.len(), 1);
+        assert_eq!(
+            take_up_again_what_a_restart_cut_short(&state, &cut_short).await,
+            1
+        );
+
+        // The row exists before the work starts, so it is there by the time
+        // this returns rather than at some moment worth waiting for.
+        let taken_up = state
+            .database()
+            .recent_jobs(10)
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|job| job.kind == JobKind::ScanLibrary && !job.state.is_finished())
+            .expect("a scan is under way again");
+        assert_eq!(
+            taken_up.priority,
+            JobPriority::BACKGROUND,
+            "nobody is waiting on this one, so it goes behind anything asked for"
+        );
+        assert_eq!(
+            taken_up.target_id.as_deref(),
+            Some(&*library.id.to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_job_that_failed_or_was_stopped_is_left_alone() {
+        // One that failed would fail again, and one somebody stopped was
+        // stopped on purpose: starting either back up would be the server
+        // arguing with the person using it.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let (state, _) = server_with_a_library(directory.path()).await;
+        let library = state
+            .database()
+            .library_by_name("Films")
+            .await
+            .expect("read")
+            .expect("the library was declared");
+
+        let mut ended = Vec::new();
+        for state_it_ended_in in [JobState::Failed, JobState::Cancelled, JobState::Succeeded] {
+            let job = state
+                .database()
+                .create_job(
+                    JobKind::ScanLibrary,
+                    JobPriority::REQUESTED,
+                    Some(&library.id.to_string()),
+                )
+                .await
+                .expect("job created");
+            ended.push(Job {
+                state: state_it_ended_in,
+                ..job
+            });
+        }
+
+        assert_eq!(
+            take_up_again_what_a_restart_cut_short(&state, &ended).await,
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn a_job_about_a_library_that_is_gone_has_nothing_to_start_on() {
+        // What taking a library out of the configuration leaves behind.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let (state, _) = server_with_a_library(directory.path()).await;
+        let orphan = state
+            .database()
+            .create_job(
+                JobKind::ScanLibrary,
+                JobPriority::REQUESTED,
+                Some("a-library-nobody-has"),
+            )
+            .await
+            .expect("job created");
+
+        let cut_short = vec![Job {
+            state: JobState::Interrupted,
+            ..orphan
+        }];
+        assert_eq!(
+            take_up_again_what_a_restart_cut_short(&state, &cut_short).await,
+            0
+        );
     }
 
     #[tokio::test]
