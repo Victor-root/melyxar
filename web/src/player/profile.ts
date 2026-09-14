@@ -42,11 +42,25 @@ const AUDIO: Probe[] = [
   { type: 'audio/mp4; codecs="ac-3"', name: "ac3" },
 ];
 
+/**
+ * A codec this browser takes in a stream fed to it piece by piece, and how far
+ * it takes it.
+ *
+ * The height is the whole point. "Do you decode AV1" and "do you decode this
+ * film, at this size, as fast as it plays" are different questions, and only
+ * the second one decides whether anybody sees a picture.
+ */
+export interface RebuiltCapability {
+  codec: string;
+  /** Tallest picture decoded smoothly, and null when nothing was measured. */
+  max_height: number | null;
+}
+
 export interface ClientProfile {
   containers: string[];
   video: { codec: string }[];
   /** Codecs this browser takes in a stream fed to it piece by piece. */
-  rebuilt_video: string[];
+  rebuilt_video: RebuiltCapability[];
   audio_codecs: string[];
   max_audio_channels: number | null;
   subtitle_formats: string[];
@@ -57,28 +71,123 @@ export interface ClientProfile {
 }
 
 /**
+ * The sizes each rebuilt codec is tried at, tallest first.
+ *
+ * The rungs a film really comes in. Asking about every height in between would
+ * answer a question nobody plays at.
+ */
+const HEIGHTS = [2160, 1440, 1080, 720, 480];
+
+/** What a picture of that height weighs, roughly, so the question is a real one. */
+function weight(height: number): number {
+  return height >= 2160 ? 25_000_000 : height >= 1080 ? 8_000_000 : 3_000_000;
+}
+
+/**
+ * What a browser answered about a codec fed to it piece by piece.
+ *
+ * Two different nothings, and telling them apart is the whole point. A browser
+ * that could not be asked leaves the server as free as it was before, while a
+ * browser that was asked and said "not smoothly, at any size" has answered,
+ * and the codec is not offered at all. Read the same way, the second would be
+ * taken for "no limit", which is the exact mistake this is here to prevent.
+ */
+interface Answered {
+  /** Whether the browser could be asked the question at all. */
+  asked: boolean;
+  /** Tallest picture it decodes smoothly, when it named one. */
+  tallest: number | null;
+}
+
+/**
+ * How tall this browser decodes a codec smoothly, fed to it piece by piece.
+ *
+ * Asked with the size, the rate and the cadence, because that is the question
+ * that decides whether a picture appears. Asked without them, a browser answers
+ * for the codec in the abstract and says yes to a film it will buffer whole
+ * without ever showing a frame of: measured on a 4K film rebuilt into AV1,
+ * which the same browser played perfectly well at half that size.
+ */
+async function tallestSmoothly(type: string): Promise<Answered> {
+  const capabilities = navigator.mediaCapabilities;
+  if (!capabilities?.decodingInfo) {
+    return { asked: false, tallest: null };
+  }
+  for (const height of HEIGHTS) {
+    try {
+      const answer = await capabilities.decodingInfo({
+        type: "media-source",
+        video: {
+          contentType: type,
+          width: Math.round((height * 16) / 9),
+          height,
+          bitrate: weight(height),
+          framerate: 24,
+        },
+      });
+      // Smooth as well as supported: a browser that decodes a film at two
+      // frames a second supports it and shows nobody anything.
+      if (answer.supported && answer.smooth) {
+        return { asked: true, tallest: height };
+      }
+    } catch {
+      // A browser that refuses the question is a browser that cannot be asked.
+      return { asked: false, tallest: null };
+    }
+  }
+  return { asked: true, tallest: null };
+}
+
+/**
  * Asks the browser what it can play, and says it the way the server reads.
  *
  * Two questions, not one. A film the server hands over whole is opened by the
  * video element itself, and a film the server rebuilds is fed to it in pieces
  * through another part of the browser entirely. The two do not always answer
  * the same, so both are asked, and the server is told which answer is which.
+ *
+ * The second one is asked once and kept: it is about the machine, and the
+ * machine does not change between two films.
  */
-export function clientProfile(asked?: Quality): ClientProfile {
+let measured: Promise<RebuiltCapability[]> | null = null;
+
+function whatItTakesInPieces(): Promise<RebuiltCapability[]> {
+  measured ??= Promise.all(
+    VIDEO.map(async (entry) => ({
+      name: entry.name,
+      takes: takesInPieces(entry.type),
+      answered: await tallestSmoothly(entry.type),
+    })),
+  ).then((answers) =>
+    answers
+      // A codec the browser was asked about and never called smooth is one it
+      // cannot show, whatever it says about taking it. Offering it would be
+      // the very thing being measured against.
+      .filter((answer) => answer.takes && !(answer.answered.asked && answer.answered.tallest === null))
+      .map((answer) => ({ codec: answer.name, max_height: answer.answered.tallest })),
+  );
+  return measured;
+}
+
+/** Whether this browser takes a codec fed to it piece by piece at all. */
+function takesInPieces(type: string): boolean {
+  // A browser too old to have this part at all takes nothing fed in pieces,
+  // and the server then produces the codec no client has ever refused.
+  return typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(type);
+}
+
+export async function clientProfile(asked?: Quality): Promise<ClientProfile> {
   const probe = document.createElement("video");
   // "probably" and "maybe" are the two answers that mean yes; only an empty
   // string is a no, and a browser says "maybe" when it will not commit.
   const plays = (type: string) => probe.canPlayType(type) !== "";
 
-  // A browser too old to have this part at all takes nothing fed in pieces,
-  // and the server then produces the codec no client has ever refused.
-  const takesInPieces = (type: string) =>
-    typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(type);
+  const rebuilt = await whatItTakesInPieces();
 
   return {
     containers: CONTAINERS.filter((entry) => plays(entry.type)).map((entry) => entry.name),
     video: VIDEO.filter((entry) => plays(entry.type)).map((entry) => ({ codec: entry.name })),
-    rebuilt_video: VIDEO.filter((entry) => takesInPieces(entry.type)).map((entry) => entry.name),
+    rebuilt_video: rebuilt,
     audio_codecs: AUDIO.filter((entry) => plays(entry.type)).map((entry) => entry.name),
     // A browser mixes down to what the machine has; it never says how many
     // channels that is. Two is what is safe to assume, and asking for more
