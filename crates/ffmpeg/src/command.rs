@@ -660,7 +660,7 @@ impl Command {
 /// what keeps skin tones from turning grey. Used for streams and for every
 /// still image pulled out of a file, because an unconverted frame is exactly
 /// the washed out thumbnail seen on other servers.
-const TONE_MAP_FILTER: &str = concat!(
+pub(crate) const TONE_MAP_FILTER: &str = concat!(
     "zscale=transfer=linear:npl=100,",
     "format=gbrpf32le,",
     "zscale=primaries=bt709,",
