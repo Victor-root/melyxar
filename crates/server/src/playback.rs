@@ -301,6 +301,9 @@ async fn subtitle(
 ) -> Response {
     match serve_subtitle(&state, &id, &track, request).await {
         Ok(response) => response,
+        // Not written down again here: every way this refuses already says so
+        // for itself, with the codec and the stream it was about, which is
+        // what a refusal has to carry to be worth reading.
         Err(error) => error.into_response(),
     }
 }
