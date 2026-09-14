@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
-use melyxar_core::media::{SubtitleLayout, Track, TrackKind};
+use melyxar_core::media::Track;
 use melyxar_core::privacy::MediaName;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::user::DownmixMethod;
@@ -434,32 +434,10 @@ pub async fn open_session(
 /// tag, and a viewer who asks for it anyway gets the same answer they would
 /// have got without this.
 fn prepare_the_subtitles(state: &AppState, plan: &PlayPlan) {
-    let wanted: Vec<TrackId> = plan
-        .tracks
-        .iter()
-        .filter(|track| match &track.kind {
-            TrackKind::Subtitle(details) => details.layout == SubtitleLayout::Text,
-            _ => false,
-        })
-        .map(|track| track.id)
-        .collect();
-    if wanted.is_empty() {
-        return;
-    }
-
     let state = state.clone();
     let source_id = plan.source_id;
     tokio::spawn(async move {
-        tracing::debug!(
-            subtitles = wanted.len(),
-            "converting the subtitles of this film ahead of anybody asking for one"
-        );
-        for track_id in wanted {
-            // One at a time: each reads the whole film, and the system keeps
-            // what it just read, so the second costs a fraction of the first.
-            // All at once would set several readers on one disk for no gain.
-            let _ = crate::subtitles::as_web_vtt(&state, source_id, track_id).await;
-        }
+        let _ = crate::subtitles::pull_them_all_out(&state, source_id).await;
     });
 }
 

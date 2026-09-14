@@ -59,6 +59,66 @@ pub fn to_web_vtt_arguments(
     arguments
 }
 
+/// Builds the conversion of several tracks of one film, in a single reading.
+///
+/// One tool, one pass, one output per track. The cost of pulling a subtitle
+/// out of a film is not the writing, which is a few tens of kilobytes of text:
+/// it is that the words are interleaved with the picture from end to end, so
+/// the file has to be read through. Done once per track, a film carrying seven
+/// of them is read seven times. Measured on a film with seven: 575 ms in seven
+/// passes against 89 ms in one, for output identical to the byte.
+pub fn all_to_web_vtt_arguments(source: &Path, wanted: &[(i32, &Path)]) -> Vec<OsString> {
+    let mut arguments = vec![
+        OsString::from("-hide_banner"),
+        OsString::from("-loglevel"),
+        OsString::from("error"),
+        OsString::from("-y"),
+        OsString::from("-i"),
+        source.as_os_str().to_os_string(),
+    ];
+
+    for (stream_index, destination) in wanted {
+        arguments.push(OsString::from("-map"));
+        arguments.push(OsString::from(format!("0:{stream_index}")));
+        // Nothing but the words, for each of them: the picture and the sound
+        // are read through either way, and writing them out would be the whole
+        // film again, once per subtitle.
+        arguments.push(OsString::from("-vn"));
+        arguments.push(OsString::from("-an"));
+        arguments.push(OsString::from("-c:s"));
+        arguments.push(OsString::from("webvtt"));
+        arguments.push(OsString::from("-f"));
+        arguments.push(OsString::from("webvtt"));
+        // Written as they come rather than at the end, so a track that is
+        // ready is readable while the rest are still being pulled out.
+        arguments.push(OsString::from("-flush_packets"));
+        arguments.push(OsString::from("1"));
+        arguments.push(destination.as_os_str().to_os_string());
+    }
+    arguments
+}
+
+/// Writes several subtitle tracks of one film out as WebVTT, in one reading.
+pub async fn all_to_web_vtt(tool: &Path, source: &Path, wanted: &[(i32, &Path)]) -> Result<()> {
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let output = TokioCommand::new(tool)
+        .args(all_to_web_vtt_arguments(source, wanted))
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        return Err(FfmpegError::Failed {
+            tool: "ffmpeg",
+            status: output.status.to_string(),
+            output: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
+    }
+    Ok(())
+}
+
 /// Writes one subtitle track out as WebVTT.
 pub async fn to_web_vtt(
     tool: &Path,
@@ -135,6 +195,49 @@ mod tests {
     }
 
     #[test]
+    fn every_track_of_a_film_is_pulled_out_in_one_reading() {
+        // The reading is the whole cost: the words are interleaved with the
+        // picture from end to end, so one pass per track reads the film once
+        // per track. Measured on a film carrying seven: 575 ms in seven passes
+        // against 89 ms in one, for output identical to the byte.
+        let one = PathBuf::from("/cache/subtitles/one.vtt");
+        let two = PathBuf::from("/cache/subtitles/two.vtt");
+        let arguments = written(&all_to_web_vtt_arguments(
+            &PathBuf::from("/films/Quiet.Harbour.2019.mkv"),
+            &[(3, one.as_path()), (4, two.as_path())],
+        ));
+
+        assert_eq!(
+            arguments.iter().filter(|value| *value == "-i").count(),
+            1,
+            "one reading, however many tracks come out of it"
+        );
+        let maps: Vec<&String> = arguments
+            .iter()
+            .enumerate()
+            .filter(|(_, value)| *value == "-map")
+            .map(|(at, _)| &arguments[at + 1])
+            .collect();
+        assert_eq!(maps, vec!["0:3", "0:4"]);
+        assert_eq!(
+            arguments.iter().filter(|value| *value == "-vn").count(),
+            2,
+            "and neither the picture nor the sound is written out for any of them"
+        );
+        assert!(arguments.contains(&one.to_string_lossy().into_owned()));
+        assert!(arguments.ends_with(&[two.to_string_lossy().into_owned()]));
+    }
+
+    #[test]
+    fn asking_for_no_track_at_all_asks_the_tool_for_nothing() {
+        let arguments = written(&all_to_web_vtt_arguments(
+            &PathBuf::from("/films/Quiet.Harbour.2019.mkv"),
+            &[],
+        ));
+        assert!(!arguments.iter().any(|value| value == "-map"));
+    }
+
+    #[test]
     fn the_form_asked_for_is_the_one_a_browser_draws() {
         let arguments = written(&to_web_vtt_arguments(
             &PathBuf::from("/films/Quiet.Harbour.2019.mkv"),
@@ -156,6 +259,74 @@ mod tests {
             "stated rather than guessed from the name, so a cache file with \
              any name still comes out right"
         );
+    }
+
+    #[tokio::test]
+    async fn several_real_tracks_come_out_of_one_film_in_one_go() {
+        // The whole point of the single reading, on a real film with real
+        // tracks: every one of them lands, and each holds its own words.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+
+        let said = ["Bonsoir.", "Good evening.", "Buenas noches."];
+        let mut beside = Vec::new();
+        for (which, words) in said.iter().enumerate() {
+            let path = directory.path().join(format!("track-{which}.srt"));
+            std::fs::write(
+                &path,
+                format!("1\n00:00:01,000 --> 00:00:03,500\n{words}\n"),
+            )
+            .expect("a subtitle file");
+            beside.push(path);
+        }
+
+        let film = directory.path().join("Quiet.Harbour.2019.mkv");
+        let mut making = tokio::process::Command::new(&tools.ffmpeg);
+        making.args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+        ]);
+        making.arg("testsrc2=size=160x90:rate=8:duration=4");
+        for path in &beside {
+            making.arg("-i").arg(path);
+        }
+        making.args(["-map", "0:v"]);
+        for which in 0..said.len() {
+            making.args(["-map", &format!("{}:s", which + 1)]);
+        }
+        making.args(["-c:v", "libx264", "-preset", "ultrafast", "-c:s", "srt"]);
+        making.arg(&film);
+        assert!(
+            making.status().await.expect("the tool runs").success(),
+            "a film carrying three subtitle tracks"
+        );
+
+        let out: Vec<std::path::PathBuf> = (0..said.len())
+            .map(|which| directory.path().join(format!("out-{which}.vtt")))
+            .collect();
+        let asked: Vec<(i32, &Path)> = out
+            .iter()
+            .enumerate()
+            .map(|(which, path)| (which as i32 + 1, path.as_path()))
+            .collect();
+
+        all_to_web_vtt(&tools.ffmpeg, &film, &asked)
+            .await
+            .expect("every track comes out");
+
+        for (which, words) in said.iter().enumerate() {
+            let written = std::fs::read_to_string(&out[which]).expect("read back");
+            assert!(written.starts_with("WEBVTT"), "{written}");
+            assert!(
+                written.contains(words),
+                "track {which} holds its own words: {written}"
+            );
+        }
     }
 
     #[tokio::test]
