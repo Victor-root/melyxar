@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { Journal, JournalLine } from "../api";
+import { putOnTheClipboard } from "../clipboard";
 import { useSettings } from "../settings";
 
 /** How often the screen refreshes while it is open. */
@@ -72,17 +73,17 @@ export function JournalPage() {
       setFailed(true);
       return;
     }
-    try {
-      await navigator.clipboard.writeText(text);
+    // Every way a browser offers, the old one included, which is the one that
+    // works on a plain address. Showing the text to be copied by hand is the
+    // last resort and not the ordinary answer: being handed a box to select is
+    // not what anybody means by "copy".
+    if (await putOnTheClipboard(text)) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2_000);
-    } catch {
-      // A browser only grants the clipboard on a secure page, and a server
-      // reached by its address on the local network is not one. Showing the
-      // text already selected always works.
-      setShown(text);
-      window.setTimeout(() => selectable.current?.select(), 0);
+      return;
     }
+    setShown(text);
+    window.setTimeout(() => selectable.current?.select(), 0);
   };
 
   return (

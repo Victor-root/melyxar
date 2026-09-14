@@ -15,6 +15,7 @@
 
 import { useRef, useState } from "react";
 import { api } from "../api";
+import { putOnTheClipboard } from "../clipboard";
 import { useSettings } from "../settings";
 
 type State = "idle" | "working" | "copied" | "shown" | "failed";
@@ -62,33 +63,4 @@ export function CopyReport() {
       )}
     </div>
   );
-}
-
-/** Tries every way a browser offers, newest first. */
-async function putOnTheClipboard(text: string): Promise<boolean> {
-  try {
-    if (window.isSecureContext && navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // Refused, which is one of the two ordinary answers here.
-  }
-
-  // The way that predates the clipboard being an interface of its own, and
-  // the only one a page served over a plain address still has.
-  try {
-    const field = document.createElement("textarea");
-    field.value = text;
-    field.setAttribute("readonly", "");
-    field.style.position = "fixed";
-    field.style.opacity = "0";
-    document.body.appendChild(field);
-    field.select();
-    const taken = document.execCommand("copy");
-    document.body.removeChild(field);
-    return taken;
-  } catch {
-    return false;
-  }
 }
