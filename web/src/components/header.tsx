@@ -43,7 +43,10 @@ export function Header({ libraries }: { libraries: Library[] }) {
     <header className="header">
       <div className="header-inner">
         <Link className="brand" to="/">
-          <span className="brand-mark" aria-hidden="true" />
+          {/* Décoratif : le nom est écrit juste à côté, et une image annoncée
+              deux fois de suite est exactement ce qu'un lecteur d'écran ne
+              doit pas avoir à entendre. */}
+          <img className="brand-mark" src="/melyxar-64.png" alt="" aria-hidden="true" />
           {t("app.name")}
         </Link>
 

@@ -36,12 +36,12 @@
   letter-spacing: 0.02em;
 }
 
+/* Servi à 64 pixels pour un carré de 26 : c'est ce qui le garde net sur un
+   écran dense, où un pixel de la page en vaut deux de l'écran. */
 .brand-mark {
-  width: 10px;
-  height: 22px;
-  border-radius: 3px;
-  background: linear-gradient(to bottom, var(--accent-bright), var(--accent-dim));
-  box-shadow: 0 0 14px var(--accent-glow);
+  width: 26px;
+  height: 26px;
+  display: block;
 }
 
 .header-nav {
