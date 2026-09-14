@@ -94,6 +94,8 @@ en|menu_restore|Restore from a backup
 fr|menu_restore|Restaurer depuis une sauvegarde
 en|menu_uninstall|Uninstall
 fr|menu_uninstall|Désinstaller
+en|menu_lines|Count the lines of code
+fr|menu_lines|Compter les lignes de code
 en|menu_quit|Quit
 fr|menu_quit|Quitter
 en|prompt_choice|Your choice
@@ -168,6 +170,22 @@ en|step_clone|Cloning the repository
 fr|step_clone|Clonage du dépôt
 en|step_pull|Fetching the latest changes
 fr|step_pull|Récupération des dernières modifications
+en|section_lines|Lines of code
+fr|section_lines|Lignes de code
+en|step_fetch_main|Fetching the %s branch as well
+fr|step_fetch_main|Récupération de la branche %s également
+en|lines_on|%s: %s lines
+fr|lines_on|%s : %s lignes
+en|lines_ahead|%s is %s lines longer than %s
+fr|lines_ahead|%s compte %s lignes de plus que %s
+en|lines_behind|%s is %s lines shorter than %s
+fr|lines_behind|%s compte %s lignes de moins que %s
+en|lines_same|%s and %s are the same length
+fr|lines_same|%s et %s font la même longueur
+en|lines_changed|%s lines added, %s removed across %s files
+fr|lines_changed|%s lignes ajoutées, %s supprimées sur %s fichiers
+en|lines_counted|Counted without the built interface, the lock files and the images.
+fr|lines_counted|Compté sans l'interface compilée, les fichiers de verrouillage et les images.
 en|section_build|Building
 fr|section_build|Compilation
 en|build_notice|This takes 5 to 10 minutes the first time and 1 to 2 minutes afterwards.
@@ -877,6 +895,76 @@ action_status() {
   "$BINARY_PATH" --config "$CONFIG_FILE" doctor 2>/dev/null
 }
 
+# What the branch being deployed is measured against.
+COUNTED_AGAINST="main"
+
+# What is written by hand rather than produced. The built interface, the lock
+# files and the pictures are large enough to drown everything else, and a count
+# they take part in says nothing about the work.
+LINES_LEFT_OUT=(
+  ':!web/dist'
+  ':!*.lock'
+  ':!*.png'
+  ':!*.webp'
+  ':!*.svg'
+  ':!*.ico'
+)
+
+# How many lines one branch is made of.
+lines_written_on() {
+  local ref="$1"
+  # One line per file, ending in its count. A path can hold a colon, so the
+  # count is read from the end rather than from a field number.
+  git -C "$SOURCE_DIR" grep -I -c '^' "$ref" -- "${LINES_LEFT_OUT[@]}" |
+    awk -F: '{ total += $NF } END { print total + 0 }'
+}
+
+action_lines() {
+  fetch_source
+
+  if [[ "$BRANCH" == "$COUNTED_AGAINST" ]]; then
+    section "$(tr_msg section_lines)"
+    info "$(tr_fmt lines_on "$BRANCH" "$(lines_written_on "origin/${BRANCH}")")"
+    info "$(tr_msg lines_counted)"
+    return 0
+  fi
+
+  # The branch is cloned on its own, so the one it is compared with has to be
+  # asked for by name and put where a comparison can find it.
+  step "$(tr_fmt step_fetch_main "$COUNTED_AGAINST")" \
+    git -C "$SOURCE_DIR" fetch --depth 1 origin \
+    "+refs/heads/${COUNTED_AGAINST}:refs/remotes/origin/${COUNTED_AGAINST}"
+
+  section "$(tr_msg section_lines)"
+
+  local here there
+  there="$(lines_written_on "origin/${COUNTED_AGAINST}")"
+  here="$(lines_written_on "origin/${BRANCH}")"
+
+  info "$(tr_fmt lines_on "$COUNTED_AGAINST" "$there")"
+  info "$(tr_fmt lines_on "$BRANCH" "$here")"
+
+  if ((here > there)); then
+    success "$(tr_fmt lines_ahead "$BRANCH" "$((here - there))" "$COUNTED_AGAINST")"
+  elif ((here < there)); then
+    success "$(tr_fmt lines_behind "$BRANCH" "$((there - here))" "$COUNTED_AGAINST")"
+  else
+    success "$(tr_fmt lines_same "$BRANCH" "$COUNTED_AGAINST")"
+  fi
+
+  # What moved, which is a different question from how long each side is: a
+  # line rewritten counts on both sides and changes neither total.
+  local moved=()
+  read -r -a moved < <(
+    git -C "$SOURCE_DIR" diff --numstat \
+      "origin/${COUNTED_AGAINST}" "origin/${BRANCH}" -- "${LINES_LEFT_OUT[@]}" |
+      awk '$1 != "-" { added += $1; removed += $2; files += 1 }
+           END { printf "%d %d %d\n", added + 0, removed + 0, files + 0 }'
+  )
+  info "$(tr_fmt lines_changed "${moved[@]}")"
+  info "$(tr_msg lines_counted)"
+}
+
 action_backup() {
   local quiet="${1:-}"
   [[ "$quiet" != "quiet" ]] && section "$(tr_msg section_backup)"
@@ -993,6 +1081,7 @@ menu() {
   printf "   %b4%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_backup)"
   printf "   %b5%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_restore)"
   printf "   %b6%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_uninstall)"
+  printf "   %b7%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_lines)"
   printf "   %b0%b) %s\n" "${BOLD}${GRAY}" "${RESET}" "$(tr_msg menu_quit)"
   echo
 
@@ -1006,6 +1095,7 @@ menu() {
     4) action_backup ;;
     5) action_restore ;;
     6) action_uninstall ;;
+    7) action_lines ;;
     0) exit 0 ;;
     *) die "$(tr_fmt err_bad_choice "$choice")" ;;
   esac
@@ -1041,6 +1131,7 @@ main() {
     backup)    action_backup ;;
     restore)   action_restore ;;
     uninstall) action_uninstall ;;
+    lines)     action_lines ;;
     # Without a terminal there is nobody to answer the menu, and an install is
     # far too heavy a thing to start on a default nobody chose.
     "")        has_terminal || die "$(tr_msg err_no_terminal)"; menu ;;
