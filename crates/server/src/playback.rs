@@ -486,20 +486,35 @@ async fn preparation(state: &AppState, id: &str) -> Response {
 /// The playlist, which the server writes and the tool never sees.
 async fn playlist(state: &AppState, id: &str) -> Response {
     match live_session(state, id).await {
-        Ok(session) => (
-            StatusCode::OK,
-            [
-                (
-                    header::CONTENT_TYPE,
-                    HeaderValue::from_static("application/vnd.apple.mpegurl"),
-                ),
-                // The film is already cut: the list never changes, but it
-                // belongs to a session that will not outlive the evening.
-                (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
-            ],
-            session.playlist_text(),
-        )
-            .into_response(),
+        Ok(session) => {
+            let text = session.playlist_text();
+            // The one step of opening a film that left no trace at all, which
+            // is the step that says where the player was told to begin. A
+            // player asking for a part of the film nobody is at can be read
+            // two ways without this, and only one of them is the server's.
+            tracing::debug!(
+                session = %session.id,
+                begins_at = text
+                    .lines()
+                    .find_map(|line| line.strip_prefix("#EXT-X-START:TIME-OFFSET=")),
+                segments = session.playlist().segment_count(),
+                "the playlist was handed over"
+            );
+            (
+                StatusCode::OK,
+                [
+                    (
+                        header::CONTENT_TYPE,
+                        HeaderValue::from_static("application/vnd.apple.mpegurl"),
+                    ),
+                    // The film is already cut: the list never changes, but it
+                    // belongs to a session that will not outlive the evening.
+                    (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
+                ],
+                text,
+            )
+                .into_response()
+        }
         Err(error) => error.into_response(),
     }
 }
