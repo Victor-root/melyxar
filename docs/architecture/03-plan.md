@@ -155,6 +155,8 @@ Vérifié dans un vrai navigateur : un MKV que le navigateur refuse tel quel se 
 
 Vérifié sur le serveur en vrai : un film HEVC que le navigateur ne sait pas décoder est reconstruit en H.264, les segments sortent à la bonne place dans le film, et les étapes de préparation se suivent réellement (trois puis cinq segments prêts sur les six attendus, puis prêt).
 
+Fait depuis : les miniatures de la barre de lecture. Une image toutes les dix secondes, rassemblées par cent dans des planches, produites en une seule lecture du film par une passe de fond du scan, et la barre est désormais dessinée par Melyxar plutôt que par le navigateur, faute de quoi il n'y a nulle part où poser la miniature. Vérifié dans un vrai navigateur : l'image sous le curseur est bien celle du repère, aux deux bouts de la barre elle reste à l'écran, et la barre est là en plein écran. Les planches portent leur propre fiche sur le disque, pour qu'une table perdue ne coûte pas une deuxième nuit de lecture.
+
 À vérifier par le mainteneur : le son EAC3 reconstruit en AAC. Le navigateur de test ici est un Chromium sans les codecs sous licence, il ne sait décoder ni AAC ni H.264 ; Brave le sait. Toute la chaîne est vérifiée jusqu'au décodage lui-même. La courbe de volume et le rendu des différents repliements stéréo se jugent à l'oreille, pas ici.
 
 - Crate `streaming` : sessions, playlist générée par le serveur, segments à la demande, battement de cœur, nettoyage.
@@ -163,6 +165,7 @@ Vérifié sur le serveur en vrai : un film HEVC que le navigateur ne sait pas d�
 - État de préparation de lecture exposé par étapes nommées, avec progression réelle sur la production du premier segment et la mise en tampon.
 - Lecture des bandes annonces, locales et distantes.
 - Apparence des sous-titres réglable : taille, couleur, contour, fond, position.
+- Miniatures de la barre de lecture : planches produites au scan, barre dessinée par Melyxar, aperçu au survol.
 - Repliement stéréo appliqué : méthodes en préréglages de filtre, gain de compensation suivi d'une limitation contre la saturation.
 - Limite de sessions simultanées, arrêt propre sur SIGTERM, balayage au démarrage.
 - Résultat visible : le premier jalon utile du document 01. Un MKV avec audio EAC3 se lit dans Brave, un seek à 80 % fonctionne, aucun FFmpeg ne survit à la fermeture de l'onglet.
