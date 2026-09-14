@@ -353,12 +353,15 @@ impl Session {
     /// jumping back to that second of the film later serves a truncated
     /// segment, which breaks playback in a way nobody can read. It is exactly
     /// what asking the tool politely used to buy, at a fraction of the price.
-    async fn remove_what_was_half_written(&self, reached: Millis) {
+    async fn remove_what_was_half_written(&self, from: u32, reached: Millis) {
         let segment = self.playlist.segment.get().max(1);
-        // The segment holding the last position it reported is the one it was
-        // inside. Everything after that it cannot have finished either, and a
-        // tool writes them in order, so there are never more than a couple.
-        let mut index = (reached.get().max(0) / segment) as u32;
+        // The tool counts from where it was set going, so what it has written
+        // is an offset from there and never a place in the film. Read as a
+        // place in the film it names some entirely different part of it, and
+        // what gets removed is somebody else's finished work: a tool set going
+        // at the eight hundredth segment and eight seconds in would have the
+        // second and third segments of the film deleted from under a viewer.
+        let mut index = from + (reached.get().max(0) / segment) as u32;
         while self.path_of(index).exists() {
             if let Err(error) = tokio::fs::remove_file(self.path_of(index)).await {
                 tracing::warn!(
@@ -520,9 +523,9 @@ impl Session {
             // of a second of the viewer's wait, every time. What it leaves
             // half written is cleared away instead, which costs a file
             // removal.
-            let reached = at_work.reached();
+            let (was_at, reached) = (at_work.from, at_work.reached());
             at_work.process.stop_now().await?;
-            self.remove_what_was_half_written(reached).await;
+            self.remove_what_was_half_written(was_at, reached).await;
         }
         let stopping = stopping.elapsed();
 
@@ -1106,6 +1109,114 @@ mod tests {
         session.close().await;
     }
 
+    /// The commonest film in a personal collection: a picture every browser
+    /// reads, carried over untouched, and a soundtrack none of them do.
+    async fn film_with_a_soundtrack_no_browser_reads(path: &Path, seconds: u32) {
+        let made = tokio::process::Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("testsrc2=size=1280x720:rate=24:duration={seconds}"),
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("sine=frequency=440:duration={seconds}"),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-g",
+                "96",
+                "-c:a",
+                "eac3",
+                "-ac",
+                "6",
+                "-shortest",
+            ])
+            .arg(path)
+            .output()
+            .await
+            .expect("the tool runs");
+        assert!(made.status.success(), "the film was made");
+    }
+
+    #[tokio::test]
+    async fn the_commonest_film_of_all_hands_over_whole_segments() {
+        // A picture carried over untouched is produced faster than anything
+        // can be watched: the tool reports having passed the end of a segment
+        // within a few milliseconds of starting. If a segment is handed over
+        // on that word alone while the file is still being written, the viewer
+        // gets a black screen and a browser that says only that it could not
+        // play the film.
+        //
+        // Run several times over, because what is being caught is a race and
+        // one pass proves nothing about the next.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("film.mkv");
+        film_with_a_soundtrack_no_browser_reads(&source, 60).await;
+
+        for attempt in 0..3 {
+            let session = Session::open(
+                SessionId::new(),
+                Recipe {
+                    source: source.clone(),
+                    duration: Millis::new(60_000),
+                    streams: StreamSelection::default(),
+                    video: VideoOutput::Copy,
+                    audio: AudioOutput::Encode(
+                        melyxar_ffmpeg::command::AudioEncode::browser_stereo("aac"),
+                    ),
+                    if_the_card_refuses: Vec::new(),
+                },
+                directory.path().join(format!("session-{attempt}")),
+                ToolPaths::discover(None, None).expect("the tools are installed here"),
+            )
+            .await
+            .expect("the session opens");
+
+            for index in 0..3 {
+                let segment = session.segment(index).await.expect("a segment");
+                let whole = session.folder().join(format!("readable-{index}.mp4"));
+                let mut bytes =
+                    std::fs::read(session.folder().join("init.mp4")).expect("the header");
+                bytes.extend(std::fs::read(&segment).expect("the segment"));
+                std::fs::write(&whole, bytes).expect("written");
+
+                let read = tokio::process::Command::new("ffprobe")
+                    .args([
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "csv=p=0",
+                    ])
+                    .arg(&whole)
+                    .output()
+                    .await
+                    .expect("the analyser runs");
+                let lasted: f64 = String::from_utf8_lossy(&read.stdout)
+                    .trim()
+                    .parse()
+                    .unwrap_or_default();
+
+                assert!(
+                    lasted > 3.5,
+                    "attempt {attempt}, segment {index} was handed over holding {lasted} \
+                     seconds of a four second segment: a browser refuses that outright and \
+                     says only that it could not play the film"
+                );
+            }
+            session.close().await;
+        }
+    }
+
     #[tokio::test]
     async fn a_tool_stopped_where_it_stood_leaves_nothing_half_written_behind() {
         // This is what asking the tool politely used to buy, and it cost the
@@ -1120,10 +1231,10 @@ mod tests {
                 .expect("a segment");
         }
 
-        // Sixteen seconds in: it had finished the first four segments and was
-        // inside the fifth.
+        // Set going at the beginning and seventeen seconds in: it had finished
+        // the first four segments and was inside the fifth.
         session
-            .remove_what_was_half_written(Millis::new(17_000))
+            .remove_what_was_half_written(0, Millis::new(17_000))
             .await;
 
         for finished in 0..4 {
@@ -1144,6 +1255,40 @@ mod tests {
                 "segment {unfinished} was never finished and would be served truncated"
             );
         }
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn what_a_tool_wrote_is_counted_from_where_it_was_set_going() {
+        // Read as a place in the film, what the tool has written names some
+        // entirely different part of it, and the work of another run is
+        // deleted from under a viewer who is watching it.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 600).await;
+        for index in [0, 1, 2, 100, 101, 102] {
+            std::fs::write(session.folder().join(format!("segment-{index}.m4s")), b"x")
+                .expect("a segment");
+        }
+
+        // Set going at the hundredth segment, eight seconds in: it finished
+        // the hundredth and the hundred and first, and was inside the next.
+        session
+            .remove_what_was_half_written(100, Millis::new(9_000))
+            .await;
+
+        for kept in [0, 1, 2, 100, 101] {
+            assert!(
+                session
+                    .folder()
+                    .join(format!("segment-{kept}.m4s"))
+                    .exists(),
+                "segment {kept} was finished, by this run or another, and must be kept"
+            );
+        }
+        assert!(
+            !session.folder().join("segment-102.m4s").exists(),
+            "the one it was inside is the one that was never finished"
+        );
         session.close().await;
     }
 
