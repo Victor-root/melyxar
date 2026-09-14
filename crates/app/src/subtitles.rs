@@ -146,6 +146,46 @@ pub async fn as_web_vtt(
     Ok(destination)
 }
 
+/// Throws away every subtitle already converted, and says how many that was.
+///
+/// For testing the conversion itself rather than the cache in front of it. A
+/// track that is already converted is served in a millisecond and proves
+/// nothing about the minute it took to get there, so trying the slow path
+/// again means being able to empty this.
+///
+/// Only the files this writes: named after a track and ending in `.vtt`, in
+/// the folder this owns. Nothing else in there is touched, and a folder that
+/// does not exist yet is not an error, it is a server nobody has asked for a
+/// subtitle from.
+pub async fn forget_what_was_converted(state: &AppState) -> Result<usize> {
+    let folder = state.config().directories.subtitles();
+    let mut reading = match tokio::fs::read_dir(&folder).await {
+        Ok(reading) => reading,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(AppError::Directory(error)),
+    };
+
+    let mut thrown_away = 0;
+    while let Ok(Some(entry)) = reading.next_entry().await {
+        let path = entry.path();
+        if path.extension().and_then(|kind| kind.to_str()) != Some("vtt") {
+            continue;
+        }
+        match tokio::fs::remove_file(&path).await {
+            Ok(()) => thrown_away += 1,
+            Err(error) => tracing::warn!(
+                %error,
+                "a converted subtitle could not be thrown away; it will be served from the cache again"
+            ),
+        }
+    }
+    tracing::info!(
+        subtitles = thrown_away,
+        "converted subtitles were thrown away, so the next one asked for is converted afresh"
+    );
+    Ok(thrown_away)
+}
+
 /// The track, when it is a subtitle made of text.
 fn text_subtitle(track: &Track) -> Result<&SubtitleDetails> {
     let TrackKind::Subtitle(details) = &track.kind else {

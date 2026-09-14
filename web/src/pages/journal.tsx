@@ -30,6 +30,9 @@ export function JournalPage() {
   const [holding, setHolding] = useState("");
   const [failed, setFailed] = useState(false);
   const [copied, setCopied] = useState(false);
+  /* What the last throwing away came to, shown on the button itself so the
+     answer is where the question was asked. */
+  const [thrownAway, setThrownAway] = useState("");
   const [shown, setShown] = useState("");
   const selectable = useRef<HTMLTextAreaElement>(null);
 
@@ -99,6 +102,22 @@ export function JournalPage() {
             onClick={() => api.forgetJournal().then(() => look())}
           >
             {t("journal.forget")}
+          </button>
+          {/* For trying the slow path again. A subtitle already converted is
+              served in a millisecond and proves nothing about the minute it
+              took to get there. */}
+          <button
+            className="button button-small"
+            onClick={() =>
+              api
+                .forgetConvertedSubtitles()
+                .then(({ forgotten }) =>
+                  setThrownAway(t("journal.subtitles_gone", { count: forgotten })),
+                )
+                .catch(() => setFailed(true))
+            }
+          >
+            {thrownAway || t("journal.forget_subtitles")}
           </button>
         </span>
       </div>

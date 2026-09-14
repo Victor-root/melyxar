@@ -248,12 +248,23 @@ export function Player({
   }, [sourceId, audioId, subtitleId, fromTheStart, quality]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
+  /* A subtitle made of pictures has to be painted into the picture, so the one
+     chosen is part of what the server produces. Named here rather than read
+     off the method, which stays the same either way: choosing another one used
+     to change nothing at all, and the words only appeared once something else
+     forced a new session, which is a very long way of saying they never
+     appeared. */
+  const paintedIn =
+    plan?.subtitles.find((track) => track.id === subtitleId)?.burns_in === true
+      ? subtitleId
+      : null;
   /* What the server would actually be asked to produce. A subtitle handed
      over alongside the picture changes none of it, so turning subtitles on
      must not throw away a conversion already under way and make the viewer
-     wait through it again. One that can only be drawn into the picture does
-     change it, and says so by changing the method. */
-  const beingProduced = rebuilt ? `${plan.method}:${audioId ?? ""}:${quality.key}` : null;
+     wait through it again. */
+  const beingProduced = rebuilt
+    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${quality.key}`
+    : null;
   /* Which picture is on screen: the file itself, or one session of segments.
      A change here means a fresh element rather than a new address on the old
      one, because the two are fed in ways that cannot be swapped. */
@@ -283,10 +294,12 @@ export function Player({
       .openSession(
         sourceId,
         {
-          // No subtitle is named: a session produces the picture and the
-          // sound, and the words travel on their own beside them.
+          // A subtitle is named only when it has to be painted into the
+          // picture. One made of words travels on its own beside it, and
+          // naming it here would rebuild the film for nothing.
           profile: clientProfile(quality),
           audio_track_id: audioId,
+          subtitle_track_id: paintedIn,
         },
         controller.signal,
       )
@@ -312,7 +325,7 @@ export function Player({
         session.current = null;
       }
     };
-  }, [beingProduced, sourceId, audioId, quality]);
+  }, [beingProduced, sourceId, audioId, paintedIn, quality]);
 
   /* Asked for while the picture is not there yet, and not a moment longer:
      once the film is playing this would be a request a second for something

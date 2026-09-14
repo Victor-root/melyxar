@@ -483,6 +483,10 @@ export const api = {
   journalText: (query: JournalQuery, signal?: AbortSignal) =>
     getText(`/api/v1/system/journal/text?${journalQuery(query)}`, signal),
   forgetJournal: () => remove<{ forgotten: number }>("/api/v1/system/journal"),
+  /* For trying the slow path again: a subtitle already converted is served in
+     a millisecond and proves nothing about the minute it took to get there. */
+  forgetConvertedSubtitles: () =>
+    remove<{ forgotten: number }>("/api/v1/system/cache/subtitles"),
   rememberTracks: (body: {
     work_id: string;
     source_id: string;

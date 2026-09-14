@@ -33,6 +33,10 @@ pub fn router(state: AppState) -> Router {
             get(journal).delete(forget_journal),
         )
         .route("/api/v1/system/journal/text", get(journal_text))
+        .route(
+            "/api/v1/system/cache/subtitles",
+            axum::routing::delete(forget_converted_subtitles),
+        )
         .route("/api/v1/public/branding", get(public_branding))
         .merge(crate::catalogue::router())
         .merge(crate::images::router())
@@ -224,6 +228,15 @@ async fn forget_journal() -> Json<ForgottenView> {
     Json(ForgottenView {
         forgotten: melyxar_core::journal::forget(),
     })
+}
+
+/// Throws away the subtitles already converted, so the slow path can be tried
+/// again. A converted track is served in a millisecond and proves nothing
+/// about the minute it took to get there.
+async fn forget_converted_subtitles(State(state): State<AppState>) -> Result<Json<ForgottenView>> {
+    Ok(Json(ForgottenView {
+        forgotten: melyxar_app::subtitles::forget_what_was_converted(&state).await?,
+    }))
 }
 
 /// The visual identity, before anyone has signed in.
