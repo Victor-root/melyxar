@@ -17,7 +17,7 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::process::Stdio;
 
-use melyxar_core::time::Millis;
+use melyxar_core::thumbnails::{Layout, Thumbnails};
 use tokio::process::Command as TokioCommand;
 
 use crate::{FfmpegError, Result, ToolPaths};
@@ -25,51 +25,6 @@ use crate::{FfmpegError, Result, ToolPaths};
 /// Quality of the sheets, on the scale the tool uses: one is best, thirty one
 /// is worst. Four is where a thumbnail of this size stops improving.
 const QUALITY: u8 = 4;
-
-/// How the thumbnails of one film are laid out.
-///
-/// Said as a height rather than a width, because that is the side both the
-/// processor and a card are asked to scale by, and because a film is not
-/// always the shape its pixels suggest. The width that comes out is measured
-/// afterwards rather than assumed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Layout {
-    /// How far apart in the film two thumbnails stand.
-    pub every: Millis,
-    /// Height of one thumbnail, in pixels.
-    pub height: u32,
-    pub columns: u32,
-    pub rows: u32,
-}
-
-impl Layout {
-    /// How many thumbnails one sheet holds.
-    pub fn per_sheet(&self) -> u32 {
-        self.columns.saturating_mul(self.rows)
-    }
-
-    /// Which thumbnail covers a moment of the film.
-    pub fn index_at(&self, position: Millis) -> u32 {
-        if self.every.get() <= 0 {
-            return 0;
-        }
-        (position.get().max(0) / self.every.get()) as u32
-    }
-}
-
-/// What one reading of a film produced.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Made {
-    /// Thumbnails that really came out, which is not what the running time
-    /// suggests: the last slot of a film goes missing when only the pictures
-    /// standing on their own are read, and a container's stated running time
-    /// is wrong often enough that nothing may be built on it.
-    pub counted: u32,
-    /// Sheets written, numbered from zero.
-    pub sheets: u32,
-    pub thumbnail_width: u32,
-    pub thumbnail_height: u32,
-}
 
 /// The name the sheets are written under, which the tool fills in itself.
 ///
@@ -159,6 +114,13 @@ pub fn sheet_at(into: &Path, number: u32) -> std::path::PathBuf {
 ///
 /// Answers what really came out, measured rather than worked out: how many
 /// thumbnails, how many sheets, and the size of one picture on a sheet.
+///
+/// The folder is written into as it stands. Emptying it first is the caller's
+/// to do: a film read again is a film whose old sheets describe nothing.
+///
+/// A file that holds no picture at all comes back with nothing counted rather
+/// than as a fault: it is an answer about that file, and one worth writing
+/// down so the file is never read through again for the same nothing.
 pub async fn make(
     tools: &ToolPaths,
     source: &Path,
@@ -166,7 +128,7 @@ pub async fn make(
     layout: Layout,
     tone_map: bool,
     standing_pictures_only: bool,
-) -> Result<Made> {
+) -> Result<Thumbnails> {
     let output = TokioCommand::new(&tools.ffmpeg)
         .args(arguments(
             source,
@@ -190,10 +152,18 @@ pub async fn make(
     // One byte was asked for per thumbnail, so this is their number.
     let counted = output.stdout.len() as u32;
     if counted == 0 {
-        return Err(FfmpegError::Failed {
-            tool: "ffmpeg",
-            status: "0".to_string(),
-            output: "this film gave up no picture at all".to_string(),
+        // A reading that went well and gave nothing is an answer, not a
+        // fault: there are files in a film folder that hold no picture. Said
+        // as an answer so it is written down and the file is never read
+        // through again for the same nothing.
+        return Ok(Thumbnails {
+            every: layout.every,
+            width: 0,
+            height: 0,
+            columns: layout.columns,
+            rows: layout.rows,
+            counted: 0,
+            sheets: 0,
         });
     }
     let sheets = counted.div_ceil(layout.per_sheet().max(1));
@@ -203,11 +173,14 @@ pub async fn make(
     // and the page places every thumbnail by these two numbers.
     let first = sheet_at(into, 0);
     let (sheet_width, sheet_height) = size_of(&tools.ffprobe, &first).await?;
-    Ok(Made {
+    Ok(Thumbnails {
+        every: layout.every,
+        width: sheet_width / layout.columns.max(1),
+        height: sheet_height / layout.rows.max(1),
+        columns: layout.columns,
+        rows: layout.rows,
         counted,
         sheets,
-        thumbnail_width: sheet_width / layout.columns.max(1),
-        thumbnail_height: sheet_height / layout.rows.max(1),
     })
 }
 
@@ -226,6 +199,7 @@ async fn size_of(analyser: &Path, picture: &Path) -> Result<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use melyxar_core::time::Millis;
     use std::path::PathBuf;
 
     fn ten_seconds() -> Layout {
@@ -326,20 +300,6 @@ mod tests {
     }
 
     #[test]
-    fn a_thumbnail_is_found_by_where_the_viewer_is() {
-        let layout = ten_seconds();
-        assert_eq!(layout.per_sheet(), 100);
-        assert_eq!(layout.index_at(Millis::ZERO), 0);
-        assert_eq!(layout.index_at(Millis::new(9_999)), 0);
-        assert_eq!(layout.index_at(Millis::new(10_000)), 1);
-        assert_eq!(
-            layout.index_at(Millis::new(1_000_000)),
-            100,
-            "the first thumbnail of the second sheet"
-        );
-    }
-
-    #[test]
     fn a_sheet_is_named_by_its_number_alone() {
         let folder = PathBuf::from("/cache/trickplay/one");
         assert_eq!(sheet_at(&folder, 0), folder.join("0000.jpg"));
@@ -400,8 +360,8 @@ mod tests {
 
         assert_eq!(made.counted, 3, "nought, ten and twenty seconds");
         assert_eq!(made.sheets, 1);
-        assert_eq!(made.thumbnail_height, 90);
-        assert_eq!(made.thumbnail_width, 160, "the shape of the film is kept");
+        assert_eq!(made.height, 90);
+        assert_eq!(made.width, 160, "the shape of the film is kept");
         assert!(
             sheet_at(&into, 0).exists(),
             "the sheets are numbered from nought"
