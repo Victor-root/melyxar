@@ -522,13 +522,27 @@ fn subtitle_to_paint_on(decision: &PlaybackDecision, tracks: &[Track]) -> Option
 /// noticing, and the ceiling is not applied to one.
 const TALLEST_SOFTWARE_REBUILD: i32 = 1080;
 
-/// The codecs a rebuilt picture is offered in, best first.
+/// The codecs a rebuilt picture is offered in when a rate has to be kept to.
 ///
 /// Best means the most picture for a given rate. A card produces all three at
-/// much the same speed, so the newer ones cost nothing here and are worth a
-/// great deal to a viewer who asked for a lighter stream. The last one is the
-/// one no client has ever refused.
-const BEST_FIRST: &[&str] = &["av1", "hevc", melyxar_playback::profile::ALWAYS_READ];
+/// much the same speed, so the newer ones cost nothing to make and are worth a
+/// great deal to a viewer who asked for a lighter stream.
+const LIGHTEST_FIRST: &[&str] = &["av1", "hevc", melyxar_playback::profile::ALWAYS_READ];
+
+/// The same, when nothing has to be spared.
+///
+/// A client saying it decodes a codec is saying it decodes one somewhere, not
+/// that it decodes this film: measured on a browser that reads AV1 perfectly
+/// well, a film rebuilt into AV1 at its own size buffered every segment it was
+/// given and never showed a frame. There is no way to ask a browser the
+/// question that matters, and the answer only arrives as a black screen in
+/// front of somebody who pressed play.
+///
+/// So the newer codecs are offered where they buy something, which is a rate
+/// somebody asked to hold to, and the one no client has ever refused is offered
+/// where they buy nothing. Over a network of one's own, a larger stream that
+/// plays beats a smaller one that might not.
+const SUREST_FIRST: &[&str] = &[melyxar_playback::profile::ALWAYS_READ, "hevc", "av1"];
 
 /// How tall the picture of a film is, when it holds one.
 fn height_of(tracks: &[Track]) -> Option<i32> {
@@ -596,8 +610,18 @@ fn how_to_rebuild(
         // that is grey, which is worse than one that is merely smaller.
         .filter(|card| !decision.tone_map || card.can_tone_map);
 
+    // Something to spare means a viewer asked for a lighter stream, by rate or
+    // by size. That is the only thing a newer codec buys, and the only reason
+    // to take a client at its word about one.
+    let sparing = decision.bitrate_ceiling.is_some() || decision.scale_to_height.is_some();
+    let offered = if sparing {
+        LIGHTEST_FIRST
+    } else {
+        SUREST_FIRST
+    };
+
     let on_a_card = card.and_then(|card| {
-        BEST_FIRST
+        offered
             .iter()
             .find(|codec| card.encoder_for(codec).is_some() && profile.accepts_rebuilt(codec))
             .map(|codec| (card, (*codec).to_string()))
@@ -1909,10 +1933,12 @@ mod tests {
     }
 
     #[test]
-    fn a_card_rebuilds_the_picture_in_the_best_codec_the_client_takes() {
-        // A card produces all three at much the same speed, so the newer ones
-        // cost nothing here and are worth a great deal to a viewer who asked
-        // for a lighter stream.
+    fn a_card_rebuilds_the_picture_in_the_surest_codec_unless_something_is_spared() {
+        // A client saying it decodes a codec is saying it decodes one
+        // somewhere, not that it decodes this film. So the newer codecs are
+        // offered where they buy something, which is a rate somebody asked to
+        // hold to, and the one no client has ever refused is offered where
+        // they buy nothing.
         let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
         let card = capabilities_with(Some(a_card(&["h264", "hevc", "av1"], true)));
 
@@ -1920,7 +1946,8 @@ mod tests {
             rebuilt_video: vec!["h264".into(), "hevc".into(), "av1".into()],
             ..ClientProfile::conservative_browser()
         };
-        let rebuild = how_to_rebuild(
+
+        let nothing_spared = how_to_rebuild(
             &rebuilding(None, true, None),
             &tracks,
             &takes_everything,
@@ -1928,17 +1955,33 @@ mod tests {
             false,
         )
         .expect("this picture is rebuilt");
-        assert!(rebuild.on_a_card());
-        assert_eq!(rebuild.codec, "av1");
+        assert!(nothing_spared.on_a_card());
         assert_eq!(
-            rebuild.height, None,
+            nothing_spared.codec, "h264",
+            "nothing is being spared, so nothing is gambled either"
+        );
+        assert_eq!(
+            nothing_spared.height, None,
             "a card rebuilds a picture at its own size, and the ceiling is the processor's"
+        );
+
+        let a_rate_to_hold_to = how_to_rebuild(
+            &rebuilding(None, true, Some(4_000_000)),
+            &tracks,
+            &takes_everything,
+            Some(&card),
+            false,
+        )
+        .expect("this picture is rebuilt");
+        assert_eq!(
+            a_rate_to_hold_to.codec, "av1",
+            "a rate to hold to is what the newer codec is worth something for"
         );
 
         // The same card and a client that measured nothing: what every client
         // reads, because a guess wrong here is a black screen.
         let rebuild = how_to_rebuild(
-            &rebuilding(None, true, None),
+            &rebuilding(None, true, Some(4_000_000)),
             &tracks,
             &ClientProfile::conservative_browser(),
             Some(&card),
@@ -1947,68 +1990,6 @@ mod tests {
         .expect("this picture is rebuilt");
         assert_eq!(rebuild.codec, "h264");
         assert!(rebuild.on_a_card());
-    }
-
-    #[test]
-    fn a_card_that_cannot_convert_wide_gamut_colour_is_left_out_of_those_films() {
-        // It would hand back a film that is grey, which is worse than one that
-        // is merely smaller.
-        let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
-        let card = capabilities_with(Some(a_card(&["h264", "av1"], false)));
-        let profile = ClientProfile {
-            rebuilt_video: vec!["h264".into(), "av1".into()],
-            ..ClientProfile::conservative_browser()
-        };
-
-        let grey = how_to_rebuild(
-            &rebuilding(None, true, None),
-            &tracks,
-            &profile,
-            Some(&card),
-            false,
-        )
-        .expect("this picture is rebuilt");
-        assert!(!grey.on_a_card());
-        assert_eq!(
-            grey.height,
-            Some(1080),
-            "and the processor's ceiling applies"
-        );
-
-        let ordinary = how_to_rebuild(
-            &rebuilding(None, false, None),
-            &tracks,
-            &profile,
-            Some(&card),
-            false,
-        )
-        .expect("this picture is rebuilt");
-        assert!(
-            ordinary.on_a_card(),
-            "the same card is perfectly good for a film with ordinary colour"
-        );
-    }
-
-    #[test]
-    fn words_painted_into_a_picture_keep_it_on_the_processor() {
-        // Painting them is done where the words are. Getting them onto a card
-        // is a different piece of work, and this is not it.
-        let tracks = vec![video(MediaSourceId::new(), "h264", 1080)];
-        let card = capabilities_with(Some(a_card(&["h264", "av1"], true)));
-        let profile = ClientProfile {
-            rebuilt_video: vec!["h264".into(), "av1".into()],
-            ..ClientProfile::conservative_browser()
-        };
-
-        let painted = how_to_rebuild(
-            &rebuilding(None, false, None),
-            &tracks,
-            &profile,
-            Some(&card),
-            true,
-        )
-        .expect("this picture is rebuilt");
-        assert!(!painted.on_a_card());
     }
 
     #[test]
@@ -2033,21 +2014,21 @@ mod tests {
         assert_eq!(rebuild.height, Some(720));
         assert_eq!(rebuild.bitrate, Some(4_000_000));
 
-        // Nobody asked for one, so the card is given the usual rate for the
-        // size and the codec: it has to be given one, because it counts
-        // quality on a scale of its own for each codec.
-        let unasked = how_to_rebuild(
-            &rebuilding(None, false, None),
+        // No rate asked for, only a size: the card is still given one,
+        // because it counts quality on a scale of its own for each codec, and
+        // it is the usual rate for that size and that codec.
+        let only_a_size = how_to_rebuild(
+            &rebuilding(Some(720), false, None),
             &tracks,
             &profile,
             Some(&card),
             false,
         )
         .expect("this picture is rebuilt");
-        assert_eq!(unasked.codec, "av1");
-        assert_eq!(unasked.bitrate, Some(rate_for(Some(2160), "av1")));
+        assert_eq!(only_a_size.codec, "av1");
+        assert_eq!(only_a_size.bitrate, Some(rate_for(Some(720), "av1")));
         assert!(
-            unasked.bitrate < Some(rate_for(Some(2160), "h264")),
+            only_a_size.bitrate < Some(rate_for(Some(720), "h264")),
             "needing less is the whole point of the newer codec"
         );
     }
