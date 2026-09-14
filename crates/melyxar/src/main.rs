@@ -136,9 +136,10 @@ fn install_logging(config: &Config) {
 
 async fn serve(config: Config) -> anyhow::Result<()> {
     let address = SocketAddr::new(config.bind_address, config.port);
-    let (state, cut_short) = melyxar_app::startup::bring_up_and_say_what_was_cut_short(config)
+    let brought_up = melyxar_app::startup::bring_up_and_say_what_is_waiting(config)
         .await
         .context("bringing the server up")?;
+    let state = brought_up.state;
 
     if !state.can_play_media() {
         tracing::warn!(
@@ -157,7 +158,14 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     // of one must not mean starting it over by hand, or worse, forgetting to.
     // Only the server does this: the diagnostic and the command line have no
     // business starting work nobody asked them for.
-    melyxar_app::startup::take_up_again_what_a_restart_cut_short(&state, &cut_short).await;
+    melyxar_app::startup::take_up_again_what_a_restart_cut_short(&state, &brought_up.cut_short)
+        .await;
+
+    // A language changed in the configuration puts every film of that library
+    // back in the queue. Asking about them now is what makes the change
+    // something somebody watches happen, rather than something they discover
+    // months later.
+    melyxar_app::startup::ask_again_about(&state, &brought_up.waiting_on_a_new_language).await;
 
     melyxar_server::serve(address, state.clone(), shutdown_signal())
         .await

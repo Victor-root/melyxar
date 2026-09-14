@@ -75,6 +75,25 @@ impl Database {
         })
     }
 
+    /// Changes the language a library's films are described in.
+    ///
+    /// Answers whether anything moved, so a caller can tell a change from a
+    /// value written again: only a real change is worth asking a provider
+    /// about four hundred films again.
+    pub async fn set_metadata_language(&self, id: LibraryId, language: &str) -> Result<bool> {
+        let result = sqlx::query(
+            "UPDATE libraries SET metadata_language = ?, updated_at = ?
+             WHERE id = ? AND metadata_language <> ?",
+        )
+        .bind(language)
+        .bind(timestamp_to_text(now()))
+        .bind(id.to_db_string())
+        .bind(language)
+        .execute(self.writer())
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
     /// Every library with its roots, ordered by name.
     pub async fn list_libraries(&self) -> Result<Vec<Library>> {
         let rows = sqlx::query(
@@ -307,6 +326,39 @@ mod tests {
             ("disk-one".to_string(), PathBuf::from("/mnt/one/Films")),
             ("disk-two".to_string(), PathBuf::from("/mnt/two/Films")),
         ]
+    }
+
+    #[tokio::test]
+    async fn the_language_of_a_library_can_be_changed_afterwards() {
+        // Read once at creation and never again is what left an installation
+        // describing its films in a language nobody there speaks, with no way
+        // out short of editing the database by hand.
+        let database = database().await;
+        let library = database
+            .create_library("Films", LibraryKind::Movies, "fr", &roots())
+            .await
+            .expect("library created");
+
+        assert!(
+            database
+                .set_metadata_language(library.id, "en")
+                .await
+                .expect("written"),
+            "a real change is a change"
+        );
+        assert_eq!(
+            database.list_libraries().await.expect("listed")[0].metadata_language,
+            "en"
+        );
+
+        assert!(
+            !database
+                .set_metadata_language(library.id, "en")
+                .await
+                .expect("written"),
+            "writing the same value again is not a change, and must not send a \
+             provider four hundred films to describe once more"
+        );
     }
 
     #[tokio::test]
