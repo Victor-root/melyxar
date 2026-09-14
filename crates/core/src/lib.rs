@@ -14,6 +14,7 @@ pub mod journal;
 pub mod library;
 pub mod media;
 pub mod privacy;
+pub mod thumbnails;
 pub mod time;
 pub mod user;
 pub mod work;

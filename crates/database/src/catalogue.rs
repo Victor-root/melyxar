@@ -12,6 +12,7 @@ use melyxar_core::media::{
     AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, SubtitleDetails, SubtitleLayout, Track,
     TrackKind, VideoDetails,
 };
+use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::{now, Millis, Timestamp};
 use melyxar_core::work::{IdentificationNote, IdentificationState, Work, WorkKind};
 use sqlx::{Row, Sqlite};
@@ -77,6 +78,10 @@ pub struct CatalogueSummary {
     /// several scans and is the only way to tell a pass that is still going
     /// from one that finished.
     pub read_for_key_frames: i64,
+    /// Files that have the thumbnails of the playback bar, whatever shape they
+    /// were made to. Another whole reading of every file, counted for the same
+    /// reason.
+    pub with_thumbnails: i64,
 }
 
 /// A video that belongs to a work without being the work itself.
@@ -260,6 +265,10 @@ impl Database {
         let read: (i64,) = sqlx::query_as("SELECT count(*) FROM media_source_key_frames")
             .fetch_one(self.reader())
             .await?;
+        let with_thumbnails: (i64,) =
+            sqlx::query_as("SELECT count(*) FROM media_source_thumbnails")
+                .fetch_one(self.reader())
+                .await?;
 
         Ok(CatalogueSummary {
             works: works.0,
@@ -268,6 +277,7 @@ impl Database {
             files: files.0,
             missing_files: files.1,
             read_for_key_frames: read.0,
+            with_thumbnails: with_thumbnails.0,
         })
     }
 
@@ -496,6 +506,18 @@ impl Database {
             .execute(&mut *transaction)
             .await?;
         sqlx::query("DELETE FROM chapters WHERE source_id = ?")
+            .bind(id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        // Where the picture could be started and the thumbnails of the bar
+        // were both read out of the copy that is gone. Left behind, they would
+        // cut a film at positions belonging to another one and show a viewer
+        // pictures of it.
+        sqlx::query("DELETE FROM media_source_key_frames WHERE source_id = ?")
+            .bind(id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("DELETE FROM media_source_thumbnails WHERE source_id = ?")
             .bind(id.to_db_string())
             .execute(&mut *transaction)
             .await?;
@@ -764,6 +786,146 @@ impl Database {
              WHERE library_roots.library_id = ?",
         )
         .bind(library_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0)
+    }
+
+    /// Keeps what a reading of one film gave for the bar somebody drags along.
+    ///
+    /// Replaces whatever was there: a film read again has been read again.
+    /// Nothing counted is kept as well as anything else, because it is an
+    /// answer about the file rather than a failure to have one.
+    pub async fn store_thumbnails(
+        &self,
+        source_id: MediaSourceId,
+        made: &Thumbnails,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO media_source_thumbnails
+                 (source_id, every_ms, thumbnail_width, thumbnail_height,
+                  columns_per_sheet, rows_per_sheet, counted, sheets, made_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT (source_id) DO UPDATE
+             SET every_ms = excluded.every_ms,
+                 thumbnail_width = excluded.thumbnail_width,
+                 thumbnail_height = excluded.thumbnail_height,
+                 columns_per_sheet = excluded.columns_per_sheet,
+                 rows_per_sheet = excluded.rows_per_sheet,
+                 counted = excluded.counted,
+                 sheets = excluded.sheets,
+                 made_at = excluded.made_at",
+        )
+        .bind(source_id.to_db_string())
+        .bind(made.every.get())
+        .bind(made.width as i64)
+        .bind(made.height as i64)
+        .bind(made.columns as i64)
+        .bind(made.rows as i64)
+        .bind(made.counted as i64)
+        .bind(made.sheets as i64)
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// What one film has for the bar, when it has been read for it.
+    pub async fn thumbnails_of(&self, source_id: MediaSourceId) -> Result<Option<Thumbnails>> {
+        let row = sqlx::query(
+            "SELECT every_ms, thumbnail_width, thumbnail_height, columns_per_sheet,
+                    rows_per_sheet, counted, sheets
+             FROM media_source_thumbnails
+             WHERE source_id = ?",
+        )
+        .bind(source_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        Ok(Some(Thumbnails {
+            every: Millis::new(row.try_get("every_ms")?),
+            width: row.try_get::<i64, _>("thumbnail_width")? as u32,
+            height: row.try_get::<i64, _>("thumbnail_height")? as u32,
+            columns: row.try_get::<i64, _>("columns_per_sheet")? as u32,
+            rows: row.try_get::<i64, _>("rows_per_sheet")? as u32,
+            counted: row.try_get::<i64, _>("counted")? as u32,
+            sheets: row.try_get::<i64, _>("sheets")? as u32,
+        }))
+    }
+
+    /// Files whose thumbnails are missing or were made to another shape,
+    /// oldest first, a few at a time.
+    ///
+    /// The shape is part of the question rather than checked afterwards:
+    /// change the interval and every film stops matching, which is exactly
+    /// when they all have to be made again.
+    pub async fn sources_without_thumbnails(
+        &self,
+        library_id: LibraryId,
+        wanted: Layout,
+        limit: i64,
+    ) -> Result<Vec<MediaSourceId>> {
+        let rows = sqlx::query(
+            "SELECT media_sources.id
+             FROM media_sources
+             JOIN library_roots ON library_roots.id = media_sources.root_id
+             LEFT JOIN media_source_thumbnails
+                    ON media_source_thumbnails.source_id = media_sources.id
+                   AND media_source_thumbnails.every_ms = ?
+                   AND media_source_thumbnails.rows_per_sheet = ?
+                   AND media_source_thumbnails.columns_per_sheet = ?
+             WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL
+               AND media_source_thumbnails.source_id IS NULL
+             ORDER BY media_sources.added_at
+             LIMIT ?",
+        )
+        .bind(wanted.every.get())
+        .bind(wanted.rows as i64)
+        .bind(wanted.columns as i64)
+        .bind(library_id.to_db_string())
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                id.parse().map_err(|_| {
+                    DatabaseError::Corrupt("media source identifier is malformed".to_string())
+                })
+            })
+            .collect()
+    }
+
+    /// How many files of one library already have thumbnails of this shape.
+    ///
+    /// Counted so a scan says how far the whole pass has got rather than how
+    /// far this one run of it has: a pass picking up where it left off and one
+    /// starting again from nothing look alike from a bar that begins at zero.
+    pub async fn count_made_thumbnails(
+        &self,
+        library_id: LibraryId,
+        wanted: Layout,
+    ) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(*)
+             FROM media_source_thumbnails
+             JOIN media_sources ON media_sources.id = media_source_thumbnails.source_id
+             JOIN library_roots ON library_roots.id = media_sources.root_id
+             WHERE library_roots.library_id = ?
+               AND media_source_thumbnails.every_ms = ?
+               AND media_source_thumbnails.rows_per_sheet = ?
+               AND media_source_thumbnails.columns_per_sheet = ?",
+        )
+        .bind(library_id.to_db_string())
+        .bind(wanted.every.get())
+        .bind(wanted.rows as i64)
+        .bind(wanted.columns as i64)
         .fetch_one(self.reader())
         .await?;
         Ok(row.0)
@@ -1551,6 +1713,277 @@ mod tests {
             database.key_frames_of(source_id).await.expect("read"),
             Some(again)
         );
+    }
+
+    /// A film that has been described, which is what both long passes wait
+    /// for.
+    async fn a_described_film(
+        database: &Database,
+        library_id: LibraryId,
+        root_id: LibraryRootId,
+        name: &str,
+    ) -> MediaSourceId {
+        let (_, source_id) = work_with_source(database, library_id, root_id, name).await;
+        database
+            .store_analysis(
+                source_id,
+                &SourceAnalysis {
+                    container: Some("matroska,webm".to_string()),
+                    duration: Some(Millis::new(7_200_000)),
+                    overall_bitrate: None,
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+        source_id
+    }
+
+    fn every_ten_seconds() -> Layout {
+        Layout {
+            every: Millis::new(10_000),
+            height: 180,
+            columns: 10,
+            rows: 10,
+        }
+    }
+
+    fn made(counted: u32) -> Thumbnails {
+        Thumbnails {
+            every: Millis::new(10_000),
+            width: 320,
+            height: 180,
+            columns: 10,
+            rows: 10,
+            counted,
+            sheets: counted.div_ceil(100),
+        }
+    }
+
+    #[tokio::test]
+    async fn the_thumbnails_of_a_film_are_kept_and_read_back_whole() {
+        let (database, library_id, root_id) = library().await;
+        let source_id =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        assert_eq!(
+            database.thumbnails_of(source_id).await.expect("read"),
+            None,
+            "nothing has read this film for the bar"
+        );
+
+        let first = made(720);
+        database
+            .store_thumbnails(source_id, &first)
+            .await
+            .expect("kept");
+        assert_eq!(
+            database.thumbnails_of(source_id).await.expect("read"),
+            Some(first)
+        );
+
+        // Read again is read again: two answers about one file is one answer
+        // too many.
+        let again = made(430);
+        database
+            .store_thumbnails(source_id, &again)
+            .await
+            .expect("kept");
+        assert_eq!(
+            database.thumbnails_of(source_id).await.expect("read"),
+            Some(again)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_without_thumbnails_is_offered_up_once() {
+        let (database, library_id, root_id) = library().await;
+        let (_, undescribed) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        assert!(
+            database
+                .sources_without_thumbnails(library_id, every_ten_seconds(), 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "nothing has described this file yet, so there is nothing to read it for"
+        );
+        assert_eq!(
+            database
+                .count_made_thumbnails(library_id, every_ten_seconds())
+                .await
+                .expect("read"),
+            0
+        );
+
+        let source_id =
+            a_described_film(&database, library_id, root_id, "The.Long.Wait.2004.mkv").await;
+        assert_eq!(
+            database
+                .sources_without_thumbnails(library_id, every_ten_seconds(), 10)
+                .await
+                .expect("read"),
+            vec![source_id],
+            "only the one that has been described"
+        );
+        assert_ne!(source_id, undescribed);
+
+        database
+            .store_thumbnails(source_id, &made(720))
+            .await
+            .expect("kept");
+        assert!(
+            database
+                .sources_without_thumbnails(library_id, every_ten_seconds(), 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "a film read once is not read again"
+        );
+        assert_eq!(
+            database
+                .count_made_thumbnails(library_id, every_ten_seconds())
+                .await
+                .expect("read"),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_that_gave_up_nothing_is_never_read_through_again() {
+        // There are files in a film folder that hold no picture. Nought is an
+        // answer about the file, and reading a whole file again to be told the
+        // same nothing is the most expensive way to learn it.
+        let (database, library_id, root_id) = library().await;
+        let source_id =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        database
+            .store_thumbnails(source_id, &made(0))
+            .await
+            .expect("kept");
+        assert!(database
+            .sources_without_thumbnails(library_id, every_ten_seconds(), 10)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn films_made_to_another_shape_are_offered_up_again() {
+        // Change the interval and every film stops matching, which is exactly
+        // when they all have to be made again.
+        let (database, library_id, root_id) = library().await;
+        let source_id =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        database
+            .store_thumbnails(source_id, &made(720))
+            .await
+            .expect("kept");
+
+        let closer = Layout {
+            every: Millis::new(5_000),
+            ..every_ten_seconds()
+        };
+        assert_eq!(
+            database
+                .sources_without_thumbnails(library_id, closer, 10)
+                .await
+                .expect("read"),
+            vec![source_id]
+        );
+        assert_eq!(
+            database
+                .count_made_thumbnails(library_id, closer)
+                .await
+                .expect("read"),
+            0,
+            "none of them were made to this shape"
+        );
+
+        let wider = Layout {
+            columns: 5,
+            ..every_ten_seconds()
+        };
+        assert_eq!(
+            database
+                .sources_without_thumbnails(library_id, wider, 10)
+                .await
+                .expect("read"),
+            vec![source_id]
+        );
+    }
+
+    #[tokio::test]
+    async fn thumbnails_stay_inside_the_library_being_scanned() {
+        let (database, films, films_root) = library().await;
+        let series = database
+            .create_library(
+                "Series",
+                LibraryKind::Series,
+                "fr",
+                &[("disk-two".to_string(), PathBuf::from("/mnt/two/Series"))],
+            )
+            .await
+            .expect("library created");
+        let in_films =
+            a_described_film(&database, films, films_root, "Quiet.Harbour.2019.mkv").await;
+        let in_series = a_described_film(
+            &database,
+            series.id,
+            series.roots[0].id,
+            "Amber.Field.S01E01.mkv",
+        )
+        .await;
+
+        assert_eq!(
+            database
+                .sources_without_thumbnails(films, every_ten_seconds(), 10)
+                .await
+                .expect("read"),
+            vec![in_films]
+        );
+
+        database
+            .store_thumbnails(in_series, &made(720))
+            .await
+            .expect("kept");
+        assert_eq!(
+            database
+                .count_made_thumbnails(films, every_ten_seconds())
+                .await
+                .expect("read"),
+            0,
+            "a film of another library counts for nothing here"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_that_changed_underneath_loses_what_was_read_out_of_it() {
+        // Both were read out of the copy that is gone. Left behind, they would
+        // cut a film at positions belonging to another one and show a viewer
+        // pictures of it.
+        let (database, library_id, root_id) = library().await;
+        let source_id =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        database
+            .store_key_frames(source_id, &[Millis::ZERO, Millis::new(4_004)])
+            .await
+            .expect("kept");
+        database
+            .store_thumbnails(source_id, &made(720))
+            .await
+            .expect("kept");
+
+        database
+            .refresh_source_identity(source_id, 12_345, now())
+            .await
+            .expect("the file changed on disk");
+
+        assert_eq!(database.key_frames_of(source_id).await.expect("read"), None);
+        assert_eq!(database.thumbnails_of(source_id).await.expect("read"), None);
     }
 
     #[tokio::test]
