@@ -218,6 +218,12 @@ export function Player({
   /* The element carrying the words, so the moment they finish being read can
      be waited for. */
   const subtitleTrack = useRef<HTMLTrackElement | null>(null);
+  /* Whether the words are still on their way, and whether they never came.
+     Pulling a subtitle out of a film means reading the whole file through,
+     because the words are interleaved with the picture from end to end:
+     measured at fifteen to twenty seconds on a 4K film, and seven of those on
+     one film. Said nowhere, that wait is a subtitle that does not work. */
+  const [words, setWords] = useState<"coming" | "refused" | null>(null);
   /* Where the session about to be watched is opened at, told to the server
      when it is opened. The server then puts it in the playlist it writes, and
      every player reads it from there: left to find out for itself, one asks
@@ -627,6 +633,8 @@ export function Player({
   }, [placeCues]);
 
   const whenTheWordsAreRead = useCallback(() => placing.current(), []);
+  const theWordsArrived = useCallback(() => setWords(null), []);
+  const theWordsNeverCame = useCallback(() => setWords("refused"), []);
 
   /* Waited for on the element itself, and re-attached whenever the element is
      a different one: a film being rebuilt gets a fresh picture whenever the
@@ -635,18 +643,25 @@ export function Player({
      it likes. */
   const holdTheWords = useCallback(
     (element: HTMLTrackElement | null) => {
-      subtitleTrack.current?.removeEventListener("load", whenTheWordsAreRead);
+      const held = subtitleTrack.current;
+      held?.removeEventListener("load", whenTheWordsAreRead);
+      held?.removeEventListener("load", theWordsArrived);
+      held?.removeEventListener("error", theWordsNeverCame);
       subtitleTrack.current = element;
       if (!element) {
+        setWords(null);
         return;
       }
+      setWords("coming");
       element.addEventListener("load", whenTheWordsAreRead);
+      element.addEventListener("load", theWordsArrived);
+      element.addEventListener("error", theWordsNeverCame);
       // Said outright rather than left to the default mark: that mark is read
       // when the picture itself is first read, and words added to a picture
       // already playing would simply stay switched off.
       element.track.mode = "showing";
     },
-    [whenTheWordsAreRead],
+    [whenTheWordsAreRead, theWordsArrived, theWordsNeverCame],
   );
 
   /* Where the viewer stopped, applied once the browser knows how long the
@@ -702,6 +717,15 @@ export function Player({
               })}
             </span>
           )}
+        </p>
+      )}
+
+      {/* The words take as long as reading the film takes, and until they are
+          there the picture plays with nothing on it, which is exactly what a
+          subtitle that does not work looks like. */}
+      {words && !failed && (
+        <p className="notice notice-faint">
+          {t(words === "coming" ? "player.words_coming" : "player.words_refused")}
         </p>
       )}
 
