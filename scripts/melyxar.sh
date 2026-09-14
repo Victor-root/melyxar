@@ -32,11 +32,12 @@ BACKUP_KEEP="7"
 
 # Whether every command shows its own output as it goes.
 #
-# Off by default: a tidy screen is what somebody installing this wants, and
-# what fails is printed in full anyway. On while something is being worked on,
-# because "it did not work" with nothing to show is not a bug report. Set with
-# --verbose on the command line, or MELYXAR_VERBOSE=1 in the environment.
-VERBOSE="${MELYXAR_VERBOSE:-0}"
+# On while Melyxar is being built, because "it did not work" with nothing to
+# show is not a bug report, and a step that succeeds can still have said
+# something worth reading. To be turned off once the thing is finished, when a
+# tidy screen is what somebody installing it wants. --quiet does it for one
+# run, MELYXAR_VERBOSE=0 in the environment for good.
+VERBOSE="${MELYXAR_VERBOSE:-1}"
 
 # ── Language ──────────────────────────────────────────────────────────────────
 # The script speaks the language of the system, English by default. Same
@@ -1021,6 +1022,7 @@ main() {
   while (($#)); do
     case "$1" in
       -v | --verbose) VERBOSE=1 ;;
+      -q | --quiet) VERBOSE=0 ;;
       *) rest+=("$1") ;;
     esac
     shift

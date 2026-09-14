@@ -29,17 +29,20 @@ pose aucune question.
 
 ### Quand quelque chose ne va pas
 
-Par défaut le script reste sobre : une ligne par étape, et la sortie complète
-seulement de ce qui échoue. Avec `--verbose`, chaque commande affiche la sienne
-au fur et à mesure, la compilation comprise. C'est ce qu'il faut joindre à un
-rapport de problème, parce qu'une étape qui a réussi peut très bien avoir dit
-quelque chose d'utile en chemin.
+Tant que Melyxar est en construction, le script montre tout : chaque commande
+et sa sortie au fur et à mesure, la compilation comprise. C'est ce qu'il faut
+joindre à un rapport de problème, parce qu'une étape qui a réussi peut très
+bien avoir dit quelque chose d'utile en chemin.
+
+Pour retrouver l'affichage sobre, une ligne par étape et la sortie complète
+seulement de ce qui échoue :
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Victor-root/melyxar/develop/scripts/melyxar.sh) update --verbose
+bash <(curl -fsSL https://raw.githubusercontent.com/Victor-root/melyxar/develop/scripts/melyxar.sh) update --quiet
 ```
 
-`MELYXAR_VERBOSE=1` dans l'environnement fait la même chose.
+`MELYXAR_VERBOSE=0` dans l'environnement fait la même chose, une fois pour
+toutes. Ce sera le défaut le jour où le serveur sera fini.
 
 ## Où vivent les choses
 

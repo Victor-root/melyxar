@@ -43,6 +43,7 @@ pub async fn as_web_vtt(
         .await
         .is_ok_and(|file| file.len() > 0)
     {
+        tracing::debug!(track = %track_id, "a subtitle was already converted and is served from the cache");
         return Ok(destination);
     }
 
@@ -65,10 +66,22 @@ pub async fn as_web_vtt(
     }
 
     let tracks = database.tracks_of_source(source_id).await?;
-    let track = tracks
-        .iter()
-        .find(|track| track.id == track_id)
-        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("subtitle track")))?;
+    let Some(track) = tracks.iter().find(|track| track.id == track_id) else {
+        // Said out loud with what the file does carry: a track asked for and
+        // not found means the page and the database disagree, and the only way
+        // to see that is to print both sides.
+        tracing::warn!(
+            track = %track_id,
+            subtitles_this_file_carries = tracks
+                .iter()
+                .filter(|track| matches!(track.kind, TrackKind::Subtitle(_)))
+                .count(),
+            "a subtitle track was asked for that this file does not carry"
+        );
+        return Err(AppError::Domain(melyxar_core::Error::not_found(
+            "subtitle track",
+        )));
+    };
     let details = text_subtitle(track)?;
 
     // A track in a file of its own is taken whole; one inside the film is
@@ -86,7 +99,50 @@ pub async fn as_web_vtt(
             .map_err(AppError::Directory)?;
     }
 
-    melyxar_ffmpeg::subtitles::to_web_vtt(&tools.ffmpeg, &file, &destination, stream_index).await?;
+    tracing::info!(
+        track = %track_id,
+        codec = details.codec,
+        language = track.language.as_deref().unwrap_or("none"),
+        in_its_own_file = details.is_external,
+        stream = stream_index.unwrap_or(-1),
+        "converting a subtitle for the browser"
+    );
+
+    if let Err(error) =
+        melyxar_ffmpeg::subtitles::to_web_vtt(&tools.ffmpeg, &file, &destination, stream_index)
+            .await
+    {
+        tracing::warn!(
+            track = %track_id,
+            codec = details.codec,
+            %error,
+            "this subtitle could not be converted, so nothing will be shown"
+        );
+        return Err(error.into());
+    }
+
+    // A tool that answers "it went well" and writes nothing leaves a viewer
+    // with a player that shows no subtitle and a server that reported no
+    // fault. Measured rather than assumed, because that silence is exactly
+    // what nobody can work out from a screen.
+    let written = tokio::fs::metadata(&destination)
+        .await
+        .map(|file| file.len())
+        .unwrap_or(0);
+    if written == 0 {
+        tracing::warn!(
+            track = %track_id,
+            codec = details.codec,
+            stream = stream_index.unwrap_or(-1),
+            "the tool converted this subtitle without complaining and wrote nothing, \
+             so the player will show no subtitle at all"
+        );
+        return Err(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::Internal,
+            "this subtitle came back empty",
+        )));
+    }
+    tracing::info!(track = %track_id, bytes = written, "a subtitle is ready for the browser");
     Ok(destination)
 }
 
@@ -101,6 +157,13 @@ fn text_subtitle(track: &Track) -> Result<&SubtitleDetails> {
         // There is no text in a picture to convert. The playback decision
         // already draws these into the picture instead, and saying so beats
         // handing back an empty file.
+        tracing::warn!(
+            track = %track.id,
+            codec = details.codec,
+            "this subtitle is made of pictures, so it cannot be handed to the browser \
+             on its own: it has to be drawn into the film, which the playback decision \
+             asks for"
+        );
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
             "this subtitle is made of pictures and can only be drawn into the film",
         )));
