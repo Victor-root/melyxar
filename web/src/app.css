@@ -1543,3 +1543,90 @@
     min-height: 40px;
   }
 }
+
+/* --------------------------------------------------------------------------
+ * Journal
+ * ----------------------------------------------------------------------- */
+
+/* A tag that is ticked. Filled rather than outlined, because what somebody
+   needs to see at a glance is which of a dozen buttons are on. */
+.button-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.button-on:hover {
+  background: var(--accent-bright);
+}
+
+/* The box that narrows to a word. Sized like the buttons above it so the two
+   rows read as one control rather than as two ideas. */
+.field {
+  width: 100%;
+  padding: 9px 14px;
+  margin-bottom: var(--gap);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.field:focus {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 1px;
+}
+
+.journal {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  overflow-x: auto;
+  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.journal-line {
+  display: flex;
+  gap: var(--gap);
+  padding: 2px var(--gap);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.journal-line:nth-child(odd) {
+  background: var(--surface-raised);
+}
+
+.journal-at {
+  color: var(--text-faint);
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The tag, held to one width so the messages line up and the eye can run
+   down the column rather than hunt for where each line really starts. */
+.journal-tag {
+  flex: 0 0 5.5rem;
+  color: var(--accent-bright);
+}
+
+.journal-said {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.journal-warn .journal-said {
+  color: var(--accent-bright);
+}
+
+.journal-error .journal-said {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+
+.journal-debug .journal-said {
+  color: var(--text-faint);
+}

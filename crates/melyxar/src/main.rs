@@ -15,6 +15,8 @@ use melyxar_config::Config;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
+mod journal;
+
 #[derive(Parser)]
 #[command(name = "melyxar", version, about = "The Melyxar media server")]
 struct Cli {
@@ -112,13 +114,20 @@ fn install_logging(config: &Config) {
         .unwrap_or_else(|_| EnvFilter::new(config.logging.level.clone()));
 
     tracing_subscriber::registry()
-        .with(filter)
         .with(
             tracing_subscriber::fmt::layer()
                 .with_target(false)
                 // Every line carries when it happened, which is what makes a
                 // pasted log usable.
-                .with_timer(tracing_subscriber::fmt::time::uptime()),
+                .with_timer(tracing_subscriber::fmt::time::uptime())
+                // The level belongs to the console copy alone. What the screen
+                // keeps is decided next, and deliberately not by this.
+                .with_filter(filter),
+        )
+        .with(
+            journal::KeepWhatWasSaid.with_filter(tracing_subscriber::filter::filter_fn(
+                journal::worth_keeping,
+            )),
         )
         .init();
 

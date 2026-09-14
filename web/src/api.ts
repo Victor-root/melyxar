@@ -204,6 +204,31 @@ export interface Jobs {
   recent: Job[];
 }
 
+/** One line the server said, with the tag saying which part said it. */
+export interface JournalLine {
+  at: string;
+  /** error, warn, info, debug or trace. */
+  level: string;
+  /** One word for the part of the server that wrote it. */
+  tag: string;
+  /** The module it came from, for finding the line in the source. */
+  module: string;
+  message: string;
+}
+
+/** What the server has been saying, plus the tags it really wrote. */
+export interface Journal {
+  tags: { name: string; lines: number }[];
+  lines: JournalLine[];
+}
+
+/** What a screen asks the journal for. */
+export interface JournalQuery {
+  tags?: string[];
+  holding?: string;
+  most?: number;
+}
+
 export interface SystemInfo {
   server_name: string;
   version: string;
@@ -244,6 +269,15 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
     throw new ApiError(body?.code ?? "generic", response.status);
   }
   return (await response.json()) as T;
+}
+
+/** Turns what a screen ticked into the query the server reads. */
+function journalQuery(query: JournalQuery): string {
+  const parts = new URLSearchParams();
+  if (query.tags && query.tags.length > 0) parts.set("tags", query.tags.join(","));
+  if (query.holding) parts.set("holding", query.holding);
+  if (query.most) parts.set("most", String(query.most));
+  return parts.toString();
 }
 
 /** The same as above for a report the server renders itself. */
@@ -441,6 +475,14 @@ export const api = {
      rendered by the server so that it says exactly what the command line
      says. */
   report: (signal?: AbortSignal) => getText("/api/v1/system/diagnostics/text", signal),
+  /* What the server has been saying, narrowed to the tags somebody ticked.
+     The whole point is that one person can say "send me playback and
+     subtitles" and the other sends exactly that. */
+  journal: (query: JournalQuery, signal?: AbortSignal) =>
+    get<Journal>(`/api/v1/system/journal?${journalQuery(query)}`, signal),
+  journalText: (query: JournalQuery, signal?: AbortSignal) =>
+    getText(`/api/v1/system/journal/text?${journalQuery(query)}`, signal),
+  forgetJournal: () => remove<{ forgotten: number }>("/api/v1/system/journal"),
   rememberTracks: (body: {
     work_id: string;
     source_id: string;

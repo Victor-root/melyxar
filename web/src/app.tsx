@@ -12,6 +12,7 @@ import { LibraryPage } from "./pages/library";
 import { SearchPage } from "./pages/search";
 import { WorkPage } from "./pages/work";
 import { ActivityPage } from "./pages/activity";
+import { JournalPage } from "./pages/journal";
 import { SettingsPage } from "./pages/settings";
 import { RunningContext, useWatchedWork } from "./running";
 import { useSettings } from "./settings";
@@ -43,6 +44,7 @@ export function App() {
         <Route path="/search" element={<SearchPage libraries={libraries} />} />
         <Route path="/work/:id" element={<WorkPage />} />
         <Route path="/activity" element={<ActivityPage libraries={libraries} />} />
+        <Route path="/journal" element={<JournalPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
       </Routes>
