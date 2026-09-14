@@ -5,11 +5,16 @@
 //! seventeenth minute while the page asked for the opening of the film, with
 //! nothing anywhere saying which of the two was wrong.
 //!
-//! So the page may write here. What it may not do is choose its own words. It
-//! sends one fact out of a list this module defines, and the server writes the
-//! line itself. A page cannot tell the journal anything it has no vocabulary
-//! for, whatever else ends up running in the browser, and reading this file is
-//! enough to know exactly what can appear under the `page` tag.
+//! So the page may write here. What it may not do is choose what it is saying.
+//! It sends one fact out of a list this module defines, and the server writes
+//! the line itself. A page cannot tell the journal anything it has no
+//! vocabulary for, whatever else ends up running in the browser, and reading
+//! this file is enough to know exactly what can appear under the `page` tag.
+//!
+//! One fact carries wording rather than numbers, and only one: a library
+//! naming what it could not do with a film this server produced, which is the
+//! answer and cannot be a number. It is cut short here, and it is still a fact
+//! this module named.
 
 use axum::extract::State;
 use axum::{Json, Router};
@@ -47,7 +52,26 @@ enum Seen {
         /// The number of the first segment it asked for.
         first_segment: u32,
     },
+    /// The library gave up on this film, in its own words, and whether the
+    /// browser's own reader was handed the playlist instead.
+    ///
+    /// The one place a page's own wording reaches the journal, because the
+    /// wording is the answer: it is the library naming what it could not do
+    /// with a film this server produced. Cut short by the server all the same,
+    /// and it is still a fact this module named, not a message a page chose to
+    /// send.
+    PlaybackRefused {
+        because: String,
+        /// Whether the film went on playing, read by the browser itself.
+        browser_took_over: bool,
+    },
 }
+
+/// How much of the library's wording is kept.
+///
+/// Long enough for a type, a detail and a sentence, which is what those
+/// refusals are made of. A journal is read by eye.
+const ENOUGH_OF_A_REFUSAL: usize = 300;
 
 /// Which session the fact is about, and the fact.
 #[derive(Debug, Deserialize)]
@@ -60,6 +84,14 @@ struct FromThePage {
 #[derive(Debug, Serialize)]
 struct Written {
     written: bool,
+}
+
+/// Keeps what is worth reading of a refusal, on a boundary between characters.
+fn cut_short(words: &str) -> &str {
+    match words.char_indices().nth(ENOUGH_OF_A_REFUSAL) {
+        Some((at, _)) => &words[..at],
+        None => words,
+    }
 }
 
 async fn what_the_page_saw(
@@ -92,6 +124,15 @@ async fn what_the_page_saw(
             first_segment,
             "the page began the film here"
         ),
+        Seen::PlaybackRefused {
+            because,
+            browser_took_over,
+        } => tracing::warn!(
+            %session,
+            because = cut_short(&because),
+            browser_took_over,
+            "the library gave up on this film"
+        ),
     }
 
     Ok(Json(Written { written: true }))
@@ -120,7 +161,18 @@ mod tests {
                 assert_eq!(began_at_second, 0.0);
                 assert_eq!(first_segment, 0);
             }
+            other => panic!("read as the wrong fact: {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_refusal_is_cut_short_by_the_server_and_never_by_the_page() {
+        let long = "x".repeat(ENOUGH_OF_A_REFUSAL * 3);
+        assert_eq!(cut_short(&long).len(), ENOUGH_OF_A_REFUSAL);
+        assert_eq!(cut_short("short enough"), "short enough");
+        // On a boundary between characters, so a journal stays readable.
+        let accented = "é".repeat(ENOUGH_OF_A_REFUSAL * 2);
+        assert_eq!(cut_short(&accented).chars().count(), ENOUGH_OF_A_REFUSAL);
     }
 
     #[test]
