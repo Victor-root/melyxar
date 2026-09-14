@@ -217,6 +217,7 @@ pub fn prepare_directories(config: &Config) -> Result<()> {
         &config.directories.uploads(),
         &config.directories.images(),
         &config.directories.subtitles(),
+        &config.directories.thumbnails(),
         &config.directories.backups(),
     ] {
         std::fs::create_dir_all(directory).map_err(AppError::Directory)?;

@@ -14,6 +14,7 @@ use std::sync::Arc;
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::media::Track;
 use melyxar_core::privacy::MediaName;
+use melyxar_core::thumbnails::Thumbnails;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::user::DownmixMethod;
 use melyxar_core::work::{state_for_position, PlaybackState, DEFAULT_WATCHED_THRESHOLD};
@@ -78,6 +79,10 @@ pub struct PlayPlan {
     /// this size" is the answer to the only question anybody asks about a film
     /// that stutters.
     pub rebuild: Option<PictureRebuild>,
+    /// The little pictures of the playback bar, when this film has been read
+    /// for them. Absent is an ordinary answer: a film scanned before the pass
+    /// ran shows a bare bar, which is what every film did before it existed.
+    pub thumbnails: Option<Thumbnails>,
 }
 
 /// How the picture is rebuilt, when it is.
@@ -265,6 +270,10 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         .filter(|progress| progress.state == PlaybackState::InProgress)
         .map(|progress| progress.position);
 
+    // Nothing here waits on them or makes them: a film that has none is a film
+    // whose bar shows no pictures, and that is all.
+    let thumbnails = database.thumbnails_of(source.id).await.unwrap_or_default();
+
     Ok(PlayPlan {
         source_id: source.id,
         work_id: source.work_id,
@@ -277,6 +286,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         downmix,
         downmix_gain,
         rebuild,
+        thumbnails,
     })
 }
 

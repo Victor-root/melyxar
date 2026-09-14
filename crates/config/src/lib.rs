@@ -101,6 +101,14 @@ impl Directories {
         self.cache.join("subtitles")
     }
 
+    /// Directory holding the sheets of thumbnails shown on the playback bar.
+    ///
+    /// In the cache with everything else read out of a film: they are made
+    /// again from the film in a single reading.
+    pub fn thumbnails(&self) -> PathBuf {
+        self.cache.join("thumbnails")
+    }
+
     pub fn backups(&self) -> PathBuf {
         self.data.join("backups")
     }
@@ -155,6 +163,40 @@ pub struct ScanConfig {
     /// word over a provider's. Turning it on only ever makes the server read;
     /// writing into a media folder is a separate matter and a separate switch.
     pub read_companion_files: bool,
+}
+
+/// The little pictures shown while somebody drags along the playback bar.
+///
+/// Making them means reading every film through from end to end, so this is
+/// the one piece of background work worth being able to switch off outright.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThumbnailsConfig {
+    pub enabled: bool,
+    /// How far apart in the film two thumbnails stand.
+    ///
+    /// Ten seconds, which is what Emby and Jellyfin settle on. Closer means a
+    /// smoother preview and more of everything: more reading, more sheets, more
+    /// disk.
+    pub every_seconds: u32,
+    /// Height of one thumbnail, in pixels. The width follows the film's shape.
+    pub height: u32,
+    /// How many thumbnails stand on one sheet.
+    ///
+    /// A hundred of them covers a thousand seconds of film in one request.
+    pub columns: u32,
+    pub rows: u32,
+}
+
+impl Default for ThumbnailsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            every_seconds: 10,
+            height: 180,
+            columns: 10,
+            rows: 10,
+        }
+    }
 }
 
 /// Logging behaviour.
@@ -228,6 +270,8 @@ pub struct Config {
     #[serde(default)]
     pub scan: ScanConfig,
     #[serde(default)]
+    pub thumbnails: ThumbnailsConfig,
+    #[serde(default)]
     pub logging: LoggingConfig,
     /// Left out entirely when empty, so that a starting file printed by the
     /// installer can have a library appended to it as it stands. An empty list
@@ -254,6 +298,7 @@ impl Default for Config {
             media_tools: MediaToolsConfig::default(),
             limits: LimitsConfig::default(),
             scan: ScanConfig::default(),
+            thumbnails: ThumbnailsConfig::default(),
             logging: LoggingConfig::default(),
             libraries: Vec::new(),
         }

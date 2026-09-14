@@ -19,6 +19,7 @@ pub mod scan;
 pub mod startup;
 pub mod state;
 pub mod subtitles;
+pub mod thumbnails;
 
 pub use state::AppState;
 

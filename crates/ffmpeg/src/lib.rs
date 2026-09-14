@@ -20,7 +20,7 @@ pub mod images;
 pub mod probe;
 pub mod process;
 pub mod subtitles;
-pub mod trickplay;
+pub mod thumbnails;
 
 use std::path::PathBuf;
 
