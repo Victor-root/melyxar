@@ -180,10 +180,12 @@ Fait :
 - Choix de qualité par le spectateur (taille et débit), qui devient un plafond dans le profil client.
 - Décodage sur la carte dans les codecs qu'elle a prouvé savoir lire, établis un par un, avec repli sur le processeur pour les autres.
 - Un segment rendu dès que l'outil annonce l'avoir dépassé, au lieu d'attendre que le suivant soit produit par-dessus.
+- Relevé des images clés à l'analyse, playlist découpée dessus quand l'image est recopiée : un saut atterrit où il vise au lieu de plusieurs secondes trop tôt. Passe de fond reprise par le scan suivant, comptée dans le rapport.
 
 Reste à faire :
 
 - **NVENC pour Nvidia et VAAPI vérifié pour AMD.** Le mainteneur possède les deux. VAAPI couvre déjà AMD sur le papier, et rien ne l'a prouvé sur une vraie carte AMD ; Nvidia demande un chemin distinct. Les deux se branchent au même endroit : `HardwareAcceleration`, le nom de l'encodeur, et les filtres correspondants.
+- **Lecture directe de l'index du conteneur** pour relever les images clés : Jellyfin lit la structure d'un fichier Matroska, ce qui est quasi instantané, et garde l'analyseur en repli. Ici tout passe par l'analyseur, qui lit le fichier de bout en bout. Mesuré à 283 Mo/s, soit une passe unique de l'ordre de deux heures sur une collection de trois cents films.
 - **QSV pour Intel.** VAAPI marche sur l'Arc ; QSV est parfois plus rapide sur les cartes Intel récentes. À mesurer avant de l'ajouter, pas à supposer.
 - Vignettes de chapitres et aperçu de la barre de lecture en planches, **toujours converties en SDR quand la source est HDR** pour éviter des images délavées. Intervalle et résolution configurables, génération activable par bibliothèque.
 - Résultat visible attendu : un film 4K HDR se lit en SDR avec moins d'un cœur de processeur utilisé, et ses vignettes sont en couleurs correctes.

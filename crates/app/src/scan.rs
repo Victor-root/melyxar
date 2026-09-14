@@ -39,6 +39,11 @@ pub struct ScanReport {
     pub restored: usize,
     pub unchanged: usize,
     pub analysed: usize,
+    /// Files read for where their picture can be started.
+    ///
+    /// Reading one means reading the whole file through once, so a scan that
+    /// was stopped leaves the rest for the next one.
+    pub key_frames_read: usize,
     /// Files the analyser could not read. Recorded rather than hidden: a file
     /// nobody can analyse is a file nobody will be able to play either.
     pub unreadable_files: usize,
@@ -258,6 +263,7 @@ pub async fn scan_library(
     report.renamed = reread.renamed;
     report.merged = reread.merged;
     analyse_pending(state, library, handle, &mut report).await?;
+    read_where_films_can_be_started(state, handle, &mut report).await?;
 
     if report.changed_anything() {
         database.bump_library_version(library.id).await?;
@@ -274,6 +280,7 @@ pub async fn scan_library(
         restored = report.restored,
         unchanged = report.unchanged,
         analysed = report.analysed,
+        key_frames_read = report.key_frames_read,
         extras = report.extras,
         subtitles = report.external_subtitles,
         cancelled = report.cancelled,
@@ -872,6 +879,124 @@ async fn analyse_pending(
         }
     }
     Ok(())
+}
+
+/// How many files one scan reads for where their picture can be started.
+///
+/// A bound on what is loaded at once rather than on the work: a library of a
+/// hundred thousand films must not become a hundred thousand rows in memory to
+/// answer one question. What is left over is picked up by the next scan.
+const READ_IN_ONE_SCAN: i64 = 5_000;
+
+/// Reads every described film for the places its picture can be started.
+///
+/// A pass of its own, after the analysis, for the same reason the analysis is
+/// a pass of its own: it reads each file through from end to end, which is the
+/// slow half again, and it has to survive being stopped.
+///
+/// Only the film knows where its picture stands on its own, and it is the only
+/// thing that decides where a stream carried over untouched may be cut. Read
+/// once, here, and never while somebody is watching.
+async fn read_where_films_can_be_started(
+    state: &AppState,
+    handle: &JobHandle,
+    report: &mut ScanReport,
+) -> Result<()> {
+    let Some(tools) = state.tools() else {
+        return Ok(());
+    };
+    let database = state.database();
+    let waiting = database
+        .sources_without_key_frames(READ_IN_ONE_SCAN)
+        .await?;
+    if waiting.is_empty() {
+        return Ok(());
+    }
+
+    handle.set_total(waiting.len() as i64).await;
+    let analyser = tools.ffprobe.clone();
+    let owned_database = database.clone();
+    let owned_handle = handle.clone();
+
+    // Bounded like the analysis: this is disk from end to end, and a scan must
+    // leave the film somebody is watching alone.
+    let read = melyxar_jobs::for_each_bounded(
+        waiting,
+        state.config().limits.concurrent_probes,
+        move |source_id| {
+            let analyser = analyser.clone();
+            let database = owned_database.clone();
+            let handle = owned_handle.clone();
+            async move {
+                if handle.is_cancelled() {
+                    return false;
+                }
+                let done = read_one_film_for_its_key_frames(&database, &analyser, source_id).await;
+                handle.advance(1).await;
+                done
+            }
+        },
+    )
+    .await;
+
+    report.key_frames_read = read.into_iter().filter(|done| *done).count();
+    Ok(())
+}
+
+/// Reads one film, and says whether it gave up anything usable.
+async fn read_one_film_for_its_key_frames(
+    database: &Database,
+    analyser: &Path,
+    source_id: MediaSourceId,
+) -> bool {
+    let Ok(Some(source)) = database.playable_source(source_id).await else {
+        return false;
+    };
+    if source.missing {
+        return false;
+    }
+
+    match melyxar_ffmpeg::probe::key_frames(analyser, &source.path).await {
+        Ok(found) if !found.is_empty() => {
+            match database.store_key_frames(source_id, &found).await {
+                Ok(()) => true,
+                Err(error) => {
+                    tracing::warn!(error = %error, "where a film can be started could not be kept");
+                    false
+                }
+            }
+        }
+        // A film that gave up nothing is left alone rather than written down
+        // as having none: written down it would never be asked again, and a
+        // file that was merely busy would be cut on a grid for ever.
+        Ok(_) => {
+            tracing::warn!(
+                file = %MediaName::new(
+                    source
+                        .path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or_default()
+                ),
+                "this film says nowhere its picture can be started, so it is cut on the usual grid"
+            );
+            false
+        }
+        Err(error) => {
+            tracing::warn!(
+                file = %MediaName::new(
+                    source
+                        .path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or_default()
+                ),
+                error = %error,
+                "this film could not be read for where its picture can be started"
+            );
+            false
+        }
+    }
 }
 
 /// A file waiting to be analysed, with everything needed to reach it.

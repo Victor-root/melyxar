@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 
+use melyxar_core::time::Millis;
 use serde::Deserialize;
 use tokio::process::Command as TokioCommand;
 
@@ -289,6 +290,97 @@ pub async fn probe(analyser: &Path, media: &Path) -> Result<ProbeReport> {
     }
 }
 
+/// Reads where the picture of a film can be started.
+///
+/// Almost every picture in a film says only what changed since the one before
+/// it; every few seconds there is one that stands on its own. Those are the
+/// only places a stream carried over untouched can begin, so they are the only
+/// places a playlist may cut such a film.
+///
+/// Read from the packets rather than from the frames. Both answer the same
+/// question and the first does it without decoding anything: on a wide gamut
+/// film the second would decode a thousand large pictures to learn where they
+/// were. It still reads the whole file once, which is why this belongs to the
+/// analysis and never to the moment somebody presses play.
+pub async fn key_frames(analyser: &Path, media: &Path) -> Result<Vec<Millis>> {
+    let output = TokioCommand::new(analyser)
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "packet=pts_time,flags",
+            "-of",
+            "csv=p=0",
+        ])
+        .arg(media)
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        return Err(FfmpegError::Failed {
+            tool: "analyser",
+            status: output.status.to_string(),
+            output: String::from_utf8_lossy(&output.stderr)
+                .lines()
+                .take(5)
+                .collect::<Vec<_>>()
+                .join(" | "),
+        });
+    }
+
+    Ok(read_key_frames(&String::from_utf8_lossy(&output.stdout)))
+}
+
+/// Picks the key frames out of a packet listing.
+///
+/// One line per packet, the time and then the flags. A packet that stands on
+/// its own is marked with a K; everything else is a change to the one before.
+/// A packet with no time on it is skipped rather than guessed at: a position
+/// invented here becomes a segment boundary where there is no picture.
+pub fn read_key_frames(listing: &str) -> Vec<Millis> {
+    let mut found: Vec<Millis> = listing
+        .lines()
+        .filter_map(|line| {
+            let (when, flags) = line.split_once(',')?;
+            flags.contains('K').then(|| seconds_to_ms(when)).flatten()
+        })
+        .map(Millis::new)
+        .collect();
+
+    // Ascending, because everything downstream walks them in order, and a
+    // container can list a packet before the one it follows.
+    found.sort_unstable();
+    found.dedup();
+    found
+}
+
+/// Groups key frames into the boundaries a playlist can use.
+///
+/// A cut is made at a key frame as soon as one lies far enough past the last
+/// cut. Every boundary is therefore a place the film can really begin, and the
+/// segments come out as close to the wanted length as the film allows: a film
+/// with a key frame every ten seconds gets ten second segments, because it has
+/// nowhere else to be cut.
+///
+/// The first boundary is where the picture begins, whatever the key frames
+/// say. A playlist that began at the third second would be a playlist missing
+/// the first three.
+pub fn boundaries_every(key_frames: &[Millis], wanted: Millis) -> Vec<Millis> {
+    let mut boundaries = vec![Millis::ZERO];
+    let wanted = wanted.get().max(1);
+
+    for frame in key_frames {
+        if frame.get() - boundaries[boundaries.len() - 1].get() >= wanted {
+            boundaries.push(*frame);
+        }
+    }
+    boundaries
+}
+
 /// Parses a report that was already captured, which is what tests use.
 pub fn parse_report(text: &str) -> Result<ProbeReport> {
     serde_json::from_str(text).map_err(|error| FfmpegError::MalformedReport(error.to_string()))
@@ -308,6 +400,147 @@ pub fn parse_rational(value: &str) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_packet_that_stands_on_its_own_is_a_place_the_film_can_begin() {
+        // One line per packet, the time and then the flags. A packet marked
+        // with a K stands on its own; everything else is a change to the one
+        // before it, and starting there means starting from a change with
+        // nothing to change.
+        let listing = "0.000000,K__\n\
+                       0.041667,___\n\
+                       4.004000,K__\n\
+                       4.045667,___\n\
+                       8.008000,K_C\n";
+        assert_eq!(
+            read_key_frames(listing),
+            vec![Millis::new(0), Millis::new(4004), Millis::new(8008)]
+        );
+    }
+
+    #[test]
+    fn a_packet_with_no_time_on_it_is_skipped_rather_than_guessed_at() {
+        // A position invented here becomes a segment boundary where there is
+        // no picture, which is worse than a segment boundary missing.
+        let listing = "N/A,K__\n0.000000,K__\n,K__\nrubbish,K__\n";
+        assert_eq!(read_key_frames(listing), vec![Millis::new(0)]);
+    }
+
+    #[test]
+    fn key_frames_come_back_in_order_and_only_once_each() {
+        // A container can list a packet before the one it follows, and
+        // everything downstream walks these in order.
+        let listing = "8.000000,K__\n0.000000,K__\n4.000000,K__\n4.000000,K__\n";
+        assert_eq!(
+            read_key_frames(listing),
+            vec![Millis::new(0), Millis::new(4000), Millis::new(8000)]
+        );
+    }
+
+    #[test]
+    fn a_film_is_cut_at_the_first_key_frame_far_enough_past_the_last_cut() {
+        // Every boundary is a place the film can really begin, and the
+        // segments come out as close to the wanted length as the film allows.
+        let every_second: Vec<Millis> = (0..20).map(|n| Millis::new(n * 1000)).collect();
+        assert_eq!(
+            boundaries_every(&every_second, Millis::new(4000)),
+            vec![
+                Millis::new(0),
+                Millis::new(4000),
+                Millis::new(8000),
+                Millis::new(12000),
+                Millis::new(16000),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_film_with_nowhere_to_be_cut_gets_the_segments_it_can_have() {
+        // Ten seconds apart is an ordinary film. Asking for four second
+        // segments cannot make one: there is no picture to start at second
+        // four, so the segment runs to the next place there is one.
+        let every_ten: Vec<Millis> = (0..6).map(|n| Millis::new(n * 10_000)).collect();
+        assert_eq!(
+            boundaries_every(&every_ten, Millis::new(4000)),
+            vec![
+                Millis::new(0),
+                Millis::new(10_000),
+                Millis::new(20_000),
+                Millis::new(30_000),
+                Millis::new(40_000),
+                Millis::new(50_000),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_film_whose_picture_starts_late_is_still_cut_from_its_beginning() {
+        // A playlist beginning at the third second is a playlist missing the
+        // first three.
+        let late = vec![Millis::new(3_000), Millis::new(9_000)];
+        assert_eq!(
+            boundaries_every(&late, Millis::new(4000)),
+            vec![Millis::new(0), Millis::new(9_000)]
+        );
+        assert_eq!(
+            boundaries_every(&[], Millis::new(4000)),
+            vec![Millis::ZERO],
+            "a film nobody could read has one segment and it is the whole of it"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_real_film_says_where_it_can_be_started() {
+        // Made with a key frame every ten seconds, as an ordinary film has
+        // them, so that what comes back is the spacing of a real one rather
+        // than the spacing of something convenient.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("film.mp4");
+        let made = tokio::process::Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x180:rate=24:duration=40",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-g",
+                "240",
+                "-sc_threshold",
+                "0",
+                "-an",
+            ])
+            .arg(&source)
+            .output()
+            .await
+            .expect("the tool runs");
+        assert!(made.status.success());
+
+        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let found = key_frames(&tools.ffprobe, &source)
+            .await
+            .expect("a film says where it can be started");
+
+        assert!(
+            found.len() >= 4,
+            "one every ten seconds of forty: {found:?}"
+        );
+        assert_eq!(found[0], Millis::ZERO, "the first is the beginning");
+        assert!(
+            found.windows(2).all(|pair| pair[0] < pair[1]),
+            "ascending: {found:?}"
+        );
+        assert!(
+            (found[1].get() - found[0].get() - 10_000).abs() < 500,
+            "ten seconds apart, as asked for: {found:?}"
+        );
+    }
     use crate::ToolPaths;
     use std::path::PathBuf;
     use tokio::process::Command as TokioCommand;

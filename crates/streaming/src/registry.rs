@@ -171,6 +171,7 @@ mod tests {
             streams: StreamSelection::default(),
             video: VideoOutput::Copy,
             audio: AudioOutput::Copy,
+            where_it_can_be_started: Vec::new(),
             if_the_card_refuses: Vec::new(),
         }
     }

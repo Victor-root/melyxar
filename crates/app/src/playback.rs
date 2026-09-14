@@ -382,9 +382,41 @@ pub async fn open_session(state: &AppState, plan: &PlayPlan) -> Result<Arc<Sessi
     let sessions = state.sessions().ok_or_else(no_tools)?;
     let capabilities = state.capabilities().ok_or_else(no_tools)?;
 
-    let recipe = recipe_for(plan, capabilities)?;
+    let mut recipe = recipe_for(plan, capabilities)?;
+
+    // Only for a picture carried over untouched. One the server rebuilds gets
+    // a key frame on every boundary, put there by the server itself, so the
+    // grid is already true of it and reading the film for these would answer a
+    // question nobody asked.
+    if recipe.video == melyxar_ffmpeg::command::VideoOutput::Copy {
+        recipe.where_it_can_be_started = where_this_film_can_be_started(state, plan).await;
+    }
+
     let expensive = plan.decision.method.is_expensive();
     Ok(sessions.open(recipe, expensive).await?)
+}
+
+/// Where this film can really be started, when it has been read for it.
+///
+/// Nothing when it has not, and nothing when reading it back went wrong: the
+/// usual grid is what everything used before, it plays, and a film that cannot
+/// be started is a far worse answer than a jump that lands early.
+async fn where_this_film_can_be_started(state: &AppState, plan: &PlayPlan) -> Vec<Millis> {
+    match state.database().key_frames_of(plan.source_id).await {
+        Ok(Some(found)) if !found.is_empty() => melyxar_ffmpeg::probe::boundaries_every(
+            &found,
+            melyxar_streaming::playlist::SEGMENT_DURATION,
+        ),
+        Ok(_) => Vec::new(),
+        Err(error) => {
+            tracing::warn!(
+                source = %plan.source_id,
+                error = %error,
+                "where this film can be started could not be read, so it is cut on the usual grid"
+            );
+            Vec::new()
+        }
+    }
 }
 
 /// The subtitle to paint onto every frame, when there is one.
@@ -634,6 +666,9 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
         },
         video,
         audio,
+        // Filled in by whoever opens the session, which is the only place that
+        // can read the film's own answer back.
+        where_it_can_be_started: Vec::new(),
         if_the_card_refuses,
     })
 }
@@ -1634,6 +1669,7 @@ mod tests {
                     streams: melyxar_ffmpeg::command::StreamSelection::default(),
                     video: melyxar_ffmpeg::command::VideoOutput::Copy,
                     audio: melyxar_ffmpeg::command::AudioOutput::Copy,
+                    where_it_can_be_started: Vec::new(),
                     if_the_card_refuses: Vec::new(),
                 },
                 false,
@@ -1665,6 +1701,7 @@ mod tests {
                     streams: melyxar_ffmpeg::command::StreamSelection::default(),
                     video: melyxar_ffmpeg::command::VideoOutput::Copy,
                     audio: melyxar_ffmpeg::command::AudioOutput::Copy,
+                    where_it_can_be_started: Vec::new(),
                     if_the_card_refuses: Vec::new(),
                 },
                 false,
