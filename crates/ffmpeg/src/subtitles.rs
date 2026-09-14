@@ -89,10 +89,6 @@ pub fn all_to_web_vtt_arguments(source: &Path, wanted: &[(i32, &Path)]) -> Vec<O
         arguments.push(OsString::from("webvtt"));
         arguments.push(OsString::from("-f"));
         arguments.push(OsString::from("webvtt"));
-        // Written as they come rather than at the end, so a track that is
-        // ready is readable while the rest are still being pulled out.
-        arguments.push(OsString::from("-flush_packets"));
-        arguments.push(OsString::from("1"));
         arguments.push(destination.as_os_str().to_os_string());
     }
     arguments
