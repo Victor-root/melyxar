@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
-use melyxar_core::media::Track;
+use melyxar_core::media::{SubtitleLayout, Track, TrackKind};
 use melyxar_core::privacy::MediaName;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::user::DownmixMethod;
@@ -393,7 +393,53 @@ pub async fn open_session(state: &AppState, plan: &PlayPlan) -> Result<Arc<Sessi
     }
 
     let expensive = plan.decision.method.is_expensive();
-    Ok(sessions.open(recipe, expensive).await?)
+    let session = sessions.open(recipe, expensive).await?;
+
+    // Started now rather than when somebody asks for a subtitle. Pulling one
+    // out of a film means reading the whole file through, because the words
+    // are interleaved with the picture from end to end: measured at three
+    // quarters of a minute on a 4K film. Asked for at the moment of the click,
+    // that wait falls entirely on somebody who has already pressed the button
+    // and sees nothing happen. Started here, it runs while the film plays.
+    prepare_the_subtitles(state, plan);
+
+    Ok(session)
+}
+
+/// Converts every subtitle made of words this film carries, in the background.
+///
+/// Nothing is waited on and nothing fails outwardly: this is a head start, not
+/// a step. A track that will not convert says so in the journal under its own
+/// tag, and a viewer who asks for it anyway gets the same answer they would
+/// have got without this.
+fn prepare_the_subtitles(state: &AppState, plan: &PlayPlan) {
+    let wanted: Vec<TrackId> = plan
+        .tracks
+        .iter()
+        .filter(|track| match &track.kind {
+            TrackKind::Subtitle(details) => details.layout == SubtitleLayout::Text,
+            _ => false,
+        })
+        .map(|track| track.id)
+        .collect();
+    if wanted.is_empty() {
+        return;
+    }
+
+    let state = state.clone();
+    let source_id = plan.source_id;
+    tokio::spawn(async move {
+        tracing::debug!(
+            subtitles = wanted.len(),
+            "converting the subtitles of this film ahead of anybody asking for one"
+        );
+        for track_id in wanted {
+            // One at a time: each reads the whole film, and the system keeps
+            // what it just read, so the second costs a fraction of the first.
+            // All at once would set several readers on one disk for no gain.
+            let _ = crate::subtitles::as_web_vtt(&state, source_id, track_id).await;
+        }
+    });
 }
 
 /// Where this film can really be started, when it has been read for it.
