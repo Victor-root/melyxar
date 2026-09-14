@@ -1,28 +1,54 @@
 /*
  * What the server is doing, and what it did.
  *
- * Refreshed while something is running and left alone when nothing is, so an
- * idle page does not poll a server all evening for no reason.
+ * What is running is taken from the one place that watches it, rather than
+ * asked for again here. This page used to ask on its own and start looking
+ * again only once it had seen something running, so work started anywhere else
+ * never appeared: the bar at the top said a scan was under way and this page,
+ * two centimetres below it, said nothing was. Two answers to one question is
+ * one answer too many, and the wrong one is always the one somebody reads.
+ *
+ * What finished is this page's own business, and is asked for again whenever
+ * the work being watched comes to an end.
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../api";
-import type { Jobs, Library } from "../api";
+import { api, ApiError } from "../api";
+import type { Job, Library } from "../api";
 import { JobLine } from "../components/job";
 import { CopyReport } from "../components/report";
+import { refusalKey } from "../i18n";
+import { useRunning } from "../running";
 import { useSettings } from "../settings";
-
-/** How often a page showing running work asks again. */
-const REFRESH_MS = 1500;
 
 export function ActivityPage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
-  const [jobs, setJobs] = useState<Jobs | null>(null);
+  const { jobs: running, watch, finished } = useRunning();
+  const [recent, setRecent] = useState<Job[]>([]);
   const [failed, setFailed] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
+  /* One library at a time, which is what this page is for: the bar at the top
+     already offers the whole lot at once, and somebody who came here came to
+     act on one thing. Whatever is started is watched at once rather than left
+     to the slow beat, because a button that shows nothing for twenty seconds
+     is indistinguishable from a button that did nothing. */
+  const startOn = useCallback(
+    async (asked: Promise<unknown>) => {
+      setRefused(null);
+      try {
+        await asked;
+        watch();
+      } catch (error) {
+        setRefused(error instanceof ApiError ? error.code : "generic");
+      }
+    },
+    [watch],
+  );
+
+  const loadRecent = useCallback(async (signal?: AbortSignal) => {
     try {
-      setJobs(await api.jobs(signal));
+      setRecent((await api.jobs(signal)).recent);
       setFailed(false);
     } catch (error) {
       if (!(error instanceof DOMException)) {
@@ -31,20 +57,14 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
     }
   }, []);
 
+  /* On the way in, and again each time the work being watched comes to an
+     end: that is exactly when something has moved from running to finished. */
   useEffect(() => {
     const controller = new AbortController();
-    load(controller.signal);
+    loadRecent(controller.signal);
     return () => controller.abort();
-  }, [load]);
+  }, [loadRecent, finished]);
 
-  const running = jobs?.running.length ?? 0;
-  useEffect(() => {
-    if (running === 0) {
-      return;
-    }
-    const timer = window.setInterval(() => load(), REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [running, load]);
 
   return (
     <main className="page">
@@ -59,36 +79,37 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
       <div className="controls">
         {libraries.map((library) => (
           <span key={library.id} className="control-group">
-            <button
-              className="button"
-              onClick={() => api.scan(library.id).then(() => load())}
-            >
+            <button className="button" onClick={() => startOn(api.scan(library.id))}>
               {t("home.scan")} · {library.name}
             </button>
-            <button
-              className="button"
-              onClick={() => api.identify(library.id).then(() => load())}
-            >
+            <button className="button" onClick={() => startOn(api.identify(library.id))}>
               {t("home.identify")}
             </button>
           </span>
         ))}
       </div>
 
+      {/* A button that fails in silence is the same thing as a button that
+          does nothing, and sends somebody to a terminal. */}
+      {refused && <p className="notice">{t(refusalKey(refused))}</p>}
       {failed && <p className="notice">{t("error.unreachable")}</p>}
 
       <section className="section">
         <h2>{t("jobs.running")}</h2>
-        {running === 0 ? (
+        {running.length === 0 ? (
           <p className="notice notice-faint">{t("jobs.none")}</p>
         ) : (
-          jobs?.running.map((job) => (
-            <JobLine key={job.id} job={job} onCancel={() => api.cancelJob(job.id).then(() => load())} />
+          running.map((job) => (
+            <JobLine
+              key={job.id}
+              job={job}
+              onCancel={() => api.cancelJob(job.id).then(() => watch())}
+            />
           ))
         )}
       </section>
 
-      {jobs && jobs.recent.length > 0 && (
+      {recent.length > 0 && (
         <section className="section">
           <div className="section-head">
             <h2>{t("jobs.recent")}</h2>
@@ -96,12 +117,12 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
                 something to empty. */}
             <button
               className="button button-small"
-              onClick={() => api.forgetFinishedJobs().then(() => load())}
+              onClick={() => api.forgetFinishedJobs().then(() => loadRecent())}
             >
               {t("jobs.forget")}
             </button>
           </div>
-          {jobs.recent.map((job) => (
+          {recent.map((job) => (
             <JobLine key={job.id} job={job} />
           ))}
         </section>
@@ -109,4 +130,3 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
     </main>
   );
 }
-

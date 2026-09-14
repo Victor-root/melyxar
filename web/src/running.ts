@@ -10,8 +10,10 @@
  * work and every page shows it, and two of them asking the same question twice
  * a second is one too many.
  *
- * Asked for again only while something is actually running. With nothing to
- * watch it asks once and then leaves the server alone.
+ * Asked for often while something is running and rarely when nothing is. Never
+ * stopping outright matters: work can be started from somewhere this interface
+ * knows nothing about, another tab or a terminal, and an interface that says
+ * nothing is running while a scan grinds away is an interface that lies.
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -20,6 +22,15 @@ import type { Job, Library } from "./api";
 
 /** How often the server is asked while it is busy. */
 const WHILE_BUSY_MS = 1500;
+
+/**
+ * How often it is asked when nothing is running.
+ *
+ * Rarely, because the answer is almost always the same, and never never: a
+ * scan started from a terminal or from another tab has to turn up here without
+ * anybody reloading the page.
+ */
+const WHEN_IDLE_MS = 20_000;
 
 export interface Running {
   /** What is running right now, newest first as the server lists it. */
@@ -40,7 +51,7 @@ export const RunningContext = createContext<Running>({
 /** What the provider at the top of the interface holds. */
 export function useWatchedWork(): Running {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [watching, setWatching] = useState(true);
+  const [busy, setBusy] = useState(true);
   const [finished, setFinished] = useState(0);
   const wasBusy = useRef(false);
 
@@ -48,6 +59,7 @@ export function useWatchedWork(): Running {
     try {
       const answer = await api.jobs(signal);
       setJobs(answer.running);
+      setBusy(answer.running.length > 0);
       if (answer.running.length > 0) {
         wasBusy.current = true;
         return;
@@ -56,9 +68,6 @@ export function useWatchedWork(): Running {
         wasBusy.current = false;
         setFinished((count) => count + 1);
       }
-      // Nothing is running, so there is nothing to come back for until
-      // somebody starts something.
-      setWatching(false);
     } catch {
       // A server that did not answer is not worth troubling a viewer with
       // here: the page it is on has its own way of saying so.
@@ -66,22 +75,23 @@ export function useWatchedWork(): Running {
   }, []);
 
   useEffect(() => {
-    if (!watching) {
-      return;
-    }
     const controller = new AbortController();
     look(controller.signal);
-    const timer = window.setInterval(() => look(), WHILE_BUSY_MS);
+    const timer = window.setInterval(() => look(), busy ? WHILE_BUSY_MS : WHEN_IDLE_MS);
     return () => {
       window.clearInterval(timer);
       controller.abort();
     };
-  }, [watching, look]);
+  }, [busy, look]);
 
+  /* Asked for the moment something was started here, rather than waiting out
+     the slow beat: a button that shows nothing for twenty seconds is
+     indistinguishable from a button that did nothing. */
   const watch = useCallback(() => {
     wasBusy.current = true;
-    setWatching(true);
-  }, []);
+    setBusy(true);
+    void look();
+  }, [look]);
 
   return { jobs, watch, finished };
 }
