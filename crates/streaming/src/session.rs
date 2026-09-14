@@ -52,6 +52,14 @@ pub struct Recipe {
     pub streams: StreamSelection,
     pub video: melyxar_ffmpeg::command::VideoOutput,
     pub audio: melyxar_ffmpeg::command::AudioOutput,
+    /// Where the viewer is about to begin.
+    ///
+    /// Carried because the header every segment needs is written with the
+    /// first segment produced, whichever one that is. Without this it was the
+    /// first segment of the film, produced in full for nobody: the tool was
+    /// then stopped and started again where the viewer really was, and that
+    /// whole detour sat in front of the picture.
+    pub where_the_viewer_starts: Millis,
     /// Where this film can really be started, in order, when it has been read
     /// for them.
     ///
@@ -307,11 +315,18 @@ impl Session {
         if path.exists() {
             return Ok(path);
         }
-        // The header is written with the first segment, so asking for it
-        // before anything has been produced starts the film from its
-        // beginning, which is what the player is about to ask for anyway.
-        self.segment(0).await?;
+        // The header is written with the first segment produced, whichever one
+        // that is, so this asks for the one the viewer is about to watch. The
+        // request for that same segment then finds the tool already on its way
+        // there instead of somewhere else entirely.
+        self.segment(self.where_the_viewer_starts()).await?;
         Ok(path)
+    }
+
+    /// Which segment the viewer is about to watch.
+    fn where_the_viewer_starts(&self) -> u32 {
+        self.playlist
+            .segment_holding(self.recipe.where_the_viewer_starts)
     }
 
     /// How far the preparation has got.
@@ -334,7 +349,7 @@ impl Session {
             return Preparation {
                 step: PreparationStep::Starting,
                 ready: 0,
-                wanted: self.enough_from(0),
+                wanted: self.enough_from(self.where_the_viewer_starts()),
             };
         };
 
@@ -821,6 +836,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
@@ -928,6 +944,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
@@ -968,6 +985,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
@@ -1024,6 +1042,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Encode(refused),
                 audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: vec![VideoOutput::Encode(
                     melyxar_ffmpeg::command::VideoEncode::software_h264(),
@@ -1065,6 +1084,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Encode(melyxar_ffmpeg::command::VideoEncode::software_h264()),
                 audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: vec![VideoOutput::Encode(
                     melyxar_ffmpeg::command::VideoEncode::software_h264(),
@@ -1114,6 +1134,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Encode(encode),
                 audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
@@ -1196,6 +1217,7 @@ mod tests {
                     audio: AudioOutput::Encode(
                         melyxar_ffmpeg::command::AudioEncode::browser_stereo("aac"),
                     ),
+                    where_the_viewer_starts: Millis::ZERO,
                     where_it_can_be_started: Vec::new(),
                     if_the_card_refuses: Vec::new(),
                 },
@@ -1405,6 +1427,7 @@ mod tests {
                 // Rebuilt, so the tool really starts where it was asked to.
                 video: VideoOutput::Encode(melyxar_ffmpeg::command::VideoEncode::software_h264()),
                 audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
@@ -1444,6 +1467,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
@@ -1482,6 +1506,49 @@ mod tests {
         assert!(
             session.folder().join("init.mp4").exists(),
             "the header every segment needs comes with the first one"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn the_header_is_produced_where_the_viewer_is_and_not_at_the_opening() {
+        // The header used to be asked for by producing the first segment of
+        // the film, whoever was watching and wherever they were. That segment
+        // was thrown away and the tool started again at the real place, which
+        // put a whole production in front of every picture.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip(&source, 40).await;
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(40_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Copy,
+                audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::new(20_000),
+                where_it_can_be_started: Vec::new(),
+                if_the_card_refuses: Vec::new(),
+            },
+            directory.path().join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens");
+
+        let header = session.initialisation().await.expect("the header");
+        assert!(header.exists());
+
+        let wanted = session.playlist().segment_holding(Millis::new(20_000));
+        assert!(wanted > 0, "twenty seconds in is not the opening of a film");
+        assert!(
+            session.path_of(wanted).exists(),
+            "the header comes with the segment the viewer is about to watch"
+        );
+        assert!(
+            !session.path_of(0).exists(),
+            "nothing is produced at the opening of a film nobody is at"
         );
         session.close().await;
     }
@@ -1624,6 +1691,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
@@ -1672,6 +1740,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
@@ -1720,6 +1789,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
                 where_it_can_be_started: boundaries,
                 if_the_card_refuses: Vec::new(),
             },

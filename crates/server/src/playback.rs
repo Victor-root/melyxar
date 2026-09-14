@@ -76,6 +76,20 @@ struct PlanBody {
     subtitle_track_id: Option<String>,
 }
 
+/// The same question, plus where the picture will actually be started.
+///
+/// Only a session cares: the answer to a plan is the same wherever the viewer
+/// is. Said here so the first segment produced is the one about to be watched,
+/// which is what saves producing the opening of a film nobody is at.
+#[derive(Debug, Default, Deserialize)]
+struct OpenBody {
+    #[serde(flatten)]
+    wanted: PlanBody,
+    /// Absent leaves it to what the server remembers of this viewer.
+    #[serde(default)]
+    start_at_seconds: Option<f64>,
+}
+
 #[derive(Debug, Serialize)]
 struct PlanView {
     /// Where to fetch the film itself.
@@ -351,7 +365,7 @@ struct SessionView {
 async fn open_session(
     State(state): State<AppState>,
     RoutePath(id): RoutePath<String>,
-    body: Option<Json<PlanBody>>,
+    body: Option<Json<OpenBody>>,
 ) -> Result<Json<SessionView>> {
     let source_id = parse_source(&id)?;
     let body = body.map(|Json(body)| body).unwrap_or_default();
@@ -361,13 +375,15 @@ async fn open_session(
         viewer(&state).await?,
         &PlayRequest {
             source_id,
-            profile: body.profile,
+            profile: body.wanted.profile,
             audio_track_id: body
+                .wanted
                 .audio_track_id
                 .as_deref()
                 .map(parse_track)
                 .transpose()?,
             subtitle_track_id: body
+                .wanted
                 .subtitle_track_id
                 .as_deref()
                 .map(parse_track)
@@ -376,7 +392,14 @@ async fn open_session(
     )
     .await?;
 
-    let session = melyxar_app::playback::open_session(&state, &plan).await?;
+    let session = melyxar_app::playback::open_session(
+        &state,
+        &plan,
+        body.start_at_seconds
+            .filter(|seconds| seconds.is_finite())
+            .map(melyxar_core::time::Millis::from_seconds_f64),
+    )
+    .await?;
     Ok(Json(SessionView {
         id: session.id.to_string(),
         playlist_url: format!("/api/v1/stream/{}/playlist.m3u8", session.id),
