@@ -152,6 +152,37 @@ pub struct IdentifiedWork {
 }
 
 impl Database {
+    /// Puts every work of a library back in the queue to be looked up again,
+    /// and says how many that was.
+    ///
+    /// What a change of language needs: the films already described are
+    /// described in the language that is no longer wanted, so they are asked
+    /// about again rather than left as the one part of the library that never
+    /// changed.
+    ///
+    /// A match somebody picked by hand is never touched. That is the whole
+    /// meaning of picking by hand, and a person who corrected a film the
+    /// provider got wrong must not find their correction undone by a setting.
+    /// What was fetched stays where it is: texts are filed by work and by
+    /// language, so nothing is lost while the new language arrives, and a film
+    /// the provider cannot describe in it keeps what it had.
+    pub async fn ask_again_about_every_work(
+        &self,
+        library_id: melyxar_core::id::LibraryId,
+    ) -> Result<u64> {
+        let result = sqlx::query(
+            "UPDATE works SET identification = ?, updated_at = ?
+             WHERE library_id = ? AND identification <> ?",
+        )
+        .bind(IdentificationState::Pending.as_str())
+        .bind(timestamp_to_text(now()))
+        .bind(library_id.to_db_string())
+        .bind(IdentificationState::Manual.as_str())
+        .execute(self.writer())
+        .await?;
+        Ok(result.rows_affected())
+    }
+
     /// Works of a library that are still waiting to be looked up.
     /// Every one of them, in the order they arrived.
     ///
@@ -1084,6 +1115,71 @@ mod tests {
             .await
             .expect("work created");
         (database, work)
+    }
+
+    #[tokio::test]
+    async fn changing_the_language_asks_about_every_film_again_but_never_a_manual_choice() {
+        let (database, work) = work_in_library().await;
+        let library_id = work.library_id;
+
+        // One the provider named, and one a person picked by hand after the
+        // provider got it wrong.
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("the provider named it");
+        let chosen = database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "Amber Field",
+                "amber field",
+                Some(2020),
+            )
+            .await
+            .expect("work created");
+        database
+            .apply_identification(chosen.id, &found(), true)
+            .await
+            .expect("picked by hand");
+
+        assert_eq!(
+            database
+                .works_awaiting_identification(library_id)
+                .await
+                .expect("read")
+                .len(),
+            0,
+            "both are described, so nothing is waiting"
+        );
+
+        assert_eq!(
+            database
+                .ask_again_about_every_work(library_id)
+                .await
+                .expect("queued again"),
+            1,
+            "the one the provider named goes back in the queue, the other does not"
+        );
+
+        let waiting = database
+            .works_awaiting_identification(library_id)
+            .await
+            .expect("read");
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(
+            waiting[0].id, work.id,
+            "a correction somebody made by hand is never undone by a setting"
+        );
+        assert_eq!(
+            database
+                .work(chosen.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification,
+            IdentificationState::Manual
+        );
     }
 
     fn found() -> IdentifiedWork {

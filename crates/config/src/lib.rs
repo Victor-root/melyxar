@@ -190,6 +190,9 @@ pub struct LibraryConfig {
     pub name: String,
     /// One of the stored library kinds.
     pub kind: String,
+    /// The language films are described in, for this library alone. A library
+    /// of Japanese animation and one of French films want different answers on
+    /// the same server, which is why it sits here rather than on the server.
     #[serde(default = "default_metadata_language")]
     pub metadata_language: String,
     /// Several roots per library is the ordinary case: a collection spread
@@ -197,8 +200,14 @@ pub struct LibraryConfig {
     pub roots: Vec<RootConfig>,
 }
 
+/// The language used when the configuration does not say.
+///
+/// English, and not the language the author of this server happens to speak.
+/// A default is what everybody who installs this without reading gets, so it
+/// has to be the neutral answer rather than one person's preference. Whoever
+/// wants another one writes it down, and later chooses it on a screen.
 fn default_metadata_language() -> String {
-    "fr".to_string()
+    "en".to_string()
 }
 
 /// The whole configuration.
