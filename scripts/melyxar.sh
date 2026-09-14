@@ -358,12 +358,17 @@ panel() {
 banner() {
   clear 2>/dev/null || true
   echo
-  printf "%b%s%b\n" "${RED}" "███╗   ███╗███████╗██╗     ██╗   ██╗██╗  ██╗ █████╗ ██████╗ " "${RESET}"
-  printf "%b%s%b\n" "${RED}" "████╗ ████║██╔════╝██║     ╚██╗ ██╔╝╚██╗██╔╝██╔══██╗██╔══██╗" "${RESET}"
-  printf "%b%s%b\n" "${RED}" "██╔████╔██║█████╗  ██║      ╚████╔╝  ╚███╔╝ ███████║██████╔╝" "${RESET}"
-  printf "%b%s%b\n" "${RED}" "██║╚██╔╝██║██╔══╝  ██║       ╚██╔╝   ██╔██╗ ██╔══██║██╔══██╗" "${RESET}"
-  printf "%b%s%b\n" "${RED}" "██║ ╚═╝ ██║███████╗███████╗   ██║   ██╔╝ ██╗██║  ██║██║  ██║" "${RESET}"
-  printf "%b%s%b\n" "${RED}" "╚═╝     ╚═╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝" "${RESET}"
+  # Le Y est rapproché du L de trois colonnes. Le L est creux en haut à
+  # droite, le Y l'est en bas à gauche, et laissés à leur chasse naturelle les
+  # deux creux se font face : sept colonnes de vide au plus large, là où les
+  # autres lettres se touchent. Trois est le maximum, au-delà le pied du Y
+  # entre dans celui du L.
+  printf "%b%s%b\n" "${RED}" "███╗   ███╗███████╗██╗  ██╗   ██╗██╗  ██╗ █████╗ ██████╗ " "${RESET}"
+  printf "%b%s%b\n" "${RED}" "████╗ ████║██╔════╝██║  ╚██╗ ██╔╝╚██╗██╔╝██╔══██╗██╔══██╗" "${RESET}"
+  printf "%b%s%b\n" "${RED}" "██╔████╔██║█████╗  ██║   ╚████╔╝  ╚███╔╝ ███████║██████╔╝" "${RESET}"
+  printf "%b%s%b\n" "${RED}" "██║╚██╔╝██║██╔══╝  ██║    ╚██╔╝   ██╔██╗ ██╔══██║██╔══██╗" "${RESET}"
+  printf "%b%s%b\n" "${RED}" "██║ ╚═╝ ██║███████╗███████╗██║   ██╔╝ ██╗██║  ██║██║  ██║" "${RESET}"
+  printf "%b%s%b\n" "${RED}" "╚═╝     ╚═╝╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝" "${RESET}"
   echo
   printf "  %b%s%b %b· by Victor-root%b\n" "${BOLD}${RED_SOFT}" "$APP_NAME" "${RESET}" "${GRAY}" "${RESET}"
   hr
