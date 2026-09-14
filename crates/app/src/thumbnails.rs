@@ -8,7 +8,7 @@
 //! are handed over as they are: a page fetches the sheet holding the moment
 //! under the cursor and cuts the thumbnail out of it itself.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use melyxar_core::id::MediaSourceId;
 use melyxar_core::media::TrackKind;
@@ -16,7 +16,60 @@ use melyxar_core::privacy::MediaName;
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::Millis;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{AppError, AppState, Result};
+
+/// What a folder of sheets says about itself.
+///
+/// Written beside the sheets, and the reason it exists is the cost of what it
+/// describes: reading three hundred films takes a night, and without this the
+/// only record of that night is a row in a database. Lose the row, by a
+/// mistake of mine or a database started again, and every one of those films
+/// is read through again for pictures already sitting on the disk.
+///
+/// So the sheets carry their own description and the table is an index in
+/// front of them. A folder that matches the shape asked for is taken up as it
+/// stands, and the film is not touched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+struct WhatIsOnDisk {
+    every_ms: i64,
+    width: u32,
+    height: u32,
+    columns: u32,
+    rows: u32,
+    counted: u32,
+    sheets: u32,
+}
+
+impl WhatIsOnDisk {
+    fn of(made: &Thumbnails) -> Self {
+        Self {
+            every_ms: made.every.get(),
+            width: made.width,
+            height: made.height,
+            columns: made.columns,
+            rows: made.rows,
+            counted: made.counted,
+            sheets: made.sheets,
+        }
+    }
+
+    fn read_back(self) -> Thumbnails {
+        Thumbnails {
+            every: Millis::new(self.every_ms),
+            width: self.width,
+            height: self.height,
+            columns: self.columns,
+            rows: self.rows,
+            counted: self.counted,
+            sheets: self.sheets,
+        }
+    }
+}
+
+/// The name of that description inside a folder of sheets.
+const WHAT_IT_IS: &str = "made.json";
 
 /// The shape this server is set to make them in, when it makes them at all.
 pub fn wanted(state: &AppState) -> Option<Layout> {
@@ -55,7 +108,35 @@ fn while_it_is_read(state: &AppState, source_id: MediaSourceId) -> PathBuf {
         .join(format!("{source_id}.making"))
 }
 
+/// What is already in the cache for one film, when it is whole and of the
+/// shape asked for.
+///
+/// Every sheet is looked for, not merely the description: a folder half
+/// emptied by hand is worse than an empty one, because it answers every
+/// question until somebody drags the cursor into the part that is gone.
+async fn already_on_disk(folder: &Path, layout: Layout) -> Option<Thumbnails> {
+    let written = tokio::fs::read(folder.join(WHAT_IT_IS)).await.ok()?;
+    let said: WhatIsOnDisk = serde_json::from_slice(&written).ok()?;
+    let made = said.read_back();
+    if made.layout() != layout {
+        return None;
+    }
+    for number in 0..made.sheets {
+        let sheet = melyxar_ffmpeg::thumbnails::sheet_at(folder, number);
+        if !tokio::fs::try_exists(&sheet).await.unwrap_or(false) {
+            return None;
+        }
+    }
+    Some(made)
+}
+
 /// Reads one film through and writes down what it gave.
+///
+/// A film whose sheets are already in the cache, whole and of the shape asked
+/// for, is taken up as it stands rather than read again. Reading three hundred
+/// films takes a night, and a row lost from the table must never cost that
+/// night twice: the sheets carry their own description, and the table is an
+/// index in front of them.
 ///
 /// Answers what came out. Nothing counted is an answer too: there are files in
 /// a film folder that hold no picture, and it is written down so the file is
@@ -73,6 +154,17 @@ pub async fn make_for(state: &AppState, source_id: MediaSourceId) -> Result<Thum
     })?;
 
     let database = state.database();
+    let kept = kept_at(state, source_id);
+    if let Some(found) = already_on_disk(&kept, layout).await {
+        database.store_thumbnails(source_id, &found).await?;
+        tracing::info!(
+            thumbnails = found.counted,
+            sheets = found.sheets,
+            "the thumbnails of this film were already in the cache, so it is not read again"
+        );
+        return Ok(found);
+    }
+
     let source = database
         .playable_source(source_id)
         .await?
@@ -135,8 +227,15 @@ pub async fn make_for(state: &AppState, source_id: MediaSourceId) -> Result<Thum
         }
     };
 
+    // The sheets describe themselves, so that losing the row in the table
+    // costs a moment rather than another night of reading.
+    let said = serde_json::to_vec_pretty(&WhatIsOnDisk::of(&made))
+        .map_err(|error| AppError::Directory(std::io::Error::other(error)))?;
+    tokio::fs::write(aside.join(WHAT_IT_IS), said)
+        .await
+        .map_err(AppError::Directory)?;
+
     // Moved into place in one step, once the reading is over.
-    let kept = kept_at(state, source_id);
     let _ = tokio::fs::remove_dir_all(&kept).await;
     if let Err(error) = tokio::fs::rename(&aside, &kept).await {
         let _ = tokio::fs::remove_dir_all(&aside).await;
@@ -219,6 +318,71 @@ mod tests {
                 rows: 10,
             })
         );
+    }
+
+    /// A folder of sheets as one really sits in the cache.
+    async fn a_folder_of_sheets(sheets: u32) -> (tempfile::TempDir, PathBuf, Thumbnails) {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let folder = directory.path().join("one");
+        std::fs::create_dir_all(&folder).expect("the folder");
+        let made = Thumbnails {
+            every: Millis::new(10_000),
+            width: 320,
+            height: 180,
+            columns: 10,
+            rows: 10,
+            counted: sheets * 100,
+            sheets,
+        };
+        for number in 0..sheets {
+            std::fs::write(
+                melyxar_ffmpeg::thumbnails::sheet_at(&folder, number),
+                b"a sheet",
+            )
+            .expect("a sheet");
+        }
+        std::fs::write(
+            folder.join(WHAT_IT_IS),
+            serde_json::to_vec(&WhatIsOnDisk::of(&made)).expect("written"),
+        )
+        .expect("what it is");
+        (directory, folder, made)
+    }
+
+    #[tokio::test]
+    async fn sheets_already_in_the_cache_are_taken_up_rather_than_read_again() {
+        // Reading three hundred films takes a night. A row lost from the table
+        // must never cost that night twice, so the sheets describe themselves
+        // and the table is an index in front of them.
+        let (_directory, folder, made) = a_folder_of_sheets(2).await;
+        assert_eq!(already_on_disk(&folder, made.layout()).await, Some(made));
+    }
+
+    #[tokio::test]
+    async fn sheets_made_to_another_shape_are_not_taken_up() {
+        let (_directory, folder, made) = a_folder_of_sheets(2).await;
+        let closer = Layout {
+            every: Millis::new(5_000),
+            ..made.layout()
+        };
+        assert_eq!(already_on_disk(&folder, closer).await, None);
+    }
+
+    #[tokio::test]
+    async fn a_folder_missing_a_sheet_is_not_taken_up_at_all() {
+        // Worse than an empty one: it answers every question until somebody
+        // drags the cursor into the part that is gone.
+        let (_directory, folder, made) = a_folder_of_sheets(3).await;
+        std::fs::remove_file(melyxar_ffmpeg::thumbnails::sheet_at(&folder, 2))
+            .expect("emptied by hand");
+        assert_eq!(already_on_disk(&folder, made.layout()).await, None);
+    }
+
+    #[tokio::test]
+    async fn a_folder_that_says_nothing_about_itself_is_not_taken_up() {
+        let (_directory, folder, made) = a_folder_of_sheets(1).await;
+        std::fs::remove_file(folder.join(WHAT_IT_IS)).expect("removed");
+        assert_eq!(already_on_disk(&folder, made.layout()).await, None);
     }
 
     #[tokio::test]

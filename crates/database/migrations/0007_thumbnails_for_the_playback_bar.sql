@@ -24,8 +24,9 @@ CREATE TABLE media_source_thumbnails (
     thumbnail_height  INTEGER NOT NULL,
     columns_per_sheet INTEGER NOT NULL,
     rows_per_sheet    INTEGER NOT NULL,
-    -- How many came out of the reading, which is not what the running time
-    -- suggests. Nought is an answer: a file in a film folder that holds no
+    -- How many came out of the reading, which is not always what the running
+    -- time suggests: a container's is wrong often enough that nothing may be
+    -- built on it. Nought is an answer: a file in a film folder that holds no
     -- picture, written down so it is never read through again for the same
     -- nothing.
     counted           INTEGER NOT NULL,

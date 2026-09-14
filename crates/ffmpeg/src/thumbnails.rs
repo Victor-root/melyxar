@@ -41,7 +41,9 @@ const SHEET_NAMES: &str = "%04d.jpg";
 /// second is a single pixel per thumbnail, thrown at the output of the tool
 /// and never kept: counting those bytes is how the number of thumbnails is
 /// known to be the number that came out, rather than the number a running time
-/// promised.
+/// promised. A container's running time is wrong often enough that nothing may
+/// be built on it, and a film whose last stretch is not a whole one ends a
+/// thumbnail short of what it suggests.
 pub fn arguments(
     source: &Path,
     into: &Path,
@@ -72,8 +74,20 @@ pub fn arguments(
     // Thinned out first, then made smaller, then converted: every stage costs
     // what the stage before it left, and the first one leaves one picture in a
     // few hundred.
+    // Which picture of a ten second stretch is the one shown, and it is not a
+    // detail: rounded the usual way the filter hands over the last picture of
+    // the stretch, and measured on a film with the time written into it, the
+    // thumbnail for the very start of the film showed four point nine seconds.
+    // Rounded up it is the picture at the mark itself.
+    //
+    // Counted from nought rather than from the first picture of the film, and
+    // that is the other half. Without it the grid is anchored on whatever the
+    // decoder hands over first, which is not the same thing in every codec:
+    // measured on the same film in two forms, one came out right and the other
+    // was a whole stretch out. Anchored on nought, both are the picture at the
+    // mark, within one frame of it.
     let mut chain = format!(
-        "[0:v]fps=1000/{},scale=-2:{}",
+        "[0:v]fps=1000/{}:round=up:start_time=0,scale=-2:{}",
         layout.every.get().max(1),
         layout.height
     );
@@ -233,7 +247,10 @@ mod tests {
         ));
 
         assert_eq!(line.matches(" -i ").count(), 1, "read once: {line}");
-        assert!(line.contains("fps=1000/10000"), "{line}");
+        assert!(
+            line.contains("fps=1000/10000:round=up:start_time=0"),
+            "{line}"
+        );
         assert!(line.contains("tile=10x10"), "{line}");
         assert!(
             line.contains("-start_number 0"),
@@ -281,6 +298,25 @@ mod tests {
             line.ends_with("-map [one] -f rawvideo -pix_fmt gray -"),
             "one byte a thumbnail, on the output of the tool: {line}"
         );
+    }
+
+    #[test]
+    fn the_picture_shown_is_the_one_at_the_mark_and_not_the_one_before_the_next() {
+        // Two halves of one answer, both measured on a film with the time
+        // written into it. Rounded the usual way, the filter hands over the
+        // last picture of each stretch: the thumbnail for the very start of
+        // the film showed four point nine seconds. Anchored on the first
+        // picture the decoder happens to hand over rather than on nought, the
+        // same film in another form was a whole stretch out.
+        let line = rendered(&arguments(
+            &PathBuf::from("/films/Quiet.Harbour.2019.mkv"),
+            &PathBuf::from("/cache/thumbnails/one"),
+            ten_seconds(),
+            false,
+            true,
+        ));
+        assert!(line.contains(":round=up"), "{line}");
+        assert!(line.contains(":start_time=0"), "{line}");
     }
 
     #[test]

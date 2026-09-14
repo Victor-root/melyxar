@@ -1387,6 +1387,7 @@ mod tests {
             return;
         }
 
+        let film_folder = media.clone();
         let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
         let report = scan(&state, &library).await;
         assert_eq!(report.added, 1);
@@ -1406,12 +1407,7 @@ mod tests {
             .await
             .expect("read")
             .expect("written down");
-        // Twenty five seconds of film, and two thumbnails rather than three.
-        // Only the pictures standing on their own are read, and the slot the
-        // last of them falls in is never closed: measured, and the whole
-        // reason the thumbnails are counted rather than worked out from the
-        // running time. On a film of two hours it is the last ten seconds.
-        assert_eq!(thumbnails.counted, 2, "nought and ten seconds");
+        assert_eq!(thumbnails.counted, 3, "nought, ten and twenty seconds");
         assert_eq!(thumbnails.sheets, 1);
         assert!(thumbnails.width > 0 && thumbnails.height > 0);
 
@@ -1438,6 +1434,34 @@ mod tests {
         // A second scan reads nothing again: the film already has them.
         let again = scan(&state, &library).await;
         assert_eq!(again.thumbnails_made, 0);
+
+        // And a server whose table is gone takes up what is on the disk rather
+        // than reading every film again. Three hundred films are a night of
+        // reading, and a row lost must never cost that night twice.
+        let sheet = crate::thumbnails::sheet_of(&state, source_id, 0)
+            .await
+            .expect("the sheet is there");
+        let written_at = std::fs::metadata(&sheet)
+            .expect("the sheet is there")
+            .modified()
+            .expect("a time");
+
+        let (fresh, same_library) =
+            state_with_roots(directory.path(), vec![("disk-one", film_folder)]).await;
+        let from_nothing = scan(&fresh, &same_library).await;
+        assert_eq!(from_nothing.added, 1, "the table knew nothing of this film");
+        assert_eq!(
+            from_nothing.thumbnails_made, 1,
+            "and it has its thumbnails again"
+        );
+        assert_eq!(
+            std::fs::metadata(&sheet)
+                .expect("the sheet is still there")
+                .modified()
+                .expect("a time"),
+            written_at,
+            "the sheet was taken up as it stands, so the film was never read again"
+        );
     }
 
     #[tokio::test]

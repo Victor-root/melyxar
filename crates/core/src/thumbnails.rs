@@ -45,10 +45,10 @@ pub struct Thumbnails {
     pub rows: u32,
     /// How many came out of the reading.
     ///
-    /// Counted rather than worked out from the running time: reading only the
-    /// pictures that stand on their own loses the last slot of a film, and a
-    /// container's stated running time is wrong often enough that nothing may
-    /// be built on it.
+    /// Counted rather than worked out from the running time: a container's
+    /// stated running time is wrong often enough that nothing may be built on
+    /// it, and a film whose last stretch is not a whole one ends a thumbnail
+    /// short of what it suggests.
     pub counted: u32,
     /// Sheets written, numbered from zero.
     pub sheets: u32,
