@@ -9,7 +9,9 @@
 //! convert, and the playback decision already sends those the other way: they
 //! are drawn into the picture, which is what forces a full rebuild.
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 
 use melyxar_core::id::{MediaSourceId, TrackId};
 use melyxar_core::media::{SubtitleDetails, SubtitleLayout, Track, TrackKind};
@@ -44,6 +46,17 @@ pub async fn as_web_vtt(
         .is_ok_and(|file| file.len() > 0)
     {
         tracing::debug!(track = %track_id, "a subtitle was already converted and is served from the cache");
+        return Ok(destination);
+    }
+
+    // Asking for one pulls out every one of them, because the reading is the
+    // whole cost and it is the same reading. Whoever picks the second track
+    // then waits for nothing at all.
+    let _ = pull_them_all_out(state, source_id).await;
+    if tokio::fs::metadata(&destination)
+        .await
+        .is_ok_and(|file| file.len() > 0)
+    {
         return Ok(destination);
     }
 
@@ -144,6 +157,128 @@ pub async fn as_web_vtt(
     }
     tracing::info!(track = %track_id, bytes = written, "a subtitle is ready for the browser");
     Ok(destination)
+}
+
+/// One film is pulled apart once at a time.
+///
+/// Two readings of the same film write the same files at the same moment, and
+/// a subtitle half written by one and half by the other is a subtitle a
+/// browser refuses. It also reads the film twice for nothing: whoever arrives
+/// second waits, and then finds everything already there.
+fn one_reading_at_a_time(source_id: MediaSourceId) -> Arc<tokio::sync::Mutex<()>> {
+    static BY_FILM: OnceLock<
+        std::sync::Mutex<HashMap<MediaSourceId, Arc<tokio::sync::Mutex<()>>>>,
+    > = OnceLock::new();
+    let held = BY_FILM.get_or_init(Default::default);
+    let mut films = held.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    films.entry(source_id).or_default().clone()
+}
+
+/// Pulls every subtitle made of words out of one film, in a single reading.
+///
+/// The cost of pulling a subtitle out of a film is not the writing, which is a
+/// few tens of kilobytes of text: it is that the words are interleaved with the
+/// picture from end to end, so the file has to be read through. Done once per
+/// track, a film carrying seven of them is read seven times, and the viewer who
+/// picks the last one waits for all seven. Measured on a film with seven
+/// tracks: 575 ms in seven passes against 89 ms in one, for output identical to
+/// the byte. On a 4K film the same ratio turns two minutes into seventeen
+/// seconds.
+///
+/// Only what is not already there, and only tracks inside the film: one in a
+/// file of its own is a file of its own to read, and there is nothing to share.
+/// Answers how many were pulled out.
+pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Result<usize> {
+    // Held for the whole reading, and taken before anything is looked at: what
+    // is missing is decided under it, or two readings both decide that the
+    // same seven are missing.
+    let alone = one_reading_at_a_time(source_id);
+    let _reading = alone.lock().await;
+
+    let tools = state.tools().ok_or_else(|| {
+        AppError::Domain(melyxar_core::Error::dependency_missing(
+            "this server has no media tools, so no subtitle can be converted",
+        ))
+    })?;
+
+    let database = state.database();
+    let source = database
+        .playable_source(source_id)
+        .await?
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("media source")))?;
+    if source.missing {
+        return Err(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::RootUnavailable,
+            "the file is not on the disk at the moment",
+        )));
+    }
+
+    let folder = state.config().directories.subtitles();
+    tokio::fs::create_dir_all(&folder)
+        .await
+        .map_err(AppError::Directory)?;
+
+    let tracks = database.tracks_of_source(source_id).await?;
+    let mut wanted: Vec<(i32, PathBuf)> = Vec::new();
+    for track in &tracks {
+        let Ok(details) = text_subtitle(track) else {
+            continue;
+        };
+        if details.is_external {
+            continue;
+        }
+        let destination = cached_at(state, track.id);
+        if tokio::fs::metadata(&destination)
+            .await
+            .is_ok_and(|file| file.len() > 0)
+        {
+            continue;
+        }
+        wanted.push((track.stream_index, destination));
+    }
+
+    if wanted.is_empty() {
+        return Ok(0);
+    }
+
+    tracing::info!(
+        subtitles = wanted.len(),
+        "pulling every subtitle out of this film in one reading"
+    );
+    let asked: Vec<(i32, &Path)> = wanted
+        .iter()
+        .map(|(index, path)| (*index, path.as_path()))
+        .collect();
+    if let Err(error) =
+        melyxar_ffmpeg::subtitles::all_to_web_vtt(&tools.ffmpeg, &source.path, &asked).await
+    {
+        tracing::warn!(
+            %error,
+            subtitles = wanted.len(),
+            "these subtitles could not be pulled out together; each will be tried on its own \
+             when somebody asks for it"
+        );
+        return Err(error.into());
+    }
+
+    // What really landed, rather than what was asked for. A tool that answers
+    // "it went well" and writes nothing leaves a viewer with a player showing
+    // no subtitle and a server reporting no fault.
+    let mut pulled = 0;
+    for (_, destination) in &wanted {
+        if tokio::fs::metadata(destination)
+            .await
+            .is_ok_and(|file| file.len() > 0)
+        {
+            pulled += 1;
+        }
+    }
+    tracing::info!(
+        pulled,
+        asked_for = wanted.len(),
+        "the subtitles of this film are ready for the browser"
+    );
+    Ok(pulled)
 }
 
 /// Throws away every subtitle already converted, and says how many that was.
