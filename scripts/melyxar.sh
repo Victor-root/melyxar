@@ -9,6 +9,10 @@ umask 022
 
 REPO_URL="https://github.com/Victor-root/melyxar.git"
 BRANCH="develop"
+# This script on its own, without the repository around it. Running it from
+# here is what keeps it current: a copy saved on the machine is a copy that
+# stops being the published one the day it is changed, and nothing says so.
+SCRIPT_URL="https://raw.githubusercontent.com/Victor-root/melyxar/${BRANCH}/scripts/melyxar.sh"
 
 APP_USER="melyxar"
 APP_GROUP="melyxar"
@@ -215,6 +219,8 @@ en|done_logs|Follow the logs with:
 fr|done_logs|Suivez les journaux avec :
 en|done_report|Run the report with:
 fr|done_report|Lancez le rapport avec :
+en|done_again|Run this script again, always the published version, with:
+fr|done_again|Relancez ce script, toujours dans sa version publiée, avec :
 en|section_backup|Backup
 fr|section_backup|Sauvegarde
 en|step_backup|Copying the database
@@ -806,7 +812,10 @@ show_done() {
     "${GRAY}  journalctl -u ${SERVICE} -f${RESET}" \
     "" \
     "$(tr_msg done_report)" \
-    "${GRAY}  melyxar --config ${CONFIG_FILE} doctor${RESET}"
+    "${GRAY}  melyxar --config ${CONFIG_FILE} doctor${RESET}" \
+    "" \
+    "$(tr_msg done_again)" \
+    "${GRAY}  bash <(curl -fsSL ${SCRIPT_URL})${RESET}"
 }
 
 action_install() {
