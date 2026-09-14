@@ -675,6 +675,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn what_a_player_sends_to_open_a_session_is_read_whole() {
+        // The tracks and the starting point arrive in one flat object, and a
+        // body that will not be read is not refused: it becomes the default,
+        // silently, and the film then starts from its opening for no reason
+        // anybody can see.
+        let body: OpenBody = serde_json::from_str(
+            r#"{"profile":null,"audio_track_id":"2","subtitle_track_id":"3","start_at_seconds":1024.5}"#,
+        )
+        .expect("the body of a session is read");
+
+        assert_eq!(body.wanted.audio_track_id.as_deref(), Some("2"));
+        assert_eq!(body.wanted.subtitle_track_id.as_deref(), Some("3"));
+        assert_eq!(body.start_at_seconds, Some(1024.5));
+    }
+
+    #[test]
     fn every_route_this_module_declares_is_one_a_router_accepts() {
         // Built at start-up, so a route a router refuses brings the whole
         // server down rather than failing one request. That is exactly what

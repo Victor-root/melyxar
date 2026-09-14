@@ -393,6 +393,18 @@ pub async fn open_session(
     // to be watched, rather than the beginning of a film nobody is at.
     recipe.where_the_viewer_starts = starting_at.or(plan.resume_from).unwrap_or(Millis::ZERO);
 
+    // Both sides named, because they disagreeing is the whole failure mode:
+    // the server producing one part of the film while the player asks for
+    // another costs a restart at best, and the two are set from one number on
+    // the page. A journal that shows only the answer cannot say which of them
+    // was wrong.
+    tracing::debug!(
+        said_by_the_player = starting_at.map(Millis::as_seconds_f64),
+        remembered = plan.resume_from.map(Millis::as_seconds_f64),
+        beginning_at_second = recipe.where_the_viewer_starts.as_seconds_f64(),
+        "a session was told where it begins"
+    );
+
     // Only for a picture carried over untouched. One the server rebuilds gets
     // a key frame on every boundary, put there by the server itself, so the
     // grid is already true of it and reading the film for these would answer a

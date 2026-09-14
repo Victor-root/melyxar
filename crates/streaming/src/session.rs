@@ -316,11 +316,38 @@ impl Session {
             return Ok(path);
         }
         // The header is written with the first segment produced, whichever one
-        // that is, so this asks for the one the viewer is about to watch. The
-        // request for that same segment then finds the tool already on its way
-        // there instead of somewhere else entirely.
-        self.segment(self.where_the_viewer_starts()).await?;
+        // that is, so the tool is set going where the viewer is about to watch
+        // and the header itself is waited for. Never one particular segment:
+        // a player asks for the header and for a segment at the same moment,
+        // and the second request moves the tool. Waiting for a segment the
+        // tool has just been taken away from is waiting for something nobody
+        // is producing, which is how the whole film failed to start.
+        let index = self.where_the_viewer_starts();
+        tracing::debug!(session = %self.id, index, "the header was asked for");
+        self.make_sure_someone_is_producing(index).await?;
+        self.wait_for_the_header(&path).await?;
         Ok(path)
+    }
+
+    /// Waits for the header, whoever ends up writing it.
+    async fn wait_for_the_header(&self, path: &Path) -> Result<()> {
+        let deadline = Instant::now() + PATIENCE;
+        loop {
+            if path.exists() {
+                return Ok(());
+            }
+            let (_, _, tool_is_gone) = self.where_the_tool_has_got_to().await;
+            // Nothing is running and the header is still not there. Waiting
+            // out the deadline would answer the same thing far later, and
+            // with the wrong reason.
+            if tool_is_gone {
+                return Err(self.why_nothing_came(self.where_the_viewer_starts()).await);
+            }
+            if Instant::now() >= deadline {
+                return Err(StreamingError::TooSlow);
+            }
+            tokio::time::sleep(LOOK_AGAIN_EVERY).await;
+        }
     }
 
     /// Which segment the viewer is about to watch.
@@ -1550,6 +1577,50 @@ mod tests {
             !session.path_of(0).exists(),
             "nothing is produced at the opening of a film nobody is at"
         );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn the_header_arrives_even_when_another_request_moves_the_tool() {
+        // A player asks for the header and for a segment at the same moment,
+        // and the two need not be about the same part of the film. Waiting for
+        // the segment the header was fetched with meant waiting for something
+        // the other request had just taken the tool away from: half a minute,
+        // then a film that would not start at all.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip(&source, 60).await;
+        let session = Arc::new(
+            Session::open(
+                SessionId::new(),
+                Recipe {
+                    source,
+                    duration: Millis::new(60_000),
+                    streams: StreamSelection::default(),
+                    video: VideoOutput::Copy,
+                    audio: AudioOutput::Copy,
+                    where_the_viewer_starts: Millis::new(8_000),
+                    where_it_can_be_started: Vec::new(),
+                    if_the_card_refuses: Vec::new(),
+                },
+                directory.path().join("session"),
+                ToolPaths::discover(None, None).expect("the tools are installed here"),
+            )
+            .await
+            .expect("the session opens"),
+        );
+
+        // Far enough ahead that the tool is started again rather than waited
+        // for, and never comes back past what the header was fetched with.
+        let asking_elsewhere = {
+            let session = session.clone();
+            tokio::spawn(async move { session.segment(12).await })
+        };
+        let header = session.initialisation().await;
+        let elsewhere = asking_elsewhere.await.expect("the request finished");
+
+        assert!(header.is_ok(), "the header: {header:?}");
+        assert!(elsewhere.is_ok(), "the other segment: {elsewhere:?}");
         session.close().await;
     }
 
