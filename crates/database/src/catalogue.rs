@@ -71,6 +71,12 @@ pub struct CatalogueSummary {
     pub missing_files: i64,
     pub identified: i64,
     pub awaiting_identification: i64,
+    /// Files read for where their picture can be started.
+    ///
+    /// Reading one means reading the whole file through, so this climbs over
+    /// several scans and is the only way to tell a pass that is still going
+    /// from one that finished.
+    pub read_for_key_frames: i64,
 }
 
 /// A video that belongs to a work without being the work itself.
@@ -251,12 +257,17 @@ impl Database {
                 .fetch_one(self.reader())
                 .await?;
 
+        let read: (i64,) = sqlx::query_as("SELECT count(*) FROM media_source_key_frames")
+            .fetch_one(self.reader())
+            .await?;
+
         Ok(CatalogueSummary {
             works: works.0,
             identified: works.1,
             awaiting_identification: works.2,
             files: files.0,
             missing_files: files.1,
+            read_for_key_frames: read.0,
         })
     }
 
@@ -655,6 +666,79 @@ impl Database {
         .execute(self.writer())
         .await?;
         Ok(done.rows_affected())
+    }
+
+    /// Keeps where the picture of one file can be started.
+    ///
+    /// Replaces whatever was there: a file read again has been read again, and
+    /// two answers about the same file are one answer too many.
+    pub async fn store_key_frames(
+        &self,
+        source_id: MediaSourceId,
+        positions: &[Millis],
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO media_source_key_frames (source_id, positions_ms, counted, read_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (source_id) DO UPDATE
+             SET positions_ms = excluded.positions_ms,
+                 counted = excluded.counted,
+                 read_at = excluded.read_at",
+        )
+        .bind(source_id.to_db_string())
+        .bind(write_positions(positions))
+        .bind(positions.len() as i64)
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// Where the picture of one file can be started, when it has been read.
+    pub async fn key_frames_of(&self, source_id: MediaSourceId) -> Result<Option<Vec<Millis>>> {
+        let row =
+            sqlx::query("SELECT positions_ms FROM media_source_key_frames WHERE source_id = ?")
+                .bind(source_id.to_db_string())
+                .fetch_optional(self.reader())
+                .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let written: String = row.try_get("positions_ms")?;
+        Ok(Some(read_positions(&written)))
+    }
+
+    /// Files that have been described but never read for where they can be
+    /// started, oldest first, a few at a time.
+    ///
+    /// Reading one means reading the whole file through once, so this is a
+    /// background pass bounded like the analysis, and it is picked up again by
+    /// the next one rather than run to the end in a single sitting.
+    pub async fn sources_without_key_frames(&self, limit: i64) -> Result<Vec<MediaSourceId>> {
+        let rows = sqlx::query(
+            "SELECT media_sources.id
+             FROM media_sources
+             LEFT JOIN media_source_key_frames
+                    ON media_source_key_frames.source_id = media_sources.id
+             WHERE media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL
+               AND media_source_key_frames.source_id IS NULL
+             ORDER BY media_sources.added_at
+             LIMIT ?",
+        )
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                id.parse().map_err(|_| {
+                    DatabaseError::Corrupt("media source identifier is malformed".to_string())
+                })
+            })
+            .collect()
     }
 
     /// Marks a file absent. Never a deletion: a disconnected disk must not
@@ -1259,6 +1343,32 @@ fn parse_id<T: std::str::FromStr>(value: &str) -> Result<T> {
         .map_err(|_| DatabaseError::Corrupt(format!("identifier '{value}' is malformed")))
 }
 
+/// Writes a list of positions the way the column holds them.
+///
+/// Ascending milliseconds separated by commas. Plain text rather than packed
+/// bytes: a thousand of them is ten kilobytes, they are only ever read whole,
+/// and a column somebody can read with their eyes is a column that can be
+/// looked at when something goes wrong.
+fn write_positions(positions: &[Millis]) -> String {
+    positions
+        .iter()
+        .map(|position| position.get().to_string())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Reads that list back, leaving out anything that is not a number.
+///
+/// A position nobody can read is left out rather than guessed at: a boundary
+/// invented here is a segment beginning where there is no picture.
+fn read_positions(written: &str) -> Vec<Millis> {
+    written
+        .split(',')
+        .filter_map(|value| value.trim().parse().ok())
+        .map(Millis::new)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1378,6 +1488,131 @@ mod tests {
             .await
             .expect("source recorded");
         (work.id, source)
+    }
+
+    #[tokio::test]
+    async fn where_a_film_can_be_started_is_kept_and_read_back() {
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        assert_eq!(
+            database.key_frames_of(source_id).await.expect("read"),
+            None,
+            "nothing has read this file for where it can be started"
+        );
+
+        let found = vec![Millis::new(0), Millis::new(10_010), Millis::new(20_020)];
+        database
+            .store_key_frames(source_id, &found)
+            .await
+            .expect("kept");
+        assert_eq!(
+            database.key_frames_of(source_id).await.expect("read"),
+            Some(found)
+        );
+
+        // Read again is read again: two answers about one file is one answer
+        // too many.
+        let again = vec![Millis::new(0), Millis::new(4_004)];
+        database
+            .store_key_frames(source_id, &again)
+            .await
+            .expect("kept");
+        assert_eq!(
+            database.key_frames_of(source_id).await.expect("read"),
+            Some(again)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_nobody_has_read_for_its_key_frames_is_offered_up_once() {
+        // Reading one means reading the whole file through, so this is a
+        // background pass that picks up where it left off rather than one that
+        // runs to the end in a single sitting.
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        assert!(
+            database
+                .sources_without_key_frames(10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "nothing has described this file yet, so there is nothing to read it for"
+        );
+
+        database
+            .store_analysis(
+                source_id,
+                &SourceAnalysis {
+                    container: Some("matroska,webm".to_string()),
+                    duration: Some(Millis::new(7_200_000)),
+                    overall_bitrate: None,
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+        assert_eq!(
+            database.sources_without_key_frames(10).await.expect("read"),
+            vec![source_id]
+        );
+
+        database
+            .store_key_frames(source_id, &[Millis::ZERO])
+            .await
+            .expect("kept");
+        assert!(
+            database
+                .sources_without_key_frames(10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "read once is read"
+        );
+
+        // A file off the disk is not a file to read.
+        database
+            .store_analysis(
+                source_id,
+                &SourceAnalysis {
+                    container: Some("matroska,webm".to_string()),
+                    duration: Some(Millis::new(7_200_000)),
+                    overall_bitrate: None,
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+        database
+            .mark_source_missing(source_id)
+            .await
+            .expect("marked");
+        assert!(database
+            .sources_without_key_frames(10)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[test]
+    fn a_position_nobody_can_read_is_left_out_rather_than_guessed_at() {
+        // A boundary invented here is a segment beginning where there is no
+        // picture, which is worse than a boundary missing.
+        assert_eq!(
+            read_positions("0,4004,,rubbish,8008"),
+            vec![Millis::new(0), Millis::new(4004), Millis::new(8008)]
+        );
+        assert_eq!(read_positions(""), Vec::<Millis>::new());
+        assert_eq!(
+            write_positions(&[Millis::new(0), Millis::new(4004)]),
+            "0,4004"
+        );
+        assert_eq!(write_positions(&[]), "");
     }
 
     #[tokio::test]

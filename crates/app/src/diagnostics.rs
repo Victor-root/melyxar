@@ -126,6 +126,12 @@ pub struct CatalogueReport {
     /// Whether films can be looked up at all. Saying so plainly beats leaving
     /// someone to wonder why every film is untitled.
     pub metadata_available: bool,
+    /// Files read for where their picture can be started.
+    ///
+    /// Reading one means reading the whole file through, so the pass runs over
+    /// several scans. This against the file count is the only way to tell a
+    /// pass still going from one that finished.
+    pub read_for_key_frames: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -382,6 +388,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                 identified: summary.identified,
                 awaiting_identification: summary.awaiting_identification,
                 metadata_available: state.metadata_provider().is_some(),
+                read_for_key_frames: summary.read_for_key_frames,
             })?,
         nameless: database
             .works_still_nameless(NAMELESS_SHOWN)
@@ -698,6 +705,29 @@ pub fn render_text(report: &Diagnostics) -> String {
             ),
         );
     }
+
+    // Reading one film for this means reading it through from end to end, so
+    // the pass runs over several scans. Without the count against the files,
+    // a pass still going and a pass that finished look exactly alike, and the
+    // only sign either way is that jumps are landing early.
+    let waiting_to_be_read = report.catalogue.files
+        - report.catalogue.missing_files
+        - report.catalogue.read_for_key_frames;
+    line!(
+        if waiting_to_be_read > 0 { "!" } else { "+" },
+        match waiting_to_be_read > 0 {
+            true => format!(
+                "read for where a jump can land {} of {}, so {} are still cut on the usual grid                  and jump to a little before where they are aimed; another scan carries on",
+                report.catalogue.read_for_key_frames,
+                report.catalogue.files - report.catalogue.missing_files,
+                waiting_to_be_read
+            ),
+            false => format!(
+                "read for where a jump can land: all {} of them",
+                report.catalogue.read_for_key_frames
+            ),
+        },
+    );
     out.push('\n');
 
     if !report.nameless.is_empty() {

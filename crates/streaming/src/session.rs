@@ -52,6 +52,15 @@ pub struct Recipe {
     pub streams: StreamSelection,
     pub video: melyxar_ffmpeg::command::VideoOutput,
     pub audio: melyxar_ffmpeg::command::AudioOutput,
+    /// Where this film can really be started, in order, when it has been read
+    /// for them.
+    ///
+    /// Only ever given for a picture carried over untouched, because that is
+    /// the only case where it changes anything: a picture the server rebuilds
+    /// gets a key frame on every boundary, put there by the server itself.
+    /// Empty means the usual grid, which is what a film nobody has read for
+    /// them gets.
+    pub where_it_can_be_started: Vec<Millis>,
     /// What to rebuild the picture with if the card will not have it, in
     /// order, each one asking less of the card than the one before.
     ///
@@ -232,7 +241,12 @@ impl Session {
         tokio::fs::create_dir_all(&folder).await?;
         Ok(Self {
             id,
-            playlist: Playlist::new(recipe.duration),
+            playlist: match recipe.where_it_can_be_started.is_empty() {
+                true => Playlist::on_a_fixed_grid(recipe.duration),
+                false => {
+                    Playlist::on_these_boundaries(recipe.duration, &recipe.where_it_can_be_started)
+                }
+            },
             recipe,
             folder,
             tools,
@@ -354,14 +368,14 @@ impl Session {
     /// segment, which breaks playback in a way nobody can read. It is exactly
     /// what asking the tool politely used to buy, at a fraction of the price.
     async fn remove_what_was_half_written(&self, from: u32, reached: Millis) {
-        let segment = self.playlist.segment.get().max(1);
         // The tool counts from where it was set going, so what it has written
         // is an offset from there and never a place in the film. Read as a
         // place in the film it names some entirely different part of it, and
         // what gets removed is somebody else's finished work: a tool set going
         // at the eight hundredth segment and eight seconds in would have the
         // second and third segments of the film deleted from under a viewer.
-        let mut index = from + (reached.get().max(0) / segment) as u32;
+        let wrote_up_to = Millis::new(self.playlist.start_of(from).get() + reached.get().max(0));
+        let mut index = self.playlist.segment_holding(wrote_up_to);
         while self.path_of(index).exists() {
             if let Err(error) = tokio::fs::remove_file(self.path_of(index)).await {
                 tracing::warn!(
@@ -592,7 +606,12 @@ impl Session {
                 pattern: self.folder.join("segment-%d.m4s"),
                 initialisation: self.folder.join("init.mp4"),
                 tool_playlist: self.folder.join("tool.m3u8"),
-                duration: self.playlist.segment,
+                // What the tool is asked to aim for, never what it must
+                // produce exactly. Carrying a picture over untouched, it cuts
+                // at the first place the film allows past this, which is the
+                // very rule the playlist was written with: the two then agree
+                // without either knowing about the other.
+                duration: crate::playlist::SEGMENT_DURATION,
                 start_number: index,
             },
         )
@@ -802,6 +821,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
             directory.join("session"),
@@ -908,6 +928,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
             folder.clone(),
@@ -947,6 +968,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
@@ -1002,6 +1024,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Encode(refused),
                 audio: AudioOutput::Copy,
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: vec![VideoOutput::Encode(
                     melyxar_ffmpeg::command::VideoEncode::software_h264(),
                 )],
@@ -1042,6 +1065,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Encode(melyxar_ffmpeg::command::VideoEncode::software_h264()),
                 audio: AudioOutput::Copy,
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: vec![VideoOutput::Encode(
                     melyxar_ffmpeg::command::VideoEncode::software_h264(),
                 )],
@@ -1090,6 +1114,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Encode(encode),
                 audio: AudioOutput::Copy,
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
@@ -1171,6 +1196,7 @@ mod tests {
                     audio: AudioOutput::Encode(
                         melyxar_ffmpeg::command::AudioEncode::browser_stereo("aac"),
                     ),
+                    where_it_can_be_started: Vec::new(),
                     if_the_card_refuses: Vec::new(),
                 },
                 directory.path().join(format!("session-{attempt}")),
@@ -1379,6 +1405,7 @@ mod tests {
                 // Rebuilt, so the tool really starts where it was asked to.
                 video: VideoOutput::Encode(melyxar_ffmpeg::command::VideoEncode::software_h264()),
                 audio: AudioOutput::Copy,
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
@@ -1417,6 +1444,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
@@ -1596,6 +1624,7 @@ mod tests {
                 audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
                     "aac",
                 )),
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
@@ -1643,6 +1672,7 @@ mod tests {
                 streams: StreamSelection::default(),
                 video: VideoOutput::Copy,
                 audio: AudioOutput::Copy,
+                where_it_can_be_started: Vec::new(),
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
@@ -1660,6 +1690,58 @@ mod tests {
             "a copy starts on a key frame at or before the point asked for, \
              and this clip has one every ten seconds: asked for {expected}, \
              got {announced}"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_film_cut_where_it_allows_lands_a_jump_where_it_was_aimed() {
+        // The other half of the test above, and the reason this exists. Cut on
+        // a grid, a copied picture lands on the key frame before the point
+        // asked for, measured at six seconds early on a film with one every
+        // ten. Cut where the film allows, the point asked for is itself a key
+        // frame, so there is nothing earlier to fall back to.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        clip_with_key_frames_every(&source, 60, 240).await;
+
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let found = melyxar_ffmpeg::probe::key_frames(&tools.ffprobe, &source)
+            .await
+            .expect("the film says where it can be started");
+        let boundaries =
+            melyxar_ffmpeg::probe::boundaries_every(&found, crate::playlist::SEGMENT_DURATION);
+
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(60_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Copy,
+                audio: AudioOutput::Copy,
+                where_it_can_be_started: boundaries,
+                if_the_card_refuses: Vec::new(),
+            },
+            directory.path().join("session"),
+            tools,
+        )
+        .await
+        .expect("the session opens");
+        assert!(
+            session.playlist().cut_where_the_film_allows(),
+            "the film was read for where it can be started"
+        );
+
+        // Three segments in, which on this film is thirty seconds: a place a
+        // grid would have put in the middle of two key frames.
+        session.segment(3).await.expect("the segment landed on");
+        let announced = clock_of(&session, 3).await;
+        let expected = session.playlist().start_of(3).as_seconds_f64();
+        assert!(
+            (announced - expected).abs() < 0.5,
+            "the playlist says this segment covers second {expected}, and it \
+             announces itself at {announced}"
         );
         session.close().await;
     }
