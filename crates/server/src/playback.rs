@@ -497,7 +497,7 @@ async fn playlist(state: &AppState, id: &str) -> Response {
                 // belongs to a session that will not outlive the evening.
                 (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
             ],
-            session.playlist().to_text(),
+            session.playlist_text(),
         )
             .into_response(),
         Err(error) => error.into_response(),
