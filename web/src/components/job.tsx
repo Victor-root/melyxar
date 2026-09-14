@@ -15,12 +15,17 @@ export function JobLine({ job, onCancel }: { job: Job; onCancel?: () => void }) 
     <div className={`job job-${job.state}`}>
       <span className="job-kind">{t(`jobs.${job.kind}`)}</span>
       <span className="job-state">{t(`jobs.state.${job.state}`)}</span>
+      {/* A scan is four passes end to end and the long ones are last, so a bar
+          fills up, drops back to nothing and sets off again. Without a word
+          saying which pass that is, it reads as a server that crashed and
+          started over. */}
+      {job.step && <span className="job-step">{t(`jobs.step.${job.step}`)}</span>}
 
       {job.ratio !== null ? (
         <span className="job-bar">
           <span className="job-bar-fill" style={{ width: `${Math.round(job.ratio * 100)}%` }} />
           <span className="job-bar-text">
-            {job.done} / {job.total}
+            {job.done} / {job.total} · {Math.round(job.ratio * 100)} %
           </span>
         </span>
       ) : (

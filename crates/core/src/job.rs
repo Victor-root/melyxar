@@ -51,6 +51,57 @@ impl JobKind {
     }
 }
 
+/// Which part of its work a job is on.
+///
+/// A scan is several passes end to end, and the long ones are at the end. A
+/// bar that fills up, drops back to nothing and sets off again looks exactly
+/// like a server that crashed and started over, so the pass says its own name.
+///
+/// One list for every kind of job rather than one per kind: a step is shown
+/// next to the kind, so there is never a question of which list a word is
+/// from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JobStep {
+    /// Walking the roots of the library and recording what changed.
+    WalkingFolders,
+    /// Reading the file names of the works nobody has named yet.
+    ReadingNamesAgain,
+    /// Asking the analyser what each file holds.
+    AnalysingFiles,
+    /// Reading each film through for the places its picture can be started.
+    ReadingKeyFrames,
+    /// Asking the metadata provider about the works that are waiting.
+    AskingTheProvider,
+    /// Asking again about the films that have a name and are missing the rest.
+    FillingInWhatIsMissing,
+}
+
+impl JobStep {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::WalkingFolders => "walking_folders",
+            Self::ReadingNamesAgain => "reading_names_again",
+            Self::AnalysingFiles => "analysing_files",
+            Self::ReadingKeyFrames => "reading_key_frames",
+            Self::AskingTheProvider => "asking_the_provider",
+            Self::FillingInWhatIsMissing => "filling_in_what_is_missing",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "walking_folders" => Some(Self::WalkingFolders),
+            "reading_names_again" => Some(Self::ReadingNamesAgain),
+            "analysing_files" => Some(Self::AnalysingFiles),
+            "reading_key_frames" => Some(Self::ReadingKeyFrames),
+            "asking_the_provider" => Some(Self::AskingTheProvider),
+            "filling_in_what_is_missing" => Some(Self::FillingInWhatIsMissing),
+            _ => None,
+        }
+    }
+}
+
 /// Where a job stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -131,6 +182,9 @@ pub struct Job {
     pub state: JobState,
     /// What the job is about, such as a library or a work.
     pub target_id: Option<String>,
+    /// Which pass the job is on, when it has said. The counters below are
+    /// counting that pass and nothing else.
+    pub step: Option<JobStep>,
     pub progress_done: i64,
     /// Unknown until the work has been sized up, which is why it is optional
     /// rather than zero: a progress bar showing nothing is better than one
@@ -188,6 +242,17 @@ mod tests {
         ] {
             assert_eq!(JobState::parse(state.as_str()), Some(state));
         }
+        for step in [
+            JobStep::WalkingFolders,
+            JobStep::ReadingNamesAgain,
+            JobStep::AnalysingFiles,
+            JobStep::ReadingKeyFrames,
+            JobStep::AskingTheProvider,
+            JobStep::FillingInWhatIsMissing,
+        ] {
+            assert_eq!(JobStep::parse(step.as_str()), Some(step));
+        }
+        assert_eq!(JobStep::parse("something_new"), None);
     }
 
     #[test]
@@ -211,6 +276,7 @@ mod tests {
             priority: JobPriority::REQUESTED,
             state: JobState::Running,
             target_id: None,
+            step: None,
             progress_done: done,
             progress_total: total,
             failure_reason: None,

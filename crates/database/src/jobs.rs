@@ -6,7 +6,7 @@
 //! the work that was in flight instead of leaving it hanging for ever.
 
 use melyxar_core::id::JobId;
-use melyxar_core::job::{Job, JobKind, JobPriority, JobState};
+use melyxar_core::job::{Job, JobKind, JobPriority, JobState, JobStep};
 use melyxar_core::time::now;
 use sqlx::Row;
 
@@ -43,6 +43,7 @@ impl Database {
             priority,
             state: JobState::Queued,
             target_id: target_id.map(str::to_string),
+            step: None,
             progress_done: 0,
             progress_total: None,
             failure_reason: None,
@@ -104,6 +105,24 @@ impl Database {
         )
         .bind(JobState::Running.as_str())
         .bind(timestamp_to_text(now()))
+        .bind(id.to_db_string())
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// Says which pass the job has just moved on to, and starts its count over.
+    ///
+    /// The counters belong to the pass rather than to the job: a scan analyses
+    /// four hundred files and then reads three hundred and forty of them for
+    /// where they can be started, and adding those together would count the
+    /// same films twice. Written in one go with the step so a screen can never
+    /// catch the new pass carrying the old numbers.
+    pub async fn start_job_step(&self, id: JobId, step: JobStep) -> Result<()> {
+        sqlx::query(
+            "UPDATE jobs SET step = ?, progress_done = 0, progress_total = NULL WHERE id = ?",
+        )
+        .bind(step.as_str())
         .bind(id.to_db_string())
         .execute(self.writer())
         .await?;
@@ -190,6 +209,14 @@ fn job_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Job> {
             DatabaseError::Corrupt(format!("job state '{state_text}' is unknown"))
         })?,
         target_id: row.try_get("target_id")?,
+        // A step is a label on a screen, never a result: one this build does
+        // not know reads as no step at all, where an unknown kind or state is
+        // a row nothing could show and is reported. That is what lets a
+        // database written by a newer build still be read by this one.
+        step: row
+            .try_get::<Option<String>, _>("step")?
+            .as_deref()
+            .and_then(JobStep::parse),
         progress_done: row.try_get("progress_done")?,
         progress_total: row.try_get("progress_total")?,
         failure_reason: row.try_get("failure_reason")?,
@@ -258,6 +285,68 @@ mod tests {
             "a later report without a size must not erase the one already known"
         );
         assert_eq!(stored.ratio(), Some(0.5));
+    }
+
+    #[tokio::test]
+    async fn moving_on_to_the_next_pass_starts_its_count_over() {
+        let database = database().await;
+        let job = database
+            .create_job(JobKind::ScanLibrary, JobPriority::REQUESTED, Some("films"))
+            .await
+            .expect("job created");
+        assert_eq!(
+            database
+                .job(job.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .step,
+            None,
+            "a job that has not said where it is says nothing"
+        );
+
+        database
+            .start_job_step(job.id, JobStep::AnalysingFiles)
+            .await
+            .expect("pass recorded");
+        database
+            .set_job_progress(job.id, 400, Some(400))
+            .await
+            .expect("progress recorded");
+        database
+            .start_job_step(job.id, JobStep::ReadingKeyFrames)
+            .await
+            .expect("next pass recorded");
+
+        let stored = database.job(job.id).await.expect("read").expect("present");
+        assert_eq!(stored.step, Some(JobStep::ReadingKeyFrames));
+        assert_eq!(stored.progress_done, 0);
+        assert_eq!(
+            stored.progress_total, None,
+            "the counters belong to the pass, and counting four hundred analysed \
+             files towards three hundred read ones counts the same films twice"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_pass_this_build_does_not_know_leaves_the_job_readable() {
+        // What a database written by a newer build looks like here. A step is
+        // a word on a screen: losing it must not take the whole row with it.
+        let database = database().await;
+        let job = database
+            .create_job(JobKind::ScanLibrary, JobPriority::REQUESTED, None)
+            .await
+            .expect("job created");
+
+        sqlx::query("UPDATE jobs SET step = 'something_new' WHERE id = ?")
+            .bind(job.id.to_db_string())
+            .execute(database.writer())
+            .await
+            .expect("value forced");
+
+        let stored = database.job(job.id).await.expect("read").expect("present");
+        assert_eq!(stored.step, None);
+        assert_eq!(stored.kind, JobKind::ScanLibrary);
     }
 
     #[tokio::test]

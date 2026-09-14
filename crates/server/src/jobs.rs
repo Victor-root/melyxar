@@ -45,6 +45,10 @@ struct JobView {
     state: &'static str,
     /// What the job is about, such as a library.
     target: Option<String>,
+    /// Which pass the job is on, when it has said. The counters below are
+    /// counting that pass and nothing else, which is what a screen has to say
+    /// out loud when a bar drops back to nothing and sets off again.
+    step: Option<&'static str>,
     done: i64,
     /// Absent until the work has been sized up. A bar showing nothing beats a
     /// bar showing a number that was invented.
@@ -94,6 +98,7 @@ fn job_view(job: &melyxar_core::job::Job) -> JobView {
         kind: job.kind.as_str(),
         state: job.state.as_str(),
         target: job.target_id.clone(),
+        step: job.step.map(|step| step.as_str()),
         done: job.progress_done,
         total: job.progress_total,
         ratio: job.ratio(),
@@ -377,6 +382,7 @@ mod tests {
             priority: JobPriority::REQUESTED,
             state,
             target_id: Some("films".to_string()),
+            step: Some(melyxar_core::job::JobStep::AnalysingFiles),
             progress_done: done,
             progress_total: total,
             failure_reason: None,
@@ -393,6 +399,11 @@ mod tests {
         assert_eq!(view.total, Some(50));
         assert_eq!(view.ratio, Some(0.5));
         assert_eq!(view.state, "running");
+        assert_eq!(
+            view.step,
+            Some("analysing_files"),
+            "the numbers are counting a pass, and the pass has to travel with them"
+        );
     }
 
     #[test]

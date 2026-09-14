@@ -1188,6 +1188,14 @@
   color: var(--accent-bright);
 }
 
+/* Which pass the work is on. Reads louder than the state next to it: the
+   state hardly moves for an hour, and this is the line that says the server
+   is still doing something. */
+.job-step {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
 .job-bar {
   position: relative;
   flex: 1 1 200px;

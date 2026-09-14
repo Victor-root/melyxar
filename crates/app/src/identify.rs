@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use melyxar_core::id::{LibraryId, WorkId};
-use melyxar_core::job::{JobKind, JobPriority, JobState};
+use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
 use melyxar_core::library::Library;
 use melyxar_core::privacy::MediaName;
 use melyxar_core::work::{IdentificationNote, Work};
@@ -66,6 +66,7 @@ where
     // one. A work still waiting has never been given anything but the name of
     // its file, the rules that read those names get better, and a title read
     // by yesterday's rules is the commonest reason a provider answers nothing.
+    handle.at_step(JobStep::ReadingNamesAgain).await;
     let reread = crate::scan::reread_names_of_nameless_works(state, library).await?;
 
     let mut report = IdentifyReport {
@@ -77,6 +78,7 @@ where
     // four disks must not need the button pressing three times, with nothing
     // to say why.
     let waiting = database.works_awaiting_identification(library.id).await?;
+    handle.at_step(JobStep::AskingTheProvider).await;
     handle.set_total(waiting.len() as i64).await;
 
     for work in waiting {
@@ -269,6 +271,9 @@ where
         "some films have a name and are missing something; asking again"
     );
 
+    handle.at_step(JobStep::FillingInWhatIsMissing).await;
+    handle.set_total(waiting.len() as i64).await;
+
     let mut filled = Filled::default();
     for work in waiting {
         if handle.is_cancelled() {
@@ -278,6 +283,7 @@ where
             Ok(details) => fill_in_the_synopsis(provider.as_ref(), details, language).await,
             Err(error) => {
                 tracing::warn!(reason = %error, "the provider would not describe a film again");
+                handle.advance(1).await;
                 continue;
             }
         };
@@ -303,6 +309,7 @@ where
                 filled.synopses += 1;
             }
         }
+        handle.advance(1).await;
     }
     Ok(filled)
 }
