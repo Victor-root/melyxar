@@ -124,13 +124,22 @@ pub struct Preparation {
     pub wanted: u32,
 }
 
-/// Whether a tool started at `from` will reach `index` soon enough that
-/// waiting beats starting again.
+/// Whether a tool that has written as far as `written_to` will reach `index`
+/// soon enough that waiting beats starting it again.
 ///
-/// Behind is never worth waiting for: the tool only moves forward, so a
-/// request for something it has already passed is a viewer who went back.
-fn already_on_its_way(from: u32, index: u32) -> bool {
-    index >= from && index < from + WORTH_WAITING_FOR
+/// Measured from where the tool has got to, never from where it was set going.
+/// Those are the same thing only for the first few seconds of a run: measured
+/// from the start, the window closed after six segments however far the tool
+/// had come, so ordinary playback stopped the tool and started it again every
+/// six segments, for the segment it was on the point of writing. Seen in a
+/// journal: the tool writing the five hundred and nineteenth, the player asking
+/// for the five hundred and twentieth, and the whole thing begun again from a
+/// standing start for one and a half seconds.
+///
+/// Behind is never worth waiting for: the tool only moves forward, so a request
+/// for something it has already passed is a viewer who went back.
+fn already_on_its_way(from: u32, written_to: u32, index: u32) -> bool {
+    index >= from && index < written_to.max(from) + WORTH_WAITING_FOR
 }
 
 /// Which step a running tool is on, from what it has produced so far.
@@ -378,6 +387,20 @@ impl Session {
         }
     }
 
+    /// Which segment the tool at work has written as far as.
+    ///
+    /// From the tool's own account of itself, which counts from where it was
+    /// set going rather than from the beginning of the film. A picture carried
+    /// over untouched is deliberately let to begin early and nothing here knows
+    /// how early, so for those this reads a segment or two further along than
+    /// the truth. That way round on purpose: the wait it decides is then a
+    /// little longer than it needed to be, never shorter, and the tool is on
+    /// its way there either way.
+    fn written_to(&self, at_work: &AtWork) -> u32 {
+        let written = self.playlist.start_of(at_work.from).get() + at_work.reached().get().max(0);
+        self.playlist.segment_holding(Millis::new(written))
+    }
+
     /// Which segment the viewer is about to watch.
     fn where_the_viewer_starts(&self) -> u32 {
         self.playlist
@@ -589,9 +612,27 @@ impl Session {
         let mut running = self.running.lock().await;
 
         if let Some(at_work) = running.as_mut() {
+            let from = at_work.from;
+            let written_to = self.written_to(at_work);
+            let gone = at_work.process.has_exited();
+            let waiting = already_on_its_way(from, written_to, index) && !gone;
+            // Every decision to wait or to begin again, with the three numbers
+            // it was taken on. This is the choice that costs a viewer one wait
+            // or two, and it used to leave nothing behind at all: a tool
+            // started again showed up in the journal as a slow segment, which
+            // is not the same thing and sends anybody reading it elsewhere.
+            tracing::debug!(
+                session = %self.id,
+                index,
+                set_going_at = from,
+                written_to,
+                tool_gone = gone,
+                decision = if waiting { "wait" } else { "begin again" },
+                "a segment was asked for while the tool was at work"
+            );
             // A tool that has finished is started again wherever the request
             // is: there is nothing on its way any more.
-            if already_on_its_way(at_work.from, index) && !at_work.process.has_exited() {
+            if waiting {
                 return Ok(None);
             }
         }
@@ -1777,31 +1818,136 @@ mod tests {
             .map(|at_work| at_work.from)
     }
 
+    /// Which segment the tool at work says it has written as far as.
+    async fn written_to(session: &Session) -> u32 {
+        let running = session.running.lock().await;
+        running
+            .as_ref()
+            .map(|at_work| session.written_to(at_work))
+            .unwrap_or(0)
+    }
+
+    /// A session the tool is still working on when a test asks it anything.
+    ///
+    /// Long, and rebuilt rather than carried over. Both matter: these tests ask
+    /// what a tool at work does, and a short film copied over is finished
+    /// before the question can be put. Answered then, the answer is the right
+    /// one for a different question, which is a test that passes for the wrong
+    /// reason on a slow machine and fails on a fast one.
+    async fn a_session_still_at_work(directory: &Path) -> Session {
+        let source = directory.join("source.mp4");
+        clip(&source, 240).await;
+        Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(240_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Encode(melyxar_ffmpeg::command::VideoEncode::software_h264()),
+                audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
+                where_it_can_be_started: Vec::new(),
+                if_the_card_refuses: Vec::new(),
+            },
+            directory.join("session"),
+            ToolPaths::discover(None, None).expect("the tools are installed here"),
+        )
+        .await
+        .expect("the session opens")
+    }
+
+    /// Waits until the tool is past the window it was set going with, and says
+    /// how far it has written. Fails the test if it finished first.
+    async fn once_the_tool_is_under_way(session: &Session) -> u32 {
+        for _ in 0..600 {
+            if written_to(session).await > WORTH_WAITING_FOR {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let written = written_to(session).await;
+        assert!(
+            written > WORTH_WAITING_FOR,
+            "the tool has to be past the window it was set going with for these \
+             to be asking anything: it reached {written}"
+        );
+
+        let still_at_work = {
+            let mut running = session.running.lock().await;
+            running
+                .as_mut()
+                .is_some_and(|at_work| !at_work.process.has_exited())
+        };
+        assert!(
+            still_at_work,
+            "and it has to still be at work: a tool that has finished is \
+             started again wherever the request is, which is another rule"
+        );
+        written
+    }
+
+    #[tokio::test]
+    async fn watching_a_film_through_never_stops_the_tool_to_start_it_again() {
+        // A player reads ahead of what it is showing, so it asks for segments
+        // the tool has not written yet. Those are the cheapest wait there is,
+        // the very next thing the tool will do. Measured from where the tool
+        // was set going rather than from where it had got to, they fell outside
+        // the window once the run was six segments old: the tool was stopped
+        // and begun again from a standing start, every six segments, for the
+        // whole film.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = a_session_still_at_work(directory.path()).await;
+
+        session.segment(0).await.expect("the first segment");
+        let written = once_the_tool_is_under_way(&session).await;
+
+        // The very next segment, which is what a player asks for next.
+        let started_again = session
+            .make_sure_someone_is_producing(written + 1)
+            .await
+            .expect("the request is answered");
+
+        assert!(
+            started_again.is_none(),
+            "the next segment the tool is about to write is waited for"
+        );
+        assert_eq!(
+            producing_from(&session).await,
+            Some(0),
+            "and the tool is the one that was set going at the beginning"
+        );
+        session.close().await;
+    }
+
     #[tokio::test]
     async fn jumping_ahead_starts_the_tool_where_the_viewer_landed() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let session = session_of(directory.path(), 60).await;
+        let session = a_session_still_at_work(directory.path()).await;
 
         session.segment(0).await.expect("the first segment");
         assert_eq!(producing_from(&session).await, Some(0));
+        let written = once_the_tool_is_under_way(&session).await;
 
         // The rule is asked directly rather than through a request for the
-        // segment. Copying a short clip finishes in well under a second, so a
-        // request that far ahead usually finds the file already on the disk
-        // and rightly hands it over without restarting anything: going through
-        // it would test how fast this machine is, not what the rule says.
+        // segment: a request finds a segment already written and rightly hands
+        // it over without starting anything, and going through it would test
+        // how fast this machine is rather than what the rule says.
+        let landed_on = written + WORTH_WAITING_FOR + 4;
         session
-            .make_sure_someone_is_producing(12)
+            .make_sure_someone_is_producing(landed_on)
             .await
             .expect("the tool starts again");
         assert_eq!(
             producing_from(&session).await,
-            Some(12),
+            Some(landed_on),
             "a viewer dragging the cursor towards the end must not wait for \
              everything in between to be produced first"
         );
 
-        let landed = session.segment(12).await.expect("the segment landed on");
+        let landed = session
+            .segment(landed_on)
+            .await
+            .expect("the segment landed on");
         assert!(landed.exists());
         session.close().await;
     }
@@ -1811,19 +1957,49 @@ mod tests {
         // The other half of the same rule, asked as the question it is.
         // Restarting costs a second or two and throws away work already done,
         // so a request for what is nearly ready waits.
-        assert!(already_on_its_way(0, 0), "the one being produced");
-        assert!(already_on_its_way(0, WORTH_WAITING_FOR - 1), "nearly there");
+        assert!(already_on_its_way(0, 0, 0), "the one being produced");
         assert!(
-            !already_on_its_way(0, WORTH_WAITING_FOR),
+            already_on_its_way(0, 0, WORTH_WAITING_FOR - 1),
+            "nearly there"
+        );
+        assert!(
+            !already_on_its_way(0, 0, WORTH_WAITING_FOR),
             "beyond that, the viewer has jumped"
         );
-        assert!(!already_on_its_way(0, 400), "the end of a long film");
+        assert!(!already_on_its_way(0, 0, 400), "the end of a long film");
 
         // The tool only moves forward, so anything behind it is a viewer who
         // went back and will never be reached by waiting.
-        assert!(!already_on_its_way(10, 9));
-        assert!(!already_on_its_way(10, 0));
-        assert!(already_on_its_way(10, 12), "the window travels with it");
+        assert!(!already_on_its_way(10, 10, 9));
+        assert!(!already_on_its_way(10, 10, 0));
+        assert!(already_on_its_way(10, 10, 12), "the window travels with it");
+    }
+
+    #[test]
+    fn the_window_is_measured_from_where_the_tool_has_got_to() {
+        // What this cost, seen in a journal: a tool set going at the five
+        // hundred and fourteenth segment, writing the five hundred and
+        // nineteenth, and a player asking for the five hundred and twentieth,
+        // which is the very next one. Measured from where the tool was set
+        // going, that fell outside the window, so the tool was stopped and
+        // begun again from a standing start for the segment it was on the
+        // point of writing. Every six segments, for the whole film.
+        assert!(
+            already_on_its_way(514, 519, 520),
+            "the very next segment the tool is about to write"
+        );
+        assert!(
+            already_on_its_way(514, 600, 605),
+            "an hour into a run, the next few are still the next few"
+        );
+        assert!(
+            !already_on_its_way(514, 519, 519 + WORTH_WAITING_FOR),
+            "beyond the window from where it has got to, the viewer has jumped"
+        );
+        assert!(
+            !already_on_its_way(514, 600, 513),
+            "behind where the tool was set going is a viewer who went back"
+        );
     }
 
     /// Where a produced segment says it belongs in the film, read back from
