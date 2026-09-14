@@ -366,17 +366,24 @@ export function Player({
     };
   }, [stream?.id, readyPicture, pictureKey]);
 
-  /* Feeding the segments in. Apple's browsers read a playlist on their own,
-     so there the address goes straight to the element and nothing else is
-     needed. */
+  /* Feeding the segments in.
+
+     The library first, and the browser's own reader only where there is no
+     library to run: that is the one case it is better at, and it is the one
+     browser that gives us no choice.
+
+     It used to be the other way round, on the assumption that a browser saying
+     it reads a playlist is Apple's. That stopped being true: a browser that
+     says so and is handed the address reads the playlist itself, and then none
+     of what is decided here applies to it. It ignored where the playlist said
+     to begin, so it asked for the opening of the film and only jumped once the
+     picture had started, which had the server build three segments nobody
+     would ever see; it said nothing about what it was doing, since everything
+     the page knows it knows through the library; and nothing on this side
+     could tell, because it plays perfectly well. */
   useEffect(() => {
     const element = video.current;
     if (!element || !stream) {
-      return;
-    }
-
-    if (element.canPlayType("application/vnd.apple.mpegurl")) {
-      element.src = stream.playlist_url;
       return;
     }
 
@@ -391,6 +398,12 @@ export function Player({
         return;
       }
       if (!Library.isSupported()) {
+        // No library here, which is a browser without the parts it is built
+        // on. Those read a playlist themselves, and this is what that is for.
+        if (element.canPlayType("application/vnd.apple.mpegurl")) {
+          element.src = stream.playlist_url;
+          return;
+        }
         setFailed("player.cannot_play");
         return;
       }
