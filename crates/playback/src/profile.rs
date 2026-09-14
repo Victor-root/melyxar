@@ -61,6 +61,49 @@ impl VideoCapability {
     }
 }
 
+/// A codec the client takes in a stream fed to it piece by piece, and how far
+/// it takes it.
+///
+/// The height is the whole point. "Do you decode AV1" and "do you decode this
+/// film, at this size, as fast as it plays" are different questions, and only
+/// the second one decides whether somebody sees a picture. Measured on the
+/// machine: the same browser and the same codec answer differently on two
+/// computers, and differently again on the same computer with another film.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RebuiltCapability {
+    /// Codec name as the analyser spells it.
+    pub codec: String,
+    /// Tallest picture the client decodes smoothly in this codec.
+    ///
+    /// Absent means no limit was measured, which is what a client too old to
+    /// be asked the question says. Taken as no limit, because that is what it
+    /// used to mean and refusing everything would rebuild nothing.
+    #[serde(default)]
+    pub max_height: Option<i32>,
+}
+
+impl RebuiltCapability {
+    pub fn any(codec: impl Into<String>) -> Self {
+        Self {
+            codec: codec.into(),
+            max_height: None,
+        }
+    }
+
+    /// Whether this codec covers a picture of that height.
+    pub fn covers(&self, codec: &str, height: Option<i32>) -> bool {
+        if !self.codec.eq_ignore_ascii_case(codec) {
+            return false;
+        }
+        match (self.max_height, height) {
+            (Some(max), Some(actual)) => actual <= max,
+            // A height nobody knows is accepted: a film whose size was never
+            // read would otherwise never be rebuilt at all.
+            _ => true,
+        }
+    }
+}
+
 /// Everything a client says it can handle.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClientProfile {
@@ -78,7 +121,7 @@ pub struct ClientProfile {
     /// Empty means nothing was measured, and the server then produces the one
     /// codec every client reads.
     #[serde(default)]
-    pub rebuilt_video: Vec<String>,
+    pub rebuilt_video: Vec<RebuiltCapability>,
     /// Audio codec names the client can decode.
     pub audio_codecs: Vec<String>,
     /// Most channels the client will accept. Browsers output stereo.
@@ -130,18 +173,31 @@ impl ClientProfile {
             .any(|known| known.eq_ignore_ascii_case(codec))
     }
 
-    /// Whether a stream rebuilt into this codec is one the client will take.
+    /// Whether a stream rebuilt into this codec, at this height, is one the
+    /// client will take.
     ///
     /// A client that measured nothing gets the codec every client reads, which
     /// is the only safe answer: producing a codec on a guess and being wrong
     /// is a black screen with no message on it.
-    pub fn accepts_rebuilt(&self, codec: &str) -> bool {
+    pub fn accepts_rebuilt(&self, codec: &str, height: Option<i32>) -> bool {
         if self.rebuilt_video.is_empty() {
             return codec.eq_ignore_ascii_case(ALWAYS_READ);
         }
         self.rebuilt_video
             .iter()
-            .any(|known| known.eq_ignore_ascii_case(codec))
+            .any(|known| known.covers(codec, height))
+    }
+
+    /// The tallest picture the client named for a rebuilt codec.
+    ///
+    /// Only for a codec it named a limit for: nothing for one it never
+    /// mentioned, and nothing for one it set no limit on, which needs no
+    /// shrinking to be accepted.
+    pub fn tallest_rebuilt(&self, codec: &str) -> Option<i32> {
+        self.rebuilt_video
+            .iter()
+            .find(|known| known.codec.eq_ignore_ascii_case(codec))
+            .and_then(|known| known.max_height)
     }
 
     pub fn supports_subtitle_format(&self, codec: &str) -> bool {
@@ -165,7 +221,7 @@ impl ClientProfile {
             ],
             // Only the one every client reads: this stands in for a client
             // that measured nothing, and a guess wrong here is a black screen.
-            rebuilt_video: vec![ALWAYS_READ.into()],
+            rebuilt_video: vec![RebuiltCapability::any(ALWAYS_READ)],
             audio_codecs: vec![
                 "aac".into(),
                 "mp3".into(),
@@ -244,20 +300,85 @@ mod tests {
             rebuilt_video: Vec::new(),
             ..ClientProfile::conservative_browser()
         };
-        assert!(silent.accepts_rebuilt("h264"));
-        assert!(!silent.accepts_rebuilt("av1"));
-        assert!(!silent.accepts_rebuilt("hevc"));
+        assert!(silent.accepts_rebuilt("h264", Some(2160)));
+        assert!(!silent.accepts_rebuilt("av1", Some(2160)));
+        assert!(!silent.accepts_rebuilt("hevc", Some(2160)));
     }
 
     #[test]
     fn a_client_that_said_what_it_takes_is_taken_at_its_word() {
         let measured = ClientProfile {
-            rebuilt_video: vec!["h264".into(), "hevc".into(), "av1".into()],
+            rebuilt_video: vec![
+                RebuiltCapability::any("h264"),
+                RebuiltCapability::any("hevc"),
+                RebuiltCapability::any("av1"),
+            ],
             ..ClientProfile::conservative_browser()
         };
-        assert!(measured.accepts_rebuilt("av1"));
-        assert!(measured.accepts_rebuilt("HEVC"));
-        assert!(!measured.accepts_rebuilt("vp9"));
+        assert!(measured.accepts_rebuilt("av1", Some(2160)));
+        assert!(measured.accepts_rebuilt("HEVC", Some(2160)));
+        assert!(!measured.accepts_rebuilt("vp9", Some(2160)));
+    }
+
+    #[test]
+    fn a_client_is_taken_at_its_word_about_how_far_it_goes_as_well() {
+        // The whole reason the height is there. Asked whether it decodes AV1,
+        // a browser says yes and means somewhere; asked whether it decodes a
+        // 4K film in it as fast as it plays, it says no. Only the second
+        // question decides whether anybody sees a picture, and a film rebuilt
+        // past the answer buffers whole without ever showing a frame.
+        let measured = ClientProfile {
+            rebuilt_video: vec![
+                RebuiltCapability::any("h264"),
+                RebuiltCapability {
+                    codec: "av1".into(),
+                    max_height: Some(1080),
+                },
+            ],
+            ..ClientProfile::conservative_browser()
+        };
+
+        assert!(measured.accepts_rebuilt("av1", Some(1080)));
+        assert!(measured.accepts_rebuilt("av1", Some(720)));
+        assert!(
+            !measured.accepts_rebuilt("av1", Some(2160)),
+            "past what it answered is a picture that never appears"
+        );
+        assert!(
+            measured.accepts_rebuilt("h264", Some(2160)),
+            "and the codec it set no limit on goes as far as the film does"
+        );
+        assert!(
+            measured.accepts_rebuilt("av1", None),
+            "a film whose size was never read would otherwise never be rebuilt"
+        );
+    }
+
+    #[test]
+    fn a_profile_is_read_from_what_a_page_really_sends() {
+        // The shape on the wire, which is the one thing a type cannot check
+        // on its own: a page and a server that disagree about it end up with
+        // the server reading no profile at all and rebuilding every film into
+        // the safe codec, quietly and for ever.
+        let profile: ClientProfile = serde_json::from_str(
+            r#"{"containers":["mp4"],"video":[{"codec":"h264"}],
+                "rebuilt_video":[{"codec":"h264","max_height":2160},
+                                 {"codec":"av1","max_height":1080},
+                                 {"codec":"hevc","max_height":null}],
+                "audio_codecs":["aac"],"max_audio_channels":2,
+                "subtitle_formats":["webvtt"],"supports_hdr":false,
+                "max_height":null,"max_bitrate":null,
+                "can_switch_tracks_in_container":false}"#,
+        )
+        .expect("what the page sends is what the server reads");
+
+        assert!(profile.accepts_rebuilt("av1", Some(1080)));
+        assert!(!profile.accepts_rebuilt("av1", Some(2160)));
+        assert!(profile.accepts_rebuilt("h264", Some(2160)));
+        assert!(
+            profile.accepts_rebuilt("hevc", Some(2160)),
+            "a codec the page measured no limit for is not limited"
+        );
     }
 
     #[test]

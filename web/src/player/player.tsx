@@ -231,15 +231,19 @@ export function Player({
      that can only be drawn into the picture. */
   useEffect(() => {
     const controller = new AbortController();
-    api
-      .plan(
-        sourceId,
-        {
-          profile: clientProfile(quality),
-          audio_track_id: audioId,
-          subtitle_track_id: subtitleId,
-        },
-        controller.signal,
+    /* The profile is measured rather than read off a list, which takes a
+       moment the first time and nothing at all afterwards. */
+    clientProfile(quality)
+      .then((profile) =>
+        api.plan(
+          sourceId,
+          {
+            profile,
+            audio_track_id: audioId,
+            subtitle_track_id: subtitleId,
+          },
+          controller.signal,
+        ),
       )
       .then((answer) => {
         if (!opened.current) {
@@ -301,19 +305,21 @@ export function Player({
     const controller = new AbortController();
     let gone = false;
 
-    api
-      .openSession(
-        sourceId,
-        {
-          // A subtitle is named only when it has to be painted into the
-          // picture. One made of words travels on its own beside it, and
-          // naming it here would rebuild the film for nothing.
-          profile: clientProfile(quality),
-          audio_track_id: audioId,
-          subtitle_track_id: paintedIn,
-          start_at_seconds: openedAt.current,
-        },
-        controller.signal,
+    clientProfile(quality)
+      .then((profile) =>
+        api.openSession(
+          sourceId,
+          {
+            // A subtitle is named only when it has to be painted into the
+            // picture. One made of words travels on its own beside it, and
+            // naming it here would rebuild the film for nothing.
+            profile,
+            audio_track_id: audioId,
+            subtitle_track_id: paintedIn,
+            start_at_seconds: openedAt.current,
+          },
+          controller.signal,
+        ),
       )
       .then((opening) => {
         if (gone) {

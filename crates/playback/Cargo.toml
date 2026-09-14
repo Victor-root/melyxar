@@ -10,3 +10,6 @@ description = "Decides how a media source can be delivered to a given client."
 [dependencies]
 melyxar-core = { workspace = true }
 serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
