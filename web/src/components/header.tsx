@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
+import { outOfAHundred } from "./job";
 import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
 import { useSettings } from "../settings";
@@ -96,7 +97,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
           <Link className="header-busy" to="/activity">
             <span className="header-busy-mark" aria-hidden="true" />
             {t(`jobs.${jobs[0].kind}`)}
-            {jobs[0].ratio !== null && ` ${Math.round(jobs[0].ratio * 100)} %`}
+            {jobs[0].ratio !== null && ` ${outOfAHundred(jobs[0].ratio)} %`}
           </Link>
         ) : scan.refused ? (
           <span className="header-refused" role="alert">

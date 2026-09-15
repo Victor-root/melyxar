@@ -15,8 +15,12 @@ import { useSettings } from "../settings";
  * forty seven reads a hundred per cent while it still has a whole film to
  * read: seen on the scan, where that last film was several minutes. A hundred
  * per cent is said when it is a hundred per cent.
+ *
+ * Shared with the mark in the page header rather than worked out twice: the
+ * two sit on the same screen, and one saying a hundred while the other says
+ * ninety nine is a screen nobody can believe.
  */
-function outOfAHundred(ratio: number): number {
+export function outOfAHundred(ratio: number): number {
   return ratio >= 1 ? 100 : Math.min(99, Math.floor(ratio * 100));
 }
 
