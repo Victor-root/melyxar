@@ -332,7 +332,58 @@ pub async fn key_frames(analyser: &Path, media: &Path) -> Result<Vec<Millis>> {
         });
     }
 
-    Ok(read_key_frames(&String::from_utf8_lossy(&output.stdout)))
+    let listing = String::from_utf8_lossy(&output.stdout);
+    let found = read_key_frames(&listing);
+    if found.is_empty() {
+        let seen = what_was_seen(&listing);
+        tracing::warn!(
+            file = %melyxar_core::privacy::MediaName::new(
+                media.file_name().and_then(|name| name.to_str()).unwrap_or_default()
+            ),
+            packets = seen.packets,
+            standing_alone = seen.standing_alone,
+            standing_alone_with_no_time = seen.standing_alone_with_no_time,
+            "this film gave no place its picture can be started"
+        );
+    }
+    Ok(found)
+}
+
+/// What a listing held, for a film that gave no starting point at all.
+///
+/// Three different faults hide behind "this film gives none", and they are not
+/// put right the same way: an analyser that listed nothing, a picture whose
+/// packets are never marked as standing on their own, and packets that are
+/// marked and carry no time. Without these three numbers the only way to tell
+/// them apart is to have the file in hand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WhatWasSeen {
+    pub packets: usize,
+    pub standing_alone: usize,
+    pub standing_alone_with_no_time: usize,
+}
+
+/// Counts what a packet listing held.
+pub fn what_was_seen(listing: &str) -> WhatWasSeen {
+    let mut seen = WhatWasSeen {
+        packets: 0,
+        standing_alone: 0,
+        standing_alone_with_no_time: 0,
+    };
+    for line in listing.lines().filter(|line| !line.trim().is_empty()) {
+        seen.packets += 1;
+        let Some((when, flags)) = line.split_once(',') else {
+            continue;
+        };
+        if !flags.contains('K') {
+            continue;
+        }
+        seen.standing_alone += 1;
+        if seconds_to_ms(when).is_none() {
+            seen.standing_alone_with_no_time += 1;
+        }
+    }
+    seen
 }
 
 /// Picks the key frames out of a packet listing.
@@ -424,6 +475,40 @@ mod tests {
         // no picture, which is worse than a segment boundary missing.
         let listing = "N/A,K__\n0.000000,K__\n,K__\nrubbish,K__\n";
         assert_eq!(read_key_frames(listing), vec![Millis::new(0)]);
+    }
+
+    #[test]
+    fn a_film_that_gives_nothing_says_which_of_the_three_nothings_it_is() {
+        // Nothing listed at all, which is an analyser that answered nothing.
+        assert_eq!(
+            what_was_seen(""),
+            WhatWasSeen {
+                packets: 0,
+                standing_alone: 0,
+                standing_alone_with_no_time: 0
+            }
+        );
+
+        // Packets, and not one of them stands on its own.
+        assert_eq!(
+            what_was_seen("0.000000,___\n4.000000,___\n"),
+            WhatWasSeen {
+                packets: 2,
+                standing_alone: 0,
+                standing_alone_with_no_time: 0
+            }
+        );
+
+        // Packets that stand on their own and carry no time, which is the one
+        // that looks like the others and is not.
+        assert_eq!(
+            what_was_seen("N/A,K__\nN/A,K__\n8.000000,___\n"),
+            WhatWasSeen {
+                packets: 3,
+                standing_alone: 2,
+                standing_alone_with_no_time: 2
+            }
+        );
     }
 
     #[test]
