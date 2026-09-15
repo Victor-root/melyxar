@@ -460,6 +460,43 @@ export interface PlaybackPlan {
   rebuild: PictureRebuild | null;
   /** The little pictures of the bar, when this film has been read for them. */
   thumbnails: PlaybackThumbnails | null;
+  /** What the file itself holds, beside what is being made of it. */
+  film: FilmHolds;
+}
+
+/** What the file holds, as the analyser read it. */
+export interface FilmHolds {
+  container: string | null;
+  size_bytes: number;
+  /** Everything in the file per second, streams and container alike. */
+  overall_bitrate: number | null;
+  picture: PictureHeld | null;
+  /** The soundtrack being played, not the first one in the file. */
+  sound: SoundHeld | null;
+}
+
+export interface PictureHeld {
+  codec: string;
+  profile: string | null;
+  /** The picture, margins off. */
+  width: number;
+  height: number;
+  /** The frame it sits in, only when the film says part of it is not the
+   *  picture. */
+  frame_width: number | null;
+  frame_height: number | null;
+  frame_rate: number | null;
+  bitrate: number | null;
+  hdr: string | null;
+  bit_depth: number | null;
+}
+
+export interface SoundHeld {
+  codec: string;
+  channels: number;
+  channel_layout: string | null;
+  sample_rate: number | null;
+  bitrate: number | null;
 }
 
 /**

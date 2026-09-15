@@ -35,6 +35,7 @@ import {
 } from "./appearance";
 import type { Appearance } from "./appearance";
 import { Controls, playOrPause } from "./controls";
+import { PlaybackFacts } from "./facts";
 import { watchTheReading } from "./watch";
 import { languageName } from "./languages";
 import { clientProfile } from "./profile";
@@ -243,6 +244,9 @@ export function Player({
   const [audioId, setAudioId] = useState<string | null>(null);
   const [subtitleId, setSubtitleId] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
+  /* Whether the panel saying what is happening to this film is open. Shut
+     between films: it is opened to look at one film in particular. */
+  const [factsOpen, setFactsOpen] = useState(false);
   /* What the viewer asked the picture to be held to. Kept across films rather
      than per film: somebody watching on a thin connection is on a thin
      connection for the next one too. */
@@ -960,6 +964,10 @@ export function Player({
           )}
         </video>
 
+        {factsOpen && (
+          <PlaybackFacts plan={plan} video={video} t={t} onClose={() => setFactsOpen(false)} />
+        )}
+
         {/* Ours rather than the browser's, because showing the picture of the
             moment under the cursor means knowing where the cursor is on the
             bar, and the browser's bar says nothing about that. */}
@@ -970,6 +978,8 @@ export function Player({
           thumbnails={plan.thumbnails}
           onViewerMoving={viewerMoving}
           onViewerMoved={viewerMoved}
+          factsOpen={factsOpen}
+          onFactsTurned={() => setFactsOpen((open) => !open)}
           t={t}
         />
         </div>

@@ -61,6 +61,10 @@ pub struct PlayPlan {
     /// sent to a client.
     pub path: PathBuf,
     pub size_bytes: i64,
+    /// What the file is wrapped in, as the analyser named it.
+    pub container: Option<String>,
+    /// Everything in the file per second, streams and container alike.
+    pub overall_bitrate: Option<i64>,
     pub duration: Option<Millis>,
     pub decision: PlaybackDecision,
     /// Where this viewer stopped last time, when they did.
@@ -283,6 +287,8 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         work_id: source.work_id,
         path: source.path,
         size_bytes: source.size_bytes,
+        container: source.container.clone(),
+        overall_bitrate: source.overall_bitrate,
         duration: source.duration,
         decision,
         resume_from,

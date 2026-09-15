@@ -123,6 +123,57 @@ struct PlanView {
     /// The little pictures shown while dragging along the bar, when this film
     /// has been read for them.
     thumbnails: Option<ThumbnailsView>,
+    /// What the file itself holds, beside what is being made of it.
+    ///
+    /// Every media server shows this while a film plays, and for a reason: a
+    /// film that looks or sounds wrong is one question, "what is in the file
+    /// and what is being done to it", and answering it used to mean reading
+    /// the journal. The two halves have to sit side by side or neither means
+    /// anything.
+    film: FilmView,
+}
+
+/// What the file holds, as the analyser read it.
+#[derive(Debug, Serialize)]
+struct FilmView {
+    container: Option<String>,
+    size_bytes: i64,
+    /// Everything in the file, per second, streams and container alike.
+    overall_bitrate: Option<i64>,
+    /// The picture being played, when the file holds one.
+    picture: Option<PictureView>,
+    /// The soundtrack being played, which is the one chosen rather than the
+    /// first: a film with four languages has four, and only one is playing.
+    sound: Option<SoundView>,
+}
+
+#[derive(Debug, Serialize)]
+struct PictureView {
+    codec: String,
+    profile: Option<String>,
+    /// The picture, margins off. What a viewer means by the size of a film.
+    width: i32,
+    height: i32,
+    /// The frame the picture sits in, said only when the film declares that
+    /// part of that frame is not the picture. The two being different is the
+    /// whole reason such a film is handled apart, and nothing else on a screen
+    /// says so.
+    frame_width: Option<i32>,
+    frame_height: Option<i32>,
+    frame_rate: Option<f64>,
+    bitrate: Option<i64>,
+    /// hdr10, hlg or dolby_vision. Absent for an ordinary picture.
+    hdr: Option<&'static str>,
+    bit_depth: Option<i32>,
+}
+
+#[derive(Debug, Serialize)]
+struct SoundView {
+    codec: String,
+    channels: i32,
+    channel_layout: Option<String>,
+    sample_rate: Option<i32>,
+    bitrate: Option<i64>,
 }
 
 /// Everything a page needs to put a thumbnail under the cursor.
@@ -298,6 +349,66 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
             height: rebuild.height,
             bitrate: rebuild.bitrate,
         }),
+        film: film_view(plan),
+    }
+}
+
+/// What the file holds, beside what is being made of it.
+///
+/// The soundtrack shown is the one being played rather than the first in the
+/// file: a film carrying four languages holds four, and three of them have
+/// nothing to do with what a viewer is hearing.
+fn film_view(plan: &PlayPlan) -> FilmView {
+    let picture = plan.tracks.iter().find_map(|track| match &track.kind {
+        TrackKind::Video(details) => Some(PictureView {
+            codec: details.codec.clone(),
+            profile: details.profile.clone(),
+            width: details.visible_width(),
+            height: details.visible_height(),
+            // Said only when the film declares that part of its frame is not
+            // the picture. The two being different is the whole reason such a
+            // film is handled apart, and nothing else on a screen says so.
+            frame_width: details.margins.map(|_| details.width),
+            frame_height: details.margins.map(|_| details.height),
+            frame_rate: details.frame_rate,
+            bitrate: details.bitrate,
+            hdr: details.hdr.map(|hdr| match hdr {
+                melyxar_core::media::HdrFormat::Hdr10 => "hdr10",
+                melyxar_core::media::HdrFormat::Hlg => "hlg",
+                melyxar_core::media::HdrFormat::DolbyVision { .. } => "dolby_vision",
+            }),
+            bit_depth: details.color.bit_depth,
+        }),
+        _ => None,
+    });
+
+    let sound = plan
+        .tracks
+        .iter()
+        .find(|track| {
+            matches!(track.kind, TrackKind::Audio(_))
+                && plan
+                    .decision
+                    .audio_stream_index
+                    .is_some_and(|index| track.stream_index == index)
+        })
+        .and_then(|track| match &track.kind {
+            TrackKind::Audio(details) => Some(SoundView {
+                codec: details.codec.clone(),
+                channels: details.channels,
+                channel_layout: details.channel_layout.clone(),
+                sample_rate: details.sample_rate,
+                bitrate: details.bitrate,
+            }),
+            _ => None,
+        });
+
+    FilmView {
+        container: plan.container.clone(),
+        size_bytes: plan.size_bytes,
+        overall_bitrate: plan.overall_bitrate,
+        picture,
+        sound,
     }
 }
 
@@ -893,6 +1004,8 @@ mod tests {
             work_id: WorkId::new(),
             path: "Quiet.Harbour.2019.mkv".into(),
             size_bytes: 12_000,
+            container: Some("matroska,webm".into()),
+            overall_bitrate: Some(8_000_000),
             duration: Some(Millis::new(7_200_000)),
             decision: melyxar_app::playback::PlaybackDecision {
                 method: melyxar_app::playback::PlaybackMethod::Remux,
@@ -934,6 +1047,84 @@ mod tests {
             Some(plan.tracks[0].id.to_string().as_str()),
             "the picture is not a subtitle"
         );
+    }
+
+    #[test]
+    fn the_frame_is_said_only_when_it_is_not_the_picture() {
+        // A film that says part of its frame is not the picture is two shapes,
+        // and the difference is the whole reason it is handled apart. Saying
+        // the frame on every film would put the same two numbers twice on
+        // every screen and teach nobody anything.
+        let ordinary = plan_view(&film_with_a_separate_subtitle());
+        let picture = ordinary.film.picture.expect("this film holds a picture");
+        assert_eq!((picture.width, picture.height), (1920, 1080));
+        assert_eq!(
+            (picture.frame_width, picture.frame_height),
+            (None, None),
+            "nothing is cut off this one, so there is no frame to name"
+        );
+
+        let mut cut = film_with_a_separate_subtitle();
+        if let TrackKind::Video(details) = &mut cut.tracks[0].kind {
+            details.width = 3840;
+            details.height = 2160;
+            details.margins = Some(melyxar_core::media::Margins {
+                top: 276,
+                bottom: 276,
+                left: 0,
+                right: 0,
+            });
+        }
+        let picture = plan_view(&cut)
+            .film
+            .picture
+            .expect("this film holds a picture");
+        assert_eq!(
+            (picture.width, picture.height),
+            (3840, 1608),
+            "the picture is what is left once the margins are off"
+        );
+        assert_eq!(
+            (picture.frame_width, picture.frame_height),
+            (Some(3840), Some(2160)),
+            "and the frame around it is said beside it"
+        );
+    }
+
+    #[test]
+    fn the_soundtrack_shown_is_the_one_being_played() {
+        // A film carrying four languages holds four soundtracks, and three of
+        // them have nothing to do with what a viewer is hearing.
+        use melyxar_core::media::{AudioDetails, Track};
+
+        let mut plan = film_with_a_separate_subtitle();
+        let source_id = plan.source_id;
+        let sound = |index: i32, codec: &str, channels: i32| Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: index,
+            language: None,
+            title: None,
+            is_default: index == 1,
+            is_forced: false,
+            kind: TrackKind::Audio(AudioDetails {
+                codec: codec.into(),
+                profile: None,
+                channels,
+                channel_layout: None,
+                sample_rate: Some(48_000),
+                bit_depth: None,
+                bitrate: None,
+                loudness: Default::default(),
+            }),
+        };
+        plan.tracks.push(sound(1, "ac3", 6));
+        plan.tracks.push(sound(2, "aac", 2));
+        plan.decision.audio_stream_index = Some(2);
+
+        let heard = plan_view(&plan).film.sound.expect("a soundtrack is playing");
+        assert_eq!(heard.codec, "aac");
+        assert_eq!(heard.channels, 2);
     }
 
     #[test]
