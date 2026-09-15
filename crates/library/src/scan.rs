@@ -104,6 +104,16 @@ fn walk_into(root: &Path, start: &Path, outcome: &mut ScanOutcome, root_label: &
 
         for entry in entries.filter_map(Result::ok) {
             let path = entry.path();
+            // Anything hidden is left where it is, folder or file. A collection
+            // that has lived on a network drive carries folders the drive made
+            // for itself, and they are full of things that look exactly like
+            // films: seen on the maintainer's own library, a `.@__thumb` folder
+            // holding twenty pictures each named after a film and ending in
+            // .mkv, every one of them walked in, described, and read through
+            // for the little pictures of its bar.
+            if entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
             let Ok(metadata) = entry.metadata() else {
                 continue;
             };
@@ -491,6 +501,35 @@ mod tests {
         );
         assert_eq!(changes.unchanged, 1);
         assert!(changes.added.is_empty() && changes.changed.is_empty());
+    }
+
+    #[test]
+    fn what_a_drive_hides_for_itself_is_not_taken_for_a_film() {
+        // A network drive keeps its own thumbnails in a hidden folder, each
+        // named after the film it came from and ending in .mkv. Walked in,
+        // they are twenty films that are not films, and every one of them is
+        // described, read for where a jump can land, and read again for the
+        // little pictures of its bar.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let hidden = directory.path().join(".@__thumb");
+        std::fs::create_dir_all(&hidden).expect("the folder a drive makes");
+        std::fs::write(hidden.join("s800Quiet.Harbour.2019.mkv"), b"a thumbnail")
+            .expect("what it keeps in there");
+        std::fs::write(directory.path().join(".hidden.mkv"), b"hidden").expect("a hidden file");
+        std::fs::write(directory.path().join("Quiet.Harbour.2019.mkv"), b"a film")
+            .expect("the film itself");
+
+        let outcome = walk("disk-one", directory.path()).expect("the root is readable");
+        assert_eq!(
+            outcome
+                .files
+                .iter()
+                .map(|file| file.relative_path.clone())
+                .collect::<Vec<_>>(),
+            vec![PathBuf::from("Quiet.Harbour.2019.mkv")],
+            "only the film"
+        );
+        assert!(outcome.unreadable_folders.is_empty());
     }
 
     #[test]
