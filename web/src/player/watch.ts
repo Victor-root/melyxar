@@ -38,6 +38,18 @@ const SAY_SO_ANYWAY_AFTER_MS = 5_000;
  */
 const A_GESTURE_ENDS_AFTER_MS = 400;
 
+/**
+ * How far before the landing a picture still counts as the landing.
+ *
+ * A browser puts up the picture nearest the moment asked for, which sits on
+ * the film's own grid and so falls a fraction of a second short: measured at
+ * thirty four thousandths on a film of twenty four pictures a second. A
+ * quarter of a second covers every rate a film is made at and stays far
+ * shorter than landing in the wrong place, which is counted in seconds and is
+ * the thing this must not quietly swallow.
+ */
+const CLOSE_ENOUGH_TO_THE_LANDING_MS = 250;
+
 /** The stretch the browser holds around one moment, and how many it holds. */
 function whatIsHeldAround(element: HTMLVideoElement, moment: number) {
   const held = element.buffered;
@@ -94,6 +106,51 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
     }
   };
 
+  /* How long a jump takes to put the film back on the screen, which is the
+     only part of a jump a viewer actually counts and the one number neither
+     side could produce alone. Timed from the last move of the gesture, and
+     read from a picture the browser says it has put up rather than one it has
+     decoded: decoding ahead of a screen with nothing on it is exactly the
+     fault worth catching. */
+  let waitingForThePicture: {
+    askedAt: number;
+    askedFor: number;
+    wasHeldAlready: boolean;
+    stretches: number;
+    pending: number | null;
+  } | null = null;
+
+  const watchForThePicture = () => {
+    if (!element.requestVideoFrameCallback) {
+      return;
+    }
+    const waiting = waitingForThePicture;
+    if (waiting === null) {
+      return;
+    }
+    waiting.pending = element.requestVideoFrameCallback((now, picture) => {
+      if (waitingForThePicture !== waiting) {
+        return;
+      }
+      // A picture from before the landing is the film still where it was, not
+      // the film back where the viewer asked for it.
+      if (picture.mediaTime * 1000 < waiting.askedFor * 1000 - CLOSE_ENOUGH_TO_THE_LANDING_MS) {
+        watchForThePicture();
+        return;
+      }
+      waitingForThePicture = null;
+      tell({
+        session,
+        saw: "the_picture_came_back",
+        asked_for_second: waiting.askedFor,
+        showed_second: picture.mediaTime,
+        after_ms: Math.round(now - waiting.askedAt),
+        was_held_already: waiting.wasHeldAlready,
+        stretches: waiting.stretches,
+      });
+    });
+  };
+
   /* One line per gesture, not per move. A finger dragged along the bar moves
      the film at every twitch, which is dozens of jumps a second: written down
      one by one they would bury the one thing worth reading, which is where the
@@ -105,6 +162,21 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
     if (jumpedFrom === null) {
       jumpedFrom = wasAt;
     }
+    /* One line per gesture here too: every twitch of a drag replaces the
+       previous one, so what is timed is the move the hand finished on. */
+    if (waitingForThePicture?.pending != null) {
+      element.cancelVideoFrameCallback?.(waitingForThePicture.pending);
+    }
+    const askedFor = element.currentTime;
+    const held = whatIsHeldAround(element, askedFor);
+    waitingForThePicture = {
+      askedAt: performance.now(),
+      askedFor,
+      wasHeldAlready: held.held_from_second !== null,
+      stretches: held.stretches,
+      pending: null,
+    };
+    watchForThePicture();
     window.clearTimeout(settling);
   };
   const jumpFinished = () => {
@@ -233,6 +305,10 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
   return () => {
     window.clearInterval(ticking);
     window.clearTimeout(settling);
+    if (waitingForThePicture?.pending != null) {
+      element.cancelVideoFrameCallback?.(waitingForThePicture.pending);
+    }
+    waitingForThePicture = null;
     element.removeEventListener("timeupdate", followTheClock);
     element.removeEventListener("seeking", jumpStarted);
     element.removeEventListener("seeked", jumpFinished);

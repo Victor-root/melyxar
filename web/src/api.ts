@@ -259,6 +259,20 @@ export type PageSaw =
     }
   | {
       session: string;
+      saw: "the_picture_came_back";
+      /** Where the viewer had asked to land. */
+      asked_for_second: number;
+      /** The moment of the film on the picture that came up. */
+      showed_second: number;
+      /** How long after the jump. */
+      after_ms: number;
+      /** Whether the browser already held that moment when the jump was made. */
+      was_held_already: boolean;
+      /** How many separate stretches it held when the jump was made. */
+      stretches: number;
+    }
+  | {
+      session: string;
       saw: "playback_stalled";
       at_second: number;
       /** Whether the browser was still trying to move to a new place. */

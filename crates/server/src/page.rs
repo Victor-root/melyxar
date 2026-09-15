@@ -67,6 +67,32 @@ enum Seen {
         /// Whether the film was playing when it happened.
         was_playing: bool,
     },
+    /// A jump put a picture back on the screen, and how long that took.
+    ///
+    /// The one thing nobody could measure before. The server knows when it
+    /// handed a segment over, and it knows nothing of the browser fetching it,
+    /// taking it apart and painting it; what a viewer counts is the wait
+    /// between letting go of the bar and seeing the film again, and that
+    /// number lived in neither place. Read from the picture the browser says
+    /// it has actually put on screen, not from a picture it has decoded, since
+    /// decoding ahead of an empty screen is the fault this is here to catch.
+    ThePictureCameBack {
+        /// Where the viewer had asked to land.
+        asked_for_second: f64,
+        /// The moment of the film on the picture that came up, which says
+        /// whether the browser landed where it was asked to.
+        showed_second: f64,
+        /// How long after the jump, in milliseconds.
+        after_ms: u32,
+        /// Whether the browser held that moment already when the jump was
+        /// made. A landing in film it holds ought to cost nothing at all; a
+        /// cold one has to be waited for, and the two must never be read as
+        /// one number.
+        was_held_already: bool,
+        /// How many separate stretches the browser held when the jump was
+        /// made.
+        stretches: u32,
+    },
     /// The film stopped for want of something to show.
     ///
     /// What is held on either side of where it stopped is the whole question:
@@ -207,6 +233,21 @@ async fn what_the_page_saw(
             was_playing,
             "the viewer jumped"
         ),
+        Seen::ThePictureCameBack {
+            asked_for_second,
+            showed_second,
+            after_ms,
+            was_held_already,
+            stretches,
+        } => tracing::debug!(
+            %session,
+            asked_for_second,
+            showed_second,
+            after_ms,
+            was_held_already,
+            stretches,
+            "a jump put a picture back on the screen"
+        ),
         Seen::PlaybackStalled {
             at_second,
             was_seeking,
@@ -320,6 +361,12 @@ mod tests {
                     "pictures_shown":14703,"pictures_dropped":2,"held_from_second":600.0,
                     "held_to_second":612.6,"stretches":1,"ready_state":4}"#,
                 "a picture that stood still",
+            ),
+            (
+                r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",
+                    "saw":"the_picture_came_back","asked_for_second":603.7,"showed_second":603.666,
+                    "after_ms":424,"was_held_already":false,"stretches":3}"#,
+                "a jump that put a picture back on the screen",
             ),
         ] {
             serde_json::from_str::<FromThePage>(tried)
