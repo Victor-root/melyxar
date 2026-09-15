@@ -37,6 +37,15 @@ export function JobLine({ job, onCancel }: { job: Job; onCancel?: () => void }) 
           started over. */}
       {job.step && <span className="job-step">{t(`jobs.step.${job.step}`)}</span>}
 
+      {/* Which file, right now. A pass name and a bar do not tell a server
+          that is working from one that is stuck on a four hour film, and until
+          this was here the only way to know was to open the journal. */}
+      {job.doing && (
+        <span className="job-doing" title={job.doing}>
+          {job.doing}
+        </span>
+      )}
+
       {job.ratio !== null ? (
         <>
           <span className="job-bar">

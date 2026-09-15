@@ -1199,6 +1199,19 @@
   color: var(--text-soft);
 }
 
+/* The file a pass is on right now. Allowed to take what room is left and cut
+   off rather than pushing the bar off the row: a film name runs long, and the
+   bar is what somebody is looking at. */
+.job-doing {
+  font-size: 13px;
+  color: var(--text-soft);
+  min-width: 0;
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .job-bar {
   position: relative;
   flex: 1 1 200px;

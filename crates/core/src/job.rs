@@ -234,6 +234,10 @@ pub struct Job {
     /// Which pass the job is on, when it has said. The counters below are
     /// counting that pass and nothing else.
     pub step: Option<JobStep>,
+    /// What it is on at this very moment, when the pass says so: the name of
+    /// one file. The long passes read two at a time, so this is whichever of
+    /// them started last.
+    pub doing: Option<String>,
     pub progress_done: i64,
     /// Unknown until the work has been sized up, which is why it is optional
     /// rather than zero: a progress bar showing nothing is better than one
@@ -332,6 +336,7 @@ mod tests {
             state: JobState::Running,
             target_id: None,
             step: None,
+            doing: None,
             progress_done: done,
             progress_total: total,
             failure_reason: None,

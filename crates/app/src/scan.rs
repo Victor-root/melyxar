@@ -887,6 +887,7 @@ async fn analyse_pending(
             if handle.is_cancelled() {
                 return Outcome::Stopped;
             }
+            handle.now_working_on(Some(&file.name())).await;
             let outcome = analyse_one(&database, &analyser, &file)
                 .await
                 .unwrap_or_else(|error| {
@@ -974,6 +975,9 @@ async fn read_where_films_can_be_started(
                 if handle.is_cancelled() {
                     return false;
                 }
+                if let Some(name) = file_name_of(&database, source_id).await {
+                    handle.now_working_on(Some(&name)).await;
+                }
                 let done = read_one_film_for_its_key_frames(&database, &analyser, source_id).await;
                 handle.advance(1).await;
                 done
@@ -1037,6 +1041,9 @@ async fn make_the_thumbnails_of_the_bar(
                 if handle.is_cancelled() {
                     return false;
                 }
+                if let Some(name) = file_name_of(state.database(), source_id).await {
+                    handle.now_working_on(Some(&name)).await;
+                }
                 // Every way this fails has already said so with the file it was
                 // about, which is what a refusal has to carry to be read.
                 let done = crate::thumbnails::make_for(&state, source_id)
@@ -1051,6 +1058,21 @@ async fn make_the_thumbnails_of_the_bar(
 
     report.thumbnails_made = made.into_iter().filter(|done| *done).count();
     Ok(())
+}
+
+/// The name of one file, for the screen that says what a pass is on.
+///
+/// The name rather than the path: a screen says which film, and where it sits
+/// on which disk is the report's business.
+async fn file_name_of(database: &Database, source_id: MediaSourceId) -> Option<String> {
+    let source = database.playable_source(source_id).await.ok()??;
+    Some(
+        source
+            .path
+            .file_name()
+            .and_then(|name| name.to_str())?
+            .to_string(),
+    )
 }
 
 /// Reads one film, and says whether it gave up anything usable.
@@ -1132,6 +1154,17 @@ struct PendingFile {
     root_path: PathBuf,
     source_id: MediaSourceId,
     relative_path: PathBuf,
+}
+
+impl PendingFile {
+    /// What to put on the screen while this one is being read.
+    fn name(&self) -> String {
+        self.relative_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_string()
+    }
 }
 
 enum Outcome {
