@@ -175,15 +175,11 @@ fn step_for(ready: u32, wanted: u32) -> PreparationStep {
 
 /// Whether a segment file holds whole boxes from its beginning to its end.
 ///
-/// How a finished segment is told from one cut off in the middle without
-/// knowing anything about who wrote it: a segment is a run of boxes, each
-/// naming its own length, and the last of them ends exactly where the file
-/// does. Walks the lengths rather than the bytes, so it costs a handful of
-/// eight byte reads whatever the segment weighs.
-///
-/// Only ever asked of a file no tool is touching. A file being written can end
-/// on a box boundary with more still to come, and there the tool's own account
-/// of itself is what answers.
+/// How a finished segment is told from one cut off in the middle, without
+/// knowing anything about who wrote it or what they are doing now: a segment
+/// is a run of boxes, each naming its own length, and the last of them ends
+/// exactly where the file does. Walks the lengths rather than the bytes, so it
+/// costs a handful of eight byte reads whatever the segment weighs.
 async fn every_box_is_whole(path: &Path) -> bool {
     use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
@@ -493,18 +489,10 @@ impl Session {
     /// is actually true: a count kept alongside would drift the first time a
     /// tool died between two segments.
     pub async fn preparation(&self) -> Preparation {
-        let at_work = {
-            let mut running = self.running.lock().await;
-            running.as_mut().map(|at_work| {
-                (
-                    at_work.from,
-                    at_work.reached(),
-                    at_work.process.has_exited(),
-                    at_work.began_at,
-                )
-            })
-        };
-        let Some((from, reached, tool_gone, began_at)) = at_work else {
+        let Some(from) = ({
+            let running = self.running.lock().await;
+            running.as_ref().map(|at_work| at_work.from)
+        }) else {
             return Preparation {
                 step: PreparationStep::Starting,
                 ready: 0,
@@ -514,17 +502,8 @@ impl Session {
 
         // Counted as a run rather than a total: a segment on its own with a
         // hole before it does not let a film start.
-        let mut on_disk = 0;
-        while self.path_of(from + on_disk).exists() {
-            on_disk += 1;
-        }
-
         let mut ready = 0;
-        while ready < on_disk
-            && self
-                .finished_being_written(from + ready, from, reached, tool_gone, began_at)
-                .await
-        {
+        while self.finished_being_written(from + ready).await {
             ready += 1;
         }
 
@@ -603,66 +582,27 @@ impl Session {
         }
     }
 
-    /// Whether the tool has finished writing one segment.
+    /// Whether a segment is finished and can be handed over.
     ///
-    /// Only ever a question about the run at work. What the tool is doing now
-    /// has nothing to say about a file an earlier run left behind, which is
-    /// answered instead by the shape of the file. That distinction is the
-    /// whole of this, and
-    /// leaving it out broke a film outright: a run set going a few segments
-    /// behind an earlier one rewrote the front of its block, and the untouched
-    /// file just past the one being rewritten was read as proof that the
-    /// rewriting had moved on. The half written segment went to the browser,
-    /// which refused the film and started it again from the beginning.
+    /// The file's own shape answers it, and nothing else does. Who wrote it,
+    /// and whether a tool is at work this second, change nothing: a segment
+    /// either ends where its last box ends or it is still being written.
     ///
-    /// For the run's own files, three ways of knowing, cheapest and soonest
-    /// first. The tool's own account is the one that matters: a file that is
-    /// merely there may still be growing. The next file having been written by
-    /// this run says the same thing, since the tool closes a segment before it
-    /// opens the next, at the price of producing a whole extra segment before
-    /// handing over the one somebody is waiting for.
-    async fn finished_being_written(
-        &self,
-        index: u32,
-        from: u32,
-        reached: Millis,
-        tool_gone: bool,
-        began_at: SystemTime,
-    ) -> bool {
-        match self.who_wrote(index, began_at).await {
-            WhoWrote::Nobody => return false,
-            // Nothing is touching it, so the only question left is whether
-            // whoever wrote it got to the end, which the file itself answers.
-            WhoWrote::AnEarlierRun => return every_box_is_whole(&self.path_of(index)).await,
-            WhoWrote::ThisRun => {}
-        }
-
-        // The tool counts from where it was set going, not from the beginning
-        // of the film: set going at the twentieth minute, its first word is
-        // zero. Measured, because it is the opposite of what the copied clock
-        // elsewhere would suggest. So what it has written is compared with what
-        // it would have to write to pass the end of this segment, never with
-        // where that segment sits in the film.
-        let has_to_write =
-            self.playlist.start_of(index + 1).get() - self.playlist.start_of(from).get();
-        if self.the_clock_can_be_trusted(from) && reached.get() >= has_to_write {
-            return true;
-        }
-
-        tool_gone || self.who_wrote(index + 1, began_at).await == WhoWrote::ThisRun
-    }
-
-    /// Whether the tool's account of itself can be compared with the playlist.
+    /// The tool's own account of itself used to answer this, and it turns out
+    /// it cannot. Measured: the tool holds a whole segment in memory and writes
+    /// it out in one burst once it has passed the end of it, half a megabyte at
+    /// a time. So the file only ever exists at all while the tool is already
+    /// saying it is past the end, and for as long as that burst lasts the file
+    /// stops in the middle of its own picture data. On a busy machine the burst
+    /// is long enough to be caught: what went to the browser was a fifth of a
+    /// segment, and the film stopped dead and began again from the beginning.
     ///
-    /// It counts from where it was set going, which is only the same thing as
-    /// where it was asked to start when the tool really started there. A copied
-    /// picture can only begin on one of its own key frames, so it is
-    /// deliberately let to begin early, and nothing here knows how early:
-    /// against that clock a segment would be called finished before it was.
-    /// Such a session waits for the next file to appear, as everything did
-    /// before.
-    fn the_clock_can_be_trusted(&self, from: u32) -> bool {
-        from == 0 || !matches!(self.video_now(), melyxar_ffmpeg::command::VideoOutput::Copy)
+    /// The other old answer, waiting for the next file to appear, is sound and
+    /// slow for the same reason: the tool opens that file only once it has a
+    /// whole segment of its own to write into it, which is a segment of work
+    /// later. Walking the boxes answers at the first moment the answer is yes.
+    async fn finished_being_written(&self, index: u32) -> bool {
+        every_box_is_whole(&self.path_of(index)).await
     }
 
     /// How many segments make a comfortable start from here.
@@ -674,7 +614,7 @@ impl Session {
         WORTH_WAITING_FOR.min(self.playlist.segment_count().saturating_sub(index))
     }
 
-    /// Whether a segment already on disk is a whole one.
+    /// Hands over one segment, producing it if it is not there yet.
     ///
     /// A file that is merely there may be one the tool is writing this very
     /// second, and a segment cut off in the middle is handed to a browser that
@@ -684,32 +624,6 @@ impl Session {
     /// sound running on, ending on the very second the next segment began.
     /// It is the same fault the subtitles had and the same answer: what is
     /// handed over is whole or it is waited for.
-    ///
-    /// Nothing at work means nothing is writing, so the file's own shape is the
-    /// whole answer: it ends where its last box ends, or a tool died in the
-    /// middle of it and nobody was left to clear it away.
-    async fn already_whole(&self, index: u32) -> bool {
-        let at_work = {
-            let mut running = self.running.lock().await;
-            running.as_mut().map(|at_work| {
-                (
-                    at_work.from,
-                    at_work.reached(),
-                    at_work.process.has_exited(),
-                    at_work.began_at,
-                )
-            })
-        };
-        match at_work {
-            None => every_box_is_whole(&self.path_of(index)).await,
-            Some((from, reached, gone, began_at)) => {
-                self.finished_being_written(index, from, reached, gone, began_at)
-                    .await
-            }
-        }
-    }
-
-    /// Hands over one segment, producing it if it is not there yet.
     pub async fn segment(&self, index: u32) -> Result<PathBuf> {
         self.touch().await;
 
@@ -718,7 +632,7 @@ impl Session {
         }
 
         let path = self.path_of(index);
-        if path.exists() && self.already_whole(index).await {
+        if self.finished_being_written(index).await {
             // The ordinary case, and the one the journal used to say nothing
             // about: a film playing on writes nothing at all, so the order a
             // player asked for its segments in could not be read anywhere. It
@@ -972,16 +886,11 @@ impl Session {
         let deadline = began + PATIENCE;
         let mut appeared: Option<Instant> = None;
         loop {
-            let (from, reached, tool_is_gone, began_at) = self.where_the_tool_has_got_to().await;
-            let there = path.exists();
-            if there && appeared.is_none() {
+            let tool_is_gone = self.the_tool_is_gone().await;
+            if path.exists() && appeared.is_none() {
                 appeared = Some(Instant::now());
             }
-            if there
-                && self
-                    .finished_being_written(index, from, reached, tool_is_gone, began_at)
-                    .await
-            {
+            if self.finished_being_written(index).await {
                 let appeared = appeared.unwrap_or(began);
                 return Ok(WhatItTook {
                     appearing: appeared.saturating_duration_since(began),
@@ -1050,22 +959,17 @@ impl Session {
         }
     }
 
-    /// How far the tool says it has written, and whether it is still there.
+    /// Whether nothing is producing for this session any more.
     ///
-    /// Both under one lock: asking twice would let the tool exit between the
-    /// two answers, which is exactly the moment a segment finishes.
-    async fn where_the_tool_has_got_to(&self) -> (u32, Millis, bool, SystemTime) {
+    /// Read before the segment it is about, never after: a tool that is still
+    /// there when asked and finishes the segment a moment later is waited for
+    /// one more beat, where the other way round a segment that never came would
+    /// be reported as a tool still working on it.
+    async fn the_tool_is_gone(&self) -> bool {
         let mut running = self.running.lock().await;
         match running.as_mut() {
-            Some(at_work) => (
-                at_work.from,
-                at_work.reached(),
-                at_work.process.has_exited(),
-                at_work.began_at,
-            ),
-            // Nothing at work, so nothing was written just now and every file
-            // there is belongs to a run that is over.
-            None => (0, Millis::ZERO, true, SystemTime::now()),
+            Some(at_work) => at_work.process.has_exited(),
+            None => true,
         }
     }
 
@@ -1237,6 +1141,12 @@ mod tests {
         .expect("the session opens")
     }
 
+    /// How many pictures a second every made up clip here holds.
+    ///
+    /// The one place it is written down, so a clip made at another rate cannot
+    /// quietly turn a count of pictures into the wrong number of seconds.
+    const PICTURES_A_SECOND: f64 = 24.0;
+
     /// A moment comfortably before anything a test has just written, so that
     /// every file in the folder counts as the run's own.
     fn a_moment_ago() -> SystemTime {
@@ -1248,6 +1158,13 @@ mod tests {
     /// its film.
     fn a_finished_segment() -> [u8; 8] {
         [0, 0, 0, 8, b'm', b'd', b'a', b't']
+    }
+
+    /// The shape of a segment caught halfway onto the disk: a box that names a
+    /// length the file does not reach, which is what the tool pouring out a
+    /// segment leaves behind for as long as the pouring lasts.
+    fn a_segment_still_being_written() -> [u8; 12] {
+        [0, 0, 0x40, 0, b'm', b'd', b'a', b't', 1, 2, 3, 4]
     }
 
     #[tokio::test]
@@ -1551,7 +1468,7 @@ mod tests {
         let next_one = session.folder().join("segment-1.m4s");
 
         assert!(
-            !next_one.exists() || session.where_the_tool_has_got_to().await.2,
+            !next_one.exists() || session.the_tool_is_gone().await,
             "a segment was handed over only once the one after it had been \
              produced on top of it, which is twice the wait for nothing"
         );
@@ -1638,13 +1555,21 @@ mod tests {
                 bytes.extend(std::fs::read(&segment).expect("the segment"));
                 std::fs::write(&whole, bytes).expect("written");
 
+                // Counted rather than read off the header. A fragment of a
+                // film carries no length of its own, and the analyser answers
+                // that it does not know: on a whole segment as readily as on a
+                // cut one, so the answer proved nothing either way. What is
+                // actually in it is the pictures, and those can be counted.
                 let read = tokio::process::Command::new("ffprobe")
                     .args([
                         "-hide_banner",
                         "-loglevel",
                         "error",
+                        "-select_streams",
+                        "v:0",
+                        "-count_frames",
                         "-show_entries",
-                        "format=duration",
+                        "stream=nb_read_frames",
                         "-of",
                         "csv=p=0",
                     ])
@@ -1653,11 +1578,11 @@ mod tests {
                     .await
                     .expect("the analyser runs");
                 // Read strictly, because the answer here is an accusation. An
-                // analyser that failed to run at all used to come back as a
+                // analyser that would not answer at all used to come back as a
                 // segment holding no film whatsoever, which reads in the
                 // failure as the very fault this is here to catch.
                 let said = String::from_utf8_lossy(&read.stdout);
-                let lasted: f64 = said.trim().parse().unwrap_or_else(|error| {
+                let counted: f64 = said.trim().parse().unwrap_or_else(|error| {
                     panic!(
                         "attempt {attempt}, segment {index}: the analyser said nothing \
                          readable about it, so this proves nothing either way: {error}, \
@@ -1665,6 +1590,7 @@ mod tests {
                         String::from_utf8_lossy(&read.stderr)
                     )
                 });
+                let lasted = counted / PICTURES_A_SECOND;
 
                 assert!(
                     lasted > 3.5,
@@ -1878,192 +1804,45 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_segment_is_finished_the_moment_the_tool_says_it_passed_the_end_of_it() {
-        // What this replaced waited for the next file to appear, which says
-        // the same thing and costs a whole extra segment before the one
-        // somebody is waiting for can be handed over. On a jump that is the
-        // difference between one wait and two.
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let session = session_of(directory.path(), 60).await;
-        let start_of = |index: u32| session.playlist().start_of(index);
-        let began_at = a_moment_ago();
-        std::fs::write(session.folder().join("segment-3.m4s"), b"a segment")
-            .expect("the one being asked about");
-
-        assert!(
-            !session
-                .finished_being_written(3, 0, start_of(3), false, began_at)
-                .await,
-            "the tool is inside this segment, so it is still writing it"
-        );
-        assert!(
-            session
-                .finished_being_written(3, 0, start_of(4), false, began_at)
-                .await,
-            "it has passed the end of it, so it has closed it"
-        );
-        assert!(
-            session
-                .finished_being_written(3, 0, Millis::ZERO, true, began_at)
-                .await,
-            "nothing is writing any more, so nothing is growing"
-        );
-
-        // The old signal still counts, for a tool that has not spoken yet.
-        std::fs::write(session.folder().join("segment-4.m4s"), b"a segment")
-            .expect("the next one is written");
-        assert!(
-            session
-                .finished_being_written(3, 0, Millis::ZERO, false, began_at)
-                .await
-        );
-        session.close().await;
-    }
-
-    #[tokio::test]
-    async fn a_file_an_earlier_run_left_behind_is_no_proof_this_one_has_moved_on() {
-        // What broke a film outright for the maintainer. A run set going a few
-        // segments behind an earlier one rewrites the front of its block, and
-        // the untouched file just past the one being rewritten was read as
-        // proof that the rewriting had moved on. The half written segment went
-        // to the browser, which refused the film and began it again from the
-        // beginning.
+    async fn a_segment_is_finished_when_its_last_box_ends_where_the_file_does() {
+        // Both answers this replaced were wrong. The tool's own account of
+        // itself says it is past the end of a segment while it is still
+        // pouring that segment onto the disk, so a fifth of a segment was
+        // handed over and the browser refused the film outright. Reading the
+        // file after it instead is true but a segment of work late, and it
+        // broke a film of the maintainer's in its own way: a run set going
+        // behind an earlier one rewrote the front of its block, and the
+        // untouched file just past the one being rewritten was read as proof
+        // that the rewriting had moved on.
         //
         // Told here rather than with the real tool, because the moment a
-        // rewritten segment is on disk but not yet whole lasts as long as it
-        // takes to write it: measured, under a millisecond for the hundred and
-        // forty kilobyte segments of a made up clip, against tens of megabytes
-        // for a film of a viewer's. A clip heavy enough to catch it would be
-        // heavier than the rest of these tests put together.
+        // segment is on disk but not yet whole lasts as long as it takes to
+        // write it: measured, under a millisecond for the hundred and forty
+        // kilobyte segments of a made up clip, against tens of megabytes for a
+        // film of a viewer's. A clip heavy enough to catch it would be heavier
+        // than the rest of these tests put together.
         let directory = tempfile::tempdir().expect("temporary directory");
         let session = session_of(directory.path(), 60).await;
-        for index in 0..7 {
-            std::fs::write(
-                session.folder().join(format!("segment-{index}.m4s")),
-                a_finished_segment(),
-            )
-            .expect("a segment an earlier run finished");
-        }
-
-        tokio::time::sleep(Duration::from_millis(20)).await;
-        let began_at = SystemTime::now();
-        tokio::time::sleep(Duration::from_millis(20)).await;
-
-        // This run has rewritten as far as the fourth and is inside it.
-        for index in 0..4 {
-            std::fs::write(
-                session.folder().join(format!("segment-{index}.m4s")),
-                a_finished_segment(),
-            )
-            .expect("a segment this run wrote");
-        }
+        let write = |index: u32, bytes: &[u8]| {
+            std::fs::write(session.folder().join(format!("segment-{index}.m4s")), bytes)
+                .expect("a segment on disk")
+        };
 
         assert!(
-            !session
-                .finished_being_written(3, 0, Millis::ZERO, false, began_at)
-                .await,
-            "the file after it is the earlier run's and says nothing about this one"
+            !session.finished_being_written(3).await,
+            "there is no such file, so nothing is finished"
         );
-        assert!(
-            session
-                .finished_being_written(2, 0, Millis::ZERO, false, began_at)
-                .await,
-            "the file after it is this run's, so this run had closed it"
-        );
-        assert!(
-            session
-                .finished_being_written(5, 0, Millis::ZERO, false, began_at)
-                .await,
-            "the earlier run finished this one and nothing is touching it"
-        );
-        session.close().await;
-    }
 
-    #[tokio::test]
-    async fn the_tool_counts_from_where_it_was_set_going_and_not_from_the_film() {
-        // Measured: set going at the twentieth minute, its first word is zero,
-        // which is the opposite of what the copied clock on its segments would
-        // suggest. Compared with where the segment sits in the film, its
-        // account never caught up, every jump fell back on waiting for the
-        // next file, and half the saving was quietly not happening.
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let source = directory.path().join("source.mp4");
-        clip(&source, 60).await;
-        let session = Session::open(
-            SessionId::new(),
-            Recipe {
-                source,
-                duration: Millis::new(600_000),
-                streams: StreamSelection::default(),
-                // Rebuilt, so the tool really starts where it was asked to.
-                video: VideoOutput::Encode(melyxar_ffmpeg::command::VideoEncode::software_h264()),
-                audio: AudioOutput::Copy,
-                where_the_viewer_starts: Millis::ZERO,
-                where_it_can_be_started: Vec::new(),
-                if_the_card_refuses: Vec::new(),
-            },
-            directory.path().join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
-        )
-        .await
-        .expect("the session opens");
-        let start_of = |index: u32| session.playlist().start_of(index);
-        let began_at = a_moment_ago();
-        std::fs::write(session.folder().join("segment-103.m4s"), b"a segment")
-            .expect("the one being asked about");
-
-        // Set going at segment 100, asked about segment 103: four segments
-        // written, not a hundred and four.
+        write(3, &a_segment_still_being_written());
         assert!(
-            !session
-                .finished_being_written(103, 100, start_of(3), false, began_at)
-                .await
+            !session.finished_being_written(3).await,
+            "it stops in the middle of its own picture data, so it is still being written"
         );
-        assert!(
-            session
-                .finished_being_written(103, 100, start_of(4), false, began_at)
-                .await,
-            "sixteen seconds written from where it started is past the end of it"
-        );
-        session.close().await;
-    }
 
-    #[tokio::test]
-    async fn a_copied_picture_begins_early_on_purpose_so_its_clock_is_not_believed() {
-        // It can only begin on one of its own key frames, so it is let to
-        // begin before the point asked for and nothing here knows how far
-        // before. Against that clock a segment would be called finished before
-        // it was, and a truncated segment breaks playback unreadably.
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let source = directory.path().join("source.mp4");
-        clip(&source, 60).await;
-        let session = Session::open(
-            SessionId::new(),
-            Recipe {
-                source,
-                duration: Millis::new(60_000),
-                streams: StreamSelection::default(),
-                video: VideoOutput::Copy,
-                audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
-                    "aac",
-                )),
-                where_the_viewer_starts: Millis::ZERO,
-                where_it_can_be_started: Vec::new(),
-                if_the_card_refuses: Vec::new(),
-            },
-            directory.path().join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
-        )
-        .await
-        .expect("the session opens");
-
+        write(3, &a_finished_segment());
         assert!(
-            !session.the_clock_can_be_trusted(5),
-            "a copied picture is let to begin early, so its account is short by that much"
-        );
-        assert!(
-            session.the_clock_can_be_trusted(0),
-            "nothing was skipped, so there was nothing to begin early of"
+            session.finished_being_written(3).await,
+            "its last box ends where the file does, so whoever wrote it got to the end"
         );
         session.close().await;
     }
