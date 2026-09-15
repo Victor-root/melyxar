@@ -259,6 +259,16 @@ export type PageSaw =
     }
   | {
       session: string;
+      saw: "the_picture_arrived";
+      /** How wide and tall the browser says the picture is meant to be shown. */
+      across: number;
+      down: number;
+      /** The box the page is drawing it in. */
+      drawn_across: number;
+      drawn_down: number;
+    }
+  | {
+      session: string;
       saw: "the_picture_came_back";
       /** Where the viewer had asked to land. */
       asked_for_second: number;

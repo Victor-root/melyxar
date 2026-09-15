@@ -67,6 +67,25 @@ enum Seen {
         /// Whether the film was playing when it happened.
         was_playing: bool,
     },
+    /// The shape of the picture the browser ended up with.
+    ///
+    /// The other end of what the server writes when it decides a playback. The
+    /// server knows the shape the film holds and the shape it asked for; only
+    /// the browser knows the shape that came out, and a film shown stretched
+    /// is exactly the two of them disagreeing with nothing in between to say
+    /// where it was lost. Counted in the browser's own terms, which are
+    /// already the shape the picture is meant to be shown at, whatever shape
+    /// its pixels were stored in.
+    ThePictureArrived {
+        /// How wide and how tall the browser says the picture is meant to be.
+        across: u32,
+        down: u32,
+        /// The box it is being drawn in, which is the page's doing and not the
+        /// film's: a picture the right shape in a box of the wrong one is a
+        /// fault on this side of the wire.
+        drawn_across: u32,
+        drawn_down: u32,
+    },
     /// A jump put a picture back on the screen, and how long that took.
     ///
     /// The one thing nobody could measure before. The server knows when it
@@ -233,6 +252,19 @@ async fn what_the_page_saw(
             was_playing,
             "the viewer jumped"
         ),
+        Seen::ThePictureArrived {
+            across,
+            down,
+            drawn_across,
+            drawn_down,
+        } => tracing::debug!(
+            %session,
+            across,
+            down,
+            drawn_across,
+            drawn_down,
+            "the browser says the picture is this shape"
+        ),
         Seen::ThePictureCameBack {
             asked_for_second,
             showed_second,
@@ -367,6 +399,12 @@ mod tests {
                     "saw":"the_picture_came_back","asked_for_second":603.7,"showed_second":603.666,
                     "after_ms":424,"was_held_already":false,"stretches":3}"#,
                 "a jump that put a picture back on the screen",
+            ),
+            (
+                r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",
+                    "saw":"the_picture_arrived","across":3840,"down":2160,
+                    "drawn_across":1280,"drawn_down":720}"#,
+                "the shape of the picture the browser got",
             ),
         ] {
             serde_json::from_str::<FromThePage>(tried)

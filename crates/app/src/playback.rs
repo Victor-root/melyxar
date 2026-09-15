@@ -237,6 +237,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
     // rebuilding the picture belongs on the same line for the same reason: it
     // is the first question anybody asks about a film that stutters, and the
     // answer used to be somewhere between a process listing and a guess.
+    let shape = picture_shape(&tracks);
     tracing::info!(
         file = %MediaName::new(
             source
@@ -262,6 +263,9 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         }),
         rebuilt_height = rebuild.as_ref().and_then(|rebuild| rebuild.height),
         rebuilt_bitrate = rebuild.as_ref().and_then(|rebuild| rebuild.bitrate),
+        picture_across = shape.as_ref().map(|(across, _, _)| *across),
+        picture_down = shape.as_ref().map(|(_, down, _)| *down),
+        picture_shown_as = shape.as_ref().and_then(|(_, _, shown_as)| shown_as.clone()),
         reasons = ?decision.reasons,
         "playback decided"
     );
@@ -552,6 +556,25 @@ const BEST_FIRST: &[&str] = &["av1", "hevc", melyxar_playback::profile::ALWAYS_R
 fn height_of(tracks: &[Track]) -> Option<i32> {
     tracks.iter().find_map(|track| match &track.kind {
         melyxar_core::media::TrackKind::Video(details) => Some(details.height),
+        _ => None,
+    })
+}
+
+/// The shape of the picture as the film holds it: how many pixels across and
+/// down, and what shape those pixels make once shown.
+///
+/// The two are not the same thing and the difference is the whole point. A
+/// film can hold pixels that are not square, so a picture nineteen hundred and
+/// twenty across is shown far wider than that; a film that loses that on the
+/// way out is shown stretched, and nothing anywhere said what shape it started
+/// as.
+fn picture_shape(tracks: &[Track]) -> Option<(i32, i32, Option<String>)> {
+    tracks.iter().find_map(|track| match &track.kind {
+        melyxar_core::media::TrackKind::Video(details) => Some((
+            details.width,
+            details.height,
+            details.aspect_ratio.clone(),
+        )),
         _ => None,
     })
 }

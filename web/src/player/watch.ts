@@ -96,6 +96,39 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
     api.tellTheJournal(said).catch(() => {});
   };
 
+  /* The shape of the picture, said once when it is known and again whenever it
+     changes. A film shown stretched is the server and the browser disagreeing
+     about that shape, and neither of them could see the other's answer. Said
+     from here rather than from the library, because it is the element that
+     holds both the picture's shape and the box it is drawn in. */
+  let saidTheShape = "";
+  const sayTheShape = () => {
+    if (!element.videoWidth || !element.videoHeight) {
+      return;
+    }
+    const shape = [
+      element.videoWidth,
+      element.videoHeight,
+      element.clientWidth,
+      element.clientHeight,
+    ].join("x");
+    if (shape === saidTheShape) {
+      return;
+    }
+    saidTheShape = shape;
+    tell({
+      session,
+      saw: "the_picture_arrived",
+      across: element.videoWidth,
+      down: element.videoHeight,
+      drawn_across: element.clientWidth,
+      drawn_down: element.clientHeight,
+    });
+  };
+  element.addEventListener("loadedmetadata", sayTheShape);
+  element.addEventListener("resize", sayTheShape);
+  sayTheShape();
+
   /* Where the film was before it moved. Read from the clock as it runs rather
      than from the jump itself, because by the time a jump is announced the
      clock is already at the other end of it. */
@@ -309,6 +342,8 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
       element.cancelVideoFrameCallback?.(waitingForThePicture.pending);
     }
     waitingForThePicture = null;
+    element.removeEventListener("loadedmetadata", sayTheShape);
+    element.removeEventListener("resize", sayTheShape);
     element.removeEventListener("timeupdate", followTheClock);
     element.removeEventListener("seeking", jumpStarted);
     element.removeEventListener("seeked", jumpFinished);
