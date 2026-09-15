@@ -46,9 +46,11 @@ interface Props {
      element sent fullscreen on its own leaves it behind. */
   stage: React.RefObject<HTMLDivElement | null>;
   thumbnails: PlaybackThumbnails | null;
-  /* Told once when the viewer has finished moving, never while they are still
-     moving: dragging along the bar moves the film at every twitch, and this
-     costs what a jump costs. */
+  /* Told when the viewer starts moving the film and again when they have
+     finished, never in between: dragging along the bar moves the film at every
+     twitch, and what happens on each of those is work thrown away.
+     What the two do is the player's business. */
+  onViewerMoving: () => void;
   onViewerMoved: () => void;
   t: (key: string, values?: Record<string, string | number>) => string;
 }
@@ -96,7 +98,15 @@ function spotOf(
   };
 }
 
-export function Controls({ video, pictureKey, stage, thumbnails, onViewerMoved, t }: Props) {
+export function Controls({
+  video,
+  pictureKey,
+  stage,
+  thumbnails,
+  onViewerMoving,
+  onViewerMoved,
+  t,
+}: Props) {
   const [playing, setPlaying] = useState(false);
   const [at, setAt] = useState(0);
   const [length, setLength] = useState(0);
@@ -233,13 +243,14 @@ export function Controls({ video, pictureKey, stage, thumbnails, onViewerMoved, 
       }
       const furthest = length > 0 ? length : element.duration;
       const wanted = element.currentTime + seconds;
+      onViewerMoving();
       element.currentTime = Math.max(
         0,
         Number.isFinite(furthest) ? Math.min(furthest, wanted) : wanted,
       );
       onViewerMoved();
     },
-    [video, length, onViewerMoved],
+    [video, length, onViewerMoving, onViewerMoved],
   );
 
   /* Dragging is followed on the window rather than on the bar: a finger that
@@ -300,6 +311,7 @@ export function Controls({ video, pictureKey, stage, thumbnails, onViewerMoved, 
         onPointerDown={(event) => {
           const share = shareAt(event.clientX);
           if (share !== null) {
+            onViewerMoving();
             setDragging(true);
             setHovered(share);
             goTo(share);
