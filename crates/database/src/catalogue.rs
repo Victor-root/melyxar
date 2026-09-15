@@ -367,6 +367,25 @@ impl Database {
         rows.iter().map(stored_source_from_row).collect()
     }
 
+    /// One file, with the disk it lives on.
+    ///
+    /// For the things that are done to one file rather than to a library: the
+    /// whole path has to be built, and only the root knows where the disk is
+    /// mounted.
+    pub async fn source_by_id(&self, source_id: MediaSourceId) -> Result<Option<StoredSource>> {
+        let row = sqlx::query(
+            "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
+                    s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
+             FROM media_sources s
+             JOIN library_roots r ON r.id = s.root_id
+             WHERE s.id = ?",
+        )
+        .bind(source_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+        row.as_ref().map(stored_source_from_row).transpose()
+    }
+
     /// The name of one file and the library it belongs to.
     ///
     /// What is needed to read a file name again by the rules of its own
@@ -1718,6 +1737,34 @@ mod tests {
             .await
             .expect("source recorded");
         (work.id, source)
+    }
+
+    #[tokio::test]
+    async fn a_file_can_be_looked_up_on_its_own_with_the_disk_it_lives_on() {
+        // Everything done to one file rather than to a library needs the whole
+        // path, and only the root knows where the disk is mounted.
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        let found = database
+            .source_by_id(source_id)
+            .await
+            .expect("read")
+            .expect("that file is there");
+        assert_eq!(found.id, source_id);
+        assert_eq!(found.relative_path, PathBuf::from("Quiet.Harbour.2019.mkv"));
+        assert_eq!(found.root_label, "disk-one");
+        assert_eq!(found.root_path, PathBuf::from("/mnt/one/Films"));
+
+        assert!(
+            database
+                .source_by_id(MediaSourceId::new())
+                .await
+                .expect("read")
+                .is_none(),
+            "a file nobody has is nothing, not a failure"
+        );
     }
 
     #[tokio::test]

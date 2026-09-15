@@ -358,12 +358,51 @@ function DetachCopy({ copy, onDetached }: { copy: string; onDetached: () => void
   };
 
   return (
-    <p className="version-detach">
+    <>
       <button className="button button-small" onClick={detach} disabled={busy}>
         {busy ? t("detach.busy") : t("detach.open")}
       </button>
       {failed && <span className="notice">{t("detach.failed")}</span>}
-    </p>
+    </>
+  );
+}
+
+/**
+ * Asking for one file to be read again for what it says about itself.
+ *
+ * A scan opens only a file whose size or date changed on disk, so a server
+ * that has learnt to read something new out of a file can never reach the ones
+ * it has already described. Without this the only way to profit from such an
+ * improvement on a library already scanned is to touch the files by hand or to
+ * describe the whole collection again, which takes hours.
+ *
+ * What comes back is a job like any other, so the reading shows itself on the
+ * activity screen and says when it is done.
+ */
+function ReadCopyAgain({ copy, onRead }: { copy: string; onRead: () => void }) {
+  const { t } = useSettings();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const readAgain = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await api.readCopyAgain(copy);
+      onRead();
+    } catch {
+      setFailed(true);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <>
+      <button className="button button-small" onClick={readAgain} disabled={busy}>
+        {busy ? t("read_again.busy") : t("read_again.open")}
+      </button>
+      {failed && <span className="notice">{t("read_again.failed")}</span>}
+    </>
   );
 }
 
@@ -465,7 +504,10 @@ function VersionDetails({
         {!version.analysed && <span className="fact">{t("work.not_analysed")}</span>}
       </p>
 
-      {separable && <DetachCopy copy={version.id} onDetached={onDetached} />}
+      <p className="version-actions">
+        <ReadCopyAgain copy={version.id} onRead={onDetached} />
+        {separable && <DetachCopy copy={version.id} onDetached={onDetached} />}
+      </p>
 
       <dl className="media-facts">
         <Fact label={t("media.path")} value={version.path} wide />

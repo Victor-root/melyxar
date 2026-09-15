@@ -17,6 +17,13 @@ pub enum JobKind {
     /// Looks a work up with a metadata provider. Deliberately separate from a
     /// scan, so it can be replayed on its own and on a subset.
     IdentifyWork,
+    /// Reads one file again for what it says about itself.
+    ///
+    /// A scan only opens a file whose size or date has changed, which is what
+    /// keeps a library of thousands from being read through every time. A
+    /// server that has learnt to read something new out of a file has no way
+    /// to reach the ones it has already described, and this is it.
+    ReadCopyAgain,
     FetchImages,
     AnalyseLoudness,
     GenerateThumbnails,
@@ -31,9 +38,10 @@ impl JobKind {
     /// several things have to cover all of them: the interface needs a
     /// sentence for each, and a kind with none reaches the screen as its own
     /// name.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::ScanLibrary,
         Self::IdentifyWork,
+        Self::ReadCopyAgain,
         Self::FetchImages,
         Self::AnalyseLoudness,
         Self::GenerateThumbnails,
@@ -45,6 +53,7 @@ impl JobKind {
         match self {
             Self::ScanLibrary => "scan_library",
             Self::IdentifyWork => "identify_work",
+            Self::ReadCopyAgain => "read_copy_again",
             Self::FetchImages => "fetch_images",
             Self::AnalyseLoudness => "analyse_loudness",
             Self::GenerateThumbnails => "generate_thumbnails",
@@ -57,6 +66,7 @@ impl JobKind {
         match value {
             "scan_library" => Some(Self::ScanLibrary),
             "identify_work" => Some(Self::IdentifyWork),
+            "read_copy_again" => Some(Self::ReadCopyAgain),
             "fetch_images" => Some(Self::FetchImages),
             "analyse_loudness" => Some(Self::AnalyseLoudness),
             "generate_thumbnails" => Some(Self::GenerateThumbnails),

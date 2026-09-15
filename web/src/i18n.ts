@@ -129,6 +129,7 @@ const en: Dictionary = {
   "report.select": "Your browser would not take it. The report is below, already selected: press Ctrl+C.",
   "jobs.scan_library": "Scan",
   "jobs.identify_work": "Identification",
+  "jobs.read_copy_again": "Reading a file again",
   "jobs.fetch_images": "Pictures",
   "jobs.analyse_loudness": "Loudness",
   "jobs.generate_thumbnails": "Thumbnails",
@@ -216,6 +217,10 @@ const en: Dictionary = {
   "detach.busy": "Separating...",
   "detach.done": "Separated. It is waiting to be identified.",
   "detach.failed": "This copy could not be separated.",
+
+  "read_again.open": "Read this file again",
+  "read_again.busy": "Reading...",
+  "read_again.failed": "This file could not be read again.",
 
   "credit.actor": "Actor",
   "credit.director": "Director",
@@ -428,6 +433,7 @@ const fr: Dictionary = {
   "report.select": "Votre navigateur a refusé. Le rapport est ci-dessous, déjà sélectionné : faites Ctrl+C.",
   "jobs.scan_library": "Scan",
   "jobs.identify_work": "Identification",
+  "jobs.read_copy_again": "Relecture d'un fichier",
   "jobs.fetch_images": "Images",
   "jobs.analyse_loudness": "Sonie",
   "jobs.generate_thumbnails": "Vignettes",
@@ -514,6 +520,10 @@ const fr: Dictionary = {
   "detach.busy": "Séparation...",
   "detach.done": "Séparée. Elle attend d'être identifiée.",
   "detach.failed": "Cette copie n'a pas pu être séparée.",
+
+  "read_again.open": "Relire ce fichier",
+  "read_again.busy": "Lecture...",
+  "read_again.failed": "Ce fichier n'a pas pu être relu.",
 
   "credit.actor": "Acteur",
   "credit.director": "Réalisation",

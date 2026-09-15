@@ -36,6 +36,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/copies/{id}/detach",
             axum::routing::post(detach_copy),
         )
+        .route(
+            "/api/v1/copies/{id}/read-again",
+            axum::routing::post(read_copy_again),
+        )
 }
 
 #[derive(Debug, Serialize)]
@@ -280,6 +284,29 @@ async fn detach_copy(
 
     Ok(Json(DetachedView {
         work_id: detached.to_string(),
+    }))
+}
+
+/// Reads one file again for what it says about itself.
+///
+/// Its own route rather than a scan of the whole library, because a scan opens
+/// only what changed on disk and would walk straight past this file. What a
+/// person wants here is one file read again, now.
+async fn read_copy_again(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<StartedView>> {
+    let source_id = id
+        .parse()
+        .map_err(|_| ServerError::invalid_input("the copy identifier is malformed"))?;
+
+    let job = melyxar_app::scan::read_copy_again(&state, source_id)
+        .await
+        .map_err(already_running)?
+        .ok_or_else(|| ServerError::invalid_input("there is no such copy"))?;
+
+    Ok(Json(StartedView {
+        job_id: job.to_string(),
     }))
 }
 

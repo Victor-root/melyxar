@@ -471,6 +471,82 @@ pub(crate) async fn join_work_into(state: &AppState, from: WorkId, into: WorkId)
 /// and this is how they say so: the copy leaves, named after its own file, and
 /// waits to be looked up like any film a scan has just found.
 ///
+/// Reads one file again for what it says about itself.
+///
+/// A scan opens only a file whose size or date has changed on disk, which is
+/// what keeps a second scan of a large library cheap. The price is that a
+/// server which has learnt to read something new out of a file can never reach
+/// the ones it has already described: the file has not changed, so nothing
+/// looks at it again. This is how somebody asks for one, and it costs one
+/// reading of one file.
+///
+/// Only what the file says of itself is done again: the container, how long it
+/// runs, its rate, and every track with its codec, its colours and the margins
+/// it declares. All of it is replaced in one go, so a reading that fails
+/// leaves the film described as it was rather than stripped of everything it
+/// had. What is attached to the file and was not read out of it stays
+/// untouched either way, so a film keeps its page, its pictures, where a
+/// viewer had got to and the thumbnails of its playback bar.
+///
+/// Answers nothing when there is no such file, which is a page looking at
+/// something that has since gone.
+pub async fn read_copy_again(state: &AppState, source_id: MediaSourceId) -> Result<Option<JobId>> {
+    let database = state.database();
+    let Some(source) = database.source_by_id(source_id).await? else {
+        return Ok(None);
+    };
+    let Some(tools) = state.tools() else {
+        return Err(AppError::Domain(melyxar_core::Error::not_found(
+            "media tools",
+        )));
+    };
+
+    let file = PendingFile {
+        root_label: source.root_label.clone(),
+        root_path: source.root_path.clone(),
+        source_id,
+        relative_path: source.relative_path.clone(),
+    };
+    let name = file.name();
+    let analyser = tools.ffprobe.clone();
+    let owned = state.clone();
+
+    let started = state
+        .jobs()
+        .clone()
+        .start(
+            JobKind::ReadCopyAgain,
+            JobPriority::REQUESTED,
+            Some(source_id.to_string()),
+            move |handle| async move {
+                let database = owned.database();
+                handle.at_step(JobStep::AnalysingFiles).await;
+                handle.set_total(1).await;
+                handle.now_working_on(Some(&name)).await;
+
+                // Nothing is forgotten first. One reading replaces the
+                // container, the streams and the chapters in one go, so a
+                // reading that fails leaves the film described as it was
+                // rather than stripped of everything it had: a file read again
+                // and unreadable would otherwise come out of this worse than
+                // it went in.
+                let outcome = analyse_one(database, &analyser, &file)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                handle.advance(1).await;
+
+                match outcome {
+                    Outcome::Analysed => Ok(()),
+                    Outcome::Unreadable => Err("the analyser could not read that file".to_string()),
+                    Outcome::Stopped => Ok(()),
+                }
+            },
+        )
+        .await?;
+
+    Ok(Some(started.id))
+}
+
 /// Answers nothing when the film holds this one copy and no other, which is a
 /// film to identify again rather than one to take apart.
 pub async fn detach_copy(state: &AppState, source_id: MediaSourceId) -> Result<Option<WorkId>> {
