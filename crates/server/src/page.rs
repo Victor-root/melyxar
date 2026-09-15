@@ -99,6 +99,15 @@ enum Seen {
         at_second: f64,
         for_ms: u32,
         pictures_shown: u32,
+        /// What the browser was holding around that moment, which is the whole
+        /// question: holding the beginning of the piece it was meant to be
+        /// showing, it had everything it needed and showed nothing; holding
+        /// only the part past where the viewer landed, it never had the one
+        /// picture the rest are built on.
+        held_from_second: Option<f64>,
+        held_to_second: Option<f64>,
+        stretches: u32,
+        ready_state: u32,
     },
     /// The library gave up on this film, in its own words, and whether the
     /// browser's own reader was handed the playlist instead.
@@ -208,11 +217,19 @@ async fn what_the_page_saw(
             at_second,
             for_ms,
             pictures_shown,
+            held_from_second,
+            held_to_second,
+            stretches,
+            ready_state,
         } => tracing::debug!(
             %session,
             at_second,
             for_ms,
             pictures_shown,
+            held_from_second,
+            held_to_second,
+            stretches,
+            ready_state,
             "the clock went on while the picture stood still"
         ),
         Seen::PlaybackRefused {
@@ -281,7 +298,8 @@ mod tests {
             (
                 r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",
                     "saw":"the_picture_stood_still","at_second":612.5,"for_ms":5000,
-                    "pictures_shown":14703}"#,
+                    "pictures_shown":14703,"held_from_second":600.0,
+                    "held_to_second":612.6,"stretches":1,"ready_state":4}"#,
                 "a picture that stood still",
             ),
         ] {

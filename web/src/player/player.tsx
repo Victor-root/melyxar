@@ -195,10 +195,11 @@ export function Player({
   const stage = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
   const [stream, setStream] = useState<PlaybackSession | null>(null);
-  /* How to throw away the film the browser is holding. Held here rather than
-     passed down, because it only exists while a session is being fed in
-     pieces: a film played as it is has nothing of the sort. */
-  const dropWhatIsHeld = useRef<(() => void) | null>(null);
+  /* What to do to the library feeding the film in pieces while the viewer is
+     moving the bar, and once they have finished. Held here rather than passed
+     down, because it only exists while a session is being fed in pieces: a
+     film played as it is has nothing of the sort. */
+  const whileTheViewerMoves = useRef<{ hold: () => void; letGo: () => void } | null>(null);
   /* How many times the session has been opened again from nothing. Counted
      rather than flagged because it is what makes the film reopen at all: the
      session is opened by an effect, and an effect only runs again when
@@ -521,12 +522,21 @@ export function Player({
 
          The cost is that a jump is fetched again rather than played from
          what is held, which is what a jump costs anyway. */
-      dropWhatIsHeld.current = () =>
-        feed?.trigger(Library.Events.BUFFER_FLUSHING, {
-          startOffset: 0,
-          endOffset: Number.POSITIVE_INFINITY,
-          type: null,
-        });
+      whileTheViewerMoves.current = {
+        // Nothing fetched while a hand is on the bar. Left to itself the
+        // library chases every twitch of it, fetching pieces of film nobody
+        // will ever see and appending them underneath what is about to be
+        // thrown away, which is the one thing here nobody can reason about.
+        hold: () => feed?.stopLoad(),
+        letGo: () => {
+          feed?.trigger(Library.Events.BUFFER_FLUSHING, {
+            startOffset: 0,
+            endOffset: Number.POSITIVE_INFINITY,
+            type: null,
+          });
+          feed?.startLoad(element.currentTime);
+        },
+      };
       sayWhereItBegan(Library, feed, stream.id);
       feed.on(Library.Events.ERROR, (_event, trouble) => {
         // Anything short of fatal is retried on its own, and saying so would
@@ -568,7 +578,7 @@ export function Player({
 
     return () => {
       gone = true;
-      dropWhatIsHeld.current = null;
+      whileTheViewerMoves.current = null;
       stopWatching();
       feed?.destroy();
     };
@@ -593,12 +603,19 @@ export function Player({
       });
   };
 
-  /* A jump, once the viewer has finished making it. What the browser holds
-     came out of one reading of the film and what comes next comes out of
-     another, so the two have to be kept apart. A film played as it is has no
-     such thing and this does nothing. */
+  /* A hand on the bar: the library stops fetching until it comes off. What it
+     would fetch in between is a piece of film nobody will see, and it would
+     land underneath what is about to be thrown away. */
+  const viewerMoving = useCallback(() => {
+    whileTheViewerMoves.current?.hold();
+  }, []);
+
+  /* The hand off the bar. What the browser holds came out of one reading of
+     the film and what comes next comes out of another, so it is thrown away
+     and the library is set going again where the viewer landed. A film played
+     as it is has no such thing and both of these do nothing. */
   const viewerMoved = useCallback(() => {
-    dropWhatIsHeld.current?.();
+    whileTheViewerMoves.current?.letGo();
   }, []);
 
   const report = useCallback(() => {
@@ -888,6 +905,7 @@ export function Player({
           pictureKey={pictureKey}
           stage={stage}
           thumbnails={plan.thumbnails}
+          onViewerMoving={viewerMoving}
           onViewerMoved={viewerMoved}
           t={t}
         />

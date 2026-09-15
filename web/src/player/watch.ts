@@ -186,6 +186,8 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
           at_second: at,
           for_ms: Math.round(now - frozenSince),
           pictures_shown: shown,
+          ready_state: element.readyState,
+          ...whatIsHeldAround(element, at),
         });
       }
     } else if (shown !== frozenPictures) {
@@ -196,6 +198,8 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
           at_second: frozenClock,
           for_ms: Math.round(now - frozenSince),
           pictures_shown: shown,
+          ready_state: element.readyState,
+          ...whatIsHeldAround(element, frozenClock),
         });
       }
       frozenSince = null;

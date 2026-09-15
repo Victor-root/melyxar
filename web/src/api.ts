@@ -281,6 +281,11 @@ export type PageSaw =
       at_second: number;
       for_ms: number;
       pictures_shown: number;
+      /** What the browser held around that moment, when it held anything. */
+      held_from_second: number | null;
+      held_to_second: number | null;
+      stretches: number;
+      ready_state: number;
     }
   | {
       session: string;
