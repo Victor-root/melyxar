@@ -15,6 +15,25 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlaybackThumbnails } from "../api";
+import { rememberLoudness, storedLoudness } from "./loudness";
+
+/**
+ * Starts a film, or stops it.
+ *
+ * Here rather than in the button alone because the picture itself answers to a
+ * click too, and two places deciding what a click means is two places for them
+ * to disagree.
+ */
+export function playOrPause(element: HTMLVideoElement | null) {
+  if (!element) {
+    return;
+  }
+  if (element.paused) {
+    void element.play();
+  } else {
+    element.pause();
+  }
+}
 
 interface Props {
   /* The element being driven. Held by the player, which mounts a fresh one
@@ -94,6 +113,11 @@ export function Controls({ video, pictureKey, stage, thumbnails, t }: Props) {
     if (!element) {
       return;
     }
+    /* The element is a new one for every film and starts at full volume, so
+       the setting is put back on it before anything is heard. */
+    const wanted = storedLoudness();
+    element.volume = wanted.volume;
+    element.muted = wanted.muted;
     const tell = () => {
       setAt(element.currentTime);
       setLength(Number.isFinite(element.duration) ? element.duration : 0);
@@ -119,10 +143,16 @@ export function Controls({ video, pictureKey, stage, thumbnails, t }: Props) {
     for (const name of events) {
       element.addEventListener(name, tell);
     }
+    /* Whatever moves the sound, wherever from: the buttons here, a keyboard
+       key the browser answers on its own, a headset. */
+    const remember = () =>
+      rememberLoudness({ volume: element.volume, muted: element.muted });
+    element.addEventListener("volumechange", remember);
     return () => {
       for (const name of events) {
         element.removeEventListener(name, tell);
       }
+      element.removeEventListener("volumechange", remember);
     };
   }, [video, pictureKey]);
 
@@ -221,25 +251,6 @@ export function Controls({ video, pictureKey, stage, thumbnails, t }: Props) {
         idle && playing && hovered === null && !dragging ? " player-controls-away" : ""
       }`}
     >
-      {/* The preview sits above the bar and follows the cursor, kept inside
-          the bar at both ends so it is never half off the screen. */}
-      {previewed !== null && (
-        <div className="player-preview" style={{ left: `${previewLeft}px` }} aria-hidden="true">
-          {spot && thumbnails && (
-            <span
-              className="player-preview-picture"
-              style={{
-                width: `${thumbnails.width}px`,
-                height: `${thumbnails.height}px`,
-                backgroundImage: `url(${thumbnails.url}/${spot.sheet}.jpg)`,
-                backgroundPosition: `-${spot.column * thumbnails.width}px -${spot.row * thumbnails.height}px`,
-              }}
-            />
-          )}
-          <span className="player-preview-time">{asClock(previewed)}</span>
-        </div>
-      )}
-
       <div
         className="player-rail"
         ref={rail}
@@ -281,22 +292,34 @@ export function Controls({ video, pictureKey, stage, thumbnails, t }: Props) {
         <span className="player-rail-loaded" style={{ width: `${loaded_share * 100}%` }} />
         <span className="player-rail-played" style={{ width: `${playing_share * 100}%` }} />
         <span className="player-rail-handle" style={{ left: `${playing_share * 100}%` }} />
+
+        {/* The preview stands above the bar and follows the cursor, kept
+            inside the bar at both ends so it is never half off the screen.
+            Held by the bar rather than by the row of controls, so that what it
+            clears is the bar itself whether it carries a picture or only the
+            time: measured off the row, the time sat on the bar. */}
+        {previewed !== null && (
+          <div className="player-preview" style={{ left: `${previewLeft}px` }} aria-hidden="true">
+            {spot && thumbnails && (
+              <span
+                className="player-preview-picture"
+                style={{
+                  width: `${thumbnails.width}px`,
+                  height: `${thumbnails.height}px`,
+                  backgroundImage: `url(${thumbnails.url}/${spot.sheet}.jpg)`,
+                  backgroundPosition: `-${spot.column * thumbnails.width}px -${spot.row * thumbnails.height}px`,
+                }}
+              />
+            )}
+            <span className="player-preview-time">{asClock(previewed)}</span>
+          </div>
+        )}
       </div>
 
       <div className="player-buttons">
         <button
           className="player-button"
-          onClick={() => {
-            const element = video.current;
-            if (!element) {
-              return;
-            }
-            if (element.paused) {
-              void element.play();
-            } else {
-              element.pause();
-            }
-          }}
+          onClick={() => playOrPause(video.current)}
           aria-label={t(playing ? "player.pause" : "player.play")}
         >
           {playing ? "⏸" : "▶"}

@@ -34,7 +34,7 @@ import {
   storedAppearance,
 } from "./appearance";
 import type { Appearance } from "./appearance";
-import { Controls } from "./controls";
+import { Controls, playOrPause } from "./controls";
 import { languageName } from "./languages";
 import { clientProfile } from "./profile";
 import {
@@ -750,6 +750,9 @@ export function Player({
           className="player-video"
           src={canBePlayedAsItIs(plan) ? plan.url : undefined}
           autoPlay
+          /* The picture itself starts and stops the film, the way every player
+             does it: the button is a long way from where the eyes are. */
+          onClick={(event) => playOrPause(event.currentTarget)}
           onLoadedMetadata={onReady}
           onTimeUpdate={(event) => {
             lastPosition.current = event.currentTarget.currentTime;

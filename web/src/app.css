@@ -1199,17 +1199,14 @@
   color: var(--text-soft);
 }
 
-/* The file a pass is on right now. Allowed to take what room is left and cut
-   off rather than pushing the bar off the row: a film name runs long, and the
-   bar is what somebody is looking at. */
+/* The file a pass is on right now, on a line of its own under the rest. A
+   film name is long enough to push the bar off the row, and shortening it to
+   fit alongside leaves two films of the same series reading the same. */
 .job-doing {
+  flex-basis: 100%;
   font-size: 13px;
   color: var(--text-soft);
-  min-width: 0;
-  max-width: 34ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .job-bar {
@@ -1397,10 +1394,13 @@
 }
 
 /* The picture of the moment under the cursor, standing above the bar and
-   following it. Kept clear of the pointer so it never swallows a click. */
+   following it. Kept clear of the pointer so it never swallows a click.
+   Measured from the top of the bar rather than from the bottom of the row of
+   controls: the row is as tall as whatever is in it, and a fixed height put
+   the bar straight through the time. */
 .player-preview {
   position: absolute;
-  bottom: 46px;
+  bottom: calc(100% + 6px);
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;

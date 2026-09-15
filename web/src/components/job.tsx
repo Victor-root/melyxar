@@ -37,15 +37,6 @@ export function JobLine({ job, onCancel }: { job: Job; onCancel?: () => void }) 
           started over. */}
       {job.step && <span className="job-step">{t(`jobs.step.${job.step}`)}</span>}
 
-      {/* Which file, right now. A pass name and a bar do not tell a server
-          that is working from one that is stuck on a four hour film, and until
-          this was here the only way to know was to open the journal. */}
-      {job.doing && (
-        <span className="job-doing" title={job.doing}>
-          {job.doing}
-        </span>
-      )}
-
       {job.ratio !== null ? (
         <>
           <span className="job-bar">
@@ -58,6 +49,12 @@ export function JobLine({ job, onCancel }: { job: Job; onCancel?: () => void }) 
       ) : (
         job.done > 0 && <span className="job-count">{job.done}</span>
       )}
+
+      {/* Which file, right now. On a line of its own under the rest, whole: a
+          pass name and a bar do not tell a server that is working from one
+          stuck on a four hour film, and a name cut short tells which film only
+          when two films do not begin alike. */}
+      {job.doing && <span className="job-doing">{job.doing}</span>}
 
       {job.failure_reason && <span className="job-reason">{job.failure_reason}</span>}
       {onCancel && (
