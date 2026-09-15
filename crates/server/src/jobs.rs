@@ -49,6 +49,10 @@ struct JobView {
     /// counting that pass and nothing else, which is what a screen has to say
     /// out loud when a bar drops back to nothing and sets off again.
     step: Option<&'static str>,
+    /// The name of the file it is on at this very moment, when the pass says
+    /// so. A pass name and a bar do not tell a server that is working from one
+    /// that is stuck on a four hour film; this does.
+    doing: Option<String>,
     done: i64,
     /// Absent until the work has been sized up. A bar showing nothing beats a
     /// bar showing a number that was invented.
@@ -99,6 +103,7 @@ fn job_view(job: &melyxar_core::job::Job) -> JobView {
         state: job.state.as_str(),
         target: job.target_id.clone(),
         step: job.step.map(|step| step.as_str()),
+        doing: job.doing.clone(),
         done: job.progress_done,
         total: job.progress_total,
         ratio: job.ratio(),
@@ -378,6 +383,23 @@ fn internal(error: impl std::fmt::Display) -> ServerError {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_job_says_which_file_it_is_on_right_now() {
+        // A pass name and a bar do not tell a server that is working from one
+        // stuck on a four hour film. Only this does, and until it was here the
+        // one way to know was to open the journal.
+        let view = job_view(&job(3, Some(10), JobState::Running));
+        assert_eq!(view.doing.as_deref(), Some("Quiet.Harbour.2019.mkv"));
+
+        let mut between_films = job(3, Some(10), JobState::Running);
+        between_films.doing = None;
+        assert_eq!(
+            job_view(&between_films).doing,
+            None,
+            "a pass that has not said is a row with nothing in that place"
+        );
+    }
+
     /// Every name a job can carry has a sentence in the interface, in both
     /// languages.
     ///
@@ -429,6 +451,7 @@ mod tests {
             state,
             target_id: Some("films".to_string()),
             step: Some(melyxar_core::job::JobStep::AnalysingFiles),
+            doing: Some("Quiet.Harbour.2019.mkv".to_string()),
             progress_done: done,
             progress_total: total,
             failure_reason: None,

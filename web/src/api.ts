@@ -193,6 +193,8 @@ export interface Job {
   /** Which pass the job is on. The counters below count that pass alone, so
    *  a bar dropping back to nothing is a pass ending, not a crash. */
   step: string | null;
+  /** The file it is on at this very moment, when the pass says so. */
+  doing: string | null;
   done: number;
   total: number | null;
   ratio: number | null;

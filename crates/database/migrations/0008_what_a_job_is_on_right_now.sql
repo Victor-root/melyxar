@@ -1,0 +1,12 @@
+-- Which file a job is on at this very moment.
+--
+-- A bar and a pass name say a scan is reading films and how far along it is.
+-- They do not say that it has been on the same film for four minutes because
+-- that film is four hours long, which is the difference between a server
+-- working and a server stuck, and the only way to tell them apart was to open
+-- the journal.
+--
+-- One name rather than a list: the passes read two files at a time, so this is
+-- whichever of them started last. Cleared when the job moves to another pass
+-- or ends, because a name left behind describes work that is over.
+ALTER TABLE jobs ADD COLUMN doing TEXT;

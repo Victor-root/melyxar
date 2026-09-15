@@ -44,6 +44,7 @@ impl Database {
             state: JobState::Queued,
             target_id: target_id.map(str::to_string),
             step: None,
+            doing: None,
             progress_done: 0,
             progress_total: None,
             failure_reason: None,
@@ -120,12 +121,27 @@ impl Database {
     /// catch the new pass carrying the old numbers.
     pub async fn start_job_step(&self, id: JobId, step: JobStep) -> Result<()> {
         sqlx::query(
-            "UPDATE jobs SET step = ?, progress_done = 0, progress_total = NULL WHERE id = ?",
+            "UPDATE jobs SET step = ?, doing = NULL, progress_done = 0, progress_total = NULL
+             WHERE id = ?",
         )
         .bind(step.as_str())
         .bind(id.to_db_string())
         .execute(self.writer())
         .await?;
+        Ok(())
+    }
+
+    /// Says what a job is on at this very moment, or that it is on nothing.
+    ///
+    /// Written straight away rather than at the next beat, like the pass it
+    /// sits under: it exists to be read while somebody is looking at the
+    /// screen wondering whether anything is still happening.
+    pub async fn set_job_doing(&self, id: JobId, doing: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE jobs SET doing = ? WHERE id = ?")
+            .bind(doing)
+            .bind(id.to_db_string())
+            .execute(self.writer())
+            .await?;
         Ok(())
     }
 
@@ -152,13 +168,19 @@ impl Database {
         state: JobState,
         failure_reason: Option<&str>,
     ) -> Result<()> {
-        sqlx::query("UPDATE jobs SET state = ?, failure_reason = ?, finished_at = ? WHERE id = ?")
-            .bind(state.as_str())
-            .bind(failure_reason)
-            .bind(timestamp_to_text(now()))
-            .bind(id.to_db_string())
-            .execute(self.writer())
-            .await?;
+        // What it was on goes with it: a name left on a finished job describes
+        // work that is over, and the list of finished jobs would read as though
+        // every one of them had stopped on a film.
+        sqlx::query(
+            "UPDATE jobs SET state = ?, failure_reason = ?, finished_at = ?, doing = NULL
+             WHERE id = ?",
+        )
+        .bind(state.as_str())
+        .bind(failure_reason)
+        .bind(timestamp_to_text(now()))
+        .bind(id.to_db_string())
+        .execute(self.writer())
+        .await?;
         Ok(())
     }
 
@@ -247,6 +269,7 @@ fn job_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Job> {
             .try_get::<Option<String>, _>("step")?
             .as_deref()
             .and_then(JobStep::parse),
+        doing: row.try_get("doing")?,
         progress_done: row.try_get("progress_done")?,
         progress_total: row.try_get("progress_total")?,
         failure_reason: row.try_get("failure_reason")?,
@@ -355,6 +378,68 @@ mod tests {
             stored.progress_total, None,
             "the counters belong to the pass, and counting four hundred analysed \
              files towards three hundred read ones counts the same films twice"
+        );
+    }
+
+    #[tokio::test]
+    async fn what_a_job_is_on_is_kept_while_it_lasts_and_no_longer() {
+        let database = database().await;
+        let job = database
+            .create_job(JobKind::ScanLibrary, JobPriority::REQUESTED, Some("films"))
+            .await
+            .expect("job created");
+        database
+            .start_job_step(job.id, JobStep::AnalysingFiles)
+            .await
+            .expect("pass recorded");
+
+        database
+            .set_job_doing(job.id, Some("Quiet.Harbour.2019.mkv"))
+            .await
+            .expect("name recorded");
+        assert_eq!(
+            database
+                .job(job.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .doing
+                .as_deref(),
+            Some("Quiet.Harbour.2019.mkv")
+        );
+
+        database
+            .start_job_step(job.id, JobStep::ReadingKeyFrames)
+            .await
+            .expect("next pass recorded");
+        assert_eq!(
+            database
+                .job(job.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .doing,
+            None,
+            "a name from the pass before describes a film this one has not reached"
+        );
+
+        database
+            .set_job_doing(job.id, Some("Amber.Field.2020.mkv"))
+            .await
+            .expect("name recorded");
+        database
+            .finish_job(job.id, JobState::Succeeded, None)
+            .await
+            .expect("job finished");
+        assert_eq!(
+            database
+                .job(job.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .doing,
+            None,
+            "a finished job stopped on nothing, it stopped because it was done"
         );
     }
 

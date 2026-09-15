@@ -75,6 +75,22 @@ impl JobHandle {
         self.cancelled.load(Ordering::Relaxed)
     }
 
+    /// Says what the job is on at this very moment: the name of one file.
+    ///
+    /// A bar and a pass name say a scan is reading films and how far along it
+    /// is. They do not say that it has been on the same film for four minutes
+    /// because that film is four hours long, which is the difference between a
+    /// server working and a server stuck.
+    ///
+    /// Written straight away rather than at the next beat, for the same reason
+    /// as the pass name above: it exists to be read while somebody is watching
+    /// the screen.
+    pub async fn now_working_on(&self, what: Option<&str>) {
+        if let Err(error) = self.database.set_job_doing(self.id, what).await {
+            tracing::warn!(job = %self.id, error = %error, "what a job is on could not be recorded");
+        }
+    }
+
     /// Says which pass the job has moved on to.
     ///
     /// Written straight away rather than at the next beat: a pass is announced
