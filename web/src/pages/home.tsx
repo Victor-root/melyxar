@@ -119,8 +119,23 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
   return (
     <main className="page">
-      {/* The libraries come first: they are the way in. Everything under them
-          is a suggestion, and a suggestion belongs below the door. */}
+      {/* Work the server is doing, at the very top of the page, before the way
+          in and before anything suggested. It is the one thing here that is
+          changing, and a scan of a whole library runs for hours: somebody who
+          opens this page during one is opening it to see that. Buried between
+          two rows of films it reads as one more row. */}
+      {jobs.length > 0 && (
+        <section className="section">
+          <div className="jobs">
+            {jobs.map((job) => (
+              <JobLine key={job.id} job={job} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Then the libraries: they are the way in. Everything under them is a
+          suggestion, and a suggestion belongs below the door. */}
       <section className="section">
         <div className="section-head">
           <h1>{t("nav.libraries")}</h1>
@@ -163,18 +178,6 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
               />
             ))}
           </Row>
-        </section>
-      )}
-
-      {/* Work the server is doing, shown where somebody lands rather than on a
-          page they have to think of opening. */}
-      {jobs.length > 0 && (
-        <section className="section">
-          <div className="jobs">
-            {jobs.map((job) => (
-              <JobLine key={job.id} job={job} />
-            ))}
-          </div>
         </section>
       )}
 
