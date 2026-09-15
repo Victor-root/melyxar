@@ -100,7 +100,12 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
      changes. A film shown stretched is the server and the browser disagreeing
      about that shape, and neither of them could see the other's answer. Said
      from here rather than from the library, because it is the element that
-     holds both the picture's shape and the box it is drawn in. */
+     holds both the picture's shape and the box it is drawn in.
+
+     Both halves have to be followed, and for a while only the picture was: the
+     box was read once, at the instant the shape became known, which is before
+     the page has finished laying itself out. What that wrote down was a box
+     nobody ever saw. */
   let saidTheShape = "";
   const sayTheShape = () => {
     if (!element.videoWidth || !element.videoHeight) {
@@ -127,6 +132,8 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
   };
   element.addEventListener("loadedmetadata", sayTheShape);
   element.addEventListener("resize", sayTheShape);
+  const boxChanged = new ResizeObserver(() => sayTheShape());
+  boxChanged.observe(element);
   sayTheShape();
 
   /* Where the film was before it moved. Read from the clock as it runs rather
@@ -342,6 +349,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
       element.cancelVideoFrameCallback?.(waitingForThePicture.pending);
     }
     waitingForThePicture = null;
+    boxChanged.disconnect();
     element.removeEventListener("loadedmetadata", sayTheShape);
     element.removeEventListener("resize", sayTheShape);
     element.removeEventListener("timeupdate", followTheClock);
