@@ -291,6 +291,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_session_somebody_has_paused_is_not_swept_from_under_them() {
+        // A film playing asks for a segment every few seconds, which is what
+        // says a viewer is there. A film paused asks for nothing at all, and
+        // it used to be swept away with the viewer sitting in front of it:
+        // pressing play then answered that the session was over for every
+        // segment of the film, which reaches a viewer as a browser that
+        // cannot read it. Reported from a real library after a pause.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let sessions = sessions(directory.path().join("sessions"), 4);
+        let session = sessions
+            .open(recipe(directory.path().join("film.mkv")), false)
+            .await
+            .expect("a session");
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        session.still_watching().await;
+
+        assert_eq!(
+            sessions.sweep(Duration::from_millis(40)).await,
+            0,
+            "somebody said forty milliseconds ago that they were still there"
+        );
+        assert_eq!(sessions.live_count().await, 1);
+    }
+
+    #[tokio::test]
     async fn folders_a_previous_run_left_behind_are_removed_at_start_up() {
         // A crash, a power cut, a container killed outright: nothing else ever
         // comes back for these.

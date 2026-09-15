@@ -59,9 +59,13 @@ pub fn router() -> Router<AppState> {
             "/api/v1/stream/{session}/{file}",
             axum::routing::get(session_file),
         )
+        // A viewer who has paused asks for nothing, and a session is kept
+        // alive by being asked for something. This is how they say they are
+        // still in front of it, and its refusal is how a page learns the
+        // session is gone and opens another.
         .route(
             "/api/v1/stream/{session}",
-            axum::routing::delete(close_session),
+            axum::routing::post(still_watching).delete(close_session),
         )
 }
 
@@ -637,6 +641,19 @@ async fn segment(state: &AppState, id: &str, index: u32, request: Request<Body>)
 }
 
 /// Closes a session, which a player asks for when it is done with a film.
+/// Keeps a session alive while the viewer is in front of it doing nothing.
+///
+/// Refused when the session is over, which is an answer the page acts on:
+/// there is nothing to go back to, so it opens a new one where the viewer
+/// stands rather than waiting for them to press play and find the film gone.
+async fn still_watching(
+    State(state): State<AppState>,
+    RoutePath(id): RoutePath<String>,
+) -> Result<Json<serde_json::Value>> {
+    live_session(&state, &id).await?.still_watching().await;
+    Ok(Json(serde_json::json!({ "still_there": true })))
+}
+
 async fn close_session(
     State(state): State<AppState>,
     RoutePath(id): RoutePath<String>,
