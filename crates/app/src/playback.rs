@@ -425,6 +425,7 @@ pub async fn open_session(
 
     let expensive = plan.decision.method.is_expensive();
     let session = sessions.open(recipe, expensive).await?;
+    say_how_the_film_was_cut(&session);
 
     // Started now rather than when somebody asks for a subtitle. Pulling one
     // out of a film means reading the whole file through, because the words
@@ -451,6 +452,31 @@ fn prepare_the_subtitles(state: &AppState, plan: &PlayPlan) {
     });
 }
 
+/// Writes down how a film came out cut, before a single segment exists.
+///
+/// The playlist is the one thing a reading cannot recover from getting wrong:
+/// it says which part of the film every segment holds, and a player believes
+/// it. When the picture drifts behind the bar, or a film stops with minutes
+/// still on the clock, this line is where the answer is, and without it the
+/// only way to see any of this was to have the file in hand.
+fn say_how_the_film_was_cut(session: &melyxar_streaming::session::Session) {
+    let playlist = session.playlist();
+    let segments = playlist.segment_count();
+    let lengths = (0..segments).filter_map(|index| playlist.duration_of(index));
+    let shortest = lengths.clone().map(Millis::get).min().unwrap_or_default();
+
+    tracing::debug!(
+        session = %session.id,
+        film_lasts = playlist.total.as_seconds_f64(),
+        segments,
+        cut_where_the_film_allows = playlist.cut_where_the_film_allows(),
+        last_segment_begins_at = playlist.start_of(segments.saturating_sub(1)).as_seconds_f64(),
+        longest_segment = lengths.map(Millis::get).max().unwrap_or_default() as f64 / 1000.0,
+        shortest_segment = shortest as f64 / 1000.0,
+        "how this film was cut"
+    );
+}
+
 /// Where this film can really be started, when it has been read for it.
 ///
 /// Nothing when it has not, and nothing when reading it back went wrong: the
@@ -458,10 +484,9 @@ fn prepare_the_subtitles(state: &AppState, plan: &PlayPlan) {
 /// be started is a far worse answer than a jump that lands early.
 async fn where_this_film_can_be_started(state: &AppState, plan: &PlayPlan) -> Vec<Millis> {
     match state.database().key_frames_of(plan.source_id).await {
-        Ok(Some(found)) if !found.is_empty() => melyxar_ffmpeg::probe::boundaries_every(
-            &found,
-            melyxar_streaming::playlist::SEGMENT_DURATION,
-        ),
+        Ok(Some(found)) if !found.is_empty() => {
+            melyxar_ffmpeg::probe::where_the_film_can_be_cut(&found)
+        }
         Ok(_) => Vec::new(),
         Err(error) => {
             tracing::warn!(

@@ -266,8 +266,8 @@ pub enum Output {
         /// Where the tool writes its own playlist. A byproduct: the server
         /// writes the one a player reads.
         tool_playlist: PathBuf,
-        /// Nominal length of one segment.
-        duration: Millis,
+        /// Where the tool is to cut.
+        cut: WhereToCut,
         /// Number the first produced segment carries, so that a jump starts
         /// the encoder further in rather than from the beginning.
         start_number: u32,
@@ -277,6 +277,41 @@ pub enum Output {
     /// Nothing kept, used when only the measurement matters.
     Discard,
 }
+
+/// Where the tool is to cut one segment from the next.
+///
+/// The server writes the playlist before anything is produced, so it has to
+/// know where every cut will fall. That only holds if the tool has one way of
+/// answering, and the tool has two: it aims for a length, and it can only cut
+/// where the picture stands on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WhereToCut {
+    /// At every place the film can be started, and nowhere else.
+    ///
+    /// For a picture carried over untouched, where the server chooses none of
+    /// the cuts. It is the only rule whose answer does not depend on where the
+    /// tool was set going, and a jump sets it going anywhere: the length the
+    /// tool aims for advances by a fixed step at every cut rather than being
+    /// measured from the cut it just made, so a film with two starting points
+    /// close together comes out cut differently depending on where the reading
+    /// began. Asked for a length shorter than any gap between two starting
+    /// points, the tool has no choice left and cuts at all of them.
+    AtEveryKeyFrame,
+    /// On a grid of this length.
+    ///
+    /// For a picture the server rebuilds, which is given a starting point on
+    /// every boundary of that same grid: the tool then has a place to cut
+    /// exactly where the playlist says, and no reason to cut anywhere else.
+    Every(Millis),
+}
+
+/// The length handed to the tool for a cut at every starting point.
+///
+/// A millisecond is under one frame of any film there is, so the length the
+/// tool aims for is behind from the first cut onwards and stays behind. Zero
+/// is not used: the tool reads it as "unset" and falls back to its own
+/// default.
+const SHORTER_THAN_ANY_PICTURE: Millis = Millis::new(1);
 
 /// A full invocation.
 #[derive(Debug, Clone, PartialEq)]
@@ -610,13 +645,16 @@ impl Command {
                 pattern,
                 initialisation,
                 tool_playlist,
-                duration,
+                cut,
                 start_number,
             } => {
                 push!("-f");
                 push!("hls");
                 push!("-hls_time");
-                push!(&format_seconds(*duration));
+                push!(&format_seconds(match cut {
+                    WhereToCut::AtEveryKeyFrame => SHORTER_THAN_ANY_PICTURE,
+                    WhereToCut::Every(length) => *length,
+                }));
                 // The whole film, start to finish: nothing is dropped from the
                 // list as it goes, which is what a viewer jumping backwards
                 // would otherwise fall off the end of.
@@ -1250,7 +1288,7 @@ mod tests {
                 pattern: PathBuf::from("/tmp/session/segment-%05d.m4s"),
                 initialisation: PathBuf::from("/tmp/session/init.mp4"),
                 tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
-                duration: Millis::new(4000),
+                cut: WhereToCut::Every(Millis::new(4000)),
                 start_number: 312,
             },
         );
@@ -1267,7 +1305,7 @@ mod tests {
                 pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
                 initialisation: PathBuf::from("/tmp/session/init.mp4"),
                 tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
-                duration: Millis::new(4000),
+                cut: WhereToCut::Every(Millis::new(4000)),
                 start_number: 2,
             },
         );
@@ -1284,7 +1322,7 @@ mod tests {
                 pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
                 initialisation: PathBuf::from("/tmp/session/init.mp4"),
                 tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
-                duration: Millis::new(4000),
+                cut: WhereToCut::Every(Millis::new(4000)),
                 start_number: 0,
             },
         );
@@ -1314,7 +1352,7 @@ mod tests {
             pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
             initialisation: PathBuf::from("/tmp/session/init.mp4"),
             tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
-            duration: Millis::new(4000),
+            cut: WhereToCut::Every(Millis::new(4000)),
             start_number: 5,
         };
 
@@ -1363,7 +1401,7 @@ mod tests {
                 pattern: PathBuf::from("/tmp/session/segment-%05d.m4s"),
                 initialisation: PathBuf::from("/tmp/session/init.mp4"),
                 tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
-                duration: Millis::new(4000),
+                cut: WhereToCut::Every(Millis::new(4000)),
                 start_number: 0,
             },
         );

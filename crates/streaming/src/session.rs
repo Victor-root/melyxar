@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use melyxar_core::time::Millis;
-use melyxar_ffmpeg::command::{Command, Input, Output, StreamSelection};
+use melyxar_ffmpeg::command::{Command, Input, Output, StreamSelection, WhereToCut};
 use melyxar_ffmpeg::process::RunningProcess;
 use melyxar_ffmpeg::ToolPaths;
 use tokio::sync::Mutex;
@@ -705,10 +705,9 @@ impl Session {
     }
 
     fn command_from(&self, index: u32) -> Command {
-        let start = self.playlist.start_of(index);
         let mut input = Input::new(&self.recipe.source);
         if index > 0 {
-            input = input.starting_at(start);
+            input = input.starting_at(self.set_going_at(index));
         }
 
         Command::new(
@@ -717,12 +716,7 @@ impl Session {
                 pattern: self.folder.join("segment-%d.m4s"),
                 initialisation: self.folder.join("init.mp4"),
                 tool_playlist: self.folder.join("tool.m3u8"),
-                // What the tool is asked to aim for, never what it must
-                // produce exactly. Carrying a picture over untouched, it cuts
-                // at the first place the film allows past this, which is the
-                // very rule the playlist was written with: the two then agree
-                // without either knowing about the other.
-                duration: crate::playlist::SEGMENT_DURATION,
+                cut: self.where_to_cut(),
                 start_number: index,
             },
         )
@@ -732,6 +726,40 @@ impl Session {
         // Asked for so that a segment can be handed over as soon as the tool
         // says it has passed the end of it.
         .reporting_progress()
+    }
+
+    /// Where the tool is to cut, which follows from who chose the boundaries.
+    ///
+    /// A picture the server rebuilds is given a starting point on every
+    /// boundary of the grid the playlist was written on, so the tool is asked
+    /// for that grid. A picture carried over untouched has its starting points
+    /// wherever its encoder left them, the playlist is cut at all of them, and
+    /// the tool is asked for all of them too.
+    fn where_to_cut(&self) -> WhereToCut {
+        match self.playlist.cut_where_the_film_allows() {
+            true => WhereToCut::AtEveryKeyFrame,
+            false => WhereToCut::Every(crate::playlist::SEGMENT_DURATION),
+        }
+    }
+
+    /// Where the tool is set going so that it begins on one exact segment.
+    ///
+    /// The middle of it rather than its beginning, for a film cut where its
+    /// own pictures allow. Asked for the very moment a picture stands on its
+    /// own, the tool serves the one before it: measured, and it left every
+    /// segment of the reading one place behind where the playlist said it was.
+    /// The middle of a segment is past the picture wanted and short of the
+    /// next one, so it names one and only one.
+    ///
+    /// A rebuilt picture starts exactly where it is asked to, and asking for
+    /// the middle of a segment would begin it in the middle.
+    fn set_going_at(&self, index: u32) -> Millis {
+        let start = self.playlist.start_of(index);
+        if !self.playlist.cut_where_the_film_allows() {
+            return start;
+        }
+        let ends_at = self.playlist.start_of(index + 1).get();
+        Millis::new(start.get() + (ends_at - start.get()) / 2)
     }
 
     /// Waits for a file to appear, giving up rather than hanging for ever.
@@ -909,6 +937,54 @@ mod tests {
                 &frames.to_string(),
                 "-sc_threshold",
                 "0",
+                "-c:a",
+                "aac",
+                "-shortest",
+            ])
+            .arg(path)
+            .output()
+            .await
+            .expect("the tool runs");
+        assert!(made.status.success(), "the clip was made");
+    }
+
+    /// A clip whose pictures stand on their own at the moments given.
+    ///
+    /// The shape a real film has and the made up ones above do not: places
+    /// close together, because a cut in a scene puts one there, and long
+    /// stretches with none. It is the only shape that tells a rule the tool
+    /// shares from one it does not.
+    async fn clip_with_key_frames_at(path: &Path, seconds: u32, at: &[f64]) {
+        let forced = at
+            .iter()
+            .map(|moment| format!("{moment:.3}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let made = tokio::process::Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("testsrc2=size=320x180:rate=24:duration={seconds}"),
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("sine=frequency=440:duration={seconds}"),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                // Far enough apart that nothing but the list below puts one in.
+                "-g",
+                "10000",
+                "-sc_threshold",
+                "0",
+                "-force_key_frames",
+                &forced,
                 "-c:a",
                 "aac",
                 "-shortest",
@@ -2144,8 +2220,7 @@ mod tests {
         let found = melyxar_ffmpeg::probe::key_frames(&tools.ffprobe, &source)
             .await
             .expect("the film says where it can be started");
-        let boundaries =
-            melyxar_ffmpeg::probe::boundaries_every(&found, crate::playlist::SEGMENT_DURATION);
+        let boundaries = melyxar_ffmpeg::probe::where_the_film_can_be_cut(&found);
 
         let session = Session::open(
             SessionId::new(),
@@ -2198,6 +2273,83 @@ mod tests {
             "the playlist says this segment covers second {expected}, and it \
              announces itself at {announced}"
         );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_film_with_pictures_close_together_stays_where_the_playlist_put_it() {
+        // The defect this guards against was reported from a real library: one
+        // film out of three hundred where the opening was right, the picture
+        // fell further and further behind the bar as it played, and the ending
+        // stopped with twenty minutes still on the clock.
+        //
+        // The cause is one rule believed by two parties. The playlist used to
+        // skip a place the film can be started when it lay less than a segment
+        // past the last cut, on the understanding that the tool did the same.
+        // It does not: the length it aims for advances by a fixed step at
+        // every cut instead of being measured from the cut it just made, so
+        // once a segment runs longer than that step the aim stays behind and
+        // the tool cuts at every place there is. Every skipped place is then
+        // one segment of drift, for the rest of the reading.
+        //
+        // Only a film carrying two of them close together shows it, which is
+        // why a whole library can be fine and one film cannot.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        let close_together = [
+            0.0, 2.2, 10.9, 14.0, 23.5, 33.7, 41.5, 51.7, 53.9, 66.4, 75.9, 83.7,
+        ];
+        clip_with_key_frames_at(&source, 90, &close_together).await;
+
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let found = melyxar_ffmpeg::probe::key_frames(&tools.ffprobe, &source)
+            .await
+            .expect("the film says where it can be started");
+        let session = Session::open(
+            SessionId::new(),
+            Recipe {
+                source,
+                duration: Millis::new(90_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Copy,
+                audio: AudioOutput::Encode(melyxar_ffmpeg::command::AudioEncode::browser_stereo(
+                    "aac",
+                )),
+                where_the_viewer_starts: Millis::ZERO,
+                where_it_can_be_started: melyxar_ffmpeg::probe::where_the_film_can_be_cut(&found),
+                if_the_card_refuses: Vec::new(),
+            },
+            directory.path().join("session"),
+            tools,
+        )
+        .await
+        .expect("the session opens");
+        assert!(
+            session.playlist().cut_where_the_film_allows(),
+            "the film was read for where it can be started"
+        );
+        assert!(
+            session.playlist().segment_count() >= 8,
+            "a film with too few segments would not show a drift that builds up"
+        );
+
+        // A jump, and then the film played on from there: one reading of the
+        // film, which is where the drift used to build up. Every segment of it
+        // has to hold the part of the film the playlist says it holds.
+        let jumped_to = 2;
+        for index in jumped_to..session.playlist().segment_count() {
+            session
+                .segment(index)
+                .await
+                .unwrap_or_else(|error| panic!("segment {index} was produced: {error}"));
+            let announced = clock_of(&session, index).await;
+            let expected = session.playlist().start_of(index).as_seconds_f64();
+            assert!(
+                (announced - expected).abs() < 0.5,
+                "segment {index} holds second {announced} of the film and the \
+                 playlist says it holds second {expected}"
+            );
+        }
         session.close().await;
     }
 

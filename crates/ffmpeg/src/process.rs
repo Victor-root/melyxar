@@ -235,7 +235,7 @@ fn absorb_progress_line(current: &mut Progress, line: &str) -> Option<Progress> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::{AudioOutput, Input, Output, VideoOutput};
+    use crate::command::{AudioOutput, Input, Output, VideoOutput, WhereToCut};
     use crate::ToolPaths;
 
     #[test]
@@ -441,7 +441,7 @@ mod tests {
                 pattern: session.join("segment-%05d.m4s"),
                 initialisation: session.join("init.mp4"),
                 tool_playlist: session.join("tool.m3u8"),
-                duration: Millis::new(2000),
+                cut: WhereToCut::Every(Millis::new(2000)),
                 start_number: 7,
             },
         )

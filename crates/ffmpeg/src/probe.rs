@@ -409,25 +409,28 @@ pub fn read_key_frames(listing: &str) -> Vec<Millis> {
     found
 }
 
-/// Groups key frames into the boundaries a playlist can use.
+/// Turns key frames into the boundaries a playlist can use.
 ///
-/// A cut is made at a key frame as soon as one lies far enough past the last
-/// cut. Every boundary is therefore a place the film can really begin, and the
-/// segments come out as close to the wanted length as the film allows: a film
-/// with a key frame every ten seconds gets ten second segments, because it has
-/// nowhere else to be cut.
+/// All of them, with no shortest segment. A rule that skipped the ones lying
+/// close together would be a rule the server applies and the tool does not:
+/// the tool aims for a length that advances by a fixed step at every cut
+/// rather than being measured from the cut it just made, so two starting
+/// points close together come out kept or skipped depending on where the
+/// reading began, and a reading begins wherever somebody jumped to. Measured
+/// on a film made for it: thirty boundaries announced, forty nine produced,
+/// and two minutes between what the playlist said a segment held and what it
+/// held, after five minutes of film. Asked for every one of them, the tool has
+/// nothing left to choose.
 ///
-/// The first boundary is where the picture begins, whatever the key frames
-/// say. A playlist that began at the third second would be a playlist missing
-/// the first three.
-pub fn boundaries_every(key_frames: &[Millis], wanted: Millis) -> Vec<Millis> {
-    let mut boundaries = vec![Millis::ZERO];
-    let wanted = wanted.get().max(1);
-
-    for frame in key_frames {
-        if frame.get() - boundaries[boundaries.len() - 1].get() >= wanted {
-            boundaries.push(*frame);
-        }
+/// The first boundary is where the picture begins, whatever the first key
+/// frame says: a playlist beginning at the fourth hundredth of a second would
+/// be a playlist missing them. It replaces that first key frame rather than
+/// standing in front of it, so the tool and the playlist still count the same
+/// segments.
+pub fn where_the_film_can_be_cut(key_frames: &[Millis]) -> Vec<Millis> {
+    let mut boundaries = key_frames.to_vec();
+    if let Some(first) = boundaries.first_mut() {
+        *first = Millis::ZERO;
     }
     boundaries
 }
@@ -523,54 +526,39 @@ mod tests {
     }
 
     #[test]
-    fn a_film_is_cut_at_the_first_key_frame_far_enough_past_the_last_cut() {
-        // Every boundary is a place the film can really begin, and the
-        // segments come out as close to the wanted length as the film allows.
-        let every_second: Vec<Millis> = (0..20).map(|n| Millis::new(n * 1000)).collect();
+    fn a_film_is_cut_at_every_place_it_can_be_started_and_nowhere_else() {
+        // No shortest segment, however close together two of them lie. A rule
+        // that skipped the close ones is a rule the tool does not share: it
+        // keeps or skips them depending on where the reading began, and a
+        // reading begins wherever somebody jumped to.
+        let close_together = vec![
+            Millis::new(0),
+            Millis::new(1_400),
+            Millis::new(2_200),
+            Millis::new(12_000),
+        ];
         assert_eq!(
-            boundaries_every(&every_second, Millis::new(4000)),
-            vec![
-                Millis::new(0),
-                Millis::new(4000),
-                Millis::new(8000),
-                Millis::new(12000),
-                Millis::new(16000),
-            ]
-        );
-    }
-
-    #[test]
-    fn a_film_with_nowhere_to_be_cut_gets_the_segments_it_can_have() {
-        // Ten seconds apart is an ordinary film. Asking for four second
-        // segments cannot make one: there is no picture to start at second
-        // four, so the segment runs to the next place there is one.
-        let every_ten: Vec<Millis> = (0..6).map(|n| Millis::new(n * 10_000)).collect();
-        assert_eq!(
-            boundaries_every(&every_ten, Millis::new(4000)),
-            vec![
-                Millis::new(0),
-                Millis::new(10_000),
-                Millis::new(20_000),
-                Millis::new(30_000),
-                Millis::new(40_000),
-                Millis::new(50_000),
-            ]
+            where_the_film_can_be_cut(&close_together),
+            close_together,
+            "all of them, so that the tool has nothing left to choose"
         );
     }
 
     #[test]
     fn a_film_whose_picture_starts_late_is_still_cut_from_its_beginning() {
         // A playlist beginning at the third second is a playlist missing the
-        // first three.
+        // first three. It takes the place of that first key frame rather than
+        // standing in front of it, so the tool and the playlist still count
+        // the same segments.
         let late = vec![Millis::new(3_000), Millis::new(9_000)];
         assert_eq!(
-            boundaries_every(&late, Millis::new(4000)),
-            vec![Millis::new(0), Millis::new(9_000)]
+            where_the_film_can_be_cut(&late),
+            vec![Millis::ZERO, Millis::new(9_000)]
         );
-        assert_eq!(
-            boundaries_every(&[], Millis::new(4000)),
-            vec![Millis::ZERO],
-            "a film nobody could read has one segment and it is the whole of it"
+        assert!(
+            where_the_film_can_be_cut(&[]).is_empty(),
+            "a film that gave nothing is not cut here at all, and the playlist \
+             falls back to a grid of its own"
         );
     }
 

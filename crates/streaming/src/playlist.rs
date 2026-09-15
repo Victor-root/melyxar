@@ -67,10 +67,9 @@ impl Playlist {
 
     /// A playlist cut where this film can really be started.
     ///
-    /// Given the places the picture stands on its own, in order. A segment is
-    /// begun at the first of them far enough past the last boundary, so the
-    /// segments come out as close to the usual length as the film allows and
-    /// every one of them begins where there is a picture.
+    /// Given the boundaries in order, one segment each: how they were chosen
+    /// is settled before they get here, and choosing again would be a second
+    /// opinion the tool producing the segments has not been told about.
     pub fn on_these_boundaries(total: Millis, boundaries: &[Millis]) -> Self {
         let starts: Vec<Millis> = boundaries
             .iter()
