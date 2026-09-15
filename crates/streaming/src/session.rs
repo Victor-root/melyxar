@@ -550,6 +550,36 @@ impl Session {
         WORTH_WAITING_FOR.min(self.playlist.segment_count().saturating_sub(index))
     }
 
+    /// Whether a segment already on disk is a whole one.
+    ///
+    /// A file that is merely there may be one the tool is writing this very
+    /// second, and a segment cut off in the middle is handed to a browser that
+    /// shows the beginning of it and then nothing at all until the next one.
+    /// Reported from a real library: a jump forward landed exactly where the
+    /// tool had got to, and the picture stood still for five seconds with the
+    /// sound running on, ending on the very second the next segment began.
+    /// It is the same fault the subtitles had and the same answer: what is
+    /// handed over is whole or it is waited for.
+    ///
+    /// Nothing at work means nothing is writing, so what is there is all there
+    /// is: the tool that made it is long gone.
+    async fn already_whole(&self, index: u32) -> bool {
+        let at_work = {
+            let mut running = self.running.lock().await;
+            running.as_mut().map(|at_work| {
+                (
+                    at_work.from,
+                    at_work.reached(),
+                    at_work.process.has_exited(),
+                )
+            })
+        };
+        match at_work {
+            None => true,
+            Some((from, reached, gone)) => self.finished_being_written(index, from, reached, gone),
+        }
+    }
+
     /// Hands over one segment, producing it if it is not there yet.
     pub async fn segment(&self, index: u32) -> Result<PathBuf> {
         self.touch().await;
@@ -559,7 +589,7 @@ impl Session {
         }
 
         let path = self.path_of(index);
-        if path.exists() {
+        if path.exists() && self.already_whole(index).await {
             // The ordinary case, and the one the journal used to say nothing
             // about: a film playing on writes nothing at all, so the order a
             // player asked for its segments in could not be read anywhere. It
@@ -1928,6 +1958,49 @@ mod tests {
                 .expect("a modification time"),
             written_at,
             "a segment on disk is handed over, not made a second time"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_segment_the_tool_has_not_finished_is_never_handed_over_half_made() {
+        // A file that is merely there may be one the tool is writing this very
+        // second. Handed over then, a browser shows the beginning of it and
+        // then nothing at all until the next segment begins.
+        //
+        // Reported from a real library and read in the journal: a jump forward
+        // landed where the tool had got to, the picture stood still for five
+        // seconds with the sound running on, and it came back on the very
+        // second the next segment started. It is the same fault the subtitles
+        // had, and the same answer: what is handed over is whole or it is
+        // waited for.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 120).await;
+
+        // The tool set going at the beginning, so that something is at work.
+        session.segment(0).await.expect("the first segment");
+
+        // What a segment the tool is in the middle of writing looks like from
+        // the outside: a file that is there, ahead of where the tool has got
+        // to, with nothing after it. Far enough ahead that the tool cannot
+        // have reached it already, which the next line makes sure of rather
+        // than assumes.
+        let waiting_for_it = 25;
+        let half_made = session.path_of(waiting_for_it);
+        std::fs::write(&half_made, b"not a whole segment").expect("a file that is merely there");
+        assert!(
+            !session.path_of(waiting_for_it + 1).exists(),
+            "the tool had already gone past it, so there was nothing half made to catch"
+        );
+
+        let handed_over = session
+            .segment(waiting_for_it)
+            .await
+            .expect("the segment is produced");
+        assert_eq!(handed_over, half_made);
+        assert!(
+            every_box_is_whole(&handed_over),
+            "what was handed over is the piece of film, not the beginning of it"
         );
         session.close().await;
     }
