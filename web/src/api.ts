@@ -261,6 +261,8 @@ export type PageSaw =
       session: string;
       saw: "playback_stalled";
       at_second: number;
+      /** Whether the browser was still trying to move to a new place. */
+      was_seeking: boolean;
       /** The stretch the browser holds around that moment, when it holds one. */
       held_from_second: number | null;
       held_to_second: number | null;

@@ -243,14 +243,15 @@ export function Controls({
       }
       const furthest = length > 0 ? length : element.duration;
       const wanted = element.currentTime + seconds;
-      onViewerMoving();
       element.currentTime = Math.max(
         0,
         Number.isFinite(furthest) ? Math.min(furthest, wanted) : wanted,
       );
+      // A step is one move with nothing in between, so there is nothing to
+      // hold back first.
       onViewerMoved();
     },
-    [video, length, onViewerMoving, onViewerMoved],
+    [video, length, onViewerMoved],
   );
 
   /* Dragging is followed on the window rather than on the bar: a finger that
