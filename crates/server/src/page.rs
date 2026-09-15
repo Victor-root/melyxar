@@ -15,6 +15,10 @@
 //! naming what it could not do with a film this server produced, which is the
 //! answer and cannot be a number. It is cut short here, and it is still a fact
 //! this module named.
+//!
+//! The rest are numbers about a film playing, which is the half of a reading
+//! the server cannot see at all: it knows what it produced and when it handed
+//! it over, never whether any of it reached a screen.
 
 use axum::extract::State;
 use axum::{Json, Router};
@@ -51,6 +55,50 @@ enum Seen {
         began_at_second: f64,
         /// The number of the first segment it asked for.
         first_segment: u32,
+    },
+    /// The viewer moved, and where from.
+    ///
+    /// Both ends, because a jump is the one moment the server and the page can
+    /// be made to disagree on purpose, and because a film that stops after one
+    /// stops at a place that only means something next to where it came from.
+    ViewerJumped {
+        from_second: f64,
+        to_second: f64,
+        /// Whether the film was playing when it happened.
+        was_playing: bool,
+    },
+    /// The film stopped for want of something to show.
+    ///
+    /// What is held on either side of where it stopped is the whole question:
+    /// nothing ahead is a film waiting for the server, something ahead is a
+    /// film that will not read what it already has.
+    PlaybackStalled {
+        at_second: f64,
+        /// The stretch the browser is holding around that moment, when it
+        /// holds one at all.
+        held_from_second: Option<f64>,
+        held_to_second: Option<f64>,
+        /// How many separate stretches it is holding. More than one means a
+        /// hole, and a hole is what a film stops on.
+        stretches: u32,
+        /// How ready the browser says it is, on its own scale of nought to
+        /// four.
+        ready_state: u32,
+        /// Pictures shown since the film began, as the browser counts them.
+        pictures_shown: u32,
+    },
+    /// The film began moving again after having stopped.
+    PlaybackPickedUpAgain { at_second: f64, waited_ms: u32 },
+    /// The clock went on while the picture stood still.
+    ///
+    /// The two are told apart by counting pictures rather than by watching,
+    /// because from the outside a frozen picture with the sound running and a
+    /// film that stopped altogether look like the same complaint and are not
+    /// the same fault.
+    ThePictureStoodStill {
+        at_second: f64,
+        for_ms: u32,
+        pictures_shown: u32,
     },
     /// The library gave up on this film, in its own words, and whether the
     /// browser's own reader was handed the playlist instead.
@@ -124,6 +172,49 @@ async fn what_the_page_saw(
             first_segment,
             "the page began the film here"
         ),
+        Seen::ViewerJumped {
+            from_second,
+            to_second,
+            was_playing,
+        } => tracing::debug!(
+            %session,
+            from_second,
+            to_second,
+            was_playing,
+            "the viewer jumped"
+        ),
+        Seen::PlaybackStalled {
+            at_second,
+            held_from_second,
+            held_to_second,
+            stretches,
+            ready_state,
+            pictures_shown,
+        } => tracing::debug!(
+            %session,
+            at_second,
+            held_from_second,
+            held_to_second,
+            stretches,
+            ready_state,
+            pictures_shown,
+            "the film stopped for want of something to show"
+        ),
+        Seen::PlaybackPickedUpAgain {
+            at_second,
+            waited_ms,
+        } => tracing::debug!(%session, at_second, waited_ms, "the film picked up again"),
+        Seen::ThePictureStoodStill {
+            at_second,
+            for_ms,
+            pictures_shown,
+        } => tracing::debug!(
+            %session,
+            at_second,
+            for_ms,
+            pictures_shown,
+            "the clock went on while the picture stood still"
+        ),
         Seen::PlaybackRefused {
             because,
             browser_took_over,
@@ -160,6 +251,62 @@ mod tests {
                 assert_eq!(playlist_said_second, Some(1040.993));
                 assert_eq!(began_at_second, 0.0);
                 assert_eq!(first_segment, 0);
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_page_can_say_what_only_it_can_see_of_a_film_playing() {
+        // The server knows what it produced and when it handed it over. It
+        // does not know whether any of it reached a screen, and a film that
+        // stops in the middle of itself is read from here or from nowhere.
+        for (tried, what) in [
+            (
+                r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"viewer_jumped",
+                    "from_second":612.5,"to_second":600.0,"was_playing":true}"#,
+                "a jump",
+            ),
+            (
+                r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"playback_stalled",
+                    "at_second":612.5,"held_from_second":600.0,"held_to_second":612.6,
+                    "stretches":2,"ready_state":1,"pictures_shown":14703}"#,
+                "a film that stopped",
+            ),
+            (
+                r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",
+                    "saw":"playback_picked_up_again","at_second":612.6,"waited_ms":4200}"#,
+                "a film that picked up again",
+            ),
+            (
+                r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",
+                    "saw":"the_picture_stood_still","at_second":612.5,"for_ms":5000,
+                    "pictures_shown":14703}"#,
+                "a picture that stood still",
+            ),
+        ] {
+            serde_json::from_str::<FromThePage>(tried)
+                .unwrap_or_else(|error| panic!("{what} is a fact this module names: {error}"));
+        }
+
+        // A stretch the browser holds nothing in is nothing, never a nought:
+        // a film holding nothing at all around where it stopped and a film
+        // holding the opening of itself are the two answers, and they are not
+        // the same answer.
+        let held_nothing: FromThePage = serde_json::from_str(
+            r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"playback_stalled",
+                "at_second":612.5,"held_from_second":null,"held_to_second":null,
+                "stretches":0,"ready_state":0,"pictures_shown":14703}"#,
+        )
+        .expect("read");
+        match held_nothing.seen {
+            Seen::PlaybackStalled {
+                held_from_second,
+                stretches,
+                ..
+            } => {
+                assert_eq!(held_from_second, None);
+                assert_eq!(stretches, 0);
             }
             other => panic!("read as the wrong fact: {other:?}"),
         }

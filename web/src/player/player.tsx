@@ -35,6 +35,7 @@ import {
 } from "./appearance";
 import type { Appearance } from "./appearance";
 import { Controls, playOrPause } from "./controls";
+import { watchTheReading } from "./watch";
 import { languageName } from "./languages";
 import { clientProfile } from "./profile";
 import {
@@ -407,6 +408,11 @@ export function Player({
 
     let feed: Hls | null = null;
     let gone = false;
+    /* What only this side can see: the film stopping in the middle of itself,
+       the picture standing still while the sound runs on, and where a viewer
+       jumped from. The server knows what it produced and when it handed it
+       over, never whether any of it reached a screen. */
+    const stopWatching = watchTheReading(element, stream.id);
     /* Whether the library has already given up. One failure comes back as
        three: it cannot make room for the film, then it cannot put anything in
        the room it did not make. Only the first says anything. */
@@ -478,6 +484,7 @@ export function Player({
 
     return () => {
       gone = true;
+      stopWatching();
       feed?.destroy();
     };
   }, [stream]);
