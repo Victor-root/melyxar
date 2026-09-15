@@ -1447,6 +1447,76 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
+/* Held down while the panel it opens is open. */
+.player-button-on {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* What is happening to this film, over the top right of the picture.
+ *
+ * Over rather than beside: it is read while the film plays, and a panel that
+ * pushed the picture aside would change the very thing being looked at. Its
+ * own scroll, because a long answer must not grow past the screen on a film
+ * with a lot to say. */
+.facts {
+  position: absolute;
+  top: var(--gap);
+  right: var(--gap);
+  z-index: 2;
+  width: min(22rem, calc(100% - 2 * var(--gap)));
+  max-height: min(70%, 32rem);
+  overflow-y: auto;
+  padding: var(--gap-tight) var(--gap) var(--gap);
+  border-radius: var(--radius-card);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-raised);
+}
+
+.facts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-tight);
+  margin-bottom: var(--gap-tight);
+}
+
+.facts-block {
+  margin-top: var(--gap-tight);
+}
+
+.facts-block h3 {
+  margin: 0 0 2px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
+/* The name on the left and what it is on the right, wrapping under rather than
+   squeezing: several of these are long, and a value cut in half says nothing. */
+.facts-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--gap-tight);
+  padding: 2px 0;
+}
+
+/* A fixed column rather than a minimum, so every value starts at the same
+   place: a panel read by eye is read down its values, and names of different
+   lengths would put each one somewhere else. A long name wraps inside its
+   column rather than pushing the value across. */
+.facts-name {
+  opacity: 0.6;
+  flex: 0 0 8.5rem;
+}
+
+.facts-is {
+  flex: 1;
+  min-width: 8rem;
+}
+
 /* A step back or on. Carries a number beside its arrow, so it is set smaller
    than the marks that carry none. */
 .player-button-step {

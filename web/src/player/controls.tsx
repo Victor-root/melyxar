@@ -52,6 +52,11 @@ interface Props {
      What the two do is the player's business. */
   onViewerMoving: () => void;
   onViewerMoved: () => void;
+  /* Whether the panel of playback facts is open, and how to turn it over. The
+     button belongs to this row; the panel is the player's, because what it
+     shows comes from the plan rather than from the element. */
+  factsOpen: boolean;
+  onFactsTurned: () => void;
   t: (key: string, values?: Record<string, string | number>) => string;
 }
 
@@ -105,6 +110,8 @@ export function Controls({
   thumbnails,
   onViewerMoving,
   onViewerMoved,
+  factsOpen,
+  onFactsTurned,
   t,
 }: Props) {
   const [playing, setPlaying] = useState(false);
@@ -421,6 +428,18 @@ export function Controls({
             }}
           />
         </span>
+
+        {/* What is happening to this film, for whoever is looking at one that
+            plays badly. Next to the way out of the picture rather than among
+            the buttons that move the film: it is read, not used. */}
+        <button
+          className={`player-button${factsOpen ? " player-button-on" : ""}`}
+          onClick={onFactsTurned}
+          aria-label={t("facts.title")}
+          aria-pressed={factsOpen}
+        >
+          {"\u{2139}"}
+        </button>
 
         <button
           className="player-button"
