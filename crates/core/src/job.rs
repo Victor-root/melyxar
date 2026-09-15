@@ -25,6 +25,22 @@ pub enum JobKind {
 }
 
 impl JobKind {
+    /// Every kind there is.
+    ///
+    /// Written down rather than left to whoever needs the list, because
+    /// several things have to cover all of them: the interface needs a
+    /// sentence for each, and a kind with none reaches the screen as its own
+    /// name.
+    pub const ALL: [Self; 7] = [
+        Self::ScanLibrary,
+        Self::IdentifyWork,
+        Self::FetchImages,
+        Self::AnalyseLoudness,
+        Self::GenerateThumbnails,
+        Self::PurgeActivity,
+        Self::Backup,
+    ];
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::ScanLibrary => "scan_library",
@@ -80,6 +96,17 @@ pub enum JobStep {
 }
 
 impl JobStep {
+    /// Every step there is, for the same reason as the kinds above.
+    pub const ALL: [Self; 7] = [
+        Self::WalkingFolders,
+        Self::ReadingNamesAgain,
+        Self::AnalysingFiles,
+        Self::ReadingKeyFrames,
+        Self::MakingThumbnails,
+        Self::AskingTheProvider,
+        Self::FillingInWhatIsMissing,
+    ];
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::WalkingFolders => "walking_folders",
@@ -244,15 +271,7 @@ mod tests {
 
     #[test]
     fn every_kind_and_state_survives_a_round_trip_through_its_stored_form() {
-        for kind in [
-            JobKind::ScanLibrary,
-            JobKind::IdentifyWork,
-            JobKind::FetchImages,
-            JobKind::AnalyseLoudness,
-            JobKind::GenerateThumbnails,
-            JobKind::PurgeActivity,
-            JobKind::Backup,
-        ] {
+        for kind in JobKind::ALL {
             assert_eq!(JobKind::parse(kind.as_str()), Some(kind));
         }
         for state in [
