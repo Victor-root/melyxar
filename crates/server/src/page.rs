@@ -74,6 +74,13 @@ enum Seen {
     /// film that will not read what it already has.
     PlaybackStalled {
         at_second: f64,
+        /// Whether the browser was still trying to move to a new place.
+        ///
+        /// A move that never finishes is a film with its clock, its picture
+        /// and its sound all stopped at once, which is the one shape of this
+        /// that nothing here could see before: it was read as a film nobody
+        /// was playing.
+        was_seeking: bool,
         /// The stretch the browser is holding around that moment, when it
         /// holds one at all.
         held_from_second: Option<f64>,
@@ -202,6 +209,7 @@ async fn what_the_page_saw(
         ),
         Seen::PlaybackStalled {
             at_second,
+            was_seeking,
             held_from_second,
             held_to_second,
             stretches,
@@ -210,6 +218,7 @@ async fn what_the_page_saw(
         } => tracing::debug!(
             %session,
             at_second,
+            was_seeking,
             held_from_second,
             held_to_second,
             stretches,
@@ -296,7 +305,7 @@ mod tests {
             ),
             (
                 r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"playback_stalled",
-                    "at_second":612.5,"held_from_second":600.0,"held_to_second":612.6,
+                    "at_second":612.5,"was_seeking":false,"held_from_second":600.0,"held_to_second":612.6,
                     "stretches":2,"ready_state":1,"pictures_shown":14703}"#,
                 "a film that stopped",
             ),
@@ -323,7 +332,7 @@ mod tests {
         // the same answer.
         let held_nothing: FromThePage = serde_json::from_str(
             r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"playback_stalled",
-                "at_second":612.5,"held_from_second":null,"held_to_second":null,
+                "at_second":612.5,"was_seeking":true,"held_from_second":null,"held_to_second":null,
                 "stretches":0,"ready_state":0,"pictures_shown":14703}"#,
         )
         .expect("read");

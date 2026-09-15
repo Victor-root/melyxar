@@ -552,11 +552,18 @@ export function Player({
 
          The cost is that a jump is fetched again rather than played from
          what is held, which is what a jump costs anyway. */
+      // Whether the library was stopped and is owed a start.
+      let stopped = false;
       whileTheViewerMoves.current = {
         // Nothing fetched while a hand is on the bar. Left to itself the
         // library chases every twitch of it, fetching pieces of film nobody
-        // will ever see.
-        hold: () => feed?.stopLoad(),
+        // will ever see. Only for a hand on the bar: a step of ten seconds has
+        // no in between, and stopping the library only to start it again in
+        // the same breath is two orders it never needed.
+        hold: () => {
+          stopped = true;
+          feed?.stopLoad();
+        },
         letGo: () => {
           // Thrown away only when the viewer has landed somewhere the browser
           // was not already holding.
@@ -574,14 +581,23 @@ export function Player({
           //
           // Landing where nothing is held, there is nothing to lose and the
           // stale film further on is worth being rid of.
-          if (!isHeldAround(element, element.currentTime)) {
+          const emptied = !isHeldAround(element, element.currentTime);
+          if (emptied) {
             feed?.trigger(Library.Events.BUFFER_FLUSHING, {
               startOffset: 0,
               endOffset: Number.POSITIVE_INFINITY,
               type: null,
             });
           }
-          feed?.startLoad(element.currentTime);
+          // Only when something was actually disturbed. A jump that landed in
+          // film already held and never stopped the library is a jump the
+          // browser handles on its own, as it does in every other player, and
+          // the less said to the library the fewer ways it has of ending up
+          // somewhere nobody can describe.
+          if (emptied || stopped) {
+            feed?.startLoad(element.currentTime);
+          }
+          stopped = false;
         },
       };
       sayWhereItBegan(Library, feed, stream.id);

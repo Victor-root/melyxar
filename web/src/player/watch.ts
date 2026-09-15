@@ -142,7 +142,11 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
     const now = performance.now();
     const at = element.currentTime;
     const shown = picturesShown(element);
-    const running = !element.paused && !element.ended && !element.seeking;
+    /* A move that never finishes counts as playing: it is the one shape of a
+       stopped film that this used to be blind to. The clock, the picture and
+       the sound all stop at once, and read as a film nobody was playing it
+       wrote nothing down at all. */
+    const running = !element.paused && !element.ended;
 
     if (!running) {
       stoppedSince = null;
@@ -166,6 +170,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
           session,
           saw: "playback_stalled",
           at_second: at,
+          was_seeking: element.seeking,
           ready_state: element.readyState,
           pictures_shown: shown,
           ...whatIsHeldAround(element, at),
