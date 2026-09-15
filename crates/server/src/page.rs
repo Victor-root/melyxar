@@ -99,6 +99,14 @@ enum Seen {
         at_second: f64,
         for_ms: u32,
         pictures_shown: u32,
+        /// Pictures the browser decoded and threw away rather than showing.
+        ///
+        /// It separates the two ways of showing nothing: climbing, the browser
+        /// is producing pictures and refusing them, which is a browser that
+        /// cannot keep up; standing still beside a clock that runs, it is
+        /// producing none at all, which is a browser that cannot start from
+        /// what it was given.
+        pictures_dropped: u32,
         /// What the browser was holding around that moment, which is the whole
         /// question: holding the beginning of the piece it was meant to be
         /// showing, it had everything it needed and showed nothing; holding
@@ -217,6 +225,7 @@ async fn what_the_page_saw(
             at_second,
             for_ms,
             pictures_shown,
+            pictures_dropped,
             held_from_second,
             held_to_second,
             stretches,
@@ -226,6 +235,7 @@ async fn what_the_page_saw(
             at_second,
             for_ms,
             pictures_shown,
+            pictures_dropped,
             held_from_second,
             held_to_second,
             stretches,
@@ -298,7 +308,7 @@ mod tests {
             (
                 r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",
                     "saw":"the_picture_stood_still","at_second":612.5,"for_ms":5000,
-                    "pictures_shown":14703,"held_from_second":600.0,
+                    "pictures_shown":14703,"pictures_dropped":2,"held_from_second":600.0,
                     "held_to_second":612.6,"stretches":1,"ready_state":4}"#,
                 "a picture that stood still",
             ),

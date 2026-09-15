@@ -60,6 +60,18 @@ function picturesShown(element: HTMLVideoElement): number {
 }
 
 /**
+ * Pictures the browser decoded and threw away rather than showing.
+ *
+ * It separates the two ways of showing nothing: climbing, the browser is
+ * producing pictures and refusing them, which is one fault; standing still, it
+ * is producing none at all, which is another.
+ */
+function picturesDropped(element: HTMLVideoElement): number {
+  const quality = element.getVideoPlaybackQuality?.();
+  return quality ? quality.droppedVideoFrames : 0;
+}
+
+/**
  * Follows one film and reports what the server cannot see.
  *
  * Answers the way to stop following it, which the player calls when the
@@ -186,6 +198,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
           at_second: at,
           for_ms: Math.round(now - frozenSince),
           pictures_shown: shown,
+          pictures_dropped: picturesDropped(element),
           ready_state: element.readyState,
           ...whatIsHeldAround(element, at),
         });
@@ -198,6 +211,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
           at_second: frozenClock,
           for_ms: Math.round(now - frozenSince),
           pictures_shown: shown,
+          pictures_dropped: picturesDropped(element),
           ready_state: element.readyState,
           ...whatIsHeldAround(element, frozenClock),
         });
