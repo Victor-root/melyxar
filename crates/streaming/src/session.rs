@@ -13,7 +13,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use melyxar_core::time::Millis;
 use melyxar_ffmpeg::command::{Command, Input, Output, StreamSelection, WhereToCut};
@@ -161,6 +161,13 @@ struct AtWork {
     /// The segment number it was started on, so a request can tell whether it
     /// is ahead of the tool or somewhere else entirely.
     from: u32,
+    /// The moment it was set going, which is what tells its own files apart
+    /// from the ones an earlier run left in the same folder.
+    ///
+    /// A run writes its segments one after another from where it started, and
+    /// so did the run before it, so the numbers alone say nothing about who
+    /// wrote what. The only mark a file carries is when it was written.
+    began_at: SystemTime,
     /// How far into the film the tool says it has written, in milliseconds.
     ///
     /// The tool's own account of itself rather than anything read off the
@@ -460,42 +467,56 @@ impl Session {
     /// jumping back to that second of the film later serves a truncated
     /// segment, which breaks playback in a way nobody can read. It is exactly
     /// what asking the tool politely used to buy, at a fraction of the price.
-    async fn remove_what_was_half_written(&self, from: u32, reached: Millis) {
-        // The tool counts from where it was set going, so what it has written
-        // is an offset from there and never a place in the film. Read as a
-        // place in the film it names some entirely different part of it, and
-        // what gets removed is somebody else's finished work: a tool set going
-        // at the eight hundredth segment and eight seconds in would have the
-        // second and third segments of the film deleted from under a viewer.
-        let wrote_up_to = Millis::new(self.playlist.start_of(from).get() + reached.get().max(0));
-        let first = self.playlist.segment_holding(wrote_up_to);
-        let mut index = first;
-        while self.path_of(index).exists() {
-            if let Err(error) = tokio::fs::remove_file(self.path_of(index)).await {
-                tracing::warn!(
-                    session = %self.id,
-                    index,
-                    error = %error,
-                    "a half written segment could not be removed, so it is left to be                      produced again"
-                );
-                return;
-            }
+    ///
+    /// Exactly one file is ever at risk, and it is the newest one this run
+    /// wrote: the tool closes a segment before it opens the next, so a file
+    /// with a successor of its own is finished by definition. Which file that
+    /// is comes from the folder and not from the tool's account of itself,
+    /// because the account arrives every tenth of a second while the tool
+    /// works at thirty times real time, and taking it at its word threw away
+    /// whole minutes of finished film on every jump.
+    async fn remove_what_was_half_written(&self, from: u32, began_at: SystemTime) {
+        let mut newest = None;
+        let mut index = from;
+        while self.written_by_this_run(index, began_at).await {
+            newest = Some(index);
             index += 1;
         }
-        // Said out loud, because it is a removal nobody asked for: a viewer who
-        // goes back a minute has these taken away behind them, and a player
-        // that asks for one of them again finds it gone. Silently, that is a
-        // film stopping in the middle of itself with nothing anywhere to say
-        // why.
-        if index > first {
-            tracing::debug!(
+        let Some(newest) = newest else {
+            return;
+        };
+
+        if let Err(error) = tokio::fs::remove_file(self.path_of(newest)).await {
+            tracing::warn!(
                 session = %self.id,
-                from_index = first,
-                up_to_index = index - 1,
-                the_tool_was_set_going_at = from,
-                it_had_reached_ms = reached.get(),
-                "segments the stopped tool had not finished were taken away"
+                index = newest,
+                error = %error,
+                "a half written segment could not be removed, so it is left to be produced again"
             );
+            return;
+        }
+        // Said out loud, because it is a removal nobody asked for: a player
+        // that asks for it again finds it gone. Silently, that is a film
+        // stopping in the middle of itself with nothing anywhere to say why.
+        tracing::debug!(
+            session = %self.id,
+            index = newest,
+            the_tool_was_set_going_at = from,
+            "the segment the stopped tool was inside was taken away"
+        );
+    }
+
+    /// Whether this segment is one the run being stopped wrote itself.
+    ///
+    /// Where the walk has to stop. A run set going in the middle of the film
+    /// lands in the middle of what an earlier run finished there and writes
+    /// straight over the front of it, so the numbers alone say nothing about
+    /// who wrote what. A file this run never touched still carries the moment
+    /// the other one wrote it, which is before this one was set going.
+    async fn written_by_this_run(&self, index: u32, began_at: SystemTime) -> bool {
+        match tokio::fs::metadata(self.path_of(index)).await {
+            Ok(there) => there.modified().is_ok_and(|written| written >= began_at),
+            Err(_) => false,
         }
     }
 
@@ -705,9 +726,9 @@ impl Session {
             // of a second of the viewer's wait, every time. What it leaves
             // half written is cleared away instead, which costs a file
             // removal.
-            let (was_at, reached) = (at_work.from, at_work.reached());
+            let (was_at, began_at) = (at_work.from, at_work.began_at);
             at_work.process.stop_now().await?;
-            self.remove_what_was_half_written(was_at, reached).await;
+            self.remove_what_was_half_written(was_at, began_at).await;
         }
         let stopping = stopping.elapsed();
 
@@ -745,6 +766,9 @@ impl Session {
             }
         });
 
+        // Read before the tool exists, so that every file it goes on to write
+        // is at or after it and none of the ones already there can be.
+        let began_at = SystemTime::now();
         let process = RunningProcess::start(&self.tools.ffmpeg, &command, Some(reports))?;
         tracing::debug!(
             session = %self.id,
@@ -759,6 +783,7 @@ impl Session {
         *running = Some(AtWork {
             process,
             from: index,
+            began_at,
             reached,
             speed,
             opening,
@@ -1095,6 +1120,12 @@ mod tests {
         )
         .await
         .expect("the session opens")
+    }
+
+    /// A moment comfortably before anything a test has just written, so that
+    /// every file in the folder counts as the run's own.
+    fn a_moment_ago() -> SystemTime {
+        SystemTime::now() - Duration::from_secs(60)
     }
 
     #[tokio::test]
@@ -1516,6 +1547,63 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stopping_a_reading_leaves_alone_what_an_earlier_one_finished() {
+        // Two readings of the same film, as a viewer jumping about produces.
+        // The first runs ahead and finishes a block of segments. The second is
+        // set going a long way behind it and is stopped part way, and what it
+        // had not finished is cleared away. What the first one finished is not
+        // its to clear away, and a viewer who goes back there finds the film
+        // made again from nothing.
+        //
+        // Read in the maintainer's journal: twelve stops took a hundred and
+        // sixty six segments away, of which at most twelve could have been
+        // unfinished. One stop alone took eighty four, which is seven minutes
+        // of film thrown out.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 120).await;
+        let last = session.playlist().segment_count() - 1;
+
+        // The first reading, set going part way in and left alone until it has
+        // run out of film. Everything from there to the end is finished. The
+        // wait is generous because it is a real tool producing a minute of
+        // real film on a machine that may be busy with the rest of the suite.
+        session.segment(10).await.expect("a segment part way in");
+        for _ in 0..6_000 {
+            if session.path_of(last).exists() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(
+            session.path_of(last).exists(),
+            "the first reading never finished, so there is nothing here to protect"
+        );
+
+        // A viewer goes back a few seconds, which lands just before the block
+        // and reads over the front of it. Its own first segment is finished,
+        // and the ones after it were already there.
+        session.segment(9).await.expect("a segment just before");
+        let still_there_before_the_stop = session.path_of(last - 1).exists();
+
+        // Then anything at all elsewhere, which stops that reading where it
+        // stands. What it had not finished goes; what it never wrote is not
+        // its to take.
+        session.segment(0).await.expect("back to the beginning");
+
+        assert!(
+            still_there_before_the_stop,
+            "the block was already gone before the stop, so this proves nothing"
+        );
+        for kept in [15, last - 1] {
+            assert!(
+                session.path_of(kept).exists(),
+                "segment {kept} was finished by the first reading and the stopping of the second took it away"
+            );
+        }
+        session.close().await;
+    }
+
+    #[tokio::test]
     async fn a_tool_stopped_where_it_stood_leaves_nothing_half_written_behind() {
         // This is what asking the tool politely used to buy, and it cost the
         // best part of a second of the viewer's wait on every jump. A file
@@ -1529,38 +1617,33 @@ mod tests {
                 .expect("a segment");
         }
 
-        // Set going at the beginning and seventeen seconds in: it had finished
-        // the first four segments and was inside the fifth.
+        // Set going at the beginning: the five it had opened and closed are
+        // finished, and the sixth is the one it was inside.
         session
-            .remove_what_was_half_written(0, Millis::new(17_000))
+            .remove_what_was_half_written(0, a_moment_ago())
             .await;
 
-        for finished in 0..4 {
+        for finished in 0..5 {
             assert!(
                 session
                     .folder()
                     .join(format!("segment-{finished}.m4s"))
                     .exists(),
-                "segment {finished} was finished and must be kept"
+                "segment {finished} has one after it, so the tool had closed it"
             );
         }
-        for unfinished in 4..6 {
-            assert!(
-                !session
-                    .folder()
-                    .join(format!("segment-{unfinished}.m4s"))
-                    .exists(),
-                "segment {unfinished} was never finished and would be served truncated"
-            );
-        }
+        assert!(
+            !session.folder().join("segment-5.m4s").exists(),
+            "the newest one is the one it was inside, and would be served truncated"
+        );
         session.close().await;
     }
 
     #[tokio::test]
-    async fn what_a_tool_wrote_is_counted_from_where_it_was_set_going() {
-        // Read as a place in the film, what the tool has written names some
-        // entirely different part of it, and the work of another run is
-        // deleted from under a viewer who is watching it.
+    async fn a_run_set_going_far_in_leaves_the_beginning_of_the_film_alone() {
+        // The beginning of the film is where a viewer goes back to, and the
+        // removal starts where the run started rather than at the front of the
+        // folder: nothing before that is any of its business.
         let directory = tempfile::tempdir().expect("temporary directory");
         let session = session_of(directory.path(), 600).await;
         for index in [0, 1, 2, 100, 101, 102] {
@@ -1568,10 +1651,10 @@ mod tests {
                 .expect("a segment");
         }
 
-        // Set going at the hundredth segment, eight seconds in: it finished
-        // the hundredth and the hundred and first, and was inside the next.
+        // Set going at the hundredth segment: it closed the hundredth and the
+        // hundred and first, and was inside the next.
         session
-            .remove_what_was_half_written(100, Millis::new(9_000))
+            .remove_what_was_half_written(100, a_moment_ago())
             .await;
 
         for kept in [0, 1, 2, 100, 101] {
@@ -1586,6 +1669,41 @@ mod tests {
         assert!(
             !session.folder().join("segment-102.m4s").exists(),
             "the one it was inside is the one that was never finished"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn the_removal_stops_at_the_first_file_this_run_never_wrote() {
+        // Removing everything that follows in one unbroken line is removing
+        // whatever an earlier run left further along, which it finished and
+        // which a viewer going back there is about to ask for again.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 60).await;
+        for index in 0..6 {
+            std::fs::write(session.folder().join(format!("segment-{index}.m4s")), b"x")
+                .expect("a segment an earlier run finished");
+        }
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        let began_at = SystemTime::now();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Set going at the beginning again, it got as far as the fifth segment
+        // and was stopped inside it. The sixth is not its business.
+        for index in 0..5 {
+            std::fs::write(session.folder().join(format!("segment-{index}.m4s")), b"x")
+                .expect("a segment this run wrote");
+        }
+        session.remove_what_was_half_written(0, began_at).await;
+
+        assert!(
+            !session.folder().join("segment-4.m4s").exists(),
+            "the segment this run was inside would be served truncated"
+        );
+        assert!(
+            session.folder().join("segment-5.m4s").exists(),
+            "the earlier run finished this one and nothing here wrote it"
         );
         session.close().await;
     }
