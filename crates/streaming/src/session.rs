@@ -173,6 +173,61 @@ fn step_for(ready: u32, wanted: u32) -> PreparationStep {
     }
 }
 
+/// Whether a segment file holds whole boxes from its beginning to its end.
+///
+/// How a finished segment is told from one cut off in the middle without
+/// knowing anything about who wrote it: a segment is a run of boxes, each
+/// naming its own length, and the last of them ends exactly where the file
+/// does. Walks the lengths rather than the bytes, so it costs a handful of
+/// eight byte reads whatever the segment weighs.
+///
+/// Only ever asked of a file no tool is touching. A file being written can end
+/// on a box boundary with more still to come, and there the tool's own account
+/// of itself is what answers.
+async fn every_box_is_whole(path: &Path) -> bool {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+    let (Ok(mut file), Ok(length)) = (
+        tokio::fs::File::open(path).await,
+        tokio::fs::metadata(path).await.map(|it| it.len()),
+    ) else {
+        return false;
+    };
+
+    let mut at = 0u64;
+    let mut header = [0u8; 8];
+    while at < length {
+        if file.seek(std::io::SeekFrom::Start(at)).await.is_err()
+            || file.read_exact(&mut header).await.is_err()
+        {
+            return false;
+        }
+        let box_length = u64::from(u32::from_be_bytes([
+            header[0], header[1], header[2], header[3],
+        ]));
+        // Nothing a segment holds uses the two lengths that mean anything
+        // other than themselves, and a length of nothing would not move.
+        if box_length < 8 {
+            return false;
+        }
+        at += box_length;
+    }
+    at == length && length > 0
+}
+
+/// Who last wrote a segment file, told from one run's point of view.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum WhoWrote {
+    /// There is no such file.
+    Nobody,
+    /// The run being asked about, so what it is doing now applies to the file.
+    ThisRun,
+    /// A run that has since been stopped, so the tool at work now is not
+    /// touching the file. Whether that run got to the end of it is a separate
+    /// question, which the file's own shape answers.
+    AnEarlierRun,
+}
+
 /// The tool at work, and where it started.
 struct AtWork {
     process: RunningProcess,
@@ -445,10 +500,11 @@ impl Session {
                     at_work.from,
                     at_work.reached(),
                     at_work.process.has_exited(),
+                    at_work.began_at,
                 )
             })
         };
-        let Some((from, reached, tool_gone)) = at_work else {
+        let Some((from, reached, tool_gone, began_at)) = at_work else {
             return Preparation {
                 step: PreparationStep::Starting,
                 ready: 0,
@@ -464,7 +520,10 @@ impl Session {
         }
 
         let mut ready = 0;
-        while ready < on_disk && self.finished_being_written(from + ready, from, reached, tool_gone)
+        while ready < on_disk
+            && self
+                .finished_being_written(from + ready, from, reached, tool_gone, began_at)
+                .await
         {
             ready += 1;
         }
@@ -496,7 +555,7 @@ impl Session {
     async fn remove_what_was_half_written(&self, from: u32, began_at: SystemTime) {
         let mut newest = None;
         let mut index = from;
-        while self.written_by_this_run(index, began_at).await {
+        while self.who_wrote(index, began_at).await == WhoWrote::ThisRun {
             newest = Some(index);
             index += 1;
         }
@@ -524,36 +583,60 @@ impl Session {
         );
     }
 
-    /// Whether this segment is one the run being stopped wrote itself.
+    /// Who last wrote a segment, as far as one run is concerned.
     ///
-    /// Where the walk has to stop. A run set going in the middle of the film
-    /// lands in the middle of what an earlier run finished there and writes
-    /// straight over the front of it, so the numbers alone say nothing about
-    /// who wrote what. A file this run never touched still carries the moment
-    /// the other one wrote it, which is before this one was set going.
-    async fn written_by_this_run(&self, index: u32, began_at: SystemTime) -> bool {
+    /// A run set going in the middle of the film lands in the middle of what an
+    /// earlier run finished there and writes straight over the front of it, so
+    /// the numbers alone say nothing about who wrote what. A file this run
+    /// never touched still carries the moment the other one wrote it, which is
+    /// before this one was set going.
+    async fn who_wrote(&self, index: u32, began_at: SystemTime) -> WhoWrote {
         match tokio::fs::metadata(self.path_of(index)).await {
-            Ok(there) => there.modified().is_ok_and(|written| written >= began_at),
-            Err(_) => false,
+            Err(_) => WhoWrote::Nobody,
+            Ok(there) => match there.modified() {
+                Ok(written) if written >= began_at => WhoWrote::ThisRun,
+                // A moment nobody can read is treated as this run's, which
+                // costs a wait rather than a segment handed over half written.
+                Err(_) => WhoWrote::ThisRun,
+                Ok(_) => WhoWrote::AnEarlierRun,
+            },
         }
     }
 
     /// Whether the tool has finished writing one segment.
     ///
-    /// Three ways of knowing the same thing, cheapest and soonest first. The
-    /// tool's own account is the one that matters: a file that is merely there
-    /// may still be growing, and a truncated segment breaks playback in a way
-    /// nobody can read. Waiting for the next file to appear says the same
-    /// thing, and it is what this used to rely on alone, at the price of
-    /// producing a whole extra segment before handing over the one somebody is
-    /// waiting for.
-    fn finished_being_written(
+    /// Only ever a question about the run at work. What the tool is doing now
+    /// has nothing to say about a file an earlier run left behind, which is
+    /// answered instead by the shape of the file. That distinction is the
+    /// whole of this, and
+    /// leaving it out broke a film outright: a run set going a few segments
+    /// behind an earlier one rewrote the front of its block, and the untouched
+    /// file just past the one being rewritten was read as proof that the
+    /// rewriting had moved on. The half written segment went to the browser,
+    /// which refused the film and started it again from the beginning.
+    ///
+    /// For the run's own files, three ways of knowing, cheapest and soonest
+    /// first. The tool's own account is the one that matters: a file that is
+    /// merely there may still be growing. The next file having been written by
+    /// this run says the same thing, since the tool closes a segment before it
+    /// opens the next, at the price of producing a whole extra segment before
+    /// handing over the one somebody is waiting for.
+    async fn finished_being_written(
         &self,
         index: u32,
         from: u32,
         reached: Millis,
         tool_gone: bool,
+        began_at: SystemTime,
     ) -> bool {
+        match self.who_wrote(index, began_at).await {
+            WhoWrote::Nobody => return false,
+            // Nothing is touching it, so the only question left is whether
+            // whoever wrote it got to the end, which the file itself answers.
+            WhoWrote::AnEarlierRun => return every_box_is_whole(&self.path_of(index)).await,
+            WhoWrote::ThisRun => {}
+        }
+
         // The tool counts from where it was set going, not from the beginning
         // of the film: set going at the twentieth minute, its first word is
         // zero. Measured, because it is the opposite of what the copied clock
@@ -562,9 +645,11 @@ impl Session {
         // where that segment sits in the film.
         let has_to_write =
             self.playlist.start_of(index + 1).get() - self.playlist.start_of(from).get();
-        let said_so = self.the_clock_can_be_trusted(from) && reached.get() >= has_to_write;
+        if self.the_clock_can_be_trusted(from) && reached.get() >= has_to_write {
+            return true;
+        }
 
-        said_so || self.path_of(index + 1).exists() || tool_gone
+        tool_gone || self.who_wrote(index + 1, began_at).await == WhoWrote::ThisRun
     }
 
     /// Whether the tool's account of itself can be compared with the playlist.
@@ -600,8 +685,9 @@ impl Session {
     /// It is the same fault the subtitles had and the same answer: what is
     /// handed over is whole or it is waited for.
     ///
-    /// Nothing at work means nothing is writing, so what is there is all there
-    /// is: the tool that made it is long gone.
+    /// Nothing at work means nothing is writing, so the file's own shape is the
+    /// whole answer: it ends where its last box ends, or a tool died in the
+    /// middle of it and nobody was left to clear it away.
     async fn already_whole(&self, index: u32) -> bool {
         let at_work = {
             let mut running = self.running.lock().await;
@@ -610,12 +696,16 @@ impl Session {
                     at_work.from,
                     at_work.reached(),
                     at_work.process.has_exited(),
+                    at_work.began_at,
                 )
             })
         };
         match at_work {
-            None => true,
-            Some((from, reached, gone)) => self.finished_being_written(index, from, reached, gone),
+            None => every_box_is_whole(&self.path_of(index)).await,
+            Some((from, reached, gone, began_at)) => {
+                self.finished_being_written(index, from, reached, gone, began_at)
+                    .await
+            }
         }
     }
 
@@ -882,12 +972,16 @@ impl Session {
         let deadline = began + PATIENCE;
         let mut appeared: Option<Instant> = None;
         loop {
-            let (from, reached, tool_is_gone) = self.where_the_tool_has_got_to().await;
+            let (from, reached, tool_is_gone, began_at) = self.where_the_tool_has_got_to().await;
             let there = path.exists();
             if there && appeared.is_none() {
                 appeared = Some(Instant::now());
             }
-            if there && self.finished_being_written(index, from, reached, tool_is_gone) {
+            if there
+                && self
+                    .finished_being_written(index, from, reached, tool_is_gone, began_at)
+                    .await
+            {
                 let appeared = appeared.unwrap_or(began);
                 return Ok(WhatItTook {
                     appearing: appeared.saturating_duration_since(began),
@@ -960,15 +1054,18 @@ impl Session {
     ///
     /// Both under one lock: asking twice would let the tool exit between the
     /// two answers, which is exactly the moment a segment finishes.
-    async fn where_the_tool_has_got_to(&self) -> (u32, Millis, bool) {
+    async fn where_the_tool_has_got_to(&self) -> (u32, Millis, bool, SystemTime) {
         let mut running = self.running.lock().await;
         match running.as_mut() {
             Some(at_work) => (
                 at_work.from,
                 at_work.reached(),
                 at_work.process.has_exited(),
+                at_work.began_at,
             ),
-            None => (0, Millis::ZERO, true),
+            // Nothing at work, so nothing was written just now and every file
+            // there is belongs to a run that is over.
+            None => (0, Millis::ZERO, true, SystemTime::now()),
         }
     }
 
@@ -1144,6 +1241,13 @@ mod tests {
     /// every file in the folder counts as the run's own.
     fn a_moment_ago() -> SystemTime {
         SystemTime::now() - Duration::from_secs(60)
+    }
+
+    /// The shape of a segment a tool closed: one whole box, ending where the
+    /// file does. Enough for anything that reads a segment's shape rather than
+    /// its film.
+    fn a_finished_segment() -> [u8; 8] {
+        [0, 0, 0, 8, b'm', b'd', b'a', b't']
     }
 
     #[tokio::test]
@@ -1782,24 +1886,96 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let session = session_of(directory.path(), 60).await;
         let start_of = |index: u32| session.playlist().start_of(index);
+        let began_at = a_moment_ago();
+        std::fs::write(session.folder().join("segment-3.m4s"), b"a segment")
+            .expect("the one being asked about");
 
         assert!(
-            !session.finished_being_written(3, 0, start_of(3), false),
+            !session
+                .finished_being_written(3, 0, start_of(3), false, began_at)
+                .await,
             "the tool is inside this segment, so it is still writing it"
         );
         assert!(
-            session.finished_being_written(3, 0, start_of(4), false),
+            session
+                .finished_being_written(3, 0, start_of(4), false, began_at)
+                .await,
             "it has passed the end of it, so it has closed it"
         );
         assert!(
-            session.finished_being_written(3, 0, Millis::ZERO, true),
+            session
+                .finished_being_written(3, 0, Millis::ZERO, true, began_at)
+                .await,
             "nothing is writing any more, so nothing is growing"
         );
 
         // The old signal still counts, for a tool that has not spoken yet.
         std::fs::write(session.folder().join("segment-4.m4s"), b"a segment")
             .expect("the next one is written");
-        assert!(session.finished_being_written(3, 0, Millis::ZERO, false));
+        assert!(
+            session
+                .finished_being_written(3, 0, Millis::ZERO, false, began_at)
+                .await
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_file_an_earlier_run_left_behind_is_no_proof_this_one_has_moved_on() {
+        // What broke a film outright for the maintainer. A run set going a few
+        // segments behind an earlier one rewrites the front of its block, and
+        // the untouched file just past the one being rewritten was read as
+        // proof that the rewriting had moved on. The half written segment went
+        // to the browser, which refused the film and began it again from the
+        // beginning.
+        //
+        // Told here rather than with the real tool, because the moment a
+        // rewritten segment is on disk but not yet whole lasts as long as it
+        // takes to write it: measured, under a millisecond for the hundred and
+        // forty kilobyte segments of a made up clip, against tens of megabytes
+        // for a film of a viewer's. A clip heavy enough to catch it would be
+        // heavier than the rest of these tests put together.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 60).await;
+        for index in 0..7 {
+            std::fs::write(
+                session.folder().join(format!("segment-{index}.m4s")),
+                a_finished_segment(),
+            )
+            .expect("a segment an earlier run finished");
+        }
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        let began_at = SystemTime::now();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // This run has rewritten as far as the fourth and is inside it.
+        for index in 0..4 {
+            std::fs::write(
+                session.folder().join(format!("segment-{index}.m4s")),
+                a_finished_segment(),
+            )
+            .expect("a segment this run wrote");
+        }
+
+        assert!(
+            !session
+                .finished_being_written(3, 0, Millis::ZERO, false, began_at)
+                .await,
+            "the file after it is the earlier run's and says nothing about this one"
+        );
+        assert!(
+            session
+                .finished_being_written(2, 0, Millis::ZERO, false, began_at)
+                .await,
+            "the file after it is this run's, so this run had closed it"
+        );
+        assert!(
+            session
+                .finished_being_written(5, 0, Millis::ZERO, false, began_at)
+                .await,
+            "the earlier run finished this one and nothing is touching it"
+        );
         session.close().await;
     }
 
@@ -1832,12 +2008,21 @@ mod tests {
         .await
         .expect("the session opens");
         let start_of = |index: u32| session.playlist().start_of(index);
+        let began_at = a_moment_ago();
+        std::fs::write(session.folder().join("segment-103.m4s"), b"a segment")
+            .expect("the one being asked about");
 
         // Set going at segment 100, asked about segment 103: four segments
         // written, not a hundred and four.
-        assert!(!session.finished_being_written(103, 100, start_of(3), false));
         assert!(
-            session.finished_being_written(103, 100, start_of(4), false),
+            !session
+                .finished_being_written(103, 100, start_of(3), false, began_at)
+                .await
+        );
+        assert!(
+            session
+                .finished_being_written(103, 100, start_of(4), false, began_at)
+                .await,
             "sixteen seconds written from where it started is past the end of it"
         );
         session.close().await;
@@ -2056,7 +2241,7 @@ mod tests {
         assert!(header.is_ok(), "the header: {header:?}");
         assert!(elsewhere.is_ok(), "the other segment: {elsewhere:?}");
         assert!(
-            every_box_is_whole(&header.expect("the header")),
+            every_box_is_whole(&header.expect("the header")).await,
             "half a header is not something a browser can say anything about: \
              it refuses the film outright"
         );
@@ -2068,21 +2253,6 @@ mod tests {
     /// What "finished being written" means for a header: each box says its own
     /// length, so walking them lands on the end of the file when nothing was
     /// cut off and past it or short of it when something was.
-    fn every_box_is_whole(path: &Path) -> bool {
-        let bytes = std::fs::read(path).expect("the header is there");
-        let mut at = 0usize;
-        while at + 8 <= bytes.len() {
-            let length = u32::from_be_bytes(bytes[at..at + 4].try_into().expect("four bytes"));
-            // Nothing this file holds uses the two lengths that mean anything
-            // other than themselves, and a length of nothing would not move.
-            if length < 8 {
-                return false;
-            }
-            at += length as usize;
-        }
-        at == bytes.len() && !bytes.is_empty()
-    }
-
     #[tokio::test]
     async fn a_segment_already_produced_is_handed_over_without_producing_it_again() {
         let directory = tempfile::tempdir().expect("temporary directory");
@@ -2144,7 +2314,7 @@ mod tests {
             .expect("the segment is produced");
         assert_eq!(handed_over, half_made);
         assert!(
-            every_box_is_whole(&handed_over),
+            every_box_is_whole(&handed_over).await,
             "what was handed over is the piece of film, not the beginning of it"
         );
         session.close().await;
