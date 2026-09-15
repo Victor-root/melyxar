@@ -907,6 +907,18 @@ impl Session {
         *self.touched.lock().await = Instant::now();
     }
 
+    /// Says that somebody still has this film open, though they are asking
+    /// for nothing.
+    ///
+    /// A session is kept alive by being used, which is what a film playing
+    /// does every few seconds. A film paused asks for nothing at all, and
+    /// without this it is swept away with the viewer sitting in front of it:
+    /// they press play, every segment answers that the session is over, and
+    /// the film is lost where they left it.
+    pub async fn still_watching(&self) {
+        self.touch().await;
+    }
+
     /// How long nobody has asked this session for anything.
     pub async fn idle_for(&self) -> Duration {
         self.touched.lock().await.elapsed()

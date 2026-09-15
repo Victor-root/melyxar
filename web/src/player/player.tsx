@@ -75,6 +75,17 @@ const SEGMENT_PATIENCE = 40_000;
  */
 const PREPARATION_EVERY = 1_000;
 
+/**
+ * How often the server is told somebody still has the film open.
+ *
+ * A film playing says so every few seconds by asking for its next segment. A
+ * film paused says nothing at all, and the server sweeps away a session
+ * nobody has asked anything of after two minutes. Thirty seconds leaves room
+ * for a browser that slows its clocks down while the tab is in the
+ * background, which they all do.
+ */
+const STILL_HERE_EVERY = 30_000;
+
 /** Whether the film can reach this browser without being rebuilt. */
 function canBePlayedAsItIs(plan: PlaybackPlan): boolean {
   return plan.method === "direct_play";
@@ -184,6 +195,11 @@ export function Player({
   const stage = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
   const [stream, setStream] = useState<PlaybackSession | null>(null);
+  /* How many times the session has been opened again from nothing. Counted
+     rather than flagged because it is what makes the film reopen at all: the
+     session is opened by an effect, and an effect only runs again when
+     something it watches has changed. */
+  const [afresh, setAfresh] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
   /* What the browser itself said when it refused, word for word. The message
      above is this interface's wording and says only that something went
@@ -289,7 +305,7 @@ export function Player({
      must not throw away a conversion already under way and make the viewer
      wait through it again. */
   const beingProduced = rebuilt
-    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${quality.key}`
+    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${quality.key}:${afresh}`
     : null;
   /* Which picture is on screen: the file itself, or one session of segments.
      A change here means a fresh element rather than a new address on the old
@@ -356,6 +372,51 @@ export function Player({
       }
     };
   }, [beingProduced, sourceId, audioId, paintedIn, quality]);
+
+  /* A session is kept alive by being asked for something, which a film playing
+     does every few seconds and a film paused never does. Without this, pausing
+     long enough has the server sweep the session away with the viewer sitting
+     in front of it: they press play and every segment answers that the session
+     is over, which reaches them as a browser that cannot read the film.
+
+     The refusal is an answer worth acting on rather than a failure: there is
+     nothing to go back to, so another session is opened where the viewer
+     stands. That also covers a server restarted in the middle of a film. */
+  useEffect(() => {
+    const name = stream?.id;
+    if (!name) {
+      return;
+    }
+    let gone = false;
+    const sayWeAreStillHere = () => {
+      api
+        .stillWatching(name)
+        .then((stillThere) => {
+          if (!gone && !stillThere) {
+            setAfresh((times) => times + 1);
+          }
+        })
+        .catch(() => {
+          // One that did not arrive says nothing: the next carries the same
+          // news, and a film playing is not worth interrupting for it.
+        });
+    };
+    const beating = window.setInterval(sayWeAreStillHere, STILL_HERE_EVERY);
+    // A tab coming back to the front is the moment a viewer is about to press
+    // play, and the moment a browser that slowed its clocks right down has
+    // missed a beat or two.
+    const cameBack = () => {
+      if (document.visibilityState === "visible") {
+        sayWeAreStillHere();
+      }
+    };
+    document.addEventListener("visibilitychange", cameBack);
+    return () => {
+      gone = true;
+      window.clearInterval(beating);
+      document.removeEventListener("visibilitychange", cameBack);
+    };
+  }, [stream]);
 
   /* Asked for while the picture is not there yet, and not a moment longer:
      once the film is playing this would be a request a second for something

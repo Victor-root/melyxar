@@ -600,6 +600,17 @@ export const api = {
    * here means a media tool converting a film nobody is watching until the
    * server notices on its own. Kept alive, the browser delivers it anyway.
    */
+  /**
+   * Says that somebody still has this film open, though they are asking for
+   * nothing.
+   *
+   * Answers whether the session is still there. A film paused asks the server
+   * for nothing at all, and a session nobody asks anything of is swept away:
+   * without this, pausing long enough loses the film where the viewer left
+   * it.
+   */
+  stillWatching: (session: string) =>
+    fetch(`/api/v1/stream/${session}`, { method: "POST" }).then((answer) => answer.ok),
   closeSession: (session: string) => {
     void fetch(`/api/v1/stream/${session}`, { method: "DELETE", keepalive: true }).catch(() => {
       // A session that could not be closed is swept by the server once
