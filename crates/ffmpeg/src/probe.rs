@@ -178,7 +178,41 @@ impl ProbeStream {
                 .map(|value| value as i32)
         })
     }
+
+    /// Margins the film says to cut off its picture, when it says to.
+    ///
+    /// A film can carry its picture inside a larger frame and say, beside the
+    /// picture rather than inside it, how much of each edge is not part of it.
+    /// The size the stream announces is then the frame, not the picture, and
+    /// anything that reads the one for the other is working on a shape the
+    /// film never had.
+    pub fn margins_to_cut(&self) -> Option<melyxar_core::media::Margins> {
+        self.side_data_list.iter().find_map(|block| {
+            let is_cropping = block
+                .get("side_data_type")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|value| value.to_lowercase().contains("frame cropping"));
+            if !is_cropping {
+                return None;
+            }
+            let edge = |name: &str| {
+                block
+                    .get(name)
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0)
+                    .max(0) as i32
+            };
+            let margins = melyxar_core::media::Margins {
+                top: edge("crop_top"),
+                bottom: edge("crop_bottom"),
+                left: edge("crop_left"),
+                right: edge("crop_right"),
+            };
+            (!margins.are_nothing()).then_some(margins)
+        })
+    }
 }
+
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProbeChapter {

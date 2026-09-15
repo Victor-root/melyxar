@@ -217,7 +217,7 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         && !request.profile.supports_hdr;
 
     let scale_to_height = match (request.profile.max_height, video) {
-        (Some(max), Some((_, details))) if details.height > max => Some(max),
+        (Some(max), Some((_, details))) if details.visible_height() > max => Some(max),
         _ => None,
     };
 
@@ -438,9 +438,9 @@ fn decide_video(
     }
 
     if let Some(max) = profile.max_height {
-        if details.height > max {
+        if details.visible_height() > max {
             reasons.push(Reason::ResolutionTooHigh {
-                height: details.height,
+                height: details.visible_height(),
                 max_height: max,
             });
             must_rebuild = true;
@@ -586,6 +586,7 @@ mod tests {
                 level: Some(40),
                 width: height * 16 / 9,
                 height,
+                margins: None,
                 aspect_ratio: None,
                 is_interlaced: false,
                 frame_rate: Some(24.0),

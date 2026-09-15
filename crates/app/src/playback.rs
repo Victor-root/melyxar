@@ -555,7 +555,7 @@ const BEST_FIRST: &[&str] = &["av1", "hevc", melyxar_playback::profile::ALWAYS_R
 /// How tall the picture of a film is, when it holds one.
 fn height_of(tracks: &[Track]) -> Option<i32> {
     tracks.iter().find_map(|track| match &track.kind {
-        melyxar_core::media::TrackKind::Video(details) => Some(details.height),
+        melyxar_core::media::TrackKind::Video(details) => Some(details.visible_height()),
         _ => None,
     })
 }
@@ -571,8 +571,8 @@ fn height_of(tracks: &[Track]) -> Option<i32> {
 fn picture_shape(tracks: &[Track]) -> Option<(i32, i32, Option<String>)> {
     tracks.iter().find_map(|track| match &track.kind {
         melyxar_core::media::TrackKind::Video(details) => Some((
-            details.width,
-            details.height,
+            details.visible_width(),
+            details.visible_height(),
             details.aspect_ratio.clone(),
         )),
         _ => None,
@@ -695,10 +695,26 @@ fn how_to_rebuild(
                 .bitrate_ceiling
                 .unwrap_or_else(|| rate_for(height.or(source_height), &codec)),
         ),
-        reads_the_film: codec_of(tracks).is_some_and(|codec| card.reads(&codec)),
+        // A film that says its picture sits inside a larger frame is read by
+        // the processor, whatever the card can do with its codec. A card hands
+        // its pictures on as whole frames and nothing in the chain that
+        // follows knows how to cut the edges off one, so the film would be
+        // rebuilt frame and all: a wide picture stretched to fill a shape it
+        // never had. The processor cuts them as it reads, which is what every
+        // still image pulled out of these files has always shown.
+        reads_the_film: !says_it_is_cut(tracks)
+            && codec_of(tracks).is_some_and(|codec| card.reads(&codec)),
         codec,
         card: Some(card.clone()),
         height,
+    })
+}
+
+/// Whether the film says its picture sits inside a larger frame.
+fn says_it_is_cut(tracks: &[Track]) -> bool {
+    tracks.iter().any(|track| match &track.kind {
+        melyxar_core::media::TrackKind::Video(details) => details.margins.is_some(),
+        _ => false,
     })
 }
 
@@ -986,6 +1002,7 @@ mod tests {
                 level: Some(40),
                 width: height * 16 / 9,
                 height,
+                margins: None,
                 aspect_ratio: None,
                 is_interlaced: false,
                 frame_rate: Some(24.0),
@@ -2205,6 +2222,61 @@ mod tests {
         plan.rebuild = Some(handed_up);
         let handed = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
         assert_eq!(handed.if_the_card_refuses.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_film_that_says_part_of_its_frame_is_not_the_picture_is_read_by_the_processor() {
+        // A card hands its pictures on as whole frames, and nothing in the
+        // chain that follows knows how to cut the edges off one: the film
+        // would be rebuilt frame and all, a wide picture stretched to fill a
+        // shape it never had. The processor cuts them as it reads, which is
+        // what every still image pulled out of these files has always shown.
+        // The card still rebuilds the picture; it just does not read the film.
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                let mut picture = video(id, "hevc", 2160);
+                if let TrackKind::Video(details) = &mut picture.kind {
+                    details.margins = Some(melyxar_core::media::Margins {
+                        top: 276,
+                        bottom: 276,
+                        left: 0,
+                        right: 0,
+                    });
+                }
+                vec![picture, audio(id, "eac3", 6, true)]
+            })
+            .await;
+        let plan = plan(
+            &state,
+            user_id,
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle_track_id: None,
+            },
+        )
+        .await
+        .expect("a plan");
+
+        let reads_hevc = capabilities_with(Some(a_card(&["h264", "hevc"], true)));
+        let rebuild = how_to_rebuild(
+            &plan.decision,
+            &plan.tracks,
+            &ClientProfile::conservative_browser(),
+            Some(&reads_hevc),
+            false,
+        )
+        .expect("this picture is rebuilt");
+
+        assert!(
+            rebuild.on_a_card(),
+            "the card is still what rebuilds the picture"
+        );
+        assert!(
+            !rebuild.reads_the_film,
+            "the card was proved to read this codec, and still must not read this film"
+        );
     }
 
     #[test]
