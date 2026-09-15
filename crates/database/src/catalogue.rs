@@ -2033,6 +2033,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_film_with_nowhere_to_start_is_written_down_as_having_nowhere() {
+        // A reading that finished and gave nothing is an answer about the
+        // file. Written down, the film is never read through again for the
+        // same nothing; left out, it costs a whole reading at every scan.
+        let (database, library_id, root_id) = library().await;
+        let source_id =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+
+        database
+            .store_key_frames(source_id, &[])
+            .await
+            .expect("kept");
+        assert_eq!(
+            database.key_frames_of(source_id).await.expect("read"),
+            Some(Vec::new()),
+            "read back as nowhere rather than as never read"
+        );
+        assert!(
+            database
+                .sources_without_key_frames(library_id, 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "and never offered up again"
+        );
+    }
+
+    #[tokio::test]
     async fn a_film_nobody_has_read_for_its_key_frames_is_offered_up_once() {
         // Reading one means reading the whole file through, so this is a
         // background pass that picks up where it left off rather than one that
