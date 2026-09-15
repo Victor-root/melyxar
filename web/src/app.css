@@ -1168,7 +1168,10 @@
 /* What is running, shown on a page that is otherwise about something else.
    Held to a readable width and laid out normally, because the block around it
    on the empty home page is centred. */
-.jobs {
+/* Work in progress on the home page, lined up with the rows of films under
+   it. On the screen of a library with nothing in it yet, where everything is
+   centred, it is centred too and kept narrow. */
+.empty .jobs {
   max-width: 560px;
   margin: 0 auto;
   text-align: left;

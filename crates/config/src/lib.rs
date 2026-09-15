@@ -127,6 +127,10 @@ pub struct MediaToolsConfig {
 
 /// Bounds on background work, so that a scan never makes browsing sluggish.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Every setting on its own: a section written with one line in it keeps the
+// usual value for everything else, rather than refusing to start over the
+// lines that were not written.
+#[serde(default)]
 pub struct LimitsConfig {
     /// Concurrent media analyses.
     pub concurrent_probes: usize,
@@ -155,6 +159,7 @@ impl Default for LimitsConfig {
 
 /// What a scan is allowed to do with the media folders.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ScanConfig {
     /// Read the description files some collections keep next to a film.
     ///
@@ -170,6 +175,10 @@ pub struct ScanConfig {
 /// Making them means reading every film through from end to end, so this is
 /// the one piece of background work worth being able to switch off outright.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Every setting on its own: a section written with one line in it keeps the
+// usual value for everything else, rather than refusing to start over the
+// lines that were not written.
+#[serde(default)]
 pub struct ThumbnailsConfig {
     pub enabled: bool,
     /// How far apart in the film two thumbnails stand.
@@ -201,6 +210,10 @@ impl Default for ThumbnailsConfig {
 
 /// Logging behaviour.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Every setting on its own: a section written with one line in it keeps the
+// usual value for everything else, rather than refusing to start over the
+// lines that were not written.
+#[serde(default)]
 pub struct LoggingConfig {
     /// Verbosity, using the usual filter syntax.
     pub level: String,
@@ -414,6 +427,39 @@ mod tests {
         label = "disk-two"
         path = "/mnt/two/Films"
     "#;
+
+    #[test]
+    fn one_line_in_a_section_keeps_the_usual_value_for_the_rest() {
+        // What somebody writes when they want the thumbnails a little closer
+        // together. Refusing to start over the four lines they did not write
+        // is a server that will not come up because of a setting.
+        let config = Config::parse(
+            r#"
+            port = 2100
+
+            [thumbnails]
+            every_seconds = 5
+
+            [logging]
+            level = "debug"
+
+            [limits]
+            concurrent_probes = 4
+        "#,
+        )
+        .expect("valid configuration");
+
+        assert_eq!(config.thumbnails.every_seconds, 5);
+        assert!(
+            config.thumbnails.enabled,
+            "untouched, so still the usual one"
+        );
+        assert_eq!(config.thumbnails.columns, 10);
+        assert_eq!(config.logging.level, "debug");
+        assert!(!config.logging.reveal_media_names);
+        assert_eq!(config.limits.concurrent_probes, 4);
+        assert_eq!(config.limits.max_transcoding_sessions, 2);
+    }
 
     #[test]
     fn a_minimal_file_loads_and_fills_in_the_rest() {

@@ -275,13 +275,15 @@ pub async fn sheet_of(state: &AppState, source_id: MediaSourceId, number: u32) -
     let path = melyxar_ffmpeg::thumbnails::sheet_at(&kept_at(state, source_id), number);
     if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         // The row says it was made and the sheet is not there, which is what a
-        // cache emptied by hand looks like. Said out loud: the film is read
-        // again by the next scan, and until then a bar with no pictures on it
-        // is the only sign.
+        // cache emptied by hand looks like. The row is what keeps this film out
+        // of the pass that makes them, so it goes: without that, the bar of
+        // this film stays bare for ever and nothing anywhere says why.
         tracing::warn!(
             sheet = number,
-            "a sheet of thumbnails is written down and is not in the cache"
+            "a sheet of thumbnails is written down and is not in the cache, so this film \
+             will be read for them again"
         );
+        state.database().forget_thumbnails(source_id).await?;
         return Err(AppError::Domain(melyxar_core::Error::not_found(
             "that sheet of thumbnails",
         )));

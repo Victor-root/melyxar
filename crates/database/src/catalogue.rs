@@ -856,6 +856,20 @@ impl Database {
         }))
     }
 
+    /// Forgets what a film gave for its bar, so it is read for it again.
+    ///
+    /// For the one case the table cannot see: a cache emptied by hand. The row
+    /// then says a film has thumbnails that are not on the disk, and nothing
+    /// would ever put them back, because being written down is exactly what
+    /// keeps a film out of the pass that makes them.
+    pub async fn forget_thumbnails(&self, source_id: MediaSourceId) -> Result<()> {
+        sqlx::query("DELETE FROM media_source_thumbnails WHERE source_id = ?")
+            .bind(source_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// Files whose thumbnails are missing or were made to another shape,
     /// oldest first, a few at a time.
     ///
@@ -1848,6 +1862,38 @@ mod tests {
                 .await
                 .expect("read"),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn a_cache_emptied_by_hand_puts_the_film_back_in_the_queue() {
+        // Being written down is exactly what keeps a film out of the pass that
+        // makes them, so a row left behind by a cache emptied by hand is a
+        // film whose bar stays bare for ever.
+        let (database, library_id, root_id) = library().await;
+        let source_id =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        database
+            .store_thumbnails(source_id, &made(720))
+            .await
+            .expect("kept");
+        assert!(database
+            .sources_without_thumbnails(library_id, every_ten_seconds(), 10)
+            .await
+            .expect("read")
+            .is_empty());
+
+        database
+            .forget_thumbnails(source_id)
+            .await
+            .expect("forgotten");
+        assert_eq!(database.thumbnails_of(source_id).await.expect("read"), None);
+        assert_eq!(
+            database
+                .sources_without_thumbnails(library_id, every_ten_seconds(), 10)
+                .await
+                .expect("read"),
+            vec![source_id]
         );
     }
 
