@@ -254,6 +254,7 @@ mod tests {
                 level: None,
                 width,
                 height,
+                margins: None,
                 aspect_ratio: None,
                 is_interlaced: false,
                 frame_rate: None,

@@ -589,6 +589,7 @@ mod tests {
                             level: None,
                             width: 1920,
                             height: 1080,
+                            margins: None,
                             aspect_ratio: None,
                             is_interlaced: false,
                             frame_rate: None,

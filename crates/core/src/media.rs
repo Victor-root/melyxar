@@ -212,13 +212,41 @@ impl HdrFormat {
     }
 }
 
+/// How much of each edge of a frame is not part of the picture.
+///
+/// A film can carry its picture inside a larger frame and say, beside the
+/// picture rather than inside it, how much of each edge to leave out. The size
+/// such a film announces is the frame; the picture is what is left once these
+/// are taken off, and the two are different shapes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Margins {
+    pub top: i32,
+    pub bottom: i32,
+    pub left: i32,
+    pub right: i32,
+}
+
+impl Margins {
+    /// Whether they take nothing off, which is the same as having none.
+    pub fn are_nothing(&self) -> bool {
+        self.top == 0 && self.bottom == 0 && self.left == 0 && self.right == 0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct VideoDetails {
     pub codec: String,
     pub profile: Option<String>,
     pub level: Option<i32>,
+    /// The frame the film carries, margins included.
+    ///
+    /// Kept as the film states it. What anything showing or rebuilding a
+    /// picture wants is the picture, which is `visible_width` and
+    /// `visible_height`.
     pub width: i32,
     pub height: i32,
+    /// Edges the film says are not part of its picture, when it says so.
+    pub margins: Option<Margins>,
     pub aspect_ratio: Option<String>,
     pub is_interlaced: bool,
     pub frame_rate: Option<f64>,
@@ -230,6 +258,33 @@ pub struct VideoDetails {
 }
 
 impl VideoDetails {
+    /// How wide the picture is, once the margins are off.
+    pub fn visible_width(&self) -> i32 {
+        self.without_margins().0
+    }
+
+    /// How tall the picture is, once the margins are off.
+    pub fn visible_height(&self) -> i32 {
+        self.without_margins().1
+    }
+
+    /// The shape of the picture rather than of the frame around it.
+    ///
+    /// Margins that would leave nothing at all are treated as none: a film
+    /// that describes itself into nonsense is still a film, and the frame is
+    /// then the best answer anybody has.
+    fn without_margins(&self) -> (i32, i32) {
+        let Some(margins) = self.margins else {
+            return (self.width, self.height);
+        };
+        let width = self.width - margins.left - margins.right;
+        let height = self.height - margins.top - margins.bottom;
+        match width > 0 && height > 0 {
+            true => (width, height),
+            false => (self.width, self.height),
+        }
+    }
+
     /// Whether any image taken out of this track has to be converted before
     /// it looks right, thumbnails included.
     pub fn needs_tone_mapping(&self) -> bool {
@@ -238,7 +293,7 @@ impl VideoDetails {
 
     /// Short human readable summary, of the kind shown above the play button.
     pub fn summary(&self) -> String {
-        let definition = match self.height {
+        let definition = match self.visible_height() {
             h if h >= 2000 => "4K",
             h if h >= 1400 => "1440p",
             h if h >= 1000 => "1080p",
@@ -345,6 +400,7 @@ mod tests {
             level: None,
             width: height * 16 / 9,
             height,
+            margins: None,
             aspect_ratio: None,
             is_interlaced: false,
             frame_rate: None,

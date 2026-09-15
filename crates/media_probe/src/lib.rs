@@ -178,6 +178,7 @@ fn video_details(stream: &ProbeStream) -> VideoDetails {
         level: stream.level.filter(|value| *value > 0),
         width: stream.width.unwrap_or(0),
         height: stream.height.unwrap_or(0),
+        margins: stream.margins_to_cut(),
         aspect_ratio: stream.display_aspect_ratio.clone(),
         is_interlaced: is_interlaced(stream.field_order.as_deref()),
         frame_rate: stream
@@ -469,6 +470,54 @@ mod tests {
                     .hdr
                     .expect("a flavour")
                     .is_incompatible_without_conversion());
+            }
+            other => panic!("expected a video track, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_film_that_says_part_of_its_frame_is_not_the_picture_is_read_as_the_picture() {
+        // The frame and the picture are different shapes, and only one of them
+        // is the film. Taking the frame for the picture turns a wide film into
+        // a tall one, stretched to fill a shape it never had.
+        let file = analyse(
+            r#"{"streams":[{"index":0,"codec_type":"video","codec_name":"hevc",
+                "width":3840,"height":2160,
+                "side_data_list":[{"side_data_type":"Frame Cropping",
+                    "crop_top":276,"crop_bottom":276,"crop_left":0,"crop_right":0}]}]}"#,
+        );
+        match &file.tracks[0].kind {
+            TrackKind::Video(video) => {
+                assert_eq!(
+                    (video.width, video.height),
+                    (3840, 2160),
+                    "the frame is kept as the film states it"
+                );
+                assert_eq!(
+                    (video.visible_width(), video.visible_height()),
+                    (3840, 1608),
+                    "the picture is what is left once the margins are off"
+                );
+            }
+            other => panic!("expected a video track, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn margins_that_take_nothing_off_are_no_margins_at_all() {
+        // Some files carry the block with every edge at nought, which says the
+        // frame is the picture. Kept as margins it would send every one of
+        // those films down a slower path for nothing.
+        let file = analyse(
+            r#"{"streams":[{"index":0,"codec_type":"video","codec_name":"hevc",
+                "width":1920,"height":1080,
+                "side_data_list":[{"side_data_type":"Frame Cropping",
+                    "crop_top":0,"crop_bottom":0,"crop_left":0,"crop_right":0}]}]}"#,
+        );
+        match &file.tracks[0].kind {
+            TrackKind::Video(video) => {
+                assert_eq!(video.margins, None);
+                assert_eq!((video.visible_width(), video.visible_height()), (1920, 1080));
             }
             other => panic!("expected a video track, got {other:?}"),
         }

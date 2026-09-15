@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use melyxar_core::id::{ChapterId, ExtraVideoId, LibraryId, LibraryRootId, MediaSourceId, WorkId};
 use melyxar_core::media::{
-    AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, SubtitleDetails, SubtitleLayout, Track,
-    TrackKind, VideoDetails,
+    AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, Margins, SubtitleDetails, SubtitleLayout,
+    Track, TrackKind, VideoDetails,
 };
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::{now, Millis, Timestamp};
@@ -1263,7 +1263,8 @@ async fn insert_track(
             hdr_format, dolby_vision_profile,
             channels, channel_layout, sample_rate,
             loudness_integrated_lufs, loudness_true_peak_dbfs, loudness_range_lu,
-            subtitle_layout, is_hearing_impaired, is_external, external_relative_path
+            subtitle_layout, is_hearing_impaired, is_external, external_relative_path,
+            margin_top, margin_bottom, margin_left, margin_right
          ) VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
@@ -1272,6 +1273,7 @@ async fn insert_track(
             ?, ?,
             ?, ?, ?,
             ?, ?, ?,
+            ?, ?, ?, ?,
             ?, ?, ?, ?
          )",
     )
@@ -1326,9 +1328,31 @@ async fn insert_track(
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned())
     }))
+    .bind(video.and_then(|details| details.margins).map(|it| it.top))
+    .bind(video.and_then(|details| details.margins).map(|it| it.bottom))
+    .bind(video.and_then(|details| details.margins).map(|it| it.left))
+    .bind(video.and_then(|details| details.margins).map(|it| it.right))
     .execute(&mut **transaction)
     .await?;
     Ok(())
+}
+
+/// Edges a film says are not part of its picture, when it says so.
+///
+/// Absent unless one of them takes something off: a file described before this
+/// was read leaves the four empty, and a file that really has no margins says
+/// the same thing, so the two need not be told apart.
+fn margins_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Option<Margins>> {
+    let edge = |name: &str| -> Result<i32> {
+        Ok(row.try_get::<Option<i32>, _>(name)?.unwrap_or_default())
+    };
+    let margins = Margins {
+        top: edge("margin_top")?,
+        bottom: edge("margin_bottom")?,
+        left: edge("margin_left")?,
+        right: edge("margin_right")?,
+    };
+    Ok((!margins.are_nothing()).then_some(margins))
 }
 
 fn stored_source_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredSource> {
@@ -1456,6 +1480,7 @@ fn track_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Track> {
             level: row.try_get("level")?,
             width: row.try_get::<Option<i32>, _>("width")?.unwrap_or_default(),
             height: row.try_get::<Option<i32>, _>("height")?.unwrap_or_default(),
+            margins: margins_from_row(row)?,
             aspect_ratio: row.try_get("aspect_ratio")?,
             is_interlaced: row
                 .try_get::<Option<i64>, _>("is_interlaced")?
@@ -1609,6 +1634,7 @@ mod tests {
                 level: Some(153),
                 width: 3840,
                 height: 2160,
+                margins: None,
                 aspect_ratio: Some("16:9".to_string()),
                 is_interlaced: false,
                 frame_rate: Some(23.976),

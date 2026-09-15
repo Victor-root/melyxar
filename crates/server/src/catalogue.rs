@@ -602,8 +602,12 @@ fn version_view(version: &Version) -> VersionView {
                 codec: details.codec.clone(),
                 profile: details.profile.clone(),
                 level: details.level,
-                width: details.width,
-                height: details.height,
+                // The picture rather than the frame it sits in: a film
+                // that says part of its frame is not the picture is shown by
+                // its picture, and that is what anybody reading this means by
+                // the size of a film.
+                width: details.visible_width(),
+                height: details.visible_height(),
                 aspect_ratio: details.aspect_ratio.clone(),
                 is_interlaced: details.is_interlaced,
                 hdr: details.hdr.map(|hdr| match hdr {
@@ -719,6 +723,7 @@ mod tests {
                 level: None,
                 width: 3840,
                 height: 2160,
+                margins: None,
                 aspect_ratio: None,
                 is_interlaced: false,
                 frame_rate: Some(23.976),
