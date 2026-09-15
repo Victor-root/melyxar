@@ -86,6 +86,35 @@ const PREPARATION_EVERY = 1_000;
  */
 const STILL_HERE_EVERY = 30_000;
 
+/**
+ * How wide a gap in the film the library hops over rather than waiting on.
+ *
+ * Two readings of the same film do not join on the sound: the picture is
+ * carried over untouched and lines up to the millisecond, the sound is rebuilt
+ * and lands up to one of its own frames away, a little over twenty
+ * thousandths. A jump back into film produced by an earlier reading therefore
+ * leaves a gap of a few hundredths where the two meet.
+ *
+ * The library's own figure is a tenth of a second, and it is measured from
+ * where the film has got to rather than across the gap itself, so a gap of six
+ * hundredths reached with a twentieth still to play counts as more than a
+ * tenth: measured, and it cost two seconds of nothing at all before the
+ * library hopped over it. Half a second covers the seam with room to spare and
+ * is still far too short to hop over anything a viewer would miss.
+ */
+const A_SEAM_IS_WORTH_HOPPING = 0.5;
+
+/** Whether the browser is already holding the film around one moment. */
+function isHeldAround(element: HTMLVideoElement, moment: number): boolean {
+  const held = element.buffered;
+  for (let index = 0; index < held.length; index += 1) {
+    if (held.start(index) <= moment && moment < held.end(index)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Whether the film can reach this browser without being rebuilt. */
 function canBePlayedAsItIs(plan: PlaybackPlan): boolean {
   return plan.method === "direct_play";
@@ -503,6 +532,7 @@ export function Player({
       }
       feed = new Library({
         fragLoadingTimeOut: SEGMENT_PATIENCE,
+        maxBufferHole: A_SEAM_IS_WORTH_HOPPING,
         // The segments carry no words, so the library has no business
         // touching the subtitles on the picture: left to itself it takes
         // charge of every one it finds there and empties ours as it goes.
@@ -525,15 +555,32 @@ export function Player({
       whileTheViewerMoves.current = {
         // Nothing fetched while a hand is on the bar. Left to itself the
         // library chases every twitch of it, fetching pieces of film nobody
-        // will ever see and appending them underneath what is about to be
-        // thrown away, which is the one thing here nobody can reason about.
+        // will ever see.
         hold: () => feed?.stopLoad(),
         letGo: () => {
-          feed?.trigger(Library.Events.BUFFER_FLUSHING, {
-            startOffset: 0,
-            endOffset: Number.POSITIVE_INFINITY,
-            type: null,
-          });
+          // Thrown away only when the viewer has landed somewhere the browser
+          // was not already holding.
+          //
+          // It used to be thrown away on every jump, and that was measured to
+          // be worse than what it cured. Landing inside what is held, a
+          // browser seeks in it and shows the picture at once, which is what
+          // every player in the world relies on. Emptied first, it has to be
+          // handed the same film again and start cold in the middle of a group
+          // of pictures, and it then shows nothing at all until the next whole
+          // picture comes round: measured four times over at two and a half to
+          // five seconds, with the browser holding an unbroken stretch from
+          // before that whole picture to thirty five seconds past the viewer,
+          // and saying it had everything it needed.
+          //
+          // Landing where nothing is held, there is nothing to lose and the
+          // stale film further on is worth being rid of.
+          if (!isHeldAround(element, element.currentTime)) {
+            feed?.trigger(Library.Events.BUFFER_FLUSHING, {
+              startOffset: 0,
+              endOffset: Number.POSITIVE_INFINITY,
+              type: null,
+            });
+          }
           feed?.startLoad(element.currentTime);
         },
       };
