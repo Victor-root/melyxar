@@ -46,6 +46,10 @@ interface Props {
      element sent fullscreen on its own leaves it behind. */
   stage: React.RefObject<HTMLDivElement | null>;
   thumbnails: PlaybackThumbnails | null;
+  /* Told once when the viewer has finished moving, never while they are still
+     moving: dragging along the bar moves the film at every twitch, and this
+     costs what a jump costs. */
+  onViewerMoved: () => void;
   t: (key: string, values?: Record<string, string | number>) => string;
 }
 
@@ -92,7 +96,7 @@ function spotOf(
   };
 }
 
-export function Controls({ video, pictureKey, stage, thumbnails, t }: Props) {
+export function Controls({ video, pictureKey, stage, thumbnails, onViewerMoved, t }: Props) {
   const [playing, setPlaying] = useState(false);
   const [at, setAt] = useState(0);
   const [length, setLength] = useState(0);
@@ -233,8 +237,9 @@ export function Controls({ video, pictureKey, stage, thumbnails, t }: Props) {
         0,
         Number.isFinite(furthest) ? Math.min(furthest, wanted) : wanted,
       );
+      onViewerMoved();
     },
-    [video, length],
+    [video, length, onViewerMoved],
   );
 
   /* Dragging is followed on the window rather than on the bar: a finger that
@@ -251,7 +256,10 @@ export function Controls({ video, pictureKey, stage, thumbnails, t }: Props) {
         goTo(share);
       }
     };
-    const let_go = () => setDragging(false);
+    const let_go = () => {
+      setDragging(false);
+      onViewerMoved();
+    };
     window.addEventListener("pointermove", moved);
     window.addEventListener("pointerup", let_go);
     window.addEventListener("pointercancel", let_go);
@@ -260,7 +268,7 @@ export function Controls({ video, pictureKey, stage, thumbnails, t }: Props) {
       window.removeEventListener("pointerup", let_go);
       window.removeEventListener("pointercancel", let_go);
     };
-  }, [dragging, shareAt, goTo]);
+  }, [dragging, shareAt, goTo, onViewerMoved]);
 
   const playing_share = length > 0 ? Math.min(1, at / length) : 0;
   const loaded_share = length > 0 ? Math.min(1, loaded / length) : 0;
