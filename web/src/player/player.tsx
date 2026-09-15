@@ -195,6 +195,10 @@ export function Player({
   const stage = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
   const [stream, setStream] = useState<PlaybackSession | null>(null);
+  /* How to throw away the film the browser is holding. Held here rather than
+     passed down, because it only exists while a session is being fed in
+     pieces: a film played as it is has nothing of the sort. */
+  const dropWhatIsHeld = useRef<(() => void) | null>(null);
   /* How many times the session has been opened again from nothing. Counted
      rather than flagged because it is what makes the film reopen at all: the
      session is opened by an effect, and an effect only runs again when
@@ -504,6 +508,25 @@ export function Player({
         renderTextTracksNatively: false,
       });
       feed.subtitleDisplay = false;
+      /* Everything, not only what lies ahead: what the browser is holding was
+         produced by one reading of the film, and a jump starts another. The
+         two do not join. Measured on the maintainer's library: the picture
+         copied over untouched lines up to the millisecond between two
+         readings, and the sound, which is rebuilt, lands up to one of its own
+         frames away. The browser holds the two pieces with a gap of a few
+         hundredths between them, waits two seconds on it, hops over it, and
+         then shows nothing for three seconds while the picture catches up
+         with a sound that never stopped. That is exactly what a viewer
+         reports as the picture freezing with the sound going on.
+
+         The cost is that a jump is fetched again rather than played from
+         what is held, which is what a jump costs anyway. */
+      dropWhatIsHeld.current = () =>
+        feed?.trigger(Library.Events.BUFFER_FLUSHING, {
+          startOffset: 0,
+          endOffset: Number.POSITIVE_INFINITY,
+          type: null,
+        });
       sayWhereItBegan(Library, feed, stream.id);
       feed.on(Library.Events.ERROR, (_event, trouble) => {
         // Anything short of fatal is retried on its own, and saying so would
@@ -545,6 +568,7 @@ export function Player({
 
     return () => {
       gone = true;
+      dropWhatIsHeld.current = null;
       stopWatching();
       feed?.destroy();
     };
@@ -568,6 +592,14 @@ export function Player({
         // sitting, which is the part the viewer is watching.
       });
   };
+
+  /* A jump, once the viewer has finished making it. What the browser holds
+     came out of one reading of the film and what comes next comes out of
+     another, so the two have to be kept apart. A film played as it is has no
+     such thing and this does nothing. */
+  const viewerMoved = useCallback(() => {
+    dropWhatIsHeld.current?.();
+  }, []);
 
   const report = useCallback(() => {
     const seconds = lastPosition.current;
@@ -856,6 +888,7 @@ export function Player({
           pictureKey={pictureKey}
           stage={stage}
           thumbnails={plan.thumbnails}
+          onViewerMoved={viewerMoved}
           t={t}
         />
         </div>
