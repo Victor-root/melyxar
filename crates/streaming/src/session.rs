@@ -38,7 +38,25 @@ const WORTH_WAITING_FOR: u32 = 6;
 const PATIENCE: Duration = Duration::from_secs(30);
 
 /// How often the folder is looked at while waiting.
-const LOOK_AGAIN_EVERY: Duration = Duration::from_millis(120);
+///
+/// Fine on purpose. A wait ends the moment a file appears or the tool says it
+/// has passed the end of one, and looking on a slow rhythm does not make the
+/// wait shorter, it rounds it up to the next look: read in the maintainer's
+/// journal, every single wait came out a multiple of the old hundred and
+/// twenty thousandths, a segment already finished still costing one whole look
+/// before it was handed over. A look is a lock, two numbers and a glance at the
+/// folder, which is nothing beside producing film.
+const LOOK_AGAIN_EVERY: Duration = Duration::from_millis(10);
+
+/// How long a request for the header waits for its own segment request before
+/// setting the tool going itself.
+///
+/// A player asks for both in the same breath and the segment is what chooses
+/// where the tool starts, so the header gives it a beat to arrive. Kept as a
+/// length of time rather than as a number of looks: how often the folder is
+/// looked at is about noticing a file quickly and has nothing to say about how
+/// long two requests of one player take to arrive.
+const A_PLAYER_ASKS_FOR_BOTH_WITHIN: Duration = Duration::from_millis(120);
 
 /// What a session was asked to produce.
 ///
@@ -350,11 +368,11 @@ impl Session {
     /// to disagree about where the film starts, and each then waited out its
     /// patience for what the other had taken the tool away from.
     ///
-    /// A player that asked for the header alone is still answered: one look
+    /// A player that asked for the header alone is still answered: a beat
     /// later, with nothing running, the tool is set going where the viewer is.
     async fn wait_for_the_header(&self, path: &Path) -> Result<()> {
         let deadline = Instant::now() + PATIENCE;
-        let mut looked_once = false;
+        let give_the_segment_until = Instant::now() + A_PLAYER_ASKS_FOR_BOTH_WITHIN;
         loop {
             let at_work = {
                 let mut running = self.running.lock().await;
@@ -380,11 +398,11 @@ impl Session {
                         return Err(self.why_nothing_came(from).await);
                     }
                 }
-                None if looked_once => {
+                None if Instant::now() >= give_the_segment_until => {
                     self.make_sure_someone_is_producing(self.where_the_viewer_starts())
                         .await?;
                 }
-                None => looked_once = true,
+                None => {}
             }
 
             if Instant::now() >= deadline {
@@ -1530,10 +1548,19 @@ mod tests {
                     .output()
                     .await
                     .expect("the analyser runs");
-                let lasted: f64 = String::from_utf8_lossy(&read.stdout)
-                    .trim()
-                    .parse()
-                    .unwrap_or_default();
+                // Read strictly, because the answer here is an accusation. An
+                // analyser that failed to run at all used to come back as a
+                // segment holding no film whatsoever, which reads in the
+                // failure as the very fault this is here to catch.
+                let said = String::from_utf8_lossy(&read.stdout);
+                let lasted: f64 = said.trim().parse().unwrap_or_else(|error| {
+                    panic!(
+                        "attempt {attempt}, segment {index}: the analyser said nothing \
+                         readable about it, so this proves nothing either way: {error}, \
+                         it said {said:?} and complained {:?}",
+                        String::from_utf8_lossy(&read.stderr)
+                    )
+                });
 
                 assert!(
                     lasted > 3.5,
