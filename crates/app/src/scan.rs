@@ -1076,9 +1076,19 @@ async fn read_one_film_for_its_key_frames(
                 }
             }
         }
-        // A film that gave up nothing is left alone rather than written down
-        // as having none: written down it would never be asked again, and a
-        // file that was merely busy would be cut on a grid for ever.
+        // A reading that finished and gave nothing is an answer about the
+        // file, and it is written down so the file is never read through
+        // again for the same nothing. A file that was merely busy is the
+        // other branch: the analyser fails there, and nothing is written.
+        //
+        // Seen on a VC-1 remux of the maintainer's: every packet of the
+        // picture carried no time at all, and every one of them claimed to
+        // stand on its own, which is what a demuxer says about a stream it
+        // cannot read. Reading it again can only say the same, and it cost a
+        // minute of every scan. Such a film keeps the usual grid, which is
+        // exact for it anyway: no browser plays that codec, so its picture is
+        // rebuilt, and a rebuilt picture is cut where this server puts the
+        // cuts.
         Ok(_) => {
             tracing::warn!(
                 file = %MediaName::new(
@@ -1088,9 +1098,16 @@ async fn read_one_film_for_its_key_frames(
                         .and_then(|name| name.to_str())
                         .unwrap_or_default()
                 ),
-                "this film says nowhere its picture can be started, so it is cut on the usual grid"
+                "this film says nowhere its picture can be started, so it is cut on the usual \
+                 grid from now on and never read for this again"
             );
-            false
+            match database.store_key_frames(source_id, &[]).await {
+                Ok(()) => true,
+                Err(error) => {
+                    tracing::warn!(error = %error, "that answer could not be kept");
+                    false
+                }
+            }
         }
         Err(error) => {
             tracing::warn!(
