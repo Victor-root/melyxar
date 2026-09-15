@@ -1043,9 +1043,8 @@
   }
 }
 
-/* Only ever on a film held in several copies, and quiet: it is a correction,
-   not something anybody came here to do. */
-.version-detach {
+/* Quiet: corrections and re-readings, not what anybody came here to do. */
+.version-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--gap-tight);

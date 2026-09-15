@@ -589,6 +589,11 @@ export const api = {
   /* When two copies on one film turn out not to be the same film at all. */
   detachCopy: (copy: string) =>
     post<{ work_id: string }>(`/api/v1/copies/${copy}/detach`),
+  /* Reads one file again for what it says about itself. A scan opens only
+     what changed on disk, so this is the only way to reach a file the server
+     has already described. */
+  readCopyAgain: (copy: string) =>
+    post<{ job_id: string }>(`/api/v1/copies/${copy}/read-again`),
   /* Everything worth asking about this installation, in one block of text
      rendered by the server so that it says exactly what the command line
      says. */
