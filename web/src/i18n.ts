@@ -154,6 +154,7 @@ const en: Dictionary = {
   "jobs.step.reading_names_again": "Reading the file names again",
   "jobs.step.analysing_files": "Analysing the files",
   "jobs.step.reading_key_frames": "Reading where each film can be started",
+  "jobs.step.making_thumbnails": "Making the pictures of the playback bar",
   "jobs.step.asking_the_provider": "Asking about the films",
   "jobs.step.filling_in_what_is_missing": "Filling in what is missing",
 
@@ -450,6 +451,7 @@ const fr: Dictionary = {
   "jobs.step.reading_names_again": "Relecture des noms de fichiers",
   "jobs.step.analysing_files": "Analyse des fichiers",
   "jobs.step.reading_key_frames": "Repérage des points de départ des films",
+  "jobs.step.making_thumbnails": "Fabrication des miniatures de la barre",
   "jobs.step.asking_the_provider": "Recherche des fiches",
   "jobs.step.filling_in_what_is_missing": "Complément des fiches",
 

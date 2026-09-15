@@ -377,6 +377,48 @@ fn internal(error: impl std::fmt::Display) -> ServerError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every name a job can carry has a sentence in the interface, in both
+    /// languages.
+    ///
+    /// A name with no sentence behind it reaches the screen as the name
+    /// itself. That is exactly what happened the evening a pass was added to
+    /// the scan: the activity screen read `jobs.step.making_thumbnails` while
+    /// three hundred films were being read, and nothing else said what was
+    /// going on. The words live in the interface and the names live here, so
+    /// nothing but a test crossing from one to the other can catch it.
+    #[test]
+    fn every_name_a_job_carries_has_words_in_both_languages() {
+        let words = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/i18n.ts"),
+        )
+        .expect("the words of the interface");
+
+        let said_twice = |key: &str| {
+            assert_eq!(
+                words.matches(&format!("\"{key}\":")).count(),
+                2,
+                "{key} needs a sentence in English and one in French"
+            );
+        };
+        for kind in melyxar_core::job::JobKind::ALL {
+            said_twice(&format!("jobs.{}", kind.as_str()));
+        }
+        for step in melyxar_core::job::JobStep::ALL {
+            said_twice(&format!("jobs.step.{}", step.as_str()));
+        }
+        for state in [
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "interrupted",
+        ] {
+            said_twice(&format!("jobs.state.{state}"));
+        }
+    }
+
     use melyxar_core::job::{Job, JobKind, JobPriority, JobState};
 
     fn job(done: i64, total: Option<i64>, state: JobState) -> Job {

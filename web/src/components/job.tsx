@@ -8,6 +8,18 @@
 import type { Job } from "../api";
 import { useSettings } from "../settings";
 
+/*
+ * How far along, rounded down until it really is finished.
+ *
+ * Rounded the usual way, a pass on its last film out of three hundred and
+ * forty seven reads a hundred per cent while it still has a whole film to
+ * read: seen on the scan, where that last film was several minutes. A hundred
+ * per cent is said when it is a hundred per cent.
+ */
+function outOfAHundred(ratio: number): number {
+  return ratio >= 1 ? 100 : Math.min(99, Math.floor(ratio * 100));
+}
+
 export function JobLine({ job, onCancel }: { job: Job; onCancel?: () => void }) {
   const { t } = useSettings();
 
@@ -24,10 +36,10 @@ export function JobLine({ job, onCancel }: { job: Job; onCancel?: () => void }) 
       {job.ratio !== null ? (
         <>
           <span className="job-bar">
-            <span className="job-bar-fill" style={{ width: `${Math.round(job.ratio * 100)}%` }} />
+            <span className="job-bar-fill" style={{ width: `${outOfAHundred(job.ratio)}%` }} />
           </span>
           <span className="job-count">
-            {job.done} / {job.total} · {Math.round(job.ratio * 100)} %
+            {job.done} / {job.total} · {outOfAHundred(job.ratio)} %
           </span>
         </>
       ) : (
