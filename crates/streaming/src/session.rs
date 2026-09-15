@@ -468,7 +468,8 @@ impl Session {
         // at the eight hundredth segment and eight seconds in would have the
         // second and third segments of the film deleted from under a viewer.
         let wrote_up_to = Millis::new(self.playlist.start_of(from).get() + reached.get().max(0));
-        let mut index = self.playlist.segment_holding(wrote_up_to);
+        let first = self.playlist.segment_holding(wrote_up_to);
+        let mut index = first;
         while self.path_of(index).exists() {
             if let Err(error) = tokio::fs::remove_file(self.path_of(index)).await {
                 tracing::warn!(
@@ -480,6 +481,21 @@ impl Session {
                 return;
             }
             index += 1;
+        }
+        // Said out loud, because it is a removal nobody asked for: a viewer who
+        // goes back a minute has these taken away behind them, and a player
+        // that asks for one of them again finds it gone. Silently, that is a
+        // film stopping in the middle of itself with nothing anywhere to say
+        // why.
+        if index > first {
+            tracing::debug!(
+                session = %self.id,
+                from_index = first,
+                up_to_index = index - 1,
+                the_tool_was_set_going_at = from,
+                it_had_reached_ms = reached.get(),
+                "segments the stopped tool had not finished were taken away"
+            );
         }
     }
 
@@ -544,6 +560,17 @@ impl Session {
 
         let path = self.path_of(index);
         if path.exists() {
+            // The ordinary case, and the one the journal used to say nothing
+            // about: a film playing on writes nothing at all, so the order a
+            // player asked for its segments in could not be read anywhere. It
+            // is the first thing wanted when a film stops in the middle of
+            // itself, and one line per segment is a handful a minute.
+            tracing::debug!(
+                session = %self.id,
+                index,
+                at_second = self.playlist.start_of(index).as_seconds_f64(),
+                "a segment was handed over from what is already there"
+            );
             return Ok(path);
         }
 
@@ -689,7 +716,16 @@ impl Session {
         });
 
         let process = RunningProcess::start(&self.tools.ffmpeg, &command, Some(reports))?;
-        tracing::debug!(session = %self.id, index, "producing from here");
+        tracing::debug!(
+            session = %self.id,
+            index,
+            at_second = self.playlist.start_of(index).as_seconds_f64(),
+            // Not the same number: the tool is aimed at the middle of the
+            // segment so that it lands on the one picture wanted. The two
+            // being far apart would be a segment far longer than the rest.
+            tool_aimed_at_second = self.set_going_at(index).as_seconds_f64(),
+            "producing from here"
+        );
         *running = Some(AtWork {
             process,
             from: index,

@@ -1448,6 +1448,13 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
+/* A step back or on. Carries a number beside its arrow, so it is set smaller
+   than the marks that carry none. */
+.player-button-step {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .player-clock {
   font-variant-numeric: tabular-nums;
   font-size: 0.9rem;

@@ -252,6 +252,38 @@ export type PageSaw =
     }
   | {
       session: string;
+      saw: "viewer_jumped";
+      from_second: number;
+      to_second: number;
+      was_playing: boolean;
+    }
+  | {
+      session: string;
+      saw: "playback_stalled";
+      at_second: number;
+      /** The stretch the browser holds around that moment, when it holds one. */
+      held_from_second: number | null;
+      held_to_second: number | null;
+      /** How many separate stretches it holds. More than one means a hole. */
+      stretches: number;
+      ready_state: number;
+      pictures_shown: number;
+    }
+  | {
+      session: string;
+      saw: "playback_picked_up_again";
+      at_second: number;
+      waited_ms: number;
+    }
+  | {
+      session: string;
+      saw: "the_picture_stood_still";
+      at_second: number;
+      for_ms: number;
+      pictures_shown: number;
+    }
+  | {
+      session: string;
       saw: "playback_refused";
       /** Why the library gave up, in its own words. Cut short by the server. */
       because: string;
