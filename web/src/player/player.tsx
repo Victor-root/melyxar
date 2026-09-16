@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlaybackTrack, Preparation, Work } from "../api";
+import type { PlaybackTrack, Work } from "../api";
 import { useSettings } from "../settings";
 import {
   appearanceClasses,
@@ -43,23 +43,6 @@ import { rememberSettings, storedSettings } from "./settings";
 import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
 import "./player.css";
-
-/**
- * How far the server has got, from nought to a hundred.
- *
- * Held to what the server has actually said rather than nought until the
- * first answer arrives: a viewer watching a percentage jump backwards from
- * some earlier guess to nought would read that as a step backwards, and
- * nothing has gone backwards. Held to a hundred once the server is ahead of
- * what it asked for, for the same reason the count under the ring used to be
- * hidden then: past a hundred means nothing to read.
- */
-function preparingPercent(preparing: Preparation | null): number {
-  if (!preparing || preparing.wanted_seconds <= 0) {
-    return 0;
-  }
-  return Math.min(100, Math.round((preparing.ready_seconds / preparing.wanted_seconds) * 100));
-}
 
 /**
  * What to call a track in a list.
@@ -145,7 +128,7 @@ export function Player({
     rebuilt,
     failed,
     refusal,
-    preparing,
+    loadingPercent,
     pictureKey,
     readyPicture,
     words,
@@ -289,18 +272,18 @@ export function Player({
             </p>
           )}
 
-          {/* A ring turning, and a single number under it: how far the server
-              has got, from nought to a hundred, and nothing else. Four named
-              steps and a count of seconds against a count that kept moving
-              used to sit here, and none of it told a viewer anything they
-              could act on beyond "wait". One number that climbs to a hundred
-              and then the film starts is the whole of what waiting needs to
-              say. */}
+          {/* A ring turning, and a single number under it, climbing from
+              nought to a hundred and reaching it the same instant the picture
+              does. Built in the engine from the real moments on the way to a
+              playing film, not from how far the server alone has got: the
+              server can be finished with its own part and the film still be
+              seconds away on a slow connection, and a number that stopped
+              climbing there would be a number lying about what is left. */}
           {rebuilt && readyPicture !== pictureKey && !failed && (
             <div className="player-working">
               <Spinner />
               <p className="player-notice player-notice-bare">
-                {t("player.preparing_percent", { percent: preparingPercent(preparing) })}
+                {t("player.preparing_percent", { percent: Math.round(loadingPercent) })}
               </p>
             </div>
           )}
