@@ -189,6 +189,16 @@ export function usePlayback({
 }): Playback {
   const video = useRef<HTMLVideoElement>(null);
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
+  /* Which rung of the ladder the plan in hand answers for.
+     The plan and the quality are two halves of one question and they do not
+     arrive together: asked for a lighter picture, the answer for the old one
+     stays in hand for as long as the new one takes to come back. Read as a
+     pair in between, they describe a film nobody ever asked for, and the
+     server is told to produce it. Measured: one change of quality opened two
+     sessions, and the first was abandoned mid request, so the page never
+     learnt its name and the server rebuilt a film for nobody until it swept
+     it away. */
+  const [planFor, setPlanFor] = useState<string | null>(null);
   const [stream, setStream] = useState<PlaybackSession | null>(null);
   /* What to do to the library feeding the film in pieces while the viewer is
      moving the bar, and once they have finished. Held here rather than passed
@@ -272,7 +282,9 @@ export function usePlayback({
           opened.current = true;
           resumeAt.current = fromTheStart ? null : answer.resume_from_seconds;
         }
+        // Together, always: what is produced is decided on the two of them.
         setPlan(answer);
+        setPlanFor(quality.key);
         setFailed(null);
       })
       .catch((error) => {
@@ -299,7 +311,7 @@ export function usePlayback({
      must not throw away a conversion already under way and make the viewer
      wait through it again. */
   const beingProduced = rebuilt
-    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${quality.key}:${afresh}`
+    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${planFor ?? ""}:${afresh}`
     : null;
   /* Which picture is on screen: the file itself, or one session of segments.
      A change here means a fresh element rather than a new address on the old
@@ -324,24 +336,25 @@ export function usePlayback({
     }
     openedAt.current = Math.max(0, resumeAt.current ?? 0);
 
-    const controller = new AbortController();
+    /* Never given up on once it is out, unlike every other request here. The
+       server opens the session while the asking is in flight, and giving up
+       throws away the only copy of its name: the answer never arrives, the
+       page has nothing to close, and a media tool rebuilds a film for nobody
+       until the server sweeps the session away on its own. Waited for and
+       closed instead, which costs one round trip nobody is watching. */
     let gone = false;
 
     clientProfile(quality)
       .then((profile) =>
-        api.openSession(
-          sourceId,
-          {
-            // A subtitle is named only when it has to be painted into the
-            // picture. One made of words travels on its own beside it, and
-            // naming it here would rebuild the film for nothing.
-            profile,
-            audio_track_id: audioId,
-            subtitle_track_id: paintedIn,
-            start_at_seconds: openedAt.current,
-          },
-          controller.signal,
-        ),
+        api.openSession(sourceId, {
+          // A subtitle is named only when it has to be painted into the
+          // picture. One made of words travels on its own beside it, and
+          // naming it here would rebuild the film for nothing.
+          profile,
+          audio_track_id: audioId,
+          subtitle_track_id: paintedIn,
+          start_at_seconds: openedAt.current,
+        }),
       )
       .then((opening) => {
         if (gone) {
@@ -352,20 +365,28 @@ export function usePlayback({
         setStream(opening);
       })
       .catch((error) => {
-        if (!(error instanceof DOMException)) {
+        // A viewer who has moved on is not told about a film they left.
+        if (!gone) {
           setFailed(wording(error));
         }
       });
 
     return () => {
       gone = true;
-      controller.abort();
       if (session.current) {
         api.closeSession(session.current);
         session.current = null;
       }
     };
-  }, [beingProduced, sourceId, audioId, paintedIn, quality]);
+    /* What is being produced, and which film. Nothing else, and the other
+       four that used to sit here were the other half of the double opening:
+       every one of them is already inside what is being produced, except the
+       quality, which must not set this going on its own. A rung is picked,
+       the server is asked again what to do with the film at that rung, and
+       the answer is what says whether a new session is needed at all. Woken
+       by the rung itself, this ran once on the old answer and once on the
+       new, and the film played by neither. */
+  }, [beingProduced, sourceId]);
 
   /* A session is kept alive by being asked for something, which a film playing
      does every few seconds and a film paused never does. Without this, pausing
