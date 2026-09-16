@@ -639,7 +639,7 @@ function Seek({
   surroundings: Surroundings;
   thumbnails: PlaybackThumbnails | null;
 }) {
-  const { playback, t, chapters } = surroundings;
+  const { playback, t } = surroundings;
   const { at, length, loaded } = playback;
   const rail = useRef<HTMLDivElement>(null);
   /* Where the cursor is along the bar, from nought to one, while it is on it.
@@ -773,19 +773,6 @@ function Seek({
         <span className="player-rail-track" />
         <span className="player-rail-held" style={{ width: `${held * 100}%` }} />
         <span className="player-rail-played" style={{ width: `${played * 100}%` }} />
-        {/* Where the film changes scene. Drawn over the played part as well as
-            the rest, so the shape of the film stays readable all the way
-            through it. */}
-        {length > 0 &&
-          chapters
-            .filter((chapter) => chapter.at_second > 0 && chapter.at_second < length)
-            .map((chapter) => (
-              <span
-                key={chapter.at_second}
-                className="player-rail-chapter"
-                style={{ left: `${(chapter.at_second / length) * 100}%` }}
-              />
-            ))}
         <span className="player-rail-handle" style={{ left: `${played * 100}%` }} />
       </div>
 

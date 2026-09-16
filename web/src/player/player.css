@@ -51,8 +51,6 @@
      the compositor and runs smoothly whatever the machine is doing, while a
      height is a fresh layout on every frame. */
   --player-handle-grow: 1.5;
-  --player-chapter-across: 2px;
-  --player-chapter-down: 14px;
 
   /* Buttons, and the one they are arranged around. The ring is how far inside
      the button the line a hand lights up is drawn: the button is the size a
@@ -453,20 +451,6 @@
   background: var(--accent);
 }
 
-/* Where the film changes scene. Over everything else so the shape of a film
-   stays readable through the part already watched. */
-.player-rail-chapter {
-  position: absolute;
-  z-index: 1;
-  width: var(--player-chapter-across);
-  height: var(--player-chapter-down);
-  margin-left: calc(var(--player-chapter-across) / -2);
-  border-radius: 1px;
-  background: hsla(0, 0%, 100%, 0.85);
-  pointer-events: none;
-  transition: height var(--quick) var(--ease);
-}
-
 /* A rounded white rectangle riding the bar, not a dot: it reads as a place in
    the film rather than as a knob, and it is what the maintainer's theme draws.
 
@@ -501,11 +485,6 @@
 .player-rail:focus-visible .player-rail-held,
 .player-rail:focus-visible .player-rail-played {
   height: var(--player-rail-hovered);
-}
-
-.player-rail:hover .player-rail-chapter,
-.player-rail:focus-visible .player-rail-chapter {
-  height: calc(var(--player-chapter-down) + 4px);
 }
 
 .player-rail:hover .player-rail-handle,
