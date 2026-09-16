@@ -311,7 +311,7 @@ const en: Dictionary = {
   "player.step.reading": "Reading the film...",
   "player.step.producing": "Preparing the first few seconds...",
   "player.step.ready": "Starting...",
-  "player.seconds_ready": "{ready} s of film ready out of {wanted}",
+  "player.seconds_ready": "{ready} of {wanted} seconds ready",
 
   "player.subtitle_size": "Subtitle size",
   "player.subtitle_size.small": "Small",
@@ -670,7 +670,7 @@ const fr: Dictionary = {
   "player.step.reading": "Lecture du film...",
   "player.step.producing": "Préparation des premières secondes...",
   "player.step.ready": "Démarrage...",
-  "player.seconds_ready": "{ready} s de film prêtes sur {wanted}",
+  "player.seconds_ready": "{ready} secondes prêtes sur {wanted}",
 
   "player.subtitle_size": "Taille des sous-titres",
   "player.subtitle_size.small": "Petite",
