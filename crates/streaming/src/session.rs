@@ -31,6 +31,21 @@ use crate::{Result, StreamingError};
 /// request for what is nearly ready waits. Beyond this, the viewer has jumped.
 const WORTH_WAITING_FOR: u32 = 6;
 
+/// How many steps of exactly one segment backwards, one after another, are a
+/// player walking rather than a viewer jumping.
+///
+/// A viewer drags the cursor and lands anywhere; a player that asks for the
+/// segment immediately before the one the tool was just set going on is
+/// reaching behind what it holds, and a player that does it twice running is
+/// walking backwards and will keep going. Read in the maintainer's journal:
+/// sixty five of those in twenty two seconds, each one stopping the tool and
+/// starting it again for a single segment, and nothing to watch throughout.
+///
+/// The first step is answered where it asks, because it costs one segment and
+/// may be all the player wanted. From the second on, the run covers the
+/// stretch being walked into, so the steps after it are already on the disk.
+const A_WALK_BACKWARDS: u32 = 2;
+
 /// How long a segment is waited for before the answer is that it is too slow.
 ///
 /// Long enough for a slow first segment on a busy machine, short enough that a
@@ -180,6 +195,33 @@ fn already_on_its_way(from: u32, written_to: u32, index: u32) -> bool {
     index >= from && index < written_to.max(from) + WORTH_WAITING_FOR
 }
 
+/// How many steps backwards in a row this request makes, given the run it is
+/// about to replace.
+///
+/// One step is the segment immediately before where that run was set going.
+/// Anything else, forwards or a real jump, is not a step and starts the count
+/// again.
+fn steps_back_after(from: u32, steps_back: u32, index: u32) -> u32 {
+    match index + 1 == from {
+        true => steps_back + 1,
+        false => 0,
+    }
+}
+
+/// Where to set the tool going for a request that has made this many steps
+/// backwards in a row.
+///
+/// Where it asks, until the steps say the player is walking. From there the
+/// run begins a handful earlier, so that the segment asked for and the ones
+/// the player is about to ask for all come out of one run. It costs the walk
+/// one longer wait and saves it every restart after that.
+fn where_to_begin(index: u32, steps_back: u32) -> u32 {
+    match steps_back >= A_WALK_BACKWARDS {
+        true => index.saturating_sub(WORTH_WAITING_FOR),
+        false => index,
+    }
+}
+
 /// Which step a running tool is on, from what it has produced so far.
 fn step_for(ready: u32, wanted: u32) -> PreparationStep {
     if ready >= wanted {
@@ -250,6 +292,13 @@ struct AtWork {
     /// The segment number it was started on, so a request can tell whether it
     /// is ahead of the tool or somewhere else entirely.
     from: u32,
+    /// How many steps of one segment backwards, one after another, led to this
+    /// run being started.
+    ///
+    /// Carried from run to run because that is the only place the shape of a
+    /// walk lives: each request on its own is just a segment somewhere else in
+    /// the film.
+    steps_back: u32,
     /// The moment it was set going, which is what tells its own files apart
     /// from the ones an earlier run left in the same folder.
     ///
@@ -596,6 +645,15 @@ impl Session {
     /// because the account arrives every tenth of a second while the tool
     /// works at thirty times real time, and taking it at its word threw away
     /// whole minutes of finished film on every jump.
+    ///
+    /// Being the newest is not on its own a reason to remove it: a run that
+    /// reached the end of the film, or that closed the segment it was on an
+    /// instant before it was stopped, left a whole file there. The file's own
+    /// shape is what says which it is, as it does everywhere else here, and
+    /// the tool is already stopped by the time it is asked, so nothing is
+    /// growing under the question. Read in the maintainer's journal: a run
+    /// that had produced the film to its last segment, stopped, and the last
+    /// segment of the film taken away as if it had been caught mid write.
     async fn remove_what_was_half_written(&self, from: u32, began_at: SystemTime) {
         let mut newest = None;
         let mut index = from;
@@ -606,6 +664,9 @@ impl Session {
         let Some(newest) = newest else {
             return;
         };
+        if self.finished_being_written(newest).await {
+            return;
+        }
 
         if let Err(error) = tokio::fs::remove_file(self.path_of(newest)).await {
             tracing::warn!(
@@ -805,6 +866,12 @@ impl Session {
         // Either nothing is running, or what is running is working on another
         // part of the film. A viewer who jumped is not waiting for the piece
         // in between to be produced first.
+        let steps_back = match running.as_ref() {
+            Some(at_work) => steps_back_after(at_work.from, at_work.steps_back, index),
+            None => 0,
+        };
+        let begin_at = where_to_begin(index, steps_back);
+
         let stopping = Instant::now();
         if let Some(at_work) = running.take() {
             // Stopped where it stands rather than asked to finish. Everything
@@ -820,7 +887,7 @@ impl Session {
         let stopping = stopping.elapsed();
 
         let starting = Instant::now();
-        let command = self.command_from(index);
+        let command = self.command_from(begin_at);
 
         // The tool is asked to say where it has got to, and one task keeps the
         // latest answer. That answer is what lets a finished segment be handed
@@ -875,16 +942,22 @@ impl Session {
         tracing::debug!(
             session = %self.id,
             index,
-            at_second = self.playlist.start_of(index).as_seconds_f64(),
+            // Where the run begins, which is the segment asked for unless the
+            // player is walking backwards and is being given the stretch it is
+            // walking into.
+            set_going_at = begin_at,
+            steps_back,
+            at_second = self.playlist.start_of(begin_at).as_seconds_f64(),
             // Not the same number: the tool is aimed at the middle of the
             // segment so that it lands on the one picture wanted. The two
             // being far apart would be a segment far longer than the rest.
-            tool_aimed_at_second = self.set_going_at(index).as_seconds_f64(),
+            tool_aimed_at_second = self.set_going_at(begin_at).as_seconds_f64(),
             "producing from here"
         );
         *running = Some(AtWork {
             process,
-            from: index,
+            from: begin_at,
+            steps_back,
             began_at,
             reached,
             speed,
@@ -2292,6 +2365,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_player_walking_backwards_stops_the_tool_once_and_not_once_a_segment() {
+        // The freeze this comes from: a player asking for the segment before
+        // the one the tool had just been set going on, over and over, sixty
+        // five times running. Answered each one where it asked, that is sixty
+        // five tools started and stopped for one segment each, and a film
+        // frozen on the screen the whole time.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = a_session_still_at_work(directory.path()).await;
+
+        // A viewer well into the film, which is where going back means
+        // anything at all.
+        session.segment(40).await.expect("the segment jumped to");
+        assert_eq!(producing_from(&session).await, Some(40));
+
+        // The rule is asked directly rather than through requests for the
+        // segments: a request produces film, and how long this machine takes
+        // to do that has nothing to say about where the tool is set going.
+        session
+            .make_sure_someone_is_producing(39)
+            .await
+            .expect("the first step back is answered");
+        assert_eq!(
+            producing_from(&session).await,
+            Some(39),
+            "one step back may be all the player wanted, so it is answered where it asks"
+        );
+
+        session
+            .make_sure_someone_is_producing(38)
+            .await
+            .expect("the second step back is answered");
+        assert_eq!(
+            producing_from(&session).await,
+            Some(38 - WORTH_WAITING_FOR),
+            "a second step running is a walk, and the run covers the stretch it walks into"
+        );
+
+        for step in (38 - WORTH_WAITING_FOR..38).rev() {
+            let started_again = session
+                .make_sure_someone_is_producing(step)
+                .await
+                .expect("the request is answered");
+            assert!(
+                started_again.is_none(),
+                "segment {step} is inside the run already going, so nothing is started again"
+            );
+        }
+        assert_eq!(
+            producing_from(&session).await,
+            Some(38 - WORTH_WAITING_FOR),
+            "and the walk was served by the one tool throughout"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
     async fn jumping_ahead_starts_the_tool_where_the_viewer_landed() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let session = a_session_still_at_work(directory.path()).await;
@@ -2372,6 +2501,86 @@ mod tests {
             !already_on_its_way(514, 600, 513),
             "behind where the tool was set going is a viewer who went back"
         );
+    }
+
+    #[test]
+    fn stepping_back_once_is_answered_where_it_asks_and_walking_is_answered_ahead_of_itself() {
+        // What this cost, read in the maintainer's journal: a player asking
+        // for the segment before the one the tool had just been set going on,
+        // sixty five times in a row, twenty two seconds of a film frozen on
+        // the screen with the tool stopped and started again for every single
+        // one of them.
+        assert_eq!(steps_back_after(579, 0, 578), 1, "the first step back");
+        assert_eq!(steps_back_after(578, 1, 577), 2, "and the one after it");
+        assert_eq!(steps_back_after(577, 2, 576), 3, "and it keeps going");
+        assert_eq!(
+            steps_back_after(579, 3, 590),
+            0,
+            "forwards is not a step back, however many came before"
+        );
+        assert_eq!(
+            steps_back_after(579, 3, 100),
+            0,
+            "and neither is a viewer dragging the cursor somewhere else"
+        );
+
+        assert_eq!(
+            where_to_begin(578, 1),
+            578,
+            "one step may be all the player wanted, and it is the cheapest answer"
+        );
+        assert_eq!(
+            where_to_begin(577, 2),
+            577 - WORTH_WAITING_FOR,
+            "a second step running is a walk, and the stretch it walks into comes out of one run"
+        );
+        assert_eq!(
+            where_to_begin(2, 4),
+            0,
+            "a walk that reaches the beginning of the film stops there"
+        );
+        assert_eq!(where_to_begin(1107, 0), 1107, "a jump asks where it asks");
+    }
+
+    #[tokio::test]
+    async fn a_segment_the_stopped_tool_had_finished_is_left_where_it_is() {
+        // Read in the maintainer's journal: a run that had produced the film
+        // all the way to its last segment, stopped so that a jump could be
+        // served, and the last segment of the film taken away with it. Nothing
+        // was half written, and a viewer going to the end paid for it.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = session_of(directory.path(), 600).await;
+        let write = |index: u32, bytes: &[u8]| {
+            std::fs::write(session.folder().join(format!("segment-{index}.m4s")), bytes)
+                .expect("a segment on disk")
+        };
+
+        for index in 100..103 {
+            write(index, &a_finished_segment());
+        }
+        session
+            .remove_what_was_half_written(100, a_moment_ago())
+            .await;
+        for kept in 100..103 {
+            assert!(
+                session
+                    .folder()
+                    .join(format!("segment-{kept}.m4s"))
+                    .exists(),
+                "segment {kept} ends where its last box does, so nobody was inside it"
+            );
+        }
+
+        // And the segment that really was caught halfway is still taken away.
+        write(103, &a_segment_still_being_written());
+        session
+            .remove_what_was_half_written(100, a_moment_ago())
+            .await;
+        assert!(
+            !session.folder().join("segment-103.m4s").exists(),
+            "it stops in the middle of its own picture data, so it would be served truncated"
+        );
+        session.close().await;
     }
 
     /// Where a produced segment says it belongs in the film, read back from
