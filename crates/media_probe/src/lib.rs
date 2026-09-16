@@ -517,7 +517,10 @@ mod tests {
         match &file.tracks[0].kind {
             TrackKind::Video(video) => {
                 assert_eq!(video.margins, None);
-                assert_eq!((video.visible_width(), video.visible_height()), (1920, 1080));
+                assert_eq!(
+                    (video.visible_width(), video.visible_height()),
+                    (1920, 1080)
+                );
             }
             other => panic!("expected a video track, got {other:?}"),
         }
