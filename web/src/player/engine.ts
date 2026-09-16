@@ -186,6 +186,15 @@ export interface Playback {
   loudness: number;
   /** Whether the words are on their way, and whether they never came. */
   words: "coming" | "refused" | null;
+  /** Whether this viewer has marked the film as one they like. */
+  favourite: boolean;
+  setFavourite: (liked: boolean) => void;
+  /** Whether the film starts again by itself when it ends. */
+  repeat: boolean;
+  setRepeat: (on: boolean) => void;
+  /** How far the words are shifted, in seconds. Positive is later. */
+  wordsOffset: number;
+  setWordsOffset: (seconds: number) => void;
   /** Put on the element carrying the words, whenever there is one. */
   holdTheWords: (element: HTMLTrackElement | null) => void;
   /** Says what to do to the words the instant they are read.
@@ -261,6 +270,22 @@ export function usePlayback({
      listener below is attached once per element and must not have to be
      replaced every time a viewer changes how the words look. */
   const placeTheWords = useRef<() => void>(() => {});
+  /* Whether this viewer likes the film, and whether the film starts itself
+     again when it ends. Both begin as the server's answer and are then this
+     page's to change. */
+  const [favourite, setFavouriteState] = useState(false);
+  /* Whether the server has ever said, which is not the same as it having said
+     no: before the first answer the button is simply unlit. */
+  const favouriteKnown = useRef<boolean | null>(null);
+  const [repeat, setRepeatState] = useState(false);
+  /* How far the words are shifted against the picture, in seconds, and how far
+     they are shifted at this moment.
+     The two are not the same number for as long as it takes a cue to be told,
+     and the difference is what is applied: cues carry their own times and
+     there is nowhere to keep the originals, so each change moves them by the
+     step rather than setting them to a total. */
+  const [wordsOffset, setWordsOffsetState] = useState(0);
+  const wordsShiftedBy = useRef(0);
   /* How many times the session has been opened again from nothing. Counted
      rather than flagged because it is what makes the film reopen at all: the
      session is opened by an effect, and an effect only runs again when
@@ -337,6 +362,13 @@ export function usePlayback({
         // Together, always: what is produced is decided on the two of them.
         setPlan(answer);
         setPlanFor(quality.key);
+        // Only from the first answer. Later ones carry the same mark, and the
+        // viewer may have pressed the button since: taking the server's word
+        // again would undo it in front of them.
+        if (!opened.current || favouriteKnown.current === null) {
+          favouriteKnown.current = answer.favourite;
+          setFavouriteState(answer.favourite);
+        }
         setFailed(null);
       })
       .catch((error) => {
@@ -797,14 +829,46 @@ export function usePlayback({
     }
   }, []);
 
-  /* The words are in: put where the viewer wants them before anything is
-     drawn, and the notice saying they were on their way comes down. In that
-     order, because the other way round shows one frame of words wherever the
-     browser felt like putting them. */
+  /* Moves every word that is on the element by this many seconds.
+     On the cues themselves rather than on the element: the words are a track
+     of their own with its own clock, and a film whose subtitles run early is a
+     film whose picture is right. */
+  const shiftTheWords = useCallback((by: number) => {
+    const tracks = video.current?.textTracks;
+    if (!tracks || by === 0) {
+      return;
+    }
+    for (const track of Array.from(tracks)) {
+      for (const cue of Array.from(track.cues ?? [])) {
+        cue.startTime = Math.max(0, cue.startTime + by);
+        cue.endTime = Math.max(0, cue.endTime + by);
+      }
+    }
+  }, []);
+
+  const setWordsOffset = useCallback(
+    (seconds: number) => {
+      shiftTheWords(seconds - wordsShiftedBy.current);
+      wordsShiftedBy.current = seconds;
+      setWordsOffsetState(seconds);
+    },
+    [shiftTheWords],
+  );
+
+  /* The words are in: shifted to wherever this viewer had already put them,
+     put where they want them on the picture, and the notice saying they were
+     on their way comes down. In that order, because the other way round shows
+     one frame of words in the wrong place or at the wrong moment.
+
+     A fresh set of cues arrives unshifted however far the last set was moved,
+     so the shift is applied from nothing rather than carried over. */
   const wereRead = useCallback(() => {
+    wordsShiftedBy.current = 0;
+    shiftTheWords(wordsOffset);
+    wordsShiftedBy.current = wordsOffset;
     placeTheWords.current();
     setWords(null);
-  }, []);
+  }, [shiftTheWords, wordsOffset]);
   const neverCame = useCallback(() => setWords("refused"), []);
 
   /* Waited for on the element carrying the words, and attached again whenever
@@ -918,6 +982,29 @@ export function usePlayback({
     setReadyPicture(pictureKey);
   }, [speed, pictureKey, goTo]);
 
+  /* What the server said when the film was asked for, and this page's answer
+     from then on. Told to the server and kept whatever it says back: a mark
+     that could not be saved is worth a button that stays where the viewer put
+     it rather than one that springs back under their hand. */
+  const setFavourite = useCallback(
+    (liked: boolean) => {
+      setFavouriteState(liked);
+      api.setFavourite(workId, liked).catch(() => {
+        // Said nowhere: it is a mark on a film, and interrupting somebody
+        // watching one to report it would cost more than it is worth.
+      });
+    },
+    [workId],
+  );
+
+  const setRepeat = useCallback((on: boolean) => {
+    setRepeatState(on);
+    const element = video.current;
+    if (element) {
+      element.loop = on;
+    }
+  }, []);
+
   const notePictureRefused = useCallback((refused: MediaError | null) => {
     setFailed("player.cannot_play");
     setRefusal(refused ? `${refused.code} · ${refused.message || "no reason given"}` : null);
@@ -955,6 +1042,8 @@ export function usePlayback({
     const wanted = storedLoudness();
     element.volume = wanted.volume;
     element.muted = wanted.muted;
+    // A fresh element does not carry what the viewer asked of the last one.
+    element.loop = repeat;
     const tell = () => {
       setAt(element.currentTime);
       setLength(Number.isFinite(element.duration) ? element.duration : 0);
@@ -1003,7 +1092,7 @@ export function usePlayback({
       element.removeEventListener("ended", report);
       element.removeEventListener("error", refused);
     };
-  }, [pictureKey, onPictureReady, report, notePictureRefused]);
+  }, [pictureKey, onPictureReady, report, notePictureRefused, repeat]);
 
   return {
     video,
@@ -1038,6 +1127,12 @@ export function usePlayback({
     words,
     holdTheWords,
     onWordsRead,
+    favourite,
+    setFavourite,
+    repeat,
+    setRepeat,
+    wordsOffset,
+    setWordsOffset,
     intoTheCorner,
   };
 }

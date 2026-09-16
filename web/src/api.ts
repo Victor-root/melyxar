@@ -712,6 +712,10 @@ export const api = {
    * twice in a second cannot end up saying one thing while the server says
    * another.
    */
+  /** What the server calls itself and the mark it was given. Answered without
+   *  an account, which is what lets a sign-in page carry them. */
+  branding: () =>
+    get<{ server_name: string; logo_path: string | null }>("/api/v1/public/branding"),
   setFavourite: (work: string, favourite: boolean) =>
     put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
   openSession: (source: string, body: unknown, signal?: AbortSignal) =>

@@ -1259,359 +1259,46 @@
 
 
 /* --------------------------------------------------------------------------
- * The player
- *
- * Black, edge to edge, and nothing else on screen. A film is the one thing
- * here that wants the whole surface, and every pixel of interface beside it
- * is a pixel of film missing.
+ * The settings
  * ----------------------------------------------------------------------- */
 
-.player {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  background: #000;
+.settings-block {
+  margin-bottom: var(--gap-section);
+  padding-bottom: var(--gap-wide);
+  border-bottom: 1px solid var(--border);
 }
 
-.player-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  padding: var(--gap-tight) var(--gap);
-  color: #fff;
+.settings-block:last-child {
+  border-bottom: none;
 }
 
-.player-title {
-  font-weight: 600;
+.settings-block h2 {
+  margin: 0 0 var(--gap-tight);
+  font-size: 17px;
+  font-weight: 650;
 }
 
-/* The picture and the bar under it, together.
- *
- * One box rather than two because this is what goes fullscreen: a video element
- * sent fullscreen on its own leaves every control behind it, on a page nobody
- * can see any more. */
-.player-stage {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: #000;
+/* Why a setting exists, in one line. Faint on purpose: it answers a question
+   somebody only asks once. */
+.settings-why {
+  margin: 0 0 var(--gap);
+  color: var(--text-faint);
+  font-size: 13px;
+  max-width: 62ch;
 }
 
-.player-video {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  background: #000;
-}
-
-/* The bar, drawn here rather than by the browser.
- *
- * Every value in it is fixed rather than taken from the theme: it sits on top
- * of a film, not on top of a page, and a light theme does not make a night
- * scene any brighter. */
-/* On top of the picture rather than beside it, and out of the way when nothing
-   is moving: a bar that takes a strip of its own leaves that strip black in
-   fullscreen, for the whole film. */
-.player-controls {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  transition: opacity var(--calm) var(--ease);
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-tight);
-  padding: var(--gap-tight) var(--gap) var(--gap);
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.35));
-  color: #fff;
-}
-
-/* The bar itself. Tall enough to be caught by a moving cursor without the
-   picture losing the room: the part that shows is thinner than the part that
-   answers. */
-.player-controls-away {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.player-rail {
-  position: relative;
-  height: 18px;
-  cursor: pointer;
-  touch-action: none;
-}
-
-.player-rail::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 7px;
-  height: 4px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.25);
-}
-
-.player-rail-loaded,
-.player-rail-played {
-  position: absolute;
-  left: 0;
-  top: 7px;
-  height: 4px;
-  border-radius: var(--radius-pill);
-}
-
-/* What the browser already holds, which is what says whether a jump will be
-   instant or a wait. The browser's own bar showed it and losing it would be a
-   step backwards. */
-.player-rail-loaded {
-  background: rgba(255, 255, 255, 0.4);
-}
-
-.player-rail-played {
-  background: var(--accent);
-}
-
-.player-rail-handle {
-  position: absolute;
-  top: 3px;
-  width: 12px;
-  height: 12px;
-  margin-left: -6px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-}
-
-.player-rail:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* The picture of the moment under the cursor, standing above the bar and
-   following it. Kept clear of the pointer so it never swallows a click.
-   Measured from the top of the bar rather than from the bottom of the row of
-   controls: the row is as tall as whatever is in it, and a fixed height put
-   the bar straight through the time. */
-.player-preview {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  pointer-events: none;
-  /* Inside the bar at both ends rather than half off the screen. */
-  max-width: 100%;
-}
-
-.player-preview-picture {
-  display: block;
-  border-radius: var(--radius-control);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background-repeat: no-repeat;
-  box-shadow: var(--shadow-raised);
-}
-
-.player-preview-time {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.85rem;
-  padding: 1px 6px;
-  border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.75);
-}
-
-.player-buttons {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-}
-
-.player-button {
-  border: 0;
-  background: transparent;
-  color: #fff;
-  font-size: 1.1rem;
-  line-height: 1;
-  padding: 4px 6px;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-}
-
-.player-button:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-/* Held down while the panel it opens is open. */
-.player-button-on {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-/* What is happening to this film, over the top right of the picture.
- *
- * Over rather than beside: it is read while the film plays, and a panel that
- * pushed the picture aside would change the very thing being looked at.
- *
- * It is read at a glance, so it has to be there at a glance: the whole of it
- * on screen at once, never a thing to scroll through. It grows sideways
- * instead, its blocks falling into as many columns as the picture has room
- * for. The scroll is still underneath for a window too short to hold even
- * that, which is the one case where showing half beats showing none. */
-.facts {
-  position: absolute;
-  top: var(--gap);
-  right: var(--gap);
-  z-index: 2;
-  width: min(40rem, calc(100% - 2 * var(--gap)));
-  max-height: calc(100% - 2 * var(--gap));
-  overflow-y: auto;
-  padding: var(--gap-tight) var(--gap) var(--gap);
-  border-radius: var(--radius-card);
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
-  font-size: 0.8rem;
-  box-shadow: var(--shadow-raised);
-}
-
-.facts-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gap-tight);
-  margin-bottom: 2px;
-}
-
-/* Columns of a width rather than of a count, so one rule gives two of them on
-   a film playing full screen and one on a telephone. A block is never split
-   down the middle: half a heading in one column and its lines in the next
-   reads as two answers to two questions. */
-.facts-blocks {
-  columns: 17rem;
-  column-gap: var(--gap);
-}
-
-.facts-block {
-  margin-top: var(--gap-tight);
-  break-inside: avoid;
-}
-
-/* The block whose answer is a sentence rather than a value stands across the
-   top, and the columns start under it. Measured: shut inside a column of its
-   own it wrapped six lines deep and set the height of everything beside it. */
-.facts-block-across {
-  column-span: all;
-  margin-top: 0;
-}
-
-/* A window with no room downwards has it sideways. The panel takes the width
-   it is given and cuts it into narrower columns, which is the same answer as
-   above carried one step further rather than a second layout. With that much
-   width the sentence fits in a column like anything else, and standing across
-   the top would only stop the rest balancing. */
-@media (max-height: 40rem) {
-  .facts {
-    width: calc(100% - 2 * var(--gap));
-  }
-
-  .facts-blocks {
-    columns: 13rem;
-  }
-
-  .facts-block-across {
-    column-span: none;
-    margin-top: var(--gap-tight);
-  }
-}
-
-.facts-block h3 {
-  margin: 0 0 2px;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  opacity: 0.6;
-}
-
-/* The name on the left and what it is on the right, wrapping under rather than
-   squeezing: several of these are long, and a value cut in half says nothing. */
-.facts-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--gap-tight);
-  padding: 1px 0;
-}
-
-/* A fixed column rather than a minimum, so every value starts at the same
-   place: a panel read by eye is read down its values, and names of different
-   lengths would put each one somewhere else. A long name wraps inside its
-   column rather than pushing the value across. */
-.facts-name {
-  opacity: 0.6;
-  flex: 0 0 7rem;
-}
-
-.facts-is {
-  flex: 1;
-  min-width: 7rem;
-}
-
-/* The machine is producing the film more slowly than it plays, which is the
-   one thing on this panel that is about to become a stopped picture. Said in
-   the colour the rest of the interface uses for news, and said in the number
-   as well, so it does not rest on a colour alone. */
-.facts-behind {
-  color: var(--accent-bright);
-  font-weight: 600;
-}
-
-/* A step back or on. Carries a number beside its arrow, so it is set smaller
-   than the marks that carry none. */
-.player-button-step {
-  font-size: 0.9rem;
+.settings-value {
+  margin-left: var(--gap-tight);
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
-.player-clock {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.9rem;
-}
-
-.player-clock-total {
-  opacity: 0.7;
-}
-
-/* The sound, and nothing else, is pushed to the far end: what is left of the
-   row is where anything added later goes. */
-.player-sound {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
-}
-
-.player-loudness {
-  width: 90px;
-  accent-color: var(--accent);
-}
-
-/* How the subtitles look.
- *
- * A browser draws them inside the video itself, so the only way in is the cue
- * pseudo element. Each choice says one thing and nothing else, so the five of
- * them combine without any combination needing a rule of its own.
- *
- * Every rule also names the sample on the settings page, so the two are one
- * declaration rather than two lists of values that drift apart. It is written
- * as a second selector rather than as a variable the cue reads, because what a
- * cue inherits from the page around it is not something to rely on.
- *
- * Every value here is fixed rather than derived from the theme: these words sit
- * on top of a film, not on top of a page, and a dark theme does not make a
- * night scene any brighter. */
+/* The words as they will appear, over something dark enough to judge them
+   against: a size named "very large" means nothing until it is seen.
+   Proportions of the box rather than fixed heights, so the words sit where
+   they would on a picture of any size. */
+/* How a subtitle looks, shared by the player that shows them and the
+   setting that previews them: one design, described once. */
 .player-video::cue,
 .subtitle-sample-words {
   background: transparent;
@@ -1687,86 +1374,6 @@
   background: #000;
 }
 
-/* What the viewer can change while watching: the soundtrack, the subtitles,
-   the speed. Under the picture rather than over it, so nothing is hidden
-   behind a panel that has to be opened first. */
-.player-choices {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gap);
-  padding: var(--gap-tight) var(--gap);
-  color: #fff;
-}
-
-.player-choices .choice-label {
-  color: color-mix(in srgb, #fff 60%, transparent);
-}
-
-.player-choices select {
-  background: #1a1a1a;
-  border-color: #333;
-  color: #fff;
-}
-
-.player-choices .toggle {
-  background: #1a1a1a;
-  border-color: #333;
-  color: #fff;
-}
-
-/* Why the film is reaching this browser the way it is. Faint on purpose: it
-   answers a question a viewer only asks when something looks wrong. */
-.player-why {
-  padding: var(--gap-tight) var(--gap) var(--gap);
-  color: color-mix(in srgb, #fff 55%, transparent);
-  font-size: 13px;
-}
-
-.player-reasons {
-  display: block;
-  color: color-mix(in srgb, #fff 40%, transparent);
-}
-
-/* --------------------------------------------------------------------------
- * The settings
- * ----------------------------------------------------------------------- */
-
-.settings-block {
-  margin-bottom: var(--gap-section);
-  padding-bottom: var(--gap-wide);
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-block:last-child {
-  border-bottom: none;
-}
-
-.settings-block h2 {
-  margin: 0 0 var(--gap-tight);
-  font-size: 17px;
-  font-weight: 650;
-}
-
-/* Why a setting exists, in one line. Faint on purpose: it answers a question
-   somebody only asks once. */
-.settings-why {
-  margin: 0 0 var(--gap);
-  color: var(--text-faint);
-  font-size: 13px;
-  max-width: 62ch;
-}
-
-.settings-value {
-  margin-left: var(--gap-tight);
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
-/* The words as they will appear, over something dark enough to judge them
-   against: a size named "very large" means nothing until it is seen.
-   Proportions of the box rather than fixed heights, so the words sit where
-   they would on a picture of any size. */
 .subtitle-sample {
   position: relative;
   aspect-ratio: 16 / 5;

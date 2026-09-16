@@ -1,16 +1,14 @@
 /*
- * The player: what a viewer sees and touches.
+ * The player: the picture, and what is drawn over it.
  *
  * Everything that plays the film lives next door in the engine, and this knows
- * none of it. It is handed what is being played, what went wrong, and what to
- * call when a hand lands on the bar, and its whole job is where that goes on
- * screen. The two were one file for a long time, which meant that moving a
- * button was a change to the thing that plays the film; now this one can be
- * rewritten from nothing without the film noticing.
+ * none of it. It is handed what is being played and what went wrong, and its
+ * whole job is what appears on screen.
  *
- * What is still decided here is what belongs to looking rather than to
- * playing: how the words are dressed and where they sit, what the keyboard
- * does, and which of the panels is open.
+ * What is left here is the picture itself, the few notices that stand in front
+ * of it before there is anything to watch, how the words are dressed, and
+ * which panel is open. Everything a hand touches is in the overlay beside
+ * this, laid out from an arrangement rather than written into either file.
  *
  * Nothing here touches the film. Not the bar, not the sound, not the button
  * that starts it: every one of those asks the engine, which is the only thing
@@ -33,24 +31,25 @@ import {
   storedAppearance,
 } from "./appearance";
 import type { Appearance } from "./appearance";
-import { Controls } from "./controls";
-import { A_STEP, canBePlayedAsItIs, SPEEDS, usePlayback } from "./engine";
+import { storedArrangement } from "./arrangement";
+import { canBePlayedAsItIs, usePlayback } from "./engine";
 import { PlaybackFacts } from "./facts";
 import { languageName } from "./languages";
-import { QUALITIES, qualityName } from "./quality";
+import { markFor, useBranding } from "./logo";
+import { Overlay } from "./overlay";
+import type { Panel, Shape } from "./overlay";
+import { rememberSettings, storedSettings } from "./settings";
+import type { PlayerSettings } from "./settings";
+import "./player.css";
 
 /**
- * What to call a track in a picker.
+ * What to call a track in a list.
  *
  * The language first, since that is what a viewer is looking for, then what
  * the file itself calls it when it says something, and the number of channels
  * when there is more than a pair.
  */
-function trackName(
-  track: PlaybackTrack,
-  t: (key: string) => string,
-  speaking: string,
-): string {
+function trackName(track: PlaybackTrack, t: (key: string) => string, speaking: string): string {
   const parts = [
     track.language ? languageName(track.language, speaking) : t("player.unknown_language"),
   ];
@@ -89,8 +88,8 @@ function Choice<T extends string>({
   t: (key: string) => string;
 }) {
   return (
-    <label className="choice">
-      <span className="choice-label">{label}</span>
+    <label className="player-choice">
+      <span className="player-choice-label">{label}</span>
       <select value={value} onChange={(event) => onPick(event.target.value as T)}>
         {among.map((one) => (
           <option key={one} value={one}>
@@ -128,59 +127,45 @@ export function Player({
     preparing,
     pictureKey,
     readyPicture,
-    audioId,
-    subtitleId,
-    quality,
-    speed,
-    stepBy,
     words,
     holdTheWords,
     onWordsRead,
     playOrPause,
-    intoTheCorner,
   } = playback;
 
-  /* What is sent fullscreen. The bar is ours now, so it has to come with the
-     picture: a video element sent fullscreen on its own leaves every control
-     behind it on a page nobody can see. */
+  /* What is sent fullscreen: the picture and everything drawn over it. An
+     element sent on its own leaves every control behind on a page nobody can
+     see. */
   const stage = useRef<HTMLDivElement>(null);
-  /* Whether the panel saying what is happening to this film is open. Shut
-     between films: it is opened to look at one film in particular. */
-  const [factsOpen, setFactsOpen] = useState(false);
+  /* Which panel is open, if any. Shut between films: one is opened to look at
+     one film in particular. */
+  const [panel, setPanel] = useState<Panel | null>(null);
   const [appearance, setAppearanceState] = useState<Appearance>(storedAppearance);
+  const [settings, setSettingsState] = useState<PlayerSettings>(storedSettings);
+  /* How the picture is fitted. Not remembered between films on purpose: it
+     answers one film that was mastered oddly, not a standing preference. */
+  const [shape, setShape] = useState<Shape>("auto");
+  /* Where each control sits. Read once: nothing writes one yet, and the day a
+     settings screen does, this is the line that starts listening. */
+  const [arrangement] = useState(storedArrangement);
+  const branding = useBranding();
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      switch (event.key) {
-        case "Escape":
-          onClose();
-          break;
-        case " ":
-        case "k":
-          event.preventDefault();
-          playOrPause();
-          break;
-        case "ArrowLeft":
-        case "ArrowRight":
-          // Kept from the page: the bar answers to the arrow keys as a slider
-          // and would scroll what is behind it otherwise.
-          event.preventDefault();
-          stepBy(event.key === "ArrowLeft" ? -A_STEP : A_STEP);
-          break;
-        case "f":
-          if (document.fullscreenElement) {
-            void document.exitFullscreen();
-          } else {
-            void stage.current?.requestFullscreen?.();
-          }
-          break;
-        default:
-          break;
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, stepBy, playOrPause]);
+  /* The film's own wordmark, once there is one to fetch. Nothing fetches them
+     yet, so this falls through to the server's mark, and to the title when
+     the server has none either. */
+  const mark = markFor(title, null, branding);
+
+  const setAppearance = (change: Partial<Appearance>) => {
+    const next = { ...appearance, ...change };
+    setAppearanceState(next);
+    rememberAppearance(next);
+  };
+
+  const setSettings = (change: Partial<PlayerSettings>) => {
+    const next = { ...settings, ...change };
+    setSettingsState(next);
+    rememberSettings(next);
+  };
 
   /* The subtitle being shown, when there is one, it is words rather than
      pictures, and there is a picture ready to hang it on.
@@ -194,21 +179,13 @@ export function Player({
       ? plan?.subtitles.find((track) => track.id === plan.chosen_subtitle_id && track.url)
       : undefined;
 
-  const setAppearance = (change: Partial<Appearance>) => {
-    const next = { ...appearance, ...change };
-    setAppearanceState(next);
-    rememberAppearance(next);
-  };
-
-  /* How high the words sit belongs to each cue rather than to a stylesheet,
-     so it is applied to them as they are read, and again whenever the viewer
+  /* How high the words sit belongs to each cue rather than to a stylesheet, so
+     it is applied to them as they are read, and again whenever the viewer
      moves them. Counted from the bottom, which keeps them in the same place
      whatever the size of the picture.
 
-     The one place looking reaches into the element, and it has to: where a
-     cue sits is written on the cue and nowhere a stylesheet can get at it.
-     Whether the words are there at all is the engine's, and this asks it
-     nothing about that. */
+     The one place looking reaches into the element, and it has to: where a cue
+     sits is written on the cue and nowhere a stylesheet can get at it. */
   const placeCues = useCallback(() => {
     const tracks = video.current?.textTracks;
     if (!tracks) {
@@ -231,257 +208,157 @@ export function Player({
     placeCues();
   }, [placeCues, onWordsRead]);
 
+  const naming = useCallback(
+    (track: PlaybackTrack) => trackName(track, t, language),
+    [t, language],
+  );
+
   return (
-    <div
-      className={`player ${appearanceClasses(appearance)}`}
-      role="dialog"
-      aria-label={title}
-    >
-      <div className="player-bar">
-        <button className="button" onClick={onClose}>
-          {t("player.close")}
-        </button>
-        <span className="player-title">{title}</span>
-        {rebuilt && <span className="fact">{t("player.rebuilt")}</span>}
-      </div>
+    <div className={`player ${appearanceClasses(appearance)}`} role="dialog" aria-label={title}>
+      <div className="player-stage" ref={stage}>
+        {/* One element for both, told apart by its key: a film handed over as
+            a file carries its address, a rebuilt one is fed by the library,
+            and switching between the two has to start from a fresh element
+            rather than from one still holding the other's address. */}
+        {plan && !failed && (canBePlayedAsItIs(plan) || stream) && (
+          <video
+            key={pictureKey ?? undefined}
+            ref={video}
+            className={`player-video player-video-${shape}`}
+            src={canBePlayedAsItIs(plan) ? plan.url : undefined}
+            autoPlay
+            /* The picture itself starts and stops the film, the way every
+               player does it: the button is a long way from where the eyes
+               are. */
+            onClick={playOrPause}
+          >
+            {shownSubtitle?.url && (
+              <track
+                key={shownSubtitle.id}
+                ref={holdTheWords}
+                kind="subtitles"
+                src={shownSubtitle.url}
+                srcLang={shownSubtitle.language ?? undefined}
+                label={naming(shownSubtitle)}
+                default
+              />
+            )}
+          </video>
+        )}
 
-      {failed && (
-        <p className="notice">
-          {t(failed)}
-          {refusal && <span className="player-reasons">{refusal}</span>}
-        </p>
-      )}
-
-      {/* What the server is doing while the picture is not there yet. Named
-          steps rather than a bar alone: a bar filling at an unknown rate says
-          only that something is happening, while "reading the film" says which
-          part is slow when one of them is. */}
-      {rebuilt && readyPicture !== pictureKey && !failed && (
-        <p className="notice">
-          {t(`player.step.${preparing?.step ?? "starting"}`)}
-          {preparing && preparing.wanted > 0 && (
-            <span className="player-reasons">
-              {t("player.segments_ready", {
-                ready: preparing.ready,
-                wanted: preparing.wanted,
-              })}
-            </span>
+        {/* What stands in front of the picture before there is one to watch,
+            and what is wrong when something is. Over the picture like
+            everything else: a notice that pushes the film down the page is a
+            film that jumps when the notice goes. */}
+        <div className="player-notices">
+          {failed && (
+            <p className="player-notice">
+              {t(failed)}
+              {refusal && <span className="player-notice-why">{refusal}</span>}
+            </p>
           )}
-        </p>
-      )}
 
-      {/* The words take as long as reading the film takes, and until they are
-          there the picture plays with nothing on it, which is exactly what a
-          subtitle that does not work looks like. */}
-      {words && !failed && (
-        <p className="notice notice-faint">
-          {t(words === "coming" ? "player.words_coming" : "player.words_refused")}
-        </p>
-      )}
-
-      {/* One element for both, told apart by its key: a film handed over as a
-          file carries its address, a rebuilt one is fed by the library, and
-          switching between the two has to start from a fresh element rather
-          than from one still holding the other's address. */}
-      {plan && !failed && (canBePlayedAsItIs(plan) || stream) && (
-        <div className="player-stage" ref={stage}>
-        <video
-          key={pictureKey ?? undefined}
-          ref={video}
-          className="player-video"
-          src={canBePlayedAsItIs(plan) ? plan.url : undefined}
-          autoPlay
-          /* The picture itself starts and stops the film, the way every player
-             does it: the button is a long way from where the eyes are. */
-          onClick={playOrPause}
-        >
-          {shownSubtitle?.url && (
-            <track
-              key={shownSubtitle.id}
-              ref={holdTheWords}
-              kind="subtitles"
-              src={shownSubtitle.url}
-              srcLang={shownSubtitle.language ?? undefined}
-              label={trackName(shownSubtitle, t, language)}
-              default
-            />
+          {/* Named steps rather than a bar alone: a bar filling at an unknown
+              rate says only that something is happening, while "reading the
+              film" says which part is slow when one of them is. */}
+          {rebuilt && readyPicture !== pictureKey && !failed && (
+            <p className="player-notice">
+              {t(`player.step.${preparing?.step ?? "starting"}`)}
+              {preparing && preparing.wanted > 0 && (
+                <span className="player-notice-why">
+                  {t("player.segments_ready", {
+                    ready: preparing.ready,
+                    wanted: preparing.wanted,
+                  })}
+                </span>
+              )}
+            </p>
           )}
-        </video>
 
-        {factsOpen && (
+          {/* The words take as long as reading the film takes, and until they
+              are there the picture plays with nothing on it, which is exactly
+              what a subtitle that does not work looks like. */}
+          {words && !failed && (
+            <p className="player-notice player-notice-faint">
+              {t(words === "coming" ? "player.words_coming" : "player.words_refused")}
+            </p>
+          )}
+        </div>
+
+        <Overlay
+          playback={playback}
+          arrangement={arrangement}
+          settings={settings}
+          onSettings={setSettings}
+          mark={mark}
+          shape={shape}
+          onShape={setShape}
+          stage={stage}
+          panel={panel}
+          onPanel={setPanel}
+          onClose={onClose}
+          naming={naming}
+          language={language}
+          t={t}
+        />
+
+        {panel === "facts" && plan && (
           <PlaybackFacts
             plan={plan}
             video={video}
             session={stream?.id ?? null}
             t={t}
-            onClose={() => setFactsOpen(false)}
+            onClose={() => setPanel(null)}
           />
         )}
 
-        {/* Ours rather than the browser's, because showing the picture of the
-            moment under the cursor means knowing where the cursor is on the
-            bar, and the browser's bar says nothing about that. */}
-        <Controls
-          playback={playback}
-          stage={stage}
-          factsOpen={factsOpen}
-          onFactsTurned={() => setFactsOpen((open) => !open)}
-          t={t}
-        />
-        </div>
-      )}
-
-      {/* Shown even when the film cannot be played as it is: choosing a track
-          is what caused that, and the way back is the same picker. Hiding it
-          would leave a viewer stuck with a message. */}
-      {plan && !failed && (
-        <div className="player-choices">
-          {plan.audio.length > 1 && (
-            <label className="choice">
-              <span className="choice-label">{t("work.audio")}</span>
-              <select
-                value={plan.chosen_audio_id ?? ""}
-                onChange={(event) => playback.choose(event.target.value || null, subtitleId)}
-              >
-                {plan.audio.map((track) => (
-                  <option key={track.id} value={track.id}>
-                    {trackName(track, t, language)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {plan.subtitles.length > 0 && (
-            <label className="choice">
-              <span className="choice-label">{t("work.subtitles")}</span>
-              <select
-                value={plan.chosen_subtitle_id ?? ""}
-                onChange={(event) => playback.choose(audioId, event.target.value || null)}
-              >
-                <option value="">{t("player.no_subtitle")}</option>
-                {plan.subtitles.map((track) => (
-                  <option key={track.id} value={track.id}>
-                    {trackName(track, t, language)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {/* Offered on every film, not only on one being rebuilt: asking for
-              a lighter stream is exactly what turns a film that was handed
-              over whole into one that is rebuilt, so hiding the picker until
-              then would hide the way in. */}
-          <label className="choice">
-            <span className="choice-label">{t("player.quality")}</span>
-            <select
-              value={quality.key}
-              onChange={(event) => playback.setQuality(event.target.value)}
-            >
-              {QUALITIES.map((one) => (
-                <option key={one.key} value={one.key}>
-                  {qualityName(one, t("player.quality.as_it_is"))}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="choice">
-            <span className="choice-label">{t("player.speed")}</span>
-            <select
-              value={speed}
-              onChange={(event) => playback.setSpeed(Number(event.target.value))}
-            >
-              {SPEEDS.map((value) => (
-                <option key={value} value={value}>
-                  {value}&times;
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {/* Only while subtitles are actually showing: offering to restyle
-              words that are not on screen is a row of pickers that do
-              nothing. */}
-          {shownSubtitle && (
-            <>
-              <Choice
-                label={t("player.subtitle_size")}
-                value={appearance.size}
-                among={SIZES}
-                naming="subtitle_size"
-                onPick={(size) => setAppearance({ size })}
-                t={t}
-              />
-              <Choice
-                label={t("player.subtitle_colour")}
-                value={appearance.colour}
-                among={COLOURS}
-                naming="subtitle_colour"
-                onPick={(colour) => setAppearance({ colour })}
-                t={t}
-              />
-              <Choice
-                label={t("player.subtitle_edge")}
-                value={appearance.edge}
-                among={EDGES}
-                naming="subtitle_edge"
-                onPick={(edge) => setAppearance({ edge })}
-                t={t}
-              />
-              <Choice
-                label={t("player.subtitle_background")}
-                value={appearance.background}
-                among={BACKGROUNDS}
-                naming="subtitle_background"
-                onPick={(background) => setAppearance({ background })}
-                t={t}
-              />
-              <Choice
-                label={t("player.subtitle_height")}
-                value={appearance.height}
-                among={HEIGHTS}
-                naming="subtitle_height"
-                onPick={(height) => setAppearance({ height })}
-                t={t}
-              />
-            </>
-          )}
-
-          {/* The picture in a corner while the viewer does something else.
-              Not every browser offers it, so the button only appears where
-              it works. */}
-          {"requestPictureInPicture" in HTMLVideoElement.prototype && (
-            <button className="toggle" onClick={intoTheCorner}>
-              {t("player.corner")}
-            </button>
-          )}
-        </div>
-      )}
-
-      {plan && (
-        <p className="player-why">
-          {t(`playback.${plan.method}`)}
-          {plan.reasons.length > 0 && (
-            <span className="player-reasons">
-              {plan.reasons.map((reason) => t(`reason.${reason.code}`)).join(" · ")}
-            </span>
-          )}
-          {/* Who is rebuilding the picture, and into what. This is the only
-              question anybody asks about a film that stutters, and the answer
-              used to be somewhere between a process listing and a guess. */}
-          {plan.rebuild && (
-            <span className="player-reasons">
-              {t(`player.rebuilt_by.${plan.rebuild.by}`)}
-              {` · ${plan.rebuild.codec.toUpperCase()}`}
-              {plan.rebuild.height !== null && ` · ${plan.rebuild.height}p`}
-              {plan.rebuild.bitrate !== null &&
-                ` · ${Math.round(plan.rebuild.bitrate / 100_000) / 10} Mb/s`}
-            </span>
-          )}
-        </p>
-      )}
+        {/* Only while subtitles are actually showing: offering to restyle
+            words that are not on screen is a row of pickers that do nothing. */}
+        {panel === "subtitles" && shownSubtitle && (
+          <div className="player-dressing">
+            <Choice
+              label={t("player.subtitle_size")}
+              value={appearance.size}
+              among={SIZES}
+              naming="subtitle_size"
+              onPick={(size) => setAppearance({ size })}
+              t={t}
+            />
+            <Choice
+              label={t("player.subtitle_colour")}
+              value={appearance.colour}
+              among={COLOURS}
+              naming="subtitle_colour"
+              onPick={(colour) => setAppearance({ colour })}
+              t={t}
+            />
+            <Choice
+              label={t("player.subtitle_edge")}
+              value={appearance.edge}
+              among={EDGES}
+              naming="subtitle_edge"
+              onPick={(edge) => setAppearance({ edge })}
+              t={t}
+            />
+            <Choice
+              label={t("player.subtitle_background")}
+              value={appearance.background}
+              among={BACKGROUNDS}
+              naming="subtitle_background"
+              onPick={(background) => setAppearance({ background })}
+              t={t}
+            />
+            <Choice
+              label={t("player.subtitle_height")}
+              value={appearance.height}
+              among={HEIGHTS}
+              naming="subtitle_height"
+              onPick={(height) => setAppearance({ height })}
+              t={t}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

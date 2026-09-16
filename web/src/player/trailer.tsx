@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from "react";
 import { useSettings } from "../settings";
+import "./player.css";
 
 export function TrailerPlayer({
   url,
@@ -38,25 +39,19 @@ export function TrailerPlayer({
   }, [onClose]);
 
   return (
-    <div className="player" role="dialog" aria-label={title}>
-      <div className="player-bar">
+    <div className="player-trailer" role="dialog" aria-label={title}>
+      <div className="player-trailer-bar">
         <button className="button" onClick={onClose}>
           {t("player.close")}
         </button>
-        <span className="player-title">{title}</span>
+        <span className="player-trailer-title">{title}</span>
         <span className="fact">{t("work.trailer")}</span>
       </div>
 
       {failed ? (
-        <p className="notice">{t("player.cannot_play")}</p>
+        <p className="player-notice">{t("player.cannot_play")}</p>
       ) : (
-        <video
-          className="player-video"
-          src={url}
-          controls
-          autoPlay
-          onError={() => setFailed(true)}
-        />
+        <video src={url} controls autoPlay onError={() => setFailed(true)} />
       )}
     </div>
   );
