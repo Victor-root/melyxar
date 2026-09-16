@@ -858,9 +858,16 @@ export function usePlayback({
       // What is left of the wait is the browser noticing it has a film, which
       // is `loadedmetadata` below and is usually the shortest part of all of
       // it. A later piece loading is not this moment and says nothing new.
+      //
+      // The header is fetched as a fragment too and is numbered by name
+      // rather than by place, exactly as it is below in `sayWhereItBegan`: it
+      // is a few hundred bytes and loads in no time on any connection, and
+      // counting it as the first piece is what made this climb to ninety on
+      // a slow link and then sit there for as long as the real first piece,
+      // holding several seconds of picture and sound, took to follow it.
       let firstPieceArrived = false;
-      feed.on(Library.Events.FRAG_LOADED, () => {
-        if (firstPieceArrived) {
+      feed.on(Library.Events.FRAG_LOADED, (_event, loaded) => {
+        if (firstPieceArrived || typeof loaded.frag.sn !== "number") {
           return;
         }
         firstPieceArrived = true;
