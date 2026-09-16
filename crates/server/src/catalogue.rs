@@ -34,6 +34,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/works", axum::routing::get(works))
         .route("/api/v1/works/{id}", axum::routing::get(work))
         .route(
+            "/api/v1/works/{id}/favourite",
+            axum::routing::put(set_favourite),
+        )
+        .route(
             "/api/v1/works/{id}/trailers/{rank}",
             axum::routing::get(trailer),
         )
@@ -505,6 +509,38 @@ async fn work(State(state): State<AppState>, Path(id): Path<String>) -> Result<J
     Ok(Json(work_view(&detail)))
 }
 
+/// What a viewer thinks of a film, and what they are saying about it now.
+#[derive(Debug, Deserialize)]
+struct FavouriteBody {
+    favourite: bool,
+}
+
+/// What it is now, which is what a button is drawn from.
+#[derive(Debug, Serialize)]
+struct FavouriteView {
+    favourite: bool,
+}
+
+/// Marks a film as one this viewer likes, or takes the mark off.
+///
+/// Answers the state it is in now rather than nothing at all: the button is
+/// drawn from the answer, so a viewer pressing it twice in a second cannot end
+/// up with a button saying one thing and the server another.
+async fn set_favourite(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<FavouriteBody>,
+) -> Result<Json<FavouriteView>> {
+    let work_id = parse_work(&id)?;
+    let viewer = crate::viewer(&state).await?;
+    let favourite = state
+        .database()
+        .set_favourite(viewer, work_id, body.favourite)
+        .await
+        .map_err(|error| ServerError::internal(error.to_string()))?;
+    Ok(Json(FavouriteView { favourite }))
+}
+
 fn work_view(detail: &WorkDetail) -> WorkView {
     let images_of = |kind: &str| -> Vec<ImageView> {
         detail
@@ -689,6 +725,23 @@ mod tests {
     use melyxar_core::media::{
         AudioDetails, ColorInfo, HdrFormat, SubtitleDetails, SubtitleLayout, Track, VideoDetails,
     };
+
+    #[test]
+    fn every_route_this_module_declares_is_one_a_router_accepts() {
+        // Built at start-up, so a route a router refuses brings the whole
+        // server down rather than failing one request.
+        let _ = router();
+    }
+
+    #[test]
+    fn what_a_viewer_says_about_liking_a_film_is_read_whole() {
+        let said: FavouriteBody = serde_json::from_str(r#"{"favourite":true}"#).expect("read");
+        assert!(said.favourite);
+        let said: FavouriteBody = serde_json::from_str(r#"{"favourite":false}"#).expect("read");
+        assert!(!said.favourite);
+        // Anything else is refused rather than read as one or the other.
+        assert!(serde_json::from_str::<FavouriteBody>(r#"{}"#).is_err());
+    }
 
     fn version_with(tracks: Vec<Track>) -> Version {
         Version {

@@ -123,6 +123,15 @@ struct PlanView {
     /// The little pictures shown while dragging along the bar, when this film
     /// has been read for them.
     thumbnails: Option<ThumbnailsView>,
+    /// Where the film changes scene, when the file names them.
+    ///
+    /// Marked on the bar, so that a viewer sees the shape of the film rather
+    /// than one unbroken line, and so that landing on the beginning of a scene
+    /// is something the bar helps with. Empty for a film whose file names
+    /// none, which is most of them.
+    chapters: Vec<ChapterView>,
+    /// Whether this viewer has marked the film as one they like.
+    favourite: bool,
     /// What the file itself holds, beside what is being made of it.
     ///
     /// Every media server shows this while a film plays, and for a reason: a
@@ -197,6 +206,18 @@ struct ThumbnailsView {
     /// How many the film has. Past the last one there is nothing: a sheet is
     /// filled to the end with black whatever the film gave.
     counted: u32,
+}
+
+/// One place the film changes scene.
+#[derive(Debug, Serialize)]
+struct ChapterView {
+    /// Where it begins, in seconds, which is where the mark goes and what a
+    /// player is set to.
+    at_second: f64,
+    /// What the file calls it, when it calls it anything. A film whose
+    /// chapters are numbered rather than named says nothing here, and the
+    /// interface writes its own wording.
+    title: Option<String>,
 }
 
 /// What is rebuilding the picture, and into what.
@@ -340,6 +361,15 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
                 rows: made.rows,
                 counted: made.counted,
             }),
+        chapters: plan
+            .chapters
+            .iter()
+            .map(|chapter| ChapterView {
+                at_second: chapter.start.as_seconds_f64(),
+                title: chapter.title.clone(),
+            })
+            .collect(),
+        favourite: plan.favourite,
         rebuild: plan.rebuild.as_ref().map(|rebuild| RebuildView {
             by: match rebuild.on_a_card() {
                 true => "card",
@@ -1044,7 +1074,39 @@ mod tests {
             downmix_gain: melyxar_core::user::DEFAULT_DOWNMIX_GAIN,
             rebuild: None,
             thumbnails: None,
+            favourite: false,
+            chapters: vec![
+                melyxar_core::media::Chapter {
+                    ordinal: 0,
+                    start: Millis::ZERO,
+                    title: Some("Cold open".into()),
+                    thumbnail_path: None,
+                },
+                melyxar_core::media::Chapter {
+                    ordinal: 1,
+                    start: Millis::new(754_500),
+                    title: None,
+                    thumbnail_path: None,
+                },
+            ],
         }
+    }
+
+    #[test]
+    fn a_bar_is_told_where_the_film_changes_scene() {
+        // Marked on the bar rather than fetched by it: they are drawn from the
+        // first frame the bar exists, and marks that appear a moment later are
+        // a bar that jumps under the hand. In seconds, which is what a bar is
+        // drawn in and what a player is set to; a chapter the file numbered
+        // rather than named says nothing, and the interface writes its own
+        // wording.
+        let view = plan_view(&film_with_a_separate_subtitle());
+
+        assert_eq!(view.chapters.len(), 2);
+        assert_eq!(view.chapters[0].at_second, 0.0);
+        assert_eq!(view.chapters[0].title.as_deref(), Some("Cold open"));
+        assert_eq!(view.chapters[1].at_second, 754.5);
+        assert_eq!(view.chapters[1].title, None);
     }
 
     #[test]
