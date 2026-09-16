@@ -284,8 +284,15 @@ export function Player({
                 {/* In seconds of film, which the server works out: how long a
                     piece of a rebuilt film is, is its business, and a viewer
                     waiting knows what ten seconds of a film is and not what
-                    two sixths of one is. */}
-                {preparing && preparing.wanted_seconds > 0 && (
+                    two sixths of one is.
+
+                    Only while the server is still short of what it wanted:
+                    once it has caught up, it goes on producing ahead of where
+                    the viewer is, and a count that keeps climbing past the
+                    number it was supposedly out of says nothing a viewer can
+                    make sense of. The step above already says enough once
+                    that line stops being true. */}
+                {preparing && preparing.ready_seconds < preparing.wanted_seconds && (
                   <span className="player-notice-why">
                     {t("player.seconds_ready", {
                       ready: Math.round(preparing.ready_seconds),
