@@ -39,6 +39,9 @@ pub use melyxar_playback::profile::{ClientProfile, RebuiltCapability};
 pub use melyxar_streaming::session::{
     Preparation, PreparationStep, Producing, Recipe, Session, SessionId,
 };
+/// How long one piece of a rebuilt film lasts, for turning a count of them
+/// into a length of film. Travels the same way the session does.
+pub use melyxar_streaming::playlist::SEGMENT_DURATION;
 pub use melyxar_streaming::StreamingError;
 
 /// What a viewer asked to play, in the words of a client.

@@ -16,7 +16,9 @@ use axum::extract::{Path as RoutePath, State};
 use axum::http::{header, HeaderValue, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use melyxar_app::playback::{ClientProfile, PlayPlan, PlayRequest, Preparation, Session};
+use melyxar_app::playback::{
+    ClientProfile, PlayPlan, PlayRequest, Preparation, Session, SEGMENT_DURATION,
+};
 use melyxar_app::AppState;
 use melyxar_core::id::{MediaSourceId, TrackId, WorkId};
 use melyxar_core::media::TrackKind;
@@ -702,10 +704,15 @@ async fn session_file(
 struct PreparationView {
     /// starting, reading, producing or ready.
     step: &'static str,
-    /// Segments on the disk that a player can actually read.
-    ready: u32,
-    /// How many make a comfortable start from where the tool was set going.
-    wanted: u32,
+    /// Seconds of film on the disk that a player can actually read.
+    ///
+    /// In seconds rather than in the pieces the film is cut into: how long a
+    /// piece is, is this server's own business, and a viewer waiting knows
+    /// what ten seconds of a film is and not what two sixths of one is.
+    ready_seconds: f64,
+    /// How many seconds make a comfortable start from where the tool was set
+    /// going, which near the end of a film is whatever is left of it.
+    wanted_seconds: f64,
     /// How hard the machine is working on this film, while it is working.
     ///
     /// Sent from here rather than from the plan because it is the one thing
@@ -730,10 +737,11 @@ async fn preparation(state: &AppState, id: &str) -> Response {
 }
 
 fn preparation_view(seen: &Preparation) -> PreparationView {
+    let of = |segments: u32| f64::from(segments) * SEGMENT_DURATION.as_seconds_f64();
     PreparationView {
         step: seen.step.as_str(),
-        ready: seen.ready,
-        wanted: seen.wanted,
+        ready_seconds: of(seen.ready),
+        wanted_seconds: of(seen.wanted),
         producing: seen.producing.map(|working| ProducingView {
             pictures_a_second: working.pictures_a_second,
             speed: working.speed,
@@ -1237,6 +1245,24 @@ mod tests {
         let said = working.producing.expect("the tool said how it was doing");
         assert_eq!(said.pictures_a_second, 38.4);
         assert_eq!(said.speed, 1.6);
+    }
+
+    #[test]
+    fn how_far_the_preparation_has_got_is_said_in_seconds_of_film() {
+        use melyxar_app::playback::PreparationStep;
+
+        // A count of pieces means nothing to anybody watching a ring turn, and
+        // how long a piece is, is this server's own business. Said in seconds,
+        // a page never has to know that figure and never has to be changed
+        // when it does.
+        let seen = preparation_view(&Preparation {
+            step: PreparationStep::Producing,
+            ready: 2,
+            wanted: 6,
+            producing: None,
+        });
+        assert_eq!(seen.ready_seconds, 2.0 * SEGMENT_DURATION.as_seconds_f64());
+        assert_eq!(seen.wanted_seconds, 6.0 * SEGMENT_DURATION.as_seconds_f64());
     }
 
     #[test]

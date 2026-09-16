@@ -233,7 +233,13 @@ export function Player({
                are. Twice puts it fullscreen, which is the other thing every
                player does and the reason a single click is held for a moment
                before it acts. */
-            onClick={() => playback.pictureClicked(false)}
+            onClick={() =>
+              /* A click on the picture with a panel open shuts the panel and
+                 does nothing else. It is what a hand reaching away from a
+                 menu means, and it is what stands in for the cross the panels
+                 used to carry in their corner. */
+              panel ? setPanel(null) : playback.pictureClicked(false)
+            }
             onDoubleClick={() => {
               playback.pictureClicked(true);
               fullscreen.toggle();
@@ -274,11 +280,15 @@ export function Player({
               <span className="player-spinner" aria-hidden="true" />
               <p className="player-notice player-notice-bare">
                 {t(`player.step.${preparing?.step ?? "starting"}`)}
-                {preparing && preparing.wanted > 0 && (
+                {/* In seconds of film, which the server works out: how long a
+                    piece of a rebuilt film is, is its business, and a viewer
+                    waiting knows what ten seconds of a film is and not what
+                    two sixths of one is. */}
+                {preparing && preparing.wanted_seconds > 0 && (
                   <span className="player-notice-why">
-                    {t("player.segments_ready", {
-                      ready: preparing.ready,
-                      wanted: preparing.wanted,
+                    {t("player.seconds_ready", {
+                      ready: Math.round(preparing.ready_seconds),
+                      wanted: Math.round(preparing.wanted_seconds),
                     })}
                   </span>
                 )}

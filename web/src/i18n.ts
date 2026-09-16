@@ -266,7 +266,6 @@ const en: Dictionary = {
   "player.words_offset.why": "Shift the words against the picture when they run early or late.",
   "player.words_offset.reset": "Back to the film's own timing",
   "player.keep_controls_up": "Keep the controls showing",
-  "player.about_this": "About this film",
   "player.sheet.info": "Info",
   "player.sheet.chapters": "Chapters",
   "player.sheet.cast": "Cast and crew",
@@ -312,7 +311,7 @@ const en: Dictionary = {
   "player.step.reading": "Reading the film...",
   "player.step.producing": "Preparing the first few seconds...",
   "player.step.ready": "Starting...",
-  "player.segments_ready": "{ready} of {wanted}",
+  "player.seconds_ready": "{ready} s of film ready out of {wanted}",
 
   "player.subtitle_size": "Subtitle size",
   "player.subtitle_size.small": "Small",
@@ -626,7 +625,6 @@ const fr: Dictionary = {
   "player.words_offset.why": "Décale les mots par rapport à l’image quand ils arrivent en avance ou en retard.",
   "player.words_offset.reset": "Revenir au calage du film",
   "player.keep_controls_up": "Garder les commandes affichées",
-  "player.about_this": "À propos de ce film",
   "player.sheet.info": "Info",
   "player.sheet.chapters": "Chapitres",
   "player.sheet.cast": "Distribution et équipe",
@@ -672,7 +670,7 @@ const fr: Dictionary = {
   "player.step.reading": "Lecture du film...",
   "player.step.producing": "Préparation des premières secondes...",
   "player.step.ready": "Démarrage...",
-  "player.segments_ready": "{ready} sur {wanted}",
+  "player.seconds_ready": "{ready} s de film prêtes sur {wanted}",
 
   "player.subtitle_size": "Taille des sous-titres",
   "player.subtitle_size.small": "Petite",

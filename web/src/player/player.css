@@ -1,12 +1,18 @@
 /*
  * The player, and nothing else in this interface.
  *
- * Always dark, whatever the rest of the interface is set to: it is drawn over
- * a film, and there is no such thing as a light theme on top of a picture. So
- * nothing here reads the interface's text colours, which turn black the moment
- * somebody chooses the light theme and leave every word in this file invisible
- * over its own dark panels. The accent is the one token that does travel, and
- * it has to: it is a viewer's to choose.
+ * Two kinds of surface, and the difference matters.
+ *
+ * What is drawn straight onto the film is white on a shadow, whatever theme
+ * the interface is set to: there is no such thing as a light theme on top of
+ * a picture, and a black clock over a night scene is a clock nobody can read.
+ *
+ * What is drawn on a panel of its own takes the interface's colours like every
+ * other screen, because a panel is a surface and a viewer who chose the light
+ * theme chose it for surfaces. The rule that keeps that safe is that a panel
+ * takes its background and its wording from the theme together, never one of
+ * the two: reading the theme's text colour onto a hard dark panel is what once
+ * left every word in the menus invisible.
  *
  * Its own file rather than a block of the main stylesheet: the player is the
  * one screen here that is going to be rewritten on its own, and a rule written
@@ -49,8 +55,11 @@
   --player-chapter-across: 2px;
   --player-chapter-down: 14px;
 
-  /* Buttons, and the one they are arranged around. */
+  /* Buttons, and the one they are arranged around. The ring is how far inside
+     the button the line a hand lights up is drawn: the button is the size a
+     finger needs, the ring the size the drawing in it needs. */
   --player-button: 48px;
+  --player-button-ring: 7px;
   --player-icon: 27px;
   --player-play-button: 58px;
   --player-play-icon: 34px;
@@ -75,6 +84,12 @@
   /* The one colour here that is not the accent. A star is a star: a viewer who
      set their accent to green did not ask for a green one. */
   --player-star: #e5a00d;
+
+  /* What a panel is made of. The theme's own raised surface, carried through
+     a token of the player's own so that the two panels that sit half over the
+     film can be given a little transparency without the rest of the interface
+     following them. */
+  --player-panel: color-mix(in srgb, var(--surface-raised) 94%, transparent);
 }
 
 .player {
@@ -163,10 +178,12 @@
   padding-top: 92px;
 }
 
-/* No room above the bar while the drawer is open: the drawer's own foot is
-   the space, and a second one under it is a band of film between them. */
-.player-bottom:has(.player-drawer) {
+/* While a sheet is open the strip gives up its own margins: the one above is
+   room the strip no longer needs, and the one below would leave a band of
+   film under the sheet. The sheet carries its own footing. */
+.player-bottom:has(.player-drawer-hold[data-open="yes"]) {
   padding-top: 0;
+  padding-bottom: 0;
 }
 
 .player-zone {
@@ -200,6 +217,13 @@
 .player-zone-bottom-right {
   gap: 2px;
   margin-left: auto;
+}
+
+/* The row of tabs, under the controls and above whatever they open. No height
+   of its own: it is as tall as the words in it, not as tall as a button. */
+.player-zone-under-the-row {
+  min-height: 0;
+  margin-top: 2px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -240,34 +264,52 @@
  * ------------------------------------------------------------------------ */
 
 .player-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: var(--player-button);
   height: var(--player-button);
   padding: 0;
-  /* Always there and see through until a hand arrives, so nothing moves by a
-     pixel at the moment the line appears. */
-  border: 2px solid transparent;
-  border-radius: var(--radius-control);
+  border: none;
   background: transparent;
   color: #fff;
   cursor: pointer;
   transition:
-    background var(--quick) var(--ease),
-    border-color var(--quick) var(--ease),
     color var(--quick) var(--ease),
     transform var(--quick) var(--ease);
 }
 
-/* Under a hand, a button takes the accent: the drawing inside it and a line
+/* The line a hand lights up, drawn inside the button rather than around it.
+
+   The button is as big as a finger needs; the line has to be as big as the
+   drawing in it, and the two are not the same size. Drawn on the button's own
+   edge it stood a long way out from the icon and read as a box around empty
+   space. It is there and see through at rest, so nothing moves by a pixel at
+   the moment it lights. */
+.player-button::after {
+  content: "";
+  position: absolute;
+  inset: var(--player-button-ring);
+  border: 2px solid transparent;
+  border-radius: var(--radius-control);
+  transition:
+    background var(--quick) var(--ease),
+    border-color var(--quick) var(--ease);
+  pointer-events: none;
+}
+
+/* Under a hand, a button takes the accent: the drawing inside it and the line
    around it both. The accent is the one colour a viewer chooses, so it is
    what should answer them when they reach for something. */
 .player-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent-bright);
   transform: scale(1.06);
+}
+
+.player-button:hover:not(:disabled)::after {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .player-button:active:not(:disabled) {
@@ -299,14 +341,18 @@
 
 /* Held open while its panel is, in the accent like the hand that opened it. */
 .player-button-open {
+  color: var(--accent-bright);
+}
+
+.player-button-open::after {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent-bright);
 }
 
 .player-button-small {
   width: 30px;
   height: 30px;
+  --player-button-ring: 1px;
 }
 
 .player-icon {
@@ -693,8 +739,9 @@
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-card);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(16, 18, 22, 0.94);
+  border: 1px solid var(--border);
+  background: var(--player-panel);
+  color: var(--text);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow-raised);
   overflow: hidden;
@@ -719,12 +766,11 @@
   align-items: center;
   gap: var(--gap-tight);
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border);
 }
 
 .player-menu-title {
   flex: 1;
-  color: #fff;
   font-size: 14px;
   font-weight: 650;
 }
@@ -743,7 +789,7 @@
   border: none;
   border-radius: var(--radius-control);
   background: transparent;
-  color: #fff;
+  color: inherit;
   font: inherit;
   font-size: 14px;
   text-align: left;
@@ -752,7 +798,7 @@
 }
 
 .player-menu-line:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--surface-hover);
 }
 
 .player-menu-line:focus-visible {
@@ -775,13 +821,13 @@
 }
 
 .player-menu-value {
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-faint);
   font-size: 13px;
 }
 
 .player-menu-why {
   margin: 4px 10px 10px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-faint);
   font-size: 13px;
 }
 
@@ -795,7 +841,6 @@
 
 .player-menu-amount {
   min-width: 78px;
-  color: #fff;
   font-size: 16px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -899,8 +944,9 @@
   gap: var(--gap-tight);
   padding: var(--gap);
   border-radius: var(--radius-card);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(16, 18, 22, 0.94);
+  border: 1px solid var(--border);
+  background: var(--player-panel);
+  color: var(--text);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow-raised);
   /* Clear of the panel it belongs beside. */
@@ -916,15 +962,15 @@
 }
 
 .player-choice-label {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-soft);
 }
 
 .player-choice select {
   padding: 5px 8px;
   border-radius: var(--radius-control);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-hover);
+  color: inherit;
   font: inherit;
   font-size: 13px;
 }
@@ -943,8 +989,9 @@
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-card);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(16, 18, 22, 0.94);
+  border: 1px solid var(--border);
+  background: var(--player-panel);
+  color: var(--text);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow-raised);
   overflow: hidden;
@@ -956,8 +1003,7 @@
   justify-content: space-between;
   gap: var(--gap);
   padding: 10px var(--gap);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  color: #fff;
+  border-bottom: 1px solid var(--border);
   font-size: 14px;
   font-weight: 650;
 }
@@ -980,7 +1026,7 @@
 
 .facts-block h3 {
   margin: 0 0 var(--gap-tight);
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-soft);
   font-size: 12px;
   font-weight: 650;
   text-transform: uppercase;
@@ -996,11 +1042,10 @@
 }
 
 .facts-name {
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-faint);
 }
 
 .facts-is {
-  color: #fff;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -1105,70 +1150,66 @@
    The inset it undoes and reapplies is the strip's own: the row inside runs
    to both edges of the picture so that a card halfway off the side reads as
    a row that carries on, rather than as a row that stops. */
-.player-drawer {
-  /* Right down onto the bar: a gap here is a strip of bright film between the
-     drawer and the controls, and one seam is all it takes to read as two
-     things rather than one. */
+/* Folded open and shut rather than appearing and vanishing.
+
+   A row of zero and a row of one: it is the one way a browser animates a
+   height it was never told, and what is inside can be any height at all. The
+   sheet stays on the page while it is shut, because an element taken out of
+   the page cannot be animated on its way out. */
+.player-drawer-hold {
+  display: grid;
+  grid-template-rows: 0fr;
   margin: 0 calc(var(--player-inset) * -1);
-  padding: var(--gap) var(--player-inset) var(--gap-wide);
-  background: rgba(8, 9, 12, 0.92);
-  backdrop-filter: blur(18px);
-  color: #fff;
-  animation: player-drawer-in var(--quick) var(--ease);
+  /* Clipped here as well as inside. A box folded to no height still carries
+     its own padding, which is a band of panel left under the controls with
+     nothing in it. */
+  overflow: hidden;
+  opacity: 0;
+  /* Out of the page entirely once it has finished folding away, which is what
+     keeps a tab press from landing on a card nobody can see. Held back until
+     the fold is over, so it is still there to be watched on its way out. */
+  visibility: hidden;
+  transition:
+    grid-template-rows var(--calm) var(--ease),
+    opacity var(--calm) var(--ease),
+    visibility 0s linear var(--calm);
 }
 
-@keyframes player-drawer-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
+.player-drawer-hold[data-open="yes"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    grid-template-rows var(--calm) var(--ease),
+    opacity var(--calm) var(--ease),
+    visibility 0s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .player-drawer {
-    animation: none;
+  .player-drawer-hold {
+    transition: none;
   }
 }
 
-.player-drawer-tabs {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
-  margin-bottom: var(--gap);
+/* The one that folds, which is why it has nothing of its own: a box carrying
+   padding cannot be squeezed below that padding, and a panel folded to nothing
+   would still leave a band of it under the controls. */
+.player-drawer-fold {
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* A pill rather than an underline: it is the shape of the one that is open in
-   every player the maintainer already uses, and it reads at a glance. */
-.player-drawer-tab {
-  padding: 8px 18px;
-  border: 2px solid transparent;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.72);
-  font: inherit;
-  font-size: var(--player-drawer-tab-size);
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background var(--quick) var(--ease),
-    border-color var(--quick) var(--ease),
-    color var(--quick) var(--ease);
-}
-
-.player-drawer-tab:hover {
-  border-color: var(--accent);
-  color: var(--accent-bright);
-}
-
-.player-drawer-tab-open {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+.player-drawer {
+  padding: var(--gap) var(--player-inset) var(--gap-wide);
+  background: var(--player-panel);
+  backdrop-filter: blur(18px);
+  color: var(--text);
 }
 
 .player-drawer-nothing {
   margin: 0;
   padding: var(--gap-wide) 0;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-faint);
   font-size: 15px;
 }
 
@@ -1208,7 +1249,6 @@
   flex-wrap: wrap;
   gap: 10px;
   margin: 0;
-  color: rgba(255, 255, 255, 0.88);
   font-size: 15px;
 }
 
@@ -1225,7 +1265,7 @@
 /* A fact this copy carries, said in a box the way a certificate is. */
 .player-drawer-badge {
   padding: 1px 7px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   font-size: 13px;
   letter-spacing: 0.02em;
@@ -1233,14 +1273,13 @@
 
 .player-drawer-playing {
   margin: 0;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-soft);
   font-size: 14px;
 }
 
 .player-drawer-overview {
   margin: 4px 0 0;
   max-width: 96ch;
-  color: rgba(255, 255, 255, 0.86);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -1253,8 +1292,8 @@
   padding: 12px 22px;
   border: 2px solid transparent;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  background: var(--surface-hover);
+  color: inherit;
   font: inherit;
   font-size: 15px;
   font-weight: 600;
@@ -1302,10 +1341,10 @@
   width: 44px;
   height: 44px;
   padding: 0;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
-  color: #111;
+  background: var(--surface-raised);
+  color: var(--text);
   font-size: 26px;
   line-height: 1;
   cursor: pointer;
@@ -1315,7 +1354,8 @@
 }
 
 .player-drawer-along:hover {
-  background: #fff;
+  border-color: var(--accent);
+  color: var(--accent-bright);
 }
 
 .player-drawer-along-back {
@@ -1357,7 +1397,7 @@
   width: var(--player-drawer-card);
   border-radius: var(--radius-control);
   border: 2px solid transparent;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-hover);
   overflow: hidden;
   transition:
     border-color var(--quick) var(--ease),
@@ -1388,7 +1428,7 @@
 }
 
 .player-drawer-card-under {
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--text-faint);
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1417,7 +1457,7 @@
   width: var(--player-drawer-face);
   height: calc(var(--player-drawer-face) * 3 / 2);
   border-radius: var(--radius-control);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-hover);
   overflow: hidden;
 }
 
@@ -1429,7 +1469,161 @@
 }
 
 .player-drawer-initial {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-faint);
   font-size: 40px;
   font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+ * The row of tabs, and what each one says under the controls
+ * ------------------------------------------------------------------------ */
+
+.player-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+/* A pill rather than an underline: it is the shape the player the maintainer
+   already uses gives the open one, and it reads at a glance. */
+.player-tab {
+  padding: 8px 18px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  font: inherit;
+  font-size: var(--player-drawer-tab-size);
+  font-weight: 600;
+  cursor: pointer;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+  transition:
+    background var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.player-tab:hover {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+
+.player-tab-open {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.player-tab:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+ * What a button is called, while a hand is on it
+ * ------------------------------------------------------------------------ */
+
+/* The same bubble the sound puts over its handle: one shape for "here is a
+   word about the thing under your hand" rather than two. Taken from the label
+   the button already carries for a screen reader, so a button can never end up
+   saying one thing to one viewer and another to the next.
+
+   Never in the way: it appears only under a hand, and it catches nothing. */
+.player-button[aria-label]::before {
+  content: attr(aria-label);
+  position: absolute;
+  bottom: calc(100% - var(--player-button-ring) + 6px);
+  left: 50%;
+  z-index: 3;
+  padding: 7px 11px;
+  border-radius: var(--radius-control);
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-50%) scale(0.86);
+  transform-origin: bottom center;
+  transition:
+    opacity var(--quick) var(--ease),
+    transform var(--quick) var(--ease);
+  pointer-events: none;
+}
+
+.player-button[aria-label]:hover::before,
+.player-button[aria-label]:focus-visible::before {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+/* The corner is the one place there is nothing above a button, so its word
+   goes underneath instead of off the top of the screen. */
+.player-top .player-button[aria-label]::before {
+  bottom: auto;
+  top: calc(100% - var(--player-button-ring) + 6px);
+  transform-origin: top center;
+}
+
+/* ---------------------------------------------------------------------------
+ * On or off
+ * ------------------------------------------------------------------------ */
+
+/* Material's own switch, drawn rather than pulled in: a track, and a handle
+   that grows as it crosses. No tick inside the handle, which says twice what
+   the side it is on already says once. */
+.player-switch {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  width: 52px;
+  height: 32px;
+  padding: 0 4px;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+  transition:
+    background var(--quick) var(--ease),
+    border-color var(--quick) var(--ease);
+}
+
+.player-switch-handle {
+  width: 16px;
+  height: 16px;
+  margin-left: 0;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition:
+    width var(--quick) var(--ease),
+    height var(--quick) var(--ease),
+    margin var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+.player-switch[data-on="yes"] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.player-switch[data-on="yes"] .player-switch-handle {
+  width: 24px;
+  height: 24px;
+  /* Pushed across by what the handle does not fill, so it lands on the far
+     edge whatever the track is set to. */
+  margin-left: calc(100% - 24px);
+  background: var(--accent-contrast);
+}
+
+.player-menu-line:hover .player-switch {
+  border-color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-switch,
+  .player-switch-handle,
+  .player-button::after,
+  .player-button[aria-label]::before {
+    transition: none;
+  }
 }

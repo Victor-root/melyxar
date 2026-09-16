@@ -29,7 +29,6 @@ import { A_STEP, SPEEDS } from "./engine";
 import type { Playback } from "./engine";
 import type { Fullscreen } from "./fullscreen";
 import {
-  AboutIcon,
   AudioIcon,
   BackIcon,
   ChosenIcon,
@@ -262,7 +261,6 @@ export function Overlay(props: Props) {
     length,
     anchor,
     openFrom,
-    lastSheet,
   };
 
   return (
@@ -280,26 +278,29 @@ export function Overlay(props: Props) {
 
       {props.panel && <Panels surroundings={surroundings} />}
 
+      {/* All of it inside the bottom strip rather than floating over it: a
+          panel standing clear of the controls leaves a band of film between
+          the two and reads as two things, when what a viewer sees is one. The
+          sheet goes under the tabs that open it, and the strip grows upwards
+          because it is anchored to the bottom of the picture. */}
       <div className="player-bottom">
-        {/* Inside the bottom strip rather than floating over it: a panel that
-            stands clear of the controls leaves a band of film between the two
-            and reads as two things, when what a viewer sees is one. */}
-        {playback.plan && isASheet(props.panel) && (
-          <Drawer
-            work={props.work}
-            plan={playback.plan}
-            playback={playback}
-            showing={props.panel}
-            onShow={props.onPanel}
-            language={props.language}
-            t={props.t}
-          />
-        )}
         <Seek surroundings={surroundings} thumbnails={thumbnails} />
         <div className="player-row">
           <Place zone="bottom_left" surroundings={surroundings} />
           <Place zone="bottom_right" surroundings={surroundings} />
         </div>
+        <Place zone="under_the_row" surroundings={surroundings} />
+        {playback.plan && (
+          <Drawer
+            work={props.work}
+            plan={playback.plan}
+            playback={playback}
+            showing={isASheet(props.panel) ? props.panel : lastSheet}
+            open={isASheet(props.panel)}
+            language={props.language}
+            t={props.t}
+          />
+        )}
       </div>
     </div>
   );
@@ -313,8 +314,6 @@ interface Surroundings extends Props {
   /** Where the button that opened the panel stands, across the picture. */
   anchor: number | null;
   openFrom: (panel: Panel | null, from?: HTMLElement | null) => void;
-  /** Which sheet of the drawer was last read, for reopening it there. */
-  lastSheet: SheetName;
 }
 
 /** One of the places a control can sit, drawn from the arrangement. */
@@ -509,22 +508,28 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
         </button>
       );
 
-    /* The drawer, which opens on whichever of its sheets was left showing:
-       somebody who was reading the cast and shut it is coming back to the
-       cast, not to the description they had already read. */
-    case "about": {
-      const open = isASheet(panel);
+    /* The three sheets, named rather than behind a button: what a film is,
+       where it changes scene and who is in it are things a viewer looks for
+       by name, and a row of words is quicker to read than an icon to guess.
+       Pressing the open one again folds it away. */
+    case "sheets":
       return (
-        <button
-          className={`player-button${open ? " player-button-open" : ""}`}
-          onClick={() => onPanel(open ? null : surroundings.lastSheet)}
-          aria-expanded={open}
-          aria-label={t("player.about_this")}
-        >
-          <AboutIcon size={ICON} />
-        </button>
+        <div className="player-tabs" role="tablist">
+          {SHEETS.map((sheet) => (
+            <button
+              key={sheet}
+              className={`player-tab${panel === sheet ? " player-tab-open" : ""}`}
+              role="tab"
+              id={`player-sheet-tab-${sheet}`}
+              aria-selected={panel === sheet}
+              aria-controls="player-sheet"
+              onClick={() => onPanel(panel === sheet ? null : sheet)}
+            >
+              {t(`player.sheet.${sheet}`)}
+            </button>
+          ))}
+        </div>
       );
-    }
 
     case "volume":
       return <Volume surroundings={surroundings} />;
@@ -800,22 +805,53 @@ function Line({
   label,
   value,
   chosen,
+  switched,
   into,
   onPick,
 }: {
   label: string;
   value?: string;
+  /** One of a list, of which exactly one is picked: a tick down the left. */
   chosen?: boolean;
+  /** A setting that is on or off on its own: a switch on the right. The two
+   *  are not the same question and must not look the same. */
+  switched?: boolean;
   into?: boolean;
   onPick: () => void;
 }) {
+  const aSwitch = switched !== undefined;
   return (
-    <button className="player-menu-line" onClick={onPick} role="menuitem">
+    <button
+      className="player-menu-line"
+      onClick={onPick}
+      role={aSwitch ? "menuitemcheckbox" : "menuitem"}
+      aria-checked={aSwitch ? switched : undefined}
+    >
+      {/* The column is there whether or not this line has a tick in it, so
+          every line in a panel starts its wording in the same place. */}
       <span className="player-menu-tick">{chosen && <ChosenIcon size={18} />}</span>
       <span className="player-menu-label">{label}</span>
       {value !== undefined && <span className="player-menu-value">{value}</span>}
+      {aSwitch && <Switch on={switched} />}
       {into && <IntoIcon size={16} />}
     </button>
+  );
+}
+
+/**
+ * On or off, as a switch rather than a tick.
+ *
+ * A tick down the left of a list means "this is the one picked out of these";
+ * a setting that stands alone is not one of a list, and drawn the same way it
+ * reads as though the others were unpicked. Built to the shape Material's own
+ * switch uses, without the tick inside the handle: the handle growing as it
+ * moves already says which side it is on.
+ */
+function Switch({ on }: { on: boolean }) {
+  return (
+    <span className="player-switch" data-on={on ? "yes" : "no"} aria-hidden="true">
+      <span className="player-switch-handle" />
+    </span>
   );
 }
 
@@ -850,7 +886,6 @@ function Panels({ surroundings }: { surroundings: Surroundings }) {
   return (
     <Menu
       title={sheet.title}
-      onShut={shut}
       onBack={sheet.from && (() => onPanel(sheet.from ?? null))}
       anchor={surroundings.anchor}
     >
@@ -950,7 +985,7 @@ function sheetFor(
             />
             <Line
               label={t("player.keep_controls_up")}
-              chosen={surroundings.settings.keepTheControlsUp}
+              switched={surroundings.settings.keepTheControlsUp}
               onPick={() =>
                 surroundings.onSettings({
                   keepTheControlsUp: !surroundings.settings.keepTheControlsUp,
@@ -1061,16 +1096,21 @@ function sheetFor(
       return null;
   }
 }
-/** A panel standing over the picture, above the button that opened it. */
+/**
+ * A panel standing over the picture, above the button that opened it.
+ *
+ * Nothing shuts it but the three things that already did: the button that
+ * opened it, the escape key, and the picture behind it. A cross in the corner
+ * of a panel this small is a fourth way of doing what pressing the same button
+ * again does, and it costs a corner of every panel.
+ */
 function Menu({
   title,
-  onShut,
   onBack,
   anchor,
   children,
 }: {
   title: string;
-  onShut: () => void;
   onBack?: () => void;
   /** Where the button that opened it stands, when one did. */
   anchor?: number | null;
@@ -1093,9 +1133,6 @@ function Menu({
           </button>
         )}
         <span className="player-menu-title">{title}</span>
-        <button className="player-button player-button-small" onClick={onShut} aria-label={title}>
-          {"×"}
-        </button>
       </div>
       <div className="player-menu-body">{children}</div>
     </div>
