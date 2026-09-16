@@ -109,13 +109,22 @@
   --text-faint: rgba(255, 255, 255, 0.55);
 
   /* What a panel is made of: the surface above, with enough of the film
-     showing through it to say it is standing on one.
+     showing through it to say it is standing on one. Every panel blurs what
+     is behind it, and that blur is only worth anything if something comes
+     through to be blurred: at the nine tenths this used to be, a panel was a
+     black box and the blur behind it was work nobody could see.
+
+     Measured rather than picked, against a fully saturated test pattern,
+     which is harsher than any film ever is: white text on a panel this
+     strength sits at seven to one over the brightest thing that can be under
+     it, and the soft grey beside it at five to one. Letting more of the film
+     through starts costing the words.
 
      Here rather than beside the sizes, and this is not tidiness. A custom
      property is worked out where it is written, so one written on the page
      root would read the interface's surface and come out white on a light
      theme however dark everything under it was told to be. */
-  --player-panel: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  --player-panel: color-mix(in srgb, var(--surface-raised) 72%, transparent);
 }
 
 /* What goes fullscreen: the picture and everything drawn over it together. */
