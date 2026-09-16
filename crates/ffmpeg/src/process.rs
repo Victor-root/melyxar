@@ -43,6 +43,12 @@ pub struct Progress {
     pub position: Millis,
     /// Frames written so far.
     pub frames: Option<i64>,
+    /// Pictures a second the tool says it is writing just now.
+    ///
+    /// The rate of the moment rather than an average: what somebody watching a
+    /// film asks is whether the machine is keeping up right now, and a mean
+    /// taken over a whole run answers that several minutes late.
+    pub pictures_a_second: Option<f64>,
     /// Speed relative to real time. Below one means the machine cannot keep
     /// up, which is what turns into stuttering for the viewer.
     pub speed: Option<f64>,
@@ -220,8 +226,21 @@ fn absorb_progress_line(current: &mut Progress, line: &str) -> Option<Progress> 
             }
         }
         "frame" => current.frames = value.trim().parse().ok(),
+        // Kept only when it reads as a number. Both of these answer `N/A`
+        // before the tool has produced anything and again whenever it stalls,
+        // and read on a panel somebody is watching, a rate that blinked out
+        // every few seconds would look like the machine stopping. A picture
+        // merely copied is never drawn, so the tool gives no rate for it at
+        // all: that one stays at nothing, which is the truth about it.
+        "fps" => {
+            if let Ok(rate) = value.trim().parse() {
+                current.pictures_a_second = Some(rate);
+            }
+        }
         "speed" => {
-            current.speed = value.trim().trim_end_matches('x').parse().ok();
+            if let Ok(rate) = value.trim().trim_end_matches('x').parse() {
+                current.speed = Some(rate);
+            }
         }
         "progress" => {
             current.finished = value.trim() == "end";
@@ -243,12 +262,14 @@ mod tests {
         let mut current = Progress::default();
         assert!(absorb_progress_line(&mut current, "frame=120").is_none());
         assert!(absorb_progress_line(&mut current, "out_time_us=5000000").is_none());
+        assert!(absorb_progress_line(&mut current, "fps=59.94").is_none());
         assert!(absorb_progress_line(&mut current, "speed=2.5x").is_none());
 
         let report = absorb_progress_line(&mut current, "progress=continue")
             .expect("the marker completes a block");
         assert_eq!(report.position, Millis::new(5000));
         assert_eq!(report.frames, Some(120));
+        assert_eq!(report.pictures_a_second, Some(59.94));
         assert_eq!(report.speed, Some(2.5));
         assert!(!report.finished);
     }
@@ -267,6 +288,22 @@ mod tests {
         assert!(absorb_progress_line(&mut current, "nonsense").is_none());
         assert!(absorb_progress_line(&mut current, "speed=N/A").is_none());
         assert_eq!(current.speed, None);
+    }
+
+    #[test]
+    fn a_rate_the_tool_cannot_give_yet_leaves_the_last_one_it_could() {
+        // Both of these are words rather than numbers until the tool has
+        // produced something, and they go back to being words whenever it
+        // stalls. Read on a panel a viewer is watching, a rate that blinked
+        // out every few seconds would read as the machine stopping.
+        let mut current = Progress::default();
+        absorb_progress_line(&mut current, "fps=24.0");
+        absorb_progress_line(&mut current, "speed=1.6x");
+        absorb_progress_line(&mut current, "fps=N/A");
+        absorb_progress_line(&mut current, "speed=N/A");
+
+        assert_eq!(current.pictures_a_second, Some(24.0));
+        assert_eq!(current.speed, Some(1.6));
     }
 
     /// Builds a short synthetic clip, so tests never need real content.

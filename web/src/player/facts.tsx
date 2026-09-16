@@ -14,10 +14,14 @@
 
 import { useEffect, useState } from "react";
 
-import type { PlaybackPlan } from "../api";
+import { api } from "../api";
+import type { PlaybackPlan, Producing } from "../api";
 
 /** How often what the browser says is read again. */
 const LOOK_EVERY_MS = 1_000;
+
+/** Below this the machine is producing the film more slowly than it plays. */
+const KEEPING_UP = 1;
 
 /** What the browser says about the picture it is showing. */
 interface WhatTheBrowserSays {
@@ -60,6 +64,23 @@ function asRate(bits: number | null): string | null {
     : `${Math.round(bits / 1_000)} kb/s`;
 }
 
+/** How the tool's work reads, when it is doing any.
+ *
+ * Pictures a second only when the tool is making pictures: a film whose
+ * picture is carried over untouched is repackaged rather than drawn, and the
+ * tool answers nothing at all when asked how many a second it is drawing. The
+ * speed stands on its own there, and it is the number that matters anyway.
+ */
+function asWork(
+  working: Producing,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  const speed = working.speed >= 10 ? Math.round(working.speed) : working.speed.toFixed(2);
+  return working.pictures_a_second > 0
+    ? t("facts.working_at", { pictures: working.pictures_a_second.toFixed(1), speed })
+    : t("facts.working_speed", { speed });
+}
+
 /** A size in bytes, as somebody reads one. */
 function asSize(bytes: number): string {
   const giga = bytes / 1_000_000_000;
@@ -67,14 +88,23 @@ function asSize(bytes: number): string {
 }
 
 /** One line of the panel: a name and what it is, or nothing at all. */
-function Line({ name, is }: { name: string; is: string | null }) {
+function Line({
+  name,
+  is,
+  behind = false,
+}: {
+  name: string;
+  is: string | null;
+  /** Marks the one number on this panel that can be bad news. */
+  behind?: boolean;
+}) {
   if (is === null || is === "") {
     return null;
   }
   return (
     <div className="facts-line">
       <span className="facts-name">{name}</span>
-      <span className="facts-is">{is}</span>
+      <span className={behind ? "facts-is facts-behind" : "facts-is"}>{is}</span>
     </div>
   );
 }
@@ -82,12 +112,16 @@ function Line({ name, is }: { name: string; is: string | null }) {
 interface Props {
   plan: PlaybackPlan;
   video: React.RefObject<HTMLVideoElement | null>;
+  /** The session producing the film, when one is. Nothing for a film played
+   *  as it lies on the disk, where no tool is at work to ask. */
+  session: string | null;
   t: (key: string, values?: Record<string, string | number>) => string;
   onClose: () => void;
 }
 
-export function PlaybackFacts({ plan, video, t, onClose }: Props) {
+export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
   const [says, setSays] = useState<WhatTheBrowserSays | null>(null);
+  const [working, setWorking] = useState<Producing | null>(null);
 
   /* Looked at on a rhythm rather than on an event: pictures shown and pictures
      dropped only ever climb, and nothing fires when they do. */
@@ -102,6 +136,32 @@ export function PlaybackFacts({ plan, video, t, onClose }: Props) {
     const ticking = window.setInterval(look, LOOK_EVERY_MS);
     return () => window.clearInterval(ticking);
   }, [video]);
+
+  /* How hard the machine is working, which only the server knows. Asked for
+     while this panel is open and not a moment longer: it is a request a
+     second, and the rest of the time nobody is looking at the answer. */
+  useEffect(() => {
+    if (!session) {
+      setWorking(null);
+      return;
+    }
+    const controller = new AbortController();
+    const ask = () => {
+      api
+        .preparation(session, controller.signal)
+        .then((seen) => setWorking(seen.producing))
+        .catch(() => {
+          // A session swept away while the panel was open, or a request cut
+          // off on the way out. The next look carries the same news.
+        });
+    };
+    ask();
+    const ticking = window.setInterval(ask, LOOK_EVERY_MS);
+    return () => {
+      window.clearInterval(ticking);
+      controller.abort();
+    };
+  }, [session]);
 
   const { film, rebuild } = plan;
   const picture = film.picture;
@@ -140,6 +200,15 @@ export function PlaybackFacts({ plan, video, t, onClose }: Props) {
                 ? plan.reasons.map((reason) => t(`reason.${reason.code}`)).join(" · ")
                 : null
             }
+          />
+          {/* The one number here that can be bad news, and the reason the
+              maintainer asked for this panel: a machine producing the film
+              more slowly than it plays will stop the picture, and nothing
+              else on any screen says so before it happens. */}
+          <Line
+            name={t("facts.working")}
+            is={working ? asWork(working, t) : null}
+            behind={working !== null && working.speed < KEEPING_UP}
           />
         </section>
 

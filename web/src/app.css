@@ -1559,6 +1559,15 @@
   min-width: 7rem;
 }
 
+/* The machine is producing the film more slowly than it plays, which is the
+   one thing on this panel that is about to become a stopped picture. Said in
+   the colour the rest of the interface uses for news, and said in the number
+   as well, so it does not rest on a colour alone. */
+.facts-behind {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+
 /* A step back or on. Carries a number beside its arrow, so it is set smaller
    than the marks that carry none. */
 .player-button-step {
