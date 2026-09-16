@@ -29,8 +29,11 @@ import { A_STEP, SPEEDS } from "./engine";
 import type { Playback } from "./engine";
 import type { Fullscreen } from "./fullscreen";
 import {
+  AboutIcon,
   AudioIcon,
   BackIcon,
+  CastIcon,
+  ChaptersIcon,
   ChosenIcon,
   CornerIcon,
   FullscreenIcon,
@@ -281,7 +284,7 @@ export function Overlay(props: Props) {
       {/* All of it inside the bottom strip rather than floating over it: a
           panel standing clear of the controls leaves a band of film between
           the two and reads as two things, when what a viewer sees is one. The
-          sheet goes under the tabs that open it, and the strip grows upwards
+          sheet goes under the row that opens it, and the strip grows upwards
           because it is anchored to the bottom of the picture. */}
       <div className="player-bottom">
         <Seek surroundings={surroundings} thumbnails={thumbnails} />
@@ -289,7 +292,6 @@ export function Overlay(props: Props) {
           <Place zone="bottom_left" surroundings={surroundings} />
           <Place zone="bottom_right" surroundings={surroundings} />
         </div>
-        <Place zone="under_the_row" surroundings={surroundings} />
         {playback.plan && (
           <Drawer
             work={props.work}
@@ -508,28 +510,33 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
         </button>
       );
 
-    /* The three sheets, named rather than behind a button: what a film is,
-       where it changes scene and who is in it are things a viewer looks for
-       by name, and a row of words is quicker to read than an icon to guess.
-       Pressing the open one again folds it away. */
-    case "sheets":
+    /* The three sheets, each its own button in the row rather than a strip of
+       words under it: a row of its own is a band of film given up whether or
+       not anything is open. Pressing the open one again folds it away. */
+    case "info":
+    case "chapters":
+    case "cast": {
+      const Drawn = { info: AboutIcon, chapters: ChaptersIcon, cast: CastIcon }[control];
       return (
-        <div className="player-tabs" role="tablist">
-          {SHEETS.map((sheet) => (
-            <button
-              key={sheet}
-              className={`player-tab${panel === sheet ? " player-tab-open" : ""}`}
-              role="tab"
-              id={`player-sheet-tab-${sheet}`}
-              aria-selected={panel === sheet}
-              aria-controls="player-sheet"
-              onClick={() => onPanel(panel === sheet ? null : sheet)}
-            >
-              {t(`player.sheet.${sheet}`)}
-            </button>
-          ))}
-        </div>
+        <button
+          className={`player-button${panel === control ? " player-button-open" : ""}`}
+          role="tab"
+          id={`player-sheet-tab-${control}`}
+          aria-selected={panel === control}
+          aria-controls="player-sheet"
+          aria-label={t(`player.sheet.${control}`)}
+          onClick={() => onPanel(panel === control ? null : control)}
+        >
+          <Drawn size={ICON} />
+        </button>
       );
+    }
+
+    /* A line between two groups of buttons, so a row of nine reads as what it
+       is: what the film is on one side, what is being done with it on the
+       other. */
+    case "separator":
+      return <span className="player-separator" aria-hidden="true" />;
 
     case "volume":
       return <Volume surroundings={surroundings} />;

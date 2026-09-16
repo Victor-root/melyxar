@@ -219,6 +219,39 @@ export function FullscreenIcon({ leaving, ...props }: IconProps & { leaving: boo
   );
 }
 
+/** What the film is: the letter every interface uses for it. */
+export function AboutIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9.2" />
+      <path d="M12 10.8v5.4" />
+      <path d="M12 7.7v.1" strokeWidth={2.4} />
+    </Icon>
+  );
+}
+
+/** Where the film changes scene: frames of film, side by side. */
+export function ChaptersIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="2.8" y="6.4" width="8" height="11.2" rx="1.6" />
+      <rect x="13.2" y="6.4" width="8" height="11.2" rx="1.6" />
+    </Icon>
+  );
+}
+
+/** Who is in it: two people, the nearer one whole. */
+export function CastIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="9.4" cy="8.4" r="3.4" />
+      <path d="M3.4 19.4a6 6 0 0 1 12 0" />
+      <path d="M16 5.4a3.4 3.4 0 0 1 0 6" />
+      <path d="M17.4 14.2a6 6 0 0 1 3.2 5.2" />
+    </Icon>
+  );
+}
+
 /** A tick, for what is chosen in a menu. */
 export function ChosenIcon(props: IconProps) {
   return (

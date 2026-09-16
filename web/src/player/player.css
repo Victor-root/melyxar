@@ -1,18 +1,17 @@
 /*
  * The player, and nothing else in this interface.
  *
- * Two kinds of surface, and the difference matters.
+ * Always dark, whatever the rest of the interface is set to: it is drawn over
+ * a film, and there is no such thing as a light theme on top of a picture. The
+ * accent is the one token that does travel, and it has to: it is a viewer's to
+ * choose.
  *
- * What is drawn straight onto the film is white on a shadow, whatever theme
- * the interface is set to: there is no such thing as a light theme on top of
- * a picture, and a black clock over a night scene is a clock nobody can read.
- *
- * What is drawn on a panel of its own takes the interface's colours like every
- * other screen, because a panel is a surface and a viewer who chose the light
- * theme chose it for surfaces. The rule that keeps that safe is that a panel
- * takes its background and its wording from the theme together, never one of
- * the two: reading the theme's text colour onto a hard dark panel is what once
- * left every word in the menus invisible.
+ * Said once, in the block below, rather than written into every rule: the
+ * player redefines the theme's own surface and text tokens for itself, and
+ * everything under it goes on reading tokens like the rest of the interface.
+ * That is what keeps a panel's background and its wording moving together,
+ * which is the thing that matters: one of the two read from the theme and the
+ * other written down is what once left every word in the menus invisible.
  *
  * Its own file rather than a block of the main stylesheet: the player is the
  * one screen here that is going to be rewritten on its own, and a rule written
@@ -76,7 +75,6 @@
 
   /* The drawer: how large what is in it is drawn. A viewer who wants larger
      scenes or smaller faces changes these and nothing else. */
-  --player-drawer-tab-size: 15px;
   --player-drawer-title: 26px;
   --player-drawer-poster: 118px;
   --player-drawer-card: 214px;
@@ -85,11 +83,13 @@
      set their accent to green did not ask for a green one. */
   --player-star: #e5a00d;
 
-  /* What a panel is made of. The theme's own raised surface, carried through
-     a token of the player's own so that the two panels that sit half over the
-     film can be given a little transparency without the rest of the interface
-     following them. */
-  --player-panel: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  /* The ring that turns while a film is being made. */
+  --player-spinner: 52px;
+
+  /* On or off, drawn to Material's shape at the size a menu line wants
+     rather than the size a thumb wants. */
+  --player-switch-across: 40px;
+  --player-switch-down: 24px;
 }
 
 .player {
@@ -97,6 +97,27 @@
   inset: 0;
   z-index: 100;
   background: #000;
+
+  /* The theme's own tokens, answered dark for everything inside the player.
+     Every rule below reads these rather than a colour, so the player is one
+     edit away from following the interface again if that is ever wanted, and
+     a panel can never end up half themed. */
+  --surface-raised: #101216;
+  --surface-hover: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.34);
+  --text: #fff;
+  --text-soft: rgba(255, 255, 255, 0.72);
+  --text-faint: rgba(255, 255, 255, 0.55);
+
+  /* What a panel is made of: the surface above, with enough of the film
+     showing through it to say it is standing on one.
+
+     Here rather than beside the sizes, and this is not tidiness. A custom
+     property is worked out where it is written, so one written on the page
+     root would read the interface's surface and come out white on a light
+     theme however dark everything under it was told to be. */
+  --player-panel: color-mix(in srgb, var(--surface-raised) 94%, transparent);
 }
 
 /* What goes fullscreen: the picture and everything drawn over it together. */
@@ -217,13 +238,6 @@
 .player-zone-bottom-right {
   gap: 2px;
   margin-left: auto;
-}
-
-/* The row of tabs, under the controls and above whatever they open. No height
-   of its own: it is as tall as the words in it, not as tall as a button. */
-.player-zone-under-the-row {
-  min-height: 0;
-  margin-top: 2px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -884,18 +898,58 @@
   gap: var(--gap);
 }
 
+/* The shape Material's expressive indicator uses: a thin neutral ring, and
+   over it an active one whose edge is a wave rather than a smooth circle. The
+   turning is what makes the wave travel, since a wave turned by one of its
+   own lengths lands back on itself. */
 .player-spinner {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.16);
-  border-top-color: var(--accent-bright);
-  animation: player-spin 900ms linear infinite;
+  width: var(--player-spinner);
+  height: var(--player-spinner);
+  overflow: visible;
+  animation: player-spinner-turn 2.4s linear infinite;
 }
 
-@keyframes player-spin {
+.player-spinner-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 2;
+}
+
+.player-spinner-wave {
+  fill: none;
+  stroke: var(--accent-bright);
+  stroke-width: 4;
+  stroke-linecap: round;
+  /* A lit piece of the ring and a dark rest of it. The two always add up to
+     exactly one ring: a pattern longer than what it is drawn on leaves the lit
+     piece nowhere to be for part of every turn, which is a ring that blinks
+     out and back. */
+  stroke-dasharray: var(--player-spinner-round);
+  animation: player-spinner-sweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Two turns of its own against one of the sweep, which is what keeps the lit
+   piece from starting in the same place twice running. */
+@keyframes player-spinner-turn {
   to {
     transform: rotate(1turn);
+  }
+}
+
+/* The lit piece grows out of nothing, runs round, and is drawn back in. Every
+   figure a share of the ring, so it holds at any size. */
+@keyframes player-spinner-sweep {
+  0% {
+    stroke-dasharray: calc(var(--player-spinner-round) * 0.2) calc(var(--player-spinner-round) * 0.8);
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: calc(var(--player-spinner-round) * 0.68) calc(var(--player-spinner-round) * 0.32);
+    stroke-dashoffset: calc(var(--player-spinner-round) * -0.24);
+  }
+  100% {
+    stroke-dasharray: calc(var(--player-spinner-round) * 0.2) calc(var(--player-spinner-round) * 0.8);
+    stroke-dashoffset: calc(var(--player-spinner-round) * -1);
   }
 }
 
@@ -903,10 +957,15 @@
    left without an answer: the ring stops turning and breathes instead. */
 @media (prefers-reduced-motion: reduce) {
   .player-spinner {
-    animation: player-breathe 1.6s ease-in-out infinite;
+    animation: player-spinner-breathe 1.6s ease-in-out infinite;
   }
 
-  @keyframes player-breathe {
+  .player-spinner-wave {
+    animation: none;
+    stroke-dasharray: none;
+  }
+
+  @keyframes player-spinner-breathe {
     50% {
       opacity: 0.4;
     }
@@ -1341,10 +1400,12 @@
   width: 44px;
   height: 44px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 50%;
-  background: var(--surface-raised);
-  color: var(--text);
+  /* A light disc rather than a panel-coloured one: it floats over the row
+     rather than sitting in it, and a dark disc on a dark panel is a hole. */
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
   font-size: 26px;
   line-height: 1;
   cursor: pointer;
@@ -1354,8 +1415,8 @@
 }
 
 .player-drawer-along:hover {
-  border-color: var(--accent);
-  color: var(--accent-bright);
+  background: #fff;
+  color: var(--accent);
 }
 
 .player-drawer-along-back {
@@ -1475,50 +1536,6 @@
 }
 
 /* ---------------------------------------------------------------------------
- * The row of tabs, and what each one says under the controls
- * ------------------------------------------------------------------------ */
-
-.player-tabs {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
-}
-
-/* A pill rather than an underline: it is the shape the player the maintainer
-   already uses gives the open one, and it reads at a glance. */
-.player-tab {
-  padding: 8px 18px;
-  border: 2px solid transparent;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.78);
-  font: inherit;
-  font-size: var(--player-drawer-tab-size);
-  font-weight: 600;
-  cursor: pointer;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
-  transition:
-    background var(--quick) var(--ease),
-    border-color var(--quick) var(--ease),
-    color var(--quick) var(--ease);
-}
-
-.player-tab:hover {
-  border-color: var(--accent);
-  color: var(--accent-bright);
-}
-
-.player-tab-open {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-}
-
-.player-tab:focus-visible {
-  outline: 2px solid var(--accent-bright);
-  outline-offset: 2px;
-}
-
-/* ---------------------------------------------------------------------------
  * What a button is called, while a hand is on it
  * ------------------------------------------------------------------------ */
 
@@ -1566,6 +1583,55 @@
   transform-origin: top center;
 }
 
+/* A word centred on a button near an edge of the picture runs off it, and a
+   word half off the screen is worse than no word at all. The button at each
+   end of a row hangs its word from its own edge instead, so it grows inwards.
+
+   The two after it as well: a long word on the second or third button reaches
+   just as far, and there is no cost to a word that leans in when it had room
+   to be centred. */
+.player-zone-bottom-left .player-button[aria-label]:nth-child(-n + 3)::before,
+.player-zone-top-left .player-button[aria-label]:first-child::before {
+  left: 0;
+  transform: translateX(0) scale(0.86);
+  transform-origin: bottom left;
+}
+
+.player-zone-bottom-left .player-button[aria-label]:nth-child(-n + 3):hover::before,
+.player-zone-bottom-left .player-button[aria-label]:nth-child(-n + 3):focus-visible::before,
+.player-zone-top-left .player-button[aria-label]:first-child:hover::before,
+.player-zone-top-left .player-button[aria-label]:first-child:focus-visible::before {
+  transform: translateX(0) scale(1);
+}
+
+.player-zone-top-left .player-button[aria-label]:first-child::before {
+  transform-origin: top left;
+}
+
+.player-zone-bottom-right .player-button[aria-label]:nth-last-child(-n + 3)::before {
+  left: auto;
+  right: 0;
+  transform: translateX(0) scale(0.86);
+  transform-origin: bottom right;
+}
+
+.player-zone-bottom-right .player-button[aria-label]:nth-last-child(-n + 3):hover::before,
+.player-zone-bottom-right .player-button[aria-label]:nth-last-child(-n + 3):focus-visible::before {
+  transform: translateX(0) scale(1);
+}
+
+/* ---------------------------------------------------------------------------
+ * Two groups of buttons in one row
+ * ------------------------------------------------------------------------ */
+
+.player-separator {
+  flex: none;
+  width: 1px;
+  height: 22px;
+  margin: 0 var(--gap-tight);
+  background: rgba(255, 255, 255, 0.28);
+}
+
 /* ---------------------------------------------------------------------------
  * On or off
  * ------------------------------------------------------------------------ */
@@ -1577,9 +1643,9 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  width: 52px;
-  height: 32px;
-  padding: 0 4px;
+  width: var(--player-switch-across);
+  height: var(--player-switch-down);
+  padding: 0 3px;
   border: 2px solid var(--border-strong);
   border-radius: var(--radius-pill);
   background: var(--surface-hover);
@@ -1589,8 +1655,8 @@
 }
 
 .player-switch-handle {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   margin-left: 0;
   border-radius: 50%;
   background: var(--text-faint);
@@ -1607,11 +1673,11 @@
 }
 
 .player-switch[data-on="yes"] .player-switch-handle {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   /* Pushed across by what the handle does not fill, so it lands on the far
      edge whatever the track is set to. */
-  margin-left: calc(100% - 24px);
+  margin-left: calc(100% - 18px);
   background: var(--accent-contrast);
 }
 
