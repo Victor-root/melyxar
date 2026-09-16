@@ -38,10 +38,13 @@ export const CONTROLS = [
   "elapsed",
   "remaining",
   "ends_at",
+  "info",
+  "chapters",
+  "cast",
+  "separator",
   "favourite",
   "subtitles",
   "audio",
-  "sheets",
   "volume",
   "settings",
   "corner",
@@ -53,9 +56,9 @@ export type Control = (typeof CONTROLS)[number];
 /**
  * The places a control can sit.
  *
- * The strip across the top, the two ends of the bar itself, the row underneath
- * it, and one row under that for what opens out rather than acts at once.
- * Anything else would be a place nobody looks.
+ * Four of them, and they are the four a player has: the strip across the top,
+ * the two ends of the bar itself, and the row underneath it. Anything else
+ * would be a place nobody looks.
  */
 export const ZONES = [
   "top_left",
@@ -64,7 +67,6 @@ export const ZONES = [
   "after_bar",
   "bottom_left",
   "bottom_right",
-  "under_the_row",
 ] as const;
 
 export type Zone = (typeof ZONES)[number];
@@ -89,8 +91,21 @@ export const DEFAULT_ARRANGEMENT: Arrangement = {
   before_bar: ["elapsed"],
   after_bar: ["remaining"],
   bottom_left: ["previous_chapter", "step_back", "play", "step_on", "next_chapter", "ends_at"],
-  bottom_right: ["favourite", "subtitles", "audio", "volume", "settings", "corner", "fullscreen"],
-  under_the_row: ["sheets"],
+  bottom_right: [
+    // What the film is, in front of what is being done with it, with a line
+    // between so the two read as two groups rather than one long row.
+    "info",
+    "chapters",
+    "cast",
+    "separator",
+    "favourite",
+    "subtitles",
+    "audio",
+    "volume",
+    "settings",
+    "corner",
+    "fullscreen",
+  ],
 };
 
 const STORED = "melyxar.player.arrangement";

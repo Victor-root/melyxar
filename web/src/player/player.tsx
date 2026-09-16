@@ -40,6 +40,7 @@ import { markFor, useBranding } from "./logo";
 import { Overlay } from "./overlay";
 import type { Panel, Shape } from "./overlay";
 import { rememberSettings, storedSettings } from "./settings";
+import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
 import "./player.css";
 
@@ -277,7 +278,7 @@ export function Player({
               one of them is, which a ring cannot say at all. */}
           {rebuilt && readyPicture !== pictureKey && !failed && (
             <div className="player-working">
-              <span className="player-spinner" aria-hidden="true" />
+              <Spinner />
               <p className="player-notice player-notice-bare">
                 {t(`player.step.${preparing?.step ?? "starting"}`)}
                 {/* In seconds of film, which the server works out: how long a
