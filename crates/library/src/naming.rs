@@ -16,6 +16,13 @@
 //! of the title: the word naming which cut of the film this is, and a marker
 //! shouting in capitals at the end of a title that does not.
 //!
+//! Three things are taken off the front before any of that, because they stand
+//! where the title is expected and a provider asked about them finds nothing:
+//! the address of the site a file was handed out from, the name of a group in
+//! brackets of its own, and a year written before the title rather than after
+//! it. That last one is the only shape where the boundary sits the other way
+//! round, and it says so by being in brackets: no film is called `(2019)`.
+//!
 //! Two more things are dropped, and neither is written down here: they are
 //! read off the library itself. The word its owner signs names with, because a
 //! signature repeats and a title does not. And whatever was stuck to the front
@@ -59,7 +66,7 @@ pub fn parse(file_name: &str, current_year: i32) -> ParsedName {
 /// from any list: what is dropped here is what those names carry and no title
 /// ever does.
 pub fn parse_signed(file_name: &str, current_year: i32, signs: &LibrarySigns) -> ParsedName {
-    let file_name = signs.without_the_glued_prefix(file_name);
+    let file_name = without_the_site_in_front(signs.without_the_glued_prefix(file_name));
     let markers = &signs.marks;
     let stem = strip_extension(file_name);
     // The underscore separates words just like the dot does. Personal markers
@@ -67,9 +74,23 @@ pub fn parse_signed(file_name: &str, current_year: i32, signs: &LibrarySigns) ->
     // the tag becomes unrecognisable and can land in the title.
     let normalised = stem.replace(['.', '_'], " ");
     let separated: Vec<&str> = normalised.split_whitespace().collect();
-    let words = separate_a_year_from_what_is_glued_to_it(&separated, current_year);
+    let whole = separate_a_year_from_what_is_glued_to_it(&separated, current_year);
+    let words = drop_what_is_bracketed_in_front(&whole);
 
-    if let Some(position) = find_year(&words, current_year) {
+    // A year written in front of the title says so plainly, so the rest of the
+    // name is read as one that carries no year at all. Reading it for a year
+    // as well would let a title carrying a number of its own outrank the date
+    // somebody took the trouble to write down.
+    if let Some((year, rest)) = a_year_written_in_front(words, current_year) {
+        let boundary = first_technical_tag(rest).unwrap_or(rest.len());
+        return ParsedName {
+            title: title_of(&rest[..boundary], markers),
+            year: Some(year),
+            tags: tags_from(&rest[boundary..]),
+        };
+    }
+
+    if let Some(position) = find_year(words, current_year) {
         return ParsedName {
             title: title_of(&words[..position], markers),
             year: bare(words[position]).parse().ok(),
@@ -80,12 +101,37 @@ pub fn parse_signed(file_name: &str, current_year: i32, signs: &LibrarySigns) ->
     // No year to cut at. The name still has to give up a title, and a name
     // with nothing technical in it at all would have been found by now, so
     // what is left is the two shapes a year would have handled.
-    let boundary = first_technical_tag(&words).unwrap_or(words.len());
+    let boundary = first_technical_tag(words).unwrap_or(words.len());
     ParsedName {
         title: title_of(&words[..boundary], markers),
         year: None,
         tags: tags_from(&words[boundary..]),
     }
+}
+
+/// A year somebody wrote in front of the title, and the rest of the name.
+///
+/// The whole reading rests on the year being a boundary with the title before
+/// it, and this one shape puts it the other way round. It is told apart by its
+/// brackets: no film is called `(2019)`, so a bracketed year standing in front
+/// of everything else is a date and not a name. Written bare it is left where
+/// it is, because a film really can be called `1917`.
+fn a_year_written_in_front<'a, 'b>(
+    words: &'b [&'a str],
+    current_year: i32,
+) -> Option<(i32, &'b [&'a str])> {
+    let latest = current_year + YEARS_AHEAD;
+    let (first, rest) = words.split_first()?;
+    let stripped = bare(first);
+    // Never the whole name, and never written bare.
+    if rest.is_empty() || stripped.len() != 4 || stripped.len() == first.len() {
+        return None;
+    }
+    stripped
+        .parse::<i32>()
+        .ok()
+        .filter(|year| (EARLIEST_YEAR..=latest).contains(year))
+        .map(|year| (year, rest))
 }
 
 /// Builds the title out of the words that came before the boundary.
@@ -108,21 +154,113 @@ fn separate_a_year_from_what_is_glued_to_it<'a>(
     let mut separated = Vec::with_capacity(words.len());
 
     for word in words {
-        let (head, rest) = word.split_at(word.len().min(4));
-        let is_a_year = head.len() == 4
-            && head.chars().all(|c| c.is_ascii_digit())
-            && head
+        // Read on the bytes rather than cut first. Cutting a word at its
+        // fourth byte splits a letter in half whenever an accent sits there,
+        // which is not an error but a panic: `après` is three plain letters
+        // and then one written in two bytes, and the whole scan died on the
+        // first film with that word in its name. Four digits are four bytes,
+        // so the cut below can only ever land between two letters.
+        let opens_with_a_year = word.len() > 4
+            && word.as_bytes()[..4].iter().all(u8::is_ascii_digit)
+            && word[..4]
                 .parse::<i32>()
                 .is_ok_and(|year| (EARLIEST_YEAR..=latest).contains(&year));
 
-        if is_a_year && TECHNICAL_TAGS.contains(&rest.to_lowercase().as_str()) {
-            separated.push(head);
-            separated.push(rest);
+        if opens_with_a_year && TECHNICAL_TAGS.contains(&word[4..].to_lowercase().as_str()) {
+            separated.push(&word[..4]);
+            separated.push(&word[4..]);
         } else {
             separated.push(word);
         }
     }
     separated
+}
+
+/// Drops whatever a release put in brackets in front of everything else.
+///
+/// A single bracketed word is left alone anywhere else in a name, because that
+/// is how a year is written and how a tag is written. In front of the title it
+/// is neither: a release that signs its work signs it there. What sits in it is
+/// not looked at, since the group that put it there is exactly what no list can
+/// hold.
+///
+/// Square brackets and braces only, and it has to hold a letter. Round brackets
+/// belong to titles as well as to releases, and `(500) Days of Summer` is a
+/// film that would otherwise lose the front of its name.
+fn drop_what_is_bracketed_in_front<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
+    let wholly_bracketed = |word: &str| {
+        word.chars().count() > 2
+            && word.starts_with(['[', '{'])
+            && word.ends_with([']', '}'])
+            && word.chars().any(|c| c.is_alphabetic())
+    };
+    match words.split_first() {
+        // Never the whole name: a film with no title left is a film nobody
+        // finds again.
+        Some((first, rest)) if !rest.is_empty() && wholly_bracketed(first) => rest,
+        _ => words,
+    }
+}
+
+/// How long the last piece of a site address can be.
+const LONGEST_TOP_LEVEL: usize = 6;
+
+/// The name with the address of a site taken off its front.
+///
+/// Whoever hands a file out often writes where it came from first, and that
+/// address is then the title as far as anything here is concerned: a provider
+/// asked about it finds nothing at all.
+///
+/// Only an address that says so is taken off: one beginning with `www.`, or
+/// one sitting in brackets of its own. A bare `something.tld` is not enough,
+/// because a dot separates words in these names and `Dr.No` is then an address
+/// with as good a last piece as any: a film would lose its title to a rule
+/// that went that far.
+fn without_the_site_in_front(file_name: &str) -> &str {
+    let trimmed = file_name.trim_start();
+    let opened = trimmed.starts_with(['[', '(']);
+    let rest = if opened {
+        trimmed[1..].trim_start()
+    } else {
+        trimmed
+    };
+
+    let Some(after_www) = rest
+        .get(..4)
+        .filter(|start| start.eq_ignore_ascii_case("www."))
+        .map(|_| &rest[4..])
+    else {
+        return file_name;
+    };
+
+    let host_ends = after_www
+        .find(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != '-')
+        .unwrap_or(after_www.len());
+    let host = &after_www[..host_ends];
+    let Some((_, top_level)) = host.rsplit_once('.') else {
+        return file_name;
+    };
+    if top_level.is_empty()
+        || top_level.len() > LONGEST_TOP_LEVEL
+        || !top_level.chars().all(|c| c.is_ascii_alphabetic())
+    {
+        return file_name;
+    }
+
+    // Past the address: whatever closes the brackets it was put in, and
+    // whatever separates it from the name proper.
+    let after_host = after_www[host_ends..].trim_start();
+    let after_bracket = match opened {
+        true => after_host.strip_prefix([']', ')']).unwrap_or(after_host),
+        false => after_host,
+    };
+    let name = after_bracket.trim_start_matches([' ', '-', '_', '.']);
+    // Never the whole name: an address and nothing else leaves nothing to look
+    // a film up by, and the name as it stands at least says something.
+    match name.is_empty() {
+        true => file_name,
+        false => name,
+    }
 }
 
 /// Drops an aside somebody put in square brackets or braces inside a title.
@@ -305,7 +443,25 @@ fn could_be_a_mark(word: &str) -> bool {
 /// this is, and the marker a release or a person signs with. Neither belongs
 /// to a title, and a provider asked about either finds nothing.
 fn trim_the_end<'a>(words: &'a [&'a str], markers: &BTreeSet<String>) -> &'a [&'a str] {
-    trim_trailing_marker(trim_edition_words(trim_known_marks(words, markers)))
+    trim_dangling_separators(trim_trailing_marker(trim_edition_words(trim_known_marks(
+        words, markers,
+    ))))
+}
+
+/// Drops a separator left standing on its own at the end of a title.
+///
+/// A name written `Title - Year - 1080p` puts the dash between the two, and
+/// cutting at the year leaves it hanging. Last of the trims, so that it also
+/// catches the one left behind by a word the others took off.
+fn trim_dangling_separators<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
+    let mut kept = words;
+    while let Some((last, rest)) = kept.split_last() {
+        if rest.is_empty() || last.chars().any(|c| c.is_alphanumeric()) {
+            break;
+        }
+        kept = rest;
+    }
+    kept
 }
 
 /// Drops the marks this library signs with, however many are stacked up.
@@ -413,10 +569,14 @@ fn bare(word: &str) -> &str {
 /// a year of its own: in such a name the release year comes after the title,
 /// so taking the last one keeps the title intact.
 ///
-/// A bare year is only accepted when something follows it, because a trailing
-/// number is far more likely to be part of the title than a release year. A
-/// year somebody put in brackets carries no such doubt: no film is called
-/// `(2019)`, so it is a boundary wherever it sits.
+/// A year at the very end of a name, with nothing after it, is still the year.
+/// Measured at the provider rather than argued: of a broad sample of real
+/// films, one in a hundred and forty carries a year in its own title, while a
+/// name written `Title Year` and nothing else is one of the commonest shapes
+/// there is. Asked for such a title with the year still stuck on it, the
+/// provider answered nothing at all twenty five times out of twenty eight, so
+/// leaving it there is not the cautious reading: it is the one that never
+/// finds the film.
 fn find_year(words: &[&str], current_year: i32) -> Option<usize> {
     let latest = current_year + YEARS_AHEAD;
     words
@@ -424,9 +584,8 @@ fn find_year(words: &[&str], current_year: i32) -> Option<usize> {
         .enumerate()
         .filter(|(index, word)| {
             let stripped = bare(word);
-            (*index + 1 < words.len() || stripped.len() != word.len())
-                // A title cannot be only a year.
-                && *index > 0
+            // A title cannot be only a year.
+            *index > 0
                 && stripped.len() == 4
                 && stripped.chars().all(|c| c.is_ascii_digit())
                 && stripped
@@ -522,18 +681,37 @@ fn first_technical_tag(words: &[&str]) -> Option<usize> {
 /// one name long and would name its owner: a marker shouts in capitals at the
 /// end of a title that does not. A title written wholly in capitals keeps
 /// every word, since there is then nothing to tell apart.
+///
+/// Whether the title shouts is decided only on the words that could. A number
+/// cannot shout, nor can a word of one letter, and counting those as words that
+/// do not cost `12 ANGRY MEN` and `A CLOCKWORK ORANGE` their last word: the
+/// title was read as one that does not shout because of what stands in front of
+/// it, and the word that shouts loudest in it went.
 fn trim_trailing_marker<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
+    let letters_of = |word: &str| word.chars().filter(|c| c.is_alphabetic()).count();
     let shouting = |word: &str| {
-        let mut letters = word.chars().filter(|c| c.is_alphabetic());
-        word.chars().count() >= 2
-            && word.chars().filter(|c| c.is_alphabetic()).count() >= 2
-            && letters.all(|c| c.is_uppercase())
-            // A sequel number is written this way and belongs to the title.
-            && !word.chars().all(|c| "IVXLCDM".contains(c))
+        letters_of(word) >= 2
+            && word
+                .chars()
+                .filter(|c| c.is_alphabetic())
+                .all(char::is_uppercase)
     };
+    // A sequel number is written in capitals and belongs to the title. Asked
+    // of the word being dropped and of that one only: a word of the title that
+    // happens to be spelt out of those same letters, `DIX` or `MI`, is still a
+    // word of a title written in capitals, and reading it as a number said the
+    // title did not shout and took its last word away.
+    let a_sequel_number = |word: &str| word.chars().all(|c| "IVXLCDM".contains(c));
+    let could_shout = |word: &&&str| letters_of(word) >= 2;
 
     match words.split_last() {
-        Some((last, rest)) if shouting(last) && rest.iter().any(|word| !shouting(word)) => rest,
+        Some((last, rest))
+            if shouting(last)
+                && !a_sequel_number(last)
+                && rest.iter().filter(could_shout).any(|word| !shouting(word)) =>
+        {
+            rest
+        }
         _ => words,
     }
 }
@@ -1213,17 +1391,29 @@ mod tests {
     }
 
     #[test]
-    fn a_trailing_number_is_not_mistaken_for_a_release_year() {
-        // Nothing follows it, so it belongs to the title.
-        let result = parsed("Harbour 2049.mkv");
-        assert_eq!(result.title, "Harbour 2049");
-        assert_eq!(result.year, None);
+    fn a_year_at_the_very_end_of_a_name_is_still_the_year() {
+        // `Title Year` and nothing else is one of the commonest names there
+        // is, and it used to be read as a title carrying a number. Asked for
+        // such a title with the year still stuck to it, the provider answers
+        // nothing at all: measured on real films, twenty five times out of
+        // twenty eight. Reading it as part of the title was not the cautious
+        // answer, it was the one that never found the film.
+        let result = parsed("Quiet Harbour 2019.mkv");
+        assert_eq!(result.title, "Quiet Harbour");
+        assert_eq!(result.year, Some(2019));
 
-        // The same rule when the number would have been a plausible year:
-        // a film called after a year keeps it in its title.
-        let plainly_a_title = parse("Harbour 2019.mkv", NOW);
-        assert_eq!(plainly_a_title.title, "Harbour 2019");
-        assert_eq!(plainly_a_title.year, None);
+        // A number that could not be a year is still part of the title.
+        let carried = parsed("Harbour 2049.mkv");
+        assert_eq!(carried.title, "Harbour 2049");
+        assert_eq!(carried.year, None);
+
+        // What it costs, said out loud: a film whose own title ends in a year
+        // and whose name says nothing else loses it. Nothing in such a name
+        // tells the two apart, and the reading that finds the other films is
+        // the one taken.
+        let cost = parsed("Harbour 1984.mkv");
+        assert_eq!(cost.title, "Harbour");
+        assert_eq!(cost.year, Some(1984));
     }
 
     #[test]
@@ -1530,6 +1720,310 @@ mod tests {
             let result = parse(name, NOW);
             assert_eq!(result.title, expected_title, "title of {name}");
             assert_eq!(result.year, expected_year, "year of {name}");
+        }
+    }
+
+    #[test]
+    fn a_group_that_signs_in_front_of_the_title_is_not_the_title() {
+        // Square brackets and braces only. A title really can begin with a
+        // number in round brackets, and there is a well known film that does.
+        let signed = parsed("[SOMEGROUP] Quiet Harbour (2019) 1080p.mkv");
+        assert_eq!(signed.title, "Quiet Harbour");
+        assert_eq!(signed.year, Some(2019));
+
+        let round = parsed("(500) Days Of Summer (2009) 1080p.mkv");
+        assert_eq!(
+            round.title, "(500) Days Of Summer",
+            "round brackets belong to titles as well as to releases"
+        );
+        assert_eq!(round.year, Some(2009));
+
+        let nothing_else = parsed("[SOMEGROUP].mkv");
+        assert_eq!(
+            nothing_else.title, "[SOMEGROUP]",
+            "a film with no title left is a film nobody finds again"
+        );
+    }
+
+    #[test]
+    fn the_address_of_a_site_written_in_front_of_a_name_is_taken_off() {
+        for name in [
+            "www.Somewhere.com - Quiet.Harbour.2019.1080p.WEB-DL.mkv",
+            "[ www.somewhere.cd ] Quiet.Harbour.2019.1080p.WEB-DL.mkv",
+            "www.somewhere.co.uk_Quiet.Harbour.2019.1080p.WEB-DL.mkv",
+        ] {
+            let result = parse(name, NOW);
+            assert_eq!(result.title, "Quiet Harbour", "title of {name}");
+            assert_eq!(result.year, Some(2019), "year of {name}");
+        }
+
+        // Nothing that does not say it is an address. A dot separates words
+        // in these names, so `Dr.No` is an address as good as any and a film
+        // would lose its title to a rule that went that far.
+        let doctor = parsed("Dr.No.1962.1080p.BluRay.mkv");
+        assert_eq!(doctor.title, "Dr No");
+        assert_eq!(doctor.year, Some(1962));
+    }
+
+    #[test]
+    fn a_year_written_in_front_of_the_title_is_read_where_it_stands() {
+        let result = parsed("(2009) Quiet Harbour 1080p BluRay.mkv");
+        assert_eq!(result.title, "Quiet Harbour");
+        assert_eq!(result.year, Some(2009));
+
+        // It settles the question by itself: a number in the title that reads
+        // like a year no longer outranks the date somebody wrote down.
+        let carried = parsed("(2020) Quiet Harbour 1984 1080p BluRay.mkv");
+        assert_eq!(carried.title, "Quiet Harbour 1984");
+        assert_eq!(carried.year, Some(2020));
+
+        // Written bare it stays where it is: a film really can be called 1917.
+        let bare_one = parsed("2019 Quiet Harbour 1080p.mkv");
+        assert_eq!(bare_one.title, "2019 Quiet Harbour");
+        assert_eq!(bare_one.year, None);
+    }
+
+    #[test]
+    fn a_title_written_wholly_in_capitals_keeps_every_word_of_itself() {
+        // What this catches is the word in front rather than the word taken
+        // off: a number, a word of one letter, and a word spelt out of the
+        // letters a sequel is numbered with all used to say the title did not
+        // shout, and the last word of the title went with it.
+        for (name, expected) in [
+            ("12.ANGRY.MEN.1957.1080P.BLURAY.MKV", "12 ANGRY MEN"),
+            (
+                "A.CLOCKWORK.ORANGE.1971.1080P.BLURAY.MKV",
+                "A CLOCKWORK ORANGE",
+            ),
+            (
+                "DIX.POUR.CENT.LE.FILM.2021.1080P.MKV",
+                "DIX POUR CENT LE FILM",
+            ),
+        ] {
+            assert_eq!(parse(name, NOW).title, expected, "title of {name}");
+        }
+
+        // And the marker is still taken off a title that does not shout.
+        let signed = parsed("Quiet Harbour SOMEGROUP.mkv");
+        assert_eq!(signed.title, "Quiet Harbour");
+    }
+
+    #[test]
+    fn a_separator_left_standing_between_the_title_and_the_year_is_dropped() {
+        let result = parsed("Quiet Harbour - 2019 - 720p.mp4");
+        assert_eq!(result.title, "Quiet Harbour");
+        assert_eq!(result.year, Some(2019));
+    }
+
+    /// Real films, named every way a real film is named.
+    ///
+    /// The rest of this test set is invented on purpose, because the
+    /// maintainer's own files must never reach the repository. These titles
+    /// are neither his nor invented: they are read off a public catalogue of
+    /// films, and they are here because an invented title is always the shape
+    /// its inventor had in mind. A real catalogue holds titles that are only a
+    /// year, titles carrying a year of their own, titles made of one letter
+    /// words, titles written in brackets and titles that end in a word this
+    /// reading takes for a technical one, and every one of those broke
+    /// something below.
+    ///
+    /// The names are built rather than listed: one film crossed with every
+    /// convention gives a thousand names out of forty lines, and a convention
+    /// that has to be spelled out once is a convention somebody can read.
+    mod names_of_films_that_exist {
+        use super::*;
+
+        /// Films that exist, chosen for the shapes their names take.
+        ///
+        /// Each of these is a case that cost something: `12 Angry Men` and
+        /// `A Clockwork Orange` lost their last word on a name written wholly
+        /// in capitals, `(500) Days of Summer` lost the front of its name to
+        /// the rule that drops a group's brackets, `Une Bataille après
+        /// l'autre` killed the scan outright, and `Blade Runner 2049` and
+        /// `1917` are the two ways a title carries a number that reads like a
+        /// year.
+        const FILMS: &[(&str, i32)] = &[
+            ("Inception", 2010),
+            ("Parasite", 2019),
+            ("12 Angry Men", 1957),
+            ("(500) Days of Summer", 2009),
+            ("8 Mile", 2002),
+            ("10 Cloverfield Lane", 2016),
+            ("1917", 2019),
+            ("2012", 2009),
+            ("Blade Runner 2049", 2017),
+            ("The Godfather Part II", 1974),
+            ("Rocky IV", 1985),
+            ("Mad Max: Fury Road", 2015),
+            ("Amélie", 2001),
+            ("Léon: The Professional", 1994),
+            ("La Haine", 1995),
+            ("Ocean's Eleven", 2001),
+            ("Uncut Gems", 2019),
+            ("The Final Cut", 2004),
+            ("A Clockwork Orange", 1971),
+            ("M*A*S*H", 1970),
+            ("Se7en", 1995),
+            ("Fahrenheit 9/11", 2004),
+            ("Face/Off", 1997),
+            ("Guardians of the Galaxy Vol. 2", 2017),
+            (
+                "Dr. Strangelove or: How I Learned to Stop Worrying and Love the Bomb",
+                1964,
+            ),
+            ("The Good, the Bad and the Ugly", 1966),
+            ("2001: A Space Odyssey", 1968),
+            ("Spirited Away", 2001),
+            ("Kill Bill: Vol. 1", 2003),
+            ("The Lord of the Rings: The Return of the King", 2003),
+            ("Three Billboards Outside Ebbing, Missouri", 2017),
+            ("Dune: Part Two", 2024),
+            ("Everything Everywhere All at Once", 2022),
+            ("The Hateful Eight", 2015),
+            ("Zack Snyder's Justice League", 2021),
+            ("The Intouchables", 2011),
+            ("Avengers: Endgame", 2019),
+            ("John Wick: Chapter 4", 2023),
+            ("Terminator 2: Judgment Day", 1991),
+            ("X-Men: Days of Future Past", 2014),
+            ("Une Bataille après l'autre", 2025),
+        ];
+
+        /// A title as somebody typing a name writes it: what stands between
+        /// two words becomes a space, and the rest of the punctuation stays
+        /// where it is.
+        fn in_words(title: &str) -> String {
+            let spaced: String = title
+                .chars()
+                .map(|c| match c {
+                    ':' | '/' => ' ',
+                    other => other,
+                })
+                .collect();
+            spaced.split_whitespace().collect::<Vec<_>>().join(" ")
+        }
+
+        /// The same title as a release writes it, words joined by dots.
+        fn in_dots(title: &str) -> String {
+            in_words(title).replace(' ', ".")
+        }
+
+        /// Every way one film is named, with the year written in.
+        fn every_way(title: &str, year: i32) -> Vec<String> {
+            let dots = in_dots(title);
+            let words = in_words(title);
+            let unders = words.replace(' ', "_");
+            vec![
+                format!("{dots}.{year}.1080p.BluRay.x264-FGT.mkv"),
+                format!("{dots}.{year}.2160p.UHD.BluRay.REMUX.HDR.DTS-HD.MA.5.1-SPARKS.mkv"),
+                format!("{dots}.{year}.mkv"),
+                format!("{dots}.{year}.MULTi.TRUEFRENCH.1080p.BluRay.x265-EVO.mkv"),
+                format!("{dots}.{year}.VOSTFR.HDLight.1080p.x264-GECKOS.mkv"),
+                format!("{dots}.{year}.EXTENDED.1080p.BluRay.x264-AMIABLE.mkv"),
+                format!("{dots}.{year}.Directors.Cut.REMASTERED.1080p.BluRay.x264-FGT.mkv"),
+                format!("{dots}.{year}.PROPER.REPACK.1080p.WEBRip.x264-EVO.mkv"),
+                format!("{dots}.{year}.NF.WEB-DL.DDP5.1.Atmos.H.264-playSD.mkv"),
+                format!("{dots}.{year}.[1080p].[x264].[AC3]-Tigole.mkv"),
+                format!("{dots}.{year}.720p.BluRay.x264.[YTS.MX].mp4"),
+                format!("{dots}.{year}1080p.BluRay.x264-QxR.mkv"),
+                format!("{}.{year}.1080P.BLURAY.X264-FGT.MKV", dots.to_uppercase()),
+                format!("{}.{year}.1080p.bluray.x264-fgt.mkv", dots.to_lowercase()),
+                format!("{words} ({year}).mkv"),
+                format!("{words} ({year}) [1080p] [BluRay] [x264].mkv"),
+                format!("{words} ({year}) - [Bluray-1080p][DTS 5.1][x264]-AMIABLE.mkv"),
+                format!("{words} {year} 1080p WEBRip x265 10bit.mkv"),
+                format!("{words} {{{year}}} 1080p.mkv"),
+                format!("{words} - {year} - 720p.mp4"),
+                format!("{unders}_{year}_1080p_WEB-DL.mkv"),
+                format!("[SPARKS] {words} ({year}) 1080p.mkv"),
+                format!("[YTS.MX] {words} ({year}) [1080p] [BluRay].mp4"),
+                format!("www.Torrenting.com - {dots}.{year}.1080p.WEB-DL.mkv"),
+                format!("[ www.speed.cd ] {dots}.{year}.1080p.WEB-DL.mkv"),
+                format!("({year}) {words} 1080p BluRay.mkv"),
+            ]
+        }
+
+        /// Whether a name gave back the film it was built from.
+        ///
+        /// Compared on the words rather than to the letter, which is the
+        /// comparison the identification itself makes: a name written without
+        /// a colon is the same title, and nothing downstream cares.
+        fn reads_as(read: &ParsedName, title: &str) -> bool {
+            matchable_title(&read.title) == matchable_title(title)
+        }
+
+        #[test]
+        fn every_way_a_real_film_is_named_gives_back_its_title_and_its_year() {
+            let mut wrong = Vec::new();
+            let mut counted = 0;
+
+            for (title, year) in FILMS {
+                for name in every_way(title, *year) {
+                    counted += 1;
+                    let read = parse(&name, NOW);
+                    if !reads_as(&read, title) || read.year != Some(*year) {
+                        wrong.push(format!(
+                            "{name}\n      wanted {title:?} {year}, read {:?} {:?}",
+                            read.title, read.year
+                        ));
+                    }
+                }
+            }
+
+            assert!(
+                wrong.is_empty(),
+                "{} of {counted} names were read wrong:\n   {}",
+                wrong.len(),
+                wrong.join("\n   ")
+            );
+        }
+
+        #[test]
+        fn a_name_that_never_had_a_year_still_gives_back_its_title() {
+            // The commonest name with nothing to cut at. The title has to
+            // stop at the first word that can only describe the file, and
+            // what is left has to be the whole of it.
+            let mut wrong = Vec::new();
+
+            for (title, _) in FILMS {
+                // Left out: a film whose own title ends in something that
+                // reads as a year has nothing in such a name to tell the two
+                // apart, and no rule can invent it.
+                if title.ends_with(|c: char| c.is_ascii_digit()) {
+                    continue;
+                }
+                for name in [
+                    format!("{}.1080p.BluRay.x264-FGT.mkv", in_dots(title)),
+                    format!("{} 2160p UHD HDR.mkv", in_words(title)),
+                ] {
+                    let read = parse(&name, NOW);
+                    if !reads_as(&read, title) || read.year.is_some() {
+                        wrong.push(format!(
+                            "{name}\n      wanted {title:?} and no year, read {:?} {:?}",
+                            read.title, read.year
+                        ));
+                    }
+                }
+            }
+
+            assert!(wrong.is_empty(), "read wrong:\n   {}", wrong.join("\n   "));
+        }
+
+        #[test]
+        fn a_word_written_with_an_accent_does_not_bring_the_scan_down() {
+            // Not a wrong answer but a panic, which took the whole scan with
+            // it. The name was cut at its fourth byte to look for a year
+            // welded to what follows, and in `après` the fourth byte is the
+            // middle of a letter. Plain French and plain German, and every
+            // film after it in the folder went unread.
+            for name in [
+                "Une.Bataille.après.l'autre.2025.1080p.mkv",
+                "La.forêt.2014.MULTi.1080p.BluRay.x264.mkv",
+                "Das.Mädchen.mit.der.heißen.Masche.1972.1080p.mkv",
+            ] {
+                let read = parse(name, NOW);
+                assert!(!read.title.is_empty(), "{name} gave up no title at all");
+            }
         }
     }
 }
