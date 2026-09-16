@@ -66,6 +66,18 @@ enum Seen {
         to_second: f64,
         /// Whether the film was playing when it happened.
         was_playing: bool,
+        /// What moved the film.
+        ///
+        /// A click and a drag look identical from here and are not the same
+        /// gesture at all: a drag holds the library back for as long as the
+        /// hand is down and sets it going once, a click holds it back and sets
+        /// it going again in the same breath, and clicking along the bar does
+        /// that over and over. Read in the maintainer's journal, a run of
+        /// segments asked for backwards was put down to a drag, and the
+        /// maintainer says he clicks. Nothing in the line could say which, and
+        /// a fault chased on the wrong gesture is a fault fixed in the wrong
+        /// place.
+        moved_by: HowItMoved,
     },
     /// The shape of the picture the browser ended up with.
     ///
@@ -184,6 +196,48 @@ enum Seen {
     },
 }
 
+/// What moved the film, as far as the page can tell.
+///
+/// A closed list like the facts themselves: the page picks one of these and
+/// the server writes the word. The page knows its own controls and nothing
+/// else, so anything the browser or the library does to the film on its own
+/// falls under the last of them, which is a fact in its own right and the one
+/// worth catching.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum HowItMoved {
+    /// One press on the bar with nothing in between. The library is held back
+    /// and set going again in the same breath, and clicking along the bar does
+    /// that once per click.
+    AClick,
+    /// A press on the bar followed the whole way. The library is held back for
+    /// as long as the hand is down and set going once, wherever it landed.
+    ADrag,
+    /// A fixed step, from a button or an arrow key. There is no in between to
+    /// hold anything back for.
+    AStep,
+    /// The film put back where this viewer left it, the moment the browser
+    /// knew how long it was. Nobody moved anything: it is the film starting
+    /// where it was meant to.
+    PickedUpWhereItWasLeft,
+    /// Nothing on the page asked for it. The browser or the library moved the
+    /// film by itself, which is a different fault from a viewer moving it.
+    NotThePage,
+}
+
+impl HowItMoved {
+    /// The word written in the journal.
+    fn as_word(self) -> &'static str {
+        match self {
+            Self::AClick => "a click on the bar",
+            Self::ADrag => "a drag of the bar",
+            Self::AStep => "a step",
+            Self::PickedUpWhereItWasLeft => "picked up where it was left",
+            Self::NotThePage => "not the page",
+        }
+    }
+}
+
 /// How much of the library's wording is kept.
 ///
 /// Long enough for a type, a detail and a sentence, which is what those
@@ -245,11 +299,13 @@ async fn what_the_page_saw(
             from_second,
             to_second,
             was_playing,
+            moved_by,
         } => tracing::debug!(
             %session,
             from_second,
             to_second,
             was_playing,
+            moved_by = moved_by.as_word(),
             "the viewer jumped"
         ),
         Seen::ThePictureArrived {
@@ -373,7 +429,8 @@ mod tests {
         for (tried, what) in [
             (
                 r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"viewer_jumped",
-                    "from_second":612.5,"to_second":600.0,"was_playing":true}"#,
+                    "from_second":612.5,"to_second":600.0,"was_playing":true,
+                    "moved_by":"a_click"}"#,
                 "a jump",
             ),
             (
@@ -432,6 +489,41 @@ mod tests {
             }
             other => panic!("read as the wrong fact: {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_jump_says_what_moved_the_film_and_a_click_is_not_a_drag() {
+        // The maintainer was told a run of segments asked for backwards had
+        // followed a drag of the bar. He clicks. Nothing in the line could say
+        // which, and the two are not the same gesture at all: a fault chased
+        // on the wrong one is a fault fixed in the wrong place.
+        for (word, expected) in [
+            ("a_click", "a click on the bar"),
+            ("a_drag", "a drag of the bar"),
+            ("a_step", "a step"),
+            ("picked_up_where_it_was_left", "picked up where it was left"),
+            ("not_the_page", "not the page"),
+        ] {
+            let said: FromThePage = serde_json::from_str(&format!(
+                r#"{{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"viewer_jumped",
+                    "from_second":612.5,"to_second":600.0,"was_playing":true,
+                    "moved_by":"{word}"}}"#
+            ))
+            .unwrap_or_else(|error| panic!("{word} is a word this module names: {error}"));
+            match said.seen {
+                Seen::ViewerJumped { moved_by, .. } => assert_eq!(moved_by.as_word(), expected),
+                other => panic!("read as the wrong fact: {other:?}"),
+            }
+        }
+
+        // A word this module has no name for is refused outright, like every
+        // other thing a page might try to say.
+        assert!(serde_json::from_str::<FromThePage>(
+            r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"viewer_jumped",
+                "from_second":612.5,"to_second":600.0,"was_playing":true,
+                "moved_by":"whatever the browser felt like"}"#
+        )
+        .is_err());
     }
 
     #[test]

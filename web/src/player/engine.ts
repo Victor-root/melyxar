@@ -23,17 +23,27 @@ import type Hls from "hls.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "../api";
-import type { PlaybackPlan, PlaybackSession, Preparation } from "../api";
+import type { HowItMoved, PlaybackPlan, PlaybackSession, Preparation } from "../api";
 import { qualityCalled, rememberQuality, storedQuality } from "./quality";
 import type { Quality } from "./quality";
 import { clientProfile } from "./profile";
 import { watchTheReading } from "./watch";
+import type { Watching } from "./watch";
 
 /** The library itself, as the dynamic import hands it over. */
 type HlsLibrary = Awaited<typeof import("hls.js")>["default"];
 
 /** The speeds offered. Whole steps: nobody asks for 1.17 times. */
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+
+/**
+ * How far one step of the film goes, in seconds.
+ *
+ * Ten, which is what every player uses and what the thing is for: missing a
+ * line of dialogue, not choosing a scene. The bar is there for choosing a
+ * scene.
+ */
+export const A_STEP = 10;
 
 /** How often the position is sent while a film plays. */
 const REPORT_EVERY = 10_000;
@@ -150,9 +160,11 @@ export interface Playback {
   choose: (audio: string | null, subtitle: string | null) => void;
   setQuality: (key: string) => void;
   setSpeed: (value: number) => void;
-  /** A hand landing on the bar, and coming off it. */
+  /** A hand landing on the bar, and coming off it, saying what it did. */
   viewerMoving: () => void;
-  viewerMoved: () => void;
+  viewerMoved: (how: HowItMoved) => void;
+  /** A fixed step back or on, from a button or from the keyboard. */
+  stepBy: (seconds: number) => void;
   /** Handed to the element: it is on these that the film picks itself up. */
   onPictureReady: () => void;
   notePosition: (seconds: number) => void;
@@ -183,6 +195,10 @@ export function usePlayback({
      down, because it only exists while a session is being fed in pieces: a
      film played as it is has nothing of the sort. */
   const whileTheViewerMoves = useRef<{ hold: () => void; letGo: () => void } | null>(null);
+  /* Who is following this film, so that the controls can say what moved it.
+     A click and a drag are the same thing to the element and two different
+     things to the library, and only the bar knows which one happened. */
+  const watching = useRef<Watching | null>(null);
   /* How many times the session has been opened again from nothing. Counted
      rather than flagged because it is what makes the film reopen at all: the
      session is opened by an effect, and an effect only runs again when
@@ -451,7 +467,8 @@ export function usePlayback({
        the picture standing still while the sound runs on, and where a viewer
        jumped from. The server knows what it produced and when it handed it
        over, never whether any of it reached a screen. */
-    const stopWatching = watchTheReading(element, stream.id);
+    watching.current = watchTheReading(element, stream.id);
+    const stopWatching = watching.current.stop;
     /* Whether the library has already given up. One failure comes back as
        three: it cannot make room for the film, then it cannot put anything in
        the room it did not make. Only the first says anything. */
@@ -586,6 +603,7 @@ export function usePlayback({
     return () => {
       gone = true;
       whileTheViewerMoves.current = null;
+      watching.current = null;
       stopWatching();
       feed?.destroy();
     };
@@ -624,9 +642,36 @@ export function usePlayback({
      the film and what comes next comes out of another, so it is thrown away
      and the library is set going again where the viewer landed. A film played
      as it is has no such thing and both of these do nothing. */
-  const viewerMoved = useCallback(() => {
+  const viewerMoved = useCallback((how: HowItMoved) => {
+    /* Said before the library is set going again, so that the line about the
+       jump carries the gesture that caused it whichever of the two lands
+       first. */
+    watching.current?.movedBy(how);
     whileTheViewerMoves.current?.letGo();
   }, []);
+
+  /* A step back or on, wherever it was asked for: one way of moving the film
+     means one place for it to be wrong and one place that says what moved it.
+     Held inside the film at both ends, because a step past the end is the
+     film over. */
+  const stepBy = useCallback(
+    (seconds: number) => {
+      const element = video.current;
+      if (!element) {
+        return;
+      }
+      const furthest = element.duration;
+      const wanted = element.currentTime + seconds;
+      element.currentTime = Math.max(
+        0,
+        Number.isFinite(furthest) ? Math.min(furthest, wanted) : wanted,
+      );
+      // A step is one move with nothing in between, so there is nothing to
+      // hold back first.
+      viewerMoved("a_step");
+    },
+    [viewerMoved],
+  );
 
   const report = useCallback(() => {
     const seconds = lastPosition.current;
@@ -703,6 +748,9 @@ export function usePlayback({
     const target = resumeAt.current;
     resumeAt.current = null;
     if (target !== null && target > 0) {
+      // Said before the film is moved, so that the jump it causes is not read
+      // as the browser moving the film on its own.
+      watching.current?.movedBy("picked_up_where_it_was_left");
       element.currentTime = target;
     }
     setReadyPicture(pictureKey);
@@ -736,6 +784,7 @@ export function usePlayback({
     setSpeed,
     viewerMoving,
     viewerMoved,
+    stepBy,
     onPictureReady,
     notePosition,
     report,
