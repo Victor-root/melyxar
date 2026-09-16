@@ -125,106 +125,115 @@ export function PlaybackFacts({ plan, video, t, onClose }: Props) {
         </button>
       </div>
 
-      <section className="facts-block">
-        <h3>{t("facts.stream")}</h3>
-        <Line name={t("facts.method")} is={t(`playback.${plan.method}`)} />
-        <Line
-          name={t("facts.why")}
-          is={
-            plan.reasons.length > 0
-              ? plan.reasons.map((reason) => t(`reason.${reason.code}`)).join(" · ")
-              : null
-          }
-        />
-      </section>
-
-      {picture && (
-        <section className="facts-block">
-          <h3>{t("facts.picture")}</h3>
+      <div className="facts-blocks">
+        {/* Across every column rather than shut inside one. What this block
+            holds is a sentence about the whole decision and not a value beside
+            a name, and in a column of its own it wrapped six lines deep and set
+            the height of everything beside it. */}
+        <section className="facts-block facts-block-across">
+          <h3>{t("facts.stream")}</h3>
+          <Line name={t("facts.method")} is={t(`playback.${plan.method}`)} />
           <Line
-            name={t("facts.held")}
-            is={[
-              picture.codec.toUpperCase(),
-              picture.profile,
-              `${picture.width}x${picture.height}`,
-              picture.bit_depth ? `${picture.bit_depth} bit` : null,
-              picture.hdr ? t(`facts.hdr.${picture.hdr}`) : null,
-              picture.frame_rate ? `${picture.frame_rate.toFixed(3)} fps` : null,
-              asRate(picture.bitrate),
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          />
-          <Line name={t("facts.frame")} is={frame} />
-          <Line
-            name={t("facts.done")}
+            name={t("facts.why")}
             is={
-              rebuild
-                ? [
-                    t(`player.rebuilt_by.${rebuild.by}`),
-                    rebuild.codec.toUpperCase(),
-                    rebuild.height !== null ? `${rebuild.height}p` : null,
-                    asRate(rebuild.bitrate),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")
-                : t("facts.carried_over")
-            }
-          />
-          {says && (
-            <>
-              <Line name={t("facts.arrived")} is={`${says.across}x${says.down}`} />
-              <Line name={t("facts.drawn")} is={`${says.drawnAcross}x${says.drawnDown}`} />
-              <Line
-                name={t("facts.pictures")}
-                is={t("facts.pictures_count", { shown: says.shown, dropped: says.dropped })}
-              />
-              <Line
-                name={t("facts.held_ahead")}
-                is={
-                  says.heldTo !== null && video.current
-                    ? t("facts.seconds", {
-                        count: Math.max(0, Math.round(says.heldTo - video.current.currentTime)),
-                      })
-                    : null
-                }
-              />
-            </>
-          )}
-        </section>
-      )}
-
-      {sound && (
-        <section className="facts-block">
-          <h3>{t("facts.sound")}</h3>
-          <Line
-            name={t("facts.held")}
-            is={[
-              sound.codec.toUpperCase(),
-              sound.channel_layout ?? t("facts.channels", { count: sound.channels }),
-              sound.sample_rate ? `${(sound.sample_rate / 1000).toFixed(1)} kHz` : null,
-              asRate(sound.bitrate),
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          />
-          <Line
-            name={t("facts.done")}
-            is={
-              plan.method === "full_transcode" || plan.method === "transcode_audio"
-                ? t("facts.rebuilt_sound")
-                : t("facts.carried_over")
+              plan.reasons.length > 0
+                ? plan.reasons.map((reason) => t(`reason.${reason.code}`)).join(" · ")
+                : null
             }
           />
         </section>
-      )}
 
-      <section className="facts-block">
-        <h3>{t("facts.file")}</h3>
-        <Line name={t("facts.container")} is={film.container} />
-        <Line name={t("facts.size")} is={asSize(film.size_bytes)} />
-        <Line name={t("facts.rate")} is={asRate(film.overall_bitrate)} />
-      </section>
+        {picture && (
+          <section className="facts-block">
+            <h3>{t("facts.picture")}</h3>
+            <Line
+              name={t("facts.held")}
+              is={[
+                picture.codec.toUpperCase(),
+                picture.profile,
+                `${picture.width}x${picture.height}`,
+                picture.bit_depth ? `${picture.bit_depth} bit` : null,
+                picture.hdr ? t(`facts.hdr.${picture.hdr}`) : null,
+                picture.frame_rate ? `${picture.frame_rate.toFixed(3)} fps` : null,
+                asRate(picture.bitrate),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+            <Line name={t("facts.frame")} is={frame} />
+            <Line
+              name={t("facts.done")}
+              is={
+                rebuild
+                  ? [
+                      t(`player.rebuilt_by.${rebuild.by}`),
+                      rebuild.codec.toUpperCase(),
+                      rebuild.height !== null ? `${rebuild.height}p` : null,
+                      asRate(rebuild.bitrate),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : t("facts.carried_over")
+              }
+            />
+            {says && (
+              <>
+                <Line name={t("facts.arrived")} is={`${says.across}x${says.down}`} />
+                <Line name={t("facts.drawn")} is={`${says.drawnAcross}x${says.drawnDown}`} />
+                <Line
+                  name={t("facts.pictures")}
+                  is={t("facts.pictures_count", { shown: says.shown, dropped: says.dropped })}
+                />
+                <Line
+                  name={t("facts.held_ahead")}
+                  is={
+                    says.heldTo !== null && video.current
+                      ? t("facts.seconds", {
+                          count: Math.max(
+                            0,
+                            Math.round(says.heldTo - video.current.currentTime),
+                          ),
+                        })
+                      : null
+                  }
+                />
+              </>
+            )}
+          </section>
+        )}
+
+        {sound && (
+          <section className="facts-block">
+            <h3>{t("facts.sound")}</h3>
+            <Line
+              name={t("facts.held")}
+              is={[
+                sound.codec.toUpperCase(),
+                sound.channel_layout ?? t("facts.channels", { count: sound.channels }),
+                sound.sample_rate ? `${(sound.sample_rate / 1000).toFixed(1)} kHz` : null,
+                asRate(sound.bitrate),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+            <Line
+              name={t("facts.done")}
+              is={
+                plan.method === "full_transcode" || plan.method === "transcode_audio"
+                  ? t("facts.rebuilt_sound")
+                  : t("facts.carried_over")
+              }
+            />
+          </section>
+        )}
+
+        <section className="facts-block">
+          <h3>{t("facts.file")}</h3>
+          <Line name={t("facts.container")} is={film.container} />
+          <Line name={t("facts.size")} is={asSize(film.size_bytes)} />
+          <Line name={t("facts.rate")} is={asRate(film.overall_bitrate)} />
+        </section>
+      </div>
     </aside>
   );
 }
