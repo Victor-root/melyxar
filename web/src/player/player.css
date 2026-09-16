@@ -76,6 +76,10 @@
   --player-drawer-title: 26px;
   --player-drawer-poster: 118px;
   --player-drawer-card: 214px;
+  /* How far a card may swell under a hand without being clipped by the row
+     it scrolls in. Wider than the swelling itself, which is a few tenths of
+     a card either way. */
+  --player-drawer-swell: 5px;
   --player-drawer-face: 148px;
   /* The one colour here that is not the accent. A star is a star: a viewer who
      set their accent to green did not ask for a green one. */
@@ -1252,7 +1256,10 @@
    second one laid on the first would darken the film twice over exactly where
    the sheet is. */
 .player-drawer {
-  padding: var(--gap) var(--player-inset) var(--gap-wide);
+  /* Even top and bottom: the wider footing underneath was room between the
+     sheet and the bottom of the window, back when the sheet ended there. It
+     now ends against the bar, which wants no more room than the top does. */
+  padding: var(--gap) var(--player-inset);
   color: var(--text);
 }
 
@@ -1370,6 +1377,10 @@
 .player-drawer-row {
   display: flex;
   gap: var(--gap);
+  /* Room above and below for a card to swell under a hand. A box that scrolls
+     one way clips the other way whatever it was told, so without this the
+     card grows into a wall and comes back with its top edge shaved off. */
+  padding: var(--player-drawer-swell) 0;
   overflow-x: auto;
   /* Scrolled by the hand or by the arrows, never by a bar drawn under it: the
      picture is right there and a scrollbar across it is a scrollbar across a
@@ -1387,7 +1398,7 @@
    card is half way down the words underneath it. */
 .player-drawer-along {
   position: absolute;
-  top: calc(var(--player-drawer-picture) / 2);
+  top: calc(var(--player-drawer-swell) + var(--player-drawer-picture) / 2);
   width: 44px;
   height: 44px;
   padding: 0;
@@ -1445,6 +1456,7 @@
    film never read for them keeps a widescreen frame all the same, so a row of
    scenes without pictures is still a row rather than a jumble. */
 .player-drawer-frame {
+  position: relative;
   display: block;
   width: var(--player-drawer-card);
   border-radius: var(--radius-control);
@@ -1488,9 +1500,18 @@
   max-width: 100%;
 }
 
+/* A tag lying on the corner of the picture. On the picture because the row is
+   as tall as its tallest card, so a line written under one card is empty room
+   under every other one. */
 .player-drawer-card-now {
-  color: var(--accent-bright);
-  font-size: 13px;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: 3px 7px;
+  border-radius: 0 var(--radius-control) 0 0;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 11px;
   font-weight: 600;
 }
 
