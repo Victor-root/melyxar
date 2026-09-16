@@ -16,16 +16,21 @@
  * The element itself belongs here rather than to the layout, because the
  * library that feeds a rebuilt film has to be attached to it and the resume
  * point has to be applied to it. Whoever draws the player is handed the
- * reference and puts it on the element they draw.
+ * reference and puts it on the element they draw, and that is the whole of
+ * what the drawing has to know: nothing out there moves the film, sets the
+ * sound, starts it or stops it, or listens to anything it says. It asks here
+ * and reads back what comes out, so a player drawn another way tomorrow
+ * cannot leave half of playing a film behind by forgetting to wire it up.
  */
 
 import type Hls from "hls.js";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "../api";
 import type { HowItMoved, PlaybackPlan, PlaybackSession, Preparation } from "../api";
 import { qualityCalled, rememberQuality, storedQuality } from "./quality";
 import type { Quality } from "./quality";
+import { rememberLoudness, storedLoudness } from "./loudness";
 import { clientProfile } from "./profile";
 import { watchTheReading } from "./watch";
 import type { Watching } from "./watch";
@@ -165,11 +170,32 @@ export interface Playback {
   viewerMoved: (how: HowItMoved) => void;
   /** A fixed step back or on, from a button or from the keyboard. */
   stepBy: (seconds: number) => void;
-  /** Handed to the element: it is on these that the film picks itself up. */
-  onPictureReady: () => void;
-  notePosition: (seconds: number) => void;
-  report: () => void;
-  notePictureRefused: (refused: MediaError | null) => void;
+  /** Where the film is put, in seconds from its beginning. */
+  goTo: (seconds: number) => void;
+  /** Starts the film, or stops it. */
+  playOrPause: () => void;
+  /** How loud, from nought to one, and whether the sound is off. */
+  setLoudness: (volume: number) => void;
+  setMuted: (off: boolean) => void;
+  /** Where the film has got to, how long it is, and how far it is held. */
+  at: number;
+  length: number;
+  loaded: number;
+  playing: boolean;
+  muted: boolean;
+  loudness: number;
+  /** Whether the words are on their way, and whether they never came. */
+  words: "coming" | "refused" | null;
+  /** Put on the element carrying the words, whenever there is one. */
+  holdTheWords: (element: HTMLTrackElement | null) => void;
+  /** Says what to do to the words the instant they are read.
+   *
+   * Where they sit on the picture is the look of the thing and none of this
+   * file's business. That it has to happen the moment they are read, before
+   * the browser has drawn one of them anywhere, is playing. */
+  onWordsRead: (place: () => void) => void;
+  /** Puts the picture in a corner of the screen, where the browser allows it. */
+  intoTheCorner: () => void;
 }
 
 /**
@@ -209,6 +235,32 @@ export function usePlayback({
      A click and a drag are the same thing to the element and two different
      things to the library, and only the bar knows which one happened. */
   const watching = useRef<Watching | null>(null);
+  /* Where the film has got to, how long it is, how far the browser holds it,
+     and how it sounds. Read off the element rather than remembered alongside
+     it: the film is what moves, and a copy of where it has got to is a copy
+     that goes wrong the moment anything else moves it. Kept here rather than
+     in whatever draws the bar, so that a bar drawn another way tomorrow is
+     handed the same numbers instead of going and fetching them again. */
+  const [at, setAt] = useState(0);
+  const [length, setLength] = useState(0);
+  const [loaded, setLoaded] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMutedState] = useState(false);
+  const [loudness, setLoudnessState] = useState(1);
+  /* Whether the words are still on their way, and whether they never came.
+     Pulling a subtitle out of a film means reading the whole file through,
+     because the words are interleaved with the picture from end to end:
+     measured at fifteen to twenty seconds on a 4K film, and seven of those on
+     one film. Said nowhere, that wait is a subtitle that does not work. */
+  const [words, setWords] = useState<"coming" | "refused" | null>(null);
+  /* The element carrying the words, so the moment they finish being read can
+     be waited for. */
+  const subtitleTrack = useRef<HTMLTrackElement | null>(null);
+  /* What to do to the words the instant they are read, set by whoever dresses
+     them. Held in a hand rather than taken as an argument, because the
+     listener below is attached once per element and must not have to be
+     replaced every time a viewer changes how the words look. */
+  const placeTheWords = useRef<() => void>(() => {});
   /* How many times the session has been opened again from nothing. Counted
      rather than flagged because it is what makes the film reopen at all: the
      session is opened by an effect, and an effect only runs again when
@@ -671,28 +723,117 @@ export function usePlayback({
     whileTheViewerMoves.current?.letGo();
   }, []);
 
+  /* Where the film is put, and the only place anything puts it. Everything
+     that moves a film comes through here: the bar, the steps, the resume
+     point. Held inside the film at both ends, because a step past the end is
+     the film over and a bar dragged past the left is a negative second.
+
+     What moved it is said by whoever asked, not here: a hand dragging the bar
+     moves the film at every twitch and is one gesture, and this is called on
+     every one of those twitches. */
+  const goTo = useCallback((seconds: number) => {
+    const element = video.current;
+    if (!element || !Number.isFinite(seconds)) {
+      return;
+    }
+    const furthest = element.duration;
+    const landing = Math.max(
+      0,
+      Number.isFinite(furthest) ? Math.min(furthest, seconds) : seconds,
+    );
+    element.currentTime = landing;
+    // Said here as well as read back off the element, so that a bar follows
+    // the hand rather than the next word out of the browser.
+    setAt(landing);
+  }, []);
+
   /* A step back or on, wherever it was asked for: one way of moving the film
-     means one place for it to be wrong and one place that says what moved it.
-     Held inside the film at both ends, because a step past the end is the
-     film over. */
+     means one place for it to be wrong and one place that says what moved it. */
   const stepBy = useCallback(
     (seconds: number) => {
       const element = video.current;
       if (!element) {
         return;
       }
-      const furthest = element.duration;
-      const wanted = element.currentTime + seconds;
-      element.currentTime = Math.max(
-        0,
-        Number.isFinite(furthest) ? Math.min(furthest, wanted) : wanted,
-      );
+      goTo(element.currentTime + seconds);
       // A step is one move with nothing in between, so there is nothing to
       // hold back first.
       viewerMoved("a_step");
     },
-    [viewerMoved],
+    [goTo, viewerMoved],
   );
+
+  /* Starts the film, or stops it. Here rather than on the button, because the
+     picture itself answers to a click too, and two places deciding what a
+     click means is two places for them to disagree. */
+  const playOrPause = useCallback(() => {
+    const element = video.current;
+    if (!element) {
+      return;
+    }
+    if (element.paused) {
+      void element.play();
+    } else {
+      element.pause();
+    }
+  }, []);
+
+  /* The sound is set on the element and read back off it, never held here as
+     a number of its own: a headset and a key the browser answers by itself
+     move it too, and a copy kept alongside would be wrong from then on. */
+  const setLoudness = useCallback((volume: number) => {
+    const element = video.current;
+    if (!element) {
+      return;
+    }
+    element.volume = volume;
+    element.muted = volume === 0;
+  }, []);
+
+  const setMuted = useCallback((off: boolean) => {
+    const element = video.current;
+    if (element) {
+      element.muted = off;
+    }
+  }, []);
+
+  /* The words are in: put where the viewer wants them before anything is
+     drawn, and the notice saying they were on their way comes down. In that
+     order, because the other way round shows one frame of words wherever the
+     browser felt like putting them. */
+  const wereRead = useCallback(() => {
+    placeTheWords.current();
+    setWords(null);
+  }, []);
+  const neverCame = useCallback(() => setWords("refused"), []);
+
+  /* Waited for on the element carrying the words, and attached again whenever
+     that is a different one: a film being rebuilt gets a fresh picture
+     whenever the soundtrack changes, and the words come with it. Before the
+     words are read there are no cues to place, and the browser goes on
+     putting them wherever it likes. */
+  const holdTheWords = useCallback((element: HTMLTrackElement | null) => {
+    const held = subtitleTrack.current;
+    held?.removeEventListener("load", wereRead);
+    held?.removeEventListener("error", neverCame);
+    subtitleTrack.current = element;
+    if (!element) {
+      setWords(null);
+      return;
+    }
+    setWords("coming");
+    element.addEventListener("load", wereRead);
+    element.addEventListener("error", neverCame);
+    // Said outright rather than left to the default mark: that mark is read
+    // when the picture itself is first read, and words added to a picture
+    // already playing would simply stay switched off.
+    element.track.mode = "showing";
+  }, [wereRead, neverCame]);
+
+  const onWordsRead = useCallback((place: () => void) => {
+    placeTheWords.current = place;
+  }, []);
+
 
   const report = useCallback(() => {
     const seconds = lastPosition.current;
@@ -772,19 +913,97 @@ export function usePlayback({
       // Said before the film is moved, so that the jump it causes is not read
       // as the browser moving the film on its own.
       watching.current?.movedBy("picked_up_where_it_was_left");
-      element.currentTime = target;
+      goTo(target);
     }
     setReadyPicture(pictureKey);
-  }, [speed, pictureKey]);
-
-  const notePosition = useCallback((seconds: number) => {
-    lastPosition.current = seconds;
-  }, []);
+  }, [speed, pictureKey, goTo]);
 
   const notePictureRefused = useCallback((refused: MediaError | null) => {
     setFailed("player.cannot_play");
     setRefusal(refused ? `${refused.code} · ${refused.message || "no reason given"}` : null);
   }, []);
+
+  /* The picture in a corner of the screen while the viewer does something
+     else. Offered by the browser rather than by us, so whoever draws the
+     button asks first whether there is one to draw. */
+  const intoTheCorner = useCallback(() => {
+    void video.current?.requestPictureInPicture?.();
+  }, []);
+
+  /* Everything the element says about itself, listened to from the moment it
+     exists and again whenever it is a different one.
+
+     All of it here rather than hung on the element by whoever draws it. Half
+     of these are not about how a film looks at all: where the viewer got to,
+     the resume point applied the moment the browser knows how long the film
+     is, and the browser refusing the picture outright. Left to the drawing,
+     a player drawn another way tomorrow has to know to wire them up, and a
+     film that quietly starts from the beginning again is what forgetting one
+     of them looks like.
+
+     Before the browser is let anywhere near the element, rather than after:
+     the picture is read as soon as it exists, and a listener attached a beat
+     later is a listener that missed the reading. That beat is the whole of
+     the resume point. */
+  useLayoutEffect(() => {
+    const element = video.current;
+    if (!element) {
+      return;
+    }
+    /* The element is a new one for every film and starts at full volume, so
+       the setting is put back on it before anything is heard. */
+    const wanted = storedLoudness();
+    element.volume = wanted.volume;
+    element.muted = wanted.muted;
+    const tell = () => {
+      setAt(element.currentTime);
+      setLength(Number.isFinite(element.duration) ? element.duration : 0);
+      setPlaying(!element.paused && !element.ended);
+      setMutedState(element.muted);
+      setLoudnessState(element.volume);
+      const buffered = element.buffered;
+      setLoaded(buffered.length > 0 ? buffered.end(buffered.length - 1) : 0);
+      // Where the viewer is, kept in a hand rather than in the drawing: it is
+      // what is sent to the server and what a fresh session picks up from,
+      // and it has to survive the element going away.
+      lastPosition.current = element.currentTime;
+    };
+    tell();
+    const events = [
+      "timeupdate",
+      "durationchange",
+      "loadedmetadata",
+      "play",
+      "pause",
+      "ended",
+      "progress",
+      "volumechange",
+      "seeking",
+      "seeked",
+    ];
+    for (const name of events) {
+      element.addEventListener(name, tell);
+    }
+    /* Whatever moves the sound, wherever from: the buttons on the bar, a
+       keyboard key the browser answers on its own, a headset. */
+    const remember = () => rememberLoudness({ volume: element.volume, muted: element.muted });
+    const refused = () => notePictureRefused(element.error);
+    element.addEventListener("volumechange", remember);
+    element.addEventListener("loadedmetadata", onPictureReady);
+    element.addEventListener("pause", report);
+    element.addEventListener("ended", report);
+    element.addEventListener("error", refused);
+    return () => {
+      for (const name of events) {
+        element.removeEventListener(name, tell);
+      }
+      element.removeEventListener("volumechange", remember);
+      element.removeEventListener("loadedmetadata", onPictureReady);
+      element.removeEventListener("pause", report);
+      element.removeEventListener("ended", report);
+      element.removeEventListener("error", refused);
+    };
+  }, [pictureKey, onPictureReady, report, notePictureRefused]);
 
   return {
     video,
@@ -806,10 +1025,20 @@ export function usePlayback({
     viewerMoving,
     viewerMoved,
     stepBy,
-    onPictureReady,
-    notePosition,
-    report,
-    notePictureRefused,
+    goTo,
+    playOrPause,
+    setLoudness,
+    setMuted,
+    at,
+    length,
+    loaded,
+    playing,
+    muted,
+    loudness,
+    words,
+    holdTheWords,
+    onWordsRead,
+    intoTheCorner,
   };
 }
 

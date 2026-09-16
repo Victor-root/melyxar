@@ -14,48 +14,17 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { HowItMoved, PlaybackThumbnails } from "../api";
+import type { PlaybackThumbnails } from "../api";
 import { A_STEP } from "./engine";
-import { rememberLoudness, storedLoudness } from "./loudness";
-
-/**
- * Starts a film, or stops it.
- *
- * Here rather than in the button alone because the picture itself answers to a
- * click too, and two places deciding what a click means is two places for them
- * to disagree.
- */
-export function playOrPause(element: HTMLVideoElement | null) {
-  if (!element) {
-    return;
-  }
-  if (element.paused) {
-    void element.play();
-  } else {
-    element.pause();
-  }
-}
+import type { Playback } from "./engine";
 
 interface Props {
-  /* The element being driven. Held by the player, which mounts a fresh one
-     whenever the picture changes, so the key below says when to listen to
-     another one. */
-  video: React.RefObject<HTMLVideoElement | null>;
-  /* Changes when the element does. */
-  pictureKey: string | null;
+  /* What is playing: where it has got to, how long it is, how it sounds, and
+     the ways of driving it. Nothing here touches the film itself. */
+  playback: Playback;
   /* What goes fullscreen: the bar has to come with the picture, and a video
      element sent fullscreen on its own leaves it behind. */
   stage: React.RefObject<HTMLDivElement | null>;
-  thumbnails: PlaybackThumbnails | null;
-  /* Told when the viewer starts moving the film and again when they have
-     finished, never in between: dragging along the bar moves the film at every
-     twitch, and what happens on each of those is work thrown away.
-     What the two do is the player's business. */
-  onViewerMoving: () => void;
-  onViewerMoved: (how: HowItMoved) => void;
-  /* A fixed step back or on. The film itself is moved by the engine, which is
-     the one place that holds the element and says what moved it. */
-  onStep: (seconds: number) => void;
   /* Whether the panel of playback facts is open, and how to turn it over. The
      button belongs to this row; the panel is the player's, because what it
      shows comes from the plan rather than from the element. */
@@ -98,24 +67,24 @@ function spotOf(
   };
 }
 
-export function Controls({
-  video,
-  pictureKey,
-  stage,
-  thumbnails,
-  onViewerMoving,
-  onViewerMoved,
-  onStep,
-  factsOpen,
-  onFactsTurned,
-  t,
-}: Props) {
-  const [playing, setPlaying] = useState(false);
-  const [at, setAt] = useState(0);
-  const [length, setLength] = useState(0);
-  const [loaded, setLoaded] = useState(0);
-  const [muted, setMuted] = useState(false);
-  const [loudness, setLoudness] = useState(1);
+export function Controls({ playback, stage, factsOpen, onFactsTurned, t }: Props) {
+  const {
+    at,
+    length,
+    loaded,
+    playing,
+    muted,
+    loudness,
+    pictureKey,
+    viewerMoving,
+    viewerMoved,
+    stepBy,
+    goTo,
+    playOrPause,
+    setLoudness,
+    setMuted,
+  } = playback;
+  const thumbnails: PlaybackThumbnails | null = playback.plan?.thumbnails ?? null;
   const [fullscreen, setFullscreen] = useState(false);
   /* Where the cursor is along the bar, from nought to one, while it is on it.
      Null the rest of the time, which is what hides the preview. */
@@ -138,57 +107,6 @@ export function Controls({
      across the bottom of it. */
   const [idle, setIdle] = useState(false);
   const rail = useRef<HTMLDivElement>(null);
-
-  /* Everything shown here is read off the element rather than remembered
-     alongside it: the film is what moves, and a copy of where it has got to is
-     a copy that goes wrong the moment anything else moves it. */
-  useEffect(() => {
-    const element = video.current;
-    if (!element) {
-      return;
-    }
-    /* The element is a new one for every film and starts at full volume, so
-       the setting is put back on it before anything is heard. */
-    const wanted = storedLoudness();
-    element.volume = wanted.volume;
-    element.muted = wanted.muted;
-    const tell = () => {
-      setAt(element.currentTime);
-      setLength(Number.isFinite(element.duration) ? element.duration : 0);
-      setPlaying(!element.paused && !element.ended);
-      setMuted(element.muted);
-      setLoudness(element.volume);
-      const buffered = element.buffered;
-      setLoaded(buffered.length > 0 ? buffered.end(buffered.length - 1) : 0);
-    };
-    tell();
-    const events = [
-      "timeupdate",
-      "durationchange",
-      "loadedmetadata",
-      "play",
-      "pause",
-      "ended",
-      "progress",
-      "volumechange",
-      "seeking",
-      "seeked",
-    ];
-    for (const name of events) {
-      element.addEventListener(name, tell);
-    }
-    /* Whatever moves the sound, wherever from: the buttons here, a keyboard
-       key the browser answers on its own, a headset. */
-    const remember = () =>
-      rememberLoudness({ volume: element.volume, muted: element.muted });
-    element.addEventListener("volumechange", remember);
-    return () => {
-      for (const name of events) {
-        element.removeEventListener(name, tell);
-      }
-      element.removeEventListener("volumechange", remember);
-    };
-  }, [video, pictureKey]);
 
   useEffect(() => {
     const tell = () => setFullscreen(document.fullscreenElement !== null);
@@ -232,15 +150,14 @@ export function Controls({
     };
   }, [stage, pictureKey]);
 
-  const goTo = useCallback(
+  /* A point along the bar, as a second of the film. */
+  const goToShare = useCallback(
     (share: number) => {
-      const element = video.current;
-      if (element && length > 0) {
-        element.currentTime = share * length;
-        setAt(share * length);
+      if (length > 0) {
+        goTo(share * length);
       }
     },
-    [video, length],
+    [goTo, length],
   );
 
   /* Dragging is followed on the window rather than on the bar: a finger that
@@ -255,12 +172,12 @@ export function Controls({
       if (share !== null) {
         wasDragged.current = true;
         setHovered(share);
-        goTo(share);
+        goToShare(share);
       }
     };
     const let_go = () => {
       setDragging(false);
-      onViewerMoved(wasDragged.current ? "a_drag" : "a_click");
+      viewerMoved(wasDragged.current ? "a_drag" : "a_click");
     };
     window.addEventListener("pointermove", moved);
     window.addEventListener("pointerup", let_go);
@@ -270,7 +187,7 @@ export function Controls({
       window.removeEventListener("pointerup", let_go);
       window.removeEventListener("pointercancel", let_go);
     };
-  }, [dragging, shareAt, goTo, onViewerMoved]);
+  }, [dragging, shareAt, goToShare, viewerMoved]);
 
   const playing_share = length > 0 ? Math.min(1, at / length) : 0;
   const loaded_share = length > 0 ? Math.min(1, loaded / length) : 0;
@@ -303,10 +220,10 @@ export function Controls({
           const share = shareAt(event.clientX);
           if (share !== null) {
             wasDragged.current = false;
-            onViewerMoving();
+            viewerMoving();
             setDragging(true);
             setHovered(share);
-            goTo(share);
+            goToShare(share);
           }
         }}
         onPointerMove={(event) => setHovered(shareAt(event.clientX))}
@@ -349,7 +266,7 @@ export function Controls({
             the bar above is for, and a bar is no good at ten seconds. */}
         <button
           className="player-button player-button-step"
-          onClick={() => onStep(-A_STEP)}
+          onClick={() => stepBy(-A_STEP)}
           aria-label={t("player.back_ten")}
         >
           {`↺${A_STEP}`}
@@ -357,7 +274,7 @@ export function Controls({
 
         <button
           className="player-button"
-          onClick={() => playOrPause(video.current)}
+          onClick={playOrPause}
           aria-label={t(playing ? "player.pause" : "player.play")}
         >
           {playing ? "⏸" : "▶"}
@@ -365,7 +282,7 @@ export function Controls({
 
         <button
           className="player-button player-button-step"
-          onClick={() => onStep(A_STEP)}
+          onClick={() => stepBy(A_STEP)}
           aria-label={t("player.on_ten")}
         >
           {`↻${A_STEP}`}
@@ -379,12 +296,7 @@ export function Controls({
         <span className="player-sound">
           <button
             className="player-button"
-            onClick={() => {
-              const element = video.current;
-              if (element) {
-                element.muted = !element.muted;
-              }
-            }}
+            onClick={() => setMuted(!muted)}
             aria-label={t(muted ? "player.unmute" : "player.mute")}
           >
             {muted || loudness === 0 ? "\u{1F507}" : "\u{1F50A}"}
@@ -397,13 +309,7 @@ export function Controls({
             step={0.01}
             value={muted ? 0 : loudness}
             aria-label={t("player.loudness")}
-            onChange={(event) => {
-              const element = video.current;
-              if (element) {
-                element.volume = Number(event.target.value);
-                element.muted = Number(event.target.value) === 0;
-              }
-            }}
+            onChange={(event) => setLoudness(Number(event.target.value))}
           />
         </span>
 
