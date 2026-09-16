@@ -14,7 +14,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlaybackThumbnails } from "../api";
+import type { HowItMoved, PlaybackThumbnails } from "../api";
+import { A_STEP } from "./engine";
 import { rememberLoudness, storedLoudness } from "./loudness";
 
 /**
@@ -51,7 +52,10 @@ interface Props {
      twitch, and what happens on each of those is work thrown away.
      What the two do is the player's business. */
   onViewerMoving: () => void;
-  onViewerMoved: () => void;
+  onViewerMoved: (how: HowItMoved) => void;
+  /* A fixed step back or on. The film itself is moved by the engine, which is
+     the one place that holds the element and says what moved it. */
+  onStep: (seconds: number) => void;
   /* Whether the panel of playback facts is open, and how to turn it over. The
      button belongs to this row; the panel is the player's, because what it
      shows comes from the plan rather than from the element. */
@@ -59,15 +63,6 @@ interface Props {
   onFactsTurned: () => void;
   t: (key: string, values?: Record<string, string | number>) => string;
 }
-
-/**
- * How far one step goes, in seconds.
- *
- * Ten, which is what every player uses and what the thing is for: missing a
- * line of dialogue, not choosing a scene. The bar is there for choosing a
- * scene.
- */
-const A_STEP: number = 10;
 
 /** A moment of a film, as somebody reads it. */
 function asClock(seconds: number): string {
@@ -110,6 +105,7 @@ export function Controls({
   thumbnails,
   onViewerMoving,
   onViewerMoved,
+  onStep,
   factsOpen,
   onFactsTurned,
   t,
@@ -129,6 +125,14 @@ export function Controls({
      at both ends means knowing how wide it is against how wide the bar is. */
   const [railWidth, setRailWidth] = useState(0);
   const [dragging, setDragging] = useState(false);
+  /* Whether the hand went anywhere between landing on the bar and coming off
+     it. Clicking a spot and dragging to it are two different gestures and
+     leave the film in the same place, so nothing downstream can tell them
+     apart afterwards: a drag moves the film at every twitch and sets the
+     library going once, a click does the whole thing in one breath, and
+     clicking along the bar does that once per click. Only this knows which
+     happened, and the journal was reading both as the same thing. */
+  const wasDragged = useRef(false);
   /* Whether the bar has faded out. It sits on top of the picture, so leaving
      it there for ever would mean watching a film with a strip of controls
      across the bottom of it. */
@@ -239,28 +243,6 @@ export function Controls({
     [video, length],
   );
 
-  /* A step back or on, from the buttons and from the arrow keys alike: one
-     way of moving means one place for it to be wrong. Held inside the film at
-     both ends, because a step past the end is the film over. */
-  const stepBy = useCallback(
-    (seconds: number) => {
-      const element = video.current;
-      if (!element) {
-        return;
-      }
-      const furthest = length > 0 ? length : element.duration;
-      const wanted = element.currentTime + seconds;
-      element.currentTime = Math.max(
-        0,
-        Number.isFinite(furthest) ? Math.min(furthest, wanted) : wanted,
-      );
-      // A step is one move with nothing in between, so there is nothing to
-      // hold back first.
-      onViewerMoved();
-    },
-    [video, length, onViewerMoved],
-  );
-
   /* Dragging is followed on the window rather than on the bar: a finger that
      leaves the bar while still held down is still dragging, and a bar that
      stops following it there is a bar that jumps back. */
@@ -271,13 +253,14 @@ export function Controls({
     const moved = (event: PointerEvent) => {
       const share = shareAt(event.clientX);
       if (share !== null) {
+        wasDragged.current = true;
         setHovered(share);
         goTo(share);
       }
     };
     const let_go = () => {
       setDragging(false);
-      onViewerMoved();
+      onViewerMoved(wasDragged.current ? "a_drag" : "a_click");
     };
     window.addEventListener("pointermove", moved);
     window.addEventListener("pointerup", let_go);
@@ -319,6 +302,7 @@ export function Controls({
         onPointerDown={(event) => {
           const share = shareAt(event.clientX);
           if (share !== null) {
+            wasDragged.current = false;
             onViewerMoving();
             setDragging(true);
             setHovered(share);
@@ -329,12 +313,6 @@ export function Controls({
         onPointerLeave={() => {
           if (!dragging) {
             setHovered(null);
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-            event.preventDefault();
-            stepBy(event.key === "ArrowLeft" ? -A_STEP : A_STEP);
           }
         }}
       >
@@ -371,7 +349,7 @@ export function Controls({
             the bar above is for, and a bar is no good at ten seconds. */}
         <button
           className="player-button player-button-step"
-          onClick={() => stepBy(-A_STEP)}
+          onClick={() => onStep(-A_STEP)}
           aria-label={t("player.back_ten")}
         >
           {`↺${A_STEP}`}
@@ -387,7 +365,7 @@ export function Controls({
 
         <button
           className="player-button player-button-step"
-          onClick={() => stepBy(A_STEP)}
+          onClick={() => onStep(A_STEP)}
           aria-label={t("player.on_ten")}
         >
           {`↻${A_STEP}`}

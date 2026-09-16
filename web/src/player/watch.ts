@@ -12,7 +12,7 @@
  * server names, sent as numbers, and the server writes the sentence.
  */
 
-import { api } from "../api";
+import { api, type HowItMoved } from "../api";
 
 /** How still the clock has to be before the film counts as stopped. */
 const STOPPED_AFTER_MS = 1_000;
@@ -83,13 +83,25 @@ function picturesDropped(element: HTMLVideoElement): number {
   return quality ? quality.droppedVideoFrames : 0;
 }
 
+/** What following one film hands back to whoever set it going. */
+export interface Watching {
+  /** Stops following it, which the player calls when the element goes. */
+  stop: () => void;
+  /**
+   * What moved the film, said by the controls that moved it.
+   *
+   * Only the controls know a click from a drag: by the time the element says
+   * it is seeking, the two look exactly alike. Said before the line goes out,
+   * because every gesture reaches here before the browser has finished moving
+   * the film. What nothing says stays what nobody on the page asked for.
+   */
+  movedBy: (how: HowItMoved) => void;
+}
+
 /**
  * Follows one film and reports what the server cannot see.
- *
- * Answers the way to stop following it, which the player calls when the
- * element goes.
  */
-export function watchTheReading(element: HTMLVideoElement, session: string): () => void {
+export function watchTheReading(element: HTMLVideoElement, session: string): Watching {
   const tell = (said: Parameters<typeof api.tellTheJournal>[0]) => {
     // Nothing waits on a line in a journal, and a film that plays matters
     // more than knowing how it played.
@@ -198,6 +210,12 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
      is waited for. */
   let jumpedFrom: number | null = null;
   let settling = 0;
+  /* What moved the film, until something on the page says otherwise. Reset
+     once the line is out, so that the next jump answers for itself: a film
+     moved by the library right after a viewer moved it would otherwise be
+     written down as the viewer's doing, which is the one reading that would
+     send somebody looking in the wrong place. */
+  let movedBy: HowItMoved = "not_the_page";
   const jumpStarted = () => {
     if (jumpedFrom === null) {
       jumpedFrom = wasAt;
@@ -233,7 +251,9 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
         from_second: from,
         to_second: element.currentTime,
         was_playing: !element.paused,
+        moved_by: movedBy,
       });
+      movedBy = "not_the_page";
     }, A_GESTURE_ENDS_AFTER_MS);
   };
   element.addEventListener("timeupdate", followTheClock);
@@ -342,18 +362,23 @@ export function watchTheReading(element: HTMLVideoElement, session: string): () 
 
   const ticking = window.setInterval(look, LOOK_EVERY_MS);
 
-  return () => {
-    window.clearInterval(ticking);
-    window.clearTimeout(settling);
-    if (waitingForThePicture?.pending != null) {
-      element.cancelVideoFrameCallback?.(waitingForThePicture.pending);
-    }
-    waitingForThePicture = null;
-    boxChanged.disconnect();
-    element.removeEventListener("loadedmetadata", sayTheShape);
-    element.removeEventListener("resize", sayTheShape);
-    element.removeEventListener("timeupdate", followTheClock);
-    element.removeEventListener("seeking", jumpStarted);
-    element.removeEventListener("seeked", jumpFinished);
+  return {
+    movedBy: (how) => {
+      movedBy = how;
+    },
+    stop: () => {
+      window.clearInterval(ticking);
+      window.clearTimeout(settling);
+      if (waitingForThePicture?.pending != null) {
+        element.cancelVideoFrameCallback?.(waitingForThePicture.pending);
+      }
+      waitingForThePicture = null;
+      boxChanged.disconnect();
+      element.removeEventListener("loadedmetadata", sayTheShape);
+      element.removeEventListener("resize", sayTheShape);
+      element.removeEventListener("timeupdate", followTheClock);
+      element.removeEventListener("seeking", jumpStarted);
+      element.removeEventListener("seeked", jumpFinished);
+    },
   };
 }

@@ -29,7 +29,7 @@ import {
 } from "./appearance";
 import type { Appearance } from "./appearance";
 import { Controls, playOrPause } from "./controls";
-import { canBePlayedAsItIs, SPEEDS, usePlayback } from "./engine";
+import { A_STEP, canBePlayedAsItIs, SPEEDS, usePlayback } from "./engine";
 import { PlaybackFacts } from "./facts";
 import { languageName } from "./languages";
 import { QUALITIES, qualityName } from "./quality";
@@ -127,6 +127,7 @@ export function Player({
     subtitleId,
     quality,
     speed,
+    stepBy,
   } = playback;
 
   /* What is sent fullscreen. The bar is ours now, so it has to come with the
@@ -167,10 +168,11 @@ export function Player({
           }
           break;
         case "ArrowLeft":
-          element.currentTime = Math.max(0, element.currentTime - 10);
-          break;
         case "ArrowRight":
-          element.currentTime += 10;
+          // Kept from the page: the bar answers to the arrow keys as a slider
+          // and would scroll what is behind it otherwise.
+          event.preventDefault();
+          stepBy(event.key === "ArrowLeft" ? -A_STEP : A_STEP);
           break;
         case "f":
           if (document.fullscreenElement) {
@@ -185,7 +187,7 @@ export function Player({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, video]);
+  }, [onClose, video, stepBy]);
 
   /* The subtitle being shown, when there is one, it is words rather than
      pictures, and there is a picture ready to hang it on.
@@ -369,6 +371,7 @@ export function Player({
           thumbnails={plan.thumbnails}
           onViewerMoving={playback.viewerMoving}
           onViewerMoved={playback.viewerMoved}
+          onStep={stepBy}
           factsOpen={factsOpen}
           onFactsTurned={() => setFactsOpen((open) => !open)}
           t={t}

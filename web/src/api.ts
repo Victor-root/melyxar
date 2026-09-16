@@ -239,6 +239,23 @@ export interface JournalQuery {
  * when a film starts happens here rather than on the server, and the journal
  * showed none of it.
  */
+/**
+ * What moved the film, as far as the page can tell.
+ *
+ * A click and a drag are not the same gesture at all and look identical once
+ * the film has moved: a drag holds the library back for as long as the hand is
+ * down and sets it going once, a click holds it back and sets it going again in
+ * the same breath, and clicking along the bar does that once per click. What
+ * the page never asked for is the last of them, and it is the one worth
+ * catching: it is the browser or the library moving the film by itself.
+ */
+export type HowItMoved =
+  | "a_click"
+  | "a_drag"
+  | "a_step"
+  | "picked_up_where_it_was_left"
+  | "not_the_page";
+
 export type PageSaw =
   | {
       session: string;
@@ -256,6 +273,7 @@ export type PageSaw =
       from_second: number;
       to_second: number;
       was_playing: boolean;
+      moved_by: HowItMoved;
     }
   | {
       session: string;
