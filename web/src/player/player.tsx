@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlaybackTrack, Work } from "../api";
+import type { PlaybackTrack, Preparation, Work } from "../api";
 import { useSettings } from "../settings";
 import {
   appearanceClasses,
@@ -43,6 +43,23 @@ import { rememberSettings, storedSettings } from "./settings";
 import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
 import "./player.css";
+
+/**
+ * How far the server has got, from nought to a hundred.
+ *
+ * Held to what the server has actually said rather than nought until the
+ * first answer arrives: a viewer watching a percentage jump backwards from
+ * some earlier guess to nought would read that as a step backwards, and
+ * nothing has gone backwards. Held to a hundred once the server is ahead of
+ * what it asked for, for the same reason the count under the ring used to be
+ * hidden then: past a hundred means nothing to read.
+ */
+function preparingPercent(preparing: Preparation | null): number {
+  if (!preparing || preparing.wanted_seconds <= 0) {
+    return 0;
+  }
+  return Math.min(100, Math.round((preparing.ready_seconds / preparing.wanted_seconds) * 100));
+}
 
 /**
  * What to call a track in a list.
@@ -272,34 +289,18 @@ export function Player({
             </p>
           )}
 
-          {/* A ring turning, and under it what the server is actually doing.
-              The ring says something is happening, which a line of text on a
-              black screen does badly; the words say which part is slow when
-              one of them is, which a ring cannot say at all. */}
+          {/* A ring turning, and a single number under it: how far the server
+              has got, from nought to a hundred, and nothing else. Four named
+              steps and a count of seconds against a count that kept moving
+              used to sit here, and none of it told a viewer anything they
+              could act on beyond "wait". One number that climbs to a hundred
+              and then the film starts is the whole of what waiting needs to
+              say. */}
           {rebuilt && readyPicture !== pictureKey && !failed && (
             <div className="player-working">
               <Spinner />
               <p className="player-notice player-notice-bare">
-                {t(`player.step.${preparing?.step ?? "starting"}`)}
-                {/* In seconds of film, which the server works out: how long a
-                    piece of a rebuilt film is, is its business, and a viewer
-                    waiting knows what ten seconds of a film is and not what
-                    two sixths of one is.
-
-                    Only while the server is still short of what it wanted:
-                    once it has caught up, it goes on producing ahead of where
-                    the viewer is, and a count that keeps climbing past the
-                    number it was supposedly out of says nothing a viewer can
-                    make sense of. The step above already says enough once
-                    that line stops being true. */}
-                {preparing && preparing.ready_seconds < preparing.wanted_seconds && (
-                  <span className="player-notice-why">
-                    {t("player.seconds_ready", {
-                      ready: Math.round(preparing.ready_seconds),
-                      wanted: Math.round(preparing.wanted_seconds),
-                    })}
-                  </span>
-                )}
+                {t("player.preparing_percent", { percent: preparingPercent(preparing) })}
               </p>
             </div>
           )}
