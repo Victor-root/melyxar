@@ -920,11 +920,6 @@
   stroke: var(--accent-bright);
   stroke-width: 4;
   stroke-linecap: round;
-  /* A lit piece of the ring and a dark rest of it. The two always add up to
-     exactly one ring: a pattern longer than what it is drawn on leaves the lit
-     piece nowhere to be for part of every turn, which is a ring that blinks
-     out and back. */
-  stroke-dasharray: var(--player-spinner-round);
   animation: player-spinner-sweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
@@ -936,20 +931,25 @@
   }
 }
 
-/* The lit piece grows out of nothing, runs round, and is drawn back in. Every
-   figure a share of the ring, so it holds at any size. */
+/* The lit piece grows out of nothing, runs round, and is drawn back in.
+   Written as shares of a hundred rather than of the ring's own length: the
+   path declares itself a hundred units long through `pathLength`, so these
+   are plain numbers a browser can blend frame by frame, not a `calc()` that
+   reads a custom property. The two numbers on each line always add up to a
+   hundred, one ring exactly, so the lit piece is never asked to be longer
+   than what it is drawn on, which is a ring that blinks out and back. */
 @keyframes player-spinner-sweep {
   0% {
-    stroke-dasharray: calc(var(--player-spinner-round) * 0.2) calc(var(--player-spinner-round) * 0.8);
+    stroke-dasharray: 20 80;
     stroke-dashoffset: 0;
   }
   50% {
-    stroke-dasharray: calc(var(--player-spinner-round) * 0.68) calc(var(--player-spinner-round) * 0.32);
-    stroke-dashoffset: calc(var(--player-spinner-round) * -0.24);
+    stroke-dasharray: 68 32;
+    stroke-dashoffset: -24;
   }
   100% {
-    stroke-dasharray: calc(var(--player-spinner-round) * 0.2) calc(var(--player-spinner-round) * 0.8);
-    stroke-dashoffset: calc(var(--player-spinner-round) * -1);
+    stroke-dasharray: 20 80;
+    stroke-dashoffset: -100;
   }
 }
 
