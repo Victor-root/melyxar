@@ -27,7 +27,7 @@ import type Hls from "hls.js";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "../api";
-import type { HowItMoved, PlaybackPlan, PlaybackSession, Preparation } from "../api";
+import type { HowItMoved, PlaybackPlan, PlaybackSession } from "../api";
 import { qualityCalled, rememberQuality, storedQuality } from "./quality";
 import type { Quality } from "./quality";
 import { rememberLoudness, storedLoudness } from "./loudness";
@@ -118,6 +118,94 @@ export function canBePlayedAsItIs(plan: PlaybackPlan): boolean {
   return plan.method === "direct_play";
 }
 
+/*
+ * How far there is left to wait, told as one number.
+ *
+ * Built from real moments rather than guessed at. Every one of the stages
+ * below is something that genuinely happens once, in this order, on the way
+ * to a film playing: a session is asked for, hls.js reads the playlist, the
+ * server produces what the very first piece needs, that piece reaches this
+ * browser, and the browser reads enough of it to know it has a film. Where two
+ * of those are seconds apart the number climbs quickly; where one of them is
+ * a slow link labouring over a few megabytes it climbs slowly and keeps
+ * climbing, because it is still waiting on that one real thing and says so
+ * rather than promising an end it cannot see.
+ *
+ * Between one stage and the next, nothing new is known yet, so the number
+ * creeps toward the next stage's floor rather than sitting still: reaching
+ * that floor exactly is what waits for the real event, and the creep only
+ * ever approaches it, never reaches or passes it uninvited. A stage that
+ * turns out to take far longer than usual still only ever creeps toward the
+ * same ceiling, however long it takes to get there.
+ *
+ * Every step is logged to the console in a development build, with how long
+ * the stage before it took: the one thing this cannot know on its own is
+ * whether a minute on a slow link is normal or a sign that something is
+ * actually stuck, and that reading a real number needs a real connection to
+ * try it on, not a guess made here.
+ */
+type LoadingStage =
+  | "opening"
+  | "session_opened"
+  | "manifest_parsed"
+  | "producing"
+  | "produced"
+  | "first_fragment_loaded"
+  | "done";
+
+const LOADING_STAGES: LoadingStage[] = [
+  "opening",
+  "session_opened",
+  "manifest_parsed",
+  "producing",
+  "produced",
+  "first_fragment_loaded",
+  "done",
+];
+
+/** Where the number sits the instant each stage is reached. */
+const LOADING_FLOOR: Record<LoadingStage, number> = {
+  opening: 0,
+  // A session is asked for.
+  session_opened: 6,
+  // hls.js has read the playlist and knows what to ask for next.
+  manifest_parsed: 14,
+  // The server has said it is actively writing the piece this browser needs.
+  producing: 24,
+  // That piece exists on the server now; what is left is getting it here.
+  produced: 58,
+  // It has arrived and been read. What is left is the browser noticing.
+  first_fragment_loaded: 90,
+  done: 100,
+};
+
+/**
+ * How many milliseconds a stage is expected to take, roughly, before the
+ * number climbing through it starts to visibly slow down.
+ *
+ * A first guess rather than a measurement, and said so where it is used: the
+ * two that matter most, `producing` and `produced`, are exactly the two a
+ * slow link or a slow disk stretches furthest, and are the two worth
+ * correcting first from what the console actually shows.
+ */
+const LOADING_TAU_MS: Record<Exclude<LoadingStage, "done">, number> = {
+  opening: 400,
+  session_opened: 1200,
+  manifest_parsed: 900,
+  producing: 3500,
+  produced: 3200,
+  first_fragment_loaded: 350,
+};
+
+/** A line in the console, and only in a build a viewer never sees: the console
+ *  a viewer testing a slow connection can read from is the only way to learn
+ *  which of the stages above is the one actually taking the time. */
+function debugLoading(message: string): void {
+  if (import.meta.env.DEV) {
+    console.debug(`[melyxar] loading: ${message}`);
+  }
+}
+
 /** What went wrong, in a word this interface knows how to say. */
 function wording(error: unknown): string {
   if (!(error instanceof ApiError)) {
@@ -151,8 +239,10 @@ export interface Playback {
   failed: string | null;
   /** What the browser itself said when it refused, word for word. */
   refusal: string | null;
-  /** How far the server has got, while the picture is not there yet. */
-  preparing: Preparation | null;
+  /** How far there is left to wait, from nought to a hundred, while the
+   *  picture is not there yet. Reaches a hundred at the same moment the
+   *  picture does, never before. */
+  loadingPercent: number;
   /** Which picture is on screen: the file itself, or one session of segments. */
   pictureKey: string | null;
   /** Which picture the browser has actually opened. */
@@ -317,10 +407,38 @@ export function usePlayback({
   /* Which picture the browser has actually opened. Null until it has: the
      words are hung on the picture, and only once it is there. */
   const [readyPicture, setReadyPicture] = useState<string | null>(null);
-  /* How far the server has got, asked for only while the picture is not there
-     yet: once the film is playing, the answer is a request a second for
-     something nobody is looking at. */
-  const [preparing, setPreparing] = useState<Preparation | null>(null);
+  /** How far there is left to wait, shown while the picture is not there. */
+  const [loadingPercent, setLoadingPercent] = useState(0);
+  /* Which of the real moments on the way to a playing film has been reached,
+     and when, in the browser's own clock rather than the wall clock: what
+     matters is how long a stage has been sat in, not what time it is. */
+  const loadingStage = useRef<LoadingStage>("opening");
+  const loadingStageSince = useRef(0);
+
+  /* Starts over from nothing, for a session opened from nothing: a viewer
+     changing quality mid film is not owed the tail end of the last session's
+     progress carried into this one. */
+  const resetLoadingStage = useCallback(() => {
+    loadingStage.current = "opening";
+    loadingStageSince.current = performance.now();
+    setLoadingPercent(LOADING_FLOOR.opening);
+  }, []);
+
+  /* Moved on to a later stage, and only ever a later one: a message from a
+     session already left behind, or one that arrived after a further one,
+     must not walk the number backwards. */
+  const enterLoadingStage = useCallback((stage: LoadingStage) => {
+    if (LOADING_STAGES.indexOf(stage) <= LOADING_STAGES.indexOf(loadingStage.current)) {
+      return;
+    }
+    const now = performance.now();
+    debugLoading(
+      `${stage} (${Math.round(now - loadingStageSince.current)}ms in ${loadingStage.current})`,
+    );
+    loadingStage.current = stage;
+    loadingStageSince.current = now;
+    setLoadingPercent(LOADING_FLOOR[stage]);
+  }, []);
   /* The last position seen, kept apart from the element. On the way out the
      element is already gone, and that is exactly the moment the position is
      worth sending. */
@@ -421,6 +539,10 @@ export function usePlayback({
       setStream(null);
       return;
     }
+    // Starting over: a session opened from nothing owes nobody the tail end
+    // of an earlier one's progress, whether this is the first ever or the
+    // fourth after a viewer kept changing the quality.
+    resetLoadingStage();
 
     /* Picking another soundtrack starts a new session from nothing, and its
        picture would open at the beginning. Carrying the position over is what
@@ -457,6 +579,7 @@ export function usePlayback({
         }
         session.current = opening.id;
         setStream(opening);
+        enterLoadingStage("session_opened");
       })
       .catch((error) => {
         // A viewer who has moved on is not told about a film they left.
@@ -533,14 +656,22 @@ export function usePlayback({
   useEffect(() => {
     const name = stream?.id;
     if (!name || readyPicture === pictureKey) {
-      setPreparing(null);
       return;
     }
     const controller = new AbortController();
     const look = () => {
       api
         .preparation(name, controller.signal)
-        .then(setPreparing)
+        .then((seen) => {
+          if (seen.step === "producing") {
+            enterLoadingStage("producing");
+          } else if (seen.step === "ready" || seen.ready_seconds >= seen.wanted_seconds) {
+            // What this browser asked for exists on the server now. What is
+            // left of the wait from here on is getting it from there to here,
+            // which this same server cannot see and has nothing to add about.
+            enterLoadingStage("produced");
+          }
+        })
         .catch(() => {
           // A step that could not be read is not worth troubling a viewer
           // with: the film is on its way either way, and the next look
@@ -554,6 +685,35 @@ export function usePlayback({
       controller.abort();
     };
   }, [stream?.id, readyPicture, pictureKey]);
+
+  /* The number itself, moved along between one real stage and the next.
+     Ticked on a plain timer rather than redrawn only when a stage changes,
+     because a number that only ever jumps between six fixed points does not
+     read as something happening; a number that keeps creeping does, which is
+     the one thing a viewer watching it is actually asking it for. Run for as
+     long as the notice above it is shown and not a moment longer. */
+  useEffect(() => {
+    if (!stream || readyPicture === pictureKey) {
+      return;
+    }
+    const tick = () => {
+      const stage = loadingStage.current;
+      if (stage === "done") {
+        return;
+      }
+      const next = LOADING_STAGES[LOADING_STAGES.indexOf(stage) + 1];
+      const floor = LOADING_FLOOR[stage];
+      const ceiling = LOADING_FLOOR[next];
+      const tau = LOADING_TAU_MS[stage];
+      const elapsed = performance.now() - loadingStageSince.current;
+      // Approaches the ceiling and never quite reaches it: reaching it is
+      // what the next real stage is for, not a clock running out.
+      setLoadingPercent(ceiling - (ceiling - floor) * Math.exp(-elapsed / tau));
+    };
+    tick();
+    const timer = window.setInterval(tick, 120);
+    return () => window.clearInterval(timer);
+  }, [stream, readyPicture, pictureKey]);
 
   /* Feeding the segments in.
 
@@ -677,6 +837,22 @@ export function usePlayback({
         },
       };
       sayWhereItBegan(Library, feed, stream.id);
+      // The playlist has been read, and the library now knows what to ask
+      // for. Whatever is slow from here on is either the server producing it
+      // or the network carrying it, not this.
+      feed.on(Library.Events.MANIFEST_PARSED, () => enterLoadingStage("manifest_parsed"));
+      // The very first piece of film has reached this browser and been read.
+      // What is left of the wait is the browser noticing it has a film, which
+      // is `loadedmetadata` below and is usually the shortest part of all of
+      // it. A later piece loading is not this moment and says nothing new.
+      let firstPieceArrived = false;
+      feed.on(Library.Events.FRAG_LOADED, () => {
+        if (firstPieceArrived) {
+          return;
+        }
+        firstPieceArrived = true;
+        enterLoadingStage("first_fragment_loaded");
+      });
       feed.on(Library.Events.ERROR, (_event, trouble) => {
         // Anything short of fatal is retried on its own, and saying so would
         // turn an invisible hiccup into an error the viewer has to read.
@@ -1009,8 +1185,12 @@ export function usePlayback({
       watching.current?.movedBy("picked_up_where_it_was_left");
       goTo(target);
     }
+    // The same instant the notice comes down: a number left behind at
+    // whatever it last crept to would be a number that was still climbing
+    // the moment the picture no longer needed it to.
+    enterLoadingStage("done");
     setReadyPicture(pictureKey);
-  }, [speed, pictureKey, goTo]);
+  }, [speed, pictureKey, goTo, enterLoadingStage]);
 
   /* What the server said when the film was asked for, and this page's answer
      from then on. Told to the server and kept whatever it says back: a mark
@@ -1131,7 +1311,7 @@ export function usePlayback({
     rebuilt,
     failed,
     refusal,
-    preparing,
+    loadingPercent,
     pictureKey,
     readyPicture,
     audioId,
