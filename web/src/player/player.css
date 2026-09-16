@@ -319,11 +319,17 @@
   touch-action: none;
 }
 
+/* What is drawn over what, said outright rather than left to the order things
+   happen to be written in. Three layers: the track and what is filled on it,
+   then the marks where the film changes scene, then the handle over both. The
+   handle is the one that must never be covered: it is where the film is, and a
+   red bar drawn across it is a bar with no handle at all. */
 .player-rail-track,
 .player-rail-held,
 .player-rail-played {
   position: absolute;
   left: 0;
+  z-index: 0;
   height: var(--player-rail);
   /* Fully round rather than slightly softened: it is what makes a bar of this
      thickness read as one object instead of a block. */
@@ -350,6 +356,7 @@
    stays readable through the part already watched. */
 .player-rail-chapter {
   position: absolute;
+  z-index: 1;
   width: var(--player-chapter-across);
   height: var(--player-chapter-down);
   margin-left: calc(var(--player-chapter-across) / -2);
@@ -360,18 +367,25 @@
 }
 
 /* A rounded white rectangle riding the bar, not a dot: it reads as a place in
-   the film rather than as a knob, and it is what the maintainer's theme draws. */
+   the film rather than as a knob, and it is what the maintainer's theme draws.
+
+   Shown only under a hand. A bar being watched rather than used wants to be a
+   line and nothing else, and the handle is there to be grabbed: it appears at
+   the moment somebody could grab it. It stays for a keyboard as well, which
+   has no hand to show and would otherwise be moving something invisible. */
 .player-rail-handle {
   position: absolute;
+  z-index: 2;
   width: var(--player-handle-across);
   height: var(--player-handle-down);
   margin-left: calc(var(--player-handle-across) / -2);
   border-radius: 2px;
   background: #fff;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
+  opacity: 0;
   transition:
     height var(--quick) var(--ease),
-    background var(--quick) var(--ease);
+    opacity var(--quick) var(--ease);
   pointer-events: none;
 }
 
@@ -393,6 +407,7 @@
 .player-rail:hover .player-rail-handle,
 .player-rail:focus-visible .player-rail-handle {
   height: var(--player-handle-hovered);
+  opacity: 1;
 }
 
 .player-rail:focus-visible {
@@ -409,9 +424,12 @@
  * The little picture above the bar
  * ------------------------------------------------------------------------ */
 
+/* Placed against the bar it belongs to, so its middle is the point under the
+   hand and not that point plus whatever stands to the left of the bar. */
 .player-preview {
   position: absolute;
-  bottom: 38px;
+  bottom: calc(100% + 10px);
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -493,8 +511,13 @@
   height: var(--player-rail-hovered);
 }
 
+/* Above the two pieces drawn behind it, and it has to be said: they are
+   pseudo-elements, and a pseudo-element after the content is painted after the
+   content. Left alone, the red ran straight over the white handle, which is
+   the one thing on the slider that must stay visible. */
 .player-loudness input {
   position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   margin: 0;
@@ -504,6 +527,9 @@
   cursor: pointer;
 }
 
+/* The same handle as the bar above, and shown at the same moment: under a
+   hand. A sound already set is a line, not a control waiting to be turned.
+   Kept in place rather than hidden, so nothing shifts when it appears. */
 .player-loudness input::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
@@ -511,9 +537,12 @@
   height: var(--player-handle-down);
   border: none;
   border-radius: 2px;
-  background: #fff;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
-  transition: height var(--quick) var(--ease);
+  background: transparent;
+  box-shadow: none;
+  transition:
+    height var(--quick) var(--ease),
+    background var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
 }
 
 .player-loudness input::-moz-range-thumb {
@@ -521,27 +550,29 @@
   height: var(--player-handle-down);
   border: none;
   border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.player-loudness:hover input::-webkit-slider-thumb,
+.player-loudness input:focus-visible::-webkit-slider-thumb {
+  height: var(--player-handle-hovered);
   background: #fff;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
 }
 
-.player-loudness:hover input::-webkit-slider-thumb {
+.player-loudness:hover input::-moz-range-thumb,
+.player-loudness input:focus-visible::-moz-range-thumb {
   height: var(--player-handle-hovered);
-}
-
-.player-loudness:hover input::-moz-range-thumb {
-  height: var(--player-handle-hovered);
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
 }
 
 .player-loudness input:focus-visible {
   outline: none;
 }
 
-.player-loudness input:focus-visible::-webkit-slider-thumb {
-  box-shadow:
-    0 1px 5px rgba(0, 0, 0, 0.55),
-    0 0 0 2px var(--accent-bright);
-}
+
 
 /* When the film ends, beside the transport where a glance goes for it. */
 .player-ends {
