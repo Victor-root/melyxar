@@ -133,13 +133,33 @@ impl PreparationStep {
 }
 
 /// How far the preparation has got, in a form a page can show.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// No longer compared for exact equality, because it carries a rate now and a
+/// rate is not a whole number.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Preparation {
     pub step: PreparationStep,
     /// Segments on the disk, counted from where the tool was started.
     pub ready: u32,
     /// How many make a comfortable start.
     pub wanted: u32,
+    /// What the tool at work is doing this second, when one is at work.
+    pub producing: Option<Producing>,
+}
+
+/// How hard the machine is working on this film, as the tool tells it.
+///
+/// Asked for by the maintainer and shown by every media server there is, for
+/// a reason: it is the one number that says whether the machine is coping.
+/// The two together, because neither alone answers it. Pictures a second is
+/// the work being done and means nothing without knowing the film; the speed
+/// is that work against what watching it costs, and one is exactly keeping up.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Producing {
+    /// Pictures a second the tool says it is writing just now.
+    pub pictures_a_second: f64,
+    /// The same work against real time. Below one and the picture will stop.
+    pub speed: f64,
 }
 
 /// Whether a tool that has written as far as `written_to` will reach `index`
@@ -254,6 +274,14 @@ struct AtWork {
     /// which is the one thing that turns into stuttering rather than into a
     /// wait at the start.
     speed: Arc<AtomicI64>,
+    /// How many pictures a second the tool says it is writing, in thousandths.
+    ///
+    /// Beside the speed rather than instead of it: the speed says whether the
+    /// machine is keeping up with somebody watching, and this says what it is
+    /// actually doing to get there. A film at twenty five pictures a second
+    /// produced at forty is the same machine as one at fifty produced at
+    /// eighty, and only one of the two numbers says which film it is.
+    pictures: Arc<AtomicI64>,
     /// How long the tool took to say anything at all, in milliseconds, or a
     /// negative number while it has not.
     ///
@@ -262,6 +290,18 @@ struct AtWork {
     /// is a real part of the wait, and it is a different part from producing
     /// the segment: one is attacked by asking the tool to look at less of the
     /// file, the other only by producing faster.
+    opening: Arc<AtomicI64>,
+}
+
+/// Where the task reading the tool's reports puts what it reads.
+///
+/// Named rather than a handful of counters in a tuple: the task that writes
+/// them and the session that reads them are pages apart, and a number nobody
+/// can name from where it is read is a number nobody checks.
+struct Mirrored {
+    reached: Arc<AtomicI64>,
+    speed: Arc<AtomicI64>,
+    pictures: Arc<AtomicI64>,
     opening: Arc<AtomicI64>,
 }
 
@@ -274,6 +314,11 @@ impl AtWork {
     /// How fast the tool says it is working, relative to real time.
     fn speed(&self) -> f64 {
         self.speed.load(Ordering::Relaxed) as f64 / 1000.0
+    }
+
+    /// How many pictures a second the tool says it is writing.
+    fn pictures_a_second(&self) -> f64 {
+        self.pictures.load(Ordering::Relaxed) as f64 / 1000.0
     }
 
     /// How long the tool took to say anything, when it has.
@@ -489,14 +534,23 @@ impl Session {
     /// is actually true: a count kept alongside would drift the first time a
     /// tool died between two segments.
     pub async fn preparation(&self) -> Preparation {
-        let Some(from) = ({
-            let running = self.running.lock().await;
-            running.as_ref().map(|at_work| at_work.from)
-        }) else {
+        let at_work = {
+            let mut running = self.running.lock().await;
+            running.as_mut().map(|at_work| {
+                (
+                    at_work.from,
+                    at_work.pictures_a_second(),
+                    at_work.speed(),
+                    at_work.process.has_exited(),
+                )
+            })
+        };
+        let Some((from, pictures_a_second, speed, tool_gone)) = at_work else {
             return Preparation {
                 step: PreparationStep::Starting,
                 ready: 0,
                 wanted: self.enough_from(self.where_the_viewer_starts()),
+                producing: None,
             };
         };
 
@@ -512,6 +566,17 @@ impl Session {
             step: step_for(ready, wanted),
             ready,
             wanted,
+            // Nothing until the tool has spoken, and nothing once it has
+            // finished. A rate of nothing is what a tool that has not started
+            // looks like, and the last rate a tool gave before it reached the
+            // end of the film is not what the machine is doing now: both would
+            // be read as work going on this second.
+            producing: (!tool_gone && (pictures_a_second > 0.0 || speed > 0.0)).then_some(
+                Producing {
+                    pictures_a_second,
+                    speed,
+                },
+            ),
         }
     }
 
@@ -766,24 +831,39 @@ impl Session {
         // large file are two different problems.
         let reached = Arc::new(AtomicI64::new(0));
         let speed = Arc::new(AtomicI64::new(0));
+        let pictures = Arc::new(AtomicI64::new(0));
         let opening = Arc::new(AtomicI64::new(-1));
         let (reports, mut incoming) =
             tokio::sync::mpsc::channel::<melyxar_ffmpeg::process::Progress>(4);
-        let mirrored = (reached.clone(), speed.clone(), opening.clone());
+        let mirrored = Mirrored {
+            reached: reached.clone(),
+            speed: speed.clone(),
+            pictures: pictures.clone(),
+            opening: opening.clone(),
+        };
         let began = Instant::now();
         tokio::spawn(async move {
             while let Some(report) = incoming.recv().await {
                 // The first word out of the tool is the moment it stopped
                 // opening the film and started producing it.
-                let _ = mirrored.2.compare_exchange(
+                let _ = mirrored.opening.compare_exchange(
                     -1,
                     began.elapsed().as_millis() as i64,
                     Ordering::Relaxed,
                     Ordering::Relaxed,
                 );
-                mirrored.0.store(report.position.get(), Ordering::Relaxed);
+                mirrored
+                    .reached
+                    .store(report.position.get(), Ordering::Relaxed);
                 if let Some(rate) = report.speed {
-                    mirrored.1.store((rate * 1000.0) as i64, Ordering::Relaxed);
+                    mirrored
+                        .speed
+                        .store((rate * 1000.0) as i64, Ordering::Relaxed);
+                }
+                if let Some(rate) = report.pictures_a_second {
+                    mirrored
+                        .pictures
+                        .store((rate * 1000.0) as i64, Ordering::Relaxed);
                 }
             }
         });
@@ -808,6 +888,7 @@ impl Session {
             began_at,
             reached,
             speed,
+            pictures,
             opening,
         });
         Ok(Some(WhatItTook {

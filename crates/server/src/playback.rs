@@ -16,7 +16,7 @@ use axum::extract::{Path as RoutePath, State};
 use axum::http::{header, HeaderValue, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use melyxar_app::playback::{ClientProfile, PlayPlan, PlayRequest, Session};
+use melyxar_app::playback::{ClientProfile, PlayPlan, PlayRequest, Preparation, Session};
 use melyxar_app::AppState;
 use melyxar_core::id::{MediaSourceId, TrackId, WorkId};
 use melyxar_core::media::TrackKind;
@@ -676,20 +676,38 @@ struct PreparationView {
     ready: u32,
     /// How many make a comfortable start from where the tool was set going.
     wanted: u32,
+    /// How hard the machine is working on this film, while it is working.
+    ///
+    /// Sent from here rather than from the plan because it is the one thing
+    /// about a playback that changes every second. The plan says what was
+    /// decided; this says whether the machine can do it.
+    producing: Option<ProducingView>,
+}
+
+#[derive(Debug, Serialize)]
+struct ProducingView {
+    /// Pictures a second the tool says it is writing just now.
+    pictures_a_second: f64,
+    /// The same work against real time. Below one and the picture will stop.
+    speed: f64,
 }
 
 async fn preparation(state: &AppState, id: &str) -> Response {
     match live_session(state, id).await {
-        Ok(session) => {
-            let seen = session.preparation().await;
-            Json(PreparationView {
-                step: seen.step.as_str(),
-                ready: seen.ready,
-                wanted: seen.wanted,
-            })
-            .into_response()
-        }
+        Ok(session) => Json(preparation_view(&session.preparation().await)).into_response(),
         Err(error) => error.into_response(),
+    }
+}
+
+fn preparation_view(seen: &Preparation) -> PreparationView {
+    PreparationView {
+        step: seen.step.as_str(),
+        ready: seen.ready,
+        wanted: seen.wanted,
+        producing: seen.producing.map(|working| ProducingView {
+            pictures_a_second: working.pictures_a_second,
+            speed: working.speed,
+        }),
     }
 }
 
@@ -1128,6 +1146,35 @@ mod tests {
             .expect("a soundtrack is playing");
         assert_eq!(heard.codec, "aac");
         assert_eq!(heard.channels, 2);
+    }
+
+    #[test]
+    fn how_hard_the_machine_is_working_is_sent_only_once_the_tool_has_said() {
+        use melyxar_app::playback::{PreparationStep, Producing};
+
+        let waiting = preparation_view(&Preparation {
+            step: PreparationStep::Reading,
+            ready: 0,
+            wanted: 6,
+            producing: None,
+        });
+        assert!(
+            waiting.producing.is_none(),
+            "a tool that has not spoken has no rate, and nothing is not a rate"
+        );
+
+        let working = preparation_view(&Preparation {
+            step: PreparationStep::Producing,
+            ready: 2,
+            wanted: 6,
+            producing: Some(Producing {
+                pictures_a_second: 38.4,
+                speed: 1.6,
+            }),
+        });
+        let said = working.producing.expect("the tool said how it was doing");
+        assert_eq!(said.pictures_a_second, 38.4);
+        assert_eq!(said.speed, 1.6);
     }
 
     #[test]

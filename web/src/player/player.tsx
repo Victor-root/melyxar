@@ -965,7 +965,13 @@ export function Player({
         </video>
 
         {factsOpen && (
-          <PlaybackFacts plan={plan} video={video} t={t} onClose={() => setFactsOpen(false)} />
+          <PlaybackFacts
+            plan={plan}
+            video={video}
+            session={stream?.id ?? null}
+            t={t}
+            onClose={() => setFactsOpen(false)}
+          />
         )}
 
         {/* Ours rather than the browser's, because showing the picture of the

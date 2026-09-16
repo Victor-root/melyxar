@@ -565,6 +565,16 @@ export interface Preparation {
   ready: number;
   /** How many make a comfortable start. */
   wanted: number;
+  /** How hard the machine is working on this film, while it is working. */
+  producing: Producing | null;
+}
+
+/** What the tool says it is doing this second. */
+export interface Producing {
+  /** Pictures a second it says it is writing. */
+  pictures_a_second: number;
+  /** The same work against real time. Below one and the picture will stop. */
+  speed: number;
 }
 
 export interface BrowseOptions {
