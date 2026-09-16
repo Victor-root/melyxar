@@ -232,14 +232,6 @@ export interface JournalQuery {
 }
 
 /**
- * A fact the page may tell the journal.
- *
- * The server defines the list and refuses anything outside it, so this type is
- * that list and never a message of the page's own making. Half of what happens
- * when a film starts happens here rather than on the server, and the journal
- * showed none of it.
- */
-/**
  * What moved the film, as far as the page can tell.
  *
  * A click and a drag are not the same gesture at all and look identical once
@@ -256,6 +248,14 @@ export type HowItMoved =
   | "picked_up_where_it_was_left"
   | "not_the_page";
 
+/**
+ * A fact the page may tell the journal.
+ *
+ * The server defines the list and refuses anything outside it, so this type is
+ * that list and never a message of the page's own making. Half of what happens
+ * when a film starts happens here rather than on the server, and the journal
+ * showed none of it.
+ */
 export type PageSaw =
   | {
       session: string;
@@ -478,8 +478,25 @@ export interface PlaybackPlan {
   rebuild: PictureRebuild | null;
   /** The little pictures of the bar, when this film has been read for them. */
   thumbnails: PlaybackThumbnails | null;
+  /** Where the film changes scene, when its file names them. Empty for most. */
+  chapters: PlaybackChapter[];
+  /** Whether this viewer has marked the film as one they like. */
+  favourite: boolean;
   /** What the file itself holds, beside what is being made of it. */
   film: FilmHolds;
+}
+
+/**
+ * One place the film changes scene.
+ *
+ * Marked on the bar so that a viewer sees the shape of a film rather than one
+ * unbroken line, and so that landing on the start of a scene is something the
+ * bar helps with.
+ */
+export interface PlaybackChapter {
+  at_second: number;
+  /** What the file calls it, when it calls it anything. */
+  title: string | null;
 }
 
 /** What the file holds, as the analyser read it. */
@@ -688,6 +705,15 @@ export const api = {
   }) => post<{ remembered: boolean }>("/api/v1/playback/tracks", body),
   plan: (source: string, body: unknown, signal?: AbortSignal) =>
     post<PlaybackPlan>(`/api/v1/playback/${source}/plan`, body, signal),
+  /**
+   * Marks a film as one this viewer likes, or takes the mark off.
+   *
+   * Answers what it is now rather than what was asked for, so a button pressed
+   * twice in a second cannot end up saying one thing while the server says
+   * another.
+   */
+  setFavourite: (work: string, favourite: boolean) =>
+    put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
   openSession: (source: string, body: unknown, signal?: AbortSignal) =>
     post<PlaybackSession>(`/api/v1/playback/${source}/session`, body, signal),
   preparation: (session: string, signal?: AbortSignal) =>

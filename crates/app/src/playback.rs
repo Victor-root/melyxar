@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
-use melyxar_core::media::Track;
+use melyxar_core::media::{Chapter, Track};
 use melyxar_core::privacy::MediaName;
 use melyxar_core::thumbnails::Thumbnails;
 use melyxar_core::time::{Millis, Timestamp};
@@ -89,6 +89,19 @@ pub struct PlayPlan {
     /// for them. Absent is an ordinary answer: a film scanned before the pass
     /// ran shows a bare bar, which is what every film did before it existed.
     pub thumbnails: Option<Thumbnails>,
+    /// Where the film changes scene, when the file says so.
+    ///
+    /// Read once here rather than asked for separately by the bar: they are
+    /// marked on it from the first frame, and a bar whose marks appear a
+    /// moment after it does is a bar that jumps under the hand.
+    pub chapters: Vec<Chapter>,
+    /// Whether this viewer has marked this film as one they like.
+    ///
+    /// Carried on the plan rather than asked for on its own, for the same
+    /// reason as the rest of it: the player asks the server one question when
+    /// a film starts, and a button that fills in a moment after the rest is a
+    /// button somebody presses twice.
+    pub favourite: bool,
 }
 
 /// How the picture is rebuilt, when it is.
@@ -283,6 +296,18 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
     // Nothing here waits on them or makes them: a film that has none is a film
     // whose bar shows no pictures, and that is all.
     let thumbnails = database.thumbnails_of(source.id).await.unwrap_or_default();
+    // The same: a film whose file names no chapter has a bar with no marks on
+    // it, which is every film that was never given any.
+    let chapters = database
+        .chapters_of_source(source.id)
+        .await
+        .unwrap_or_default();
+    // Never a reason to refuse to play: a film whose mark could not be read is
+    // a film with the button unlit, and pressing it says so plainly.
+    let favourite = database
+        .is_a_favourite(user_id, source.work_id)
+        .await
+        .unwrap_or(false);
 
     Ok(PlayPlan {
         source_id: source.id,
@@ -299,6 +324,8 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         downmix_gain,
         rebuild,
         thumbnails,
+        chapters,
+        favourite,
     })
 }
 

@@ -319,6 +319,53 @@ impl Database {
         .await?;
         Ok(())
     }
+
+    /// Whether this viewer has marked a work as one they like.
+    pub async fn is_a_favourite(&self, user_id: UserId, work_id: WorkId) -> Result<bool> {
+        let row = sqlx::query("SELECT 1 FROM favorites WHERE user_id = ? AND work_id = ?")
+            .bind(user_id.to_db_string())
+            .bind(work_id.to_db_string())
+            .fetch_optional(self.reader())
+            .await?;
+        Ok(row.is_some())
+    }
+
+    /// Marks a work as one this viewer likes, or takes the mark off.
+    ///
+    /// Says what the answer is now rather than what it was, because that is
+    /// what a button is drawn from, and one insistent viewer pressing twice
+    /// must not leave the button saying one thing and the row another. Marking
+    /// what is already marked keeps the moment it was first marked: it is the
+    /// day somebody liked the film, and pressing the button again did not
+    /// change that.
+    pub async fn set_favourite(
+        &self,
+        user_id: UserId,
+        work_id: WorkId,
+        liked: bool,
+    ) -> Result<bool> {
+        match liked {
+            true => {
+                sqlx::query(
+                    "INSERT INTO favorites (user_id, work_id, created_at) VALUES (?, ?, ?)
+                     ON CONFLICT (user_id, work_id) DO NOTHING",
+                )
+                .bind(user_id.to_db_string())
+                .bind(work_id.to_db_string())
+                .bind(timestamp_to_text(now()))
+                .execute(self.writer())
+                .await?;
+            }
+            false => {
+                sqlx::query("DELETE FROM favorites WHERE user_id = ? AND work_id = ?")
+                    .bind(user_id.to_db_string())
+                    .bind(work_id.to_db_string())
+                    .execute(self.writer())
+                    .await?;
+            }
+        }
+        Ok(liked)
+    }
 }
 
 /// Reads back a track identifier, treating a malformed one as none.
@@ -394,6 +441,59 @@ mod tests {
         assert_eq!(playable.work_id, work_id);
         assert_eq!(playable.size_bytes, 1_000);
         assert!(!playable.missing);
+    }
+
+    #[tokio::test]
+    async fn a_film_somebody_likes_is_marked_and_unmarked_and_says_so_either_way() {
+        // Said as it is now rather than as it was, because a button is drawn
+        // from the answer: a viewer pressing twice in a second must never end
+        // up with a button saying one thing and the row another.
+        let (database, user_id, work_id, _) = one_film().await;
+
+        assert!(
+            !database
+                .is_a_favourite(user_id, work_id)
+                .await
+                .expect("read"),
+            "nobody has said anything about this film"
+        );
+
+        assert!(database
+            .set_favourite(user_id, work_id, true)
+            .await
+            .expect("marked"));
+        assert!(database
+            .is_a_favourite(user_id, work_id)
+            .await
+            .expect("read"));
+
+        // Marking what is already marked is not an error and not a second row.
+        assert!(database
+            .set_favourite(user_id, work_id, true)
+            .await
+            .expect("marked again"));
+        assert!(database
+            .is_a_favourite(user_id, work_id)
+            .await
+            .expect("read"));
+
+        assert!(!database
+            .set_favourite(user_id, work_id, false)
+            .await
+            .expect("unmarked"));
+        assert!(
+            !database
+                .is_a_favourite(user_id, work_id)
+                .await
+                .expect("read"),
+            "and taking the mark off leaves nothing behind"
+        );
+
+        // Taking off what was never on is the same answer, not a failure.
+        assert!(!database
+            .set_favourite(user_id, work_id, false)
+            .await
+            .expect("unmarked again"));
     }
 
     #[tokio::test]
