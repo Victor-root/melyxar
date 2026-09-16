@@ -20,12 +20,16 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlaybackChapter, PlaybackThumbnails, PlaybackTrack } from "../api";
+import type { PlaybackChapter, PlaybackThumbnails, PlaybackTrack, Work } from "../api";
 import type { Arrangement, Control, Zone } from "./arrangement";
+import { asClock } from "./clock";
+import { Drawer, SHEETS } from "./drawer";
+import type { SheetName } from "./drawer";
 import { A_STEP, SPEEDS } from "./engine";
 import type { Playback } from "./engine";
 import type { Fullscreen } from "./fullscreen";
 import {
+  AboutIcon,
   AudioIcon,
   BackIcon,
   ChosenIcon,
@@ -47,8 +51,16 @@ import type { Mark } from "./logo";
 import { QUALITIES, qualityName } from "./quality";
 import { FADES_AFTER_MS } from "./settings";
 import type { PlayerSettings } from "./settings";
+import { Thumbnail } from "./thumbnail";
 
-/** Which panel is open, if any. Only ever one: they all cover the picture. */
+/**
+ * Which panel is open, if any. Only ever one: they all cover the picture.
+ *
+ * The three sheets of the drawer are among them rather than a state of their
+ * own, which is what makes the tabs work: pressing one is opening a panel,
+ * and opening any other panel shuts the drawer without either knowing about
+ * the other.
+ */
 export type Panel =
   | "subtitles"
   | "audio"
@@ -58,7 +70,8 @@ export type Panel =
   | "settings.shape"
   | "settings.repeat"
   | "settings.words_offset"
-  | "facts";
+  | "facts"
+  | SheetName;
 
 /** How the picture is fitted into the screen. */
 export const SHAPES = ["auto", "cover", "stretch"] as const;
@@ -78,6 +91,8 @@ interface Props {
   arrangement: Arrangement;
   settings: PlayerSettings;
   onSettings: (change: Partial<PlayerSettings>) => void;
+  /** The film as the library describes it, for the drawer above the bar. */
+  work: Work;
   /** What the corner shows: the film's mark, the server's, or the title. */
   mark: Mark;
   shape: Shape;
@@ -97,38 +112,9 @@ interface Props {
   t: (key: string, values?: Record<string, string | number>) => string;
 }
 
-/** A moment of a film, as somebody reads it. */
-export function asClock(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) {
-    return "0:00";
-  }
-  const whole = Math.floor(seconds);
-  const hours = Math.floor(whole / 3600);
-  const minutes = Math.floor((whole % 3600) / 60);
-  const rest = whole % 60;
-  const padded = `${minutes < 10 && hours > 0 ? "0" : ""}${minutes}:${rest < 10 ? "0" : ""}${rest}`;
-  return hours > 0 ? `${hours}:${padded}` : padded;
-}
-
-/** Which thumbnail covers a moment, and where it sits on its sheet. */
-function spotOf(
-  thumbnails: PlaybackThumbnails,
-  seconds: number,
-): { sheet: number; column: number; row: number } | null {
-  const perSheet = thumbnails.columns * thumbnails.rows;
-  if (thumbnails.every_seconds <= 0 || perSheet <= 0 || thumbnails.counted <= 0) {
-    return null;
-  }
-  const index = Math.floor(Math.max(0, seconds) / thumbnails.every_seconds);
-  // Never past the last one: a sheet is filled to the end with black whatever
-  // the film gave, and a black square under the cursor is worse than none.
-  const kept = Math.min(index, thumbnails.counted - 1);
-  const onItsSheet = kept % perSheet;
-  return {
-    sheet: Math.floor(kept / perSheet),
-    column: onItsSheet % thumbnails.columns,
-    row: Math.floor(onItsSheet / thumbnails.columns),
-  };
+/** Whether what is open is one of the drawer's three sheets. */
+function isASheet(panel: Panel | null): panel is SheetName {
+  return panel !== null && (SHEETS as readonly string[]).includes(panel);
 }
 
 /** When a film started now would end, at the speed it is being played. */
@@ -163,6 +149,14 @@ export function Overlay(props: Props) {
      that always opens at one end of the screen leaves a viewer looking for the
      link between the button they pressed and the list that appeared. */
   const [anchor, setAnchor] = useState<number | null>(null);
+  /* Which sheet of the drawer was last read. Kept so the button reopens it
+     where it was left, and forgotten between films with everything else. */
+  const [lastSheet, setLastSheet] = useState<SheetName>("info");
+  useEffect(() => {
+    if (isASheet(props.panel)) {
+      setLastSheet(props.panel);
+    }
+  }, [props.panel]);
 
   /* Shown while anything is moving, while nothing is playing, and while a
      panel is open: a paused film is a film somebody is about to do something
@@ -268,6 +262,7 @@ export function Overlay(props: Props) {
     length,
     anchor,
     openFrom,
+    lastSheet,
   };
 
   return (
@@ -286,6 +281,20 @@ export function Overlay(props: Props) {
       {props.panel && <Panels surroundings={surroundings} />}
 
       <div className="player-bottom">
+        {/* Inside the bottom strip rather than floating over it: a panel that
+            stands clear of the controls leaves a band of film between the two
+            and reads as two things, when what a viewer sees is one. */}
+        {playback.plan && isASheet(props.panel) && (
+          <Drawer
+            work={props.work}
+            plan={playback.plan}
+            playback={playback}
+            showing={props.panel}
+            onShow={props.onPanel}
+            language={props.language}
+            t={props.t}
+          />
+        )}
         <Seek surroundings={surroundings} thumbnails={thumbnails} />
         <div className="player-row">
           <Place zone="bottom_left" surroundings={surroundings} />
@@ -304,6 +313,8 @@ interface Surroundings extends Props {
   /** Where the button that opened the panel stands, across the picture. */
   anchor: number | null;
   openFrom: (panel: Panel | null, from?: HTMLElement | null) => void;
+  /** Which sheet of the drawer was last read, for reopening it there. */
+  lastSheet: SheetName;
 }
 
 /** One of the places a control can sit, drawn from the arrangement. */
@@ -327,7 +338,7 @@ function Place({ zone, surroundings }: { zone: Zone; surroundings: Surroundings 
  * an empty list is worse than not offering it.
  */
 function One({ control, surroundings }: { control: Control; surroundings: Surroundings }) {
-  const { playback, t, panel } = surroundings;
+  const { playback, t, panel, onPanel } = surroundings;
   const plan = playback.plan;
 
   switch (control) {
@@ -498,6 +509,23 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
         </button>
       );
 
+    /* The drawer, which opens on whichever of its sheets was left showing:
+       somebody who was reading the cast and shut it is coming back to the
+       cast, not to the description they had already read. */
+    case "about": {
+      const open = isASheet(panel);
+      return (
+        <button
+          className={`player-button${open ? " player-button-open" : ""}`}
+          onClick={() => onPanel(open ? null : surroundings.lastSheet)}
+          aria-expanded={open}
+          aria-label={t("player.about_this")}
+        >
+          <AboutIcon size={ICON} />
+        </button>
+      );
+    }
+
     case "volume":
       return <Volume surroundings={surroundings} />;
 
@@ -662,7 +690,6 @@ function Seek({
   const played = length > 0 ? Math.min(1, at / length) : 0;
   const held = length > 0 ? Math.min(1, loaded / length) : 0;
   const previewed = hovered !== null && length > 0 ? hovered * length : null;
-  const spot = thumbnails && previewed !== null ? spotOf(thumbnails, previewed) : null;
   const scale = surroundings.settings.previewScale;
   /* Never wider than the bar it stands on. A viewer can make these larger, and
      a window can be made narrower than the largest of them: past that point it
@@ -670,7 +697,6 @@ function Seek({
      kept inside the screen at both ends whatever it is centred on. */
   const wanted = (thumbnails?.width ?? 0) * scale;
   const across = railWidth > 0 ? Math.min(wanted, railWidth) : wanted;
-  const down = wanted > 0 ? (thumbnails?.height ?? 0) * scale * (across / wanted) : 0;
   /* Kept inside the bar at both ends rather than half off the screen. */
   const half = across / 2;
   const previewLeft = Math.min(
@@ -721,18 +747,12 @@ function Seek({
             sat beside it the whole way. */}
         {previewed !== null && (
           <div className="player-preview" style={{ left: `${previewLeft}px` }} aria-hidden="true">
-            {spot && thumbnails && (
-              <span
-                className="player-preview-picture"
-                style={{
-                  width: `${across}px`,
-                  height: `${down}px`,
-                  backgroundImage: `url(${thumbnails.url}/${spot.sheet}.jpg)`,
-                  backgroundSize: `${thumbnails.columns * across}px ${thumbnails.rows * down}px`,
-                  backgroundPosition: `-${spot.column * across}px -${spot.row * down}px`,
-                }}
-              />
-            )}
+            <Thumbnail
+              thumbnails={thumbnails}
+              seconds={previewed}
+              across={across}
+              className="player-preview-picture"
+            />
             {/* Under the picture rather than written across it: a time on top
                 of a dark frame of film is a time nobody can read. */}
             <span className="player-preview-time">{asClock(previewed)}</span>

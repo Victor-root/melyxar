@@ -64,6 +64,17 @@
 
   /* How far everything stands from the edge of the screen. */
   --player-inset: 30px;
+
+  /* The drawer: how large what is in it is drawn. A viewer who wants larger
+     scenes or smaller faces changes these and nothing else. */
+  --player-drawer-tab-size: 15px;
+  --player-drawer-title: 26px;
+  --player-drawer-poster: 118px;
+  --player-drawer-card: 214px;
+  --player-drawer-face: 148px;
+  /* The one colour here that is not the accent. A star is a star: a viewer who
+     set their accent to green did not ask for a green one. */
+  --player-star: #e5a00d;
 }
 
 .player {
@@ -150,6 +161,12 @@
   gap: 2px;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
   padding-top: 92px;
+}
+
+/* No room above the bar while the drawer is open: the drawer's own foot is
+   the space, and a second one under it is a band of film between them. */
+.player-bottom:has(.player-drawer) {
+  padding-top: 0;
 }
 
 .player-zone {
@@ -1074,4 +1091,345 @@
 
 .player-trailer .player-notice {
   margin: auto;
+}
+
+/* ---------------------------------------------------------------------------
+ * The drawer: what is being watched, without leaving it
+ * ------------------------------------------------------------------------ */
+
+/* Across the whole width, and part of the bottom strip rather than floating
+   over it: what is in it is wide by nature, a row of faces, a row of scenes,
+   a poster and a paragraph, and a panel standing clear of the controls leaves
+   a band of film between the two that reads as a second thing.
+
+   The inset it undoes and reapplies is the strip's own: the row inside runs
+   to both edges of the picture so that a card halfway off the side reads as
+   a row that carries on, rather than as a row that stops. */
+.player-drawer {
+  /* Right down onto the bar: a gap here is a strip of bright film between the
+     drawer and the controls, and one seam is all it takes to read as two
+     things rather than one. */
+  margin: 0 calc(var(--player-inset) * -1);
+  padding: var(--gap) var(--player-inset) var(--gap-wide);
+  background: rgba(8, 9, 12, 0.92);
+  backdrop-filter: blur(18px);
+  color: #fff;
+  animation: player-drawer-in var(--quick) var(--ease);
+}
+
+@keyframes player-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-drawer {
+    animation: none;
+  }
+}
+
+.player-drawer-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin-bottom: var(--gap);
+}
+
+/* A pill rather than an underline: it is the shape of the one that is open in
+   every player the maintainer already uses, and it reads at a glance. */
+.player-drawer-tab {
+  padding: 8px 18px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font: inherit;
+  font-size: var(--player-drawer-tab-size);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.player-drawer-tab:hover {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+
+.player-drawer-tab-open {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.player-drawer-nothing {
+  margin: 0;
+  padding: var(--gap-wide) 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 15px;
+}
+
+/* What the film is ------------------------------------------------------- */
+
+.player-drawer-about {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-wide);
+}
+
+.player-drawer-poster {
+  flex: none;
+  width: var(--player-drawer-poster);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-raised);
+}
+
+.player-drawer-said {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.player-drawer-title {
+  margin: 0;
+  font-size: var(--player-drawer-title);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.player-drawer-facts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 15px;
+}
+
+.player-drawer-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.player-drawer-star {
+  color: var(--player-star);
+}
+
+/* A fact this copy carries, said in a box the way a certificate is. */
+.player-drawer-badge {
+  padding: 1px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.player-drawer-playing {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+}
+
+.player-drawer-overview {
+  margin: 4px 0 0;
+  max-width: 96ch;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.player-drawer-again {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  padding: 12px 22px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.player-drawer-again:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-bright);
+}
+
+/* A row that runs off the side ------------------------------------------- */
+
+.player-drawer-strip {
+  position: relative;
+}
+
+.player-drawer-row {
+  display: flex;
+  gap: var(--gap);
+  overflow-x: auto;
+  /* Scrolled by the hand or by the arrows, never by a bar drawn under it: the
+     picture is right there and a scrollbar across it is a scrollbar across a
+     film. */
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+.player-drawer-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* The arrow for the rest of the row, over the end it points at. Level with
+   the picture on a card rather than with the whole card: half way down a
+   card is half way down the words underneath it. */
+.player-drawer-along {
+  position: absolute;
+  top: calc(var(--player-drawer-picture) / 2);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+  box-shadow: var(--shadow-raised);
+  transition: background var(--quick) var(--ease);
+}
+
+.player-drawer-along:hover {
+  background: #fff;
+}
+
+.player-drawer-along-back {
+  left: 0;
+}
+
+.player-drawer-along-on {
+  right: 0;
+}
+
+/* Where the film changes scene ------------------------------------------- */
+
+.player-drawer-chapter,
+.player-drawer-person {
+  flex: none;
+  width: var(--player-drawer-card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+
+.player-drawer-chapter {
+  cursor: pointer;
+}
+
+/* As tall as the thumbnails really are, which the drawing works out and sets:
+   a film in scope in a widescreen box is grey above and below every scene. A
+   film never read for them keeps a widescreen frame all the same, so a row of
+   scenes without pictures is still a row rather than a jumble. */
+.player-drawer-frame {
+  display: block;
+  width: var(--player-drawer-card);
+  border-radius: var(--radius-control);
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  transition:
+    border-color var(--quick) var(--ease),
+    transform var(--quick) var(--ease);
+}
+
+.player-drawer-chapter:hover .player-drawer-frame {
+  border-color: var(--accent);
+  transform: scale(1.03);
+}
+
+.player-drawer-still {
+  display: block;
+  background-repeat: no-repeat;
+}
+
+.player-drawer-chapter-now .player-drawer-frame {
+  border-color: var(--accent);
+}
+
+.player-drawer-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.player-drawer-card-under {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.player-drawer-card-now {
+  color: var(--accent-bright);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Who is in it ----------------------------------------------------------- */
+
+/* Faces are taller than they are wide, which is how every catalogue in the
+   world draws them and what makes a row of them readable at a glance. */
+.player-drawer-person {
+  width: var(--player-drawer-face);
+}
+
+.player-drawer-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--player-drawer-face);
+  height: calc(var(--player-drawer-face) * 3 / 2);
+  border-radius: var(--radius-control);
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.player-drawer-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.player-drawer-initial {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 40px;
+  font-weight: 600;
 }

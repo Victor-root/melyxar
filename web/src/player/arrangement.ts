@@ -41,6 +41,7 @@ export const CONTROLS = [
   "favourite",
   "subtitles",
   "audio",
+  "about",
   "volume",
   "settings",
   "corner",
@@ -87,7 +88,16 @@ export const DEFAULT_ARRANGEMENT: Arrangement = {
   before_bar: ["elapsed"],
   after_bar: ["remaining"],
   bottom_left: ["previous_chapter", "step_back", "play", "step_on", "next_chapter", "ends_at"],
-  bottom_right: ["favourite", "subtitles", "audio", "volume", "settings", "corner", "fullscreen"],
+  bottom_right: [
+    "favourite",
+    "subtitles",
+    "audio",
+    "about",
+    "volume",
+    "settings",
+    "corner",
+    "fullscreen",
+  ],
 };
 
 const STORED = "melyxar.player.arrangement";

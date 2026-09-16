@@ -68,9 +68,16 @@ export function WorkPage() {
     return () => controller.abort();
   }, [work, chosen]);
 
-  // Escape goes back, which is what a remote control and a keyboard both
-  // expect after opening something.
+  /* Escape goes back, which is what a remote control and a keyboard both
+     expect after opening something. Not while something is being watched: the
+     player answers to escape itself, shutting a menu or leaving fullscreen
+     before it shuts the film, and a page listening underneath it took a viewer
+     off the film every time they shut a menu. */
+  const watching = playing !== null || trailer !== null;
   useEffect(() => {
+    if (watching) {
+      return;
+    }
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         navigate(-1);
@@ -78,7 +85,7 @@ export function WorkPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+  }, [navigate, watching]);
 
   if (failed) {
     return (
@@ -105,8 +112,7 @@ export function WorkPage() {
     return (
       <Player
         sourceId={playing.source}
-        workId={work.id}
-        title={work.title}
+        work={work}
         fromTheStart={playing.fromTheStart}
         onClose={() => setPlaying(null)}
       />
