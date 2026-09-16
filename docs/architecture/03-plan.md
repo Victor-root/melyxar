@@ -60,7 +60,9 @@ Fait aussi : les photos des personnes, préparées en deux tailles pour les dix-
 
 Fait depuis : l'identification à la main depuis la fiche de n'importe quel film, la raison de l'échec conservée et rendue au rapport avec le nom de fichier dont le titre a été lu, le regroupement des copies d'un même film et la séparation d'une copie mal rangée, et la lecture des noms fiabilisée sur une collection réelle de trois disques (326 films nommés sur 327, le dernier étant un épisode spécial de série que le fournisseur ne range pas du côté des films).
 
-Reste : les images de titre, les films similaires, et la saisie directe d'un identifiant.
+Fait depuis aussi : les images de titre, demandées dans la même requête que le reste, choisies dans la langue de la médiathèque puis en anglais, et préparées en deux largeurs comme les visages. Le lecteur les affiche à droite de la flèche de retour, à la place du titre écrit.
+
+Reste : les films similaires, et la saisie directe d'un identifiant.
 
 Vérifié dans l'environnement de travail : une affiche réelle est préparée en trois tailles avec sa couleur, une affiche inchangée n'est pas retéléchargée, un film sans affiche reste identifié, une clé refusée arrête la série en désignant la clé, et un fournisseur injoignable laisse les films en attente sans rien inventer. Sur cinq vrais films, les visages arrivent pour toute la distribution affichée et pour personne d'autre.
 

@@ -5,21 +5,24 @@
  * twice: the film's own wordmark when one has been fetched, the server's mark
  * when it has been given one, and the title written out when neither exists.
  *
- * One function rather than a picture chosen where the corner is drawn. All
- * three of these are going to move: film logos are not fetched at all yet, and
- * the server's mark is a setting somebody will change. A corner that picks its
- * own picture is a corner that has to be opened every time one of the three
- * does, and that is exactly how a fallback ends up written in two places and
- * wrong in one of them.
+ * One function rather than a picture chosen where the corner is drawn. A
+ * corner that picks its own picture is a corner that has to be opened every
+ * time one of the three moves, and that is exactly how a fallback ends up
+ * written in two places and wrong in one of them.
  */
 
-import { api } from "../api";
+import { api, pictureSet } from "../api";
+import type { Picture } from "../api";
 import { useEffect, useState } from "react";
 
 /** What to draw in the corner, and which of the three it turned out to be. */
 export interface Mark {
   /** Where the picture is, when there is one to draw. */
   url: string | null;
+  /** The same picture at every width it was prepared in, for a screen with
+   *  fine pixels. Null for a mark that comes in one size only, which is what
+   *  the server's own uploaded mark is. */
+  srcSet: string | null;
   /** What to write when there is not, and what to name the picture when there
    *  is: a wordmark nobody can see still has to say what film this is. */
   words: string;
@@ -37,22 +40,29 @@ interface Branding {
 /**
  * The mark for one film.
  *
- * `filmLogo` is what has been fetched for this film, and is null until logos
- * are fetched at all. Written as an argument rather than read from the plan so
- * that the day they arrive, the only change is what is handed in.
+ * `drawnTitle` is the film's own title as a picture, which plenty of films do
+ * not have: the provider draws no title for them, and the title written out is
+ * then the whole answer rather than a fallback for a slow day.
  */
-export function markFor(title: string, filmLogo: string | null, branding: Branding | null): Mark {
-  if (filmLogo) {
-    return { url: filmLogo, words: title, whose: "the_film" };
+export function markFor(title: string, drawnTitle: Picture[], branding: Branding | null): Mark {
+  const drawn = pictureSet(drawnTitle);
+  if (drawn) {
+    return {
+      url: drawn.src,
+      srcSet: drawn.srcSet || null,
+      words: title,
+      whose: "the_film",
+    };
   }
   if (branding?.logo_path) {
     return {
       url: `/api/v1/images/${branding.logo_path}`,
+      srcSet: null,
       words: branding.server_name,
       whose: "the_server",
     };
   }
-  return { url: null, words: title, whose: "nobody" };
+  return { url: null, srcSet: null, words: title, whose: "nobody" };
 }
 
 /**

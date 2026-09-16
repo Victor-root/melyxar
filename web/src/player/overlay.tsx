@@ -359,6 +359,10 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
         <img
           className={`player-mark player-mark-${surroundings.mark.whose.replace("_", "-")}`}
           src={surroundings.mark.url}
+          srcSet={surroundings.mark.srcSet ?? undefined}
+          /* The widest the box can be, so a screen with fine pixels takes the
+             larger of the two and every other screen leaves it alone. */
+          sizes="340px"
           alt={surroundings.mark.words}
         />
       ) : null;

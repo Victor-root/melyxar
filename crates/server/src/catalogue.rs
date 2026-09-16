@@ -291,6 +291,20 @@ fn card_view(card: &WorkCard) -> CardView {
     }
 }
 
+/// The pictures of one kind a film holds, addressed as the interface asks for
+/// them.
+///
+/// A film carries every kind of picture in one list, and each field of the
+/// page takes the kind it shows: a title image among the posters would be a
+/// card with a wordmark on it.
+fn pictures_of(images: &[StoredImage], kind: &str) -> Vec<ImageView> {
+    images
+        .iter()
+        .filter(|image| image.image_kind == kind)
+        .map(image_view)
+        .collect()
+}
+
 fn image_view(image: &StoredImage) -> ImageView {
     ImageView {
         url: format!("/api/v1/images/{}", image.relative_path),
@@ -385,6 +399,9 @@ struct WorkView {
     crew: Vec<CreditView>,
     poster: Vec<ImageView>,
     backdrop: Vec<ImageView>,
+    /// The title drawn as the film draws it, shown in place of the title
+    /// written out. Empty for a film the provider draws under none.
+    logo: Vec<ImageView>,
     versions: Vec<VersionView>,
     trailers: Vec<TrailerView>,
     external_ids: Vec<ExternalIdView>,
@@ -542,14 +559,7 @@ async fn set_favourite(
 }
 
 fn work_view(detail: &WorkDetail) -> WorkView {
-    let images_of = |kind: &str| -> Vec<ImageView> {
-        detail
-            .images
-            .iter()
-            .filter(|image| image.image_kind == kind)
-            .map(image_view)
-            .collect()
-    };
+    let images_of = |kind: &str| pictures_of(&detail.images, kind);
 
     WorkView {
         id: detail.work.id.to_string(),
@@ -588,6 +598,7 @@ fn work_view(detail: &WorkDetail) -> WorkView {
             .collect(),
         poster: images_of("poster"),
         backdrop: images_of("backdrop"),
+        logo: images_of("logo"),
         versions: detail.versions.iter().map(version_view).collect(),
         trailers: detail
             .trailers
@@ -881,6 +892,36 @@ mod tests {
                 height: Some(600),
             }
         );
+    }
+
+    #[test]
+    fn each_field_of_a_page_takes_the_kind_of_picture_it_shows() {
+        let picture = |kind: &str, width: i32| StoredImage {
+            owner_kind: "work".to_string(),
+            owner_id: "w".to_string(),
+            image_kind: kind.to_string(),
+            relative_path: format!("works/w/{kind}-abc123-{width}.webp"),
+            width: Some(width),
+            height: Some(width / 2),
+            fingerprint: "abc123".to_string(),
+            dominant_color: None,
+        };
+        let held = [
+            picture("poster", 400),
+            picture("logo", 340),
+            picture("logo", 680),
+            picture("backdrop", 1280),
+        ];
+
+        let titles = pictures_of(&held, "logo");
+        assert_eq!(titles.len(), 2);
+        assert_eq!(titles[0].url, "/api/v1/images/works/w/logo-abc123-340.webp");
+        assert_eq!(
+            pictures_of(&held, "poster").len(),
+            1,
+            "a title image among the posters would be a card with a wordmark on it"
+        );
+        assert!(pictures_of(&held, "photo").is_empty());
     }
 
     #[test]
