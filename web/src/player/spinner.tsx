@@ -32,9 +32,28 @@ const WAVES = 8;
  *  size the ring is drawn, and not so many the path is a wall of numbers. */
 const PIECES = 16;
 
-/** The wavy ring, and how long it is: the sweep is written in fractions of its
- *  own length, so a change to any figure above carries through on its own. */
-function theWave(): { d: string; length: number } {
+/**
+ * How many units the path is declared to measure, whatever its real length in
+ * the square above works out to.
+ *
+ * The `pathLength` attribute rescales an SVG path's own length to whatever
+ * this is set to, so the sweep below is written as plain numbers between
+ * nought and a hundred rather than as a fraction of a length worked out here
+ * in JavaScript and carried into the stylesheet through a custom property.
+ *
+ * That is not tidiness. A browser asked to animate `stroke-dasharray` between
+ * two `calc()` expressions that each read a custom property has to work out,
+ * on every frame, whether the two ends of the animation are even the same
+ * kind of value before it can blend them, and at least one of the browsers
+ * this player is watched in answers that question by not blending at all: it
+ * holds one keyframe and jumps straight to the next, which is a ring that
+ * teleports rather than one that sweeps. A hundred written twice needs no
+ * such answer, because it is already the same number both times.
+ */
+const A_WHOLE_TURN = 100;
+
+/** The wavy ring's outline, as a closed path of straight pieces. */
+function theWave(): string {
   const middle = BOX / 2;
   const steps = WAVES * PIECES;
   const points: [number, number][] = [];
@@ -47,17 +66,12 @@ function theWave(): { d: string; length: number } {
       middle + out * Math.sin(angle - Math.PI / 2),
     ]);
   }
-  let length = 0;
-  for (let at = 0; at < points.length - 1; at += 1) {
-    length += Math.hypot(points[at + 1][0] - points[at][0], points[at + 1][1] - points[at][1]);
-  }
   // Closed rather than ended on the point it began at, so the two ends meet
   // as one join instead of two caps sitting on each other.
-  const d = `M${points
+  return `M${points
     .slice(0, -1)
     .map(([x, y]) => `${x.toFixed(2)} ${y.toFixed(2)}`)
     .join("L")}Z`;
-  return { d, length };
 }
 
 const WAVE = theWave();
@@ -81,13 +95,8 @@ export function Spinner() {
       <circle className="player-spinner-track" cx={BOX / 2} cy={BOX / 2} r={RADIUS} />
       <path
         className="player-spinner-wave"
-        d={WAVE.d}
-        style={{
-          // The sweep is a dash running round the ring: a piece of it lit, the
-          // rest dark. Both are shares of the ring's own length so the
-          // stylesheet never has to know how long it is.
-          ["--player-spinner-round" as string]: `${WAVE.length.toFixed(1)}`,
-        }}
+        d={WAVE}
+        pathLength={A_WHOLE_TURN}
       />
     </svg>
   );
