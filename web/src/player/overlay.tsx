@@ -545,7 +545,12 @@ function Volume({ surroundings }: { surroundings: Surroundings }) {
       >
         <VolumeIcon level={loud === 0 ? "off" : loud < 0.5 ? "low" : "high"} size={ICON} />
       </button>
-      <span className="player-loudness" style={{ ["--filled" as string]: `${loud * 100}%` }}>
+      {/* The share is handed over as a bare number rather than as a width, so
+          the stylesheet can work out where the handle actually stands: a
+          browser keeps its handle inside the track at both ends, so the middle
+          of it travels a little less than the whole width. Anything drawn at a
+          plain percentage drifts away from it towards the ends. */}
+      <span className="player-loudness" style={{ ["--share" as string]: `${loud}` }}>
         <input
           type="range"
           min={0}
@@ -555,6 +560,11 @@ function Volume({ surroundings }: { surroundings: Surroundings }) {
           aria-label={t("player.loudness")}
           onChange={(event) => playback.setLoudness(Number(event.target.value))}
         />
+        {/* How loud, in the round numbers a person thinks in, standing over the
+            handle while a hand is on it. */}
+        <span className="player-loudness-said" aria-hidden="true">
+          {Math.round(loud * 100)}
+        </span>
       </span>
     </span>
   );
@@ -649,7 +659,11 @@ function Seek({
 
   return (
     <div className="player-seek">
-      <span className="player-clock player-clock-before">
+      {/* The two ends of the bar hold whatever the arrangement puts there and
+          are sized by it, never by a width written here: a box wider than its
+          own words pushes the bar away from one end and not the other, and the
+          bar stops being centred between the two. */}
+      <span className="player-seek-end">
         <ZoneOnTheBar zone="before_bar" surroundings={surroundings} />
       </span>
 
@@ -722,7 +736,7 @@ function Seek({
         <span className="player-rail-handle" style={{ left: `${played * 100}%` }} />
       </div>
 
-      <span className="player-clock player-clock-after">
+      <span className="player-seek-end">
         <ZoneOnTheBar zone="after_bar" surroundings={surroundings} />
       </span>
     </div>

@@ -40,7 +40,12 @@
   --player-rail-hovered: 14px;
   --player-handle-across: 8px;
   --player-handle-down: 18px;
-  --player-handle-hovered: 26px;
+  /* Grown by stretching rather than by being redrawn taller. It is what the
+     maintainer's theme does, and it is the difference between a handle that
+     appears at its new size and one that springs to it: a stretch is handed to
+     the compositor and runs smoothly whatever the machine is doing, while a
+     height is a fresh layout on every frame. */
+  --player-handle-grow: 1.5;
   --player-chapter-across: 2px;
   --player-chapter-down: 14px;
 
@@ -204,6 +209,11 @@
   color: #fff;
   font-size: var(--player-title);
   font-weight: 600;
+  /* The box hugs the letters. Left to the font, the line box carries room for
+     accents above and tails below, and a title centred on that box sits a
+     couple of pixels off the arrow beside it, which is the kind of thing that
+     is never noticed and always felt. */
+  line-height: 1;
   letter-spacing: -0.01em;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
 }
@@ -291,20 +301,28 @@
   gap: var(--gap);
 }
 
-.player-clock {
+/* The two ends of the bar. Each is exactly as wide as what it holds, which is
+   the only arrangement that is symmetrical whatever it holds: the words touch
+   the edge of the screen at both ends, and the bar stands the same distance
+   from the words at both ends. Given a width of their own, the longer of the
+   two clocks fills its box while the shorter leaves a gap, and the bar ends up
+   pushed away from one end and not the other. */
+.player-seek-end {
   display: inline-flex;
   align-items: center;
   gap: var(--gap-tight);
-  min-width: 78px;
+  flex: 0 0 auto;
+}
+
+.player-clock {
   color: #fff;
   font-size: var(--player-clock);
   font-weight: 600;
+  /* Every digit the same width, so a clock counting on does not shuffle the
+     bar beside it a pixel at a time. */
   font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
-}
-
-.player-clock-after {
-  justify-content: flex-end;
+  white-space: nowrap;
 }
 
 /* The bar itself is taller than the line drawn in it, so a hand aiming at it
@@ -383,8 +401,11 @@
   background: #fff;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
   opacity: 0;
+  /* Flattened as well as faded at rest, so it grows out of the bar rather than
+     fading in at full height on top of it. */
+  transform: scaleY(0.55);
   transition:
-    height var(--quick) var(--ease),
+    transform var(--calm) var(--ease),
     opacity var(--quick) var(--ease);
   pointer-events: none;
 }
@@ -406,7 +427,7 @@
 
 .player-rail:hover .player-rail-handle,
 .player-rail:focus-visible .player-rail-handle {
-  height: var(--player-handle-hovered);
+  transform: scaleY(var(--player-handle-grow));
   opacity: 1;
 }
 
@@ -501,9 +522,45 @@
   background: hsla(0, 0%, 100%, 0.2);
 }
 
+/* Stops exactly where the middle of the handle is rather than at a plain
+   share of the width, so the two never drift apart towards either end. */
 .player-loudness::after {
-  width: var(--filled, 0%);
+  width: calc(
+    var(--player-handle-across) / 2 + var(--share, 0) * (100% - var(--player-handle-across))
+  );
   background: var(--accent);
+}
+
+/* Standing over the handle while a hand is on it, and following it. */
+.player-loudness-said {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: calc(
+    var(--player-handle-across) / 2 + var(--share, 0) * (100% - var(--player-handle-across))
+  );
+  z-index: 2;
+  transform: translateX(-50%) scale(0.86);
+  transform-origin: bottom center;
+  padding: 5px 11px;
+  border-radius: var(--radius-card);
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity var(--quick) var(--ease),
+    transform var(--quick) var(--ease);
+}
+
+.player-loudness:hover .player-loudness-said,
+.player-loudness input:focus-visible ~ .player-loudness-said {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
 .player-loudness:hover::before,
@@ -539,8 +596,9 @@
   border-radius: 2px;
   background: transparent;
   box-shadow: none;
+  transform: scaleY(0.55);
   transition:
-    height var(--quick) var(--ease),
+    transform var(--calm) var(--ease),
     background var(--quick) var(--ease),
     box-shadow var(--quick) var(--ease);
 }
@@ -552,18 +610,23 @@
   border-radius: 2px;
   background: transparent;
   box-shadow: none;
+  transform: scaleY(0.55);
+  transition:
+    transform var(--calm) var(--ease),
+    background var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
 }
 
 .player-loudness:hover input::-webkit-slider-thumb,
 .player-loudness input:focus-visible::-webkit-slider-thumb {
-  height: var(--player-handle-hovered);
+  transform: scaleY(var(--player-handle-grow));
   background: #fff;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
 }
 
 .player-loudness:hover input::-moz-range-thumb,
 .player-loudness input:focus-visible::-moz-range-thumb {
-  height: var(--player-handle-hovered);
+  transform: scaleY(var(--player-handle-grow));
   background: #fff;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
 }
