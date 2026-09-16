@@ -340,6 +340,21 @@ export type PageSaw =
       because: string;
       /** Whether the film went on playing, read by the browser itself. */
       browser_took_over: boolean;
+    }
+  | {
+      session: string;
+      saw: "loading_stage";
+      /** One of the real moments on the way to a film playing. */
+      stage:
+        | "opening"
+        | "session_opened"
+        | "manifest_parsed"
+        | "producing"
+        | "produced"
+        | "first_fragment_loaded"
+        | "done";
+      /** How long the stage before this one took, in milliseconds. */
+      after_ms: number;
     };
 
 export interface SystemInfo {

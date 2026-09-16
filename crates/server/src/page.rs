@@ -194,6 +194,59 @@ enum Seen {
         /// Whether the film went on playing, read by the browser itself.
         browser_took_over: bool,
     },
+    /// One of the real moments on the way to a film playing, and how long the
+    /// one before it took.
+    ///
+    /// The number shown under the ring while a film is being prepared is built
+    /// from these, and it climbed to a hundred and stopped moving on a slow
+    /// connection, with nothing anywhere saying which of the moments it was
+    /// waiting on. The two that matter are the server producing what the
+    /// browser needs and that reaching the browser afterwards, and only the
+    /// browser can see where the time between them actually went.
+    LoadingStage {
+        stage: LoadingStage,
+        /// How long the stage before this one lasted, in milliseconds.
+        after_ms: u32,
+    },
+}
+
+/// One of the real moments a page passes through on the way to a film
+/// playing, in the order it passes through them.
+///
+/// A closed list like every other fact here: the page cannot invent a stage,
+/// and the order below is what a reading of the journal is checked against.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum LoadingStage {
+    /// A session has been asked for and nothing has answered yet.
+    Opening,
+    /// The server opened a session to rebuild the film into.
+    SessionOpened,
+    /// The library read the playlist and knows what to ask for next.
+    ManifestParsed,
+    /// The server said it is actively writing the piece this browser needs.
+    Producing,
+    /// That piece exists on the server now. What is left is the network.
+    Produced,
+    /// The first piece of the film reached the browser and was read.
+    FirstFragmentLoaded,
+    /// The browser knows it has a film. The film is playing.
+    Done,
+}
+
+impl LoadingStage {
+    /// The word written in the journal.
+    fn as_word(self) -> &'static str {
+        match self {
+            Self::Opening => "opening",
+            Self::SessionOpened => "session opened",
+            Self::ManifestParsed => "manifest parsed",
+            Self::Producing => "producing",
+            Self::Produced => "produced",
+            Self::FirstFragmentLoaded => "first fragment loaded",
+            Self::Done => "done",
+        }
+    }
 }
 
 /// What moved the film, as far as the page can tell.
@@ -389,6 +442,12 @@ async fn what_the_page_saw(
             browser_took_over,
             "the library gave up on this film"
         ),
+        Seen::LoadingStage { stage, after_ms } => tracing::debug!(
+            %session,
+            stage = stage.as_word(),
+            after_ms,
+            "the page reached a loading stage"
+        ),
     }
 
     Ok(Json(Written { written: true }))
@@ -419,6 +478,31 @@ mod tests {
             }
             other => panic!("read as the wrong fact: {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_loading_stage_names_itself_and_how_long_the_one_before_it_took() {
+        let said: FromThePage = serde_json::from_str(
+            r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"loading_stage",
+                "stage":"produced","after_ms":3421}"#,
+        )
+        .expect("a stage this module names is read");
+
+        match said.seen {
+            Seen::LoadingStage { stage, after_ms } => {
+                assert_eq!(stage.as_word(), "produced");
+                assert_eq!(after_ms, 3421);
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
+
+        // A stage this module has no name for is refused outright, like every
+        // other thing a page might try to say.
+        assert!(serde_json::from_str::<FromThePage>(
+            r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"loading_stage",
+                "stage":"somewhere_the_page_invented","after_ms":0}"#
+        )
+        .is_err());
     }
 
     #[test]
