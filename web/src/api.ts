@@ -596,10 +596,11 @@ export interface ViewerPreferences {
 export interface Preparation {
   /** starting, reading, producing or ready. */
   step: "starting" | "reading" | "producing" | "ready";
-  /** Segments on the disk that a player can actually read. */
-  ready: number;
-  /** How many make a comfortable start. */
-  wanted: number;
+  /** Seconds of film on the disk that a player can actually read. */
+  ready_seconds: number;
+  /** How many seconds make a comfortable start, which near the end of a film
+   *  is whatever is left of it. */
+  wanted_seconds: number;
   /** How hard the machine is working on this film, while it is working. */
   producing: Producing | null;
 }

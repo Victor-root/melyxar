@@ -41,7 +41,7 @@ export const CONTROLS = [
   "favourite",
   "subtitles",
   "audio",
-  "about",
+  "sheets",
   "volume",
   "settings",
   "corner",
@@ -53,9 +53,9 @@ export type Control = (typeof CONTROLS)[number];
 /**
  * The places a control can sit.
  *
- * Four of them, and they are the four a player has: the strip across the top,
- * the two ends of the bar itself, and the row underneath it. Anything else
- * would be a place nobody looks.
+ * The strip across the top, the two ends of the bar itself, the row underneath
+ * it, and one row under that for what opens out rather than acts at once.
+ * Anything else would be a place nobody looks.
  */
 export const ZONES = [
   "top_left",
@@ -64,6 +64,7 @@ export const ZONES = [
   "after_bar",
   "bottom_left",
   "bottom_right",
+  "under_the_row",
 ] as const;
 
 export type Zone = (typeof ZONES)[number];
@@ -88,16 +89,8 @@ export const DEFAULT_ARRANGEMENT: Arrangement = {
   before_bar: ["elapsed"],
   after_bar: ["remaining"],
   bottom_left: ["previous_chapter", "step_back", "play", "step_on", "next_chapter", "ends_at"],
-  bottom_right: [
-    "favourite",
-    "subtitles",
-    "audio",
-    "about",
-    "volume",
-    "settings",
-    "corner",
-    "fullscreen",
-  ],
+  bottom_right: ["favourite", "subtitles", "audio", "volume", "settings", "corner", "fullscreen"],
+  under_the_row: ["sheets"],
 };
 
 const STORED = "melyxar.player.arrangement";

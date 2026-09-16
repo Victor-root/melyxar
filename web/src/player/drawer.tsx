@@ -36,6 +36,9 @@ const A_PICTURE_IS = 9 / 16;
 /** What every catalogue in the world draws a face at. */
 const A_FACE_IS = 3 / 2;
 
+/** How far apart the marks stand on a film that names no scenes, in seconds. */
+const A_STEP_OF = 300;
+
 /**
  * The sizes the stylesheet was given, read off it rather than written here
  * twice.
@@ -76,8 +79,10 @@ interface Props {
   work: Work;
   plan: PlaybackPlan;
   playback: Playback;
+  /** Which sheet is drawn, which is the last one read while it is shut. */
   showing: SheetName;
-  onShow: (sheet: SheetName) => void;
+  /** Whether it is folded open. Shut, it stays on screen at no height. */
+  open: boolean;
   /** Which language the interface is speaking, for naming the soundtrack. */
   language: string;
   t: (key: string, values?: Record<string, string | number>) => string;
@@ -127,35 +132,37 @@ function whatIsPlaying(plan: PlaybackPlan, language: string, t: Props["t"]): str
   return said.filter((part): part is string => Boolean(part)).join(" ");
 }
 
-export function Drawer({ work, plan, playback, showing, onShow, language, t }: Props) {
+/**
+ * One sheet, drawn under the row of tabs that opens it.
+ *
+ * Kept on screen while it is shut rather than taken away, folded to nothing by
+ * the stylesheet. That is what lets it fold open and shut rather than appear
+ * and vanish: an element taken out of the page cannot be animated on its way
+ * out, because by the time it would move it is gone.
+ */
+export function Drawer({ work, plan, playback, showing, open, language, t }: Props) {
   const self = useRef<HTMLDivElement>(null);
   const sizes = useSizes(self);
   return (
-    <div className="player-drawer" role="region" aria-label={t("player.about_this")} ref={self}>
-      <div className="player-drawer-tabs" role="tablist">
-        {SHEETS.map((sheet) => (
-          <button
-            key={sheet}
-            className={`player-drawer-tab${showing === sheet ? " player-drawer-tab-open" : ""}`}
-            role="tab"
-            id={`player-sheet-tab-${sheet}`}
-            aria-selected={showing === sheet}
-            aria-controls="player-sheet"
-            onClick={() => onShow(sheet)}
-          >
-            {t(`player.sheet.${sheet}`)}
-          </button>
-        ))}
-      </div>
-
-      <div role="tabpanel" id="player-sheet" aria-labelledby={`player-sheet-tab-${showing}`}>
-        {showing === "info" && (
-          <About work={work} plan={plan} playback={playback} language={language} t={t} />
-        )}
-        {showing === "chapters" && (
-          <Chapters plan={plan} playback={playback} across={sizes.card} t={t} />
-        )}
-        {showing === "cast" && <Cast work={work} across={sizes.face} t={t} />}
+    <div className="player-drawer-hold" data-open={open ? "yes" : "no"} ref={self}>
+      {/* Bare on purpose: this is what folds, and a box that folds to nothing
+          must have nothing of its own, not even a margin. Everything the sheet
+          is made of is on the panel inside it. */}
+      <div className="player-drawer-fold">
+        <div
+          className="player-drawer"
+          role="tabpanel"
+          id="player-sheet"
+          aria-labelledby={`player-sheet-tab-${showing}`}
+        >
+          {showing === "info" && (
+            <About work={work} plan={plan} playback={playback} language={language} t={t} />
+          )}
+          {showing === "chapters" && (
+            <Chapters plan={plan} playback={playback} across={sizes.card} t={t} />
+          )}
+          {showing === "cast" && <Cast work={work} across={sizes.face} t={t} />}
+        </div>
       </div>
     </div>
   );
@@ -216,7 +223,8 @@ function Chapters({
   across,
   t,
 }: Pick<Props, "plan" | "playback" | "t"> & { across: number }) {
-  const chapters = plan.chapters;
+  const chapters =
+    plan.chapters.length > 0 ? plan.chapters : everyFewMinutes(playback.length);
   if (chapters.length === 0) {
     return <p className="player-drawer-nothing">{t("player.no_chapters")}</p>;
   }
@@ -255,6 +263,29 @@ function Chapters({
       ))}
     </Strip>
   );
+}
+
+/**
+ * Marks every few minutes, for a film whose file names no scenes.
+ *
+ * Most files carry none: naming scenes is something a disc does and something
+ * most copies lose. The row is still the quickest way through a film, so it is
+ * drawn at a regular step rather than left empty, which is what the players
+ * the maintainer already uses do.
+ *
+ * Only here. The bar itself keeps its marks honest: a white line across it
+ * says the film really changes scene there, and filling it with lines every
+ * five minutes would say something about the film that is not true.
+ */
+function everyFewMinutes(length: number): PlaybackChapter[] {
+  if (!Number.isFinite(length) || length <= A_STEP_OF) {
+    return [];
+  }
+  const marks: PlaybackChapter[] = [];
+  for (let at = 0; at < length; at += A_STEP_OF) {
+    marks.push({ at_second: at, title: null });
+  }
+  return marks;
 }
 
 /** Which chapter a moment falls inside, or none at all before the first. */
