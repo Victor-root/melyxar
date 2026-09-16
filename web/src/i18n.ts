@@ -307,11 +307,7 @@ const en: Dictionary = {
   "facts.hdr.dolby_vision": "Dolby Vision",
   "player.unknown_language": "Language not stated",
   "player.burns_in_short": "drawn into the picture",
-  "player.step.starting": "Getting ready...",
-  "player.step.reading": "Reading the film...",
-  "player.step.producing": "Preparing the first few seconds...",
-  "player.step.ready": "Starting...",
-  "player.seconds_ready": "{ready} of {wanted} seconds ready",
+  "player.preparing_percent": "{percent}%",
 
   "player.subtitle_size": "Subtitle size",
   "player.subtitle_size.small": "Small",
@@ -666,11 +662,8 @@ const fr: Dictionary = {
   "facts.hdr.dolby_vision": "Dolby Vision",
   "player.unknown_language": "Langue non précisée",
   "player.burns_in_short": "incrustés dans l’image",
-  "player.step.starting": "Préparation...",
-  "player.step.reading": "Lecture du film...",
-  "player.step.producing": "Préparation des premières secondes...",
-  "player.step.ready": "Démarrage...",
-  "player.seconds_ready": "{ready} secondes prêtes sur {wanted}",
+  // Un espace avant le signe pourcent, comme partout ailleurs en français.
+  "player.preparing_percent": "{percent} %",
 
   "player.subtitle_size": "Taille des sous-titres",
   "player.subtitle_size.small": "Petite",
