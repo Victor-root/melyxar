@@ -11,6 +11,11 @@
  * What is still decided here is what belongs to looking rather than to
  * playing: how the words are dressed and where they sit, what the keyboard
  * does, and which of the panels is open.
+ *
+ * Nothing here touches the film. Not the bar, not the sound, not the button
+ * that starts it: every one of those asks the engine, which is the only thing
+ * holding the element. The one exception is where a subtitle line sits on the
+ * picture, which is written on the cue itself and reachable from nowhere else.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -28,7 +33,7 @@ import {
   storedAppearance,
 } from "./appearance";
 import type { Appearance } from "./appearance";
-import { Controls, playOrPause } from "./controls";
+import { Controls } from "./controls";
 import { A_STEP, canBePlayedAsItIs, SPEEDS, usePlayback } from "./engine";
 import { PlaybackFacts } from "./facts";
 import { languageName } from "./languages";
@@ -128,6 +133,11 @@ export function Player({
     quality,
     speed,
     stepBy,
+    words,
+    holdTheWords,
+    onWordsRead,
+    playOrPause,
+    intoTheCorner,
   } = playback;
 
   /* What is sent fullscreen. The bar is ours now, so it has to come with the
@@ -138,22 +148,9 @@ export function Player({
      between films: it is opened to look at one film in particular. */
   const [factsOpen, setFactsOpen] = useState(false);
   const [appearance, setAppearanceState] = useState<Appearance>(storedAppearance);
-  /* The element carrying the words, so the moment they finish being read can
-     be waited for. */
-  const subtitleTrack = useRef<HTMLTrackElement | null>(null);
-  /* Whether the words are still on their way, and whether they never came.
-     Pulling a subtitle out of a film means reading the whole file through,
-     because the words are interleaved with the picture from end to end:
-     measured at fifteen to twenty seconds on a 4K film, and seven of those on
-     one film. Said nowhere, that wait is a subtitle that does not work. */
-  const [words, setWords] = useState<"coming" | "refused" | null>(null);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const element = video.current;
-      if (!element) {
-        return;
-      }
       switch (event.key) {
         case "Escape":
           onClose();
@@ -161,11 +158,7 @@ export function Player({
         case " ":
         case "k":
           event.preventDefault();
-          if (element.paused) {
-            void element.play();
-          } else {
-            element.pause();
-          }
+          playOrPause();
           break;
         case "ArrowLeft":
         case "ArrowRight":
@@ -187,7 +180,7 @@ export function Player({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, video, stepBy]);
+  }, [onClose, stepBy, playOrPause]);
 
   /* The subtitle being shown, when there is one, it is words rather than
      pictures, and there is a picture ready to hang it on.
@@ -210,7 +203,12 @@ export function Player({
   /* How high the words sit belongs to each cue rather than to a stylesheet,
      so it is applied to them as they are read, and again whenever the viewer
      moves them. Counted from the bottom, which keeps them in the same place
-     whatever the size of the picture. */
+     whatever the size of the picture.
+
+     The one place looking reaches into the element, and it has to: where a
+     cue sits is written on the cue and nowhere a stylesheet can get at it.
+     Whether the words are there at all is the engine's, and this asks it
+     nothing about that. */
   const placeCues = useCallback(() => {
     const tracks = video.current?.textTracks;
     if (!tracks) {
@@ -224,46 +222,14 @@ export function Player({
     }
   }, [appearance.height, video]);
 
-  /* Placed again whenever the viewer moves them, and kept where the words
-     themselves can reach it: the listener below is attached once per element
-     and must not have to be replaced every time a choice changes. */
-  const placing = useRef(placeCues);
+  /* Placed again whenever the viewer moves them, and handed to the engine so
+     that it can place them the instant the words are read. Waiting for a
+     render instead would show one frame of words wherever the browser felt
+     like putting them. */
   useEffect(() => {
-    placing.current = placeCues;
+    onWordsRead(placeCues);
     placeCues();
-  }, [placeCues]);
-
-  const whenTheWordsAreRead = useCallback(() => placing.current(), []);
-  const theWordsArrived = useCallback(() => setWords(null), []);
-  const theWordsNeverCame = useCallback(() => setWords("refused"), []);
-
-  /* Waited for on the element itself, and re-attached whenever the element is
-     a different one: a film being rebuilt gets a fresh picture whenever the
-     soundtrack changes, and the words come with it. Before the words are read
-     there are no cues to place, and the browser goes on putting them wherever
-     it likes. */
-  const holdTheWords = useCallback(
-    (element: HTMLTrackElement | null) => {
-      const held = subtitleTrack.current;
-      held?.removeEventListener("load", whenTheWordsAreRead);
-      held?.removeEventListener("load", theWordsArrived);
-      held?.removeEventListener("error", theWordsNeverCame);
-      subtitleTrack.current = element;
-      if (!element) {
-        setWords(null);
-        return;
-      }
-      setWords("coming");
-      element.addEventListener("load", whenTheWordsAreRead);
-      element.addEventListener("load", theWordsArrived);
-      element.addEventListener("error", theWordsNeverCame);
-      // Said outright rather than left to the default mark: that mark is read
-      // when the picture itself is first read, and words added to a picture
-      // already playing would simply stay switched off.
-      element.track.mode = "showing";
-    },
-    [whenTheWordsAreRead, theWordsArrived, theWordsNeverCame],
-  );
+  }, [placeCues, onWordsRead]);
 
   return (
     <div
@@ -327,16 +293,7 @@ export function Player({
           autoPlay
           /* The picture itself starts and stops the film, the way every player
              does it: the button is a long way from where the eyes are. */
-          onClick={(event) => playOrPause(event.currentTarget)}
-          onLoadedMetadata={playback.onPictureReady}
-          onTimeUpdate={(event) => {
-            playback.notePosition(event.currentTarget.currentTime);
-          }}
-          onPause={playback.report}
-          onEnded={playback.report}
-          onError={(event) => {
-            playback.notePictureRefused(event.currentTarget.error);
-          }}
+          onClick={playOrPause}
         >
           {shownSubtitle?.url && (
             <track
@@ -365,13 +322,8 @@ export function Player({
             moment under the cursor means knowing where the cursor is on the
             bar, and the browser's bar says nothing about that. */}
         <Controls
-          video={video}
-          pictureKey={pictureKey}
+          playback={playback}
           stage={stage}
-          thumbnails={plan.thumbnails}
-          onViewerMoving={playback.viewerMoving}
-          onViewerMoved={playback.viewerMoved}
-          onStep={stepBy}
           factsOpen={factsOpen}
           onFactsTurned={() => setFactsOpen((open) => !open)}
           t={t}
@@ -501,12 +453,7 @@ export function Player({
               Not every browser offers it, so the button only appears where
               it works. */}
           {"requestPictureInPicture" in HTMLVideoElement.prototype && (
-            <button
-              className="toggle"
-              onClick={() => {
-                void video.current?.requestPictureInPicture?.();
-              }}
-            >
+            <button className="toggle" onClick={intoTheCorner}>
               {t("player.corner")}
             </button>
           )}
