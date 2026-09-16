@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlaybackTrack } from "../api";
+import type { PlaybackTrack, Work } from "../api";
 import { useSettings } from "../settings";
 import {
   appearanceClasses,
@@ -104,20 +104,22 @@ function Choice<T extends string>({
 
 export function Player({
   sourceId,
-  workId,
-  title,
+  work,
   fromTheStart,
   onClose,
 }: {
   sourceId: string;
-  workId: string;
-  title: string;
+  /** The film as the library describes it, handed down by the screen that
+   *  opened the player: it had the whole description in hand already, and the
+   *  drawer would otherwise fetch it a second time. */
+  work: Work;
   /** Set when the viewer asked to start again rather than carry on. */
   fromTheStart?: boolean;
   onClose: () => void;
 }) {
   const { t, language } = useSettings();
-  const playback = usePlayback({ sourceId, workId, fromTheStart });
+  const title = work.title;
+  const playback = usePlayback({ sourceId, workId: work.id, fromTheStart });
   const {
     video,
     plan,
@@ -299,6 +301,7 @@ export function Player({
           arrangement={arrangement}
           settings={settings}
           onSettings={setSettings}
+          work={work}
           mark={mark}
           shape={shape}
           onShape={setShape}

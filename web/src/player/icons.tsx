@@ -219,6 +219,17 @@ export function FullscreenIcon({ leaving, ...props }: IconProps & { leaving: boo
   );
 }
 
+/** What is being watched: the letter every interface uses for it. */
+export function AboutIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9.2" />
+      <path d="M12 10.8v5.4" />
+      <path d="M12 7.7v.1" strokeWidth={2.4} />
+    </Icon>
+  );
+}
+
 /** A tick, for what is chosen in a menu. */
 export function ChosenIcon(props: IconProps) {
   return (
