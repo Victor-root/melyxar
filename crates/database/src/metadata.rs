@@ -107,6 +107,10 @@ pub struct IncompleteNamedWork {
     /// What the provider calls it, which is how it is asked about again.
     pub external_id: String,
     pub wants_pictures: bool,
+    /// Kept apart from the pictures above: every film on a shelf that was
+    /// filled in before title images existed already has its poster, so a film
+    /// wanting one and nothing else would never be asked about again.
+    pub wants_a_title_image: bool,
     pub wants_a_synopsis: bool,
 }
 
@@ -402,6 +406,10 @@ impl Database {
                          WHERE i.owner_kind = 'work' AND i.owner_id = w.id
                            AND i.image_kind = 'poster') AS wants_pictures,
                     NOT EXISTS (
+                        SELECT 1 FROM images i
+                         WHERE i.owner_kind = 'work' AND i.owner_id = w.id
+                           AND i.image_kind = 'logo') AS wants_a_title_image,
+                    NOT EXISTS (
                         SELECT 1 FROM work_translations t
                          WHERE t.work_id = w.id AND t.language = ?
                            AND t.overview IS NOT NULL AND t.overview <> '') AS wants_a_synopsis
@@ -423,8 +431,9 @@ impl Database {
         let mut waiting = Vec::new();
         for row in &rows {
             let wants_pictures: bool = int_to_bool(row.try_get("wants_pictures")?);
+            let wants_a_title_image: bool = int_to_bool(row.try_get("wants_a_title_image")?);
             let wants_a_synopsis: bool = int_to_bool(row.try_get("wants_a_synopsis")?);
-            if !wants_pictures && !wants_a_synopsis {
+            if !wants_pictures && !wants_a_title_image && !wants_a_synopsis {
                 continue;
             }
             waiting.push(IncompleteNamedWork {
@@ -434,6 +443,7 @@ impl Database {
                     .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?,
                 external_id: row.try_get("external_id")?,
                 wants_pictures,
+                wants_a_title_image,
                 wants_a_synopsis,
             });
         }
@@ -1686,24 +1696,9 @@ mod tests {
             "the provider gave one: {waiting:?}"
         );
 
-        database
-            .replace_images(
-                "work",
-                &work.id.to_db_string(),
-                "poster",
-                &[crate::images::StoredImage {
-                    owner_kind: "work".to_string(),
-                    owner_id: work.id.to_db_string(),
-                    image_kind: "poster".to_string(),
-                    relative_path: "works/x/poster-200.webp".to_string(),
-                    width: Some(200),
-                    height: Some(300),
-                    fingerprint: "abc".to_string(),
-                    dominant_color: None,
-                }],
-            )
-            .await
-            .expect("picture stored");
+        for kind in ["poster", "logo"] {
+            store_one_picture(&database, work.id, kind).await;
+        }
 
         assert!(
             database
@@ -1713,6 +1708,62 @@ mod tests {
                 .is_empty(),
             "a film with nothing missing is never asked about again"
         );
+    }
+
+    /// Films were given their pictures long before title images existed, so
+    /// every shelf already filled in is made of films holding a poster and no
+    /// title image. Were the two counted as one, not one of them would ever be
+    /// asked about again and no title image would ever arrive.
+    #[tokio::test]
+    async fn a_film_holding_its_poster_and_no_title_image_is_still_asked_about() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+        store_one_picture(&database, work.id, "poster").await;
+
+        let waiting = database
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+            .await
+            .expect("read");
+        assert_eq!(waiting.len(), 1);
+        assert!(
+            !waiting[0].wants_pictures,
+            "the poster is here: {waiting:?}"
+        );
+        assert!(waiting[0].wants_a_title_image);
+
+        store_one_picture(&database, work.id, "logo").await;
+        assert!(
+            database
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+                .await
+                .expect("read")
+                .is_empty(),
+            "and once it has one it is left alone"
+        );
+    }
+
+    async fn store_one_picture(database: &Database, work_id: WorkId, kind: &str) {
+        database
+            .replace_images(
+                "work",
+                &work_id.to_db_string(),
+                kind,
+                &[crate::images::StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: work_id.to_db_string(),
+                    image_kind: kind.to_string(),
+                    relative_path: format!("works/x/{kind}-200.webp"),
+                    width: Some(200),
+                    height: Some(300),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("picture stored");
     }
 
     #[tokio::test]

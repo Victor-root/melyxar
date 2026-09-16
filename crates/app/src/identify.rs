@@ -288,7 +288,10 @@ where
             }
         };
 
-        if work.wants_pictures
+        // One call covers both: a picture already here is recognised by the
+        // name the provider gave it and never fetched twice, so a film wanting
+        // only its title image costs only its title image.
+        if (work.wants_pictures || work.wants_a_title_image)
             && crate::images::store_provider_images(state, provider.as_ref(), work.id, &details)
                 .await
                 > 0
@@ -2642,6 +2645,81 @@ mod tests {
 
         // And a third run has nothing left to do, so nobody is asked again.
         assert_eq!(run(&state, &serving, &library).await.pictures_filled, 0);
+    }
+
+    #[tokio::test]
+    async fn a_shelf_already_holding_its_posters_still_gets_its_title_images() {
+        // The state every existing shelf is in: every film was named and given
+        // its poster long before title images were fetched at all. Counted
+        // together with the poster, not one of those films would ever be asked
+        // about again, and no title image would ever arrive on a shelf that
+        // was not built from nothing today.
+        let Some(picture) = a_real_title_image() else {
+            eprintln!("no media tool here, the preparation of a picture was not exercised");
+            return;
+        };
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+
+        let without = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture.clone()),
+        );
+        assert_eq!(run(&state, &without, &library).await.identified, 1);
+        assert_eq!(
+            state
+                .database()
+                .images_of("work", &work.id.to_db_string())
+                .await
+                .expect("read")
+                .iter()
+                .filter(|image| image.image_kind == "logo")
+                .count(),
+            0,
+            "the film was named before there were title images to be had"
+        );
+
+        let with = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![MovieDetails {
+                    logo_path: Some("/title.png".to_string()),
+                    ..details("111", "Quiet Harbour", Some(2019))
+                }],
+            )
+            .serving(picture),
+        );
+        assert_eq!(run(&state, &with, &library).await.pictures_filled, 1);
+
+        let images = state
+            .database()
+            .images_of("work", &work.id.to_db_string())
+            .await
+            .expect("read");
+        assert_eq!(
+            images
+                .iter()
+                .filter(|image| image.image_kind == "logo")
+                .count(),
+            2
+        );
+        assert_eq!(
+            images
+                .iter()
+                .filter(|image| image.image_kind == "poster")
+                .count(),
+            3,
+            "the poster that was already there is left exactly as it was"
+        );
+
+        assert_eq!(
+            run(&state, &with, &library).await.pictures_filled,
+            0,
+            "and once it has one, nothing is fetched for it again"
+        );
     }
 
     #[tokio::test]
