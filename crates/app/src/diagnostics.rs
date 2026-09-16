@@ -9,6 +9,10 @@
 //! line, the administration screen and the export that gets pasted into a
 //! conversation.
 
+use melyxar_core::media::{
+    AudioDetails, HdrFormat, SubtitleDetails, SubtitleLayout, Track, TrackKind, VideoDetails,
+};
+use melyxar_database::Database;
 use serde::Serialize;
 
 use crate::{AppState, Result};
@@ -51,12 +55,43 @@ pub struct Diagnostics {
     /// somebody presses play. It was only ever visible to whoever happened to
     /// be watching a scan in a terminal.
     pub undescribed: Vec<UndescribedReport>,
+    /// The heaviest films in the library, and everything they are made of.
+    ///
+    /// A server is not tested by its ordinary films but by its worst ones, and
+    /// the worst ones are not known until they are named. Weight is what names
+    /// them without anything having to be read or any rule agreed on: a file
+    /// is big because of what is in it.
+    pub heaviest: Vec<HeaviestReport>,
     /// The last pieces of work and what became of them.
     ///
     /// In the report rather than only in a log, because a run that failed says
     /// why it failed here, and that is the first question worth asking when
     /// something did not happen.
     pub recent_work: Vec<WorkReport>,
+}
+
+/// One heavy film, with what every track of it holds.
+///
+/// Written out rather than summarised, because the question it answers is
+/// whether another server makes the same of it, and two servers disagree on
+/// the details rather than on the headline.
+#[derive(Debug, Clone, Serialize)]
+pub struct HeaviestReport {
+    pub title: String,
+    pub year: Option<i32>,
+    /// The name on disk, which is how whoever reads this finds the file again
+    /// to try it somewhere else. Never the folders leading to it.
+    pub file_name: String,
+    pub size_bytes: i64,
+    pub container: Option<String>,
+    pub runtime_minutes: Option<i64>,
+    /// Everything in the file per second, streams and container alike.
+    pub overall_bitrate: Option<i64>,
+    /// The picture, in full. Absent for a file nothing has read yet.
+    pub picture: Option<String>,
+    /// One line per soundtrack, and one per track of text.
+    pub sound: Vec<String>,
+    pub text: Vec<String>,
 }
 
 /// One film nobody has been able to name.
@@ -440,6 +475,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                 missing: work.missing,
             })
             .collect(),
+        heaviest: heaviest_films(database).await?,
         recent_work: database
             .recent_jobs(WORK_SHOWN)
             .await?
@@ -447,6 +483,155 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             .map(work_report)
             .collect(),
     })
+}
+
+/// The heaviest films, with everything each of them is made of.
+///
+/// The tracks are read one file at a time, on the query every other page uses
+/// for them. Ten files on a report nobody asks for twice a minute is not a
+/// place to invent a second way of reading the same rows.
+async fn heaviest_films(database: &Database) -> Result<Vec<HeaviestReport>> {
+    let mut films = Vec::new();
+    for source in database.heaviest_sources(HEAVIEST_SHOWN).await? {
+        let tracks = database.tracks_of_source(source.id).await?;
+        films.push(HeaviestReport {
+            title: source.title,
+            year: source.release_year,
+            file_name: source.file_name,
+            size_bytes: source.size_bytes,
+            container: source.container,
+            runtime_minutes: source
+                .duration
+                .map(|duration| duration.get() / 60_000)
+                .filter(|minutes| *minutes > 0),
+            overall_bitrate: source.overall_bitrate,
+            picture: tracks.iter().find_map(|track| match &track.kind {
+                TrackKind::Video(details) => Some(picture_line(details)),
+                _ => None,
+            }),
+            sound: tracks
+                .iter()
+                .filter_map(|track| match &track.kind {
+                    TrackKind::Audio(details) => Some(sound_line(track, details)),
+                    _ => None,
+                })
+                .collect(),
+            text: tracks
+                .iter()
+                .filter_map(|track| match &track.kind {
+                    TrackKind::Subtitle(details) => Some(text_line(track, details)),
+                    _ => None,
+                })
+                .collect(),
+        });
+    }
+    Ok(films)
+}
+
+/// Everything the picture of a film says about itself.
+fn picture_line(details: &VideoDetails) -> String {
+    let mut parts = vec![details.codec.to_uppercase()];
+    if let Some(profile) = &details.profile {
+        parts.push(profile.clone());
+    }
+    parts.push(format!(
+        "{}x{}",
+        details.visible_width(),
+        details.visible_height()
+    ));
+    // Said only when the film declares that part of its frame is not the
+    // picture, which is the one shape that is handled apart.
+    if details.margins.is_some() {
+        parts.push(format!("in a {}x{} frame", details.width, details.height));
+    }
+    if let Some(depth) = details.color.bit_depth {
+        parts.push(format!("{depth} bit"));
+    }
+    if let Some(hdr) = details.hdr {
+        parts.push(match hdr {
+            HdrFormat::Hdr10 => "HDR10".to_string(),
+            HdrFormat::Hlg => "HLG".to_string(),
+            HdrFormat::DolbyVision { profile: None } => "Dolby Vision".to_string(),
+            HdrFormat::DolbyVision {
+                profile: Some(profile),
+            } => format!("Dolby Vision profile {profile}"),
+        });
+    }
+    if details.is_interlaced {
+        parts.push("interlaced".to_string());
+    }
+    if let Some(rate) = details.frame_rate {
+        parts.push(format!("{rate:.3} fps"));
+    }
+    if let Some(bitrate) = details.bitrate {
+        parts.push(human_rate(bitrate));
+    }
+    parts.join(" · ")
+}
+
+/// Everything one soundtrack says about itself.
+fn sound_line(track: &Track, details: &AudioDetails) -> String {
+    let mut parts = vec![details.codec.to_uppercase()];
+    if let Some(profile) = &details.profile {
+        parts.push(profile.clone());
+    }
+    parts.push(
+        details
+            .channel_layout
+            .clone()
+            .unwrap_or_else(|| format!("{} channels", details.channels)),
+    );
+    if let Some(rate) = details.sample_rate {
+        parts.push(format!("{:.1} kHz", f64::from(rate) / 1000.0));
+    }
+    if let Some(depth) = details.bit_depth {
+        parts.push(format!("{depth} bit"));
+    }
+    if let Some(bitrate) = details.bitrate {
+        parts.push(human_rate(bitrate));
+    }
+    parts.extend(how_a_track_is_marked(track));
+    parts.join(" · ")
+}
+
+/// Everything one track of text says about itself.
+fn text_line(track: &Track, details: &SubtitleDetails) -> String {
+    let mut parts = vec![details.codec.to_uppercase()];
+    // The one thing about a track of text that decides what it costs: words
+    // are converted, pictures can only be burnt into the film itself.
+    parts.push(
+        match details.layout {
+            SubtitleLayout::Text => "words",
+            SubtitleLayout::Bitmap => "pictures",
+        }
+        .to_string(),
+    );
+    if details.is_external {
+        parts.push("in a file of its own".to_string());
+    }
+    if details.is_hearing_impaired {
+        parts.push("hard of hearing".to_string());
+    }
+    parts.extend(how_a_track_is_marked(track));
+    parts.join(" · ")
+}
+
+/// What the file says about a track beyond what is in it.
+fn how_a_track_is_marked(track: &Track) -> Vec<String> {
+    let mut parts = Vec::new();
+    if let Some(language) = &track.language {
+        parts.push(language.clone());
+    }
+    if let Some(title) = &track.title {
+        parts.push(format!("\"{title}\""));
+    }
+    if track.is_default {
+        parts.push("default".to_string());
+    }
+    if track.is_forced {
+        parts.push("forced".to_string());
+    }
+    parts
 }
 
 /// Whether the name on disk says anything the title does not.
@@ -478,6 +663,13 @@ const UNDESCRIBED_SHOWN: i64 = 15;
 ///
 /// The report is one block somebody reads; the list behind it is not cut.
 const INCOMPLETE_SHOWN: usize = 25;
+
+/// How many of the heaviest films the report describes.
+///
+/// Each of them takes several lines, so this is the one list where the number
+/// is set by how long the block gets rather than by how much there is to say.
+/// Ten is what somebody sits down and tries one evening.
+const HEAVIEST_SHOWN: i64 = 10;
 
 /// How many finished pieces of work the report carries.
 ///
@@ -848,6 +1040,52 @@ pub fn render_text(report: &Diagnostics) -> String {
         out.push('\n');
     }
 
+    if !report.heaviest.is_empty() {
+        line!("#", "Heaviest films");
+        line!(
+            " ",
+            "  what this library will make the server work hardest on",
+        );
+        for film in &report.heaviest {
+            let year = match film.year {
+                Some(year) => format!(" ({year})"),
+                None => String::new(),
+            };
+            let mut about = vec![human_size(film.size_bytes)];
+            if let Some(container) = &film.container {
+                about.push(container.clone());
+            }
+            if let Some(minutes) = film.runtime_minutes {
+                about.push(match minutes / 60 {
+                    0 => format!("{minutes} min"),
+                    hours => format!("{hours}h{:02}", minutes % 60),
+                });
+            }
+            if let Some(bitrate) = film.overall_bitrate {
+                about.push(human_rate(bitrate));
+            }
+            line!("+", format!("{}{year}", film.title));
+            line!(" ", format!("    {}", about.join(" · ")));
+            line!(" ", format!("    file     {}", film.file_name));
+            if let Some(picture) = &film.picture {
+                line!(" ", format!("    picture  {picture}"));
+            }
+            // Numbered, because the question a comparison asks is which of
+            // them a server picked, and an unnumbered list cannot be pointed
+            // at. Counted from one, as anybody reading it would.
+            for (index, sound) in film.sound.iter().enumerate() {
+                line!(" ", format!("    sound {:<2} {sound}", index + 1));
+            }
+            for (index, text) in film.text.iter().enumerate() {
+                line!(" ", format!("    text  {:<2} {text}", index + 1));
+            }
+            if film.picture.is_none() && film.sound.is_empty() && film.text.is_empty() {
+                line!(" ", "    nothing has read this file yet");
+            }
+        }
+        out.push('\n');
+    }
+
     line!("#", "Recent work");
     if report.recent_work.is_empty() {
         line!("+", "nothing has run yet");
@@ -931,6 +1169,19 @@ fn yes_no(value: bool) -> &'static str {
         "yes"
     } else {
         "no"
+    }
+}
+
+/// A rate in bits per second, as somebody reads one.
+///
+/// Counted in thousands rather than in units of 1024, which is how every
+/// analyser and every other media server states a rate: a number written one
+/// way here and another way there is a number nobody can compare.
+fn human_rate(bits: i64) -> String {
+    match bits {
+        rate if rate >= 1_000_000 => format!("{:.1} Mb/s", rate as f64 / 1_000_000.0),
+        rate if rate > 0 => format!("{} kb/s", rate / 1_000),
+        _ => "no rate stated".to_string(),
     }
 }
 
@@ -1100,6 +1351,155 @@ mod tests {
         let text = render_text(&report);
         assert!(text.contains("Quiet Harbour Extended (2019)"), "{text}");
         assert!(text.contains("no_match"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn the_heaviest_films_are_written_out_track_by_track() {
+        // What a server is actually tested on. The headline is no use here:
+        // the question this answers is whether another server makes the same
+        // of the same file, and two servers agree on the headline and differ
+        // in the details.
+        use melyxar_core::id::TrackId;
+        use melyxar_core::media::{
+            AudioDetails, ColorInfo, HdrFormat, Margins, SubtitleDetails, SubtitleLayout, Track,
+            TrackKind, VideoDetails,
+        };
+
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .pop()
+            .expect("one library");
+        let work = state
+            .database()
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        let source = state
+            .database()
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Films/Quiet.Harbour.2019.mkv"),
+                61_000_000_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+
+        let track = |kind| Track {
+            id: TrackId::new(),
+            source_id: source,
+            stream_index: 0,
+            language: Some("eng".into()),
+            title: None,
+            is_default: true,
+            is_forced: false,
+            kind,
+        };
+        state
+            .database()
+            .store_analysis(
+                source,
+                &melyxar_database::catalogue::SourceAnalysis {
+                    container: Some("matroska,webm".into()),
+                    duration: Some(melyxar_core::time::Millis::new(9_240_000)),
+                    overall_bitrate: Some(53_000_000),
+                },
+                &[
+                    track(TrackKind::Video(VideoDetails {
+                        codec: "hevc".into(),
+                        profile: Some("Main 10".into()),
+                        level: None,
+                        width: 3840,
+                        height: 2160,
+                        margins: Some(Margins {
+                            top: 276,
+                            bottom: 276,
+                            left: 0,
+                            right: 0,
+                        }),
+                        aspect_ratio: None,
+                        is_interlaced: false,
+                        frame_rate: Some(23.976),
+                        bitrate: Some(48_000_000),
+                        pixel_format: None,
+                        reference_frames: None,
+                        color: ColorInfo {
+                            bit_depth: Some(10),
+                            ..ColorInfo::default()
+                        },
+                        hdr: Some(HdrFormat::DolbyVision { profile: Some(7) }),
+                    })),
+                    track(TrackKind::Audio(AudioDetails {
+                        codec: "truehd".into(),
+                        profile: None,
+                        channels: 8,
+                        channel_layout: Some("7.1".into()),
+                        sample_rate: Some(48_000),
+                        bit_depth: Some(24),
+                        bitrate: Some(4_500_000),
+                        loudness: Default::default(),
+                    })),
+                    track(TrackKind::Subtitle(SubtitleDetails {
+                        codec: "hdmv_pgs_subtitle".into(),
+                        layout: SubtitleLayout::Bitmap,
+                        is_hearing_impaired: false,
+                        is_external: false,
+                        external_relative_path: None,
+                    })),
+                ],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        let report = collect(&state).await.expect("report collected");
+        assert_eq!(report.heaviest.len(), 1);
+        let film = &report.heaviest[0];
+        assert_eq!(film.title, "Quiet Harbour");
+        assert_eq!(film.file_name, "Quiet.Harbour.2019.mkv");
+        assert_eq!(film.runtime_minutes, Some(154));
+
+        let picture = film.picture.as_deref().expect("this film holds a picture");
+        assert!(picture.contains("HEVC"), "{picture}");
+        assert!(
+            picture.contains("3840x1608") && picture.contains("in a 3840x2160 frame"),
+            "the picture and the frame around it are two different shapes: {picture}"
+        );
+        assert!(picture.contains("10 bit"), "{picture}");
+        assert!(picture.contains("Dolby Vision profile 7"), "{picture}");
+        assert!(picture.contains("48.0 Mb/s"), "{picture}");
+
+        assert_eq!(film.sound.len(), 1);
+        assert!(film.sound[0].contains("TRUEHD · 7.1"), "{:?}", film.sound);
+        assert!(film.sound[0].contains("eng"), "{:?}", film.sound);
+        assert_eq!(film.text.len(), 1);
+        assert!(
+            film.text[0].contains("pictures"),
+            "words are converted and pictures can only be burnt in, which is the \
+             whole difference in what a track of text costs: {:?}",
+            film.text
+        );
+
+        let text = render_text(&report);
+        assert!(text.contains("Heaviest films"), "{text}");
+        assert!(text.contains("Quiet Harbour (2019)"), "{text}");
+        assert!(text.contains("sound 1"), "{text}");
+        assert!(text.contains("2h34"), "{text}");
     }
 
     #[tokio::test]

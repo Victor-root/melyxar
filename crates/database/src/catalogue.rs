@@ -56,6 +56,25 @@ pub struct StoredSource {
     pub missing_since: Option<Timestamp>,
 }
 
+/// One of the files that weigh the most, with what it is and what it holds.
+///
+/// Everything the whole file says about itself, in one row. What each of its
+/// tracks says is a question of its own, asked of the tracks themselves.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeaviestSource {
+    pub id: MediaSourceId,
+    /// The title of the film this file is a copy of.
+    pub title: String,
+    pub release_year: Option<i32>,
+    /// The name of the file, without the folders leading to it.
+    pub file_name: String,
+    pub size_bytes: i64,
+    pub container: Option<String>,
+    pub duration: Option<Millis>,
+    /// Everything in the file per second, streams and container alike.
+    pub overall_bitrate: Option<i64>,
+}
+
 /// What an analysis found about the file as a whole.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SourceAnalysis {
@@ -443,6 +462,55 @@ impl Database {
             ))
         })
         .transpose()
+    }
+
+    /// The files that weigh the most, heaviest first.
+    ///
+    /// For the diagnostic, and for one question in particular: which films in
+    /// this library are the hardest thing it will ever be asked to play. A
+    /// server is not tested by its ordinary films but by its worst ones, and
+    /// the worst ones are not known until they are named.
+    ///
+    /// Weight rather than anything cleverer, because weight is the one measure
+    /// that needs nothing read and no rule agreed on: a file is big because of
+    /// what is in it. Files no longer on disk are left out, since a film
+    /// nobody can play is not a test of anything.
+    pub async fn heaviest_sources(&self, limit: i64) -> Result<Vec<HeaviestSource>> {
+        let rows = sqlx::query(
+            "SELECT s.id, s.relative_path, s.size_bytes, s.container, s.duration_ms,
+                    s.overall_bitrate, w.title, w.release_year
+             FROM media_sources s
+             JOIN works w ON w.id = s.work_id
+             WHERE s.missing_since IS NULL
+             ORDER BY s.size_bytes DESC, s.relative_path
+             LIMIT ?",
+        )
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                let path: String = row.try_get("relative_path")?;
+                Ok(HeaviestSource {
+                    id: row
+                        .try_get::<String, _>("id")?
+                        .parse()
+                        .map_err(|_| DatabaseError::Corrupt("media source id".to_string()))?,
+                    title: row.try_get("title")?,
+                    release_year: row.try_get("release_year")?,
+                    file_name: Path::new(&path)
+                        .file_name()
+                        .map_or(path.clone(), |name| name.to_string_lossy().into_owned()),
+                    size_bytes: row.try_get("size_bytes")?,
+                    container: row.try_get("container")?,
+                    duration: row
+                        .try_get::<Option<i64>, _>("duration_ms")?
+                        .map(Millis::new),
+                    overall_bitrate: row.try_get("overall_bitrate")?,
+                })
+            })
+            .collect()
     }
 
     /// Files of one root that carry no analysis yet.
@@ -1741,6 +1809,74 @@ mod tests {
             .await
             .expect("source recorded");
         (work.id, source)
+    }
+
+    #[tokio::test]
+    async fn the_heaviest_files_come_back_heaviest_first_and_leave_out_what_is_gone() {
+        // Which films are the hardest thing this library will ever be asked to
+        // play, which is what a server is tested on. Heaviest first, and a
+        // file no longer on disk left out: it cannot be played, so it is not a
+        // test of anything.
+        let (database, library_id, root_id) = library().await;
+        let mut recorded = Vec::new();
+        for (name, size) in [
+            ("Quiet.Harbour.2019.mkv", 3_000),
+            ("Amber.Field.2020.mkv", 90_000),
+            ("Silent.Coast.2015.mkv", 40_000),
+            ("Paper.Lantern.2012.mkv", 70_000),
+        ] {
+            let work = database
+                .create_work(library_id, WorkKind::Movie, name, name, Some(2019))
+                .await
+                .expect("work created");
+            let source = database
+                .insert_source(work.id, root_id, Path::new(name), size, now())
+                .await
+                .expect("source recorded");
+            recorded.push((name, source));
+        }
+
+        // The second heaviest is gone from the disk, so it drops out entirely.
+        let gone = recorded
+            .iter()
+            .find(|(name, _)| *name == "Paper.Lantern.2012.mkv")
+            .expect("it was recorded")
+            .1;
+        database.mark_source_missing(gone).await.expect("marked");
+
+        database
+            .store_analysis(
+                recorded[1].1,
+                &SourceAnalysis {
+                    container: Some("matroska,webm".into()),
+                    duration: Some(Millis::new(7_200_000)),
+                    overall_bitrate: Some(80_000_000),
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        let heaviest = database.heaviest_sources(2).await.expect("read");
+        assert_eq!(
+            heaviest.len(),
+            2,
+            "no more than it was asked for: {heaviest:?}"
+        );
+        assert_eq!(heaviest[0].file_name, "Amber.Field.2020.mkv");
+        assert_eq!(heaviest[0].size_bytes, 90_000);
+        assert_eq!(heaviest[0].container.as_deref(), Some("matroska,webm"));
+        assert_eq!(heaviest[0].duration, Some(Millis::new(7_200_000)));
+        assert_eq!(heaviest[0].overall_bitrate, Some(80_000_000));
+        assert_eq!(
+            heaviest[1].file_name, "Silent.Coast.2015.mkv",
+            "the heavier one between them is gone from the disk"
+        );
+        assert_eq!(
+            heaviest[1].container, None,
+            "a file nothing has read yet says nothing about itself, rather than failing"
+        );
     }
 
     #[tokio::test]
