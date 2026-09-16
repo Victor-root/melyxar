@@ -138,11 +138,12 @@ export function canBePlayedAsItIs(plan: PlaybackPlan): boolean {
  * turns out to take far longer than usual still only ever creeps toward the
  * same ceiling, however long it takes to get there.
  *
- * Every step is logged to the console in a development build, with how long
- * the stage before it took: the one thing this cannot know on its own is
- * whether a minute on a slow link is normal or a sign that something is
- * actually stuck, and that reading a real number needs a real connection to
- * try it on, not a guess made here.
+ * Every step is written to Melyxar's own journal, under the `page` tag, with
+ * how long the stage before it took: the one thing this cannot know on its
+ * own is whether a minute on a slow link is normal or a sign that something
+ * is actually stuck, and reading that needs a real connection to try it on,
+ * not a guess made here. A console open on the machine watching the film is
+ * not something to rely on; the journal is read from wherever the server is.
  */
 type LoadingStage =
   | "opening"
@@ -197,13 +198,20 @@ const LOADING_TAU_MS: Record<Exclude<LoadingStage, "done">, number> = {
   first_fragment_loaded: 350,
 };
 
-/** A line in the console, and only in a build a viewer never sees: the console
- *  a viewer testing a slow connection can read from is the only way to learn
- *  which of the stages above is the one actually taking the time. */
-function debugLoading(message: string): void {
-  if (import.meta.env.DEV) {
-    console.debug(`[melyxar] loading: ${message}`);
+/** A line in Melyxar's own journal, when there is a session to write it
+ *  against: before one exists there is nothing yet worth a line. Written only
+ *  at the server's own debug level, the same as every other fact a page tells
+ *  the journal, so it says nothing at all unless it is asked to. */
+function tellTheJournalOfAStage(session: string | null, stage: LoadingStage, afterMs: number): void {
+  if (!session) {
+    return;
   }
+  api
+    .tellTheJournal({ session, saw: "loading_stage", stage, after_ms: Math.round(afterMs) })
+    .catch(() => {
+      // A line that did not arrive is a line the journal never had to begin
+      // with: nothing here is worth troubling a viewer over.
+    });
 }
 
 /** What went wrong, in a word this interface knows how to say. */
@@ -426,15 +434,18 @@ export function usePlayback({
 
   /* Moved on to a later stage, and only ever a later one: a message from a
      session already left behind, or one that arrived after a further one,
-     must not walk the number backwards. */
-  const enterLoadingStage = useCallback((stage: LoadingStage) => {
+     must not walk the number backwards.
+
+     Told to the journal against the session this is happening for, when
+     there is one to name: a viewer with a slow connection can be asked to
+     copy a line out of a console, but the journal is there whether or not
+     anybody thought to open one before the film started. */
+  const enterLoadingStage = useCallback((session: string | null, stage: LoadingStage) => {
     if (LOADING_STAGES.indexOf(stage) <= LOADING_STAGES.indexOf(loadingStage.current)) {
       return;
     }
     const now = performance.now();
-    debugLoading(
-      `${stage} (${Math.round(now - loadingStageSince.current)}ms in ${loadingStage.current})`,
-    );
+    tellTheJournalOfAStage(session, stage, now - loadingStageSince.current);
     loadingStage.current = stage;
     loadingStageSince.current = now;
     setLoadingPercent(LOADING_FLOOR[stage]);
@@ -579,7 +590,7 @@ export function usePlayback({
         }
         session.current = opening.id;
         setStream(opening);
-        enterLoadingStage("session_opened");
+        enterLoadingStage(opening.id, "session_opened");
       })
       .catch((error) => {
         // A viewer who has moved on is not told about a film they left.
@@ -664,12 +675,12 @@ export function usePlayback({
         .preparation(name, controller.signal)
         .then((seen) => {
           if (seen.step === "producing") {
-            enterLoadingStage("producing");
+            enterLoadingStage(name, "producing");
           } else if (seen.step === "ready" || seen.ready_seconds >= seen.wanted_seconds) {
             // What this browser asked for exists on the server now. What is
             // left of the wait from here on is getting it from there to here,
             // which this same server cannot see and has nothing to add about.
-            enterLoadingStage("produced");
+            enterLoadingStage(name, "produced");
           }
         })
         .catch(() => {
@@ -840,7 +851,9 @@ export function usePlayback({
       // The playlist has been read, and the library now knows what to ask
       // for. Whatever is slow from here on is either the server producing it
       // or the network carrying it, not this.
-      feed.on(Library.Events.MANIFEST_PARSED, () => enterLoadingStage("manifest_parsed"));
+      feed.on(Library.Events.MANIFEST_PARSED, () =>
+        enterLoadingStage(stream.id, "manifest_parsed"),
+      );
       // The very first piece of film has reached this browser and been read.
       // What is left of the wait is the browser noticing it has a film, which
       // is `loadedmetadata` below and is usually the shortest part of all of
@@ -851,7 +864,7 @@ export function usePlayback({
           return;
         }
         firstPieceArrived = true;
-        enterLoadingStage("first_fragment_loaded");
+        enterLoadingStage(stream.id, "first_fragment_loaded");
       });
       feed.on(Library.Events.ERROR, (_event, trouble) => {
         // Anything short of fatal is retried on its own, and saying so would
@@ -1187,10 +1200,11 @@ export function usePlayback({
     }
     // The same instant the notice comes down: a number left behind at
     // whatever it last crept to would be a number that was still climbing
-    // the moment the picture no longer needed it to.
-    enterLoadingStage("done");
+    // the moment the picture no longer needed it to. Absent for a film
+    // played as it is, which never had a session to report against.
+    enterLoadingStage(stream?.id ?? null, "done");
     setReadyPicture(pictureKey);
-  }, [speed, pictureKey, goTo, enterLoadingStage]);
+  }, [speed, pictureKey, goTo, enterLoadingStage, stream]);
 
   /* What the server said when the film was asked for, and this page's answer
      from then on. Told to the server and kept whatever it says back: a mark
