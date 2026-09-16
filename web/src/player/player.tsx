@@ -152,10 +152,10 @@ export function Player({
   const [arrangement] = useState(storedArrangement);
   const branding = useBranding();
 
-  /* The film's own wordmark, once there is one to fetch. Nothing fetches them
-     yet, so this falls through to the server's mark, and to the title when
-     the server has none either. */
-  const mark = markFor(title, null, branding);
+  /* The film's own title drawn as the film draws it, falling through to the
+     server's mark and then to the title written out. The whole description is
+     already in hand, so this costs nothing to ask for. */
+  const mark = markFor(title, work.logo, branding);
 
   const setAppearance = (change: Partial<Appearance>) => {
     const next = { ...appearance, ...change };

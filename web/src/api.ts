@@ -180,6 +180,9 @@ export interface Work {
   crew: Credit[];
   poster: Picture[];
   backdrop: Picture[];
+  /** The title drawn as the film draws it, shown in place of the title
+   *  written out. Empty for a film the provider draws under none. */
+  logo: Picture[];
   versions: Version[];
   trailers: Trailer[];
   external_ids: { provider: string; id: string }[];
