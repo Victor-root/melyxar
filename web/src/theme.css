@@ -1,4 +1,42 @@
 /*
+ * The interface's own typeface, carried with it rather than named and hoped
+ * for.
+ *
+ * It used to be asked for by name and fall back to whatever the machine had:
+ * one face on Windows, another on Linux, another again on a phone. Every one
+ * of them has its own idea of how tall a line is and where a letter sits
+ * inside it, so a title lined up against a button on one machine sits a
+ * couple of pixels off on the next, and no amount of measuring on one of them
+ * fixes the others. Carried, the interface is the same drawing everywhere.
+ *
+ * The latin letters only, as one variable file covering every weight used: a
+ * hundred and thirty kilobytes for a typeface, against seven hundred for the
+ * rest of the page. A language outside it falls through to whatever the
+ * machine has, which is what would have happened anyway.
+ */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./fonts/inter-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./fonts/inter-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/*
  * Every colour, spacing and radius the interface uses lives here as a token.
  * Nothing else in the interface writes a colour: that is what lets the accent
  * be changed in one place, and what makes a light and a dark theme the same
