@@ -251,14 +251,19 @@ function Chapters({
               across={across}
               className="player-drawer-still"
             />
+            {/* On the picture rather than under the card. Written underneath,
+                it made the one card carrying it taller than all the others,
+                and a row sizes itself on its tallest card: every other card
+                in the row then carried that line's worth of nothing, for a
+                card that is usually scrolled out of sight. */}
+            {index === inside && (
+              <span className="player-drawer-card-now">{t("player.playing_now")}</span>
+            )}
           </span>
           <span className="player-drawer-card-name">
             {chapter.title ?? t("player.chapter_number", { number: index + 1 })}
           </span>
           <span className="player-drawer-card-under">{asClock(chapter.at_second)}</span>
-          {index === inside && (
-            <span className="player-drawer-card-now">{t("player.playing_now")}</span>
-          )}
         </button>
       ))}
     </Strip>
