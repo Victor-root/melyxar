@@ -166,10 +166,16 @@ en|step_dirs|Creating the folders
 fr|step_dirs|Création des dossiers
 en|section_source|Getting the source
 fr|section_source|Récupération des sources
-en|step_clone|Cloning the repository
-fr|step_clone|Clonage du dépôt
+en|step_clone|Cloning the repository, with its full history
+fr|step_clone|Clonage du dépôt, avec tout son historique
 en|step_pull|Fetching the latest changes
 fr|step_pull|Récupération des dernières modifications
+en|step_unshallow|Completing a partial copy of the repository into a full one
+fr|step_unshallow|Complétion d'une copie partielle du dépôt en copie complète
+en|section_update_diff|What is about to change
+fr|section_update_diff|Ce qui va changer
+en|update_diff_up_to_date|Already at the latest version. Nothing to update.
+fr|update_diff_up_to_date|Déjà à la dernière version. Rien à mettre à jour.
 en|section_lines|Lines of code
 fr|section_lines|Lignes de code
 en|step_fetch_main|Fetching the %s branch as well
@@ -679,11 +685,22 @@ fetch_source() {
   section "$(tr_msg section_source)"
 
   if [[ -d "${SOURCE_DIR}/.git" ]]; then
-    step "$(tr_msg step_pull)" git -C "$SOURCE_DIR" fetch --depth 1 origin "$BRANCH"
+    # An earlier install may have left a shallow copy behind, from before this
+    # script always kept the full history. Completed once here rather than
+    # left as it is: a shallow copy cannot show a diff against a commit it
+    # never kept, and every update after this one depends on that history
+    # still being there.
+    if [[ "$(git -C "$SOURCE_DIR" rev-parse --is-shallow-repository 2>/dev/null)" == "true" ]]; then
+      step "$(tr_msg step_unshallow)" git -C "$SOURCE_DIR" fetch --unshallow origin "$BRANCH"
+    else
+      step "$(tr_msg step_pull)" git -C "$SOURCE_DIR" fetch origin "$BRANCH"
+    fi
     step "$(tr_msg step_pull)" git -C "$SOURCE_DIR" reset --hard "origin/${BRANCH}"
   else
     rm -rf "$SOURCE_DIR"
-    step "$(tr_msg step_clone)" git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$SOURCE_DIR"
+    # No --depth: the full history of the branch, kept from here on, is what
+    # lets an update show what actually changed rather than only its result.
+    step "$(tr_msg step_clone)" git clone --branch "$BRANCH" "$REPO_URL" "$SOURCE_DIR"
   fi
 }
 
@@ -879,11 +896,59 @@ action_install() {
   show_done
 }
 
+# What changed between the commit that was running and the one about to
+# replace it: the file list first, in git's own shape, then one sentence with
+# the totals in it. Nothing here needs the branch's history to reach back to
+# any particular point, only that both commits are still present, which a full
+# clone guarantees and a shallow one used not to.
+show_update_diff() {
+  local before="$1"
+  local after="$2"
+
+  # Nothing to compare against: the source was not there before this run, so
+  # what is about to be built is not a change from anything, it is the first
+  # copy of it.
+  [[ -z "$before" ]] && return 0
+
+  section "$(tr_msg section_update_diff)"
+
+  if [[ "$before" == "$after" ]]; then
+    info "$(tr_msg update_diff_up_to_date)"
+    return 0
+  fi
+
+  local color_stat=()
+  [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]] && color_stat=(--color=always)
+
+  # git's own table of files and bars needs no translation, being names and
+  # graphics rather than words. Only its last line, the English summary
+  # sentence, is dropped, and replaced below with a translated one built from
+  # the same numbers the line-counting menu entry already knows how to add up.
+  git -C "$SOURCE_DIR" diff --stat "${color_stat[@]}" "$before" "$after" |
+    sed -e '$d' -e 's/^/  /'
+
+  local moved=()
+  read -r -a moved < <(
+    git -C "$SOURCE_DIR" diff --numstat "$before" "$after" |
+      awk '$1 != "-" { added += $1; removed += $2; files += 1 }
+           END { printf "%d %d %d\n", added + 0, removed + 0, files + 0 }'
+  )
+  echo
+  success "$(tr_fmt lines_changed "${moved[@]}")"
+}
+
 action_update() {
   is_installed || die "$(tr_msg err_not_installed)"
   # A backup before any change, so a failed update is never a lost library.
   action_backup quiet
+
+  local before
+  before="$(git -C "$SOURCE_DIR" rev-parse HEAD 2>/dev/null || echo "")"
   fetch_source
+  local after
+  after="$(git -C "$SOURCE_DIR" rev-parse HEAD)"
+  show_update_diff "$before" "$after"
+
   build_and_install
   step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
   show_done
