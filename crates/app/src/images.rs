@@ -26,6 +26,9 @@ use crate::{AppState, Result};
 enum Kind {
     Poster,
     Backdrop,
+    /// The film's title drawn as the film draws it, shown in place of the
+    /// title written out.
+    Logo,
     Photo,
 }
 
@@ -34,6 +37,7 @@ impl Kind {
         match self {
             Self::Poster => "poster",
             Self::Backdrop => "backdrop",
+            Self::Logo => "logo",
             Self::Photo => "photo",
         }
     }
@@ -47,6 +51,7 @@ impl Kind {
         match self {
             Self::Poster => &melyxar_ffmpeg::images::POSTER_WIDTHS,
             Self::Backdrop => &melyxar_ffmpeg::images::BACKDROP_WIDTHS,
+            Self::Logo => &melyxar_ffmpeg::images::LOGO_WIDTHS,
             Self::Photo => &melyxar_ffmpeg::images::PHOTO_WIDTHS,
         }
     }
@@ -54,7 +59,7 @@ impl Kind {
     /// What the picture belongs to: a film, or a person who is in several.
     fn owner_kind(self) -> &'static str {
         match self {
-            Self::Poster | Self::Backdrop => "work",
+            Self::Poster | Self::Backdrop | Self::Logo => "work",
             Self::Photo => "person",
         }
     }
@@ -62,7 +67,7 @@ impl Kind {
     /// The folder of the cache it is filed under.
     fn folder(self) -> &'static str {
         match self {
-            Self::Poster | Self::Backdrop => "works",
+            Self::Poster | Self::Backdrop | Self::Logo => "works",
             Self::Photo => "people",
         }
     }
@@ -87,6 +92,7 @@ pub async fn store_provider_images(
     for (kind, path) in [
         (Kind::Poster, details.poster_path.as_deref()),
         (Kind::Backdrop, details.backdrop_path.as_deref()),
+        (Kind::Logo, details.logo_path.as_deref()),
     ] {
         // Said out loud rather than passed over: a film with no picture is
         // indistinguishable from one whose picture failed to arrive, and the
@@ -410,6 +416,18 @@ mod tests {
         );
         assert_eq!(Kind::Poster.as_str(), "poster");
         assert_eq!(Kind::Backdrop.as_str(), "backdrop");
+        assert_eq!(Kind::Logo.as_str(), "logo");
+    }
+
+    #[test]
+    fn a_title_image_belongs_to_its_film_and_paints_no_card() {
+        assert_eq!(Kind::Logo.owner_kind(), "work");
+        assert_eq!(Kind::Logo.folder(), Kind::Poster.folder());
+        assert!(
+            !Kind::Logo.carries_the_colour_of_its_work(),
+            "a card is painted the colour of its poster; a title image is \
+             mostly see-through and would paint it the colour of nothing"
+        );
     }
 
     #[test]

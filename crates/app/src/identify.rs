@@ -1285,6 +1285,7 @@ mod tests {
             }),
             poster_path: Some("/poster.jpg".to_string()),
             backdrop_path: None,
+            logo_path: None,
             trailers: vec![Trailer {
                 name: "Bande annonce".to_string(),
                 site: "YouTube".to_string(),
@@ -2173,6 +2174,97 @@ mod tests {
             .expect("present");
         let colour = stored.dominant_color.expect("a card has a colour to show");
         assert!(colour.starts_with('#') && colour.len() == 7, "{colour}");
+    }
+
+    /// A title image is drawn see-through so it can sit over a film, which is
+    /// the one thing about it that is not like a poster.
+    fn a_real_title_image() -> Option<Vec<u8>> {
+        let file = tempfile::Builder::new()
+            .suffix(".png")
+            .tempfile()
+            .expect("temporary file");
+        let made = std::process::Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=#ffffff@0.0:s=800x160,format=rgba",
+                "-frames:v",
+                "1",
+            ])
+            .arg(file.path())
+            .output()
+            .ok()?;
+        made.status
+            .success()
+            .then(|| std::fs::read(file.path()).ok())?
+    }
+
+    #[tokio::test]
+    async fn a_title_image_is_prepared_beside_the_poster_and_kept_apart_from_it() {
+        let Some(picture) = a_real_title_image() else {
+            eprintln!("no media tool here, the preparation of a picture was not exercised");
+            return;
+        };
+
+        let (_directory, state, _library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture),
+        );
+
+        let described = MovieDetails {
+            logo_path: Some("/title.png".to_string()),
+            ..details("111", "Quiet Harbour", Some(2019))
+        };
+        assert_eq!(
+            crate::images::store_provider_images(&state, provider.as_ref(), work.id, &described)
+                .await,
+            2,
+            "the film has a poster and a title image, and no backdrop"
+        );
+
+        let images = state
+            .database()
+            .images_of("work", &work.id.to_db_string())
+            .await
+            .expect("read");
+        let titles: Vec<_> = images
+            .iter()
+            .filter(|image| image.image_kind == "logo")
+            .collect();
+        assert_eq!(
+            titles.len(),
+            2,
+            "one width for the box it is drawn in, one for a fine screen"
+        );
+        assert!(titles
+            .iter()
+            .all(|image| image.relative_path.ends_with(".webp")));
+        assert_eq!(
+            images
+                .iter()
+                .filter(|image| image.image_kind == "poster")
+                .count(),
+            3,
+            "a title image arriving never disturbs the poster"
+        );
+
+        let root = state.config().directories.images();
+        for image in &titles {
+            assert!(
+                root.join(&image.relative_path).exists(),
+                "a row without its file is a broken picture"
+            );
+        }
     }
 
     #[tokio::test]
