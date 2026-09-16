@@ -205,12 +205,15 @@
   padding-top: 92px;
 }
 
-/* While a sheet is open the strip gives up its own margins: the one above is
-   room the strip no longer needs, and the one below would leave a band of
-   film under the sheet. The sheet carries its own footing. */
+/* While a sheet is open the whole strip becomes the panel: the sheet, the bar
+   and the row are one pane of glass with the film showing through all of it,
+   rather than a sheet sitting on a black gradient that hides what the sheet
+   was made see-through for. The runway above goes with it, since the sheet
+   starts where it used to start. */
 .player-bottom:has(.player-drawer-hold[data-open="yes"]) {
   padding-top: 0;
-  padding-bottom: 0;
+  background: var(--player-panel);
+  backdrop-filter: blur(18px);
 }
 
 .player-zone {
@@ -1245,10 +1248,11 @@
   overflow: hidden;
 }
 
+/* No surface of its own: the strip around it is the pane of glass, and a
+   second one laid on the first would darken the film twice over exactly where
+   the sheet is. */
 .player-drawer {
   padding: var(--gap) var(--player-inset) var(--gap-wide);
-  background: var(--player-panel);
-  backdrop-filter: blur(18px);
   color: var(--text);
 }
 

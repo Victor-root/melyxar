@@ -284,14 +284,14 @@ export function Overlay(props: Props) {
       {/* All of it inside the bottom strip rather than floating over it: a
           panel standing clear of the controls leaves a band of film between
           the two and reads as two things, when what a viewer sees is one. The
-          sheet goes under the row that opens it, and the strip grows upwards
-          because it is anchored to the bottom of the picture. */}
+          strip grows upwards because it is anchored to the bottom.
+
+          The sheet sits above the row that opens it rather than under it, so
+          that what it says lands on the picture. Under the row it lands at
+          the very bottom of the window, which on a wide film is the black
+          band the picture does not reach: a sheet you can see through, with
+          nothing behind it to see. */}
       <div className="player-bottom">
-        <Seek surroundings={surroundings} thumbnails={thumbnails} />
-        <div className="player-row">
-          <Place zone="bottom_left" surroundings={surroundings} />
-          <Place zone="bottom_right" surroundings={surroundings} />
-        </div>
         {playback.plan && (
           <Drawer
             work={props.work}
@@ -303,6 +303,11 @@ export function Overlay(props: Props) {
             t={props.t}
           />
         )}
+        <Seek surroundings={surroundings} thumbnails={thumbnails} />
+        <div className="player-row">
+          <Place zone="bottom_left" surroundings={surroundings} />
+          <Place zone="bottom_right" surroundings={surroundings} />
+        </div>
       </div>
     </div>
   );
