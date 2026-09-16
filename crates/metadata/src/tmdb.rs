@@ -39,8 +39,16 @@ const LARGEST_IMAGE: u64 = 16 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Everything asked for in one go, so one film costs one request rather than
-/// four.
-const DETAIL_EXTRAS: &str = "credits,release_dates,videos";
+/// five.
+const DETAIL_EXTRAS: &str = "credits,release_dates,videos,images";
+
+/// Which picture files the pictures asked for are worth reading.
+///
+/// The provider offers some title images as drawings rather than pixels, and
+/// reading those needs a piece the media tool is not always built with. A
+/// title image that shows up on one machine and not another is worse than none
+/// at all, so only what any build reads is considered.
+const READABLE_PICTURES: [&str; 4] = ["png", "jpg", "jpeg", "webp"];
 
 pub struct TmdbProvider {
     client: reqwest::Client,
@@ -153,6 +161,7 @@ impl MetadataProvider for TmdbProvider {
                 &[
                     ("language", language.to_string()),
                     ("append_to_response", DETAIL_EXTRAS.to_string()),
+                    ("include_image_language", image_languages(language)),
                 ],
             )
             .await?;
@@ -315,11 +324,34 @@ struct DetailsResponse {
     release_dates: Option<RawReleaseDates>,
     #[serde(default)]
     videos: Option<RawVideos>,
+    #[serde(default)]
+    images: Option<RawImages>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Named {
     name: String,
+}
+
+/// Only the title images are read here. The posters and backdrops come along
+/// in the same answer and are ignored: the film's own two pictures are named
+/// on the film itself, where the provider has already made the choice.
+#[derive(Debug, Default, Deserialize)]
+struct RawImages {
+    #[serde(default)]
+    logos: Vec<RawImage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawImage {
+    #[serde(default)]
+    file_path: Option<String>,
+    #[serde(default)]
+    iso_639_1: Option<String>,
+    #[serde(default)]
+    vote_average: f64,
+    #[serde(default)]
+    vote_count: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -517,6 +549,7 @@ fn details_from(raw: DetailsResponse, language: &str) -> MovieDetails {
         }),
         poster_path: raw.poster_path,
         backdrop_path: raw.backdrop_path,
+        logo_path: best_logo(raw.images.unwrap_or_default(), language),
         trailers,
     }
 }
@@ -524,6 +557,76 @@ fn details_from(raw: DetailsResponse, language: &str) -> MovieDetails {
 /// The year a date string carries.
 fn year_of(date: Option<&str>) -> Option<i32> {
     date?.get(..4)?.parse().ok()
+}
+
+/// The languages title images are asked for.
+///
+/// The library's own first, and English behind it: a great many films are
+/// drawn under an English title and under no other, so a library that asked
+/// for its language alone would show a plain line of text for most of its
+/// shelf. Pictures carrying no language at all are left out on purpose: a
+/// title image is a title, so it has one, and asking for them drags in every
+/// wordless backdrop the film has, measured at twice the answer for nothing.
+fn image_languages(language: &str) -> String {
+    let wanted = short_language(language);
+    match wanted == "en" {
+        true => wanted.to_string(),
+        false => format!("{wanted},en"),
+    }
+}
+
+/// A language as the provider writes it on a picture: two letters, no country.
+fn short_language(language: &str) -> String {
+    language
+        .split(['-', '_'])
+        .next()
+        .unwrap_or(language)
+        .to_lowercase()
+}
+
+/// The title image a film is shown under, among those the provider offers.
+///
+/// The language decides first: a shelf kept in one language wants the title
+/// drawn in that language, however well thought of another is. Among those
+/// left, the provider's own voters decide, which is the same thing that
+/// settles two films sharing a name.
+fn best_logo(images: RawImages, language: &str) -> Option<String> {
+    let wanted = short_language(language);
+    let mut offered: Vec<(u8, f64, i64, String)> = images
+        .logos
+        .into_iter()
+        .filter_map(|image| {
+            let path = image.file_path?;
+            if !is_readable_picture(&path) {
+                return None;
+            }
+            let tongue = image.iso_639_1.unwrap_or_default().to_lowercase();
+            let rank = match tongue.as_str() {
+                spoken if spoken == wanted => 0,
+                "en" => 1,
+                _ => return None,
+            };
+            Some((rank, image.vote_average, image.vote_count, path))
+        })
+        .collect();
+
+    offered.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then(right.1.total_cmp(&left.1))
+            .then(right.2.cmp(&left.2))
+    });
+    offered.into_iter().next().map(|(_, _, _, path)| path)
+}
+
+/// Whether a picture is in a form the media tool reads whatever it was built
+/// with.
+fn is_readable_picture(path: &str) -> bool {
+    let extension = match path.rsplit_once('.') {
+        Some((_, extension)) => extension.to_lowercase(),
+        None => return false,
+    };
+    READABLE_PICTURES.contains(&extension.as_str())
 }
 
 /// The age rating, from the country that goes with the language asked for.
@@ -613,6 +716,22 @@ mod tests {
                 {"name": "Bande annonce", "site": "YouTube", "key": "abc", "type": "Trailer",
                  "official": true, "iso_639_1": "fr"},
                 {"name": "Interview", "site": "YouTube", "key": "def", "type": "Featurette"}
+            ]
+        },
+        "images": {
+            "posters": [{"file_path": "/another-poster.jpg", "iso_639_1": "fr"}],
+            "backdrops": [],
+            "logos": [
+                {"file_path": "/drawn.svg", "iso_639_1": "fr",
+                 "vote_average": 9.0, "vote_count": 30},
+                {"file_path": "/english-favourite.png", "iso_639_1": "en",
+                 "vote_average": 8.0, "vote_count": 20},
+                {"file_path": "/french.png", "iso_639_1": "fr",
+                 "vote_average": 1.2, "vote_count": 2},
+                {"file_path": "/french-unloved.png", "iso_639_1": "fr",
+                 "vote_average": 1.2, "vote_count": 1},
+                {"file_path": "/spanish.png", "iso_639_1": "es",
+                 "vote_average": 9.5, "vote_count": 50}
             ]
         }
     }"#;
@@ -748,6 +867,93 @@ mod tests {
         assert_eq!(year_of(None), None);
         assert_eq!(year_of(Some("bientot")), None);
     }
+
+    #[test]
+    fn the_title_image_is_the_one_drawn_in_the_language_of_the_shelf() {
+        assert_eq!(
+            details("fr").logo_path.as_deref(),
+            Some("/french.png"),
+            "a shelf kept in one language wants its own title, \
+             however well thought of another is"
+        );
+        assert_eq!(
+            details("en").logo_path.as_deref(),
+            Some("/english-favourite.png")
+        );
+    }
+
+    #[test]
+    fn a_title_image_the_media_tool_might_not_read_is_not_chosen() {
+        assert_ne!(
+            details("fr").logo_path.as_deref(),
+            Some("/drawn.svg"),
+            "reading a drawing needs a piece the media tool is not always \
+             built with, so it would show on one machine and not another"
+        );
+    }
+
+    #[test]
+    fn a_title_image_in_a_language_nobody_here_reads_is_left_alone() {
+        let raw: DetailsResponse = serde_json::from_str(
+            r#"{"id": 1, "images": {"logos": [
+                {"file_path": "/spanish.png", "iso_639_1": "es",
+                 "vote_average": 9.5, "vote_count": 50}]}}"#,
+        )
+        .expect("parses");
+        assert_eq!(
+            details_from(raw, "fr").logo_path,
+            None,
+            "a title nobody can read is worse than the title written out"
+        );
+    }
+
+    #[test]
+    fn among_titles_of_the_same_language_the_provider_settles_it() {
+        let raw: DetailsResponse = serde_json::from_str(
+            r#"{"id": 1, "images": {"logos": [
+                {"file_path": "/seen-once.png", "iso_639_1": "fr",
+                 "vote_average": 1.2, "vote_count": 1},
+                {"file_path": "/seen-often.png", "iso_639_1": "fr",
+                 "vote_average": 1.2, "vote_count": 9}]}}"#,
+        )
+        .expect("parses");
+        assert_eq!(
+            details_from(raw, "fr").logo_path.as_deref(),
+            Some("/seen-often.png"),
+            "two titles rated alike are told apart by how many said so"
+        );
+    }
+
+    #[test]
+    fn a_film_drawn_under_no_title_at_all_simply_has_none() {
+        let raw: DetailsResponse = serde_json::from_str(r#"{"id": 1}"#).expect("parses");
+        assert_eq!(details_from(raw, "fr").logo_path, None);
+    }
+
+    #[test]
+    fn title_images_are_asked_for_in_the_language_of_the_shelf_and_in_english() {
+        assert_eq!(image_languages("fr"), "fr,en");
+        assert_eq!(image_languages("fr-FR"), "fr,en");
+        assert_eq!(
+            image_languages("en"),
+            "en",
+            "asking for English twice asks for nothing more"
+        );
+        assert!(
+            !image_languages("fr").contains("null"),
+            "pictures carrying no language drag in every wordless backdrop \
+             the film has, for a title image that has a language by nature"
+        );
+    }
+
+    #[test]
+    fn only_pictures_any_build_of_the_media_tool_reads_are_kept() {
+        assert!(is_readable_picture("/a.png"));
+        assert!(is_readable_picture("/a.PNG"));
+        assert!(is_readable_picture("/a.jpg"));
+        assert!(!is_readable_picture("/a.svg"));
+        assert!(!is_readable_picture("/no-extension-at-all"));
+    }
 }
 
 /// Checks made against the provider itself.
@@ -771,6 +977,33 @@ mod live {
             Err(ProviderError::Unauthorised) => {}
             other => panic!("a refused key must be recognised as such, got {other:?}"),
         }
+    }
+
+    /// The one thing no invented answer can check: that the provider still
+    /// sends title images in the shape read here, and that a well known film
+    /// really comes back with one.
+    #[tokio::test]
+    #[ignore = "needs the network"]
+    async fn a_famous_film_really_comes_back_with_a_title_image() {
+        let Some(key) = crate::defaults::provider_key() else {
+            eprintln!("no key carried here, the provider was not asked");
+            return;
+        };
+        let provider = TmdbProvider::new(key).expect("a client");
+
+        // A film picked from a public catalogue for being well illustrated,
+        // and drawn under a title in both languages asked for here.
+        let film = provider
+            .movie_details("603", "fr")
+            .await
+            .expect("the provider answered");
+
+        let path = film.logo_path.expect("a title image came back");
+        assert!(
+            is_readable_picture(&path),
+            "a title image must be in a form any build of the media tool \
+             reads, got {path}"
+        );
     }
 
     #[tokio::test]

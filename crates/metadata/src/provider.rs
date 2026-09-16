@@ -74,6 +74,10 @@ pub struct MovieDetails {
     pub collection: Option<Collection>,
     pub poster_path: Option<String>,
     pub backdrop_path: Option<String>,
+    /// The film's title drawn as the film itself draws it, a picture rather
+    /// than a line of text. A kind of its own: it is neither the poster nor
+    /// the backdrop, and plenty of films have none.
+    pub logo_path: Option<String>,
     pub trailers: Vec<Trailer>,
 }
 

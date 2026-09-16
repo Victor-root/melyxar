@@ -32,6 +32,10 @@ pub const BACKDROP_WIDTHS: [u32; 3] = [640, 1280, 1920];
 /// A face is shown in a small round frame, and a screen with fine pixels wants
 /// twice what it measures. Two widths cover both and no more.
 pub const PHOTO_WIDTHS: [u32; 2] = [96, 192];
+/// A title image is drawn in a box a few hundred points across, beside the way
+/// back out of a film. Like a face, it wants what it measures and twice that,
+/// and nothing beyond: it is never shown large.
+pub const LOGO_WIDTHS: [u32; 2] = [340, 680];
 
 /// Builds the conversion of one picture to every width at once.
 ///
@@ -290,6 +294,61 @@ mod tests {
         assert!(
             PHOTO_WIDTHS[0] < POSTER_WIDTHS[0],
             "a face in a round frame is the smallest picture prepared"
+        );
+        assert!(LOGO_WIDTHS.windows(2).all(|pair| pair[0] < pair[1]));
+        assert_eq!(
+            LOGO_WIDTHS[1],
+            LOGO_WIDTHS[0] * 2,
+            "the second width exists for a screen with fine pixels, \
+             so it is exactly twice the first"
+        );
+    }
+
+    /// A title image is the only picture here carrying transparency, and it is
+    /// drawn over a film: were it flattened, the wordmark would arrive in a
+    /// box of its own colour. Nothing in the command asks for transparency to
+    /// be kept, so this is what says it survives all the same.
+    #[tokio::test]
+    async fn a_picture_that_sees_through_itself_still_does_afterwards() {
+        let folder = tempfile::tempdir().expect("temporary directory");
+        let source = folder.path().join("source.png");
+        let made = TokioCommand::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=#ffffff@0.0:s=400x200,format=rgba",
+                "-frames:v",
+                "1",
+            ])
+            .arg(&source)
+            .output()
+            .await;
+        if !made.is_ok_and(|output| output.status.success()) {
+            eprintln!("no media tool here, the conversion was not exercised");
+            return;
+        }
+
+        let written = folder.path().join("logo-340.webp");
+        resize(Path::new("ffmpeg"), &source, &[(340, &written)])
+            .await
+            .expect("the tool accepted the command");
+
+        let read_back = TokioCommand::new("ffmpeg")
+            .args(["-hide_banner", "-loglevel", "error", "-i"])
+            .arg(&written)
+            .args(["-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgba", "-"])
+            .output()
+            .await
+            .expect("the picture was read back");
+        assert_eq!(
+            read_back.stdout.get(3),
+            Some(&0),
+            "the first pixel was fully see-through and must still be"
         );
     }
 }
