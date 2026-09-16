@@ -63,6 +63,11 @@ export type Panel =
 export const SHAPES = ["auto", "cover", "stretch"] as const;
 export type Shape = (typeof SHAPES)[number];
 
+/* How large an icon is drawn, read from the stylesheet so that the sizes live
+   in one place and a viewer changing them later changes them everywhere. */
+const ICON = 27;
+const PLAY_ICON = 34;
+
 /** How far the words can be shifted, and by how much at a time, in seconds. */
 const OFFSET_STEP = 0.5;
 const OFFSET_FURTHEST = 15;
@@ -329,7 +334,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           onClick={surroundings.onClose}
           aria-label={t("player.close")}
         >
-          <BackIcon />
+          <BackIcon size={ICON} />
         </button>
       );
 
@@ -356,7 +361,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           onClick={playback.playOrPause}
           aria-label={t(playback.playing ? "player.pause" : "player.play")}
         >
-          {playback.playing ? <PauseIcon size={26} /> : <PlayIcon size={26} />}
+          {playback.playing ? <PauseIcon size={PLAY_ICON} /> : <PlayIcon size={PLAY_ICON} />}
         </button>
       );
 
@@ -367,7 +372,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           onClick={() => playback.stepBy(-A_STEP)}
           aria-label={t("player.back_ten")}
         >
-          <StepBackIcon seconds={A_STEP} />
+          <StepBackIcon seconds={A_STEP} size={ICON} />
         </button>
       );
 
@@ -378,7 +383,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           onClick={() => playback.stepBy(A_STEP)}
           aria-label={t("player.on_ten")}
         >
-          <StepOnIcon seconds={A_STEP} />
+          <StepOnIcon seconds={A_STEP} size={ICON} />
         </button>
       );
 
@@ -402,7 +407,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           disabled={back ? on < 0 && surroundings.at < 3 : wanted >= surroundings.chapters.length}
           aria-label={t(back ? "player.previous_chapter" : "player.next_chapter")}
         >
-          {back ? <PreviousChapterIcon /> : <NextChapterIcon />}
+          {back ? <PreviousChapterIcon size={ICON} /> : <NextChapterIcon size={ICON} />}
         </button>
       );
     }
@@ -446,7 +451,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           aria-pressed={playback.favourite}
           aria-label={t(playback.favourite ? "player.unfavourite" : "player.favourite")}
         >
-          <HeartIcon filled={playback.favourite} />
+          <HeartIcon filled={playback.favourite} size={ICON} />
         </button>
       );
 
@@ -463,7 +468,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           aria-expanded={panel === "subtitles"}
           aria-label={t("work.subtitles")}
         >
-          <SubtitlesIcon />
+          <SubtitlesIcon size={ICON} />
         </button>
       );
 
@@ -478,7 +483,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           aria-expanded={panel === "audio"}
           aria-label={t("work.audio")}
         >
-          <AudioIcon />
+          <AudioIcon size={ICON} />
         </button>
       );
 
@@ -493,7 +498,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           aria-expanded={panel?.startsWith("settings") ?? false}
           aria-label={t("player.settings")}
         >
-          <SettingsIcon />
+          <SettingsIcon size={ICON} />
         </button>
       );
 
@@ -507,7 +512,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           onClick={playback.intoTheCorner}
           aria-label={t("player.corner")}
         >
-          <CornerIcon />
+          <CornerIcon size={ICON} />
         </button>
       );
 
@@ -518,7 +523,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           onClick={surroundings.goFullscreen}
           aria-label={t(surroundings.fullscreen ? "player.leave_fullscreen" : "player.fullscreen")}
         >
-          <FullscreenIcon leaving={surroundings.fullscreen} />
+          <FullscreenIcon leaving={surroundings.fullscreen} size={ICON} />
         </button>
       );
 
@@ -538,7 +543,7 @@ function Volume({ surroundings }: { surroundings: Surroundings }) {
         onClick={() => playback.setMuted(!playback.muted)}
         aria-label={t(playback.muted ? "player.unmute" : "player.mute")}
       >
-        <VolumeIcon level={loud === 0 ? "off" : loud < 0.5 ? "low" : "high"} />
+        <VolumeIcon level={loud === 0 ? "off" : loud < 0.5 ? "low" : "high"} size={ICON} />
       </button>
       <span className="player-loudness" style={{ ["--filled" as string]: `${loud * 100}%` }}>
         <input
