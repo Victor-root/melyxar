@@ -34,6 +34,7 @@ import type { Appearance } from "./appearance";
 import { storedArrangement } from "./arrangement";
 import { canBePlayedAsItIs, usePlayback } from "./engine";
 import { PlaybackFacts } from "./facts";
+import { useFullscreen } from "./fullscreen";
 import { languageName } from "./languages";
 import { markFor, useBranding } from "./logo";
 import { Overlay } from "./overlay";
@@ -130,13 +131,11 @@ export function Player({
     words,
     holdTheWords,
     onWordsRead,
-    playOrPause,
   } = playback;
 
-  /* What is sent fullscreen: the picture and everything drawn over it. An
-     element sent on its own leaves every control behind on a page nobody can
-     see. */
+  /* What is sent fullscreen: the picture and everything drawn over it. */
   const stage = useRef<HTMLDivElement>(null);
+  const fullscreen = useFullscreen(stage);
   /* Which panel is open, if any. Shut between films: one is opened to look at
      one film in particular. */
   const [panel, setPanel] = useState<Panel | null>(null);
@@ -229,8 +228,14 @@ export function Player({
             autoPlay
             /* The picture itself starts and stops the film, the way every
                player does it: the button is a long way from where the eyes
-               are. */
-            onClick={playOrPause}
+               are. Twice puts it fullscreen, which is the other thing every
+               player does and the reason a single click is held for a moment
+               before it acts. */
+            onClick={() => playback.pictureClicked(false)}
+            onDoubleClick={() => {
+              playback.pictureClicked(true);
+              fullscreen.toggle();
+            }}
           >
             {shownSubtitle?.url && (
               <track
@@ -258,21 +263,25 @@ export function Player({
             </p>
           )}
 
-          {/* Named steps rather than a bar alone: a bar filling at an unknown
-              rate says only that something is happening, while "reading the
-              film" says which part is slow when one of them is. */}
+          {/* A ring turning, and under it what the server is actually doing.
+              The ring says something is happening, which a line of text on a
+              black screen does badly; the words say which part is slow when
+              one of them is, which a ring cannot say at all. */}
           {rebuilt && readyPicture !== pictureKey && !failed && (
-            <p className="player-notice">
-              {t(`player.step.${preparing?.step ?? "starting"}`)}
-              {preparing && preparing.wanted > 0 && (
-                <span className="player-notice-why">
-                  {t("player.segments_ready", {
-                    ready: preparing.ready,
-                    wanted: preparing.wanted,
-                  })}
-                </span>
-              )}
-            </p>
+            <div className="player-working">
+              <span className="player-spinner" aria-hidden="true" />
+              <p className="player-notice player-notice-bare">
+                {t(`player.step.${preparing?.step ?? "starting"}`)}
+                {preparing && preparing.wanted > 0 && (
+                  <span className="player-notice-why">
+                    {t("player.segments_ready", {
+                      ready: preparing.ready,
+                      wanted: preparing.wanted,
+                    })}
+                  </span>
+                )}
+              </p>
+            </div>
           )}
 
           {/* The words take as long as reading the film takes, and until they
@@ -294,6 +303,7 @@ export function Player({
           shape={shape}
           onShape={setShape}
           stage={stage}
+          fullscreen={fullscreen}
           panel={panel}
           onPanel={setPanel}
           onClose={onClose}

@@ -157,35 +157,42 @@ export function AudioIcon(props: IconProps) {
   );
 }
 
-/** How loud, in three states, because a slider at nought is not the same as
- *  a sound switched off. */
-export function VolumeIcon({ level, ...props }: IconProps & { level: "off" | "low" | "high" }) {
+/** How loud, in four states: a slider at nought is not the same as a sound
+ *  switched off, and one wave is not the same as three. */
+export function VolumeIcon({
+  level,
+  ...props
+}: IconProps & { level: "off" | "low" | "middling" | "high" }) {
   return (
     <Icon {...props}>
       <path
-        d="M4 9.4h3.2L12 5.4v13.2L7.2 14.6H4Z"
+        d="M3.4 9.4h3L11.4 5.2v13.6L6.4 14.6h-3Z"
         fill="currentColor"
         stroke="currentColor"
         strokeWidth={1.4}
         strokeLinejoin="round"
       />
       {level === "off" ? (
-        <path d="M16.2 9.8l4.4 4.4M20.6 9.8l-4.4 4.4" />
+        <path d="M15.4 9.6l4.8 4.8M20.2 9.6l-4.8 4.8" />
       ) : (
         <>
-          <path d="M15.6 9.6a3.6 3.6 0 0 1 0 4.8" />
-          {level === "high" && <path d="M18.4 7.2a7.2 7.2 0 0 1 0 9.6" />}
+          <path d="M14.4 9.8a3.1 3.1 0 0 1 0 4.4" />
+          {level !== "low" && <path d="M17 7.6a6.3 6.3 0 0 1 0 8.8" />}
+          {level === "high" && <path d="M19.6 5.4a9.4 9.4 0 0 1 0 13.2" />}
         </>
       )}
     </Icon>
   );
 }
 
+/* Worked out from its own geometry rather than copied from somewhere, which
+   is how the last one ended up with a hole that leaned to one side: eight
+   teeth around one middle, and a circle on that same middle. */
 export function SettingsIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <circle cx="12" cy="12" r="3.1" />
-      <path d="M19.6 14.4a1.5 1.5 0 0 0 .3 1.66l.06.05a1.8 1.8 0 1 1-2.55 2.55l-.05-.06a1.5 1.5 0 0 0-1.66-.3 1.5 1.5 0 0 0-.9 1.37v.16a1.8 1.8 0 1 1-3.6 0v-.09a1.5 1.5 0 0 0-.99-1.37 1.5 1.5 0 0 0-1.65.3l-.06.06a1.8 1.8 0 1 1-2.55-2.55l.06-.05a1.5 1.5 0 0 0 .3-1.66 1.5 1.5 0 0 0-1.38-.9h-.16a1.8 1.8 0 1 1 0-3.6h.09a1.5 1.5 0 0 0 1.37-.99 1.5 1.5 0 0 0-.3-1.65l-.06-.06A1.8 1.8 0 1 1 8.5 4.88l.05.06a1.5 1.5 0 0 0 1.66.3h.07a1.5 1.5 0 0 0 .9-1.38v-.16a1.8 1.8 0 1 1 3.6 0v.09a1.5 1.5 0 0 0 .9 1.37 1.5 1.5 0 0 0 1.66-.3l.05-.06a1.8 1.8 0 1 1 2.55 2.55l-.06.05a1.5 1.5 0 0 0-.3 1.66v.07a1.5 1.5 0 0 0 1.38.9h.16a1.8 1.8 0 1 1 0 3.6h-.09a1.5 1.5 0 0 0-1.37.9Z" />
+      <path d="M9.81 2.86L14.19 2.86L14.79 5.26L16.91 3.99L20.01 7.09L18.74 9.21L21.14 9.81L21.14 14.19L18.74 14.79L20.01 16.91L16.91 20.01L14.79 18.74L14.19 21.14L9.81 21.14L9.21 18.74L7.09 20.01L3.99 16.91L5.26 14.79L2.86 14.19L2.86 9.81L5.26 9.21L3.99 7.09L7.09 3.99L9.21 5.26Z" />
+      <circle cx="12" cy="12" r="3.4" />
     </Icon>
   );
 }

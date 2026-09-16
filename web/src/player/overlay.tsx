@@ -24,6 +24,7 @@ import type { PlaybackChapter, PlaybackThumbnails, PlaybackTrack } from "../api"
 import type { Arrangement, Control, Zone } from "./arrangement";
 import { A_STEP, SPEEDS } from "./engine";
 import type { Playback } from "./engine";
+import type { Fullscreen } from "./fullscreen";
 import {
   AudioIcon,
   BackIcon,
@@ -83,6 +84,9 @@ interface Props {
   onShape: (shape: Shape) => void;
   /** What goes fullscreen, which is the picture and its controls together. */
   stage: React.RefObject<HTMLDivElement | null>;
+  /** Whether the screen is filled, and how to ask for it either way. The
+   *  picture answers to a double click too, so neither owns it. */
+  fullscreen: Fullscreen;
   panel: Panel | null;
   onPanel: (panel: Panel | null) => void;
   onClose: () => void;
@@ -147,22 +151,18 @@ function chapterAround(chapters: PlaybackChapter[], at: number): number {
 }
 
 export function Overlay(props: Props) {
-  const { playback, stage } = props;
+  const { playback, stage, fullscreen } = props;
   const { at, length, playing } = playback;
 
   /* Whether the controls have faded out. Kept here rather than in the
      stylesheet alone because the panels and the bar answer to it too: a menu
      left open behind a faded bar is a menu nobody can shut. */
   const [away, setAway] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
   const stir = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    const tell = () => setFullscreen(document.fullscreenElement !== null);
-    tell();
-    document.addEventListener("fullscreenchange", tell);
-    return () => document.removeEventListener("fullscreenchange", tell);
-  }, []);
+  /* Where the button that opened the panel stands, across the picture. A panel
+     that always opens at one end of the screen leaves a viewer looking for the
+     link between the button they pressed and the list that appeared. */
+  const [anchor, setAnchor] = useState<number | null>(null);
 
   /* Shown while anything is moving, while nothing is playing, and while a
      panel is open: a paused film is a film somebody is about to do something
@@ -191,14 +191,6 @@ export function Overlay(props: Props) {
       surface.removeEventListener("pointerdown", wake);
     };
   }, [stage, held, playback.pictureKey]);
-
-  const goFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-    } else {
-      void stage.current?.requestFullscreen?.();
-    }
-  }, [stage]);
 
   /* The keyboard, which is the other half of every control below. Held here
      rather than on the page so that one place says what a key does, and so
@@ -242,7 +234,7 @@ export function Overlay(props: Props) {
           loudness(event.key === "ArrowUp" ? 0.05 : -0.05);
           break;
         case "f":
-          goFullscreen();
+          fullscreen.toggle();
           break;
         case "m":
           playback.setMuted(!playback.muted);
@@ -254,17 +246,28 @@ export function Overlay(props: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [playback, props, goFullscreen]);
+  }, [playback, props, fullscreen]);
+
+  /* Opened from a button, which says where it stands as it does so. */
+  const openFrom = useCallback(
+    (panel: Panel | null, from?: HTMLElement | null) => {
+      const surface = stage.current?.getBoundingClientRect();
+      const button = from?.getBoundingClientRect();
+      setAnchor(surface && button ? button.x + button.width / 2 - surface.x : null);
+      props.onPanel(panel);
+    },
+    [stage, props],
+  );
 
   const chapters = playback.plan?.chapters ?? [];
   const thumbnails = playback.plan?.thumbnails ?? null;
   const surroundings: Surroundings = {
     ...props,
-    fullscreen,
-    goFullscreen,
     chapters,
     at,
     length,
+    anchor,
+    openFrom,
   };
 
   return (
@@ -295,11 +298,12 @@ export function Overlay(props: Props) {
 
 /** What every control is handed, which is the player and its surroundings. */
 interface Surroundings extends Props {
-  fullscreen: boolean;
-  goFullscreen: () => void;
   chapters: PlaybackChapter[];
   at: number;
   length: number;
+  /** Where the button that opened the panel stands, across the picture. */
+  anchor: number | null;
+  openFrom: (panel: Panel | null, from?: HTMLElement | null) => void;
 }
 
 /** One of the places a control can sit, drawn from the arrangement. */
@@ -323,7 +327,7 @@ function Place({ zone, surroundings }: { zone: Zone; surroundings: Surroundings 
  * an empty list is worse than not offering it.
  */
 function One({ control, surroundings }: { control: Control; surroundings: Surroundings }) {
-  const { playback, t, panel, onPanel } = surroundings;
+  const { playback, t, panel } = surroundings;
   const plan = playback.plan;
 
   switch (control) {
@@ -464,7 +468,12 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           className={`player-button${plan.chosen_subtitle_id ? " player-button-lit" : ""}${
             panel === "subtitles" ? " player-button-open" : ""
           }`}
-          onClick={() => onPanel(panel === "subtitles" ? null : "subtitles")}
+          onClick={(event) =>
+            surroundings.openFrom(
+              panel === "subtitles" ? null : "subtitles",
+              event.currentTarget,
+            )
+          }
           aria-expanded={panel === "subtitles"}
           aria-label={t("work.subtitles")}
         >
@@ -479,7 +488,9 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
       return (
         <button
           className={`player-button${panel === "audio" ? " player-button-open" : ""}`}
-          onClick={() => onPanel(panel === "audio" ? null : "audio")}
+          onClick={(event) =>
+            surroundings.openFrom(panel === "audio" ? null : "audio", event.currentTarget)
+          }
           aria-expanded={panel === "audio"}
           aria-label={t("work.audio")}
         >
@@ -494,7 +505,12 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
       return (
         <button
           className={`player-button${panel?.startsWith("settings") ? " player-button-open" : ""}`}
-          onClick={() => onPanel(panel?.startsWith("settings") ? null : "settings")}
+          onClick={(event) =>
+            surroundings.openFrom(
+              panel?.startsWith("settings") ? null : "settings",
+              event.currentTarget,
+            )
+          }
           aria-expanded={panel?.startsWith("settings") ?? false}
           aria-label={t("player.settings")}
         >
@@ -520,10 +536,12 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
       return (
         <button
           className="player-button"
-          onClick={surroundings.goFullscreen}
-          aria-label={t(surroundings.fullscreen ? "player.leave_fullscreen" : "player.fullscreen")}
+          onClick={surroundings.fullscreen.toggle}
+          aria-label={t(
+            surroundings.fullscreen.filling ? "player.leave_fullscreen" : "player.fullscreen",
+          )}
         >
-          <FullscreenIcon leaving={surroundings.fullscreen} size={ICON} />
+          <FullscreenIcon leaving={surroundings.fullscreen.filling} size={ICON} />
         </button>
       );
 
@@ -543,7 +561,10 @@ function Volume({ surroundings }: { surroundings: Surroundings }) {
         onClick={() => playback.setMuted(!playback.muted)}
         aria-label={t(playback.muted ? "player.unmute" : "player.mute")}
       >
-        <VolumeIcon level={loud === 0 ? "off" : loud < 0.5 ? "low" : "high"} size={ICON} />
+        <VolumeIcon
+          level={loud === 0 ? "off" : loud < 0.34 ? "low" : loud < 0.67 ? "middling" : "high"}
+          size={ICON}
+        />
       </button>
       {/* The share is handed over as a bare number rather than as a width, so
           the stylesheet can work out where the handle actually stands: a
@@ -778,46 +799,88 @@ function Line({
   );
 }
 
-/** Whatever panel is open, drawn where the button that opens it stands. */
+/** What one open panel is: a heading, what it leads back to, and its lines. */
+interface Sheet {
+  title: string;
+  /** The panel this one was reached from, for the arrow in its heading. */
+  from?: Panel;
+  lines: React.ReactNode;
+}
+
+/**
+ * Whatever panel is open, drawn where the button that opens it stands.
+ *
+ * Each one says what it is rather than drawing itself, and the one panel
+ * below draws all of them. That is what keeps where a panel stands, how it
+ * shuts and how it goes back one thing rather than eight.
+ */
 function Panels({ surroundings }: { surroundings: Surroundings }) {
-  const { playback, t, panel, onPanel, naming } = surroundings;
+  const { playback, onPanel } = surroundings;
   const plan = playback.plan;
   if (!plan) {
     return null;
   }
 
   const shut = () => onPanel(null);
-
-  if (panel === "subtitles") {
-    return (
-      <Menu title={t("work.subtitles")} onShut={shut}>
-        <Line
-          label={t("player.no_subtitle")}
-          chosen={!plan.chosen_subtitle_id}
-          onPick={() => {
-            playback.choose(playback.audioId, null);
-            shut();
-          }}
-        />
-        {plan.subtitles.map((track) => (
-          <Line
-            key={track.id}
-            label={naming(track)}
-            chosen={plan.chosen_subtitle_id === track.id}
-            onPick={() => {
-              playback.choose(playback.audioId, track.id);
-              shut();
-            }}
-          />
-        ))}
-      </Menu>
-    );
+  const sheet = sheetFor(surroundings, plan, shut);
+  if (!sheet) {
+    return null;
   }
 
-  if (panel === "audio") {
-    return (
-      <Menu title={t("work.audio")} onShut={shut}>
-        {plan.audio.map((track) => (
+  return (
+    <Menu
+      title={sheet.title}
+      onShut={shut}
+      onBack={sheet.from && (() => onPanel(sheet.from ?? null))}
+      anchor={surroundings.anchor}
+    >
+      {sheet.lines}
+    </Menu>
+  );
+}
+
+/** Which panel is open and what is in it, with nothing said about where it
+ *  is drawn. */
+function sheetFor(
+  surroundings: Surroundings,
+  plan: NonNullable<Playback["plan"]>,
+  shut: () => void,
+): Sheet | null {
+  const { playback, t, panel, onPanel, naming } = surroundings;
+
+  switch (panel) {
+    case "subtitles":
+      return {
+        title: t("work.subtitles"),
+        lines: (
+          <>
+            <Line
+              label={t("player.no_subtitle")}
+              chosen={!plan.chosen_subtitle_id}
+              onPick={() => {
+                playback.choose(playback.audioId, null);
+                shut();
+              }}
+            />
+            {plan.subtitles.map((track) => (
+              <Line
+                key={track.id}
+                label={naming(track)}
+                chosen={plan.chosen_subtitle_id === track.id}
+                onPick={() => {
+                  playback.choose(playback.audioId, track.id);
+                  shut();
+                }}
+              />
+            ))}
+          </>
+        ),
+      };
+
+    case "audio":
+      return {
+        title: t("work.audio"),
+        lines: plan.audio.map((track) => (
           <Line
             key={track.id}
             label={naming(track)}
@@ -827,161 +890,182 @@ function Panels({ surroundings }: { surroundings: Surroundings }) {
               shut();
             }}
           />
-        ))}
-      </Menu>
-    );
-  }
+        )),
+      };
 
-  if (panel === "settings") {
-    return (
-      <Menu title={t("player.settings")} onShut={shut}>
-        <Line
-          label={t("player.shape")}
-          value={t(`player.shape.${surroundings.shape}`)}
-          into
-          onPick={() => onPanel("settings.shape")}
-        />
-        <Line
-          label={t("player.speed")}
-          value={`${playback.speed}×`}
-          into
-          onPick={() => onPanel("settings.speed")}
-        />
-        <Line
-          label={t("player.quality")}
-          value={qualityName(playback.quality, t("player.quality.as_it_is"))}
-          into
-          onPick={() => onPanel("settings.quality")}
-        />
-        <Line
-          label={t("player.repeat")}
-          value={t(playback.repeat ? "player.repeat.film" : "player.repeat.none")}
-          into
-          onPick={() => onPanel("settings.repeat")}
-        />
-        <Line
-          label={t("player.words_offset")}
-          value={`${playback.wordsOffset > 0 ? "+" : ""}${playback.wordsOffset.toFixed(1)} s`}
-          into
-          onPick={() => onPanel("settings.words_offset")}
-        />
-        <Line
-          label={t("player.keep_controls_up")}
-          chosen={surroundings.settings.keepTheControlsUp}
-          onPick={() =>
-            surroundings.onSettings({
-              keepTheControlsUp: !surroundings.settings.keepTheControlsUp,
-            })
-          }
-        />
-        <Line label={t("facts.title")} into onPick={() => onPanel("facts")} />
-      </Menu>
-    );
-  }
+    case "settings":
+      return {
+        title: t("player.settings"),
+        lines: (
+          <>
+            <Line
+              label={t("player.shape")}
+              value={t(`player.shape.${surroundings.shape}`)}
+              into
+              onPick={() => onPanel("settings.shape")}
+            />
+            <Line
+              label={t("player.speed")}
+              value={`${playback.speed}×`}
+              into
+              onPick={() => onPanel("settings.speed")}
+            />
+            <Line
+              label={t("player.quality")}
+              value={qualityName(playback.quality, t("player.quality.as_it_is"))}
+              into
+              onPick={() => onPanel("settings.quality")}
+            />
+            <Line
+              label={t("player.repeat")}
+              value={t(playback.repeat ? "player.repeat.film" : "player.repeat.none")}
+              into
+              onPick={() => onPanel("settings.repeat")}
+            />
+            <Line
+              label={t("player.words_offset")}
+              value={`${playback.wordsOffset > 0 ? "+" : ""}${playback.wordsOffset.toFixed(1)} s`}
+              into
+              onPick={() => onPanel("settings.words_offset")}
+            />
+            <Line
+              label={t("player.keep_controls_up")}
+              chosen={surroundings.settings.keepTheControlsUp}
+              onPick={() =>
+                surroundings.onSettings({
+                  keepTheControlsUp: !surroundings.settings.keepTheControlsUp,
+                })
+              }
+            />
+            <Line label={t("facts.title")} into onPick={() => onPanel("facts")} />
+          </>
+        ),
+      };
 
-  if (panel === "settings.shape") {
-    return (
-      <Menu title={t("player.shape")} onShut={shut} onBack={() => onPanel("settings")}>
-        {SHAPES.map((shape) => (
+    case "settings.shape":
+      return {
+        title: t("player.shape"),
+        from: "settings",
+        lines: SHAPES.map((shape) => (
           <Line
             key={shape}
             label={t(`player.shape.${shape}`)}
             chosen={surroundings.shape === shape}
             onPick={() => surroundings.onShape(shape)}
           />
-        ))}
-      </Menu>
-    );
-  }
+        )),
+      };
 
-  if (panel === "settings.speed") {
-    return (
-      <Menu title={t("player.speed")} onShut={shut} onBack={() => onPanel("settings")}>
-        {SPEEDS.map((speed) => (
+    case "settings.speed":
+      return {
+        title: t("player.speed"),
+        from: "settings",
+        lines: SPEEDS.map((speed) => (
           <Line
             key={speed}
             label={`${speed}×`}
             chosen={playback.speed === speed}
             onPick={() => playback.setSpeed(speed)}
           />
-        ))}
-      </Menu>
-    );
-  }
+        )),
+      };
 
-  if (panel === "settings.quality") {
-    return (
-      <Menu title={t("player.quality")} onShut={shut} onBack={() => onPanel("settings")}>
-        {QUALITIES.map((one) => (
+    case "settings.quality":
+      return {
+        title: t("player.quality"),
+        from: "settings",
+        lines: QUALITIES.map((one) => (
           <Line
             key={one.key}
             label={qualityName(one, t("player.quality.as_it_is"))}
             chosen={playback.quality.key === one.key}
             onPick={() => playback.setQuality(one.key)}
           />
-        ))}
-      </Menu>
-    );
-  }
+        )),
+      };
 
-  if (panel === "settings.repeat") {
-    return (
-      <Menu title={t("player.repeat")} onShut={shut} onBack={() => onPanel("settings")}>
-        <Line
-          label={t("player.repeat.none")}
-          chosen={!playback.repeat}
-          onPick={() => playback.setRepeat(false)}
-        />
-        <Line
-          label={t("player.repeat.film")}
-          chosen={playback.repeat}
-          onPick={() => playback.setRepeat(true)}
-        />
-      </Menu>
-    );
-  }
+    case "settings.repeat":
+      return {
+        title: t("player.repeat"),
+        from: "settings",
+        lines: (
+          <>
+            <Line
+              label={t("player.repeat.none")}
+              chosen={!playback.repeat}
+              onPick={() => playback.setRepeat(false)}
+            />
+            <Line
+              label={t("player.repeat.film")}
+              chosen={playback.repeat}
+              onPick={() => playback.setRepeat(true)}
+            />
+          </>
+        ),
+      };
 
-  if (panel === "settings.words_offset") {
-    const move = (by: number) =>
-      playback.setWordsOffset(
-        Math.min(OFFSET_FURTHEST, Math.max(-OFFSET_FURTHEST, playback.wordsOffset + by)),
-      );
-    return (
-      <Menu title={t("player.words_offset")} onShut={shut} onBack={() => onPanel("settings")}>
-        <p className="player-menu-why">{t("player.words_offset.why")}</p>
-        <div className="player-menu-nudge">
-          <button className="player-button" onClick={() => move(-OFFSET_STEP)}>
-            {"−"}
-          </button>
-          <span className="player-menu-amount">
-            {`${playback.wordsOffset > 0 ? "+" : ""}${playback.wordsOffset.toFixed(1)} s`}
-          </span>
-          <button className="player-button" onClick={() => move(OFFSET_STEP)}>
-            {"+"}
-          </button>
-        </div>
-        <Line label={t("player.words_offset.reset")} onPick={() => playback.setWordsOffset(0)} />
-      </Menu>
-    );
-  }
+    case "settings.words_offset": {
+      const move = (by: number) =>
+        playback.setWordsOffset(
+          Math.min(OFFSET_FURTHEST, Math.max(-OFFSET_FURTHEST, playback.wordsOffset + by)),
+        );
+      return {
+        title: t("player.words_offset"),
+        from: "settings",
+        lines: (
+          <>
+            <p className="player-menu-why">{t("player.words_offset.why")}</p>
+            <div className="player-menu-nudge">
+              <button className="player-button" onClick={() => move(-OFFSET_STEP)}>
+                {"−"}
+              </button>
+              <span className="player-menu-amount">
+                {`${playback.wordsOffset > 0 ? "+" : ""}${playback.wordsOffset.toFixed(1)} s`}
+              </span>
+              <button className="player-button" onClick={() => move(OFFSET_STEP)}>
+                {"+"}
+              </button>
+            </div>
+            <Line
+              label={t("player.words_offset.reset")}
+              onPick={() => playback.setWordsOffset(0)}
+            />
+          </>
+        ),
+      };
+    }
 
-  return null;
+    // The facts are a sheet of their own rather than a list of choices, and
+    // the player draws them beside this.
+    default:
+      return null;
+  }
 }
-
 /** A panel standing over the picture, above the button that opened it. */
 function Menu({
   title,
   onShut,
   onBack,
+  anchor,
   children,
 }: {
   title: string;
   onShut: () => void;
   onBack?: () => void;
+  /** Where the button that opened it stands, when one did. */
+  anchor?: number | null;
   children: React.ReactNode;
 }) {
   return (
-    <div className="player-menu" role="menu" aria-label={title}>
+    <div
+      className={`player-menu${anchor == null ? " player-menu-at-the-end" : ""}`}
+      role="menu"
+      aria-label={title}
+      /* Standing over the button that opened it. Held inside the picture at
+         both edges by the stylesheet, which knows how wide the panel is and
+         how far in things are allowed to come. */
+      style={anchor == null ? undefined : { ["--anchor" as string]: `${anchor}px` }}
+    >
       <div className="player-menu-head">
         {onBack && (
           <button className="player-button player-button-small" onClick={onBack}>

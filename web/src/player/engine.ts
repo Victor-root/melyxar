@@ -174,6 +174,16 @@ export interface Playback {
   goTo: (seconds: number) => void;
   /** Starts the film, or stops it. */
   playOrPause: () => void;
+  /**
+   * A click on the picture itself, which may turn out to be half of two.
+   *
+   * One starts or stops the film, two put it fullscreen, and a browser sends
+   * the first of the two before it knows there is a second. So the first is
+   * held for the moment it takes to find out: a film that flickers to a stop
+   * and back on its way to fullscreen is what acting on it at once looks
+   * like.
+   */
+  pictureClicked: (twice: boolean) => void;
   /** How loud, from nought to one, and whether the sound is off. */
   setLoudness: (volume: number) => void;
   setMuted: (off: boolean) => void;
@@ -810,6 +820,26 @@ export function usePlayback({
     }
   }, []);
 
+  /* A click on the picture, held long enough to find out whether a second one
+     is coming. Two hundred thousandths is under what anybody notices on a play
+     button and over what a browser takes to deliver the second click. */
+  const aSecondClick = useRef(0);
+  const pictureClicked = useCallback(
+    (twice: boolean) => {
+      window.clearTimeout(aSecondClick.current);
+      if (twice) {
+        // The first of the two was held and is now known to have been half of
+        // a gesture that means something else. Whoever drew the picture deals
+        // with what two clicks mean; all this does is not act on the first.
+        return;
+      }
+      aSecondClick.current = window.setTimeout(playOrPause, 200);
+    },
+    [playOrPause],
+  );
+
+  useEffect(() => () => window.clearTimeout(aSecondClick.current), []);
+
   /* The sound is set on the element and read back off it, never held here as
      a number of its own: a headset and a key the browser answers by itself
      move it too, and a copy kept alongside would be wrong from then on. */
@@ -1116,6 +1146,7 @@ export function usePlayback({
     stepBy,
     goTo,
     playOrPause,
+    pictureClicked,
     setLoudness,
     setMuted,
     at,
