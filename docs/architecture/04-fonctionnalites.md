@@ -259,14 +259,19 @@ Décisions validées.
 - **Enchaînement automatique de l'épisode suivant**.
 - **Saut d'intro et de générique**, signalé comme très important.
 - **Vitesse de lecture**, **image dans l'image** signalée comme très importante, **raccourcis clavier**.
+- **Refus de la conversion des couleurs d'un film HDR**, au choix du spectateur : un interrupteur pendant la lecture et un réglage global dans ses paramètres. La règle automatique ne change pas et reste le défaut.
 
 **Ce que cela implique.**
 
+- La conversion des couleurs est aujourd'hui automatique et sans appel : un film à large gamme est converti parce qu'aucun navigateur ici ne l'affiche correctement. C'est juste par défaut et ça le reste. Mais sur un PC dont l'écran est en HDR et dont le système l'a activé, cette conversion fait perdre exactement ce que le film contient, et coûte en plus une reconstruction complète de l'image, puisque changer les couleurs oblige à redessiner chaque pixel. Le serveur ne peut pas savoir ce qu'il y a devant l'écran ; la personne qui regarde, si.
+- Donc deux endroits pour dire non, et pas un seul. **Pendant la lecture**, un interrupteur valable pour ce film-là, qui relance la lecture puisque l'image est reconstruite autrement, et qui revient à l'automatique au film suivant. **Dans les paramètres du spectateur**, un « ne jamais convertir » qui devient son défaut, que l'interrupteur peut encore contredire film par film. Décoché par défaut dans les deux cas : personne ne doit tomber dessus par accident.
+- **Un cas à traiter à part.** Une image Dolby Vision de profil 5 servie sans conversion n'est pas délavée, elle est verte et violette. L'interrupteur doit le dire à cet endroit plutôt que laisser quelqu'un casser sa lecture sans comprendre pourquoi.
+- **Refuser la conversion ne donne pas la lecture directe pour autant.** Le film peut rester reconstruit pour son codec, pour son son ou pour ses sous-titres. Ce que le panneau des données de lecture montre déjà, et qui doit continuer à dire la vérité quand l'interrupteur est mis.
 - L'image dans l'image et la vitesse de lecture sont des fonctions natives du navigateur, disponibles aussi bien en lecture directe qu'en flux HLS. Peu de travail, à condition que le lecteur soit écrit comme un module isolé possédant l'élément vidéo, ce qui est déjà la règle.
 - **Le saut d'intro demande un vrai travail.** Aucune métadonnée publique ne dit où commence un générique. Trois sources possibles, à combiner : les chapitres présents dans le fichier quand ils existent et portent un nom explicite ; une détection automatique qui compare les empreintes sonores des épisodes d'une même saison pour trouver le passage commun, ce qui est la méthode utilisée par l'extension correspondante de Jellyfin ; et la correction manuelle. C'est une analyse de fond coûteuse, à l'échelle d'une saison entière, mais elle ne se fait qu'une fois.
 - Le modèle doit donc prévoir des **segments repérés** dans une source média : début et fin, avec un type (récapitulatif, générique de début, générique de fin, publicité). Le même mécanisme sert au bouton « épisode suivant » qui apparaît pendant le générique de fin. Cette table est à créer dès le départ même si elle ne se remplit qu'avec les séries.
 
-**Quand.** Reprise, langues, vitesse, image dans l'image et raccourcis au jalon 4. Apparence des sous-titres au jalon 5. Enchaînement et saut d'intro avec les séries, après la V0.1 ; la table des segments dès le jalon 0.
+**Quand.** Reprise, langues, vitesse, image dans l'image et raccourcis au jalon 4. Apparence des sous-titres au jalon 5. Refus de la conversion des couleurs au jalon 8, avec les autres réglages du spectateur. Enchaînement et saut d'intro avec les séries, après la V0.1 ; la table des segments dès le jalon 0.
 
 ## 16. Correction et gestion des médias
 
