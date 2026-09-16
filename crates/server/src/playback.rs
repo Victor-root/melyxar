@@ -1122,7 +1122,10 @@ mod tests {
         plan.tracks.push(sound(2, "aac", 2));
         plan.decision.audio_stream_index = Some(2);
 
-        let heard = plan_view(&plan).film.sound.expect("a soundtrack is playing");
+        let heard = plan_view(&plan)
+            .film
+            .sound
+            .expect("a soundtrack is playing");
         assert_eq!(heard.codec, "aac");
         assert_eq!(heard.channels, 2);
     }

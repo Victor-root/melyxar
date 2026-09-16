@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use melyxar_core::id::{ChapterId, ExtraVideoId, LibraryId, LibraryRootId, MediaSourceId, WorkId};
 use melyxar_core::media::{
-    AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, Margins, SubtitleDetails, SubtitleLayout,
-    Track, TrackKind, VideoDetails,
+    AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, Margins, SubtitleDetails,
+    SubtitleLayout, Track, TrackKind, VideoDetails,
 };
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::{now, Millis, Timestamp};
@@ -1348,7 +1348,11 @@ async fn insert_track(
             .map(|path| path.to_string_lossy().into_owned())
     }))
     .bind(video.and_then(|details| details.margins).map(|it| it.top))
-    .bind(video.and_then(|details| details.margins).map(|it| it.bottom))
+    .bind(
+        video
+            .and_then(|details| details.margins)
+            .map(|it| it.bottom),
+    )
     .bind(video.and_then(|details| details.margins).map(|it| it.left))
     .bind(video.and_then(|details| details.margins).map(|it| it.right))
     .execute(&mut **transaction)

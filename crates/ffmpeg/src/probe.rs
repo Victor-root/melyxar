@@ -213,7 +213,6 @@ impl ProbeStream {
     }
 }
 
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProbeChapter {
     #[serde(default)]
