@@ -88,8 +88,8 @@
 
   /* On or off, drawn to Material's shape at the size a menu line wants
      rather than the size a thumb wants. */
-  --player-switch-across: 40px;
-  --player-switch-down: 24px;
+  --player-switch-across: 36px;
+  --player-switch-down: 21px;
 }
 
 .player {
@@ -1638,14 +1638,19 @@
 
 /* Material's own switch, drawn rather than pulled in: a track, and a handle
    that grows as it crosses. No tick inside the handle, which says twice what
-   the side it is on already says once. */
+   the side it is on already says once.
+
+   The handle is positioned rather than centred by flex: a circle sized by a
+   margin computed from a percentage is one rounding error away from sitting a
+   pixel off true centre, and a handle that leans is worse than one that is a
+   pixel narrower than it could be. Anchored to the middle of the track by
+   `top: 50%` and pulled back by half its own height, it is exactly centred
+   whatever height it is asked to grow to. */
 .player-switch {
+  position: relative;
   flex: none;
-  display: inline-flex;
-  align-items: center;
   width: var(--player-switch-across);
   height: var(--player-switch-down);
-  padding: 0 3px;
   border: 2px solid var(--border-strong);
   border-radius: var(--radius-pill);
   background: var(--surface-hover);
@@ -1655,15 +1660,18 @@
 }
 
 .player-switch-handle {
-  width: 12px;
-  height: 12px;
-  margin-left: 0;
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--text-faint);
+  transform: translateY(-50%);
   transition:
     width var(--quick) var(--ease),
     height var(--quick) var(--ease),
-    margin var(--quick) var(--ease),
+    left var(--quick) var(--ease),
     background var(--quick) var(--ease);
 }
 
@@ -1673,11 +1681,9 @@
 }
 
 .player-switch[data-on="yes"] .player-switch-handle {
-  width: 18px;
-  height: 18px;
-  /* Pushed across by what the handle does not fill, so it lands on the far
-     edge whatever the track is set to. */
-  margin-left: calc(100% - 18px);
+  left: calc(100% - 15px - 3px);
+  width: 15px;
+  height: 15px;
   background: var(--accent-contrast);
 }
 
