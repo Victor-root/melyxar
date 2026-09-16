@@ -633,8 +633,14 @@ function Seek({
   const previewed = hovered !== null && length > 0 ? hovered * length : null;
   const spot = thumbnails && previewed !== null ? spotOf(thumbnails, previewed) : null;
   const scale = surroundings.settings.previewScale;
-  const across = (thumbnails?.width ?? 0) * scale;
-  /* Kept on screen at both ends rather than half off it. */
+  /* Never wider than the bar it stands on. A viewer can make these larger, and
+     a window can be made narrower than the largest of them: past that point it
+     is the bar that decides, because a picture wider than the bar cannot be
+     kept inside the screen at both ends whatever it is centred on. */
+  const wanted = (thumbnails?.width ?? 0) * scale;
+  const across = railWidth > 0 ? Math.min(wanted, railWidth) : wanted;
+  const down = wanted > 0 ? (thumbnails?.height ?? 0) * scale * (across / wanted) : 0;
+  /* Kept inside the bar at both ends rather than half off the screen. */
   const half = across / 2;
   const previewLeft = Math.min(
     Math.max((hovered ?? 0) * railWidth, half),
@@ -643,26 +649,6 @@ function Seek({
 
   return (
     <div className="player-seek">
-      {previewed !== null && (
-        <div className="player-preview" style={{ left: `${previewLeft}px` }} aria-hidden="true">
-          {spot && thumbnails && (
-            <span
-              className="player-preview-picture"
-              style={{
-                width: `${across}px`,
-                height: `${thumbnails.height * scale}px`,
-                backgroundImage: `url(${thumbnails.url}/${spot.sheet}.jpg)`,
-                backgroundSize: `${thumbnails.columns * across}px ${thumbnails.rows * thumbnails.height * scale}px`,
-                backgroundPosition: `-${spot.column * across}px -${spot.row * thumbnails.height * scale}px`,
-              }}
-            />
-          )}
-          {/* Under the picture rather than written across it: a time on top of
-              a dark frame of film is a time nobody can read. */}
-          <span className="player-preview-time">{asClock(previewed)}</span>
-        </div>
-      )}
-
       <span className="player-clock player-clock-before">
         <ZoneOnTheBar zone="before_bar" surroundings={surroundings} />
       </span>
@@ -694,6 +680,29 @@ function Seek({
           }
         }}
       >
+        {/* Inside the bar rather than beside it, because where it stands is a
+            place along the bar. Hung on the row instead, it was out by the
+            width of the clock to its left: it followed the hand correctly and
+            sat beside it the whole way. */}
+        {previewed !== null && (
+          <div className="player-preview" style={{ left: `${previewLeft}px` }} aria-hidden="true">
+            {spot && thumbnails && (
+              <span
+                className="player-preview-picture"
+                style={{
+                  width: `${across}px`,
+                  height: `${down}px`,
+                  backgroundImage: `url(${thumbnails.url}/${spot.sheet}.jpg)`,
+                  backgroundSize: `${thumbnails.columns * across}px ${thumbnails.rows * down}px`,
+                  backgroundPosition: `-${spot.column * across}px -${spot.row * down}px`,
+                }}
+              />
+            )}
+            {/* Under the picture rather than written across it: a time on top
+                of a dark frame of film is a time nobody can read. */}
+            <span className="player-preview-time">{asClock(previewed)}</span>
+          </div>
+        )}
         <span className="player-rail-track" />
         <span className="player-rail-held" style={{ width: `${held * 100}%` }} />
         <span className="player-rail-played" style={{ width: `${played * 100}%` }} />
