@@ -54,13 +54,16 @@ enum Command {
         /// Stop after the scan, without looking anything up.
         #[arg(long)]
         without_identification: bool,
-        /// Read every file again, even the ones already analysed.
+        /// How much to go over: new_and_updated_files, what_is_missing or
+        /// everything.
         ///
-        /// What the analyser is asked to read grows, and a collection
-        /// analysed by an older build keeps the gaps that build left. This
-        /// costs one full scan and touches no file on disk.
+        /// The middle one by default, which is what a scan does on its own.
+        /// `everything` reads every file again, even the ones already
+        /// described, and asks about every film again: what the analyser is
+        /// asked to read grows, and a collection analysed by an older build
+        /// keeps the gaps that build left. It touches no file on disk.
         #[arg(long)]
-        analyse_again: bool,
+        mode: Option<String>,
     },
     /// Look up the works that are still waiting to be identified.
     ///
@@ -70,6 +73,9 @@ enum Command {
         /// Look up only this library, by name. Every library by default.
         #[arg(long)]
         library: Option<String>,
+        /// How much to go over, as for the scan.
+        #[arg(long)]
+        mode: Option<String>,
     },
     /// Print a starting configuration, for the installer.
     PrintDefaultConfig,
@@ -98,11 +104,37 @@ async fn main() -> anyhow::Result<()> {
         Command::Scan {
             library,
             without_identification,
-            analyse_again,
-        } => scan(config, library, !without_identification, analyse_again).await,
-        Command::Identify { library } => identify(config, library).await,
+            mode,
+        } => {
+            let mode = chosen_mode(mode.as_deref())?;
+            scan(config, library, !without_identification, mode).await
+        }
+        Command::Identify { library, mode } => {
+            let mode = chosen_mode(mode.as_deref())?;
+            identify(config, library, mode).await
+        }
         Command::PrintDefaultConfig => unreachable!("handled above"),
     }
+}
+
+/// Reads the mode a command was given, or the usual one when it was given
+/// none.
+///
+/// A word nobody knows is refused by name rather than read as the usual one:
+/// whoever typed a mode meant that mode, and a run that quietly does something
+/// else is a run somebody believes has happened.
+fn chosen_mode(asked: Option<&str>) -> anyhow::Result<melyxar_core::refresh::RefreshMode> {
+    let Some(word) = asked else {
+        return Ok(melyxar_core::refresh::RefreshMode::default());
+    };
+    melyxar_core::refresh::RefreshMode::parse(word).ok_or_else(|| {
+        anyhow::anyhow!(
+            "'{word}' is not a way of refreshing; the three are {}",
+            melyxar_core::refresh::RefreshMode::ALL
+                .map(|mode| mode.as_str())
+                .join(", ")
+        )
+    })
 }
 
 /// Sets up logging from the configuration.
@@ -165,6 +197,12 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     melyxar_app::playback::tidy_up_after_a_previous_run(&state).await;
     let sweeper = melyxar_app::playback::keep_sessions_swept(&state);
 
+    // The two readings that go through every film belong to the night, unless
+    // a library has asked its own scan to do them. Started here because only a
+    // server runs long enough to reach an hour of the morning: a report or a
+    // scan from a terminal is over in minutes.
+    let upkeep = melyxar_app::upkeep::keep_the_upkeep_running(&state);
+
     // A scan of a whole collection runs for hours, so an update in the middle
     // of one must not mean starting it over by hand, or worse, forgetting to.
     let cut_short = melyxar_app::startup::close_what_a_previous_run_left(&state)
@@ -185,6 +223,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     // The listener has stopped accepting: nothing new can open a session, so
     // closing them all is the last thing left to do.
     sweeper.abort();
+    upkeep.abort();
     melyxar_app::playback::close_every_session(&state).await;
     state.database().close().await;
 
@@ -238,7 +277,7 @@ async fn scan(
     config: Config,
     only: Option<String>,
     then_identify: bool,
-    analyse_again: bool,
+    mode: melyxar_core::refresh::RefreshMode,
 ) -> anyhow::Result<()> {
     let state = melyxar_app::startup::bring_up(config)
         .await
@@ -247,19 +286,12 @@ async fn scan(
 
     for library in chosen {
         let name = library.name.clone();
-        if analyse_again {
-            let forgotten = state
-                .database()
-                .forget_analysis(library.id)
-                .await
-                .with_context(|| format!("forgetting the analysis of {name}"))?;
-            println!("{name}: {forgotten} files will be read again");
-        }
         // Somebody is at a terminal watching this one.
         let job = melyxar_app::scan::start_scan(
             &state,
             library,
             melyxar_core::job::JobPriority::REQUESTED,
+            mode,
         )
         .await
         .with_context(|| format!("starting the scan of {name}"))?;
@@ -286,7 +318,7 @@ async fn scan(
         }
 
         if then_identify {
-            identify_one_library(&state, library_again(&state, &name).await?).await?;
+            identify_one_library(&state, library_again(&state, &name).await?, mode).await?;
         }
     }
 
@@ -294,14 +326,18 @@ async fn scan(
     Ok(())
 }
 
-async fn identify(config: Config, only: Option<String>) -> anyhow::Result<()> {
+async fn identify(
+    config: Config,
+    only: Option<String>,
+    mode: melyxar_core::refresh::RefreshMode,
+) -> anyhow::Result<()> {
     let state = melyxar_app::startup::bring_up(config)
         .await
         .context("bringing the server up for the identification")?;
 
     let mut all_ran = true;
     for library in chosen_libraries(&state, only).await? {
-        all_ran &= identify_one_library(&state, library).await?;
+        all_ran &= identify_one_library(&state, library, mode).await?;
     }
 
     state.database().close().await;
@@ -328,6 +364,7 @@ async fn library_again(
 async fn identify_one_library(
     state: &melyxar_app::AppState,
     library: melyxar_core::library::Library,
+    mode: melyxar_core::refresh::RefreshMode,
 ) -> anyhow::Result<bool> {
     let Some(provider) = state.metadata_provider() else {
         println!(
@@ -338,7 +375,7 @@ async fn identify_one_library(
     };
 
     let name = library.name.clone();
-    let job = melyxar_app::identify::start_identification(state, provider, library)
+    let job = melyxar_app::identify::start_identification(state, provider, library, mode)
         .await
         .with_context(|| format!("starting the identification of {name}"))?;
     let (job_state, report) = job.wait().await;

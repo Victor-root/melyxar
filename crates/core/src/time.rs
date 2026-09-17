@@ -94,6 +94,53 @@ pub fn current_year() -> i32 {
     now().year()
 }
 
+/// The hour of the day it is now, in UTC, from nought to twenty three.
+///
+/// UTC because it is the only clock a server can read with certainty: the hour
+/// a machine calls its own comes from a setting that cannot be asked for
+/// safely from several threads at once, so a value that looked local would be
+/// wrong on any server not set to this one's offset, and silently wrong half
+/// the year on every other. Whatever shows an hour to somebody turns it into
+/// theirs, which is the only place that conversion can be made honestly.
+pub fn hour_of_day_utc() -> u32 {
+    u32::from(now().hour())
+}
+
+/// When an hour of the day in UTC next comes round after `now`.
+///
+/// For saying when work that happens once a day will happen next. An hour
+/// already gone today is tomorrow's, and the hour it is right now is
+/// tomorrow's too: the run of this hour has either happened or is happening,
+/// and announcing it as still to come would be a promise about the past.
+///
+/// An hour that is not an hour of the day is read as midnight. The
+/// configuration refuses such a value long before this is reached; reading it
+/// as something rather than refusing here keeps a screen from having no answer
+/// at all to show.
+pub fn next_occurrence_of_utc_hour_after(now: Timestamp, hour: u32) -> Timestamp {
+    let at = time::Time::from_hms(hour.min(23) as u8, 0, 0).expect("an hour of the day is a time");
+    let today = now.replace_time(at);
+    if today > now {
+        today
+    } else {
+        today.saturating_add(time::Duration::days(1))
+    }
+}
+
+/// The same, from right now.
+pub fn next_occurrence_of_utc_hour(hour: u32) -> Timestamp {
+    next_occurrence_of_utc_hour_after(now(), hour)
+}
+
+/// The day it is now, in UTC.
+///
+/// For work that happens once a day: the day it last ran is compared with
+/// this, rather than a delay being counted, so a run missed while the machine
+/// was asleep is not a run silently skipped for ever.
+pub fn today_utc() -> time::Date {
+    now().date()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,5 +192,43 @@ mod tests {
     #[test]
     fn a_missing_duration_yields_a_zero_ratio_instead_of_a_division_by_zero() {
         assert_eq!(Millis::new(500).ratio_of(Millis::ZERO), 0.0);
+    }
+
+    #[test]
+    fn an_hour_still_to_come_today_is_today_and_one_already_gone_is_tomorrow() {
+        let at = |day, hour| {
+            time::Date::from_calendar_date(2026, time::Month::September, day)
+                .expect("a date")
+                .with_hms(hour, 0, 0)
+                .expect("a time")
+                .assume_utc()
+        };
+        let midday = at(17, 12);
+
+        assert_eq!(next_occurrence_of_utc_hour_after(midday, 20), at(17, 20));
+        assert_eq!(
+            next_occurrence_of_utc_hour_after(midday, 3),
+            at(18, 3),
+            "three in the morning is tomorrow once the afternoon has come"
+        );
+        assert_eq!(
+            next_occurrence_of_utc_hour_after(midday, 12),
+            at(18, 12),
+            "the hour it is now has either happened or is happening, so the next \
+             one is tomorrow's rather than a promise about the past"
+        );
+    }
+
+    #[test]
+    fn an_hour_that_is_not_an_hour_of_the_day_reads_as_the_last_one() {
+        // The configuration refuses such a value long before this is reached.
+        // Answering something rather than refusing here keeps a screen from
+        // having nothing at all to show.
+        let now = time::Date::from_calendar_date(2026, time::Month::September, 17)
+            .expect("a date")
+            .with_hms(1, 0, 0)
+            .expect("a time")
+            .assume_utc();
+        assert_eq!(next_occurrence_of_utc_hour_after(now, 99).hour(), 23);
     }
 }

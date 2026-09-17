@@ -19,6 +19,7 @@ use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
 use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::media::{SubtitleDetails, Track, TrackKind};
 use melyxar_core::privacy::{MediaName, MediaPath};
+use melyxar_core::refresh::RefreshMode;
 use melyxar_core::work::WorkKind;
 use melyxar_database::catalogue::{LocalExtraVideo, SourceAnalysis, StoredSource};
 use melyxar_database::Database;
@@ -125,10 +126,14 @@ impl ScanJob {
 ///
 /// The priority says who is waiting: a person who pressed a button, or nobody
 /// at all, which is what a scan taken up again after a restart is.
+///
+/// The mode says how much of the library is gone over: what turned up on the
+/// disk, what is still missing, or everything again.
 pub async fn start_scan(
     state: &AppState,
     library: Library,
     priority: JobPriority,
+    mode: RefreshMode,
 ) -> Result<ScanJob> {
     let outcome: Arc<Mutex<Option<ScanReport>>> = Arc::new(Mutex::new(None));
     let recorded = Arc::clone(&outcome);
@@ -143,7 +148,7 @@ pub async fn start_scan(
             priority,
             Some(target),
             move |handle| async move {
-                match scan_library(&state, &library, &handle).await {
+                match scan_library(&state, &library, &handle, mode).await {
                     Ok(report) => {
                         *recorded
                             .lock()
@@ -183,8 +188,9 @@ pub async fn start_scan_and_identification(
     state: &AppState,
     library: Library,
     priority: JobPriority,
+    mode: RefreshMode,
 ) -> Result<JobId> {
-    let scan = start_scan(state, library.clone(), priority).await?;
+    let scan = start_scan(state, library.clone(), priority, mode).await?;
     let id = scan.id();
 
     // Without a provider key there is nothing to look anything up with. The
@@ -202,7 +208,8 @@ pub async fn start_scan_and_identification(
             // and whoever reads the list of jobs can already see why.
             return;
         }
-        if let Err(error) = crate::identify::start_identification(&waiting, provider, library).await
+        if let Err(error) =
+            crate::identify::start_identification(&waiting, provider, library, mode).await
         {
             tracing::warn!(%error, "the scan finished but the look up would not start");
         }
@@ -219,9 +226,30 @@ pub async fn scan_library(
     state: &AppState,
     library: &Library,
     handle: &JobHandle,
+    mode: RefreshMode,
 ) -> Result<ScanReport> {
     let mut report = ScanReport::default();
     let database = state.database();
+    tracing::debug!(
+        library = library.name,
+        mode = mode.as_str(),
+        key_frames_during_scan = library.options.key_frames_during_scan,
+        thumbnails_during_scan = library.options.thumbnails_during_scan,
+        "a scan is starting"
+    );
+
+    // Everything again means forgetting what was read out of every file first,
+    // which is what puts them all back in front of the pass that reads them.
+    // Nothing else is touched: the files, the pages, the pictures, where a
+    // viewer had got to and the thumbnails of the bar all stay as they are.
+    if mode.reads_every_file_again() {
+        let forgotten = database.forget_analysis(library.id).await?;
+        tracing::info!(
+            library = library.name,
+            files = forgotten,
+            "every file of this library will be read again"
+        );
+    }
     // Read before anything is recorded, so a file added today is named by the
     // same rules as the ones already here.
     let signs = signs_of(state, library).await?;
@@ -285,8 +313,21 @@ pub async fn scan_library(
     report.renamed = reread.renamed;
     report.merged = reread.merged;
     analyse_pending(state, library, handle, &mut report).await?;
-    read_where_films_can_be_started(state, library, handle, &mut report).await?;
-    make_the_thumbnails_of_the_bar(state, library, handle, &mut report).await?;
+
+    // The two readings that go through every film from end to end happen here
+    // only if this library asked for them. Otherwise they belong to the upkeep,
+    // which runs of a night and can be set going from a button: a scan that
+    // carried them turned minutes into days on a collection of any size.
+    if library.options.key_frames_during_scan {
+        report.key_frames_read =
+            crate::upkeep::read_the_key_frames_of(state, library, handle).await?;
+    }
+    if library.options.thumbnails_during_scan {
+        report.thumbnails_made = crate::upkeep::make_the_thumbnails_of(state, library, handle).await?;
+    }
+    if library.options.leaves_something_to_the_upkeep() {
+        say_what_is_left_to_the_upkeep(state, library).await;
+    }
 
     if report.changed_anything() {
         database.bump_library_version(library.id).await?;
@@ -297,6 +338,7 @@ pub async fn scan_library(
 
     tracing::info!(
         library = library.name,
+        mode = mode.as_str(),
         added = report.added,
         changed = report.changed,
         missing = report.missing,
@@ -311,6 +353,33 @@ pub async fn scan_library(
         "scan finished"
     );
     Ok(report)
+}
+
+/// Says what this scan is leaving to the upkeep, and how much of it there is.
+///
+/// The question this answers is the one the maintainer asks the evening after
+/// a scan: the films are all there, and the playback bar has no pictures on
+/// it. Without this line the only honest answer is that a scan is not what
+/// makes them, which nobody could work out from anything on the screen.
+///
+/// Never a failure: this is a sentence, and a library that could not be
+/// counted has already said so where it happened.
+async fn say_what_is_left_to_the_upkeep(state: &AppState, library: &Library) {
+    let Ok(left) = crate::upkeep::what_is_left(state).await else {
+        return;
+    };
+    for entry in left
+        .iter()
+        .filter(|entry| entry.library == library.id && !entry.during_the_scan)
+    {
+        tracing::debug!(
+            library = library.name,
+            task = entry.task.as_str(),
+            waiting = entry.waiting,
+            done = entry.done,
+            "this scan does not do this reading; the upkeep has it"
+        );
+    }
 }
 
 /// Writes down what the walk found for one root.
@@ -986,244 +1055,6 @@ async fn analyse_pending(
     Ok(())
 }
 
-/// How many files one scan reads for where their picture can be started.
-///
-/// A bound on what is loaded at once rather than on the work: a library of a
-/// hundred thousand films must not become a hundred thousand rows in memory to
-/// answer one question. What is left over is picked up by the next scan.
-const READ_IN_ONE_SCAN: i64 = 5_000;
-
-/// Reads every described film for the places its picture can be started.
-///
-/// A pass of its own, after the analysis, for the same reason the analysis is
-/// a pass of its own: it reads each file through from end to end, which is the
-/// slow half again, and it has to survive being stopped.
-///
-/// Only the film knows where its picture stands on its own, and it is the only
-/// thing that decides where a stream carried over untouched may be cut. Read
-/// once, here, and never while somebody is watching.
-async fn read_where_films_can_be_started(
-    state: &AppState,
-    library: &Library,
-    handle: &JobHandle,
-    report: &mut ScanReport,
-) -> Result<()> {
-    let Some(tools) = state.tools() else {
-        return Ok(());
-    };
-    let database = state.database();
-    let waiting = database
-        .sources_without_key_frames(library.id, READ_IN_ONE_SCAN)
-        .await?;
-    if waiting.is_empty() {
-        return Ok(());
-    }
-
-    handle.at_step(JobStep::ReadingKeyFrames).await;
-    // Counted against the whole pass rather than against this run of it. A
-    // pass picking up where it left off and one starting again from nothing
-    // look exactly alike from a bar that always begins at zero, and the
-    // difference between them is two hours.
-    let already_read = database.count_read_for_key_frames(library.id).await?;
-    // Counted before the size is given, because giving the size is what writes
-    // both of them down. The other way round, what is already done is held
-    // back until the first film of this run has been read through, and a pass
-    // that is nine tenths finished says nought per cent for as long as that
-    // takes, which is exactly the lie this pass exists to stop telling.
-    if already_read > 0 {
-        handle.advance(already_read).await;
-    }
-    handle.set_total(already_read + waiting.len() as i64).await;
-    let analyser = tools.ffprobe.clone();
-    let owned_database = database.clone();
-    let owned_handle = handle.clone();
-
-    // Bounded like the analysis: this is disk from end to end, and a scan must
-    // leave the film somebody is watching alone.
-    let read = melyxar_jobs::for_each_bounded(
-        waiting,
-        state.config().limits.concurrent_probes,
-        move |source_id| {
-            let analyser = analyser.clone();
-            let database = owned_database.clone();
-            let handle = owned_handle.clone();
-            async move {
-                if handle.is_cancelled() {
-                    return false;
-                }
-                if let Some(name) = file_name_of(&database, source_id).await {
-                    handle.now_working_on(Some(&name)).await;
-                }
-                let done = read_one_film_for_its_key_frames(&database, &analyser, source_id).await;
-                handle.advance(1).await;
-                done
-            }
-        },
-    )
-    .await;
-
-    report.key_frames_read = read.into_iter().filter(|done| *done).count();
-    Ok(())
-}
-
-/// Reads every described film for the thumbnails of its playback bar.
-///
-/// A pass of its own, last, for the same reason as the one before it: it reads
-/// each file through from end to end, and it has to survive being stopped. A
-/// film that has none shows a bar with no pictures on it, which is what every
-/// film did until this pass had run, so nothing here is ever worth holding a
-/// scan up for.
-async fn make_the_thumbnails_of_the_bar(
-    state: &AppState,
-    library: &Library,
-    handle: &JobHandle,
-    report: &mut ScanReport,
-) -> Result<()> {
-    if state.tools().is_none() {
-        return Ok(());
-    }
-    let Some(layout) = crate::thumbnails::wanted(state) else {
-        return Ok(());
-    };
-    let database = state.database();
-    let waiting = database
-        .sources_without_thumbnails(library.id, layout, READ_IN_ONE_SCAN)
-        .await?;
-    if waiting.is_empty() {
-        return Ok(());
-    }
-
-    handle.at_step(JobStep::MakingThumbnails).await;
-    // Counted against the whole pass rather than against this run of it, for
-    // the same reason as the pass before: a bar that always begins at zero
-    // cannot tell a pass picking up where it left off from one starting again.
-    let already_made = database.count_made_thumbnails(library.id, layout).await?;
-    if already_made > 0 {
-        handle.advance(already_made).await;
-    }
-    handle.set_total(already_made + waiting.len() as i64).await;
-
-    let owned_state = state.clone();
-    let owned_handle = handle.clone();
-    // Bounded like the two passes before it: this is the disk from end to end,
-    // and a scan must leave the film somebody is watching alone.
-    let made = melyxar_jobs::for_each_bounded(
-        waiting,
-        state.config().limits.concurrent_probes,
-        move |source_id| {
-            let state = owned_state.clone();
-            let handle = owned_handle.clone();
-            async move {
-                if handle.is_cancelled() {
-                    return false;
-                }
-                if let Some(name) = file_name_of(state.database(), source_id).await {
-                    handle.now_working_on(Some(&name)).await;
-                }
-                // Every way this fails has already said so with the file it was
-                // about, which is what a refusal has to carry to be read.
-                let done = crate::thumbnails::make_for(&state, source_id)
-                    .await
-                    .is_ok_and(|made| made.counted > 0);
-                handle.advance(1).await;
-                done
-            }
-        },
-    )
-    .await;
-
-    report.thumbnails_made = made.into_iter().filter(|done| *done).count();
-    Ok(())
-}
-
-/// The name of one file, for the screen that says what a pass is on.
-///
-/// The name rather than the path: a screen says which film, and where it sits
-/// on which disk is the report's business.
-async fn file_name_of(database: &Database, source_id: MediaSourceId) -> Option<String> {
-    let source = database.playable_source(source_id).await.ok()??;
-    Some(
-        source
-            .path
-            .file_name()
-            .and_then(|name| name.to_str())?
-            .to_string(),
-    )
-}
-
-/// Reads one film, and says whether it gave up anything usable.
-async fn read_one_film_for_its_key_frames(
-    database: &Database,
-    analyser: &Path,
-    source_id: MediaSourceId,
-) -> bool {
-    let Ok(Some(source)) = database.playable_source(source_id).await else {
-        return false;
-    };
-    if source.missing {
-        return false;
-    }
-
-    match melyxar_ffmpeg::probe::key_frames(analyser, &source.path).await {
-        Ok(found) if !found.is_empty() => {
-            match database.store_key_frames(source_id, &found).await {
-                Ok(()) => true,
-                Err(error) => {
-                    tracing::warn!(error = %error, "where a film can be started could not be kept");
-                    false
-                }
-            }
-        }
-        // A reading that finished and gave nothing is an answer about the
-        // file, and it is written down so the file is never read through
-        // again for the same nothing. A file that was merely busy is the
-        // other branch: the analyser fails there, and nothing is written.
-        //
-        // Seen on a VC-1 remux of the maintainer's: every packet of the
-        // picture carried no time at all, and every one of them claimed to
-        // stand on its own, which is what a demuxer says about a stream it
-        // cannot read. Reading it again can only say the same, and it cost a
-        // minute of every scan. Such a film keeps the usual grid, which is
-        // exact for it anyway: no browser plays that codec, so its picture is
-        // rebuilt, and a rebuilt picture is cut where this server puts the
-        // cuts.
-        Ok(_) => {
-            tracing::warn!(
-                file = %MediaName::new(
-                    source
-                        .path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or_default()
-                ),
-                "this film says nowhere its picture can be started, so it is cut on the usual \
-                 grid from now on and never read for this again"
-            );
-            match database.store_key_frames(source_id, &[]).await {
-                Ok(()) => true,
-                Err(error) => {
-                    tracing::warn!(error = %error, "that answer could not be kept");
-                    false
-                }
-            }
-        }
-        Err(error) => {
-            tracing::warn!(
-                file = %MediaName::new(
-                    source
-                        .path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or_default()
-                ),
-                error = %error,
-                "this film could not be read for where its picture can be started"
-            );
-            false
-        }
-    }
-}
-
 /// A file waiting to be analysed, with everything needed to reach it.
 struct PendingFile {
     root_label: String,
@@ -1373,9 +1204,39 @@ mod tests {
         )
     }
 
+    /// Tells a library to do the two heavy readings during its own scan.
+    ///
+    /// Off for every library to begin with, so a test about what a scan reads
+    /// out of a film has to say so, exactly as somebody ticking the box on the
+    /// screen does.
+    async fn reading_everything_during_the_scan(state: &AppState, library: &Library) -> Library {
+        state
+            .database()
+            .set_library_options(
+                library.id,
+                melyxar_core::library::LibraryOptions {
+                    key_frames_during_scan: true,
+                    thumbnails_during_scan: true,
+                },
+            )
+            .await
+            .expect("the switches are written down");
+        state
+            .database()
+            .library_by_name(&library.name)
+            .await
+            .expect("read")
+            .expect("the library is still there")
+    }
+
     /// Runs a scan the way the server does, and gives back what it did.
     async fn scan(state: &AppState, library: &Library) -> ScanReport {
-        let (job_state, report) = start_scan(state, library.clone(), JobPriority::REQUESTED)
+        let (job_state, report) = start_scan(
+            state,
+            library.clone(),
+            JobPriority::REQUESTED,
+            RefreshMode::default(),
+        )
             .await
             .expect("job started")
             .wait()
@@ -1481,6 +1342,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_scan_leaves_the_two_heavy_readings_to_the_upkeep_unless_it_is_told_not_to() {
+        // The defect this exists for: both readings went through every film of
+        // the library inside the scan, so a scan of a real collection took
+        // days and the first five thousand films were all anybody ever got.
+        // They belong to the upkeep now, which runs of a night and can be set
+        // going from a button, and a library that wants them in one sitting
+        // says so.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        std::fs::create_dir_all(&media).expect("the media folder");
+        if !write_real_video(&media.join("Quiet.Harbour.2019.mkv")) {
+            eprintln!("no media tool here, the readings were not exercised");
+            return;
+        }
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        let report = scan(&state, &library).await;
+        assert_eq!(report.added, 1);
+        assert_eq!(
+            (report.key_frames_read, report.thumbnails_made),
+            (0, 0),
+            "a scan of a library nobody configured reads no film from end to end"
+        );
+
+        // And what it left is counted, which is what the upkeep screen shows
+        // and what the button acts on.
+        let left = crate::upkeep::what_is_left(&state).await.expect("counted");
+        for task in crate::upkeep::UpkeepTask::ALL {
+            let entry = left
+                .iter()
+                .find(|entry| entry.task == task && entry.library == library.id)
+                .expect("every library answers for both readings");
+            assert_eq!(entry.waiting, 1, "{}", task.as_str());
+            assert!(!entry.during_the_scan);
+            assert!(!entry.under_way);
+        }
+
+        assert_eq!(
+            crate::upkeep::start_what_is_waiting(&state, JobPriority::REQUESTED).await,
+            2,
+            "one job for each reading, on the one library that has anything waiting"
+        );
+        // The jobs are written down before they start, so waiting on the rows
+        // is waiting on the work.
+        while !state
+            .database()
+            .unfinished_jobs()
+            .await
+            .expect("read")
+            .is_empty()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+
+        let done = crate::upkeep::what_is_left(&state).await.expect("counted");
+        for task in crate::upkeep::UpkeepTask::ALL {
+            let entry = done
+                .iter()
+                .find(|entry| entry.task == task && entry.library == library.id)
+                .expect("every library answers for both readings");
+            assert_eq!(entry.waiting, 0, "{}", task.as_str());
+            assert_eq!(entry.done, 1, "{}", task.as_str());
+        }
+
+        assert_eq!(
+            crate::upkeep::start_what_is_waiting(&state, JobPriority::REQUESTED).await,
+            0,
+            "nothing is waiting, so no job that would end on the spot is started"
+        );
+    }
+
+    #[tokio::test]
     async fn a_scan_leaves_every_film_with_the_thumbnails_of_its_bar() {
         // The whole chain on a real film: walked, described, read for where a
         // jump can land, then read for the little pictures of the bar.
@@ -1515,8 +1448,12 @@ mod tests {
 
         let film_folder = media.clone();
         let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        // This library has been told to do both readings itself, which is what
+        // the switch on its settings screen does.
+        let library = reading_everything_during_the_scan(&state, &library).await;
         let report = scan(&state, &library).await;
         assert_eq!(report.added, 1);
+        assert_eq!(report.key_frames_read, 1, "the film was read for its jumps");
         assert_eq!(report.thumbnails_made, 1, "the film was read for its bar");
 
         let source_id = state
@@ -1574,6 +1511,7 @@ mod tests {
 
         let (fresh, same_library) =
             state_with_roots(directory.path(), vec![("disk-one", film_folder)]).await;
+        let same_library = reading_everything_during_the_scan(&fresh, &same_library).await;
         let from_nothing = scan(&fresh, &same_library).await;
         assert_eq!(from_nothing.added, 1, "the table knew nothing of this film");
         assert_eq!(
@@ -2428,9 +2366,14 @@ mod tests {
         write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
 
         let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
-        let job = start_scan(&state, library.clone(), JobPriority::REQUESTED)
-            .await
-            .expect("job started");
+        let job = start_scan(
+            &state,
+            library.clone(),
+            JobPriority::REQUESTED,
+            RefreshMode::default(),
+        )
+        .await
+        .expect("job started");
         // What a client follows the scan by, so it has to name a real row.
         let followed = job.id();
         let (state_at_end, report) = job.wait().await;
@@ -2461,10 +2404,21 @@ mod tests {
         write(&media, "Quiet.Harbour.2019.MULTi.1080p.mkv", b"x");
 
         let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
-        let first = start_scan(&state, library.clone(), JobPriority::REQUESTED)
-            .await
-            .expect("job started");
-        let second = start_scan(&state, library.clone(), JobPriority::REQUESTED).await;
+        let first = start_scan(
+            &state,
+            library.clone(),
+            JobPriority::REQUESTED,
+            RefreshMode::default(),
+        )
+        .await
+        .expect("job started");
+        let second = start_scan(
+            &state,
+            library.clone(),
+            JobPriority::REQUESTED,
+            RefreshMode::default(),
+        )
+        .await;
         assert!(
             second.is_err(),
             "two scans of one library would walk over each other"

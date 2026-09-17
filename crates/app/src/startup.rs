@@ -12,6 +12,7 @@ use std::sync::Arc;
 use melyxar_config::Config;
 use melyxar_core::job::{Job, JobKind, JobPriority};
 use melyxar_core::library::{Library, LibraryKind, RootAccess};
+use melyxar_core::refresh::RefreshMode;
 use melyxar_core::user::Permissions;
 use melyxar_database::Database;
 use melyxar_ffmpeg::{Capabilities, ToolPaths};
@@ -99,8 +100,16 @@ pub async fn ask_again_about(state: &AppState, libraries: &[Library]) -> usize {
 
     let mut started = 0;
     for library in libraries {
-        match crate::identify::start_identification(state, Arc::clone(&provider), library.clone())
-            .await
+        // What is missing, since a language that changed is exactly a library
+        // whose every film is short of something: the queue they were put back
+        // in is what this run empties.
+        match crate::identify::start_identification(
+            state,
+            Arc::clone(&provider),
+            library.clone(),
+            RefreshMode::WhatIsMissing,
+        )
+        .await
         {
             Ok(_) => started += 1,
             Err(error) => tracing::warn!(
@@ -161,21 +170,51 @@ pub async fn take_up_again_what_a_restart_cut_short(state: &AppState, cut_short:
         };
 
         let started = match job.kind {
+            // In the usual mode rather than in the one the run that was cut
+            // short was asked for: nothing records which that was, and every
+            // pass asks what is left to do anyway, so a scan taken up again
+            // does exactly what the one before it had not got to. The one
+            // difference is a run of everything again, which starts by
+            // forgetting what it has already read: taken up in that mode it
+            // would forget the half it had just done and begin once more.
             JobKind::ScanLibrary => crate::scan::start_scan_and_identification(
                 state,
+                library.clone(),
+                JobPriority::BACKGROUND,
+                RefreshMode::WhatIsMissing,
+            )
+            .await
+            .map(|_| ()),
+            JobKind::IdentifyWork => match state.metadata_provider() {
+                Some(provider) => crate::identify::start_identification(
+                    state,
+                    provider,
+                    library.clone(),
+                    RefreshMode::WhatIsMissing,
+                )
+                .await
+                .map(|_| ()),
+                None => continue,
+            },
+            // The two readings of the upkeep are taken up again the same way,
+            // and for the same reason: each batch asks what is left, so one
+            // cut short by a restart carries on exactly where it was.
+            JobKind::ReadKeyFrames => crate::upkeep::start(
+                state,
+                crate::upkeep::UpkeepTask::KeyFrames,
                 library.clone(),
                 JobPriority::BACKGROUND,
             )
             .await
             .map(|_| ()),
-            JobKind::IdentifyWork => match state.metadata_provider() {
-                Some(provider) => {
-                    crate::identify::start_identification(state, provider, library.clone())
-                        .await
-                        .map(|_| ())
-                }
-                None => continue,
-            },
+            JobKind::GenerateThumbnails => crate::upkeep::start(
+                state,
+                crate::upkeep::UpkeepTask::Thumbnails,
+                library.clone(),
+                JobPriority::BACKGROUND,
+            )
+            .await
+            .map(|_| ()),
             // Everything else is short enough that the next thing to ask for
             // it will do it, and starting it here would only be guessing at
             // what somebody wanted an hour ago.

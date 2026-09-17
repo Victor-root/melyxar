@@ -132,6 +132,7 @@ const en: Dictionary = {
   "jobs.read_copy_again": "Reading a file again",
   "jobs.fetch_images": "Pictures",
   "jobs.analyse_loudness": "Loudness",
+  "jobs.read_key_frames": "Where films can be started",
   "jobs.generate_thumbnails": "Thumbnails",
   "jobs.purge_activity": "Tidying",
   "jobs.backup": "Backup",
@@ -159,6 +160,39 @@ const en: Dictionary = {
   "jobs.step.asking_the_provider": "Asking about the films",
   "jobs.step.filling_in_what_is_missing": "Filling in what is missing",
 
+  "refresh.mode": "How much to go over",
+  "refresh.new_and_updated_files": "New and updated files",
+  "refresh.new_and_updated_files_why":
+    "The quickest. Looks for what turned up on the disk and looks those films up. Nothing already here is touched.",
+  "refresh.what_is_missing": "Fill in what is missing",
+  "refresh.what_is_missing_why":
+    "The usual one. The above, and another go at every film that has a name and is short of a poster or a synopsis.",
+  "refresh.everything": "Everything again",
+  "refresh.everything_why":
+    "The heaviest. Reads every file again for what it says of itself and asks about every film again. A film you named yourself is left alone. Can take hours on a large library.",
+
+  "upkeep.title": "Upkeep",
+  "upkeep.why":
+    "Two things have to be read out of every film, and each one reads it from end to end: where a jump can land, and the little pictures of the playback bar. They are not part of a scan, which has to be over quickly. They run of a night, or now if you press the button.",
+  "upkeep.key_frames": "Where films can be started",
+  "upkeep.key_frames_why":
+    "Without this, a jump lands a few seconds before where you asked. Quick on each film, and worth doing first.",
+  "upkeep.thumbnails": "Pictures of the playback bar",
+  "upkeep.thumbnails_why":
+    "The little pictures that scroll past while you drag along the bar. The longest of the two.",
+  "upkeep.waiting": "{count} waiting",
+  "upkeep.done_count": "{count} done",
+  "upkeep.nothing_waiting": "Nothing waiting",
+  "upkeep.during_the_scan": "Done during the scan of this library",
+  "upkeep.run": "Run now",
+  "upkeep.run_all": "Run everything waiting",
+  "upkeep.under_way": "Running",
+  "upkeep.started": "{count} started. Watch them under Activity.",
+  "upkeep.nothing_started": "Nothing was waiting.",
+  "upkeep.next_run": "Next run on its own: {when}",
+  "upkeep.nightly_off": "The nightly run is switched off in the server configuration.",
+  "upkeep.disabled": "Switched off in the server configuration.",
+
   "settings.title": "Settings",
   "settings.device": "This device",
   "settings.device_why": "Some devices play a picture format smoothly on paper and still stumble once a real film asks more of them. Optimizing this device tests a few seconds of a sample film so the player knows what to trust here, instead of guessing. Takes about thirty seconds and never changes how films actually look.",
@@ -179,6 +213,11 @@ const en: Dictionary = {
   "settings.subtitles_why": "Kept by this browser rather than by the server, so it follows the screen you are watching on rather than the account.",
   "settings.subtitles_sample": "The harbour is quiet tonight.",
   "settings.not_kept": "The server would not keep that.",
+  "settings.libraries": "Libraries",
+  "settings.libraries_why":
+    "Two readings go through every film of a library from end to end. A scan can do them as it goes, which is fine on a small library and turns a scan of minutes into one of days on a large one. Left off, they happen of a night, or whenever you press the button on the upkeep screen.",
+  "settings.key_frames_during_scan": "Read where films can be started during the scan",
+  "settings.thumbnails_during_scan": "Make the pictures of the playback bar during the scan",
 
   "downmix.none": "Leave it to the tool",
   "downmix.none_why": "Nothing is asked for, so the sound is carried over untouched wherever it can be. The browser folds it itself, and browsers bury dialogue under the effects.",
@@ -503,6 +542,7 @@ const fr: Dictionary = {
   "jobs.read_copy_again": "Relecture d'un fichier",
   "jobs.fetch_images": "Images",
   "jobs.analyse_loudness": "Sonie",
+  "jobs.read_key_frames": "Points de départ des films",
   "jobs.generate_thumbnails": "Vignettes",
   "jobs.purge_activity": "Rangement",
   "jobs.backup": "Sauvegarde",
@@ -530,6 +570,39 @@ const fr: Dictionary = {
   "jobs.step.asking_the_provider": "Recherche des fiches",
   "jobs.step.filling_in_what_is_missing": "Complément des fiches",
 
+  "refresh.mode": "Étendue",
+  "refresh.new_and_updated_files": "Fichiers nouveaux et modifiés",
+  "refresh.new_and_updated_files_why":
+    "Le plus rapide. Cherche ce qui est apparu sur le disque et identifie ces films-là. Rien de ce qui est déjà en place n'est touché.",
+  "refresh.what_is_missing": "Compléter ce qui manque",
+  "refresh.what_is_missing_why":
+    "L'habituel. Le précédent, plus une nouvelle tentative pour chaque film qui a un nom et à qui il manque une affiche ou un résumé.",
+  "refresh.everything": "Tout refaire",
+  "refresh.everything_why":
+    "Le plus lourd. Relit chaque fichier pour ce qu'il dit de lui-même et redemande la fiche de chaque film. Un film que vous avez identifié à la main reste intact. Peut prendre des heures sur une grosse bibliothèque.",
+
+  "upkeep.title": "Entretien",
+  "upkeep.why":
+    "Deux choses doivent être lues dans chaque film, et chacune le lit d'un bout à l'autre : les endroits où un saut peut atterrir, et les vignettes de la barre de lecture. Elles ne font pas partie du scan, qui doit être vite fini. Elles tournent la nuit, ou maintenant si vous appuyez sur le bouton.",
+  "upkeep.key_frames": "Points de départ des films",
+  "upkeep.key_frames_why":
+    "Sans ça, un saut atterrit quelques secondes avant l'endroit demandé. Rapide sur chaque film, et à faire en premier.",
+  "upkeep.thumbnails": "Vignettes de la barre de lecture",
+  "upkeep.thumbnails_why":
+    "Les petites images qui défilent quand on glisse le long de la barre. La plus longue des deux.",
+  "upkeep.waiting": "{count} en attente",
+  "upkeep.done_count": "{count} faits",
+  "upkeep.nothing_waiting": "Rien en attente",
+  "upkeep.during_the_scan": "Fait pendant le scan de cette bibliothèque",
+  "upkeep.run": "Lancer maintenant",
+  "upkeep.run_all": "Lancer tout ce qui attend",
+  "upkeep.under_way": "En cours",
+  "upkeep.started": "{count} lancés. Suivez-les dans Activité.",
+  "upkeep.nothing_started": "Rien n'attendait.",
+  "upkeep.next_run": "Prochain passage automatique : {when}",
+  "upkeep.nightly_off": "Le passage de nuit est désactivé dans la configuration du serveur.",
+  "upkeep.disabled": "Désactivé dans la configuration du serveur.",
+
   "settings.title": "Réglages",
   "settings.device": "Cet appareil",
   "settings.device_why": "Certains appareils lisent un format d'image sans problème sur le papier et décrochent quand même face à un vrai film exigeant. Optimiser cet appareil teste quelques secondes d'un film d'exemple pour que le lecteur sache quoi croire ici, plutôt que de deviner. Prend environ trente secondes et ne change jamais l'apparence réelle des films.",
@@ -550,6 +623,11 @@ const fr: Dictionary = {
   "settings.subtitles_why": "Gardé par ce navigateur et non par le serveur : cela suit l'écran sur lequel vous regardez, pas le compte.",
   "settings.subtitles_sample": "Le port est calme ce soir.",
   "settings.not_kept": "Le serveur n'a pas accepté cette valeur.",
+  "settings.libraries": "Bibliothèques",
+  "settings.libraries_why":
+    "Deux lectures parcourent chaque film d'une bibliothèque d'un bout à l'autre. Le scan peut les faire au passage, ce qui va très bien sur une petite bibliothèque et transforme un scan de quelques minutes en scan de plusieurs jours sur une grosse. Laissées décochées, elles se font la nuit, ou quand vous appuyez sur le bouton de l'écran d'entretien.",
+  "settings.key_frames_during_scan": "Relever les points de départ pendant le scan",
+  "settings.thumbnails_during_scan": "Fabriquer les vignettes de la barre pendant le scan",
 
   "downmix.none": "Laisser faire l'outil",
   "downmix.none_why": "Rien n'est demandé, donc le son est transmis intact partout où c'est possible. C'est le navigateur qui replie, et les navigateurs enterrent les dialogues sous les effets.",

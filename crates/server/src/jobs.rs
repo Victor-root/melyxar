@@ -28,6 +28,16 @@ pub fn router() -> Router<AppState> {
             axum::routing::post(start_identification),
         )
         .route(
+            "/api/v1/libraries/{id}/options",
+            axum::routing::put(set_library_options),
+        )
+        .route("/api/v1/upkeep", axum::routing::get(upkeep))
+        .route("/api/v1/upkeep/run", axum::routing::post(run_the_upkeep))
+        .route(
+            "/api/v1/libraries/{id}/upkeep/{task}",
+            axum::routing::post(run_one_upkeep_task),
+        )
+        .route(
             "/api/v1/works/{id}/candidates",
             axum::routing::get(candidates),
         )
@@ -128,6 +138,7 @@ struct StartedView {
 async fn start_scan(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(asked): Query<HowMuch>,
 ) -> Result<Json<StartedView>> {
     let library = library_of(&state, &id).await?;
     // A scan asked for from a screen looks up what it found, because a person
@@ -137,6 +148,7 @@ async fn start_scan(
         &state,
         library,
         melyxar_core::job::JobPriority::REQUESTED,
+        asked.mode()?,
     )
     .await
     .map_err(already_running)?;
@@ -145,10 +157,32 @@ async fn start_scan(
     }))
 }
 
+/// How much of a library a run is asked to go over.
+///
+/// Left out means the usual one. A word nobody knows is refused rather than
+/// read as the usual one: somebody who wrote a mode meant a mode, and quietly
+/// doing something else is how a library ends up not being refreshed while
+/// every screen says it was.
+#[derive(Debug, Deserialize)]
+struct HowMuch {
+    mode: Option<String>,
+}
+
+impl HowMuch {
+    fn mode(&self) -> Result<melyxar_core::refresh::RefreshMode> {
+        match self.mode.as_deref() {
+            None => Ok(melyxar_core::refresh::RefreshMode::default()),
+            Some(word) => melyxar_core::refresh::RefreshMode::parse(word)
+                .ok_or_else(|| ServerError::invalid_input("that is not a way of refreshing")),
+        }
+    }
+}
+
 /// Asks for the works still waiting to be looked up.
 async fn start_identification(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(asked): Query<HowMuch>,
 ) -> Result<Json<StartedView>> {
     let library = library_of(&state, &id).await?;
     let provider = state.metadata_provider().ok_or_else(|| {
@@ -159,7 +193,7 @@ async fn start_identification(
         )
     })?;
 
-    let job = melyxar_app::identify::start_identification(&state, provider, library)
+    let job = melyxar_app::identify::start_identification(&state, provider, library, asked.mode()?)
         .await
         .map_err(already_running)?;
     Ok(Json(StartedView {
@@ -333,6 +367,147 @@ fn provider_of(
     })
 }
 
+#[derive(Debug, Deserialize)]
+struct OptionsAsked {
+    key_frames_during_scan: bool,
+    thumbnails_during_scan: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct OptionsView {
+    key_frames_during_scan: bool,
+    thumbnails_during_scan: bool,
+    /// Whether anything really moved. A screen that sent what was already
+    /// there gets a plain no rather than a second copy of the same answer.
+    changed: bool,
+}
+
+/// Says whether a scan of this library does the two heavy readings itself.
+///
+/// Both switches always travel together, because they are one answer to one
+/// question on one screen: sending half of it would leave the other half to be
+/// guessed at, and the guess would be wrong every other time.
+async fn set_library_options(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(asked): Json<OptionsAsked>,
+) -> Result<Json<OptionsView>> {
+    let library = library_of(&state, &id).await?;
+    let options = melyxar_core::library::LibraryOptions {
+        key_frames_during_scan: asked.key_frames_during_scan,
+        thumbnails_during_scan: asked.thumbnails_during_scan,
+    };
+    let changed = state
+        .database()
+        .set_library_options(library.id, options)
+        .await
+        .map_err(internal)?;
+
+    Ok(Json(OptionsView {
+        key_frames_during_scan: options.key_frames_during_scan,
+        thumbnails_during_scan: options.thumbnails_during_scan,
+        changed,
+    }))
+}
+
+#[derive(Debug, Serialize)]
+struct UpkeepTaskView {
+    task: &'static str,
+    library: String,
+    library_name: String,
+    /// Files still waiting. Nought means there is nothing to start.
+    waiting: i64,
+    /// Files already done, so a screen says four hundred of four hundred and
+    /// ten rather than ten.
+    done: i64,
+    /// Whether the scan of that library does this reading itself.
+    during_the_scan: bool,
+    /// Whether it is running right now, so a screen offers to watch rather
+    /// than to start.
+    under_way: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct UpkeepView {
+    tasks: Vec<UpkeepTaskView>,
+    /// Whether the upkeep runs on its own of a night.
+    nightly: bool,
+    /// When it next will, written as an instant so that whoever reads it sees
+    /// it in their own hour rather than in the server's.
+    next_run: Option<String>,
+}
+
+/// What the upkeep has left to do, and when it will next do it on its own.
+async fn upkeep(State(state): State<AppState>) -> Result<Json<UpkeepView>> {
+    let asked = &state.config().tasks;
+    let left = melyxar_app::upkeep::what_is_left(&state).await?;
+
+    Ok(Json(UpkeepView {
+        tasks: left
+            .into_iter()
+            .map(|entry| UpkeepTaskView {
+                task: entry.task.as_str(),
+                library: entry.library.to_string(),
+                library_name: entry.library_name,
+                waiting: entry.waiting,
+                done: entry.done,
+                during_the_scan: entry.during_the_scan,
+                under_way: entry.under_way,
+            })
+            .collect(),
+        nightly: asked.nightly_upkeep,
+        next_run: asked.nightly_upkeep.then(|| {
+            melyxar_core::time::to_text(melyxar_core::time::next_occurrence_of_utc_hour(
+                asked.nightly_upkeep_at_utc_hour,
+            ))
+        }),
+    }))
+}
+
+#[derive(Debug, Serialize)]
+struct StartedManyView {
+    /// How many jobs this started. Nought is an answer: there was nothing
+    /// waiting, which is what somebody pressing the button wanted to know.
+    started: usize,
+}
+
+/// Starts everything the upkeep has waiting, now, on every library.
+///
+/// At the priority of something asked for: whoever pressed this is not waiting
+/// for the night, which is the whole reason the button exists.
+async fn run_the_upkeep(State(state): State<AppState>) -> Result<Json<StartedManyView>> {
+    Ok(Json(StartedManyView {
+        started: melyxar_app::upkeep::start_what_is_waiting(
+            &state,
+            melyxar_core::job::JobPriority::REQUESTED,
+        )
+        .await,
+    }))
+}
+
+/// Starts one of the two readings on one library, now.
+async fn run_one_upkeep_task(
+    State(state): State<AppState>,
+    Path((id, task)): Path<(String, String)>,
+) -> Result<Json<StartedView>> {
+    let task = melyxar_app::upkeep::UpkeepTask::parse(&task)
+        .ok_or_else(|| ServerError::invalid_input("there is no such upkeep task"))?;
+    let library = library_of(&state, &id).await?;
+
+    let job = melyxar_app::upkeep::start(
+        &state,
+        task,
+        library,
+        melyxar_core::job::JobPriority::REQUESTED,
+    )
+    .await
+    .map_err(already_running)?;
+
+    Ok(Json(StartedView {
+        job_id: job.to_string(),
+    }))
+}
+
 /// Asks a job to stop.
 async fn cancel(
     State(state): State<AppState>,
@@ -465,6 +640,19 @@ mod tests {
             "interrupted",
         ] {
             said_twice(&format!("jobs.state.{state}"));
+        }
+        // A mode reaches a screen as a choice somebody has to make, and one
+        // with no words behind it reaches it as `refresh.what_is_missing`.
+        // Both the name and the sentence saying what it costs: these three
+        // differ by hours of work, and Jellyfin's own users have asked for
+        // years what its three actually do.
+        for mode in melyxar_core::refresh::RefreshMode::ALL {
+            said_twice(&format!("refresh.{}", mode.as_str()));
+            said_twice(&format!("refresh.{}_why", mode.as_str()));
+        }
+        for task in melyxar_app::upkeep::UpkeepTask::ALL {
+            said_twice(&format!("upkeep.{}", task.as_str()));
+            said_twice(&format!("upkeep.{}_why", task.as_str()));
         }
     }
 

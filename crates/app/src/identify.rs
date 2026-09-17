@@ -16,6 +16,7 @@ use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
 use melyxar_core::library::Library;
 use melyxar_core::privacy::MediaName;
+use melyxar_core::refresh::RefreshMode;
 use melyxar_core::work::{IdentificationNote, Work};
 use melyxar_database::metadata::{
     CollectionRecord, CreditRecord, IdentifiedWork, RemoteTrailerRecord,
@@ -57,11 +58,26 @@ pub async fn identify_library<P>(
     provider: &Arc<P>,
     library: &Library,
     handle: &JobHandle,
+    mode: RefreshMode,
 ) -> Result<IdentifyReport>
 where
     P: MetadataProvider + 'static,
 {
     let database = state.database();
+
+    // Everything again puts every film back in the queue first, so the loop
+    // below asks about the lot rather than about the ones nobody has named. A
+    // film somebody picked by hand is left where it is: that is what picking
+    // by hand means, and a correction undone by a button nobody connected to
+    // it is the worst kind of surprise.
+    if mode.asks_about_named_works_again() {
+        let queued = database.ask_again_about_every_work(library.id).await?;
+        tracing::info!(
+            library = library.name,
+            films = queued,
+            "every film of this library will be asked about again"
+        );
+    }
     // Before asking anyone about a film, make sure the question is the right
     // one. A work still waiting has never been given anything but the name of
     // its file, the rules that read those names get better, and a title read
@@ -122,9 +138,16 @@ where
     // did not arrive that day would never arrive: the film keeps its title and
     // its grey rectangle for ever. Asked for here, where somebody has just
     // pressed the button that says look up what is missing.
-    let filled = fill_in_what_is_missing(state, provider, library, handle).await?;
-    report.pictures_filled = filled.pictures;
-    report.synopses_filled = filled.synopses;
+    //
+    // Skipped by the lightest mode alone, which exists to touch nothing but
+    // what is new: on a library of any size this pass asks the provider about
+    // every named film that is short of anything, and somebody who asked only
+    // what turned up on the disk is not waiting for that.
+    if mode.fills_in_what_is_missing() {
+        let filled = fill_in_what_is_missing(state, provider, library, handle).await?;
+        report.pictures_filled = filled.pictures;
+        report.synopses_filled = filled.synopses;
+    }
 
     if report.identified > 0
         || report.merged > 0
@@ -136,6 +159,7 @@ where
 
     tracing::info!(
         library = library.name,
+        mode = mode.as_str(),
         identified = report.identified,
         unidentified = report.unidentified,
         postponed = report.postponed,
@@ -700,6 +724,7 @@ pub async fn start_identification<P>(
     state: &AppState,
     provider: Arc<P>,
     library: Library,
+    mode: RefreshMode,
 ) -> Result<IdentifyJob>
 where
     P: MetadataProvider + 'static,
@@ -718,7 +743,7 @@ where
             JobPriority::BACKGROUND,
             Some(target),
             move |handle| async move {
-                match identify_library(&state, &provider, &library, &handle).await {
+                match identify_library(&state, &provider, &library, &handle, mode).await {
                     Ok(report) => {
                         *recorded
                             .lock()
@@ -1396,7 +1421,7 @@ mod tests {
             .expect("the job ran");
         let handle = holder.lock().expect("free").clone().expect("a handle");
 
-        identify_library(state, provider, library, &handle)
+        identify_library(state, provider, library, &handle, RefreshMode::default())
             .await
             .expect("the run finished")
     }
@@ -1872,7 +1897,7 @@ mod tests {
             .expect("the job ran");
         let handle = holder.lock().expect("free").clone().expect("a handle");
 
-        let error = identify_library(&state, &provider, &library, &handle)
+        let error = identify_library(&state, &provider, &library, &handle, RefreshMode::default())
             .await
             .expect_err("a refused key is a failure of the run");
         assert!(error.to_string().contains("key"));
@@ -2758,7 +2783,7 @@ mod tests {
             vec![details("111", "Quiet Harbour", Some(2019))],
         ));
 
-        let job = start_identification(&state, provider, library)
+        let job = start_identification(&state, provider, library, RefreshMode::default())
             .await
             .expect("job started");
         // The identifier is what an activity page follows the run by, so it
