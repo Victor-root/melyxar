@@ -282,6 +282,16 @@ const LOOK_AT_THE_CLOCK_EVERY: std::time::Duration = std::time::Duration::from_s
 pub fn keep_the_upkeep_running(state: &AppState) -> tokio::task::JoinHandle<()> {
     let state = state.clone();
     tokio::spawn(async move {
+        // Said once, on the way up. The question somebody asks a week later is
+        // whether this server is going to read those films at all, and a loop
+        // that says nothing until it fires cannot answer it.
+        let asked = &state.config().tasks;
+        tracing::debug!(
+            nightly = asked.nightly_upkeep,
+            at_utc_hour = asked.nightly_upkeep_at_utc_hour,
+            "the upkeep is watching the clock"
+        );
+
         let mut last_run_on = None;
         loop {
             tokio::time::sleep(LOOK_AT_THE_CLOCK_EVERY).await;
@@ -322,6 +332,10 @@ pub(crate) async fn read_the_key_frames_of(
     handle: &JobHandle,
 ) -> Result<usize> {
     let Some(tools) = state.tools() else {
+        tracing::debug!(
+            library = library.name,
+            "no media tool here, so no film is read for where its picture can be started"
+        );
         return Ok(0);
     };
     let database = state.database();
@@ -428,9 +442,20 @@ pub(crate) async fn make_the_thumbnails_of(
     handle: &JobHandle,
 ) -> Result<usize> {
     if state.tools().is_none() {
+        // Said rather than passed over in silence: a server with no media tool
+        // makes no thumbnail and never will, and the bar staying bare is the
+        // only other sign of it.
+        tracing::debug!(
+            library = library.name,
+            "no media tool here, so no thumbnail is made"
+        );
         return Ok(0);
     }
     let Some(layout) = crate::thumbnails::wanted(state) else {
+        tracing::debug!(
+            library = library.name,
+            "the thumbnails of the playback bar are switched off in the configuration"
+        );
         return Ok(0);
     };
     let database = state.database();
