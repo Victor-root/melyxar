@@ -194,6 +194,13 @@ pub async fn calibration_profile(
     Ok(state.database().codec_calibrations_of(client_id).await?)
 }
 
+/// Forgets everything measured for one client, all codecs at once.
+pub async fn forget_calibration(state: &AppState, client_id: PlaybackClientId) -> Result<()> {
+    tracing::info!(client = %client_id, "a client's whole calibration was forgotten");
+    state.database().forget_codec_calibrations(client_id).await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -268,5 +275,29 @@ mod tests {
 
         let profile = calibration_profile(&state, client).await.expect("read");
         assert_eq!(profile, vec![calibration]);
+    }
+
+    #[tokio::test]
+    async fn a_forgotten_calibration_is_offered_afresh() {
+        let (_directory, state) = state_without_media_tools().await;
+        let client = PlaybackClientId::new();
+        record_calibration(
+            &state,
+            client,
+            &CodecCalibration {
+                codec: "h264".to_string(),
+                calibration_version: 1,
+                usable: true,
+                tested_height: 1080,
+                dropped_share: 0.0,
+                measured_at: melyxar_core::time::now(),
+            },
+        )
+        .await
+        .expect("recorded");
+
+        forget_calibration(&state, client).await.expect("forgotten");
+
+        assert!(calibration_profile(&state, client).await.expect("read").is_empty());
     }
 }

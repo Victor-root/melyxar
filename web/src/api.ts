@@ -825,6 +825,9 @@ export const api = {
   /* Everything measured for this device so far, one entry per codec. */
   calibrationProfile: (clientId: string) =>
     get<CalibrationEntry[]>(`/api/v1/calibration/${clientId}`),
+  /* Forgets everything measured for this device, all codecs at once. */
+  forgetCalibration: (clientId: string) =>
+    remove<{ forgotten: boolean }>(`/api/v1/calibration/${clientId}`),
 };
 
 /** What was measured for one codec, on this device. */

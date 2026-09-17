@@ -92,6 +92,20 @@ impl Database {
             })
             .collect()
     }
+
+    /// Forgets everything measured for one client, all codecs at once.
+    ///
+    /// A client recalibrating one codec on its own already replaces that
+    /// row by itself; this is for starting from nothing again, which
+    /// somebody testing the calibration itself needs far more often than a
+    /// viewer ever will.
+    pub async fn forget_codec_calibrations(&self, client_id: PlaybackClientId) -> Result<()> {
+        sqlx::query("DELETE FROM client_codec_calibrations WHERE client_id = ?")
+            .bind(client_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -176,6 +190,38 @@ mod tests {
         assert_eq!(calibrations[0].tested_height, 2160);
         assert_eq!(calibrations[1].codec, "h264");
         assert!(calibrations[1].usable, "untouched by calibrating another codec");
+    }
+
+    #[tokio::test]
+    async fn forgetting_a_client_clears_every_codec_it_had() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let client = PlaybackClientId::new();
+        let other = PlaybackClientId::new();
+
+        database
+            .save_codec_calibration(client, &measured("h264", true, 2160, 0.0))
+            .await
+            .expect("saved");
+        database
+            .save_codec_calibration(client, &measured("av1", false, 1080, 0.3))
+            .await
+            .expect("saved");
+        database
+            .save_codec_calibration(other, &measured("hevc", true, 2160, 0.0))
+            .await
+            .expect("saved");
+
+        database
+            .forget_codec_calibrations(client)
+            .await
+            .expect("forgotten");
+
+        assert!(database.codec_calibrations_of(client).await.expect("read").is_empty());
+        assert_eq!(
+            database.codec_calibrations_of(other).await.expect("read").len(),
+            1,
+            "forgetting one client must not touch another one's calibration"
+        );
     }
 
     #[tokio::test]

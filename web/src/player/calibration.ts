@@ -187,6 +187,12 @@ export function storedCalibration() {
   return api.calibrationProfile(deviceIdentity());
 }
 
+/** Forgets this device's calibration, all codecs at once, so the next run
+ *  starts from nothing rather than refining what is already there. */
+export function resetCalibration() {
+  return api.forgetCalibration(deviceIdentity());
+}
+
 /** Whether a stored calibration was made by the recipe this build still
  *  uses. A profile made an older way is treated as if it did not exist,
  *  rather than trusted for something it never really measured. */

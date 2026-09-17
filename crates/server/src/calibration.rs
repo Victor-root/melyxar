@@ -27,7 +27,7 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/v1/calibration/{client}",
-            axum::routing::get(profile),
+            axum::routing::get(profile).delete(forget),
         )
 }
 
@@ -122,6 +122,16 @@ async fn profile(
             })
             .collect(),
     ))
+}
+
+/// Forgets everything measured for one client, all codecs at once.
+async fn forget(
+    State(state): State<AppState>,
+    RoutePath(client): RoutePath<String>,
+) -> Result<Json<serde_json::Value>> {
+    let client_id = parse_client(&client)?;
+    melyxar_app::calibration::forget_calibration(&state, client_id).await?;
+    Ok(Json(serde_json::json!({ "forgotten": true })))
 }
 
 fn parse_client(value: &str) -> Result<PlaybackClientId> {

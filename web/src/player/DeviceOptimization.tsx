@@ -11,7 +11,12 @@
 
 import { useEffect, useState } from "react";
 import { useSettings } from "../settings";
-import { isCurrent, runCalibration, storedCalibration } from "./calibration";
+import {
+  isCurrent,
+  resetCalibration,
+  runCalibration,
+  storedCalibration,
+} from "./calibration";
 import type { CalibrationProgress } from "./calibration";
 import { forgetMeasuredCapabilities } from "./profile";
 
@@ -21,12 +26,22 @@ export function DeviceOptimization() {
   const { t } = useSettings();
   const [status, setStatus] = useState<Status>("checking");
   const [optimized, setOptimized] = useState(false);
+  /* Whether anything at all is on record for this device, current or not:
+     a run interrupted partway through still leaves rows behind, and those
+     have to be clearable too, not only a finished calibration. */
+  const [hasStored, setHasStored] = useState(false);
   const [progress, setProgress] = useState<CalibrationProgress | null>(null);
 
   const check = () => {
     storedCalibration()
-      .then((entries) => setOptimized(isCurrent(entries)))
-      .catch(() => setOptimized(false))
+      .then((entries) => {
+        setOptimized(isCurrent(entries));
+        setHasStored(entries.length > 0);
+      })
+      .catch(() => {
+        setOptimized(false);
+        setHasStored(false);
+      })
       .finally(() => setStatus((current) => (current === "running" ? current : "idle")));
   };
 
@@ -47,6 +62,12 @@ export function DeviceOptimization() {
     }
   };
 
+  const reset = async () => {
+    await resetCalibration();
+    forgetMeasuredCapabilities();
+    check();
+  };
+
   return (
     <section className="settings-block">
       <h2>{t("settings.device")}</h2>
@@ -62,13 +83,20 @@ export function DeviceOptimization() {
             t(optimized ? "settings.device_optimized" : "settings.device_not_optimized")}
       </p>
 
-      <button
-        className="button button-small"
-        onClick={start}
-        disabled={status === "running" || status === "checking"}
-      >
-        {t("settings.device_optimize")}
-      </button>
+      <div className="controls">
+        <button
+          className="button button-small"
+          onClick={start}
+          disabled={status === "running" || status === "checking"}
+        >
+          {t("settings.device_optimize")}
+        </button>
+        {hasStored && status !== "running" && status !== "checking" && (
+          <button className="button-link" onClick={reset}>
+            {t("settings.device_reset")}
+          </button>
+        )}
+      </div>
     </section>
   );
 }
