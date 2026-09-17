@@ -441,8 +441,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
             during_the_scan: libraries
                 .iter()
                 .filter(|library| {
-                    library.options.key_frames_during_scan
-                        || library.options.thumbnails_during_scan
+                    library.options.key_frames_during_scan || library.options.thumbnails_during_scan
                 })
                 .map(|library| library.name.clone())
                 .collect(),

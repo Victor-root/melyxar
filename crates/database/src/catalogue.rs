@@ -2539,10 +2539,7 @@ mod tests {
         );
 
         // A file off the disk is not a file to read, here as everywhere else.
-        database
-            .mark_source_missing(second)
-            .await
-            .expect("marked");
+        database.mark_source_missing(second).await.expect("marked");
         assert_eq!(
             database
                 .count_awaiting_key_frames(library_id)
