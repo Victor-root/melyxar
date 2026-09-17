@@ -804,7 +804,37 @@ export const api = {
       // made elsewhere in the meantime.
       reported_at: new Date().toISOString(),
     }),
+  /* Opens a session against the reference film, rebuilt into one codec at one
+     height, for a calibration to watch and measure. Nameless: the same
+     question for whoever asks it. */
+  openCalibrationSession: (codec: string, height: number) =>
+    post<{ id: string; playlist_url: string }>("/api/v1/calibration/session", {
+      codec,
+      height,
+    }),
+  /* Records what this device measured for one codec, under its own
+     identifier and nothing else. */
+  recordCalibration: (body: {
+    client_id: string;
+    codec: string;
+    calibration_version: number;
+    usable: boolean;
+    tested_height: number;
+    dropped_share: number;
+  }) => post<{ recorded: boolean }>("/api/v1/calibration/verdict", body),
+  /* Everything measured for this device so far, one entry per codec. */
+  calibrationProfile: (clientId: string) =>
+    get<CalibrationEntry[]>(`/api/v1/calibration/${clientId}`),
 };
+
+/** What was measured for one codec, on this device. */
+export interface CalibrationEntry {
+  codec: string;
+  calibration_version: number;
+  usable: boolean;
+  tested_height: number;
+  dropped_share: number;
+}
 
 /**
  * The set of sizes a browser picks from, and the one to load by default.
