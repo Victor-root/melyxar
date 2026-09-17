@@ -44,6 +44,11 @@ const KEPT: usize = 4_000;
 pub fn tag_of(module: &str) -> &'static str {
     const BY_MODULE: &[(&str, &str)] = &[
         ("melyxar_app::scan", "scan"),
+        // The two heavy readings of a film, whether a scan does them or the
+        // nightly upkeep does. Kept apart from `scan` on purpose: the question
+        // somebody asks is "why has my bar no pictures", and the answer is in
+        // these lines rather than in the thousands a scan writes around them.
+        ("melyxar_app::upkeep", "upkeep"),
         ("melyxar_app::identify", "identify"),
         ("melyxar_app::subtitles", "subtitles"),
         ("melyxar_app::playback", "playback"),
@@ -228,6 +233,7 @@ mod tests {
         // crate lands under one tag and the tags stop meaning anything.
         assert_eq!(tag_of("melyxar_app::playback"), "playback");
         assert_eq!(tag_of("melyxar_app::startup"), "startup");
+        assert_eq!(tag_of("melyxar_app::upkeep"), "upkeep");
         assert_eq!(tag_of("melyxar_ffmpeg::hardware"), "card");
         assert_eq!(tag_of("melyxar_ffmpeg::command"), "ffmpeg");
         assert_eq!(tag_of("melyxar_server::playback"), "playback");

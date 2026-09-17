@@ -26,6 +26,15 @@ pub enum JobKind {
     ReadCopyAgain,
     FetchImages,
     AnalyseLoudness,
+    /// Reads every film of a library for where its picture can be started.
+    ///
+    /// A job of its own rather than a pass of the scan, because it reads each
+    /// file from end to end and a scan has to be over quickly. A library says
+    /// whether the scan does it anyway; otherwise this is what the nightly
+    /// upkeep starts, and what a button starts when somebody will not wait for
+    /// the night.
+    ReadKeyFrames,
+    /// The same, for the thumbnails somebody drags along the playback bar.
     GenerateThumbnails,
     PurgeActivity,
     Backup,
@@ -38,12 +47,13 @@ impl JobKind {
     /// several things have to cover all of them: the interface needs a
     /// sentence for each, and a kind with none reaches the screen as its own
     /// name.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::ScanLibrary,
         Self::IdentifyWork,
         Self::ReadCopyAgain,
         Self::FetchImages,
         Self::AnalyseLoudness,
+        Self::ReadKeyFrames,
         Self::GenerateThumbnails,
         Self::PurgeActivity,
         Self::Backup,
@@ -56,6 +66,7 @@ impl JobKind {
             Self::ReadCopyAgain => "read_copy_again",
             Self::FetchImages => "fetch_images",
             Self::AnalyseLoudness => "analyse_loudness",
+            Self::ReadKeyFrames => "read_key_frames",
             Self::GenerateThumbnails => "generate_thumbnails",
             Self::PurgeActivity => "purge_activity",
             Self::Backup => "backup",
@@ -69,6 +80,7 @@ impl JobKind {
             "read_copy_again" => Some(Self::ReadCopyAgain),
             "fetch_images" => Some(Self::FetchImages),
             "analyse_loudness" => Some(Self::AnalyseLoudness),
+            "read_key_frames" => Some(Self::ReadKeyFrames),
             "generate_thumbnails" => Some(Self::GenerateThumbnails),
             "purge_activity" => Some(Self::PurgeActivity),
             "backup" => Some(Self::Backup),
