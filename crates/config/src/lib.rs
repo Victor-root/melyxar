@@ -217,6 +217,48 @@ impl Default for ThumbnailsConfig {
     }
 }
 
+/// The work that runs of a night rather than while somebody waits.
+///
+/// Two readings of a film are far heavier than anything else this server does
+/// to a library, and neither is anything a person is standing in front of: the
+/// places a picture can be started, and the thumbnails of the playback bar.
+/// Each library says whether its own scan does them; whatever is left over is
+/// read here, once a day, at an hour when nobody is watching anything.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Every setting on its own: a section written with one line in it keeps the
+// usual value for everything else, rather than refusing to start over the
+// lines that were not written.
+#[serde(default)]
+pub struct TasksConfig {
+    /// Whether the upkeep runs on its own at all.
+    ///
+    /// On. Off leaves both readings to the switches of each library and to
+    /// whoever presses the button, which is a server that has been told to do
+    /// nothing by itself rather than a server that forgets.
+    pub nightly_upkeep: bool,
+    /// The hour of the day it starts, **in UTC**.
+    ///
+    /// In UTC because it is the only clock this server can read with
+    /// certainty: the hour a machine calls its own comes from a setting that
+    /// cannot be asked for safely from several threads at once, and a value
+    /// that is wrong half the year is worse than one that is plainly stated.
+    /// The interface turns it into the hour of whoever is looking at it, which
+    /// is the only place that conversion can be made honestly.
+    ///
+    /// Three in the morning, which is the hour Jellyfin settles on for the
+    /// same work.
+    pub nightly_upkeep_at_utc_hour: u32,
+}
+
+impl Default for TasksConfig {
+    fn default() -> Self {
+        Self {
+            nightly_upkeep: true,
+            nightly_upkeep_at_utc_hour: 3,
+        }
+    }
+}
+
 /// What a transcode is allowed to produce.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 // Every setting on its own: a section written with one line in it keeps the
@@ -321,6 +363,8 @@ pub struct Config {
     #[serde(default)]
     pub thumbnails: ThumbnailsConfig,
     #[serde(default)]
+    pub tasks: TasksConfig,
+    #[serde(default)]
     pub transcode: TranscodeConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
@@ -350,6 +394,7 @@ impl Default for Config {
             limits: LimitsConfig::default(),
             scan: ScanConfig::default(),
             thumbnails: ThumbnailsConfig::default(),
+            tasks: TasksConfig::default(),
             transcode: TranscodeConfig::default(),
             logging: LoggingConfig::default(),
             libraries: Vec::new(),
@@ -396,6 +441,12 @@ impl Config {
             return Err(ConfigError::Invalid(
                 "max_transcoding_sessions must be at least one, otherwise nothing can be transcoded".into(),
             ));
+        }
+        if self.tasks.nightly_upkeep_at_utc_hour > 23 {
+            return Err(ConfigError::Invalid(format!(
+                "tasks.nightly_upkeep_at_utc_hour is {}, and an hour of the day is nought to twenty three",
+                self.tasks.nightly_upkeep_at_utc_hour
+            )));
         }
         if self.transcode.enabled_video_codecs.is_empty() {
             return Err(ConfigError::Invalid(
@@ -564,6 +615,29 @@ mod tests {
     fn an_empty_root_label_is_refused_because_logs_rely_on_it() {
         let text = MINIMAL.replace(r#"label = "disk-one""#, r#"label = "  ""#);
         assert!(Config::parse(&text).is_err());
+    }
+
+    #[test]
+    fn a_server_nobody_configured_does_its_upkeep_in_the_middle_of_the_night() {
+        let config = Config::default();
+        assert!(config.tasks.nightly_upkeep);
+        assert_eq!(config.tasks.nightly_upkeep_at_utc_hour, 3);
+    }
+
+    #[test]
+    fn an_hour_that_is_not_an_hour_of_the_day_is_refused_by_name() {
+        let text = format!("{MINIMAL}\n[tasks]\nnightly_upkeep_at_utc_hour = 25\n");
+        let error = Config::parse(&text).expect_err("an impossible hour must be refused");
+        assert!(error.to_string().contains("nightly_upkeep_at_utc_hour"));
+
+        let midnight = format!("{MINIMAL}\n[tasks]\nnightly_upkeep_at_utc_hour = 0\n");
+        assert_eq!(
+            Config::parse(&midnight)
+                .expect("midnight is an hour like any other")
+                .tasks
+                .nightly_upkeep_at_utc_hour,
+            0
+        );
     }
 
     #[test]
