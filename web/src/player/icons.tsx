@@ -213,17 +213,22 @@ export function SettingsIcon(props: IconProps) {
   );
 }
 
-/* The picture kept in a corner of the screen.
-   The frame is cut exactly where the small window sits, rather than leaving
-   a gap either shape has to guess the size of: both were measured off the
-   same corner, so the frame's open end and the window's own corner are the
-   same point, and the window overhangs the frame's edge on purpose, the way
-   a picture in a corner actually would rather than sitting flush inside it. */
+/** The picture kept in a corner of the screen. Solid rather than stroked: the
+ *  frame and the window it holds are each one filled shape, not a line
+ *  drawn around one. */
 export function CornerIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M20 11V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h6" />
-      <rect x="12" y="11" width="8.8" height="7.6" rx="1.6" fill="currentColor" stroke="currentColor" />
+      <path
+        d="M19 4a3 3 0 0 1 3 3v4a1 1 0 0 1 -2 0v-4a1 1 0 0 0 -1 -1h-14a1 1 0 0 0 -1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 1 0 2h-6a3 3 0 0 1 -3 -3v-10a3 3 0 0 1 3 -3z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path
+        d="M20 13a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-5a2 2 0 0 1 -2 -2v-3a2 2 0 0 1 2 -2z"
+        fill="currentColor"
+        stroke="none"
+      />
     </Icon>
   );
 }
