@@ -821,6 +821,7 @@ export const api = {
     usable: boolean;
     tested_height: number;
     dropped_share: number;
+    shown_share: number;
   }) => post<{ recorded: boolean }>("/api/v1/calibration/verdict", body),
   /* Everything measured for this device so far, one entry per codec. */
   calibrationProfile: (clientId: string) =>
@@ -837,6 +838,10 @@ export interface CalibrationEntry {
   usable: boolean;
   tested_height: number;
   dropped_share: number;
+  /* The share of the pictures the film asked for that ever appeared at all:
+     the half of the answer a dropped share alone never catches, since a
+     decoder too slow to make pictures throws none of them away. */
+  shown_share: number;
 }
 
 /**

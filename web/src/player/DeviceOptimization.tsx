@@ -9,18 +9,18 @@
  * them means something to somebody watching a progress bar.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSettings } from "../settings";
 import {
-  isCurrent,
   resetCalibration,
   runCalibration,
   storedCalibration,
+  worthTrusting,
 } from "./calibration";
 import type { CalibrationProgress } from "./calibration";
 import { forgetMeasuredCapabilities } from "./profile";
 
-type Status = "checking" | "idle" | "running" | "done";
+type Status = "checking" | "idle" | "running";
 
 export function DeviceOptimization() {
   const { t } = useSettings();
@@ -31,36 +31,54 @@ export function DeviceOptimization() {
      have to be clearable too, not only a finished calibration. */
   const [hasStored, setHasStored] = useState(false);
   const [progress, setProgress] = useState<CalibrationProgress | null>(null);
+  /* Where the reference film really plays, and not a detail: a browser asked
+     to put a film somewhere nobody can see skips the work of showing it, and
+     then reports having dropped none of it. Every machine passed that way. */
+  const testing = useRef<HTMLVideoElement>(null);
 
-  const check = () => {
+  const check = () =>
     storedCalibration()
       .then((entries) => {
-        setOptimized(isCurrent(entries));
+        setOptimized(worthTrusting(entries));
         setHasStored(entries.length > 0);
       })
       .catch(() => {
         setOptimized(false);
         setHasStored(false);
-      })
-      .finally(() => setStatus((current) => (current === "running" ? current : "idle")));
-  };
+      });
 
-  useEffect(check, []);
+  useEffect(() => {
+    check().finally(() => setStatus("idle"));
+  }, []);
 
-  const start = async () => {
-    setStatus("running");
-    setProgress(null);
-    try {
-      await runCalibration(setProgress);
-    } finally {
+  /* Started from here rather than from the button, so that the element the
+     film plays in is on the page before anything is asked to play in it. */
+  useEffect(() => {
+    if (status !== "running") {
+      return;
+    }
+    const video = testing.current;
+    if (!video) {
+      return;
+    }
+    video.scrollIntoView({ block: "center", behavior: "smooth" });
+
+    let gone = false;
+    runCalibration(video, setProgress).finally(() => {
+      if (gone) {
+        return;
+      }
       // The very next question about this device must answer from what was
       // just measured, not from whatever was cached before the button was
       // pressed.
       forgetMeasuredCapabilities();
       setProgress(null);
-      check();
-    }
-  };
+      check().finally(() => setStatus("idle"));
+    });
+    return () => {
+      gone = true;
+    };
+  }, [status]);
 
   const reset = async () => {
     await resetCalibration();
@@ -86,7 +104,10 @@ export function DeviceOptimization() {
       <div className="controls">
         <button
           className="button button-small"
-          onClick={start}
+          onClick={() => {
+            setProgress(null);
+            setStatus("running");
+          }}
           disabled={status === "running" || status === "checking"}
         >
           {t("settings.device_optimize")}
@@ -97,6 +118,10 @@ export function DeviceOptimization() {
           </button>
         )}
       </div>
+
+      {status === "running" && (
+        <video ref={testing} className="device-test" muted playsInline aria-hidden="true" />
+      )}
     </section>
   );
 }

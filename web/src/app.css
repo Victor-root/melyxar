@@ -1314,6 +1314,22 @@
   color: var(--text);
 }
 
+/* The reference film really playing, where it can really be seen.
+   Deliberately on the page rather than tucked away: a browser handed a film
+   nobody is shown never does the work of showing it, decodes a handful of
+   pictures a second without ever calling one of them late, and reports a
+   flawless measurement. A machine that cannot play AV1 at all passed that
+   way twice. */
+.device-test {
+  display: block;
+  width: 100%;
+  max-width: 32rem;
+  aspect-ratio: 16 / 9;
+  margin-top: var(--gap);
+  border-radius: var(--radius-card);
+  background: #000;
+}
+
 /* The words as they will appear, over something dark enough to judge them
    against: a size named "very large" means nothing until it is seen.
    Proportions of the box rather than fixed heights, so the words sit where

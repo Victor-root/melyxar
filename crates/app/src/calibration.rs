@@ -182,6 +182,7 @@ pub async fn record_calibration(
         usable = calibration.usable,
         tested_height = calibration.tested_height,
         dropped_share = calibration.dropped_share,
+        shown_share = calibration.shown_share,
         calibration_version = calibration.calibration_version,
         "a client's calibration of one codec was recorded"
     );
@@ -273,6 +274,7 @@ mod tests {
             usable: true,
             tested_height: 2160,
             dropped_share: 0.0,
+            shown_share: 1.0,
             measured_at: melyxar_core::time::now(),
         };
 
@@ -297,6 +299,7 @@ mod tests {
                 usable: true,
                 tested_height: 1080,
                 dropped_share: 0.0,
+                shown_share: 1.0,
                 measured_at: melyxar_core::time::now(),
             },
         )
