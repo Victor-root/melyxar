@@ -102,10 +102,20 @@ export function StepOnIcon({ seconds, ...props }: IconProps & { seconds: number 
   );
 }
 
+/* The triangle used to stop short of a real point, at a plain diagonal cut
+   the bar then sat across: what read as a tip was mostly the bar, and the
+   triangle's own share of it barely reached past the middle of its height.
+   The triangle now comes to one true point, and the bar's edge lands exactly
+   on it rather than a bar-width further in. */
 export function PreviousChapterIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M18 6.4v11.2a.6.6 0 0 1-.93.5L9 13.1v4.5a.6.6 0 0 1-.9.52l-.1-.06V5.94a.6.6 0 0 1 .9-.52l.1.06v4.5l8.07-5.08a.6.6 0 0 1 .93.5Z" fill="currentColor" stroke="none" />
+      <rect x="6.9" y="5.9" width="1.1" height="12.2" rx="0.55" fill="currentColor" stroke="none" />
+      <path
+        d="M 8 12 L 17.39 6.74 A 0.7 0.7 0 0 1 18 7.1 L 18 16.9 A 0.7 0.7 0 0 1 17.39 17.26 Z"
+        fill="currentColor"
+        stroke="none"
+      />
     </Icon>
   );
 }
@@ -113,7 +123,12 @@ export function PreviousChapterIcon(props: IconProps) {
 export function NextChapterIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M6 6.4v11.2a.6.6 0 0 0 .93.5L15 13.1v4.5a.6.6 0 0 0 .9.52l.1-.06V5.94a.6.6 0 0 0-.9-.52l-.1.06v4.5L6.93 4.9a.6.6 0 0 0-.93.5Z" fill="currentColor" stroke="none" />
+      <rect x="16" y="5.9" width="1.1" height="12.2" rx="0.55" fill="currentColor" stroke="none" />
+      <path
+        d="M 16 12 L 6.61 6.74 A 0.7 0.7 0 0 0 6 7.1 L 6 16.9 A 0.7 0.7 0 0 0 6.61 17.26 Z"
+        fill="currentColor"
+        stroke="none"
+      />
     </Icon>
   );
 }
