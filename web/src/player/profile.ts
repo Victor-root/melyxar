@@ -9,6 +9,7 @@
  */
 
 import type { Quality } from "./quality";
+import { isCurrent, storedCalibration } from "./calibration";
 
 /** One thing the server will ask about. */
 interface Probe {
@@ -192,13 +193,55 @@ function takesInPieces(type: string): boolean {
   return typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(type);
 }
 
+/**
+ * What a real calibration measured on this exact device, when there is one
+ * to trust.
+ *
+ * Asked once and kept, for the same reason as the prediction above: a
+ * calibration does not change between two films either. Null for a device
+ * that has never been calibrated, or whose calibration was made by a recipe
+ * this build no longer uses, which is treated the same as never having run
+ * one at all rather than trusted for something it did not really measure.
+ */
+let calibrated: Promise<RebuiltCapability[] | null> | null = null;
+
+function whatWasReallyMeasured(): Promise<RebuiltCapability[] | null> {
+  calibrated ??= storedCalibration()
+    .then((entries) =>
+      isCurrent(entries)
+        ? entries
+            .filter((entry) => entry.usable)
+            .map((entry) => ({
+              codec: entry.codec,
+              max_height: entry.tested_height,
+              power_efficient: true,
+            }))
+        : null,
+    )
+    .catch(() => null);
+  return calibrated;
+}
+
+/**
+ * Forgets what was cached about this browser's decode capability.
+ *
+ * Called once a calibration just finished, so the very next question about
+ * this device answers from it instead of from before it existed.
+ */
+export function forgetMeasuredCapabilities(): void {
+  measured = null;
+  calibrated = null;
+}
+
 export async function clientProfile(asked?: Quality): Promise<ClientProfile> {
   const probe = document.createElement("video");
   // "probably" and "maybe" are the two answers that mean yes; only an empty
   // string is a no, and a browser says "maybe" when it will not commit.
   const plays = (type: string) => probe.canPlayType(type) !== "";
 
-  const rebuilt = await whatItTakesInPieces();
+  // What was really measured on this device beats what the browser predicts
+  // about itself, whenever there is a measurement current enough to trust.
+  const rebuilt = (await whatWasReallyMeasured()) ?? (await whatItTakesInPieces());
 
   return {
     containers: CONTAINERS.filter((entry) => plays(entry.type)).map((entry) => entry.name),
