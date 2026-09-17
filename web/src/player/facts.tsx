@@ -15,7 +15,8 @@
 import { useEffect, useState } from "react";
 
 import { api } from "../api";
-import type { PlaybackPlan, Producing } from "../api";
+import type { CalibrationEntry, PlaybackPlan, Producing } from "../api";
+import { storedCalibration } from "./calibration";
 
 /** How often what the browser says is read again. */
 const LOOK_EVERY_MS = 1_000;
@@ -122,6 +123,16 @@ interface Props {
 export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
   const [says, setSays] = useState<WhatTheBrowserSays | null>(null);
   const [working, setWorking] = useState<Producing | null>(null);
+  const [calibration, setCalibration] = useState<CalibrationEntry[]>([]);
+
+  /* Read once, on opening: this device's own calibration does not change
+     while a film plays. Empty for a device nobody has optimized, which is
+     silently left off the panel rather than shown as a row of nothing. */
+  useEffect(() => {
+    storedCalibration()
+      .then(setCalibration)
+      .catch(() => setCalibration([]));
+  }, []);
 
   /* Looked at on a rhythm rather than on an event: pictures shown and pictures
      dropped only ever climb, and nothing fires when they do. */
@@ -302,6 +313,23 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
           <Line name={t("facts.size")} is={asSize(film.size_bytes)} />
           <Line name={t("facts.rate")} is={asRate(film.overall_bitrate)} />
         </section>
+
+        {calibration.length > 0 && (
+          <section className="facts-block">
+            <h3>{t("facts.calibration")}</h3>
+            {calibration.map((entry) => (
+              <Line
+                key={entry.codec}
+                name={entry.codec.toUpperCase()}
+                is={
+                  entry.usable
+                    ? t("facts.calibration_at", { height: entry.tested_height })
+                    : t("facts.calibration_unusable")
+                }
+              />
+            ))}
+          </section>
+        )}
       </div>
     </aside>
   );
