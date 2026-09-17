@@ -54,6 +54,10 @@ export interface RebuiltCapability {
   codec: string;
   /** Tallest picture decoded smoothly, and null when nothing was measured. */
   max_height: number | null;
+  /** Whether the browser said this decode was power efficient. Null when it
+   *  never answered the question, which counts against nothing: most
+   *  browsers do not answer it at all. */
+  power_efficient: boolean | null;
 }
 
 export interface ClientProfile {
@@ -97,6 +101,14 @@ interface Answered {
   asked: boolean;
   /** Tallest picture it decodes smoothly, when it named one. */
   tallest: number | null;
+  /** Whether that decode was power efficient, at the height above.
+   *
+   * "Smooth" and "on a real decoder" are different questions: a browser
+   * without hardware support for a codec can still call it smooth by
+   * falling back to software on a machine fast enough to keep up in this
+   * synthetic measurement, and still drop pictures once a real film asks
+   * more of it. Null when the browser never said. */
+  efficient: boolean | null;
 }
 
 /**
@@ -111,7 +123,7 @@ interface Answered {
 async function tallestSmoothly(type: string): Promise<Answered> {
   const capabilities = navigator.mediaCapabilities;
   if (!capabilities?.decodingInfo) {
-    return { asked: false, tallest: null };
+    return { asked: false, tallest: null, efficient: null };
   }
   for (const height of HEIGHTS) {
     try {
@@ -128,14 +140,14 @@ async function tallestSmoothly(type: string): Promise<Answered> {
       // Smooth as well as supported: a browser that decodes a film at two
       // frames a second supports it and shows nobody anything.
       if (answer.supported && answer.smooth) {
-        return { asked: true, tallest: height };
+        return { asked: true, tallest: height, efficient: answer.powerEfficient };
       }
     } catch {
       // A browser that refuses the question is a browser that cannot be asked.
-      return { asked: false, tallest: null };
+      return { asked: false, tallest: null, efficient: null };
     }
   }
-  return { asked: true, tallest: null };
+  return { asked: true, tallest: null, efficient: null };
 }
 
 /**
@@ -164,7 +176,11 @@ function whatItTakesInPieces(): Promise<RebuiltCapability[]> {
       // cannot show, whatever it says about taking it. Offering it would be
       // the very thing being measured against.
       .filter((answer) => answer.takes && !(answer.answered.asked && answer.answered.tallest === null))
-      .map((answer) => ({ codec: answer.name, max_height: answer.answered.tallest })),
+      .map((answer) => ({
+        codec: answer.name,
+        max_height: answer.answered.tallest,
+        power_efficient: answer.answered.efficient,
+      })),
   );
   return measured;
 }

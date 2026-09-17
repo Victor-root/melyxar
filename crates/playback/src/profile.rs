@@ -80,6 +80,18 @@ pub struct RebuiltCapability {
     /// used to mean and refusing everything would rebuild nothing.
     #[serde(default)]
     pub max_height: Option<i32>,
+    /// Whether the browser said this decode was power efficient, at the
+    /// height above.
+    ///
+    /// "Decodes smoothly" and "decodes on a real decoder" are different
+    /// questions too: a browser without hardware support for a codec can
+    /// still call it smooth by falling back to software on a machine fast
+    /// enough to keep up in a synthetic measurement, and still drop pictures
+    /// once a real film asks more of it. Absent means the browser never
+    /// answered the question, which is taken as neither answer: a codec is
+    /// not punished for a browser that simply does not say.
+    #[serde(default)]
+    pub power_efficient: Option<bool>,
 }
 
 impl RebuiltCapability {
@@ -87,6 +99,7 @@ impl RebuiltCapability {
         Self {
             codec: codec.into(),
             max_height: None,
+            power_efficient: None,
         }
     }
 
@@ -101,6 +114,13 @@ impl RebuiltCapability {
             // read would otherwise never be rebuilt at all.
             _ => true,
         }
+    }
+
+    /// Whether this decode is trusted for an automatic choice: not explicitly
+    /// reported inefficient. A browser that never answered gets the benefit
+    /// of the doubt, because most do not answer at all yet.
+    pub fn efficient(&self) -> bool {
+        self.power_efficient != Some(false)
     }
 }
 
@@ -198,6 +218,38 @@ impl ClientProfile {
             .iter()
             .find(|known| known.codec.eq_ignore_ascii_case(codec))
             .and_then(|known| known.max_height)
+    }
+
+    /// Whether this client's decode of a codec is trusted, on its own,
+    /// without a height attached.
+    ///
+    /// The codec every client reads is always trusted: this question exists
+    /// to keep an automatic choice from being pushed towards it by a doubtful
+    /// report about a newer one, and it would defeat itself if that codec
+    /// could fail the very question it is the fallback for. A codec never
+    /// measured otherwise gets the same benefit of the doubt, because most
+    /// browsers do not answer this question yet. Only an explicit "not
+    /// efficient" on a newer codec counts against it here.
+    pub fn efficient(&self, codec: &str) -> bool {
+        codec.eq_ignore_ascii_case(ALWAYS_READ)
+            || self
+                .rebuilt_video
+                .iter()
+                .find(|known| known.codec.eq_ignore_ascii_case(codec))
+                .is_none_or(RebuiltCapability::efficient)
+    }
+
+    /// Whether an automatic choice may prefer this codec, at this height,
+    /// over the one every client reads.
+    ///
+    /// A stricter question than [`Self::accepts_rebuilt`]: covered as usual,
+    /// and not reported inefficient to decode. The point of offering a newer
+    /// codec is the bitrate it saves, and that is not saved by a decode the
+    /// browser had to fall back to doing in software. A codec asked for
+    /// directly skips this question entirely; only the automatic choice asks
+    /// it.
+    pub fn efficiently_accepts_rebuilt(&self, codec: &str, height: Option<i32>) -> bool {
+        self.accepts_rebuilt(codec, height) && self.efficient(codec)
     }
 
     pub fn supports_subtitle_format(&self, codec: &str) -> bool {
@@ -333,6 +385,7 @@ mod tests {
                 RebuiltCapability {
                     codec: "av1".into(),
                     max_height: Some(1080),
+                    power_efficient: None,
                 },
             ],
             ..ClientProfile::conservative_browser()
@@ -355,6 +408,65 @@ mod tests {
     }
 
     #[test]
+    fn a_codec_reported_smooth_but_not_efficient_is_not_trusted_automatically() {
+        // A browser without a real decoder for a codec can still call it
+        // smooth on a machine fast enough to fall back to software in a
+        // synthetic measurement, and still drop pictures once a real film
+        // asks more of it. The point of a newer codec is the bitrate it
+        // saves, and that is not saved by a software decode.
+        let profile = ClientProfile {
+            rebuilt_video: vec![
+                RebuiltCapability::any("h264"),
+                RebuiltCapability {
+                    codec: "av1".into(),
+                    max_height: Some(2160),
+                    power_efficient: Some(false),
+                },
+            ],
+            ..ClientProfile::conservative_browser()
+        };
+
+        assert!(
+            profile.accepts_rebuilt("av1", Some(2160)),
+            "the browser did say it decodes this smoothly"
+        );
+        assert!(!profile.efficient("av1"));
+        assert!(
+            !profile.efficiently_accepts_rebuilt("av1", Some(2160)),
+            "smooth on its own is not enough for an automatic choice"
+        );
+    }
+
+    #[test]
+    fn a_codec_never_measured_for_efficiency_is_not_punished_for_a_silent_browser() {
+        // Most browsers do not answer this question yet, and an automatic
+        // choice must not be pushed towards the codec every client reads
+        // just because none of them say either way.
+        let profile = ClientProfile {
+            rebuilt_video: vec![RebuiltCapability::any("hevc")],
+            ..ClientProfile::conservative_browser()
+        };
+        assert!(profile.efficient("hevc"));
+        assert!(profile.efficiently_accepts_rebuilt("hevc", Some(2160)));
+    }
+
+    #[test]
+    fn the_codec_every_client_reads_is_never_refused_for_being_inefficient() {
+        // It is the fallback of last resort, and it would defeat itself if it
+        // could fail the very question it exists to answer.
+        let profile = ClientProfile {
+            rebuilt_video: vec![RebuiltCapability {
+                codec: "h264".into(),
+                max_height: Some(2160),
+                power_efficient: Some(false),
+            }],
+            ..ClientProfile::conservative_browser()
+        };
+        assert!(profile.efficient("h264"));
+        assert!(profile.efficiently_accepts_rebuilt("h264", Some(2160)));
+    }
+
+    #[test]
     fn a_profile_is_read_from_what_a_page_really_sends() {
         // The shape on the wire, which is the one thing a type cannot check
         // on its own: a page and a server that disagree about it end up with
@@ -363,7 +475,7 @@ mod tests {
         let profile: ClientProfile = serde_json::from_str(
             r#"{"containers":["mp4"],"video":[{"codec":"h264"}],
                 "rebuilt_video":[{"codec":"h264","max_height":2160},
-                                 {"codec":"av1","max_height":1080},
+                                 {"codec":"av1","max_height":1080,"power_efficient":false},
                                  {"codec":"hevc","max_height":null}],
                 "audio_codecs":["aac"],"max_audio_channels":2,
                 "subtitle_formats":["webvtt"],"supports_hdr":false,
@@ -378,6 +490,11 @@ mod tests {
         assert!(
             profile.accepts_rebuilt("hevc", Some(2160)),
             "a codec the page measured no limit for is not limited"
+        );
+        assert!(!profile.efficient("av1"), "read from the wire, not assumed");
+        assert!(
+            profile.efficient("hevc"),
+            "a codec the page said nothing about is not punished for it"
         );
     }
 
