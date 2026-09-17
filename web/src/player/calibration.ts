@@ -119,22 +119,40 @@ async function watchIt(playlistUrl: string): Promise<Measured> {
 
   const video = hiddenVideo();
   const hls = new Hls();
+  // A fatal error can arrive at any point, including well after the
+  // manifest was parsed and the picture already started playing: a segment
+  // the media tool fails to produce partway through is exactly that, and it
+  // says nothing a playback quality counter would catch on its own, since
+  // the picture that did arrive before it played back perfectly well. Kept
+  // for the rest of this measurement, not just the wait below, so a codec
+  // that failed here is never read as one that merely stalled or was never
+  // asked to do anything.
+  let fatal: string | null = null;
+  let stillConnecting: ((error: Error) => void) | null = null;
+  hls.on(Hls.Events.ERROR, (_event, data) => {
+    if (data.fatal) {
+      fatal = data.details;
+      stillConnecting?.(new Error(data.details));
+    }
+  });
   try {
     hls.attachMedia(video);
     hls.loadSource(playlistUrl);
     await new Promise<void>((resolve, reject) => {
-      hls.on(Hls.Events.MANIFEST_PARSED, () => resolve());
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) {
-          reject(new Error(data.details));
-        }
-      });
+      stillConnecting = reject;
+      hls.once(Hls.Events.MANIFEST_PARSED, () => resolve());
     });
+    stillConnecting = null;
     await video.play();
 
     const quality = video.getVideoPlaybackQuality?.();
     const startedAt = { time: video.currentTime, dropped: quality?.droppedVideoFrames ?? 0 };
     await new Promise((resolve) => window.setTimeout(resolve, MEASURE_MS));
+
+    if (fatal) {
+      return { usable: false, droppedShare: 1 };
+    }
+
     const endQuality = video.getVideoPlaybackQuality?.();
     const advanced = video.currentTime - startedAt.time;
     const dropped = (endQuality?.droppedVideoFrames ?? 0) - startedAt.dropped;
