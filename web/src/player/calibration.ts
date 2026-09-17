@@ -82,58 +82,71 @@ async function measure(codec: string, height: number): Promise<Measured> {
   return Promise.race([measureOnce(codec, height), gaveUp]);
 }
 
+/**
+ * Everything that can go wrong here, from a server that will not open this
+ * session at all (no card for this codec, say) to the picture never arriving,
+ * means the same thing to a calibration: this codec is not one to offer on
+ * this device. Nothing here is allowed to reject and stop the whole run over
+ * one codec the server or the browser could not produce.
+ */
 async function measureOnce(codec: string, height: number): Promise<Measured> {
-  const opened = await api.openCalibrationSession(codec, height);
-  const video = hiddenVideo();
-
   try {
-    const { default: Hls } = await import("hls.js");
-    if (!Hls.isSupported()) {
-      // Nothing about a real streaming path can be measured here, so the
-      // codec is left exactly as unmeasured as it always was.
-      return { usable: false, droppedShare: 1 };
-    }
-
-    const hls = new Hls();
+    const opened = await api.openCalibrationSession(codec, height);
     try {
-      hls.attachMedia(video);
-      hls.loadSource(opened.playlist_url);
-      await new Promise<void>((resolve, reject) => {
-        hls.on(Hls.Events.MANIFEST_PARSED, () => resolve());
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (data.fatal) {
-            reject(new Error(data.details));
-          }
-        });
-      });
-      await video.play();
-
-      const quality = video.getVideoPlaybackQuality?.();
-      const startedAt = { time: video.currentTime, dropped: quality?.droppedVideoFrames ?? 0 };
-      await new Promise((resolve) => window.setTimeout(resolve, MEASURE_MS));
-      const endQuality = video.getVideoPlaybackQuality?.();
-      const advanced = video.currentTime - startedAt.time;
-      const dropped = (endQuality?.droppedVideoFrames ?? 0) - startedAt.dropped;
-      const shown =
-        (endQuality?.totalVideoFrames ?? 0) - (quality?.totalVideoFrames ?? 0);
-
-      const clockAdvancedEnough = advanced >= (MEASURE_MS / 1000) * CLOCK_MUST_ADVANCE_AT_LEAST;
-      const droppedShare = shown + dropped > 0 ? dropped / (shown + dropped) : 0;
-
-      return {
-        // A stall is a buffering problem, not a decode one, and a codec is
-        // never blamed for what a stall already explains.
-        usable: clockAdvancedEnough && droppedShare <= MAX_ACCEPTABLE_DROPPED_SHARE,
-        droppedShare,
-      };
+      return await watchIt(opened.playlist_url);
     } finally {
-      hls.destroy();
+      api.closeSession(opened.id);
     }
   } catch {
     return { usable: false, droppedShare: 1 };
+  }
+}
+
+/** Plays one already-open session and says what really happened. Left to
+ *  throw on anything that goes wrong; `measureOnce` decides what that means. */
+async function watchIt(playlistUrl: string): Promise<Measured> {
+  const { default: Hls } = await import("hls.js");
+  if (!Hls.isSupported()) {
+    // Nothing about a real streaming path can be measured here, so the codec
+    // is left exactly as unmeasured as it always was.
+    return { usable: false, droppedShare: 1 };
+  }
+
+  const video = hiddenVideo();
+  const hls = new Hls();
+  try {
+    hls.attachMedia(video);
+    hls.loadSource(playlistUrl);
+    await new Promise<void>((resolve, reject) => {
+      hls.on(Hls.Events.MANIFEST_PARSED, () => resolve());
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          reject(new Error(data.details));
+        }
+      });
+    });
+    await video.play();
+
+    const quality = video.getVideoPlaybackQuality?.();
+    const startedAt = { time: video.currentTime, dropped: quality?.droppedVideoFrames ?? 0 };
+    await new Promise((resolve) => window.setTimeout(resolve, MEASURE_MS));
+    const endQuality = video.getVideoPlaybackQuality?.();
+    const advanced = video.currentTime - startedAt.time;
+    const dropped = (endQuality?.droppedVideoFrames ?? 0) - startedAt.dropped;
+    const shown = (endQuality?.totalVideoFrames ?? 0) - (quality?.totalVideoFrames ?? 0);
+
+    const clockAdvancedEnough = advanced >= (MEASURE_MS / 1000) * CLOCK_MUST_ADVANCE_AT_LEAST;
+    const droppedShare = shown + dropped > 0 ? dropped / (shown + dropped) : 0;
+
+    return {
+      // A stall is a buffering problem, not a decode one, and a codec is
+      // never blamed for what a stall already explains.
+      usable: clockAdvancedEnough && droppedShare <= MAX_ACCEPTABLE_DROPPED_SHARE,
+      droppedShare,
+    };
   } finally {
+    hls.destroy();
     video.remove();
-    api.closeSession(opened.id);
   }
 }
 
