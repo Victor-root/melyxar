@@ -7,6 +7,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod calibration;
 pub mod catalogue;
 pub mod error;
 pub mod images;
