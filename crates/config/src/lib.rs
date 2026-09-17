@@ -208,6 +208,33 @@ impl Default for ThumbnailsConfig {
     }
 }
 
+/// What a transcode is allowed to produce.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Every setting on its own: a section written with one line in it keeps the
+// usual value for everything else, rather than refusing to start over the
+// lines that were not written.
+#[serde(default)]
+pub struct TranscodeConfig {
+    /// Codecs a rebuild is allowed to come out in, best first.
+    ///
+    /// All three by default, the same as a server nobody has configured has
+    /// always offered. Narrowing this is how an administrator rules a codec
+    /// out server wide; a viewer choosing among what is left happens in the
+    /// player, for the playback they are watching.
+    pub enabled_video_codecs: Vec<String>,
+}
+
+impl Default for TranscodeConfig {
+    fn default() -> Self {
+        Self {
+            enabled_video_codecs: ["av1", "hevc", "h264"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        }
+    }
+}
+
 /// Logging behaviour.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 // Every setting on its own: a section written with one line in it keeps the
@@ -285,6 +312,8 @@ pub struct Config {
     #[serde(default)]
     pub thumbnails: ThumbnailsConfig,
     #[serde(default)]
+    pub transcode: TranscodeConfig,
+    #[serde(default)]
     pub logging: LoggingConfig,
     /// Left out entirely when empty, so that a starting file printed by the
     /// installer can have a library appended to it as it stands. An empty list
@@ -312,6 +341,7 @@ impl Default for Config {
             limits: LimitsConfig::default(),
             scan: ScanConfig::default(),
             thumbnails: ThumbnailsConfig::default(),
+            transcode: TranscodeConfig::default(),
             logging: LoggingConfig::default(),
             libraries: Vec::new(),
         }
@@ -357,6 +387,18 @@ impl Config {
             return Err(ConfigError::Invalid(
                 "max_transcoding_sessions must be at least one, otherwise nothing can be transcoded".into(),
             ));
+        }
+        if self.transcode.enabled_video_codecs.is_empty() {
+            return Err(ConfigError::Invalid(
+                "transcode.enabled_video_codecs must name at least one codec, otherwise nothing can be transcoded".into(),
+            ));
+        }
+        for codec in &self.transcode.enabled_video_codecs {
+            if !["h264", "hevc", "av1"].contains(&codec.as_str()) {
+                return Err(ConfigError::Invalid(format!(
+                    "transcode.enabled_video_codecs names the unknown codec '{codec}'"
+                )));
+            }
         }
         for library in &self.libraries {
             if melyxar_core::library::LibraryKind::parse(&library.kind).is_none() {
@@ -512,6 +554,28 @@ mod tests {
     #[test]
     fn an_empty_root_label_is_refused_because_logs_rely_on_it() {
         let text = MINIMAL.replace(r#"label = "disk-one""#, r#"label = "  ""#);
+        assert!(Config::parse(&text).is_err());
+    }
+
+    #[test]
+    fn a_server_nobody_configured_transcodes_into_all_three_codecs() {
+        let config = Config::default();
+        assert_eq!(
+            config.transcode.enabled_video_codecs,
+            vec!["av1".to_string(), "hevc".to_string(), "h264".to_string()]
+        );
+    }
+
+    #[test]
+    fn an_unknown_transcode_codec_is_refused_by_name() {
+        let text = format!("{MINIMAL}\n[transcode]\nenabled_video_codecs = [\"vp9\"]\n");
+        let error = Config::parse(&text).expect_err("an unknown codec must be refused");
+        assert!(error.to_string().contains("vp9"));
+    }
+
+    #[test]
+    fn an_empty_codec_list_is_refused_rather_than_transcoding_nothing() {
+        let text = format!("{MINIMAL}\n[transcode]\nenabled_video_codecs = []\n");
         assert!(Config::parse(&text).is_err());
     }
 

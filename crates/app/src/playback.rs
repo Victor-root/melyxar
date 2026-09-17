@@ -55,6 +55,15 @@ pub struct PlayRequest {
     pub audio_track_id: Option<TrackId>,
     /// Chosen subtitle. Absent means none.
     pub subtitle_track_id: Option<TrackId>,
+    /// A codec asked for directly, forced whenever this server allows it and
+    /// the card can produce it.
+    ///
+    /// Absent leaves the choice to the usual negotiation. This exists so an
+    /// administrator chasing a stutter can watch one exact codec rather than
+    /// have it decided the same way every time; a viewer picking a codec for
+    /// themselves is the same mechanism, and choosing it for them is a later
+    /// piece of work.
+    pub preferred_video_codec: Option<String>,
 }
 
 /// Everything a player needs to start.
@@ -251,6 +260,8 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         &profile,
         state.capabilities(),
         subtitle_to_paint_on(&decision, &tracks).is_some(),
+        &state.config().transcode.enabled_video_codecs,
+        request.preferred_video_codec.as_deref(),
     );
 
     // The one line that explains a playback afterwards. The reasons are worked
@@ -279,6 +290,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         }),
         rebuilt_on = rebuild.as_ref().and_then(PictureRebuild::card_name),
         rebuilt_into = rebuild.as_ref().map(|rebuild| rebuild.codec.as_str()),
+        requested_codec = request.preferred_video_codec.as_deref(),
         read_by = rebuild.as_ref().map(|rebuild| match rebuild.reads_the_film {
             true => "card",
             false => "processor",
@@ -659,6 +671,8 @@ fn how_to_rebuild(
     profile: &ClientProfile,
     capabilities: Option<&melyxar_ffmpeg::Capabilities>,
     painting_subtitles: bool,
+    enabled_codecs: &[String],
+    requested_codec: Option<&str>,
 ) -> Option<PictureRebuild> {
     if decision.video != melyxar_playback::decision::StreamAction::Transcode {
         return None;
@@ -680,13 +694,28 @@ fn how_to_rebuild(
     // less, so a codec is offered only where it was measured to keep up.
     let rebuilt_height = decision.scale_to_height.or(source_height);
 
+    let allowed = |codec: &&&str| enabled_codecs.iter().any(|one| one.eq_ignore_ascii_case(codec));
+
     let on_a_card = card.and_then(|card| {
         let writes = |codec: &&&str| card.encoder_for(codec).is_some();
+
+        // A codec asked for directly, forced whenever this server allows it
+        // and the card can write it, whatever the client answered about it.
+        // This exists so a codec can be watched on its own while chasing a
+        // stutter, rather than have the usual negotiation decide it again
+        // every time.
+        if let Some(codec) = requested_codec.filter(|wanted| {
+            enabled_codecs.iter().any(|one| one.eq_ignore_ascii_case(wanted))
+                && card.encoder_for(wanted).is_some()
+        }) {
+            return Some((card, codec.to_string(), None));
+        }
 
         // The best codec the client keeps up with at the size this is coming
         // out at, which is the ordinary answer.
         if let Some(codec) = BEST_FIRST
             .iter()
+            .filter(allowed)
             .filter(writes)
             .find(|codec| profile.accepts_rebuilt(codec, rebuilt_height))
         {
@@ -700,6 +729,7 @@ fn how_to_rebuild(
         // nothing to offer here, and the answer is found below.
         BEST_FIRST
             .iter()
+            .filter(allowed)
             .filter(|_| card.can_scale)
             .filter(writes)
             .find_map(|codec| {
@@ -1205,6 +1235,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1233,6 +1264,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1281,6 +1313,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: Some(chosen.id),
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1315,6 +1348,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1465,6 +1499,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1491,6 +1526,7 @@ mod tests {
             profile: Some(profile),
             audio_track_id: None,
             subtitle_track_id: None,
+            preferred_video_codec: None,
         };
 
         // A server nobody has configured already folds the sound its own way
@@ -1581,6 +1617,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1620,6 +1657,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1672,6 +1710,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1724,6 +1763,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: Some(words.id),
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1772,6 +1812,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: Some(words.id),
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1804,6 +1845,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -1959,6 +2001,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await;
@@ -2010,6 +2053,12 @@ mod tests {
         }
     }
 
+    /// Every codec this server allows, which is what a server nobody has
+    /// configured allows.
+    fn all_codecs() -> Vec<String> {
+        BEST_FIRST.iter().map(|codec| codec.to_string()).collect()
+    }
+
     /// A card, with a say in what it was proved able to do. It reads every
     /// codec it writes here; the tests that care say otherwise themselves.
     fn a_card(codecs: &[&str], can_tone_map: bool) -> melyxar_ffmpeg::Card {
@@ -2058,6 +2107,8 @@ mod tests {
             &keeps_up_with_everything,
             Some(&card),
             false,
+            &all_codecs(),
+            None,
         )
         .expect("this picture is rebuilt");
         assert!(rebuild.on_a_card());
@@ -2086,6 +2137,8 @@ mod tests {
             &only_so_far,
             Some(&card),
             false,
+            &all_codecs(),
+            None,
         )
         .expect("this picture is rebuilt");
         assert_eq!(
@@ -2099,6 +2152,8 @@ mod tests {
             &only_so_far,
             Some(&card),
             false,
+            &all_codecs(),
+            None,
         )
         .expect("this picture is rebuilt");
         assert_eq!(
@@ -2121,6 +2176,8 @@ mod tests {
             &only_small_av1,
             Some(&card),
             false,
+            &all_codecs(),
+            None,
         )
         .expect("this picture is rebuilt");
         assert_eq!(made_to_fit.codec, "av1");
@@ -2142,6 +2199,8 @@ mod tests {
             &ClientProfile::conservative_browser(),
             Some(&card),
             false,
+            &all_codecs(),
+            None,
         )
         .expect("this picture is rebuilt");
         assert_eq!(rebuild.codec, "h264");
@@ -2168,6 +2227,8 @@ mod tests {
             &profile,
             Some(&card),
             false,
+            &all_codecs(),
+            None,
         )
         .expect("this picture is rebuilt");
         assert_eq!(rebuild.height, Some(720));
@@ -2182,6 +2243,8 @@ mod tests {
             &profile,
             Some(&card),
             false,
+            &all_codecs(),
+            None,
         )
         .expect("this picture is rebuilt");
         assert_eq!(only_a_size.codec, "av1");
@@ -2190,6 +2253,68 @@ mod tests {
             only_a_size.bitrate < Some(rate_for(Some(720), "h264")),
             "needing less is the whole point of the newer codec"
         );
+    }
+
+    #[test]
+    fn a_codec_asked_for_directly_is_forced_whatever_the_client_answered() {
+        // Chasing a stutter means watching one exact codec rather than have
+        // the usual negotiation decide it again every time, so a viewer who
+        // asks for h264 gets h264 even though the client here keeps up with
+        // everything and would ordinarily be given the newer codec.
+        let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
+        let card = capabilities_with(Some(a_card(&["h264", "hevc", "av1"], true)));
+        let keeps_up_with_everything = ClientProfile {
+            rebuilt_video: vec![
+                RebuiltCapability::any("h264"),
+                RebuiltCapability::any("hevc"),
+                RebuiltCapability::any("av1"),
+            ],
+            ..ClientProfile::conservative_browser()
+        };
+
+        let forced = how_to_rebuild(
+            &rebuilding(None, true, None),
+            &tracks,
+            &keeps_up_with_everything,
+            Some(&card),
+            false,
+            &all_codecs(),
+            Some("h264"),
+        )
+        .expect("this picture is rebuilt");
+        assert_eq!(forced.codec, "h264");
+
+        // Asked for a codec this server was not configured to allow: refused
+        // as if nothing had been asked, rather than produced anyway.
+        let not_allowed = how_to_rebuild(
+            &rebuilding(None, true, None),
+            &tracks,
+            &keeps_up_with_everything,
+            Some(&card),
+            false,
+            &["h264".to_string(), "hevc".to_string()],
+            Some("av1"),
+        )
+        .expect("this picture is rebuilt");
+        assert_eq!(
+            not_allowed.codec, "hevc",
+            "the best codec among those still allowed"
+        );
+
+        // Asked for a codec the card was never proved to write: the request
+        // cannot be honoured, so the usual negotiation decides instead.
+        let card_without_av1 = capabilities_with(Some(a_card(&["h264", "hevc"], true)));
+        let cannot_write_it = how_to_rebuild(
+            &rebuilding(None, true, None),
+            &tracks,
+            &keeps_up_with_everything,
+            Some(&card_without_av1),
+            false,
+            &all_codecs(),
+            Some("av1"),
+        )
+        .expect("this picture is rebuilt");
+        assert_eq!(cannot_write_it.codec, "hevc");
     }
 
     #[tokio::test]
@@ -2212,6 +2337,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -2226,8 +2352,16 @@ mod tests {
         }));
 
         let on_the_card =
-            how_to_rebuild(&plan.decision, &tracks, &profile, Some(&reads_hevc), false)
-                .expect("this picture is rebuilt");
+            how_to_rebuild(
+                &plan.decision,
+                &tracks,
+                &profile,
+                Some(&reads_hevc),
+                false,
+                &all_codecs(),
+                None,
+            )
+            .expect("this picture is rebuilt");
         assert!(on_the_card.reads_the_film, "the card was proved to read it");
 
         let handed_up = how_to_rebuild(
@@ -2236,6 +2370,8 @@ mod tests {
             &profile,
             Some(&reads_nothing_useful),
             false,
+            &all_codecs(),
+            None,
         )
         .expect("this picture is rebuilt");
         assert!(handed_up.on_a_card(), "it still rebuilds the picture");
@@ -2292,6 +2428,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -2304,6 +2441,8 @@ mod tests {
             &ClientProfile::conservative_browser(),
             Some(&reads_hevc),
             false,
+            &all_codecs(),
+            None,
         )
         .expect("this picture is rebuilt");
 
@@ -2328,6 +2467,8 @@ mod tests {
             &ClientProfile::conservative_browser(),
             Some(&capabilities_with(Some(a_card(&["h264"], true)))),
             false,
+            &all_codecs(),
+            None,
         )
         .is_none());
     }
@@ -2354,6 +2495,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await;
@@ -2401,6 +2543,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
@@ -2453,6 +2596,7 @@ mod tests {
                 profile: None,
                 audio_track_id: None,
                 subtitle_track_id: None,
+                preferred_video_codec: None,
             },
         )
         .await
