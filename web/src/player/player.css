@@ -1607,6 +1607,25 @@
   transform-origin: top center;
 }
 
+/* The facts panel clips its own edges to keep its rounded corners, and its
+   close button sits right against the top right one: a word above it, or
+   centred on it, would be cut off exactly where a corner is, rather than
+   merely run off the screen. The same fix as the corner above, for the same
+   reason, on both edges this button sits against. */
+.facts-head .player-button[aria-label]::before {
+  bottom: auto;
+  top: calc(100% - var(--player-button-ring) + 6px);
+  left: auto;
+  right: 0;
+  transform: translateX(0) scale(0.86);
+  transform-origin: top right;
+}
+
+.facts-head .player-button[aria-label]:hover::before,
+.facts-head .player-button[aria-label]:focus-visible::before {
+  transform: translateX(0) scale(1);
+}
+
 /* A word centred on a button near an edge of the picture runs off it, and a
    word half off the screen is worse than no word at all. The button at each
    end of a row hangs its word from its own edge instead, so it grows inwards.
