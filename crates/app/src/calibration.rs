@@ -33,8 +33,15 @@ use crate::{AppError, AppState, Result};
 const CALIBRATED_CODECS: &[&str] = &["h264", "hevc", "av1"];
 
 /// Where the reference film lives, once it has been made.
+///
+/// Carries the recipe's own version, so a server that already made one under
+/// an older recipe makes a fresh one instead of measuring every client
+/// against a film that recipe no longer stands behind.
 fn reference_film_path(state: &AppState) -> PathBuf {
-    state.config().directories.calibration().join("reference.mkv")
+    state.config().directories.calibration().join(format!(
+        "reference-v{}.mkv",
+        melyxar_ffmpeg::calibration::REFERENCE_RECIPE_VERSION
+    ))
 }
 
 fn no_tools() -> AppError {
