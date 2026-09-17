@@ -181,6 +181,24 @@ enum Seen {
         stretches: u32,
         ready_state: u32,
     },
+    /// Pictures the browser dropped over one short stretch, said only when it
+    /// dropped any.
+    ///
+    /// The other two facts about a stalled or frozen picture only fire once
+    /// the clock itself has stopped moving for a whole second, or the picture
+    /// has for five: a decoder shedding pictures to stay caught up, without
+    /// ever losing the clock, said neither. That is exactly the shape of a
+    /// player producing well ahead of real time on the server and still
+    /// looking rough on screen, which is what sent this looking for the wrong
+    /// half of the pipe first. Counted over a short stretch and sent only when
+    /// something was actually dropped, so a healthy stretch of film says
+    /// nothing at all.
+    PicturesWereDropped {
+        at_second: f64,
+        over_ms: u32,
+        pictures_shown: u32,
+        pictures_dropped: u32,
+    },
     /// The library gave up on this film, in its own words, and whether the
     /// browser's own reader was handed the playlist instead.
     ///
@@ -433,6 +451,19 @@ async fn what_the_page_saw(
             ready_state,
             "the clock went on while the picture stood still"
         ),
+        Seen::PicturesWereDropped {
+            at_second,
+            over_ms,
+            pictures_shown,
+            pictures_dropped,
+        } => tracing::debug!(
+            %session,
+            at_second,
+            over_ms,
+            pictures_shown,
+            pictures_dropped,
+            "the browser dropped pictures without ever losing the clock"
+        ),
         Seen::PlaybackRefused {
             because,
             browser_took_over,
@@ -546,6 +577,12 @@ mod tests {
                     "saw":"the_picture_arrived","across":3840,"down":2160,
                     "drawn_across":1280,"drawn_down":720}"#,
                 "the shape of the picture the browser got",
+            ),
+            (
+                r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",
+                    "saw":"pictures_were_dropped","at_second":612.5,"over_ms":2000,
+                    "pictures_shown":48,"pictures_dropped":11}"#,
+                "pictures dropped without the clock ever stopping",
             ),
         ] {
             serde_json::from_str::<FromThePage>(tried)
