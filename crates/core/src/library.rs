@@ -119,6 +119,33 @@ pub struct LibraryRoot {
     pub path: PathBuf,
 }
 
+/// What a library has been told to do while it is being scanned.
+///
+/// The two heavy readings of a film are switches rather than rules, and both
+/// are off to begin with. Each of them reads every file of the library from
+/// end to end, which is the difference between a scan that ends before dinner
+/// and one that is still going in the morning. Off, the work is not dropped:
+/// it belongs to the upkeep that runs of a night, where nobody is waiting on
+/// it. On, a scan does the lot in one sitting, which is what somebody with a
+/// machine to spare and a small library wants.
+///
+/// Jellyfin words the same choice the same way, and warns in its own
+/// documentation against ticking it on a large collection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct LibraryOptions {
+    /// Read each film for where its picture can be started during the scan.
+    pub key_frames_during_scan: bool,
+    /// Make the thumbnails of the playback bar during the scan.
+    pub thumbnails_during_scan: bool,
+}
+
+impl LibraryOptions {
+    /// Whether anything at all is left to the upkeep rather than done here.
+    pub fn leaves_something_to_the_upkeep(self) -> bool {
+        !self.key_frames_during_scan || !self.thumbnails_during_scan
+    }
+}
+
 /// A library as stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Library {
@@ -127,6 +154,8 @@ pub struct Library {
     pub kind: LibraryKind,
     /// Preferred metadata language, as a two letter code.
     pub metadata_language: String,
+    /// What a scan of this library is allowed to do in one sitting.
+    pub options: LibraryOptions,
     pub roots: Vec<LibraryRoot>,
 }
 
@@ -145,6 +174,26 @@ mod tests {
         ] {
             assert_eq!(LibraryKind::parse(kind.as_str()), Some(kind));
         }
+    }
+
+    #[test]
+    fn a_library_nobody_configured_leaves_the_heavy_readings_to_the_night() {
+        // The switch Jellyfin warns about in its own documentation: ticked on
+        // a large collection, a scan that took minutes takes days. Off is the
+        // answer for the library that needs the setting at all.
+        let usual = LibraryOptions::default();
+        assert!(!usual.key_frames_during_scan);
+        assert!(!usual.thumbnails_during_scan);
+        assert!(usual.leaves_something_to_the_upkeep());
+
+        let in_one_sitting = LibraryOptions {
+            key_frames_during_scan: true,
+            thumbnails_during_scan: true,
+        };
+        assert!(
+            !in_one_sitting.leaves_something_to_the_upkeep(),
+            "a scan that does both leaves the upkeep nothing to pick up"
+        );
     }
 
     #[test]

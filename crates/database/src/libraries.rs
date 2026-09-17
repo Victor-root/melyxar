@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use melyxar_core::id::{LibraryId, LibraryRootId};
-use melyxar_core::library::{Library, LibraryKind, LibraryRoot, RootAccess};
+use melyxar_core::library::{Library, LibraryKind, LibraryOptions, LibraryRoot, RootAccess};
 use melyxar_core::time::{now, Timestamp};
 use sqlx::Row;
 
@@ -71,8 +71,36 @@ impl Database {
             name: name.to_string(),
             kind,
             metadata_language: metadata_language.to_string(),
+            options: LibraryOptions::default(),
             roots: stored_roots,
         })
+    }
+
+    /// Changes what a scan of this library does in one sitting.
+    ///
+    /// Answers whether anything moved, so a caller can tell a real change from
+    /// the same value written again: turning a reading on is worth starting
+    /// the work that was waiting for the night, and writing it again is not.
+    pub async fn set_library_options(
+        &self,
+        id: LibraryId,
+        options: LibraryOptions,
+    ) -> Result<bool> {
+        let result = sqlx::query(
+            "UPDATE libraries
+                SET key_frames_during_scan = ?, thumbnails_during_scan = ?, updated_at = ?
+              WHERE id = ?
+                AND (key_frames_during_scan <> ? OR thumbnails_during_scan <> ?)",
+        )
+        .bind(options.key_frames_during_scan)
+        .bind(options.thumbnails_during_scan)
+        .bind(timestamp_to_text(now()))
+        .bind(id.to_db_string())
+        .bind(options.key_frames_during_scan)
+        .bind(options.thumbnails_during_scan)
+        .execute(self.writer())
+        .await?;
+        Ok(result.rows_affected() > 0)
     }
 
     /// Changes the language a library's films are described in.
@@ -97,7 +125,9 @@ impl Database {
     /// Every library with its roots, ordered by name.
     pub async fn list_libraries(&self) -> Result<Vec<Library>> {
         let rows = sqlx::query(
-            "SELECT id, name, kind, metadata_language FROM libraries ORDER BY name COLLATE NOCASE",
+            "SELECT id, name, kind, metadata_language,
+                    key_frames_during_scan, thumbnails_during_scan
+             FROM libraries ORDER BY name COLLATE NOCASE",
         )
         .fetch_all(self.reader())
         .await?;
@@ -114,6 +144,10 @@ impl Database {
                 name: row.try_get("name")?,
                 kind,
                 metadata_language: row.try_get("metadata_language")?,
+                options: LibraryOptions {
+                    key_frames_during_scan: row.try_get("key_frames_during_scan")?,
+                    thumbnails_during_scan: row.try_get("thumbnails_during_scan")?,
+                },
                 roots: self.library_roots(id).await?,
             });
         }
@@ -358,6 +392,59 @@ mod tests {
                 .expect("written"),
             "writing the same value again is not a change, and must not send a \
              provider four hundred films to describe once more"
+        );
+    }
+
+    #[tokio::test]
+    async fn what_a_scan_of_a_library_does_is_kept_and_read_back() {
+        let database = database().await;
+        let library = database
+            .create_library("Films", LibraryKind::Movies, "fr", &roots())
+            .await
+            .expect("library created");
+        assert_eq!(
+            library.options,
+            LibraryOptions::default(),
+            "a library nobody has configured leaves the heavy readings to the night"
+        );
+
+        let both = LibraryOptions {
+            key_frames_during_scan: true,
+            thumbnails_during_scan: true,
+        };
+        assert!(
+            database
+                .set_library_options(library.id, both)
+                .await
+                .expect("written"),
+            "a real change is a change"
+        );
+        assert_eq!(
+            database.list_libraries().await.expect("listed")[0].options,
+            both
+        );
+
+        assert!(
+            !database
+                .set_library_options(library.id, both)
+                .await
+                .expect("written"),
+            "the same value written again is not a change, and must not set a \
+             reading of every film going for nothing"
+        );
+
+        let only_one = LibraryOptions {
+            key_frames_during_scan: true,
+            thumbnails_during_scan: false,
+        };
+        assert!(database
+            .set_library_options(library.id, only_one)
+            .await
+            .expect("written"));
+        assert_eq!(
+            database.list_libraries().await.expect("listed")[0].options,
+            only_one,
+            "the two switches are two answers, not one"
         );
     }
 

@@ -857,6 +857,33 @@ impl Database {
             .collect()
     }
 
+    /// How many files of one library are still waiting to be read for where
+    /// their picture can be started.
+    ///
+    /// Counted rather than worked out from a batch: the reading is done a few
+    /// files at a time so that a library of a hundred thousand never becomes a
+    /// hundred thousand rows in memory, and a bar sized on one batch would
+    /// reach its end several times over. This is also what the upkeep screen
+    /// shows when nothing is running, which is the moment somebody wants to
+    /// know whether there is anything left to do at all.
+    pub async fn count_awaiting_key_frames(&self, library_id: LibraryId) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(*)
+             FROM media_sources
+             JOIN library_roots ON library_roots.id = media_sources.root_id
+             LEFT JOIN media_source_key_frames
+                    ON media_source_key_frames.source_id = media_sources.id
+             WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL
+               AND media_source_key_frames.source_id IS NULL",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0)
+    }
+
     /// How many files of one library have already been read for where their
     /// picture can be started.
     ///
@@ -1001,6 +1028,41 @@ impl Database {
                 })
             })
             .collect()
+    }
+
+    /// How many files of one library are still waiting for thumbnails of this
+    /// shape.
+    ///
+    /// Counted for the same reason as the reading before it, and with the
+    /// shape part of the question rather than checked afterwards: change the
+    /// interval and every film is waiting again, which is exactly when the
+    /// number matters.
+    pub async fn count_awaiting_thumbnails(
+        &self,
+        library_id: LibraryId,
+        wanted: Layout,
+    ) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(*)
+             FROM media_sources
+             JOIN library_roots ON library_roots.id = media_sources.root_id
+             LEFT JOIN media_source_thumbnails
+                    ON media_source_thumbnails.source_id = media_sources.id
+                   AND media_source_thumbnails.every_ms = ?
+                   AND media_source_thumbnails.rows_per_sheet = ?
+                   AND media_source_thumbnails.columns_per_sheet = ?
+             WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL
+               AND media_source_thumbnails.source_id IS NULL",
+        )
+        .bind(wanted.every.get())
+        .bind(wanted.rows as i64)
+        .bind(wanted.columns as i64)
+        .bind(library_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0)
     }
 
     /// How many files of one library already have thumbnails of this shape.
@@ -2422,6 +2484,86 @@ mod tests {
                 .await
                 .expect("read"),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn what_is_left_to_read_is_counted_rather_than_guessed_from_one_batch() {
+        // The readings are done a few files at a time, so a bar sized on one
+        // batch reaches its end once per batch and says nothing true about the
+        // work. This is also the number the upkeep screen shows when nothing
+        // is running, which is when somebody wants to know whether there is
+        // anything left to do at all.
+        let (database, library_id, root_id) = library().await;
+        let first =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        let second = a_described_film(&database, library_id, root_id, "Amber.Field.2021.mkv").await;
+
+        assert_eq!(
+            database
+                .count_awaiting_key_frames(library_id)
+                .await
+                .expect("read"),
+            2
+        );
+        assert_eq!(
+            database
+                .count_awaiting_thumbnails(library_id, every_ten_seconds())
+                .await
+                .expect("read"),
+            2
+        );
+
+        database
+            .store_key_frames(first, &[Millis::ZERO])
+            .await
+            .expect("kept");
+        database
+            .store_thumbnails(second, &made(720))
+            .await
+            .expect("kept");
+
+        assert_eq!(
+            database
+                .count_awaiting_key_frames(library_id)
+                .await
+                .expect("read"),
+            1
+        );
+        assert_eq!(
+            database
+                .count_awaiting_thumbnails(library_id, every_ten_seconds())
+                .await
+                .expect("read"),
+            1
+        );
+
+        // A file off the disk is not a file to read, here as everywhere else.
+        database
+            .mark_source_missing(second)
+            .await
+            .expect("marked");
+        assert_eq!(
+            database
+                .count_awaiting_key_frames(library_id)
+                .await
+                .expect("read"),
+            0
+        );
+
+        // Move the shape and every film is waiting again, which is exactly
+        // when the number has to say so.
+        let closer = Layout {
+            every: Millis::new(5_000),
+            ..every_ten_seconds()
+        };
+        assert_eq!(
+            database
+                .count_awaiting_thumbnails(library_id, closer)
+                .await
+                .expect("read"),
+            1,
+            "the one still on the disk, whatever was made for it in another shape"
         );
     }
 
