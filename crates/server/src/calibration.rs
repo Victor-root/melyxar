@@ -7,7 +7,7 @@
 
 use axum::extract::{Path as RoutePath, State};
 use axum::{Json, Router};
-use melyxar_app::calibration::CodecCalibration;
+use melyxar_app::calibration::{CodecCalibration, FoundBy};
 use melyxar_app::AppState;
 use melyxar_core::id::PlaybackClientId;
 use melyxar_core::time::now;
@@ -41,24 +41,32 @@ struct OpenBody {
 struct SessionView {
     id: String,
     playlist_url: String,
+    /// The height really produced, which is not always the one asked for: a
+    /// film is never asked to be taller than it is, and what a client records
+    /// has to be what it really watched.
+    height: i32,
+    /// How many pictures a second it runs at, which is what keeping up is
+    /// counted against on the other side.
+    frame_rate: f64,
 }
 
-/// Opens a session that rebuilds the reference film into one codec, at one
-/// height, for a client to watch and measure.
+/// Opens a session that rebuilds the film being measured against into one
+/// codec, at one height, for a client to watch and measure.
 ///
-/// Nameless on purpose: the same reference film, codec and height is the same
-/// question whoever asks it, and nothing about a client is known until the
-/// verdict comes back.
+/// Nameless on purpose: which film this is, is the server's business, and
+/// nothing about a client is known until the verdict comes back.
 async fn open_session(
     State(state): State<AppState>,
     Json(body): Json<OpenBody>,
 ) -> Result<Json<SessionView>> {
-    let session =
+    let (session, height, frame_rate) =
         melyxar_app::calibration::open_calibration_session(&state, &body.codec, body.height)
             .await?;
     Ok(Json(SessionView {
         id: session.id.to_string(),
         playlist_url: format!("/api/v1/stream/{}/playlist.m3u8", session.id),
+        height,
+        frame_rate,
     }))
 }
 
@@ -71,6 +79,9 @@ struct VerdictBody {
     tested_height: i32,
     dropped_share: f64,
     shown_share: f64,
+    /// Whether this came out of the test or out of watching a real film. The
+    /// two are not equal, and the server is the one that knows it.
+    found_by: String,
 }
 
 /// Records what one client measured for one codec.
@@ -89,6 +100,7 @@ async fn record_verdict(
             tested_height: body.tested_height,
             dropped_share: body.dropped_share,
             shown_share: body.shown_share,
+            found_by: FoundBy::from_word(&body.found_by),
             measured_at: now(),
         },
     )
@@ -104,6 +116,7 @@ struct CalibrationView {
     tested_height: i32,
     dropped_share: f64,
     shown_share: f64,
+    found_by: &'static str,
 }
 
 /// Everything measured for one client so far.
@@ -123,6 +136,7 @@ async fn profile(
                 tested_height: calibration.tested_height,
                 dropped_share: calibration.dropped_share,
                 shown_share: calibration.shown_share,
+                found_by: calibration.found_by.as_word(),
             })
             .collect(),
     ))

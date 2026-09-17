@@ -808,10 +808,13 @@ export const api = {
      height, for a calibration to watch and measure. Nameless: the same
      question for whoever asks it. */
   openCalibrationSession: (codec: string, height: number) =>
-    post<{ id: string; playlist_url: string }>("/api/v1/calibration/session", {
-      codec,
-      height,
-    }),
+    /* The height and the rate come back because they are the server's answer
+       and not the question: a film is never asked to be taller than it is,
+       and keeping up is counted against the rate it really runs at. */
+    post<{ id: string; playlist_url: string; height: number; frame_rate: number }>(
+      "/api/v1/calibration/session",
+      { codec, height },
+    ),
   /* Records what this device measured for one codec, under its own
      identifier and nothing else. */
   recordCalibration: (body: {
@@ -822,6 +825,7 @@ export const api = {
     tested_height: number;
     dropped_share: number;
     shown_share: number;
+    found_by: "test" | "watching";
   }) => post<{ recorded: boolean }>("/api/v1/calibration/verdict", body),
   /* Everything measured for this device so far, one entry per codec. */
   calibrationProfile: (clientId: string) =>
@@ -842,6 +846,9 @@ export interface CalibrationEntry {
      the half of the answer a dropped share alone never catches, since a
      decoder too slow to make pictures throws none of them away. */
   shown_share: number;
+  /* Whether this came out of the test or out of watching a real film. A real
+     film is the stronger of the two, and the one a test never overrules. */
+  found_by: "test" | "watching";
 }
 
 /**

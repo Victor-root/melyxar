@@ -1,12 +1,17 @@
 /*
  * Measuring what this device really decodes, rather than what it guesses.
  *
- * "Optimiser cet appareil" runs a short, real playback of a fixed reference
- * film through the ordinary streaming pipeline, once per codec, so the
- * automatic choice can be told the truth about this exact machine instead of
- * a browser's own prediction of itself. The prediction in `profile.ts` still
- * runs on its own and still works with nothing done here: this is what makes
- * it trustworthy, not what it depends on.
+ * "Optimiser cet appareil" runs a short, real playback through the ordinary
+ * streaming pipeline, once per codec, so the automatic choice can be told the
+ * truth about this exact machine instead of a browser's own prediction of
+ * itself. The prediction in `profile.ts` still runs on its own and still
+ * works with nothing done here: this is what makes it trustworthy, not what
+ * it depends on.
+ *
+ * Which film is played is the server's business and it is a real one: the
+ * most demanding the library holds. A film this server generated was tried
+ * first and it could not be made hard enough, costing a decoder a hundredth
+ * of what a real film costs at the same size and the same rate.
  *
  * What is measured here is one thing at a time and nothing is decided by
  * guessing: the picture is watched playing, the browser's own frame counters
@@ -45,17 +50,20 @@ import { deviceIdentity } from "./deviceIdentity";
  * against a machine that really could not play AV1: it was called perfect
  * both times. Every earlier row was measured that way and none of them mean
  * anything under this one.
+ *
+ * Bumped to 4 when the film stopped being one this server generates. Made as
+ * hard as a generated picture can be made, it still cost a decoder a hundredth
+ * of what a real film costs, and a machine that cannot play AV1 passed it
+ * cleanly. What is measured against now is the most demanding film the library
+ * actually holds.
  */
-export const CALIBRATION_VERSION = 3;
+export const CALIBRATION_VERSION = 4;
 
-/** The heights tried, tallest first: the same ladder a real film's rebuild
- *  would climb down if the tallest one did not hold up. */
+/** The heights asked for, tallest first: the same ladder a real film's
+ *  rebuild would climb down if the tallest one did not hold up. What is
+ *  really produced is the server's answer, since it never asks a film to be
+ *  taller than it is. */
 const HEIGHTS = [2160, 1080];
-
-/** How many pictures a second the reference film runs at. Kept in step by
- *  hand with the server's own constant, which is what the film is made at:
- *  it is what "as fast as it plays" is counted against below. */
-const REFERENCE_FRAME_RATE = 24;
 
 /** How long the picture plays before anything is counted.
  *
@@ -106,10 +114,18 @@ interface Measured {
   usable: boolean;
   droppedShare: number;
   shownShare: number;
+  /** The height really produced, which is the server's answer and not the
+   *  height that was asked for. Null when nothing was produced at all. */
+  height: number | null;
 }
 
 /** What nothing at all playing looks like, whatever the reason. */
-const NOTHING_PLAYED: Measured = { usable: false, droppedShare: 1, shownShare: 0 };
+const NOTHING_PLAYED: Measured = {
+  usable: false,
+  droppedShare: 1,
+  shownShare: 0,
+  height: null,
+};
 
 /**
  * Everything that can go wrong here, from a server that will not open this
@@ -129,7 +145,11 @@ async function measure(
       const gaveUp = new Promise<Measured>((resolve) => {
         window.setTimeout(() => resolve(NOTHING_PLAYED), GIVE_UP_AFTER_MS);
       });
-      return await Promise.race([watchIt(video, opened.playlist_url), gaveUp]);
+      const watched = await Promise.race([
+        watchIt(video, opened.playlist_url, opened.frame_rate),
+        gaveUp,
+      ]);
+      return { ...watched, height: opened.height };
     } finally {
       api.closeSession(opened.id);
     }
@@ -139,9 +159,14 @@ async function measure(
 }
 
 /** Plays one already-open session in the element the page is showing, and
- *  says what really happened. Left to throw on anything that goes wrong;
- *  `measure` decides what that means. */
-async function watchIt(video: HTMLVideoElement, playlistUrl: string): Promise<Measured> {
+ *  says what really happened, counted against the rate the film really runs
+ *  at. Left to throw on anything that goes wrong; `measure` decides what
+ *  that means. */
+async function watchIt(
+  video: HTMLVideoElement,
+  playlistUrl: string,
+  frameRate: number,
+): Promise<Omit<Measured, "height">> {
   const { default: Hls } = await import("hls.js");
   if (!Hls.isSupported()) {
     // Nothing about a real streaming path can be measured here, so the codec
@@ -195,7 +220,7 @@ async function watchIt(video: HTMLVideoElement, playlistUrl: string): Promise<Me
     const made = (ended?.totalVideoFrames ?? 0) - (began?.totalVideoFrames ?? 0);
     const dropped = (ended?.droppedVideoFrames ?? 0) - (began?.droppedVideoFrames ?? 0);
     const appeared = Math.max(0, made - dropped);
-    const wanted = (MEASURE_MS / 1000) * REFERENCE_FRAME_RATE;
+    const wanted = (MEASURE_MS / 1000) * frameRate;
 
     // Nothing made at all is a measurement that failed, never a film that
     // played flawlessly, which is exactly how it used to read.
@@ -241,17 +266,27 @@ export async function runCalibration(
   const codecs = CODECS.filter((codec) => codec !== AUTOMATIC).map((codec) => codec.key);
 
   for (const [codecIndex, codec] of codecs.entries()) {
-    for (const height of HEIGHTS) {
-      onProgress?.({ codec, height, codecIndex, totalCodecs: codecs.length });
-      const { usable, droppedShare, shownShare } = await measure(video, codec, height);
+    const alreadyMeasured = new Set<number>();
+    for (const asked of HEIGHTS) {
+      onProgress?.({ codec, height: asked, codecIndex, totalCodecs: codecs.length });
+      const { usable, droppedShare, shownShare, height } = await measure(video, codec, asked);
+      // What the server really produced, which is what was really watched: a
+      // film shorter than the height asked for answers for its own height,
+      // and asking again for a rung it already answered measures it twice.
+      const measuredHeight = height ?? asked;
+      if (alreadyMeasured.has(measuredHeight)) {
+        break;
+      }
+      alreadyMeasured.add(measuredHeight);
       await api.recordCalibration({
         client_id: clientId,
         codec,
         calibration_version: CALIBRATION_VERSION,
         usable,
-        tested_height: height,
+        tested_height: measuredHeight,
         dropped_share: droppedShare,
         shown_share: shownShare,
+        found_by: "test",
       });
       if (usable) {
         break;
