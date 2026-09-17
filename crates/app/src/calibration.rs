@@ -52,7 +52,12 @@ async fn ensure_reference_film(state: &AppState, path: &Path) -> Result<()> {
         return Ok(());
     }
     let tools = state.tools().ok_or_else(no_tools)?;
+    tracing::info!(
+        seconds = melyxar_ffmpeg::calibration::REFERENCE_DURATION.as_seconds_f64(),
+        "making the reference film a calibration is measured against, since none exists yet"
+    );
     melyxar_ffmpeg::calibration::make_reference_film(tools, path).await?;
+    tracing::info!("the reference film is made and will be kept from now on");
     Ok(())
 }
 
@@ -119,6 +124,10 @@ pub async fn open_calibration_session(
     let reference = reference_film_path(state);
     ensure_reference_film(state, &reference).await?;
 
+    let on_a_card = capabilities
+        .card()
+        .filter(|card| card.encoder_for(codec).is_some())
+        .is_some();
     let encode = video_encode_for(capabilities.card(), codec, height)?;
 
     let session = sessions
@@ -140,15 +149,35 @@ pub async fn open_calibration_session(
             true,
         )
         .await?;
+    tracing::info!(
+        session = %session.id,
+        codec,
+        height,
+        rebuilt_by = if on_a_card { "card" } else { "processor" },
+        "a calibration session was opened against the reference film"
+    );
     Ok(session)
 }
 
 /// Records what one client measured for one codec.
+///
+/// The one line that answers "did the calibration really run, and what did it
+/// conclude": a page saying "optimized" is a claim, and this is where it can
+/// be checked against what actually happened, codec by codec.
 pub async fn record_calibration(
     state: &AppState,
     client_id: PlaybackClientId,
     calibration: &CodecCalibration,
 ) -> Result<()> {
+    tracing::info!(
+        client = %client_id,
+        codec = calibration.codec,
+        usable = calibration.usable,
+        tested_height = calibration.tested_height,
+        dropped_share = calibration.dropped_share,
+        calibration_version = calibration.calibration_version,
+        "a client's calibration of one codec was recorded"
+    );
     state
         .database()
         .save_codec_calibration(client_id, calibration)
