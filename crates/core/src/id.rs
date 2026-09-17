@@ -129,6 +129,18 @@ define_id!(
     /// Identifies a live playback session held in memory by the server.
     SessionId
 );
+define_id!(
+    /// Identifies one browser or app installation, for its own playback
+    /// capability profile.
+    ///
+    /// Deliberately not [`DeviceId`]: that one guards a login token, and this
+    /// one guards nothing at all. It travels as a plain value the browser
+    /// keeps for itself, never checked against an account, because what it
+    /// names is a fact about a machine, not a right to use one. The two must
+    /// never be confused for each other, which is the whole reason each
+    /// entity here owns a type nothing else can be mistaken for.
+    PlaybackClientId
+);
 
 #[cfg(test)]
 mod tests {

@@ -13,6 +13,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod calibration;
 pub mod capabilities;
 pub mod command;
 pub mod hardware;
