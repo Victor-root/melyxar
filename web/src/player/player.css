@@ -326,16 +326,19 @@
   pointer-events: none;
 }
 
-/* Under a hand, a button takes the accent: the drawing inside it and the line
-   around it both. The accent is the one colour a viewer chooses, so it is
-   what should answer them when they reach for something. */
+/* Under a hand, a button takes the accent: the drawing inside it and a soft
+   glow behind it. The accent is the one colour a viewer chooses, so it is
+   what should answer them when they reach for something.
+
+   The frame itself is left out here on purpose: it is what says a panel is
+   open, and drawing it under every passing hand as well would make it mean
+   nothing when it actually was. */
 .player-button:hover:not(:disabled) {
   color: var(--accent-bright);
   transform: scale(1.06);
 }
 
 .player-button:hover:not(:disabled)::after {
-  border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
@@ -351,6 +354,15 @@
 .player-button:focus-visible {
   outline: 2px solid var(--accent-bright);
   outline-offset: 2px;
+}
+
+/* A mouse leaves a hand hovering to say which button is about to be
+   pressed. A keyboard or a remote has no such hand, so the frame a hover no
+   longer draws is what a focused button draws instead: the only sign, short
+   of the outline further out, of where the next press would land. */
+.player-button:focus-visible:not(:disabled)::after {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 /* The one control a hand goes to without looking, and drawn larger for it. */
