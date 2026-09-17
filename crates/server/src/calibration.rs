@@ -70,6 +70,7 @@ struct VerdictBody {
     usable: bool,
     tested_height: i32,
     dropped_share: f64,
+    shown_share: f64,
 }
 
 /// Records what one client measured for one codec.
@@ -87,6 +88,7 @@ async fn record_verdict(
             usable: body.usable,
             tested_height: body.tested_height,
             dropped_share: body.dropped_share,
+            shown_share: body.shown_share,
             measured_at: now(),
         },
     )
@@ -101,6 +103,7 @@ struct CalibrationView {
     usable: bool,
     tested_height: i32,
     dropped_share: f64,
+    shown_share: f64,
 }
 
 /// Everything measured for one client so far.
@@ -119,6 +122,7 @@ async fn profile(
                 usable: calibration.usable,
                 tested_height: calibration.tested_height,
                 dropped_share: calibration.dropped_share,
+                shown_share: calibration.shown_share,
             })
             .collect(),
     ))

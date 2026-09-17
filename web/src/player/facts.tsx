@@ -321,11 +321,20 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
               <Line
                 key={entry.codec}
                 name={entry.codec.toUpperCase()}
-                is={
+                /* What was concluded, and then the two numbers it was
+                   concluded from: a codec turned down for showing an eighth
+                   of the film and one turned down for throwing a quarter of
+                   it away are different machines, and the verdict alone
+                   never says which this was. */
+                is={[
                   entry.usable
                     ? t("facts.calibration_at", { height: entry.tested_height })
-                    : t("facts.calibration_unusable")
-                }
+                    : t("facts.calibration_unusable"),
+                  t("facts.calibration_measured", {
+                    shown: Math.round(entry.shown_share * 100),
+                    dropped: Math.round(entry.dropped_share * 100),
+                  }),
+                ].join(" · ")}
               />
             ))}
           </section>

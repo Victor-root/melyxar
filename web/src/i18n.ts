@@ -317,6 +317,7 @@ const en: Dictionary = {
   "facts.calibration": "Device calibration",
   "facts.calibration_at": "up to {height}p",
   "facts.calibration_unusable": "not usable",
+  "facts.calibration_measured": "{shown}% shown, {dropped}% dropped",
   "player.unknown_language": "Language not stated",
   "player.burns_in_short": "drawn into the picture",
   "player.preparing_percent": "{percent}%",
@@ -684,6 +685,7 @@ const fr: Dictionary = {
   "facts.calibration": "Calibrage de l'appareil",
   "facts.calibration_at": "jusqu'en {height}p",
   "facts.calibration_unusable": "non utilisable",
+  "facts.calibration_measured": "{shown} % affichées, {dropped} % perdues",
   "player.unknown_language": "Langue non précisée",
   "player.burns_in_short": "incrustés dans l’image",
   // Un espace avant le signe pourcent, comme partout ailleurs en français.

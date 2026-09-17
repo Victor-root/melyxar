@@ -26,6 +26,13 @@ pub struct CodecCalibration {
     /// The share of pictures the decoder dropped during the measurement, kept
     /// for a page that wants to say more than a plain yes or no.
     pub dropped_share: f64,
+    /// The share of the pictures the film asked for over the measurement that
+    /// ever appeared at all.
+    ///
+    /// The other half of the same question, and the half that catches a
+    /// decoder too slow to produce pictures rather than one throwing them
+    /// away: that one drops nothing, because it never made anything to drop.
+    pub shown_share: f64,
     pub measured_at: Timestamp,
 }
 
@@ -43,13 +50,14 @@ impl Database {
     ) -> Result<()> {
         sqlx::query(
             "INSERT INTO client_codec_calibrations
-                (client_id, codec, calibration_version, usable, tested_height, dropped_share, measured_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+                (client_id, codec, calibration_version, usable, tested_height, dropped_share, shown_share, measured_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT (client_id, codec) DO UPDATE SET
                 calibration_version = excluded.calibration_version,
                 usable = excluded.usable,
                 tested_height = excluded.tested_height,
                 dropped_share = excluded.dropped_share,
+                shown_share = excluded.shown_share,
                 measured_at = excluded.measured_at",
         )
         .bind(client_id.to_db_string())
@@ -58,6 +66,7 @@ impl Database {
         .bind(bool_to_int(calibration.usable))
         .bind(calibration.tested_height)
         .bind(calibration.dropped_share)
+        .bind(calibration.shown_share)
         .bind(timestamp_to_text(calibration.measured_at))
         .execute(self.writer())
         .await?;
@@ -72,7 +81,7 @@ impl Database {
         client_id: PlaybackClientId,
     ) -> Result<Vec<CodecCalibration>> {
         let rows = sqlx::query(
-            "SELECT codec, calibration_version, usable, tested_height, dropped_share, measured_at
+            "SELECT codec, calibration_version, usable, tested_height, dropped_share, shown_share, measured_at
              FROM client_codec_calibrations WHERE client_id = ?",
         )
         .bind(client_id.to_db_string())
@@ -87,6 +96,7 @@ impl Database {
                     usable: int_to_bool(row.try_get("usable")?),
                     tested_height: row.try_get("tested_height")?,
                     dropped_share: row.try_get("dropped_share")?,
+                    shown_share: row.try_get("shown_share")?,
                     measured_at: parse_timestamp(&row.try_get::<String, _>("measured_at")?)?,
                 })
             })
@@ -120,6 +130,7 @@ mod tests {
             usable,
             tested_height: height,
             dropped_share: dropped,
+            shown_share: 1.0,
             measured_at: now(),
         }
     }
@@ -158,6 +169,31 @@ mod tests {
         assert_eq!(calibrations[0].dropped_share, 0.42);
         assert_eq!(calibrations[1].codec, "hevc");
         assert!(calibrations[1].usable);
+    }
+
+    #[tokio::test]
+    async fn a_decoder_that_showed_almost_nothing_is_read_back_saying_so() {
+        // The case a dropped share alone never catches: nothing was thrown
+        // away because almost nothing was ever produced. A row that lost this
+        // number would read as a flawless measurement.
+        let database = Database::open_in_memory().await.expect("database opens");
+        let client = PlaybackClientId::new();
+
+        database
+            .save_codec_calibration(
+                client,
+                &CodecCalibration {
+                    shown_share: 0.125,
+                    ..measured("av1", false, 2160, 0.0)
+                },
+            )
+            .await
+            .expect("saved");
+
+        let calibrations = database.codec_calibrations_of(client).await.expect("read");
+        assert_eq!(calibrations[0].shown_share, 0.125);
+        assert_eq!(calibrations[0].dropped_share, 0.0);
+        assert!(!calibrations[0].usable);
     }
 
     #[tokio::test]

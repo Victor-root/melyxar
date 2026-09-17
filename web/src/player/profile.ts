@@ -9,7 +9,7 @@
  */
 
 import type { Quality } from "./quality";
-import { isCurrent, storedCalibration } from "./calibration";
+import { storedCalibration, worthTrusting } from "./calibration";
 
 /** One thing the server will ask about. */
 interface Probe {
@@ -208,7 +208,7 @@ let calibrated: Promise<RebuiltCapability[] | null> | null = null;
 function whatWasReallyMeasured(): Promise<RebuiltCapability[] | null> {
   calibrated ??= storedCalibration()
     .then((entries) =>
-      isCurrent(entries)
+      worthTrusting(entries)
         ? entries
             .filter((entry) => entry.usable)
             .map((entry) => ({
