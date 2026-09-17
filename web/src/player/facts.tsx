@@ -334,6 +334,11 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
                     shown: Math.round(entry.shown_share * 100),
                     dropped: Math.round(entry.dropped_share * 100),
                   }),
+                  t(
+                    entry.found_by === "watching"
+                      ? "facts.calibration_from_watching"
+                      : "facts.calibration_from_test",
+                  ),
                 ].join(" · ")}
               />
             ))}

@@ -318,6 +318,8 @@ const en: Dictionary = {
   "facts.calibration_at": "up to {height}p",
   "facts.calibration_unusable": "not usable",
   "facts.calibration_measured": "{shown}% shown, {dropped}% dropped",
+  "facts.calibration_from_test": "from the test",
+  "facts.calibration_from_watching": "from watching a film",
   "player.unknown_language": "Language not stated",
   "player.burns_in_short": "drawn into the picture",
   "player.preparing_percent": "{percent}%",
@@ -686,6 +688,8 @@ const fr: Dictionary = {
   "facts.calibration_at": "jusqu'en {height}p",
   "facts.calibration_unusable": "non utilisable",
   "facts.calibration_measured": "{shown} % affichées, {dropped} % perdues",
+  "facts.calibration_from_test": "d'après le test",
+  "facts.calibration_from_watching": "d'après un film regardé",
   "player.unknown_language": "Langue non précisée",
   "player.burns_in_short": "incrustés dans l’image",
   // Un espace avant le signe pourcent, comme partout ailleurs en français.
