@@ -1293,6 +1293,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.device-status {
+  margin: 0 0 var(--gap);
+  font-size: 14px;
+  min-height: 1.2em;
+}
+
 /* The words as they will appear, over something dark enough to judge them
    against: a size named "very large" means nothing until it is seen.
    Proportions of the box rather than fixed heights, so the words sit where

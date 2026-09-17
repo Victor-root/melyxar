@@ -28,6 +28,7 @@ import {
 } from "../player/appearance";
 import type { Appearance } from "../player/appearance";
 import { languageName } from "../player/languages";
+import { DeviceOptimization } from "../player/DeviceOptimization";
 import { useSettings } from "../settings";
 
 export function SettingsPage() {
@@ -81,6 +82,8 @@ export function SettingsPage() {
       </div>
 
       {failed && <p className="notice">{t(failed)}</p>}
+
+      <DeviceOptimization />
 
       <section className="settings-block">
         <h2>{t("settings.sound")}</h2>
