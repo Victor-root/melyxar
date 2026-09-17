@@ -34,6 +34,7 @@ import { codecCalled, rememberCodec, requestedCodec, storedCodec } from "./codec
 import type { Codec } from "./codec";
 import { rememberLoudness, storedLoudness } from "./loudness";
 import { clientProfile } from "./profile";
+import { learnFromWatching } from "./learning";
 import { watchTheReading } from "./watch";
 import type { Watching } from "./watch";
 
@@ -534,6 +535,12 @@ export function usePlayback({
   }, [sourceId, audioId, subtitleId, fromTheStart, quality, codec]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
+  /* The codec the picture is really being rebuilt into, and how fast the film
+     runs. Both plain values rather than the plan itself, so that following
+     what this machine does with that codec starts again when the codec
+     changes and not every time anything else about the plan does. */
+  const rebuiltInto = plan?.rebuild?.codec ?? null;
+  const filmFrameRate = plan?.film.picture?.frame_rate ?? null;
   /* A subtitle made of pictures has to be painted into the picture, so the one
      chosen is part of what the server produces. Named here rather than read
      off the method, which stays the same either way: choosing another one used
@@ -771,6 +778,14 @@ export function usePlayback({
        over, never whether any of it reached a screen. */
     watching.current = watchTheReading(element, stream.id);
     const stopWatching = watching.current.stop;
+    /* What a real film teaches this machine about the codec it is being
+       rebuilt into, which no test can teach it as well: a generated film
+       cannot be made to cost what a real one costs to decode. Only ever
+       about a film being rebuilt, since a film handed over untouched says
+       nothing about a codec this server would have produced. */
+    const learning = rebuiltInto
+      ? learnFromWatching(element, { codec: rebuiltInto, frameRate: filmFrameRate })
+      : null;
     /* Whether the library has already given up. One failure comes back as
        three: it cannot make room for the film, then it cannot put anything in
        the room it did not make. Only the first says anything. */
@@ -932,9 +947,10 @@ export function usePlayback({
       whileTheViewerMoves.current = null;
       watching.current = null;
       stopWatching();
+      learning?.stop();
       feed?.destroy();
     };
-  }, [stream]);
+  }, [stream, rebuiltInto, filmFrameRate]);
 
   /* A choice is remembered once it has been made, never on the way in: the
      tracks a page opens with are what the rules already decided, and writing
