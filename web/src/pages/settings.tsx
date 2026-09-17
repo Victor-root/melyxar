@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
-import type { ViewerPreferences } from "../api";
+import type { Library, ViewerPreferences } from "../api";
 import {
   appearanceClasses,
   BACKGROUNDS,
@@ -36,6 +36,10 @@ export function SettingsPage() {
   const [kept, setKept] = useState<ViewerPreferences | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [appearance, setAppearanceState] = useState<Appearance>(storedAppearance);
+  /* Fetched here rather than taken from the shell, which holds the same
+     libraries for the navigation: this is the one screen that changes them,
+     so it is the one screen that has to be looking at what it changed. */
+  const [libraries, setLibraries] = useState<Library[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -52,6 +56,43 @@ export function SettingsPage() {
       });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .libraries(controller.signal)
+      .then(setLibraries)
+      .catch((error) => {
+        if (!(error instanceof DOMException)) {
+          setFailed("error.unreachable");
+        }
+      });
+    return () => controller.abort();
+  }, []);
+
+  /* Shown straight away and sent at once, like everything else here. The two
+     switches always travel together, because they are one answer to one
+     question: sending half would leave the other half to be guessed at. */
+  const switchTo = (library: Library, changes: Partial<Library>) => {
+    const wanted = { ...library, ...changes };
+    setLibraries((before) =>
+      before.map((one) => (one.id === library.id ? wanted : one)),
+    );
+    api
+      .setLibraryOptions(library.id, {
+        key_frames_during_scan: wanted.key_frames_during_scan,
+        thumbnails_during_scan: wanted.thumbnails_during_scan,
+      })
+      .then(() => setFailed(null))
+      .catch((error) => {
+        // Put back what the server still holds, rather than leaving a ticked
+        // box next to a server that never heard of it.
+        setLibraries((before) =>
+          before.map((one) => (one.id === library.id ? library : one)),
+        );
+        setFailed(error instanceof ApiError ? "settings.not_kept" : "error.unreachable");
+      });
+  };
 
   /* Sent as it is made, and the answer is what the page then shows: the server
      brings a value back into range rather than refusing the lot, so what it
@@ -152,6 +193,43 @@ export function SettingsPage() {
           <p className="settings-why">{t("settings.no_languages_yet")}</p>
         )}
       </section>
+
+      {libraries.length > 0 && (
+        <section className="settings-block">
+          <h2>{t("settings.libraries")}</h2>
+          <p className="settings-why">{t("settings.libraries_why")}</p>
+
+          {libraries.map((library) => (
+            <div className="library-options" key={library.id}>
+              <span className="library-options-name">{library.name}</span>
+              {/* Buttons that stay pressed rather than tick boxes, which is
+                  how every other switch in this interface is drawn. */}
+              <button
+                className={`button button-small${library.key_frames_during_scan ? " button-on" : ""}`}
+                aria-pressed={library.key_frames_during_scan}
+                onClick={() =>
+                  switchTo(library, {
+                    key_frames_during_scan: !library.key_frames_during_scan,
+                  })
+                }
+              >
+                {t("settings.key_frames_during_scan")}
+              </button>
+              <button
+                className={`button button-small${library.thumbnails_during_scan ? " button-on" : ""}`}
+                aria-pressed={library.thumbnails_during_scan}
+                onClick={() =>
+                  switchTo(library, {
+                    thumbnails_during_scan: !library.thumbnails_during_scan,
+                  })
+                }
+              >
+                {t("settings.thumbnails_during_scan")}
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className={`settings-block ${appearanceClasses(appearance)}`}>
         <h2>{t("settings.subtitles")}</h2>

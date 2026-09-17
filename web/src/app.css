@@ -1245,6 +1245,70 @@
 }
 
 /* --------------------------------------------------------------------------
+ * The upkeep
+ *
+ * Drawn like a job and deliberately quieter than one: these rows are work
+ * that has not started, and a row shouting for attention next to a scan that
+ * is really running would be read as the scan.
+ * ----------------------------------------------------------------------- */
+
+.upkeep-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  padding: var(--gap-tight) var(--gap-wide);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  margin-bottom: var(--gap-tight);
+}
+
+.upkeep-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+}
+
+.upkeep-name {
+  font-weight: 650;
+}
+
+/* Which library this row is about. Under the name rather than beside it: on a
+   telephone the two side by side push everything else off the line. */
+.upkeep-library {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.upkeep-count {
+  font-size: 13px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-right: auto;
+}
+
+.upkeep-note {
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+/* One library and what its scan does. The name first and the switches after
+   it, wrapping onto their own line where there is no room. */
+.library-options {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-bottom: var(--gap-tight);
+}
+
+.library-options-name {
+  font-weight: 650;
+  min-width: 120px;
+}
+
+/* --------------------------------------------------------------------------
  * Foot of the page
  * ----------------------------------------------------------------------- */
 

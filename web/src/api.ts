@@ -58,7 +58,45 @@ export interface Library {
   kind: string;
   works: number;
   version: number;
+  /** Whether a scan of this library reads every film for where it can be
+      started, rather than leaving it to the upkeep. */
+  key_frames_during_scan: boolean;
+  /** The same, for the pictures of the playback bar. */
+  thumbnails_during_scan: boolean;
   roots: Root[];
+}
+
+/** How much of a library a scan or an identification goes over. */
+export type RefreshMode = "new_and_updated_files" | "what_is_missing" | "everything";
+
+/** The three, in the order a menu offers them: lightest first. */
+export const REFRESH_MODES: RefreshMode[] = [
+  "new_and_updated_files",
+  "what_is_missing",
+  "everything",
+];
+
+/** One of the two readings the upkeep is made of, on one library. */
+export interface UpkeepTask {
+  task: "key_frames" | "thumbnails";
+  library: string;
+  library_name: string;
+  /** Films still waiting. Nought means there is nothing to start. */
+  waiting: number;
+  done: number;
+  /** Whether the scan of that library does this reading itself. */
+  during_the_scan: boolean;
+  /** Whether it is running right now. */
+  under_way: boolean;
+}
+
+export interface Upkeep {
+  tasks: UpkeepTask[];
+  /** Whether the upkeep runs on its own of a night. */
+  nightly: boolean;
+  /** When it next will, as an instant: shown in the hour of whoever reads it
+      rather than in the server's. */
+  next_run: string | null;
 }
 
 export interface Filters {
@@ -681,8 +719,32 @@ export const api = {
     get<Page>(`/api/v1/works?${browseQuery(options)}`, signal),
   work: (id: string, signal?: AbortSignal) => get<Work>(`/api/v1/works/${id}`, signal),
   jobs: (signal?: AbortSignal) => get<Jobs>("/api/v1/jobs", signal),
-  scan: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/scan`),
-  identify: (library: string) => post<{ job_id: string }>(`/api/v1/libraries/${library}/identify`),
+  /* The mode says how much to go over. Left out, the server does what it has
+     always done, which is to fill in what is missing. */
+  scan: (library: string, mode?: RefreshMode) =>
+    post<{ job_id: string }>(
+      `/api/v1/libraries/${library}/scan${mode ? `?mode=${mode}` : ""}`,
+    ),
+  identify: (library: string, mode?: RefreshMode) =>
+    post<{ job_id: string }>(
+      `/api/v1/libraries/${library}/identify${mode ? `?mode=${mode}` : ""}`,
+    ),
+  /* What a scan of one library does in one sitting. Both switches travel
+     together, because they are one answer to one question on one screen. */
+  setLibraryOptions: (library: string, options: {
+    key_frames_during_scan: boolean;
+    thumbnails_during_scan: boolean;
+  }) =>
+    put<{ key_frames_during_scan: boolean; thumbnails_during_scan: boolean; changed: boolean }>(
+      `/api/v1/libraries/${library}/options`,
+      options,
+    ),
+  /* The two readings that go through every film, what each has left, and when
+     the server will next do them on its own. */
+  upkeep: (signal?: AbortSignal) => get<Upkeep>("/api/v1/upkeep", signal),
+  runUpkeep: () => post<{ started: number }>("/api/v1/upkeep/run"),
+  runUpkeepTask: (library: string, task: string) =>
+    post<{ job_id: string }>(`/api/v1/libraries/${library}/upkeep/${task}`),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
   forgetFinishedJobs: () => remove<{ forgotten: number }>("/api/v1/jobs/finished"),
   /* For the films the rules could not name: what a person could have meant,

@@ -102,6 +102,11 @@ struct LibraryView {
     /// Bumped whenever anything in the library moves. A client keeps it and
     /// asks whether it changed instead of fetching everything again.
     version: i64,
+    /// Whether a scan of this library reads every film for where its picture
+    /// can be started, rather than leaving it to the upkeep.
+    key_frames_during_scan: bool,
+    /// The same for the thumbnails of the playback bar.
+    thumbnails_during_scan: bool,
     roots: Vec<RootView>,
 }
 
@@ -125,6 +130,8 @@ async fn libraries(State(state): State<AppState>) -> Result<Json<Vec<LibraryView
                 kind: library.kind.as_str(),
                 works: library.works,
                 version: library.version,
+                key_frames_during_scan: library.options.key_frames_during_scan,
+                thumbnails_during_scan: library.options.thumbnails_during_scan,
                 roots: library
                     .roots
                     .into_iter()
