@@ -51,6 +51,7 @@ import {
 } from "./icons";
 import type { Mark } from "./logo";
 import { QUALITIES, qualityName } from "./quality";
+import { CODECS, codecName } from "./codec";
 import { FADES_AFTER_MS } from "./settings";
 import type { PlayerSettings } from "./settings";
 import { Thumbnail } from "./thumbnail";
@@ -69,6 +70,7 @@ export type Panel =
   | "settings"
   | "settings.speed"
   | "settings.quality"
+  | "settings.codec"
   | "settings.shape"
   | "settings.repeat"
   | "settings.words_offset"
@@ -975,6 +977,12 @@ function sheetFor(
               onPick={() => onPanel("settings.quality")}
             />
             <Line
+              label={t("player.codec")}
+              value={codecName(playback.codec, t("player.codec.auto"))}
+              into
+              onPick={() => onPanel("settings.codec")}
+            />
+            <Line
               label={t("player.repeat")}
               value={t(playback.repeat ? "player.repeat.film" : "player.repeat.none")}
               into
@@ -1038,6 +1046,20 @@ function sheetFor(
             label={qualityName(one, t("player.quality.as_it_is"))}
             chosen={playback.quality.key === one.key}
             onPick={() => playback.setQuality(one.key)}
+          />
+        )),
+      };
+
+    case "settings.codec":
+      return {
+        title: t("player.codec"),
+        from: "settings",
+        lines: CODECS.map((one) => (
+          <Line
+            key={one.key}
+            label={codecName(one, t("player.codec.auto"))}
+            chosen={playback.codec.key === one.key}
+            onPick={() => playback.setCodec(one.key)}
           />
         )),
       };

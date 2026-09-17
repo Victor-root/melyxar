@@ -30,6 +30,8 @@ import { api, ApiError } from "../api";
 import type { HowItMoved, PlaybackPlan, PlaybackSession } from "../api";
 import { qualityCalled, rememberQuality, storedQuality } from "./quality";
 import type { Quality } from "./quality";
+import { codecCalled, rememberCodec, requestedCodec, storedCodec } from "./codec";
+import type { Codec } from "./codec";
 import { rememberLoudness, storedLoudness } from "./loudness";
 import { clientProfile } from "./profile";
 import { watchTheReading } from "./watch";
@@ -258,10 +260,14 @@ export interface Playback {
   audioId: string | null;
   subtitleId: string | null;
   quality: Quality;
+  /** Which codec a transcode is asked to come out in. "auto" leaves the
+   *  choice to the usual negotiation. */
+  codec: Codec;
   speed: number;
   /** Chooses a soundtrack and a subtitle, and remembers the choice. */
   choose: (audio: string | null, subtitle: string | null) => void;
   setQuality: (key: string) => void;
+  setCodec: (key: string) => void;
   setSpeed: (value: number) => void;
   /** A hand landing on the bar, and coming off it, saying what it did. */
   viewerMoving: () => void;
@@ -342,6 +348,9 @@ export function usePlayback({
      learnt its name and the server rebuilt a film for nobody until it swept
      it away. */
   const [planFor, setPlanFor] = useState<string | null>(null);
+  /* Which codec the plan in hand answers for, for the same reason as planFor
+     and read the same way: together with it, never apart. */
+  const [codecFor, setCodecFor] = useState<string | null>(null);
   const [stream, setStream] = useState<PlaybackSession | null>(null);
   /* What to do to the library feeding the film in pieces while the viewer is
      moving the bar, and once they have finished. Held here rather than passed
@@ -412,6 +421,10 @@ export function usePlayback({
      than per film: somebody watching on a thin connection is on a thin
      connection for the next one too. */
   const [quality, setQualityState] = useState(storedQuality);
+  /* Which codec a transcode is asked to come out in. "auto" leaves the choice
+     to the usual negotiation, which is what nearly everyone wants nearly
+     always; forcing one is for chasing a stutter. */
+  const [codec, setCodecState] = useState(storedCodec);
   /* Which picture the browser has actually opened. Null until it has: the
      words are hung on the picture, and only once it is there. */
   const [readyPicture, setReadyPicture] = useState<string | null>(null);
@@ -489,6 +502,7 @@ export function usePlayback({
             profile,
             audio_track_id: audioId,
             subtitle_track_id: subtitleId,
+            preferred_video_codec: requestedCodec(codec),
           },
           controller.signal,
         ),
@@ -498,9 +512,10 @@ export function usePlayback({
           opened.current = true;
           resumeAt.current = fromTheStart ? null : answer.resume_from_seconds;
         }
-        // Together, always: what is produced is decided on the two of them.
+        // Together, always: what is produced is decided on the three of them.
         setPlan(answer);
         setPlanFor(quality.key);
+        setCodecFor(codec.key);
         // Only from the first answer. Later ones carry the same mark, and the
         // viewer may have pressed the button since: taking the server's word
         // again would undo it in front of them.
@@ -516,7 +531,7 @@ export function usePlayback({
         }
       });
     return () => controller.abort();
-  }, [sourceId, audioId, subtitleId, fromTheStart, quality]);
+  }, [sourceId, audioId, subtitleId, fromTheStart, quality, codec]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
   /* A subtitle made of pictures has to be painted into the picture, so the one
@@ -534,7 +549,7 @@ export function usePlayback({
      must not throw away a conversion already under way and make the viewer
      wait through it again. */
   const beingProduced = rebuilt
-    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${planFor ?? ""}:${afresh}`
+    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${planFor ?? ""}:${codecFor ?? ""}:${afresh}`
     : null;
   /* Which picture is on screen: the file itself, or one session of segments.
      A change here means a fresh element rather than a new address on the old
@@ -580,6 +595,7 @@ export function usePlayback({
           profile,
           audio_track_id: audioId,
           subtitle_track_id: paintedIn,
+          preferred_video_codec: requestedCodec(codec),
           start_at_seconds: openedAt.current,
         }),
       )
@@ -1181,6 +1197,12 @@ export function usePlayback({
     rememberQuality(chosen);
   }, []);
 
+  const setCodec = useCallback((key: string) => {
+    const chosen = codecCalled(key);
+    setCodecState(chosen);
+    rememberCodec(chosen);
+  }, []);
+
   const setSpeed = useCallback((value: number) => {
     setSpeedState(value);
     if (video.current) {
@@ -1338,9 +1360,11 @@ export function usePlayback({
     audioId,
     subtitleId,
     quality,
+    codec,
     speed,
     choose,
     setQuality,
+    setCodec,
     setSpeed,
     viewerMoving,
     viewerMoved,
