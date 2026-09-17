@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 
 use melyxar_core::id::JobId;
 use melyxar_core::job::{Job, JobKind, JobPriority, JobState, JobStep};
+use melyxar_core::privacy::MediaName;
 use melyxar_database::Database;
 use tokio::task::{JoinHandle, JoinSet};
 
@@ -86,6 +87,13 @@ impl JobHandle {
     /// as the pass name above: it exists to be read while somebody is watching
     /// the screen.
     pub async fn now_working_on(&self, what: Option<&str>) {
+        // Written to the log as well as the screen: a pass through heavy
+        // files is exactly the kind of thing worth lining up in time against
+        // whatever else the machine was doing at the same moment, and the
+        // screen alone keeps no history once the next file replaces it.
+        if let Some(name) = what {
+            tracing::debug!(job = %self.id, file = %MediaName::new(name), "a job moved on to a file");
+        }
         if let Err(error) = self.database.set_job_doing(self.id, what).await {
             tracing::warn!(job = %self.id, error = %error, "what a job is on could not be recorded");
         }
@@ -109,6 +117,13 @@ impl JobHandle {
             progress.total = None;
             progress.last_written = Instant::now();
         }
+        // A step's own name says whether it is worth the machine's heavy
+        // parts: reading key frames barely touches them, making thumbnails or
+        // asking a card to decode a film both do. Written here rather than
+        // left to the screen alone, so a moment that turns out to matter can
+        // be found again after the fact instead of only while somebody was
+        // looking at the time.
+        tracing::debug!(job = %self.id, step = step.as_str(), "a job moved on to a step");
         if let Err(error) = self.database.start_job_step(self.id, step).await {
             tracing::warn!(job = %self.id, error = %error, "the step of a job could not be recorded");
         }
