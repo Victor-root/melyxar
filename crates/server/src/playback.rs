@@ -84,6 +84,11 @@ struct PlanBody {
     audio_track_id: Option<String>,
     #[serde(default)]
     subtitle_track_id: Option<String>,
+    /// A codec asked for directly, forced whenever this server allows it and
+    /// the card can produce it. Absent leaves the choice to the usual
+    /// negotiation.
+    #[serde(default)]
+    preferred_video_codec: Option<String>,
 }
 
 /// The same question, plus where the picture will actually be started.
@@ -279,6 +284,7 @@ async fn plan(
             .as_deref()
             .map(parse_track)
             .transpose()?,
+        preferred_video_codec: body.preferred_video_codec,
     };
 
     let plan = melyxar_app::playback::plan(&state, viewer(&state).await?, &request).await?;
@@ -630,6 +636,7 @@ async fn open_session(
                 .as_deref()
                 .map(parse_track)
                 .transpose()?,
+            preferred_video_codec: body.wanted.preferred_video_codec,
         },
     )
     .await?;
@@ -975,13 +982,24 @@ mod tests {
         // silently, and the film then starts from its opening for no reason
         // anybody can see.
         let body: OpenBody = serde_json::from_str(
-            r#"{"profile":null,"audio_track_id":"2","subtitle_track_id":"3","start_at_seconds":1024.5}"#,
+            r#"{"profile":null,"audio_track_id":"2","subtitle_track_id":"3",
+                "preferred_video_codec":"av1","start_at_seconds":1024.5}"#,
         )
         .expect("the body of a session is read");
 
         assert_eq!(body.wanted.audio_track_id.as_deref(), Some("2"));
         assert_eq!(body.wanted.subtitle_track_id.as_deref(), Some("3"));
+        assert_eq!(
+            body.wanted.preferred_video_codec.as_deref(),
+            Some("av1")
+        );
         assert_eq!(body.start_at_seconds, Some(1024.5));
+    }
+
+    #[test]
+    fn a_body_that_names_no_codec_leaves_the_choice_to_the_usual_negotiation() {
+        let body: PlanBody = serde_json::from_str("{}").expect("an empty body is read");
+        assert_eq!(body.preferred_video_codec, None);
     }
 
     #[test]
