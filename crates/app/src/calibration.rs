@@ -416,6 +416,93 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn what_a_real_film_proved_is_not_talked_out_of_by_the_test() {
+        // The whole reason the two are told apart. The test plays a film this
+        // server generated, and no generated film costs what a real one costs
+        // to decode: measured on real hardware, the same codec at the same
+        // size passed the generated film cleanly and stuttered through every
+        // real one. A test must never quietly overwrite that.
+        let (_directory, state) = state_without_media_tools().await;
+        let client = PlaybackClientId::new();
+
+        let from_a_film = CodecCalibration {
+            codec: "av1".to_string(),
+            calibration_version: 1,
+            usable: false,
+            tested_height: 1600,
+            dropped_share: 0.31,
+            shown_share: 0.69,
+            found_by: FoundBy::Watching,
+            measured_at: melyxar_core::time::now(),
+        };
+        record_calibration(&state, client, &from_a_film)
+            .await
+            .expect("recorded");
+
+        record_calibration(
+            &state,
+            client,
+            &CodecCalibration {
+                usable: true,
+                dropped_share: 0.0,
+                shown_share: 1.0,
+                found_by: FoundBy::Test,
+                ..from_a_film.clone()
+            },
+        )
+        .await
+        .expect("accepted without complaint");
+
+        let profile = calibration_profile(&state, client).await.expect("read");
+        assert_eq!(
+            profile,
+            vec![from_a_film],
+            "the film outranks the test, and says so by being the row that is left"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_test_still_answers_for_a_codec_no_film_ever_did() {
+        let (_directory, state) = state_without_media_tools().await;
+        let client = PlaybackClientId::new();
+
+        record_calibration(
+            &state,
+            client,
+            &CodecCalibration {
+                codec: "hevc".to_string(),
+                calibration_version: 1,
+                usable: false,
+                tested_height: 2160,
+                dropped_share: 0.4,
+                shown_share: 0.6,
+                found_by: FoundBy::Watching,
+                measured_at: melyxar_core::time::now(),
+            },
+        )
+        .await
+        .expect("recorded");
+
+        let av1 = CodecCalibration {
+            codec: "av1".to_string(),
+            calibration_version: 1,
+            usable: true,
+            tested_height: 2160,
+            dropped_share: 0.0,
+            shown_share: 1.0,
+            found_by: FoundBy::Test,
+            measured_at: melyxar_core::time::now(),
+        };
+        record_calibration(&state, client, &av1).await.expect("recorded");
+
+        let profile = calibration_profile(&state, client).await.expect("read");
+        assert!(
+            profile.iter().any(|kept| kept == &av1),
+            "one codec a film answered for must not silence the test on the others"
+        );
+    }
+
+    #[tokio::test]
     async fn a_forgotten_calibration_is_offered_afresh() {
         let (_directory, state) = state_without_media_tools().await;
         let client = PlaybackClientId::new();

@@ -110,29 +110,45 @@ export interface CalibrationProgress {
   totalCodecs: number;
 }
 
-interface Measured {
+interface Watched {
+  /**
+   * Whether the server could produce this film in this codec at all.
+   *
+   * False is not a verdict on this machine and must never be written down as
+   * one: a server with no card for a codec, or one whose encoder gave way
+   * halfway through, has said nothing whatsoever about what this browser can
+   * decode. The browser's own prediction is a better answer than a made-up
+   * failure, and that is what a codec left unmeasured falls back to.
+   */
+  produced: boolean;
   usable: boolean;
   droppedShare: number;
   shownShare: number;
+}
+
+interface Measured extends Watched {
   /** The height really produced, which is the server's answer and not the
    *  height that was asked for. Null when nothing was produced at all. */
   height: number | null;
 }
 
-/** What nothing at all playing looks like, whatever the reason. */
-const NOTHING_PLAYED: Measured = {
+/** What the browser being unable to show the film looks like. */
+const NOTHING_APPEARED: Watched = {
+  produced: true,
   usable: false,
   droppedShare: 1,
   shownShare: 0,
-  height: null,
 };
 
+/** What the server being unable to produce the film looks like. */
+const NOTHING_PRODUCED: Measured = { ...NOTHING_APPEARED, produced: false, height: null };
+
 /**
- * Everything that can go wrong here, from a server that will not open this
- * session at all (no card for this codec, say) to the picture never arriving,
- * means the same thing to a calibration: this codec is not one to offer on
- * this device. Nothing here is allowed to reject and stop the whole run over
- * one codec the server or the browser could not produce.
+ * Asks for the film in one codec at one height, watches it, and says what
+ * happened, keeping apart the two ways it can come to nothing: a server that
+ * could not produce it, which is not this machine's doing, and a picture that
+ * arrived and could not be shown, which is. Nothing here is allowed to reject
+ * and stop the whole run over one codec.
  */
 async function measure(
   video: HTMLVideoElement,
@@ -142,8 +158,8 @@ async function measure(
   try {
     const opened = await api.openCalibrationSession(codec, height);
     try {
-      const gaveUp = new Promise<Measured>((resolve) => {
-        window.setTimeout(() => resolve(NOTHING_PLAYED), GIVE_UP_AFTER_MS);
+      const gaveUp = new Promise<Watched>((resolve) => {
+        window.setTimeout(() => resolve(NOTHING_APPEARED), GIVE_UP_AFTER_MS);
       });
       const watched = await Promise.race([
         watchIt(video, opened.playlist_url, opened.frame_rate),
@@ -154,7 +170,10 @@ async function measure(
       api.closeSession(opened.id);
     }
   } catch {
-    return NOTHING_PLAYED;
+    // The server would not open this session: no card for this codec, a
+    // codec it is not configured to produce, or a film it could not read.
+    // None of that is a fact about this browser.
+    return NOTHING_PRODUCED;
   }
 }
 
@@ -166,12 +185,12 @@ async function watchIt(
   video: HTMLVideoElement,
   playlistUrl: string,
   frameRate: number,
-): Promise<Omit<Measured, "height">> {
+): Promise<Watched> {
   const { default: Hls } = await import("hls.js");
   if (!Hls.isSupported()) {
     // Nothing about a real streaming path can be measured here, so the codec
     // is left exactly as unmeasured as it always was.
-    return NOTHING_PLAYED;
+    return { ...NOTHING_APPEARED, produced: false };
   }
 
   const hls = new Hls();
@@ -184,10 +203,14 @@ async function watchIt(
   // that failed here is never read as one that merely stalled or was never
   // asked to do anything.
   let fatal: string | null = null;
+  /* A fatal error carrying the server's own refusal is the server failing to
+     produce this film, which says nothing about this browser's decoder. */
+  let serverGaveWay = false;
   let stillConnecting: ((error: Error) => void) | null = null;
   hls.on(Hls.Events.ERROR, (_event, data) => {
     if (data.fatal) {
       fatal = data.details;
+      serverGaveWay = (data.response?.code ?? 0) >= 500;
       stillConnecting?.(new Error(data.details));
     }
   });
@@ -211,7 +234,7 @@ async function watchIt(
     await new Promise((resolve) => window.setTimeout(resolve, MEASURE_MS));
 
     if (fatal) {
-      return NOTHING_PLAYED;
+      return { ...NOTHING_APPEARED, produced: !serverGaveWay };
     }
 
     const ended = video.getVideoPlaybackQuality?.();
@@ -230,6 +253,7 @@ async function watchIt(
     const clockAdvancedEnough = advanced >= (MEASURE_MS / 1000) * CLOCK_MUST_ADVANCE_AT_LEAST;
 
     return {
+      produced: true,
       // Three ways of asking the same question, and a codec is only offered
       // when all three answer yes: the film kept time, it appeared as often
       // as it was meant to, and next to none of it was thrown away.
@@ -269,7 +293,17 @@ export async function runCalibration(
     const alreadyMeasured = new Set<number>();
     for (const asked of HEIGHTS) {
       onProgress?.({ codec, height: asked, codecIndex, totalCodecs: codecs.length });
-      const { usable, droppedShare, shownShare, height } = await measure(video, codec, asked);
+      const { produced, usable, droppedShare, shownShare, height } = await measure(
+        video,
+        codec,
+        asked,
+      );
+      if (!produced) {
+        // This server cannot make this codec out of this film, so nothing at
+        // all was learned about this machine. Writing a failure down here
+        // would put the server's own limit on the viewer's device for good.
+        break;
+      }
       // What the server really produced, which is what was really watched: a
       // film shorter than the height asked for answers for its own height,
       // and asking again for a rung it already answered measures it twice.
@@ -322,9 +356,18 @@ export function resetCalibration() {
 export function worthTrusting(
   entries: { calibration_version: number; usable: boolean }[],
 ): boolean {
-  return (
-    entries.length > 0 &&
-    entries.every((entry) => entry.calibration_version === CALIBRATION_VERSION) &&
-    entries.some((entry) => entry.usable)
-  );
+  return currentOnes(entries).some((entry) => entry.usable);
+}
+
+/**
+ * The rows made by the recipe this build still uses.
+ *
+ * Kept codec by codec rather than all or nothing: a codec this server could
+ * not produce at all leaves no row, and a codec whose row was written a
+ * different way answers for a measurement that no longer exists. Either way
+ * the rest of what was measured is still perfectly good, and what is missing
+ * falls back to the browser's own prediction of itself.
+ */
+export function currentOnes<T extends { calibration_version: number }>(entries: T[]): T[] {
+  return entries.filter((entry) => entry.calibration_version === CALIBRATION_VERSION);
 }
