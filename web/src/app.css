@@ -1299,6 +1299,21 @@
   min-height: 1.2em;
 }
 
+/* A quieter action beside a button that matters more: undoing it, mostly. */
+.button-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-faint);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.button-link:hover {
+  color: var(--text);
+}
+
 /* The words as they will appear, over something dark enough to judge them
    against: a size named "very large" means nothing until it is seen.
    Proportions of the box rather than fixed heights, so the words sit where
