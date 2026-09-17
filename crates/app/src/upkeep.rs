@@ -117,25 +117,16 @@ pub struct WhatIsLeft {
 /// there.
 pub async fn what_is_left(state: &AppState) -> Result<Vec<WhatIsLeft>> {
     let database = state.database();
-    let layout = crate::thumbnails::wanted(state);
     let mut left = Vec::new();
 
     for library in database.list_libraries().await? {
         for task in UpkeepTask::ALL {
-            let (waiting, done) = match task {
-                UpkeepTask::KeyFrames => (
-                    database.count_awaiting_key_frames(library.id).await?,
-                    database.count_read_for_key_frames(library.id).await?,
-                ),
-                // Nothing is waiting for thumbnails on a server that has been
-                // told not to make any. Nought and nought rather than a row
-                // offering a button that would do nothing.
-                UpkeepTask::Thumbnails => match layout {
-                    Some(layout) => (
-                        database.count_awaiting_thumbnails(library.id, layout).await?,
-                        database.count_made_thumbnails(library.id, layout).await?,
-                    ),
-                    None => (0, 0),
+            let waiting = what_is_waiting_for(state, task, library.id).await?;
+            let done = match task {
+                UpkeepTask::KeyFrames => database.count_read_for_key_frames(library.id).await?,
+                UpkeepTask::Thumbnails => match crate::thumbnails::wanted(state) {
+                    Some(layout) => database.count_made_thumbnails(library.id, layout).await?,
+                    None => 0,
                 },
             };
 
@@ -153,6 +144,27 @@ pub async fn what_is_left(state: &AppState) -> Result<Vec<WhatIsLeft>> {
         }
     }
     Ok(left)
+}
+
+/// How many films of one library are waiting on one of the two readings.
+///
+/// The one number a scan says out loud when it hands the work over, and the
+/// one the screen counts down. Nothing is ever waiting for thumbnails on a
+/// server that has been told not to make any: nought rather than a queue that
+/// nothing will ever empty.
+pub async fn what_is_waiting_for(
+    state: &AppState,
+    task: UpkeepTask,
+    library: LibraryId,
+) -> Result<i64> {
+    let database = state.database();
+    Ok(match task {
+        UpkeepTask::KeyFrames => database.count_awaiting_key_frames(library).await?,
+        UpkeepTask::Thumbnails => match crate::thumbnails::wanted(state) {
+            Some(layout) => database.count_awaiting_thumbnails(library, layout).await?,
+            None => 0,
+        },
+    })
 }
 
 /// Starts one of the two readings on one library, as a job of its own.
@@ -178,8 +190,12 @@ pub async fn start(
             Some(target),
             move |handle| async move {
                 let read = match task {
-                    UpkeepTask::KeyFrames => read_the_key_frames_of(&owned, &library, &handle).await,
-                    UpkeepTask::Thumbnails => make_the_thumbnails_of(&owned, &library, &handle).await,
+                    UpkeepTask::KeyFrames => {
+                        read_the_key_frames_of(&owned, &library, &handle).await
+                    }
+                    UpkeepTask::Thumbnails => {
+                        make_the_thumbnails_of(&owned, &library, &handle).await
+                    }
                 }
                 .map_err(|error| error.to_string())?;
                 tracing::info!(
@@ -225,10 +241,7 @@ pub async fn start_what_is_waiting(state: &AppState, priority: JobPriority) -> u
 
     let mut started = 0;
     for entry in left.iter().filter(|entry| entry.waiting > 0) {
-        let Some(library) = libraries
-            .iter()
-            .find(|library| library.id == entry.library)
-        else {
+        let Some(library) = libraries.iter().find(|library| library.id == entry.library) else {
             continue;
         };
 
@@ -339,8 +352,7 @@ pub(crate) async fn read_the_key_frames_of(
         return Ok(0);
     };
     let database = state.database();
-    let waiting = database
-        .count_awaiting_key_frames(library.id).await?;
+    let waiting = database.count_awaiting_key_frames(library.id).await?;
     if waiting == 0 {
         return Ok(0);
     }
@@ -350,8 +362,7 @@ pub(crate) async fn read_the_key_frames_of(
     // run picking up where it left off and one starting again from nothing
     // look exactly alike from a bar that always begins at zero, and the
     // difference between them is two hours.
-    let already_read = database
-        .count_read_for_key_frames(library.id).await?;
+    let already_read = database.count_read_for_key_frames(library.id).await?;
     // Counted before the size is given, because giving the size is what writes
     // both of them down. The other way round, what is already done is held
     // back until the first film of this run has been read through, and a
@@ -460,14 +471,14 @@ pub(crate) async fn make_the_thumbnails_of(
     };
     let database = state.database();
     let waiting = database
-        .count_awaiting_thumbnails(library.id, layout).await?;
+        .count_awaiting_thumbnails(library.id, layout)
+        .await?;
     if waiting == 0 {
         return Ok(0);
     }
 
     handle.at_step(JobStep::MakingThumbnails).await;
-    let already_made = database
-        .count_made_thumbnails(library.id, layout).await?;
+    let already_made = database.count_made_thumbnails(library.id, layout).await?;
     if already_made > 0 {
         handle.advance(already_made).await;
     }

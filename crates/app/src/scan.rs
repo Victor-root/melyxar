@@ -323,7 +323,8 @@ pub async fn scan_library(
             crate::upkeep::read_the_key_frames_of(state, library, handle).await?;
     }
     if library.options.thumbnails_during_scan {
-        report.thumbnails_made = crate::upkeep::make_the_thumbnails_of(state, library, handle).await?;
+        report.thumbnails_made =
+            crate::upkeep::make_the_thumbnails_of(state, library, handle).await?;
     }
     if library.options.leaves_something_to_the_upkeep() {
         say_what_is_left_to_the_upkeep(state, library).await;
@@ -365,18 +366,17 @@ pub async fn scan_library(
 /// Never a failure: this is a sentence, and a library that could not be
 /// counted has already said so where it happened.
 async fn say_what_is_left_to_the_upkeep(state: &AppState, library: &Library) {
-    let Ok(left) = crate::upkeep::what_is_left(state).await else {
-        return;
-    };
-    for entry in left
-        .iter()
-        .filter(|entry| entry.library == library.id && !entry.during_the_scan)
-    {
+    for task in crate::upkeep::UpkeepTask::ALL {
+        if task.is_done_during_the_scan_of(library) {
+            continue;
+        }
+        let Ok(waiting) = crate::upkeep::what_is_waiting_for(state, task, library.id).await else {
+            return;
+        };
         tracing::debug!(
             library = library.name,
-            task = entry.task.as_str(),
-            waiting = entry.waiting,
-            done = entry.done,
+            task = task.as_str(),
+            waiting,
             "this scan does not do this reading; the upkeep has it"
         );
     }
@@ -1237,10 +1237,10 @@ mod tests {
             JobPriority::REQUESTED,
             RefreshMode::default(),
         )
-            .await
-            .expect("job started")
-            .wait()
-            .await;
+        .await
+        .expect("job started")
+        .wait()
+        .await;
         assert_eq!(job_state, JobState::Succeeded, "the scan ran to the end");
         report.expect("a finished scan has a report")
     }
