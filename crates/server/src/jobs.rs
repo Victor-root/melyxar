@@ -403,6 +403,17 @@ async fn set_library_options(
         .await
         .map_err(internal)?;
 
+    // A switch flipped on a screen and a switch the server took are two
+    // different things, and the only difference a person sees is a scan that
+    // behaves as it did before.
+    tracing::debug!(
+        library = library.name,
+        key_frames_during_scan = options.key_frames_during_scan,
+        thumbnails_during_scan = options.thumbnails_during_scan,
+        changed,
+        "what a scan of this library does was set"
+    );
+
     Ok(Json(OptionsView {
         key_frames_during_scan: options.key_frames_during_scan,
         thumbnails_during_scan: options.thumbnails_during_scan,
@@ -476,13 +487,16 @@ struct StartedManyView {
 /// At the priority of something asked for: whoever pressed this is not waiting
 /// for the night, which is the whole reason the button exists.
 async fn run_the_upkeep(State(state): State<AppState>) -> Result<Json<StartedManyView>> {
-    Ok(Json(StartedManyView {
-        started: melyxar_app::upkeep::start_what_is_waiting(
-            &state,
-            melyxar_core::job::JobPriority::REQUESTED,
-        )
-        .await,
-    }))
+    let started = melyxar_app::upkeep::start_what_is_waiting(
+        &state,
+        melyxar_core::job::JobPriority::REQUESTED,
+    )
+    .await;
+    // Nought is the commonest answer here and the one worth writing down: the
+    // button did work, there was simply nothing waiting, and from the outside
+    // that is indistinguishable from a button that does nothing.
+    tracing::debug!(jobs = started, "the upkeep was asked for from a screen");
+    Ok(Json(StartedManyView { started }))
 }
 
 /// Starts one of the two readings on one library, now.

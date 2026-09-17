@@ -28,6 +28,7 @@ pub struct Diagnostics {
     pub accounts: i64,
     pub libraries: usize,
     pub catalogue: CatalogueReport,
+    pub upkeep: UpkeepReport,
     /// The films still without a name, and what stopped each of them.
     ///
     /// Named rather than counted. A count is a question; these are the answer,
@@ -170,6 +171,24 @@ pub struct CatalogueReport {
     /// Files that have the thumbnails of the playback bar. Another whole
     /// reading of every file, reported for the same reason.
     pub with_thumbnails: i64,
+}
+
+/// When the two heavy readings of a film happen, and where.
+///
+/// The counts above say how much is left; this says what is going to do it.
+/// Without it, a server whose nightly run is switched off and one that simply
+/// has not reached three in the morning look exactly alike, and both look like
+/// a server that has forgotten.
+#[derive(Debug, Clone, Serialize)]
+pub struct UpkeepReport {
+    /// Whether the upkeep runs on its own.
+    pub nightly: bool,
+    /// The hour of the day it starts, in UTC, which is the clock a server can
+    /// read with certainty.
+    pub at_utc_hour: u32,
+    /// Libraries whose own scan does at least one of the two readings, by
+    /// name. These do not wait for the night.
+    pub during_the_scan: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -416,6 +435,18 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
         roots,
         accounts: database.user_count().await?,
         libraries: libraries.len(),
+        upkeep: UpkeepReport {
+            nightly: config.tasks.nightly_upkeep,
+            at_utc_hour: config.tasks.nightly_upkeep_at_utc_hour,
+            during_the_scan: libraries
+                .iter()
+                .filter(|library| {
+                    library.options.key_frames_during_scan
+                        || library.options.thumbnails_during_scan
+                })
+                .map(|library| library.name.clone())
+                .collect(),
+        },
         catalogue: database
             .catalogue_summary()
             .await
@@ -903,9 +934,9 @@ pub fn render_text(report: &Diagnostics) -> String {
     }
 
     // Reading one film for this means reading it through from end to end, so
-    // the pass runs over several scans. Without the count against the files,
-    // a pass still going and a pass that finished look exactly alike, and the
-    // only sign either way is that jumps are landing early.
+    // it is the upkeep's and not the scan's. Without the count against the
+    // files, a reading still going and one that finished look exactly alike,
+    // and the only sign either way is that jumps are landing early.
     let waiting_to_be_read = report.catalogue.files
         - report.catalogue.missing_files
         - report.catalogue.read_for_key_frames;
@@ -913,7 +944,7 @@ pub fn render_text(report: &Diagnostics) -> String {
         if waiting_to_be_read > 0 { "!" } else { "+" },
         match waiting_to_be_read > 0 {
             true => format!(
-                "read for where a jump can land {} of {}, so {} are still cut on the usual grid                  and jump to a little before where they are aimed; another scan carries on",
+                "read for where a jump can land {} of {}, so {} are still cut on the usual grid                  and jump to a little before where they are aimed; the upkeep carries on",
                 report.catalogue.read_for_key_frames,
                 report.catalogue.files - report.catalogue.missing_files,
                 waiting_to_be_read
@@ -926,15 +957,15 @@ pub fn render_text(report: &Diagnostics) -> String {
     );
 
     // The same again for the little pictures of the playback bar, and for the
-    // same reason: another whole reading of every file, spread over several
-    // scans, and a bar with nothing on it is the only sign either way.
+    // same reason: another whole reading of every file, and a bar with
+    // nothing on it is the only sign either way.
     let waiting_for_thumbnails =
         report.catalogue.files - report.catalogue.missing_files - report.catalogue.with_thumbnails;
     line!(
         if waiting_for_thumbnails > 0 { "!" } else { "+" },
         match waiting_for_thumbnails > 0 {
             true => format!(
-                "read for the thumbnails of the playback bar {} of {}, so {} still show a bare bar; another scan carries on",
+                "read for the thumbnails of the playback bar {} of {}, so {} still show a bare bar; the upkeep carries on",
                 report.catalogue.with_thumbnails,
                 report.catalogue.files - report.catalogue.missing_files,
                 waiting_for_thumbnails
@@ -945,6 +976,29 @@ pub fn render_text(report: &Diagnostics) -> String {
             ),
         },
     );
+
+    // What is going to do the reading, next to how much of it is left. A
+    // server whose nightly run is switched off and one that has not yet
+    // reached the hour look exactly alike from the counts above.
+    line!(
+        if report.upkeep.nightly { "+" } else { "!" },
+        match report.upkeep.nightly {
+            true => format!(
+                "the upkeep runs on its own at {:02}:00 UTC",
+                report.upkeep.at_utc_hour
+            ),
+            false => "the upkeep never runs on its own; it waits for the button".to_string(),
+        },
+    );
+    if !report.upkeep.during_the_scan.is_empty() {
+        line!(
+            "+",
+            format!(
+                "read during the scan of: {}",
+                report.upkeep.during_the_scan.join(", ")
+            ),
+        );
+    }
     out.push('\n');
 
     if !report.nameless.is_empty() {
@@ -1307,6 +1361,50 @@ mod tests {
             !text.contains('\u{1b}'),
             "no escape codes: the output gets pasted into a conversation"
         );
+    }
+
+    #[tokio::test]
+    async fn the_report_says_what_is_going_to_do_the_two_heavy_readings() {
+        // The counts of what is left were already here, and on their own they
+        // say nothing about whether anything is coming for them: a server
+        // whose nightly run is off looks exactly like one that has not reached
+        // three in the morning, and both look like one that has forgotten.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("media");
+        std::fs::create_dir_all(&media).expect("media folder");
+        let state = state_with_root(directory.path(), media).await;
+
+        let report = collect(&state).await.expect("report collected");
+        assert!(report.upkeep.nightly, "a server nobody configured runs it");
+        assert_eq!(report.upkeep.at_utc_hour, 3);
+        assert!(
+            report.upkeep.during_the_scan.is_empty(),
+            "no library has been told to do the readings in one sitting"
+        );
+        assert!(render_text(&report).contains("03:00 UTC"));
+
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .pop()
+            .expect("the library was declared");
+        state
+            .database()
+            .set_library_options(
+                library.id,
+                melyxar_core::library::LibraryOptions {
+                    key_frames_during_scan: true,
+                    thumbnails_during_scan: false,
+                },
+            )
+            .await
+            .expect("written");
+
+        let named = collect(&state).await.expect("report collected");
+        assert_eq!(named.upkeep.during_the_scan, vec![library.name.clone()]);
+        assert!(render_text(&named).contains(&library.name));
     }
 
     #[tokio::test]
