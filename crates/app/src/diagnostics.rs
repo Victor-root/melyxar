@@ -943,7 +943,8 @@ pub fn render_text(report: &Diagnostics) -> String {
         if waiting_to_be_read > 0 { "!" } else { "+" },
         match waiting_to_be_read > 0 {
             true => format!(
-                "read for where a jump can land {} of {}, so {} are still cut on the usual grid                  and jump to a little before where they are aimed; the upkeep carries on",
+                "read for where a jump can land {} of {}, so {} are still cut on the usual \
+                 grid and jump to a little before where they are aimed; the upkeep carries on",
                 report.catalogue.read_for_key_frames,
                 report.catalogue.files - report.catalogue.missing_files,
                 waiting_to_be_read
