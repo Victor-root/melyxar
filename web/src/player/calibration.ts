@@ -25,8 +25,13 @@ import { deviceIdentity } from "./deviceIdentity";
  * judged changes, so a row made the old way is offered a fresh calibration
  * rather than trusted forever. Kept in step by hand with the same constant on
  * the server, which is the only other place a change here would matter.
+ *
+ * Bumped to 2 when the reference film gained real grain: a fractal alone let
+ * a codec with no real hardware decoder look usable, because it never cost
+ * enough real bits to tell the two apart. Every row made under version 1
+ * measured that easier film, not a real one, and is stale under this one.
  */
-export const CALIBRATION_VERSION = 1;
+export const CALIBRATION_VERSION = 2;
 
 /** The heights tried, tallest first: the same ladder a real film's rebuild
  *  would climb down if the tallest one did not hold up. */
