@@ -6,7 +6,7 @@
 //! like the browser without any rule being written twice.
 
 use melyxar_core::id::{LibraryId, UserId};
-use melyxar_core::library::{LibraryKind, RootAccess};
+use melyxar_core::library::{LibraryKind, LibraryOptions, RootAccess};
 
 use crate::browse::{BrowseRequest, WorkOrder, WorkPage};
 use crate::{AppState, Result};
@@ -22,6 +22,9 @@ pub struct LibrarySummary {
     /// Moves whenever anything in the library moves, so a client can ask
     /// whether to refetch instead of refetching.
     pub version: i64,
+    /// What a scan of this library does in one sitting, so the screen that
+    /// offers the switches shows where they stand.
+    pub options: LibraryOptions,
     pub roots: Vec<RootSummary>,
 }
 
@@ -94,6 +97,7 @@ pub async fn libraries(state: &AppState) -> Result<Vec<LibrarySummary>> {
             id: library.id,
             name: library.name,
             kind: library.kind,
+            options: library.options,
         });
     }
     Ok(summaries)
