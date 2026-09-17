@@ -109,6 +109,15 @@ impl Directories {
         self.cache.join("thumbnails")
     }
 
+    /// Directory holding the reference film a client is calibrated against.
+    ///
+    /// In the cache, like the pictures made from a real film: nothing here
+    /// belongs to a library, and all of it is made again from nothing the
+    /// moment it is missing.
+    pub fn calibration(&self) -> PathBuf {
+        self.cache.join("calibration")
+    }
+
     pub fn backups(&self) -> PathBuf {
         self.data.join("backups")
     }

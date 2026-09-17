@@ -647,7 +647,7 @@ fn height_to_rebuild_at(source_height: Option<i32>, asked_for: Option<i32>) -> O
 /// means the same thing to all three. These are the usual streaming rates for
 /// the codec every client reads, and the newer codecs are given less because
 /// needing less is the whole point of them.
-fn rate_for(height: Option<i32>, codec: &str) -> i64 {
+pub(crate) fn rate_for(height: Option<i32>, codec: &str) -> i64 {
     let as_h264 = match height.unwrap_or(1080) {
         height if height > 1440 => 25_000_000,
         height if height > 1080 => 16_000_000,
