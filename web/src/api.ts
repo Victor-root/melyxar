@@ -338,6 +338,15 @@ export type PageSaw =
     }
   | {
       session: string;
+      saw: "pictures_were_dropped";
+      at_second: number;
+      /** The stretch this counts over, in milliseconds. */
+      over_ms: number;
+      pictures_shown: number;
+      pictures_dropped: number;
+    }
+  | {
+      session: string;
       saw: "playback_refused";
       /** Why the library gave up, in its own words. Cut short by the server. */
       because: string;

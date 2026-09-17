@@ -30,6 +30,16 @@ const LOOK_EVERY_MS = 250;
 const SAY_SO_ANYWAY_AFTER_MS = 5_000;
 
 /**
+ * How long a stretch of dropped pictures covers before it is said.
+ *
+ * Short enough to place the trouble in time against what the server was
+ * doing at the same moment, long enough that a single incidental drop, which
+ * happens even on a healthy film, does not write a line for nothing. A
+ * stretch that dropped nothing says nothing at all.
+ */
+const DROPPED_PICTURES_OVER_MS = 2_000;
+
+/**
  * How still the film has to be before a drag counts as over.
  *
  * Long enough to bridge the gap between two twitches of a hand on the bar,
@@ -270,6 +280,15 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
   let frozenPictures = picturesShown(element);
   let frozenClock = element.currentTime;
 
+  /* Pictures dropped without ever costing the clock a whole second, which is
+     what the two checks above are blind to: a decoder shedding pictures to
+     stay caught up looks, from the clock's side, exactly like a film playing
+     perfectly well. Windowed rather than read at a single instant, so what is
+     said is a rate rather than a count that only ever grows. */
+  let droppedWindowSince = performance.now();
+  let droppedAtWindowStart = picturesDropped(element);
+  let shownAtWindowStart = picturesShown(element);
+
   const look = () => {
     const now = performance.now();
     const at = element.currentTime;
@@ -288,7 +307,28 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
       stillAt = at;
       frozenClock = at;
       frozenPictures = shown;
+      droppedWindowSince = now;
+      droppedAtWindowStart = picturesDropped(element);
+      shownAtWindowStart = shown;
       return;
+    }
+
+    if (now - droppedWindowSince >= DROPPED_PICTURES_OVER_MS) {
+      const droppedNow = picturesDropped(element);
+      const dropped = droppedNow - droppedAtWindowStart;
+      if (dropped > 0) {
+        tell({
+          session,
+          saw: "pictures_were_dropped",
+          at_second: at,
+          over_ms: Math.round(now - droppedWindowSince),
+          pictures_shown: shown - shownAtWindowStart,
+          pictures_dropped: dropped,
+        });
+      }
+      droppedWindowSince = now;
+      droppedAtWindowStart = droppedNow;
+      shownAtWindowStart = shown;
     }
 
     // The clock itself has stopped: the film is waiting for something.
