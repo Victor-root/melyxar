@@ -712,26 +712,30 @@ fn how_to_rebuild(
         }
 
         // The best codec the client keeps up with at the size this is coming
-        // out at, which is the ordinary answer.
+        // out at, and trusted not to have fallen back to software to get
+        // there: the point of a newer codec is the bitrate it saves, and that
+        // is not saved by a decode the browser had to do on the processor.
         if let Some(codec) = BEST_FIRST
             .iter()
             .filter(allowed)
             .filter(writes)
-            .find(|codec| profile.accepts_rebuilt(codec, rebuilt_height))
+            .find(|codec| profile.efficiently_accepts_rebuilt(codec, rebuilt_height))
         {
             return Some((card, (*codec).to_string(), None));
         }
 
-        // Nothing the card writes keeps up at this size. Then the picture is
-        // made smaller rather than handed over in a codec that will not show:
-        // a client that cannot follow this film in anything cannot follow it,
-        // and a smaller picture is a picture. A card that cannot scale has
-        // nothing to offer here, and the answer is found below.
+        // Nothing the card writes keeps up at this size, trusted or not. Then
+        // the picture is made smaller rather than handed over in a codec that
+        // will not show: a client that cannot follow this film in anything
+        // cannot follow it, and a smaller picture is a picture. A card that
+        // cannot scale has nothing to offer here, and the answer is found
+        // below.
         BEST_FIRST
             .iter()
             .filter(allowed)
             .filter(|_| card.can_scale)
             .filter(writes)
+            .filter(|codec| profile.efficient(codec))
             .find_map(|codec| {
                 profile
                     .tallest_rebuilt(codec)
@@ -2127,6 +2131,7 @@ mod tests {
                 RebuiltCapability {
                     codec: "av1".into(),
                     max_height: Some(1080),
+                    power_efficient: None,
                 },
             ],
             ..ClientProfile::conservative_browser()
@@ -2167,6 +2172,7 @@ mod tests {
             rebuilt_video: vec![RebuiltCapability {
                 codec: "av1".into(),
                 max_height: Some(1080),
+                power_efficient: None,
             }],
             ..ClientProfile::conservative_browser()
         };
@@ -2315,6 +2321,62 @@ mod tests {
         )
         .expect("this picture is rebuilt");
         assert_eq!(cannot_write_it.codec, "hevc");
+    }
+
+    #[test]
+    fn automatic_choice_skips_a_codec_the_browser_only_decodes_in_software() {
+        // The exact machine that motivated this: a card with no AV1 decoder
+        // of its own, where the browser still calls AV1 smooth by falling
+        // back to software, and drops pictures on a real film. HEVC has a
+        // real decoder on the same machine and is chosen instead, without
+        // anybody having to force it by hand.
+        let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
+        let card = capabilities_with(Some(a_card(&["h264", "hevc", "av1"], true)));
+        let av1_only_in_software = ClientProfile {
+            rebuilt_video: vec![
+                RebuiltCapability::any("h264"),
+                RebuiltCapability {
+                    codec: "hevc".into(),
+                    max_height: None,
+                    power_efficient: Some(true),
+                },
+                RebuiltCapability {
+                    codec: "av1".into(),
+                    max_height: None,
+                    power_efficient: Some(false),
+                },
+            ],
+            ..ClientProfile::conservative_browser()
+        };
+
+        let automatic = how_to_rebuild(
+            &rebuilding(None, true, None),
+            &tracks,
+            &av1_only_in_software,
+            Some(&card),
+            false,
+            &all_codecs(),
+            None,
+        )
+        .expect("this picture is rebuilt");
+        assert_eq!(
+            automatic.codec, "hevc",
+            "av1 is smooth on paper but never trusted automatically"
+        );
+
+        // Forcing it by hand still works: that request is never second
+        // guessed by this same doubt.
+        let forced_anyway = how_to_rebuild(
+            &rebuilding(None, true, None),
+            &tracks,
+            &av1_only_in_software,
+            Some(&card),
+            false,
+            &all_codecs(),
+            Some("av1"),
+        )
+        .expect("this picture is rebuilt");
+        assert_eq!(forced_anyway.codec, "av1");
     }
 
     #[tokio::test]
