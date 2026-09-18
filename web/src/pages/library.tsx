@@ -1,115 +1,18 @@
 /*
  * A grid of a whole library, with what narrows it.
- *
- * The choices live in the address rather than in memory, so a sorted, filtered
- * grid can be kept as a link, reloaded, and walked back to with the browser's
- * own back button.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
-import { api } from "../api";
-import type { Card as CardData, Filters, Library } from "../api";
+import type { Library } from "../api";
 import { Card } from "../components/card";
 import { Grid } from "../components/grid";
+import { ORDERS, useBrowsing } from "../screens/browsing";
 import { useSettings } from "../settings";
 
-const ORDERS = ["title", "added_at", "release_year", "community_rating", "runtime"] as const;
-
 export function LibraryPage({ libraries }: { libraries: Library[] }) {
-  const { id } = useParams();
-  const [parameters, setParameters] = useSearchParams();
   const { t } = useSettings();
-
-  const [cards, setCards] = useState<CardData[]>([]);
-  const [next, setNext] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-  const [filters, setFilters] = useState<Filters | null>(null);
-
-  const order = parameters.get("order") ?? "title";
-  const descending = parameters.get("descending") === "true";
-  const genre = parameters.get("genre") ?? undefined;
-  const decade = parameters.get("decade") ? Number(parameters.get("decade")) : undefined;
-  const search = parameters.get("search") ?? undefined;
-  const unidentified = parameters.get("unidentified") === "true";
-  const initial = parameters.get("initial") ?? undefined;
-  const library = libraries.find((entry) => entry.id === id);
-
-  // Any change to the choices starts the grid again from the top, since the
-  // page after the fiftieth card of one ordering means nothing in another.
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setFailed(false);
-    api
-      .works(
-        { library: id, order, descending, genre, decade, search, unidentified, initial },
-        controller.signal,
-      )
-      .then((page) => {
-        setCards(page.cards);
-        setNext(page.next);
-        setLoading(false);
-      })
-      .catch((error) => {
-        if (!(error instanceof DOMException)) {
-          setFailed(true);
-          setLoading(false);
-        }
-      });
-    return () => controller.abort();
-  }, [id, order, descending, genre, decade, search, unidentified, initial]);
-
-  useEffect(() => {
-    if (!id) {
-      setFilters(null);
-      return;
-    }
-    const controller = new AbortController();
-    api
-      .filters(id, controller.signal)
-      .then(setFilters)
-      .catch(() => setFilters(null));
-    return () => controller.abort();
-  }, [id]);
-
-  const loadMore = useCallback(() => {
-    if (!next || loading) {
-      return;
-    }
-    setLoading(true);
-    api
-      .works({
-        library: id,
-        order,
-        descending,
-        genre,
-        decade,
-        search,
-        unidentified,
-        initial,
-        after: next,
-      })
-      .then((page) => {
-        // Appended rather than replaced: the cards already on screen stay
-        // where they are, which is what keeps the scroll position honest.
-        setCards((current) => [...current, ...page.cards]);
-        setNext(page.next);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [next, loading, id, order, descending, genre, decade, search, unidentified, initial]);
-
-  const choose = (name: string, value: string | null) => {
-    const updated = new URLSearchParams(parameters);
-    if (value === null || value === "") {
-      updated.delete(name);
-    } else {
-      updated.set(name, value);
-    }
-    setParameters(updated, { replace: true });
-  };
+  const { narrowing, choose, cards, more, loadMore, loading, failed, filters } = useBrowsing();
+  const { order, descending, genre, decade, search, unidentified, initial } = narrowing;
+  const library = libraries.find((entry) => entry.id === narrowing.library);
 
   return (
     <main className="page">
@@ -195,7 +98,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
           to scroll through and too short to search by hand every time, and the
           letter is the one thing anybody remembers about a title. */}
       <div className="grid-with-letters">
-        <Grid onReachEnd={loadMore} hasMore={next !== null}>
+        <Grid onReachEnd={loadMore} hasMore={more}>
           {cards.map((card) => (
             <Card key={card.id} card={card} />
           ))}
@@ -227,7 +130,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
       </div>
 
       {loading && <p className="notice">{t("library.loading")}</p>}
-      {!loading && next === null && cards.length > 0 && (
+      {!loading && !more && cards.length > 0 && (
         <p className="notice notice-faint">{t("library.end")}</p>
       )}
     </main>

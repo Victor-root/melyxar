@@ -13,94 +13,32 @@
  * thing here that is not a job at all: it is the work nobody has started yet.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, REFRESH_MODES } from "../api";
-import type { Job, Library, RefreshMode, Upkeep, UpkeepTask } from "../api";
+import { api, REFRESH_MODES } from "../api";
+import type { Library, RefreshMode, UpkeepTask } from "../api";
 import { JobLine } from "../components/job";
 import { CopyReport } from "../components/report";
 import { refusalKey } from "../i18n";
-import { useRunning } from "../running";
+import { useActivityScreen, whenItIs } from "../screens/activity";
 import { useSettings } from "../settings";
 
 export function ActivityPage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
-  const { jobs: running, watch, finished } = useRunning();
-  const [recent, setRecent] = useState<Job[]>([]);
-  const [upkeep, setUpkeep] = useState<Upkeep | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [refused, setRefused] = useState<string | null>(null);
-  const [said, setSaid] = useState<string | null>(null);
-  /* How much a scan started from here goes over. Kept for the page rather than
-     asked once per button: somebody choosing "everything again" is choosing it
-     for what they are about to press, and having to choose it twice is how the
-     second library quietly gets the light one. */
-  const [mode, setMode] = useState<RefreshMode>("what_is_missing");
-
-  /* One library at a time, which is what this page is for: the bar at the top
-     already offers the whole lot at once, and somebody who came here came to
-     act on one thing. Whatever is started is watched at once rather than left
-     to the slow beat, because a button that shows nothing for twenty seconds
-     is indistinguishable from a button that did nothing. */
-  const startOn = useCallback(
-    async (asked: Promise<unknown>) => {
-      setRefused(null);
-      setSaid(null);
-      try {
-        await asked;
-        watch();
-      } catch (error) {
-        setRefused(error instanceof ApiError ? error.code : "generic");
-      }
-    },
-    [watch],
-  );
-
-  const loadRecent = useCallback(async (signal?: AbortSignal) => {
-    try {
-      setRecent((await api.jobs(signal)).recent);
-      setFailed(false);
-    } catch (error) {
-      if (!(error instanceof DOMException)) {
-        setFailed(true);
-      }
-    }
-  }, []);
-
-  const loadUpkeep = useCallback(async (signal?: AbortSignal) => {
-    try {
-      setUpkeep(await api.upkeep(signal));
-    } catch (error) {
-      if (!(error instanceof DOMException)) {
-        setFailed(true);
-      }
-    }
-  }, []);
-
-  /* On the way in, and again each time the work being watched comes to an
-     end: that is exactly when something has moved from running to finished,
-     and when what the upkeep has left has just gone down. */
-  useEffect(() => {
-    const controller = new AbortController();
-    loadRecent(controller.signal);
-    loadUpkeep(controller.signal);
-    return () => controller.abort();
-  }, [loadRecent, loadUpkeep, finished]);
-
-  /* Started from here, so this page says what happened rather than leaving a
-     button that did nothing to look exactly like a button that is broken. */
-  const startTheUpkeep = useCallback(async () => {
-    setRefused(null);
-    try {
-      const { started } = await api.runUpkeep();
-      setSaid(started > 0 ? t("upkeep.started", { count: started }) : t("upkeep.nothing_started"));
-      watch();
-      loadUpkeep();
-    } catch (error) {
-      setRefused(error instanceof ApiError ? error.code : "generic");
-    }
-  }, [loadUpkeep, t, watch]);
-
-  const waiting = upkeep?.tasks.filter((task) => task.waiting > 0) ?? [];
+  const {
+    running,
+    recent,
+    upkeep,
+    waiting,
+    failed,
+    refused,
+    started,
+    mode,
+    setMode,
+    startOn,
+    startTheUpkeep,
+    startOneReading,
+    cancel,
+    forgetFinished,
+  } = useActivityScreen();
 
   return (
     <main className="page">
@@ -144,7 +82,11 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
       {/* A button that fails in silence is the same thing as a button that
           does nothing, and sends somebody to a terminal. */}
       {refused && <p className="notice">{t(refusalKey(refused))}</p>}
-      {said && <p className="notice">{said}</p>}
+      {started !== null && (
+        <p className="notice">
+          {started > 0 ? t("upkeep.started", { count: started }) : t("upkeep.nothing_started")}
+        </p>
+      )}
       {failed && <p className="notice">{t("error.unreachable")}</p>}
 
       <section className="section">
@@ -156,7 +98,7 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
             <JobLine
               key={job.id}
               job={job}
-              onCancel={() => api.cancelJob(job.id).then(() => watch())}
+              onCancel={() => cancel(job.id)}
             />
           ))
         )}
@@ -206,9 +148,7 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
                 task.waiting > 0 && (
                   <button
                     className="button button-small"
-                    onClick={() =>
-                      startOn(api.runUpkeepTask(task.library, task.task)).then(() => loadUpkeep())
-                    }
+                    onClick={() => startOneReading(task)}
                   >
                     {t("upkeep.run")}
                   </button>
@@ -227,7 +167,7 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
                 something to empty. */}
             <button
               className="button button-small"
-              onClick={() => api.forgetFinishedJobs().then(() => loadRecent())}
+              onClick={forgetFinished}
             >
               {t("jobs.forget")}
             </button>
@@ -241,14 +181,6 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
   );
 }
 
-/*
- * An instant from the server, in the hour of whoever is reading it.
- *
- * The server keeps one clock and it is UTC, which is the only one it can read
- * with certainty. Three in the morning there is four here half the year, and
- * announcing the server's hour to somebody looking at their own clock is how a
- * run that happened on time looks like a run that did not.
- */
 /*
  * When a reading last ran, in one short phrase.
  *
@@ -268,12 +200,4 @@ function lastRun(
   return task.last_run_seconds === null
     ? t("upkeep.last_run_unknown", { when })
     : t("upkeep.last_run", { when, seconds: task.last_run_seconds });
-}
-
-function whenItIs(instant: string | null): string {
-  if (!instant) {
-    return "";
-  }
-  const when = new Date(instant);
-  return Number.isNaN(when.getTime()) ? instant : when.toLocaleString();
 }

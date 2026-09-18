@@ -3,74 +3,24 @@
  * is nothing yet.
  */
 
-import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api";
-import type { Home as HomeData, Library } from "../api";
+import type { Library } from "../api";
 import { Card } from "../components/card";
 import { Row } from "../components/row";
 import { JobLine } from "../components/job";
-import { useRunning, useStartIdentification, useStartScan } from "../running";
+import { howFarIn, useHomeScreen } from "../screens/home";
 import { refusalKey } from "../i18n";
 import { useSettings } from "../settings";
 
-/**
- * How far into a film somebody is, between nothing and one.
- *
- * Absent when the film has no length recorded, since a fraction of an unknown
- * is not a fraction. Capped, because a position past the end is a report that
- * arrived oddly and not a film watched twice over.
- */
-function howFarIn(seconds: number, runtimeMinutes: number | null): number | undefined {
-  if (!runtimeMinutes || runtimeMinutes <= 0) {
-    return undefined;
-  }
-  return Math.min(1, seconds / (runtimeMinutes * 60));
-}
-
 export function HomePage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
-  const [home, setHome] = useState<HomeData | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  const load = useCallback((signal?: AbortSignal) => {
-    setFailed(false);
-    api
-      .home(undefined, signal)
-      .then(setHome)
-      .catch((error) => {
-        if (!(error instanceof DOMException)) {
-          setFailed(true);
-        }
-      });
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
-
-  /* Work takes minutes on a real library, so the page reads again what it
-     produced when it ends. Without this, pressing a button looks exactly like
-     pressing a button that does nothing. */
-  const { jobs, finished } = useRunning();
-  const scan = useStartScan(libraries);
-  /* Asked for on its own, for the films a previous look up did not name:
-     a provider that was down, a title nobody recognised, a key added since. */
-  const lookUp = useStartIdentification(libraries);
-  const refused = lookUp.refused ?? scan.refused;
-  useEffect(() => {
-    if (finished > 0) {
-      load();
-    }
-  }, [finished, load]);
+  const { home, failed, again, jobs, scan, lookUp, refused } = useHomeScreen(libraries);
 
   if (failed) {
     return (
       <main className="page">
         <p className="notice">{t("error.unreachable")}</p>
-        <button className="button" onClick={() => load()}>
+        <button className="button" onClick={again}>
           {t("error.retry")}
         </button>
       </main>
