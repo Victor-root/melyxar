@@ -11,10 +11,22 @@
  * before it is pressed.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { Version, Work } from "../api";
 import { useAsked } from "../asking";
+
+/**
+ * What the address says when a page is meant to start playing by itself.
+ *
+ * This is how one press of "carry on" on a series reaches the episode's own
+ * page and starts it: the episode is the thing being watched, so it is its
+ * page that plays it and its own progress that is written down. Playing it
+ * from the series page would record a series as watched and show its title
+ * over somebody else's episode.
+ */
+const START_AT_ONCE = "play";
 
 /**
  * Where a work lives at the site that named it.
@@ -122,9 +134,13 @@ export interface WorkScreen {
   trailer: string | null;
   watchTrailer: (url: string) => void;
   stopTrailer: () => void;
+  /** Where to go when this one ends, so an episode is followed by the next.
+      Absent for anything with nothing after it. */
+  andThen: string | null;
 }
 
 export function useWorkScreen(id: string | undefined): WorkScreen {
+  const [address, setAddress] = useSearchParams();
   const [chosen, setChosen] = useState(0);
   const [playing, setPlaying] = useState<Watching | null>(null);
   const [trailer, setTrailer] = useState<string | null>(null);
@@ -156,6 +172,28 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     [work, chosen],
   );
 
+  /* Started once and only once. The address is cleared as soon as it is
+     acted on, so coming back to this page later does not start the film
+     again, and the hand is what stops a screen drawn twice from starting
+     twice before the address has been cleared. */
+  const started = useRef(false);
+  useEffect(() => {
+    if (!address.has(START_AT_ONCE) || started.current || !version || version.missing) {
+      return;
+    }
+    started.current = true;
+    setPlaying({ source: version.id, fromTheStart: false });
+    const rest = new URLSearchParams(address);
+    rest.delete(START_AT_ONCE);
+    setAddress(rest, { replace: true });
+  }, [address, setAddress, version]);
+
+  /* A different work is a different film to start, so the one press the
+     address carried is spent and a new one may be honoured. */
+  useEffect(() => {
+    started.current = false;
+  }, [id]);
+
   const readAgain = useCallback(() => setAgain((count) => count + 1), []);
   const play = useCallback(
     (source: string, fromTheStart: boolean) => setPlaying({ source, fromTheStart }),
@@ -182,5 +220,11 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     trailer,
     watchTrailer,
     stopTrailer,
+    /* Only after an episode: a film that ends is a film that ended, and a
+       season has nothing playing to follow. */
+    andThen:
+      work?.kind === "episode" && work.carry_on_with
+        ? `/work/${work.carry_on_with.id}?${START_AT_ONCE}=1`
+        : null,
   };
 }

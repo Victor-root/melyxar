@@ -45,6 +45,7 @@ export function WorkPage() {
     trailer,
     watchTrailer,
     stopTrailer,
+    andThen,
   } = useWorkScreen(id);
 
   /* Escape goes back, which is what a remote control and a keyboard both
@@ -112,6 +113,10 @@ export function WorkPage() {
         work={work}
         fromTheStart={playing.fromTheStart}
         onClose={stopPlaying}
+        /* One episode after another without anybody pressing anything. The
+           next one is opened on its own page, which is what writes its own
+           progress down and shows its own title. */
+        onEnded={andThen ? () => navigate(andThen) : undefined}
       />
     );
   }
@@ -230,10 +235,19 @@ export function WorkPage() {
                 {t("work.trailer")}
               </a>
             )}
+            {/* The one after this, for whoever does not want to wait for the
+                end of this one to get there. */}
+            {work.kind === "episode" && work.carry_on_with && (
+              <Link className="button" to={`/work/${work.carry_on_with.id}`}>
+                {t("work.next_episode")}
+              </Link>
+            )}
           </div>
           )}
 
           <Synopsis text={work.overview} />
+
+          {holdsOthers && <CarryOn work={work} />}
 
           {holdsOthers && <WhatHangsUnder work={work} />}
 
@@ -680,7 +694,9 @@ function SeasonCard({ child }: { child: Child }) {
       <span className="season-name">{numberOfOne(child.kind, child.number, t)}</span>
       {child.title && <span className="season-title">{child.title}</span>}
       <span className="season-count">
-        {howMany(child.child_count, "work.episode_count", t)}
+        {child.unwatched > 0
+          ? howMany(child.unwatched, "work.left_to_watch", t)
+          : howMany(child.child_count, "work.episode_count", t)}
       </span>
     </Link>
   );
@@ -703,7 +719,62 @@ function EpisodeRow({ child }: { child: Child }) {
               ? t("work.minutes", { count: child.runtime_minutes })
               : ""}
         </span>
+        {/* A tick rather than a word: a list of twenty four lines each ending
+            in "Vu" reads as a wall of the same word. */}
+        {child.watched && (
+          <span className="episode-watched" title={t("work.watched")} aria-label={t("work.watched")}>
+            ✓
+          </span>
+        )}
       </Link>
     </li>
+  );
+}
+
+/**
+ * What a series or a season offers to play next.
+ *
+ * One press, and the episode's own page opens and starts it. Not played from
+ * here: the episode is what is being watched, so its page is what shows its
+ * title and writes its own progress down.
+ */
+function CarryOn({ work }: { work: Work }) {
+  const { t } = useSettings();
+  const next = work.carry_on_with;
+
+  if (!next) {
+    /* Nothing left only says something once there is something here at all. */
+    return work.children.length > 0 ? (
+      <p className="work-all-watched">{t("work.all_watched")}</p>
+    ) : null;
+  }
+
+  /* Nothing to play it from, or no way to say which episode it is, means
+     nothing to offer: the list of episodes is right below either way, and a
+     button that cannot name what it would start is worse than no button. */
+  if (!next.source_id || next.season === null || next.episode === null) {
+    return null;
+  }
+
+  /* Whether anybody has started this at all, which decides between starting
+     and carrying on. A season page counts watched episodes and a series page
+     counts what is left inside each season: an episode has nothing under it,
+     so counting its children would say every season page is untouched. */
+  const untouched = work.children.every((child) =>
+    child.kind === "episode" ? !child.watched : child.unwatched === child.child_count,
+  );
+  const wording = t(untouched ? "work.start_series" : "work.carry_on", {
+    season: String(next.season).padStart(2, "0"),
+    episode: String(next.episode).padStart(2, "0"),
+  });
+
+  return (
+    <div className="work-actions">
+      <Link className="button button-accent button-large" to={`/work/${next.id}?play=1`}>
+        <span className="play-mark" aria-hidden="true" />
+        {wording}
+      </Link>
+      {next.title && <span className="carry-on-title">{next.title}</span>}
+    </div>
   );
 }

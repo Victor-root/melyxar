@@ -108,6 +108,7 @@ export function Player({
   work,
   fromTheStart,
   onClose,
+  onEnded,
 }: {
   sourceId: string;
   /** The film as the library describes it, handed down by the screen that
@@ -117,10 +118,13 @@ export function Player({
   /** Set when the viewer asked to start again rather than carry on. */
   fromTheStart?: boolean;
   onClose: () => void;
+  /** Told when the film reaches its end on its own, so an episode can be
+   *  followed by the one after it. */
+  onEnded?: () => void;
 }) {
   const { t, language } = useSettings();
   const title = work.title;
-  const playback = usePlayback({ sourceId, workId: work.id, fromTheStart });
+  const playback = usePlayback({ sourceId, workId: work.id, fromTheStart, onEnded });
   const {
     video,
     plan,

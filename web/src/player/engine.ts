@@ -333,10 +333,15 @@ export function usePlayback({
   sourceId,
   workId,
   fromTheStart,
+  onEnded,
 }: {
   sourceId: string;
   workId: string;
   fromTheStart?: boolean;
+  /** Told when the film reaches its end on its own, for whoever wants to put
+   *  something else on after it. Never told when the viewer asked for it to
+   *  repeat, because the browser then never reaches an end at all. */
+  onEnded?: () => void;
 }): Playback {
   const video = useRef<HTMLVideoElement>(null);
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
@@ -469,6 +474,11 @@ export function usePlayback({
      element is already gone, and that is exactly the moment the position is
      worth sending. */
   const lastPosition = useRef(0);
+  /* Kept in a hand rather than named in the listener's dependencies: what to
+     do at the end can change while a film plays, and rebuilding the listeners
+     for it would tear the element's own down and put them back mid film. */
+  const reachedTheEnd = useRef(onEnded);
+  reachedTheEnd.current = onEnded;
   /* Where the picture picks up once it is ready, and null when it starts
      where it is. Applied on loadedmetadata: set any earlier it is ignored
      without a word, and the film starts from the beginning. */
@@ -1352,8 +1362,12 @@ export function usePlayback({
     const refused = () => notePictureRefused(element.error);
     element.addEventListener("volumechange", remember);
     element.addEventListener("loadedmetadata", onPictureReady);
+    const finished = () => {
+      report();
+      reachedTheEnd.current?.();
+    };
     element.addEventListener("pause", report);
-    element.addEventListener("ended", report);
+    element.addEventListener("ended", finished);
     element.addEventListener("error", refused);
     return () => {
       for (const name of events) {
@@ -1362,7 +1376,7 @@ export function usePlayback({
       element.removeEventListener("volumechange", remember);
       element.removeEventListener("loadedmetadata", onPictureReady);
       element.removeEventListener("pause", report);
-      element.removeEventListener("ended", report);
+      element.removeEventListener("ended", finished);
       element.removeEventListener("error", refused);
     };
   }, [pictureKey, onPictureReady, report, notePictureRefused, repeat]);
