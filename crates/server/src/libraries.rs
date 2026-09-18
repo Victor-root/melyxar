@@ -22,14 +22,27 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/folders", axum::routing::get(folders))
         .route("/api/v1/libraries", axum::routing::post(create))
+        .route("/api/v1/libraries/{id}", axum::routing::delete(remove))
         .route("/api/v1/libraries/{id}/name", axum::routing::put(rename))
+        .route(
+            "/api/v1/libraries/{id}/removal",
+            axum::routing::get(what_removing_takes),
+        )
         .route(
             "/api/v1/libraries/{id}/roots",
             axum::routing::post(add_root),
         )
         .route(
+            "/api/v1/libraries/{id}/roots/{root}",
+            axum::routing::delete(remove_root),
+        )
+        .route(
             "/api/v1/libraries/{id}/roots/{root}/label",
             axum::routing::put(rename_root),
+        )
+        .route(
+            "/api/v1/libraries/{id}/roots/{root}/removal",
+            axum::routing::get(what_removing_a_folder_takes),
         )
 }
 
@@ -212,10 +225,7 @@ async fn rename_root(
     Json(asked): Json<NewLabel>,
 ) -> Result<Json<RootView>> {
     crate::administrator(&state).await?;
-    let root_id: LibraryRootId = root
-        .parse()
-        .map_err(|_| ServerError::invalid_input("the folder identifier is malformed"))?;
-    let root = melyxar_app::libraries::root_of(&state, library_id(&id)?, root_id).await?;
+    let root = melyxar_app::libraries::root_of(&state, library_id(&id)?, root_id(&root)?).await?;
 
     let label = asked.label.trim();
     if label.is_empty() {
@@ -236,9 +246,89 @@ async fn rename_root(
     }))
 }
 
+#[derive(Debug, Serialize)]
+struct WouldGoView {
+    /// Films the server would stop knowing about. Not one of them leaves the
+    /// disk.
+    works: i64,
+    /// The files behind them, as rows: the files themselves stay where they
+    /// are.
+    files: i64,
+}
+
+impl From<melyxar_app::libraries::WouldGo> for WouldGoView {
+    fn from(went: melyxar_app::libraries::WouldGo) -> Self {
+        Self {
+            works: went.works,
+            files: went.files,
+        }
+    }
+}
+
+/// How much a library holds, asked just before the question is put.
+async fn what_removing_takes(
+    State(state): State<AppState>,
+    UrlPath(id): UrlPath<String>,
+) -> Result<Json<WouldGoView>> {
+    crate::administrator(&state).await?;
+    Ok(Json(
+        melyxar_app::libraries::what_removing_takes(&state, library_id(&id)?)
+            .await?
+            .into(),
+    ))
+}
+
+/// The same for one folder of a library.
+async fn what_removing_a_folder_takes(
+    State(state): State<AppState>,
+    UrlPath((id, root)): UrlPath<(String, String)>,
+) -> Result<Json<WouldGoView>> {
+    crate::administrator(&state).await?;
+    Ok(Json(
+        melyxar_app::libraries::what_removing_a_folder_takes(
+            &state,
+            library_id(&id)?,
+            root_id(&root)?,
+        )
+        .await?
+        .into(),
+    ))
+}
+
+/// Takes a library away. No file on the disk is touched.
+async fn remove(
+    State(state): State<AppState>,
+    UrlPath(id): UrlPath<String>,
+) -> Result<Json<WouldGoView>> {
+    crate::administrator(&state).await?;
+    Ok(Json(
+        melyxar_app::libraries::remove(&state, library_id(&id)?)
+            .await?
+            .into(),
+    ))
+}
+
+/// Takes one folder away from a library. No file on the disk is touched.
+async fn remove_root(
+    State(state): State<AppState>,
+    UrlPath((id, root)): UrlPath<(String, String)>,
+) -> Result<Json<WouldGoView>> {
+    crate::administrator(&state).await?;
+    Ok(Json(
+        melyxar_app::libraries::remove_root(&state, library_id(&id)?, root_id(&root)?)
+            .await?
+            .into(),
+    ))
+}
+
 fn library_id(id: &str) -> Result<LibraryId> {
     id.parse()
         .map_err(|_| ServerError::invalid_input("the library identifier is malformed"))
+}
+
+fn root_id(id: &str) -> Result<LibraryRootId> {
+    id.parse()
+        .map_err(|_| ServerError::invalid_input("the folder identifier is malformed"))
 }
 
 #[cfg(test)]

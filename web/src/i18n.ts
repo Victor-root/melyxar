@@ -251,6 +251,17 @@ const en: Dictionary = {
   "settings.add_library": "Add a library",
   "settings.create_library": "Add it",
   "settings.cancel": "Cancel",
+  "settings.remove_library": "Remove this library",
+  "settings.remove_folder": "Take this folder out",
+  "settings.removal_counting": "Counting what would go…",
+  "settings.removal_library_asks":
+    "Remove {name}? The server would stop knowing about {works} films and {files} files.",
+  "settings.removal_folder_asks":
+    "Take {label} out of {name}? The server would stop knowing about {works} films and {files} files.",
+  "settings.removal_keeps_the_files":
+    "Nothing is deleted from the disk. Not one file, not one folder: your collection stays exactly where it is, and adding the folder back finds every film again.",
+  "settings.removal_go_ahead": "Yes, remove it",
+  "settings.removal_done": "Removed. {works} films and {files} files are no longer known. Every file is still on the disk.",
   "settings.new_library_why":
     "The folders are looked through as soon as you add the library, and the films appear as they are found. A folder another library already looks in is refused, since every film in it would be found twice.",
   "library.kind.movies": "Films",
@@ -269,6 +280,8 @@ const en: Dictionary = {
   "refused.library.name_needed": "A library needs a name.",
   "refused.library.name_too_long": "That name is too long to sit in a menu.",
   "refused.library.name_taken": "A library of that name is already here.",
+  "refused.library.something_is_running":
+    "Something is at work on this library. Wait for it to end, or stop it from the Activity page, and ask again.",
   "refused.library.unknown_kind": "This server has no library of that kind.",
   "refused.library.no_folder": "A library has to look somewhere, so add a folder.",
   "refused.library.not_a_whole_path": "A folder is given by its whole path.",
@@ -726,6 +739,17 @@ const fr: Dictionary = {
   "settings.add_library": "Ajouter une bibliothèque",
   "settings.create_library": "L'ajouter",
   "settings.cancel": "Annuler",
+  "settings.remove_library": "Retirer cette bibliothèque",
+  "settings.remove_folder": "Enlever ce dossier",
+  "settings.removal_counting": "Décompte de ce qui partirait…",
+  "settings.removal_library_asks":
+    "Retirer {name} ? Le serveur oublierait {works} films et {files} fichiers.",
+  "settings.removal_folder_asks":
+    "Enlever {label} de {name} ? Le serveur oublierait {works} films et {files} fichiers.",
+  "settings.removal_keeps_the_files":
+    "Rien n'est supprimé du disque. Pas un fichier, pas un dossier : votre collection reste exactement où elle est, et remettre le dossier retrouve tous les films.",
+  "settings.removal_go_ahead": "Oui, retirer",
+  "settings.removal_done": "Retiré. {works} films et {files} fichiers ne sont plus connus. Tous les fichiers sont toujours sur le disque.",
   "settings.new_library_why":
     "Les dossiers sont parcourus dès que vous ajoutez la bibliothèque, et les films apparaissent au fur et à mesure. Un dossier dans lequel une autre bibliothèque regarde déjà est refusé, sinon chaque film qu'il contient serait trouvé deux fois.",
   "library.kind.movies": "Films",
@@ -744,6 +768,8 @@ const fr: Dictionary = {
   "refused.library.name_needed": "Une bibliothèque a besoin d'un nom.",
   "refused.library.name_too_long": "Ce nom est trop long pour tenir dans un menu.",
   "refused.library.name_taken": "Une bibliothèque porte déjà ce nom.",
+  "refused.library.something_is_running":
+    "Quelque chose travaille sur cette bibliothèque. Attendez la fin, ou arrêtez-le depuis la page Activité, puis redemandez.",
   "refused.library.unknown_kind": "Ce serveur n'a pas de bibliothèque de ce type.",
   "refused.library.no_folder":
     "Une bibliothèque doit regarder quelque part, ajoutez un dossier.",

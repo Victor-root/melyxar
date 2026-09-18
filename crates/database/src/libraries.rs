@@ -3,13 +3,26 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use melyxar_core::id::{LibraryId, LibraryRootId};
+use melyxar_core::id::{LibraryId, LibraryRootId, MediaSourceId};
 use melyxar_core::library::{Library, LibraryKind, LibraryOptions, LibraryRoot, RootAccess};
 use melyxar_core::time::{now, Timestamp};
 use sqlx::Row;
 
 use crate::convert::{parse_optional_timestamp, timestamp_to_text};
 use crate::{Database, DatabaseError, Result};
+
+/// What taking a library or one of its folders away would take with it.
+///
+/// Rows and only rows. No file on the disk is ever touched by any of this, so
+/// neither number counts anything anybody could lose off a disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WouldGo {
+    /// Films that would disappear, because every copy of them came through
+    /// what is being taken away.
+    pub works: i64,
+    /// Files that would stop being known, and stay exactly where they are.
+    pub files: i64,
+}
 
 /// A root along with what the server may actually do with it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -308,13 +321,149 @@ impl Database {
         })
     }
 
-    /// Removes a root, along with everything found through it.
-    pub async fn remove_root(&self, root_id: LibraryRootId) -> Result<()> {
-        sqlx::query("DELETE FROM library_roots WHERE id = ?")
+    /// What taking something away would take with it.
+    ///
+    /// Counted before anything is touched, because it is what the screen says
+    /// out loud and what a person answers yes to. Never a file on the disk:
+    /// nothing here opens, moves or removes one, and the two numbers below
+    /// count rows and nothing else.
+    pub async fn what_would_go_with_a_library(&self, id: LibraryId) -> Result<WouldGo> {
+        let row: (i64, i64) = sqlx::query_as(
+            "SELECT
+                 (SELECT count(*) FROM works WHERE library_id = ?),
+                 (SELECT count(*) FROM media_sources s
+                   JOIN library_roots r ON r.id = s.root_id
+                  WHERE r.library_id = ?)",
+        )
+        .bind(id.to_db_string())
+        .bind(id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(WouldGo {
+            works: row.0,
+            files: row.1,
+        })
+    }
+
+    /// The same for one folder of a library.
+    ///
+    /// A film held in two folders is not one of the films that would go: it
+    /// stays, and loses that copy. Only a film whose every copy came through
+    /// this folder disappears with it, which is exactly what makes the number
+    /// worth showing rather than guessing at.
+    pub async fn what_would_go_with_a_root(&self, root_id: LibraryRootId) -> Result<WouldGo> {
+        let row: (i64, i64) = sqlx::query_as(
+            "SELECT
+                 (SELECT count(*) FROM (
+                     SELECT s.work_id FROM media_sources s
+                      WHERE s.root_id = ?
+                      GROUP BY s.work_id
+                     HAVING count(*) = (SELECT count(*) FROM media_sources o
+                                         WHERE o.work_id = s.work_id)
+                 )),
+                 (SELECT count(*) FROM media_sources WHERE root_id = ?)",
+        )
+        .bind(root_id.to_db_string())
+        .bind(root_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(WouldGo {
+            works: row.0,
+            files: row.1,
+        })
+    }
+
+    /// The files recorded under one folder, by identifier.
+    ///
+    /// Read before the folder goes, for what is keyed on them outside the
+    /// database: the sheets of thumbnails, which are big enough that leaving
+    /// them behind would show on a disk.
+    pub async fn source_ids_of_root(&self, root_id: LibraryRootId) -> Result<Vec<MediaSourceId>> {
+        let rows = sqlx::query("SELECT id FROM media_sources WHERE root_id = ?")
             .bind(root_id.to_db_string())
+            .fetch_all(self.reader())
+            .await?;
+        rows.iter()
+            .map(|row| parse_id(&row.try_get::<String, _>("id")?))
+            .collect()
+    }
+
+    /// The same for every folder of a library.
+    pub async fn source_ids_of_library(&self, id: LibraryId) -> Result<Vec<MediaSourceId>> {
+        let rows = sqlx::query(
+            "SELECT s.id FROM media_sources s
+              JOIN library_roots r ON r.id = s.root_id
+             WHERE r.library_id = ?",
+        )
+        .bind(id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+        rows.iter()
+            .map(|row| parse_id(&row.try_get::<String, _>("id")?))
+            .collect()
+    }
+
+    /// Takes a library away, and everything the server knew about it.
+    ///
+    /// **No file on the disk is touched.** What goes is what this server
+    /// wrote down: the films, their pages, their pictures, what was watched of
+    /// them, the files as rows and the folders as declared folders. The
+    /// collection itself is not this server's to remove.
+    ///
+    /// Everything hanging off a library follows it out through the schema
+    /// rather than through a list kept here, which is what stops a table added
+    /// later from being left behind.
+    pub async fn delete_library(&self, id: LibraryId) -> Result<WouldGo> {
+        let going = self.what_would_go_with_a_library(id).await?;
+        sqlx::query("DELETE FROM libraries WHERE id = ?")
+            .bind(id.to_db_string())
             .execute(self.writer())
             .await?;
-        Ok(())
+        Ok(going)
+    }
+
+    /// Takes one folder away from a library, with the films that were only in
+    /// it.
+    ///
+    /// No file on the disk is touched here either. A film also held in another
+    /// folder stays and loses that copy; one whose every copy came through
+    /// this folder would otherwise be left as a page with nothing behind it,
+    /// which is a film nobody can play and nobody can get rid of.
+    pub async fn delete_root(&self, root_id: LibraryRootId) -> Result<WouldGo> {
+        let files = self.what_would_go_with_a_root(root_id).await?.files;
+        // Read before the folder goes, because the sweep below is bounded by
+        // it: a library elsewhere may be in the middle of a scan, and a series
+        // it has written down but not yet filled with episodes looks exactly
+        // like a film with nothing behind it.
+        let library_id: String =
+            sqlx::query_scalar("SELECT library_id FROM library_roots WHERE id = ?")
+                .bind(root_id.to_db_string())
+                .fetch_one(self.reader())
+                .await?;
+
+        let mut transaction = self.begin().await?;
+        sqlx::query("DELETE FROM library_roots WHERE id = ?")
+            .bind(root_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        // In the same transaction as the folder: a film left with nothing
+        // behind it between the two writes is a film somebody could open.
+        let orphans = sqlx::query(
+            "DELETE FROM works
+              WHERE library_id = ?
+                AND NOT EXISTS (SELECT 1 FROM media_sources WHERE work_id = works.id)
+                AND NOT EXISTS (SELECT 1 FROM works AS child WHERE child.parent_id = works.id)",
+        )
+        .bind(&library_id)
+        .execute(&mut *transaction)
+        .await?
+        .rows_affected();
+        transaction.commit().await?;
+
+        Ok(WouldGo {
+            works: orphans as i64,
+            files,
+        })
     }
 
     /// Current version counter of a library.
@@ -655,7 +804,7 @@ mod tests {
             3
         );
 
-        database.remove_root(added.id).await.expect("root removed");
+        database.delete_root(added.id).await.expect("root removed");
         assert_eq!(
             database
                 .library_roots(library.id)
@@ -664,6 +813,183 @@ mod tests {
                 .len(),
             2
         );
+    }
+
+    /// A library holding one film with one copy in each of its two roots.
+    async fn library_with_a_film_on_both_disks() -> (
+        Database,
+        Library,
+        melyxar_core::id::WorkId,
+        Vec<MediaSourceId>,
+    ) {
+        let database = database().await;
+        let library = database
+            .create_library("Films", LibraryKind::Movies, "fr", &roots())
+            .await
+            .expect("library created");
+        let work = database
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+
+        let mut sources = Vec::new();
+        for root in &library.roots {
+            sources.push(
+                database
+                    .insert_source(
+                        work.id,
+                        root.id,
+                        std::path::Path::new("Quiet Harbour 1080p.mkv"),
+                        1_000,
+                        melyxar_core::time::now(),
+                    )
+                    .await
+                    .expect("source recorded"),
+            );
+        }
+        (database, library, work.id, sources)
+    }
+
+    #[tokio::test]
+    async fn taking_a_library_away_takes_what_the_server_knew_and_says_how_much() {
+        let (database, library, work, _) = library_with_a_film_on_both_disks().await;
+
+        let would = database
+            .what_would_go_with_a_library(library.id)
+            .await
+            .expect("counted");
+        assert_eq!(
+            (would.works, would.files),
+            (1, 2),
+            "one film, held twice: the numbers somebody answers yes to"
+        );
+
+        let went = database.delete_library(library.id).await.expect("removed");
+        assert_eq!(went, would, "what was counted is what went");
+        assert!(database.list_libraries().await.expect("read").is_empty());
+        assert!(
+            database.work(work).await.expect("read").is_none(),
+            "the film goes with the library that held it"
+        );
+        assert!(
+            database.roots_with_access().await.expect("read").is_empty(),
+            "and so do its folders"
+        );
+    }
+
+    #[tokio::test]
+    async fn taking_one_folder_away_keeps_a_film_that_is_also_held_elsewhere() {
+        // The whole reason the count is worth showing rather than guessing at:
+        // a film in two folders loses a copy, it does not disappear.
+        let (database, library, work, sources) = library_with_a_film_on_both_disks().await;
+
+        let would = database
+            .what_would_go_with_a_root(library.roots[0].id)
+            .await
+            .expect("counted");
+        assert_eq!(
+            (would.works, would.files),
+            (0, 1),
+            "one copy goes, the film stays"
+        );
+
+        let went = database
+            .delete_root(library.roots[0].id)
+            .await
+            .expect("removed");
+        assert_eq!(went, would);
+        assert!(
+            database.work(work).await.expect("read").is_some(),
+            "the film is still held by the other folder"
+        );
+        assert!(database
+            .source_by_id(sources[0])
+            .await
+            .expect("read")
+            .is_none());
+        assert!(database
+            .source_by_id(sources[1])
+            .await
+            .expect("read")
+            .is_some());
+
+        // The second folder is the last one holding it, so this time the film
+        // goes: a page with nothing behind it is a film nobody can play and
+        // nobody can get rid of.
+        let last = database
+            .what_would_go_with_a_root(library.roots[1].id)
+            .await
+            .expect("counted");
+        assert_eq!((last.works, last.files), (1, 1));
+        assert_eq!(
+            database
+                .delete_root(library.roots[1].id)
+                .await
+                .expect("removed"),
+            last
+        );
+        assert!(database.work(work).await.expect("read").is_none());
+        assert_eq!(
+            database.list_libraries().await.expect("read").len(),
+            1,
+            "the library itself stays, with nowhere left to look"
+        );
+    }
+
+    #[tokio::test]
+    async fn taking_a_folder_away_never_reaches_into_another_library() {
+        // A series written down before its episodes have been found looks
+        // exactly like a film with nothing behind it. One being scanned in
+        // another library must not be swept away by a folder going here.
+        let (database, library, _, _) = library_with_a_film_on_both_disks().await;
+        let elsewhere = database
+            .create_library("Series", LibraryKind::Series, "fr", &roots())
+            .await
+            .expect("library created");
+        let half_scanned = database
+            .create_work(
+                elsewhere.id,
+                melyxar_core::work::WorkKind::Series,
+                "Lantern Road",
+                "lantern road",
+                None,
+            )
+            .await
+            .expect("work created");
+
+        database
+            .delete_root(library.roots[0].id)
+            .await
+            .expect("removed");
+        assert!(
+            database
+                .work(half_scanned.id)
+                .await
+                .expect("read")
+                .is_some(),
+            "the other library's work is none of this removal's business"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_library_that_is_gone_can_be_declared_again_from_nothing() {
+        // What somebody does straight after taking one away by mistake. The
+        // files never moved, so it comes back whole on the next scan.
+        let (database, library, _, _) = library_with_a_film_on_both_disks().await;
+        database.delete_library(library.id).await.expect("removed");
+
+        let again = database
+            .create_library("Films", LibraryKind::Movies, "fr", &roots())
+            .await
+            .expect("declared again");
+        assert_eq!(again.roots.len(), 2);
+        assert_ne!(again.id, library.id);
     }
 
     #[tokio::test]

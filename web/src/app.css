@@ -1357,6 +1357,19 @@
   color: var(--accent-bright);
 }
 
+/* The question put before something is taken away. Set apart from the block
+   that opened it, because saying yes here loses what the server learned about
+   a few hundred films. */
+.removal {
+  margin-top: var(--gap);
+  padding: var(--gap);
+  border: 1px solid var(--accent-bright);
+  border-radius: var(--radius-control);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+}
+
 /* The whole path of a folder being chosen. Shown only while a library is being
    declared, where the path is the subject. */
 .library-root-path {

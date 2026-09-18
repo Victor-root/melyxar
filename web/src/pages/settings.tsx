@@ -13,9 +13,9 @@
  * saving.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
-import type { Library, LibraryWork, ViewerPreferences } from "../api";
+import type { LibraryWork, ViewerPreferences } from "../api";
 import {
   appearanceClasses,
   BACKGROUNDS,
@@ -28,6 +28,7 @@ import {
 } from "../player/appearance";
 import type { Appearance } from "../player/appearance";
 import { LibraryEditor } from "../components/libraries";
+import { useLibraries } from "../libraries";
 import { languageName } from "../player/languages";
 import { DeviceOptimization } from "../player/DeviceOptimization";
 import { useSettings } from "../settings";
@@ -37,10 +38,11 @@ export function SettingsPage() {
   const [kept, setKept] = useState<ViewerPreferences | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [appearance, setAppearanceState] = useState<Appearance>(storedAppearance);
-  /* Fetched here rather than taken from the shell, which holds the same
-     libraries for the navigation: this is the one screen that changes them,
-     so it is the one screen that has to be looking at what it changed. */
-  const [libraries, setLibraries] = useState<Library[]>([]);
+  /* The one list the whole interface is drawn from. Taken from the shell
+     rather than fetched again here: this is the screen that changes them, and
+     a change nobody else saw would leave the bar at the top listing a library
+     that is no longer there. */
+  const { all: libraries, refresh: readLibraries } = useLibraries();
   /* What the server does with every library: the shape of the thumbnails, the
      description files, and when the upkeep runs. All three were lines of the
      configuration file until now. */
@@ -61,25 +63,6 @@ export function SettingsPage() {
       });
     return () => controller.abort();
   }, []);
-
-  /* Read again whenever the editor has changed something, so what is on the
-     screen is what the server kept rather than what the screen hoped for. */
-  const readLibraries = useCallback((signal?: AbortSignal) => {
-    api
-      .libraries(signal)
-      .then(setLibraries)
-      .catch((error) => {
-        if (!(error instanceof DOMException)) {
-          setFailed("error.unreachable");
-        }
-      });
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    readLibraries(controller.signal);
-    return () => controller.abort();
-  }, [readLibraries]);
 
   useEffect(() => {
     const controller = new AbortController();
