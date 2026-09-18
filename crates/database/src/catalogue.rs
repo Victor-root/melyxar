@@ -858,6 +858,13 @@ impl Database {
 
     /// Works of one library the provider says are one and the same film.
     ///
+    /// Only works met on their own. Joining is about two files of one film,
+    /// and a season is never a copy of anything. It also has to be that way:
+    /// a provider numbers its films, its series, its seasons and its episodes
+    /// on separate counters, so the twelfth season and the twelfth film carry
+    /// the same number, and a library holding both would see one work with two
+    /// files where there are two works with one each.
+    ///
     /// Two copies can carry names nothing could ever match, and be the same
     /// film: only the provider can say so, and it says so by answering the
     /// same identifier for both. Left apart they are the same title, the same
@@ -875,6 +882,7 @@ impl Database {
              FROM work_external_ids e
              JOIN works w ON w.id = e.work_id
              WHERE w.library_id = ? AND e.provider = ?
+               AND w.parent_id IS NULL
              ORDER BY e.external_id, w.added_at",
         )
         .bind(library_id.to_db_string())
