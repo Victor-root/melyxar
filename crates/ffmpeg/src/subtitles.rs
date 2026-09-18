@@ -106,11 +106,7 @@ pub async fn all_to_web_vtt(tool: &Path, source: &Path, wanted: &[(i32, &Path)])
         .await?;
 
     if !output.status.success() {
-        return Err(FfmpegError::Failed {
-            tool: "ffmpeg",
-            status: output.status.to_string(),
-            output: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
+        return Err(FfmpegError::from_output("ffmpeg", &output));
     }
     Ok(())
 }
@@ -129,11 +125,7 @@ pub async fn to_web_vtt(
         .await?;
 
     if !output.status.success() {
-        return Err(FfmpegError::Failed {
-            tool: "ffmpeg",
-            status: output.status.to_string(),
-            output: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
+        return Err(FfmpegError::from_output("ffmpeg", &output));
     }
     Ok(())
 }

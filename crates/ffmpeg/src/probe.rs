@@ -283,13 +283,7 @@ pub async fn probe(analyser: &Path, media: &Path) -> Result<ProbeReport> {
         .output()
         .await?;
 
-    let complaint = || {
-        String::from_utf8_lossy(&output.stderr)
-            .lines()
-            .take(5)
-            .collect::<Vec<_>>()
-            .join(" | ")
-    };
+    let complaint = || FfmpegError::what_it_complained_about(&output);
 
     if output.status.success() {
         return parse_report(&String::from_utf8_lossy(&output.stdout));
@@ -358,15 +352,7 @@ pub async fn key_frames(analyser: &Path, media: &Path) -> Result<Vec<Millis>> {
         .await?;
 
     if !output.status.success() {
-        return Err(FfmpegError::Failed {
-            tool: "analyser",
-            status: output.status.to_string(),
-            output: String::from_utf8_lossy(&output.stderr)
-                .lines()
-                .take(5)
-                .collect::<Vec<_>>()
-                .join(" | "),
-        });
+        return Err(FfmpegError::from_output("analyser", &output));
     }
 
     let listing = String::from_utf8_lossy(&output.stdout);
@@ -374,9 +360,7 @@ pub async fn key_frames(analyser: &Path, media: &Path) -> Result<Vec<Millis>> {
     if found.is_empty() {
         let seen = what_was_seen(&listing);
         tracing::warn!(
-            file = %melyxar_core::privacy::MediaName::new(
-                media.file_name().and_then(|name| name.to_str()).unwrap_or_default()
-            ),
+            file = %melyxar_core::privacy::MediaName::of_file(media),
             packets = seen.packets,
             standing_alone = seen.standing_alone,
             standing_alone_with_no_time = seen.standing_alone_with_no_time,

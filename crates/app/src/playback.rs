@@ -152,19 +152,7 @@ impl PictureRebuild {
 pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> Result<PlayPlan> {
     let database = state.database();
 
-    let source = database
-        .playable_source(request.source_id)
-        .await?
-        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("media source")))?;
-
-    if source.missing {
-        // Refused with an explanation rather than opened and failing halfway
-        // through, which is what a viewer would otherwise see.
-        return Err(AppError::Domain(melyxar_core::Error::new(
-            melyxar_core::error::ErrorCode::RootUnavailable,
-            "the file is not on the disk at the moment",
-        )));
-    }
+    let source = crate::playable_file(database, request.source_id).await?;
 
     // Nothing ever managed to describe this file: no container, no streams.
     // There is nothing to decide with, and a conversion started anyway would
@@ -274,13 +262,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
     // answer used to be somewhere between a process listing and a guess.
     let shape = picture_shape(&tracks);
     tracing::info!(
-        file = %MediaName::new(
-            source
-                .path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default()
-        ),
+        file = %MediaName::of_file(&source.path),
         method = decision.method.as_str(),
         video = ?decision.video,
         audio = ?decision.audio,

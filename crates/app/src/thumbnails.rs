@@ -174,16 +174,7 @@ pub async fn make_for(state: &AppState, source_id: MediaSourceId) -> Result<Thum
         return Ok(found);
     }
 
-    let source = database
-        .playable_source(source_id)
-        .await?
-        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("media source")))?;
-    if source.missing {
-        return Err(AppError::Domain(melyxar_core::Error::new(
-            melyxar_core::error::ErrorCode::RootUnavailable,
-            "the file is not on the disk at the moment",
-        )));
-    }
+    let source = crate::playable_file(database, source_id).await?;
 
     // An unconverted frame of a wide gamut film is the washed out thumbnail
     // seen on other servers, so the film is asked what it is.
@@ -193,13 +184,7 @@ pub async fn make_for(state: &AppState, source_id: MediaSourceId) -> Result<Thum
         _ => false,
     });
 
-    let name = MediaName::new(
-        source
-            .path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default(),
-    );
+    let name = MediaName::of_file(&source.path);
     let aside = while_it_is_read(state, source_id);
     let _ = tokio::fs::remove_dir_all(&aside).await;
     tokio::fs::create_dir_all(&aside)

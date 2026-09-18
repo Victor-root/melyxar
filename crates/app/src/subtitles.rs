@@ -87,16 +87,7 @@ pub async fn as_web_vtt(
     })?;
 
     let database = state.database();
-    let source = database
-        .playable_source(source_id)
-        .await?
-        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("media source")))?;
-    if source.missing {
-        return Err(AppError::Domain(melyxar_core::Error::new(
-            melyxar_core::error::ErrorCode::RootUnavailable,
-            "the file is not on the disk at the moment",
-        )));
-    }
+    let source = crate::playable_file(database, source_id).await?;
 
     let tracks = database.tracks_of_source(source_id).await?;
     let Some(track) = tracks.iter().find(|track| track.id == track_id) else {
@@ -238,16 +229,7 @@ pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Re
     })?;
 
     let database = state.database();
-    let source = database
-        .playable_source(source_id)
-        .await?
-        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("media source")))?;
-    if source.missing {
-        return Err(AppError::Domain(melyxar_core::Error::new(
-            melyxar_core::error::ErrorCode::RootUnavailable,
-            "the file is not on the disk at the moment",
-        )));
-    }
+    let source = crate::playable_file(database, source_id).await?;
 
     let folder = state.config().directories.subtitles();
     tokio::fs::create_dir_all(&folder)

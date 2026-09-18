@@ -196,6 +196,21 @@ pub enum HdrFormat {
 }
 
 impl HdrFormat {
+    /// The word a client is told this flavour by.
+    ///
+    /// Named once because two routes hand it over, the film's page and the
+    /// playback it opens, and a flavour added to one of them and not the other
+    /// is a film the page and the player do not describe the same way.
+    pub fn as_word(self) -> &'static str {
+        match self {
+            Self::Hdr10 => "hdr10",
+            Self::Hlg => "hlg",
+            Self::DolbyVision { .. } => "dolby_vision",
+        }
+    }
+}
+
+impl HdrFormat {
     /// Whether the stream needs converting before a browser can show it with
     /// correct colours.
     ///

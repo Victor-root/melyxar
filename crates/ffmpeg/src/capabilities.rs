@@ -136,15 +136,7 @@ async fn run(tool: &std::path::Path, args: &[&str]) -> Result<String> {
         .await?;
 
     if !output.status.success() {
-        return Err(FfmpegError::Failed {
-            tool: "encoder",
-            status: output.status.to_string(),
-            output: String::from_utf8_lossy(&output.stderr)
-                .lines()
-                .take(5)
-                .collect::<Vec<_>>()
-                .join(" | "),
-        });
+        return Err(FfmpegError::from_output("encoder", &output));
     }
 
     let mut text = String::from_utf8_lossy(&output.stdout).into_owned();

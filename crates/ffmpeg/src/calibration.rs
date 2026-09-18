@@ -134,11 +134,7 @@ async fn run(tools: &ToolPaths, into: &Path, duration: Millis) -> Result<()> {
         .await?;
 
     if !output.status.success() {
-        return Err(FfmpegError::Failed {
-            tool: "ffmpeg",
-            status: output.status.to_string(),
-            output: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
+        return Err(FfmpegError::from_output("ffmpeg", &output));
     }
     Ok(())
 }
