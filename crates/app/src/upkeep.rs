@@ -426,6 +426,7 @@ pub(crate) async fn read_the_key_frames_of(
 
     let analyser = tools.ffprobe.clone();
     let mut read = 0;
+    let mut from_their_own_index = 0;
     let mut still_waiting = waiting;
     loop {
         if handle.is_cancelled() {
@@ -452,21 +453,28 @@ pub(crate) async fn read_the_key_frames_of(
                 let handle = owned_handle.clone();
                 async move {
                     if handle.is_cancelled() {
-                        return false;
+                        return HowItWasRead::NotAtAll;
                     }
                     if let Some(name) = file_name_of(&database, source_id).await {
                         handle.now_working_on(Some(&name)).await;
                     }
-                    let done =
+                    let how =
                         read_one_film_for_its_key_frames(&database, &analyser, source_id).await;
                     handle.advance(1).await;
-                    done
+                    how
                 }
             },
         )
         .await;
 
-        read += done.into_iter().filter(|done| *done).count();
+        read += done
+            .iter()
+            .filter(|how| **how != HowItWasRead::NotAtAll)
+            .count();
+        from_their_own_index += done
+            .iter()
+            .filter(|how| **how == HowItWasRead::FromItsOwnIndex)
+            .count();
 
         // What is left is asked for again rather than worked out from what the
         // batch answered, and it is the only thing that says the run is moving.
@@ -483,6 +491,18 @@ pub(crate) async fn read_the_key_frames_of(
             break;
         }
         still_waiting = left;
+    }
+    if read > 0 {
+        // The split is the whole point of asking the file first, and it is the
+        // only place it can be seen: a library whose films all answered from
+        // their own index reads in seconds what used to take a night.
+        tracing::info!(
+            library = library.name,
+            read,
+            from_their_own_index,
+            by_reading_them_through = read - from_their_own_index,
+            "the films of this library were read for where their picture can be started"
+        );
     }
     Ok(read)
 }
@@ -614,26 +634,51 @@ async fn file_name_of(database: &Database, source_id: MediaSourceId) -> Option<S
     )
 }
 
+/// How one film gave up where its picture can be started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HowItWasRead {
+    /// Nothing could be written down, so the film is still waiting.
+    NotAtAll,
+    /// The film's own index answered, without the film being read.
+    FromItsOwnIndex,
+    /// The film had to be handed to the analyser and read from end to end.
+    ByReadingItThrough,
+}
+
 /// Reads one film, and says whether it gave up anything usable.
+///
+/// The film's own index first. A container worth the name carries a table of
+/// where its pictures stand on their own, and reading it costs a few thousand
+/// bytes where reading the film through costs the whole file. What carries no
+/// index this server can read is read through, which is the answer that is
+/// always available, and the two answer exactly the same thing.
 async fn read_one_film_for_its_key_frames(
     database: &Database,
     analyser: &std::path::Path,
     source_id: MediaSourceId,
-) -> bool {
+) -> HowItWasRead {
     let Ok(Some(source)) = database.playable_source(source_id).await else {
-        return false;
+        return HowItWasRead::NotAtAll;
     };
     if source.missing {
-        return false;
+        return HowItWasRead::NotAtAll;
     }
 
-    match melyxar_ffmpeg::probe::key_frames(analyser, &source.path).await {
+    let (read, how) = match melyxar_container::key_frames(&source.path).await {
+        Some(found) => (Ok(found), HowItWasRead::FromItsOwnIndex),
+        None => (
+            melyxar_ffmpeg::probe::key_frames(analyser, &source.path).await,
+            HowItWasRead::ByReadingItThrough,
+        ),
+    };
+
+    match read {
         Ok(found) if !found.is_empty() => {
             match database.store_key_frames(source_id, &found).await {
-                Ok(()) => true,
+                Ok(()) => how,
                 Err(error) => {
                     tracing::warn!(error = %error, "where a film can be started could not be kept");
-                    false
+                    HowItWasRead::NotAtAll
                 }
             }
         }
@@ -663,10 +708,10 @@ async fn read_one_film_for_its_key_frames(
                  grid from now on and never read for this again"
             );
             match database.store_key_frames(source_id, &[]).await {
-                Ok(()) => true,
+                Ok(()) => how,
                 Err(error) => {
                     tracing::warn!(error = %error, "that answer could not be kept");
-                    false
+                    HowItWasRead::NotAtAll
                 }
             }
         }
@@ -682,7 +727,7 @@ async fn read_one_film_for_its_key_frames(
                 error = %error,
                 "this film could not be read for where its picture can be started"
             );
-            false
+            HowItWasRead::NotAtAll
         }
     }
 }

@@ -5,6 +5,7 @@ members = [
     "crates/config",
     "crates/database",
     "crates/ffmpeg",
+    "crates/container",
     "crates/media_probe",
     "crates/playback",
     "crates/streaming",
@@ -28,6 +29,7 @@ melyxar-core = { path = "crates/core" }
 melyxar-config = { path = "crates/config" }
 melyxar-database = { path = "crates/database" }
 melyxar-ffmpeg = { path = "crates/ffmpeg" }
+melyxar-container = { path = "crates/container" }
 melyxar-media-probe = { path = "crates/media_probe" }
 melyxar-playback = { path = "crates/playback" }
 melyxar-streaming = { path = "crates/streaming" }

@@ -167,6 +167,7 @@ Trois sujets structurent tout : le **modèle de données** (une œuvre n'est pas
 | `config` (nouveau) | Chargement de la configuration (TOML, variables d'environnement) : chemins des données, du cache, des transcodages, du binaire FFmpeg, limites. |
 | `database` | SQLx, migrations, fonctions d'accès renvoyant des types de `core`. Seul endroit où du SQL existe. |
 | `ffmpeg` (nouveau) | Bas niveau : trouve le binaire, détecte version et capacités, constructeur de commande typé, lancement et supervision de processus (arrêt propre, délai de grâce, progression). Seul endroit qui lance FFmpeg ou ffprobe. |
+| `container` (nouveau) | Lit l'index que le fichier porte déjà, pour savoir où son image peut être démarrée sans le traverser : tables d'un MP4, MOV ou M4V, repères de recherche d'un MKV ou d'un WebM. Ne lance aucun binaire et ne devine rien : un conteneur inconnu ou un index d'une forme incertaine ne répond rien, et l'appelant retombe sur la lecture complète par `ffmpeg`. |
 | `media_probe` | Transforme la sortie JSON de ffprobe en modèle de pistes : codecs, profils, niveaux, HDR, langues, pistes par défaut, chapitres. |
 | `library` | Scan des dossiers, analyse des noms de fichiers, identité des fichiers dans le temps, détection des renommages et des montages absents. |
 | `metadata` | Fournisseurs externes derrière un trait (TMDb d'abord), téléchargement et cache des images, provenance de chaque champ. |
@@ -192,6 +193,8 @@ graph TD
   app --> streaming
   app --> jobs
   app --> auth
+  app --> container
+  container --> core
   library --> media_probe
   library --> database
   metadata --> database
@@ -206,7 +209,7 @@ graph TD
   core[core + config, aucune dépendance interne]
 ```
 
-`playback` ne dépend que de `core`, ce qui garantit qu'elle reste testable sans base ni FFmpeg. `media_probe` et `streaming` passent tous deux par `ffmpeg`.
+`playback` ne dépend que de `core`, ce qui garantit qu'elle reste testable sans base ni FFmpeg. `container` non plus : elle ne fait que lire des octets dans un fichier. `media_probe` et `streaming` passent tous deux par `ffmpeg`.
 
 ### Gain et coût des trois ajustements
 
