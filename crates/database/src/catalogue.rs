@@ -7,7 +7,9 @@
 
 use std::path::{Path, PathBuf};
 
-use melyxar_core::id::{ChapterId, ExtraVideoId, LibraryId, LibraryRootId, MediaSourceId, WorkId};
+use melyxar_core::id::{
+    ChapterId, ExtraVideoId, LibraryId, LibraryRootId, MediaSourceId, UserId, WorkId,
+};
 use melyxar_core::media::{
     AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, Margins, SubtitleDetails,
     SubtitleLayout, Track, TrackKind, VideoDetails,
@@ -44,6 +46,21 @@ pub(crate) fn what_a_work_is(table: &str) -> String {
 /// the series above that.
 const HOW_DEEP_IT_GOES: usize = 2;
 
+/// The one order children are ever read in.
+///
+/// Written once because two reads answer "what hangs under this", one for a
+/// page and one for the look up, and two orders would put an episode in one
+/// place on screen and fill in another.
+const IN_THE_ONE_ORDER: &str = "ORDER BY ordinal, sort_title";
+
+/// One work hanging under another, stripped to where it sits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RankedChild {
+    pub id: WorkId,
+    pub ordinal: Option<i32>,
+    pub title: String,
+}
+
 /// One work hanging under another, with what its card shows.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChildWork {
@@ -59,6 +76,13 @@ pub struct ChildWork {
     pub child_count: i64,
     /// Whether a file of it is on the disk right now.
     pub playable: bool,
+    /// Episodes under this one this viewer has not watched. Zero for an
+    /// episode, which holds none.
+    pub unwatched: i64,
+    /// Whether this viewer has watched this one. Only ever true of an episode.
+    pub watched: bool,
+    /// Where this viewer stopped in it, when they stopped partway.
+    pub resume_from: Option<Millis>,
     pub identification: IdentificationState,
     pub dominant_color: Option<String>,
     pub added_at: Timestamp,
@@ -331,22 +355,37 @@ impl Database {
     /// Everything hanging under one work, in the order it is numbered.
     ///
     /// A series answers with its seasons, a season with its episodes. Read in
-    /// one go, with what each card shows: whether anything can be played, how
-    /// long it runs, and how many the one below holds. A page of twenty four
-    /// episodes that asked those three questions per episode would be seventy
-    /// two round trips.
-    pub async fn children_of(&self, parent_id: WorkId) -> Result<Vec<ChildWork>> {
-        let rows = sqlx::query(
+    /// one go, with everything each card shows: whether anything can be
+    /// played, how long it runs, how many the one below holds, how many of
+    /// those this viewer has left to watch, and where they stopped. A page of
+    /// twenty four episodes that asked those questions per episode would be a
+    /// hundred and twenty round trips.
+    pub async fn children_of(&self, viewer: UserId, parent_id: WorkId) -> Result<Vec<ChildWork>> {
+        // Ordered the one way children are ever ordered, named below so the
+        // shelf read and this one cannot come back in different orders.
+        let rows = sqlx::query(AssertSqlSafe(format!(
             "SELECT w.id, w.kind, w.ordinal, w.title, w.runtime_ms, w.child_count,
                     w.identification, w.dominant_color, w.added_at,
                     (SELECT count(*) FROM media_sources s
                       WHERE s.work_id = w.id AND s.missing_since IS NULL) AS playable,
                     (SELECT max(s.duration_ms) FROM media_sources s WHERE s.work_id = w.id)
-                        AS longest_ms
+                        AS longest_ms,
+                    -- What is left to watch under this one. A season answers
+                    -- for its episodes; an episode has nothing under it and
+                    -- answers nothing.
+                    (SELECT count(*) FROM works c
+                      LEFT JOIN playback_progress q
+                             ON q.work_id = c.id AND q.user_id = ?1
+                      WHERE c.parent_id = w.id
+                        AND coalesce(q.state, 'not_started') <> 'watched') AS unwatched,
+                    coalesce(p.state, 'not_started') AS seen,
+                    p.position_ms
              FROM works w
-             WHERE w.parent_id = ?
-             ORDER BY w.ordinal, w.sort_title",
-        )
+             LEFT JOIN playback_progress p ON p.work_id = w.id AND p.user_id = ?1
+             WHERE w.parent_id = ?2
+             {IN_THE_ONE_ORDER}"
+        )))
+        .bind(viewer.to_db_string())
         .bind(parent_id.to_db_string())
         .fetch_all(self.reader())
         .await?;
@@ -368,6 +407,16 @@ impl Database {
                         .map(Millis::new),
                     child_count: row.try_get("child_count")?,
                     playable: row.try_get::<i64, _>("playable")? > 0,
+                    unwatched: row.try_get("unwatched")?,
+                    watched: row.try_get::<String, _>("seen")? == "watched",
+                    // Only where somebody really stopped partway: a position
+                    // of nothing is where everybody starts, and a button
+                    // offering to carry on from the very beginning is a button
+                    // saying the wrong thing.
+                    resume_from: row
+                        .try_get::<Option<i64>, _>("position_ms")?
+                        .filter(|position| *position > 0)
+                        .map(Millis::new),
                     identification: IdentificationState::parse(&identification_text).ok_or_else(
                         || DatabaseError::Corrupt(format!("state '{identification_text}'")),
                     )?,
@@ -376,6 +425,124 @@ impl Database {
                 })
             })
             .collect()
+    }
+
+    /// What hangs under one work, as a shelf rather than as a page.
+    ///
+    /// The same children in the same order, with nobody's progress in them.
+    /// Asked by the look up, which fills a season in and has no viewer to
+    /// answer for: handing it one would be inventing a person.
+    pub async fn children_ranked(&self, parent_id: WorkId) -> Result<Vec<RankedChild>> {
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT id, ordinal, title FROM works WHERE parent_id = ? {IN_THE_ONE_ORDER}"
+        )))
+        .bind(parent_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                Ok(RankedChild {
+                    id: parse_id(&row.try_get::<String, _>("id")?)?,
+                    ordinal: row.try_get("ordinal")?,
+                    title: row.try_get("title")?,
+                })
+            })
+            .collect()
+    }
+
+    /// The next episode a viewer would watch after this one.
+    ///
+    /// The one after it in its own season, and failing that the first of the
+    /// season after: an episode is numbered inside its season, so "next" only
+    /// means anything read across the whole series in order.
+    pub async fn next_episode_after(
+        &self,
+        viewer: UserId,
+        episode_id: WorkId,
+    ) -> Result<Option<Work>> {
+        let Some((series_id, at)) = self.where_an_episode_sits(episode_id).await? else {
+            return Ok(None);
+        };
+        self.an_episode_of(viewer, series_id, Some(at), false).await
+    }
+
+    /// Where a viewer would pick a series back up: the first episode of it they
+    /// have not watched.
+    ///
+    /// Read in order rather than from the last one played, because a series
+    /// watched out of order has a hole in it and the hole is what somebody
+    /// means by where they are. Nothing when every episode here has been
+    /// watched, which is a series to start again rather than to carry on.
+    pub async fn where_to_resume(&self, viewer: UserId, series_id: WorkId) -> Result<Option<Work>> {
+        self.an_episode_of(viewer, series_id, None, true).await
+    }
+
+    /// The series an episode belongs to, and where it sits in it.
+    async fn where_an_episode_sits(
+        &self,
+        episode_id: WorkId,
+    ) -> Result<Option<(WorkId, (i32, i32))>> {
+        let row = sqlx::query(
+            "SELECT s.parent_id AS series_id, s.ordinal AS season, e.ordinal AS episode
+             FROM works e
+             JOIN works s ON s.id = e.parent_id
+             WHERE e.id = ? AND e.kind = 'episode'",
+        )
+        .bind(episode_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let (Some(series), Some(season), Some(episode)) = (
+            row.try_get::<Option<String>, _>("series_id")?,
+            row.try_get::<Option<i32>, _>("season")?,
+            row.try_get::<Option<i32>, _>("episode")?,
+        ) else {
+            return Ok(None);
+        };
+        Ok(Some((parse_id(&series)?, (season, episode))))
+    }
+
+    /// One episode of a series, read in the order they are watched in.
+    ///
+    /// Written once because the two questions above are the same question
+    /// asked with different bounds: the next one after a place, and the first
+    /// one nobody has watched. Both skip an episode with no file behind it,
+    /// because both end in a button that has to play something.
+    async fn an_episode_of(
+        &self,
+        viewer: UserId,
+        series_id: WorkId,
+        after: Option<(i32, i32)>,
+        only_unwatched: bool,
+    ) -> Result<Option<Work>> {
+        let (season, episode) = after.unwrap_or((0, 0));
+        let row = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM works e
+             JOIN works s ON s.id = e.parent_id
+             LEFT JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
+             WHERE s.parent_id = ? AND e.kind = 'episode'
+               AND EXISTS (SELECT 1 FROM media_sources m
+                            WHERE m.work_id = e.id AND m.missing_since IS NULL)
+               AND (?3 = 0 OR (s.ordinal, e.ordinal) > (?4, ?5))
+               AND (?6 = 0 OR coalesce(p.state, 'not_started') <> 'watched')
+             ORDER BY s.ordinal, e.ordinal
+             LIMIT 1",
+            what_a_work_is("e.")
+        )))
+        .bind(viewer.to_db_string())
+        .bind(series_id.to_db_string())
+        .bind(i64::from(after.is_some()))
+        .bind(season)
+        .bind(episode)
+        .bind(i64::from(only_unwatched))
+        .fetch_optional(self.reader())
+        .await?;
+
+        row.map(|row| work_from_row(&row)).transpose()
     }
 
     /// The works one work hangs under, nearest first.
@@ -2111,6 +2278,16 @@ mod tests {
     use melyxar_core::id::TrackId;
     use melyxar_core::library::LibraryKind;
 
+    /// Somebody to answer for, since what a page shows depends on who is
+    /// looking at it.
+    async fn a_viewer(database: &Database) -> UserId {
+        database
+            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id
+    }
+
     async fn library() -> (Database, LibraryId, LibraryRootId) {
         let database = Database::open_in_memory().await.expect("database opens");
         let library = database
@@ -2183,7 +2360,8 @@ mod tests {
         let (database, library_id, _) = library().await;
         let (series, seasons, _) = a_series(&database, library_id).await;
 
-        let answered = database.children_of(series).await.expect("read");
+        let viewer = a_viewer(&database).await;
+        let answered = database.children_of(viewer, series).await.expect("read");
         assert_eq!(
             answered
                 .iter()
@@ -2202,7 +2380,10 @@ mod tests {
             "a season says how many episodes it holds"
         );
 
-        let first = database.children_of(seasons[0]).await.expect("read");
+        let first = database
+            .children_of(viewer, seasons[0])
+            .await
+            .expect("read");
         assert_eq!(first.len(), 2);
         assert!(first.iter().all(|child| child.kind == WorkKind::Episode));
         assert_eq!(
@@ -2225,8 +2406,9 @@ mod tests {
             .await
             .expect("film written");
 
+        let viewer = a_viewer(&database).await;
         assert!(database
-            .children_of(film.id)
+            .children_of(viewer, film.id)
             .await
             .expect("read")
             .is_empty());
@@ -2265,6 +2447,209 @@ mod tests {
         );
     }
 
+    /// Puts a file behind an episode, so it can be offered.
+    async fn a_file_behind(database: &Database, root_id: LibraryRootId, work: WorkId, name: &str) {
+        database
+            .insert_source(
+                work,
+                root_id,
+                &PathBuf::from(name),
+                12,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("file written down");
+    }
+
+    /// Says somebody watched one.
+    async fn watched(database: &Database, viewer: UserId, work: WorkId) {
+        database
+            .record_playback_progress(
+                viewer,
+                work,
+                Millis::new(0),
+                melyxar_core::work::PlaybackState::Watched,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("marked");
+    }
+
+    #[tokio::test]
+    async fn the_next_episode_is_the_next_one_of_the_whole_series() {
+        // An episode is numbered inside its own season, so the one after the
+        // last of a season is the first of the season after it, not nothing.
+        let (database, library_id, root_id) = library().await;
+        let viewer = a_viewer(&database).await;
+        let (_, seasons, episodes) = a_series(&database, library_id).await;
+        for (rank, episode) in episodes.iter().enumerate() {
+            a_file_behind(&database, root_id, *episode, &format!("{rank}.mkv")).await;
+        }
+
+        // Season one holds two, season two holds one.
+        let after_first = database
+            .next_episode_after(viewer, episodes[0])
+            .await
+            .expect("read")
+            .expect("there is one after it");
+        assert_eq!(after_first.id, episodes[1]);
+
+        let across = database
+            .next_episode_after(viewer, episodes[1])
+            .await
+            .expect("read")
+            .expect("the first of the next season");
+        assert_eq!(across.id, episodes[2]);
+        assert_eq!(across.parent_id, Some(seasons[1]));
+
+        assert_eq!(
+            database
+                .next_episode_after(viewer, episodes[2])
+                .await
+                .expect("read"),
+            None,
+            "and nothing at all after the last one of the last season"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_episode_with_no_file_behind_it_is_never_offered_as_the_next_one() {
+        // The button it ends in has to play something.
+        let (database, library_id, root_id) = library().await;
+        let viewer = a_viewer(&database).await;
+        let (_, _, episodes) = a_series(&database, library_id).await;
+        a_file_behind(&database, root_id, episodes[0], "one.mkv").await;
+        // Nothing behind the second; the third is there.
+        a_file_behind(&database, root_id, episodes[2], "three.mkv").await;
+
+        assert_eq!(
+            database
+                .next_episode_after(viewer, episodes[0])
+                .await
+                .expect("read")
+                .map(|found| found.id),
+            Some(episodes[2]),
+            "the one nobody has is stepped over"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_series_is_picked_back_up_at_the_first_episode_left_unwatched() {
+        // Read in order rather than from the last one played: a series watched
+        // out of order has a hole in it, and the hole is where somebody is.
+        let (database, library_id, root_id) = library().await;
+        let viewer = a_viewer(&database).await;
+        let (series, _, episodes) = a_series(&database, library_id).await;
+        for (rank, episode) in episodes.iter().enumerate() {
+            a_file_behind(&database, root_id, *episode, &format!("{rank}.mkv")).await;
+        }
+
+        assert_eq!(
+            database
+                .where_to_resume(viewer, series)
+                .await
+                .expect("read")
+                .map(|found| found.id),
+            Some(episodes[0]),
+            "nothing watched yet, so the very first"
+        );
+
+        // The first and the last watched, the middle one not.
+        watched(&database, viewer, episodes[0]).await;
+        watched(&database, viewer, episodes[2]).await;
+        assert_eq!(
+            database
+                .where_to_resume(viewer, series)
+                .await
+                .expect("read")
+                .map(|found| found.id),
+            Some(episodes[1]),
+            "the hole, not the one after the last one played"
+        );
+
+        watched(&database, viewer, episodes[1]).await;
+        assert_eq!(
+            database
+                .where_to_resume(viewer, series)
+                .await
+                .expect("read"),
+            None,
+            "and nothing once it has all been watched, which is a series to \
+             start again rather than to carry on"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_season_says_how_many_of_it_are_left_to_watch() {
+        let (database, library_id, root_id) = library().await;
+        let viewer = a_viewer(&database).await;
+        let (series, seasons, episodes) = a_series(&database, library_id).await;
+        for (rank, episode) in episodes.iter().enumerate() {
+            a_file_behind(&database, root_id, *episode, &format!("{rank}.mkv")).await;
+        }
+        watched(&database, viewer, episodes[0]).await;
+
+        let read = database.children_of(viewer, series).await.expect("read");
+        assert_eq!(
+            read.iter()
+                .map(|season| (season.child_count, season.unwatched))
+                .collect::<Vec<_>>(),
+            vec![(2, 1), (1, 1)],
+            "the first season holds two and one is left; the second holds one"
+        );
+
+        let inside = database
+            .children_of(viewer, seasons[0])
+            .await
+            .expect("read");
+        assert_eq!(
+            inside
+                .iter()
+                .map(|episode| episode.watched)
+                .collect::<Vec<_>>(),
+            vec![true, false]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_page_answers_for_the_person_looking_at_it_and_nobody_else() {
+        // Two accounts watching the same series are two different pages.
+        let (database, library_id, root_id) = library().await;
+        let viewer = a_viewer(&database).await;
+        let other = database
+            .create_user(
+                "Somebody else",
+                None,
+                &melyxar_core::user::Permissions::viewer(),
+            )
+            .await
+            .expect("account created")
+            .id;
+        let (series, _, episodes) = a_series(&database, library_id).await;
+        for (rank, episode) in episodes.iter().enumerate() {
+            a_file_behind(&database, root_id, *episode, &format!("{rank}.mkv")).await;
+        }
+        watched(&database, viewer, episodes[0]).await;
+
+        assert_eq!(
+            database
+                .where_to_resume(viewer, series)
+                .await
+                .expect("read")
+                .map(|found| found.id),
+            Some(episodes[1])
+        );
+        assert_eq!(
+            database
+                .where_to_resume(other, series)
+                .await
+                .expect("read")
+                .map(|found| found.id),
+            Some(episodes[0]),
+            "who has watched nothing starts at the first"
+        );
+    }
+
     #[tokio::test]
     async fn an_episode_says_whether_anything_of_it_is_on_the_disk() {
         // A page that offers an episode with no file behind it offers a button
@@ -2283,7 +2668,11 @@ mod tests {
             .await
             .expect("file written down");
 
-        let read = database.children_of(seasons[0]).await.expect("read");
+        let viewer = a_viewer(&database).await;
+        let read = database
+            .children_of(viewer, seasons[0])
+            .await
+            .expect("read");
         assert_eq!(
             read.iter().map(|child| child.playable).collect::<Vec<_>>(),
             vec![true, false]
