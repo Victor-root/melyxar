@@ -21,10 +21,11 @@ import {
   HEIGHTS,
   SIZES,
 } from "../player/appearance";
+import { Choice, NumberChoice } from "../components/choice";
 import { LibraryEditor } from "../components/libraries";
 import { languageName } from "../languages";
 import { DeviceOptimization } from "../player/DeviceOptimization";
-import { asLocalTime, asUtcMinutes, insideTheRange } from "../readable";
+import { asLocalTime, asUtcMinutes } from "../readable";
 import { useSettingsScreen } from "../screens/settings";
 import { useSettings } from "../settings";
 
@@ -99,20 +100,20 @@ export function SettingsPage() {
 
         {kept && (
           <div className="controls">
-            <LanguageChoice
+            <Choice
               label={t("work.audio")}
-              value={kept.preferred_audio_language}
-              among={kept.audio_languages}
-              speaking={language}
-              none={t("settings.no_preference")}
+              value={kept.preferred_audio_language ?? ""}
+              options={languagesAmong(kept.audio_languages, language, t("settings.no_preference"))}
               onPick={(picked) => change({ preferred_audio_language: picked })}
             />
-            <LanguageChoice
+            <Choice
               label={t("work.subtitles")}
-              value={kept.preferred_subtitle_language}
-              among={kept.subtitle_languages}
-              speaking={language}
-              none={t("settings.no_preference")}
+              value={kept.preferred_subtitle_language ?? ""}
+              options={languagesAmong(
+                kept.subtitle_languages,
+                language,
+                t("settings.no_preference"),
+              )}
               onPick={(picked) => change({ preferred_subtitle_language: picked })}
             />
           </div>
@@ -256,45 +257,35 @@ export function SettingsPage() {
         <p className="settings-why">{t("settings.subtitles_why")}</p>
 
         <div className="controls">
-          <Look
+          <Choice
             label={t("player.subtitle_size")}
             value={appearance.size}
-            among={SIZES}
-            naming="subtitle_size"
+            options={worded(SIZES, "subtitle_size", t)}
             onPick={(size) => look({ size })}
-            t={t}
           />
-          <Look
+          <Choice
             label={t("player.subtitle_colour")}
             value={appearance.colour}
-            among={COLOURS}
-            naming="subtitle_colour"
+            options={worded(COLOURS, "subtitle_colour", t)}
             onPick={(colour) => look({ colour })}
-            t={t}
           />
-          <Look
+          <Choice
             label={t("player.subtitle_edge")}
             value={appearance.edge}
-            among={EDGES}
-            naming="subtitle_edge"
+            options={worded(EDGES, "subtitle_edge", t)}
             onPick={(edge) => look({ edge })}
-            t={t}
           />
-          <Look
+          <Choice
             label={t("player.subtitle_background")}
             value={appearance.background}
-            among={BACKGROUNDS}
-            naming="subtitle_background"
+            options={worded(BACKGROUNDS, "subtitle_background", t)}
             onPick={(background) => look({ background })}
-            t={t}
           />
-          <Look
+          <Choice
             label={t("player.subtitle_height")}
             value={appearance.height}
-            among={HEIGHTS}
-            naming="subtitle_height"
+            options={worded(HEIGHTS, "subtitle_height", t)}
             onPick={(height) => look({ height })}
-            t={t}
           />
         </div>
 
@@ -308,104 +299,20 @@ export function SettingsPage() {
   );
 }
 
-function LanguageChoice({
-  label,
-  value,
-  among,
-  speaking,
-  none,
-  onPick,
-}: {
-  label: string;
-  value: string | null;
-  among: string[];
-  speaking: string;
-  none: string;
-  onPick: (value: string) => void;
-}) {
-  return (
-    <label className="choice">
-      <span className="choice-label">{label}</span>
-      <select value={value ?? ""} onChange={(event) => onPick(event.target.value)}>
-        <option value="">{none}</option>
-        {among.map((code) => (
-          <option key={code} value={code}>
-            {languageName(code, speaking)}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function Look<T extends string>({
-  label,
-  value,
-  among,
-  naming,
-  onPick,
-  t,
-}: {
-  label: string;
-  value: T;
-  among: readonly T[];
-  naming: string;
-  onPick: (value: T) => void;
-  t: (key: string) => string;
-}) {
-  return (
-    <label className="choice">
-      <span className="choice-label">{label}</span>
-      <select value={value} onChange={(event) => onPick(event.target.value as T)}>
-        {among.map((one) => (
-          <option key={one} value={one}>
-            {t(`player.${naming}.${one}`)}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 /**
- * One number of a setting, with the range the server will keep it inside.
- *
- * The bounds are on the field as well as on the server, so somebody dragging
- * the arrows is stopped where the server would have stopped them rather than
- * being silently corrected afterwards.
+ * The languages a library really holds, each under its own name, with "no
+ * preference" in front. Only the ones there are: a picker offering a language
+ * the collection does not carry is a picker that leads nowhere.
  */
-function NumberChoice({
-  label,
-  value,
-  min,
-  max,
-  disabled,
-  onPick,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  disabled?: boolean;
-  onPick: (value: number) => void;
-}) {
-  return (
-    <label className="choice">
-      <span className="choice-label">{label}</span>
-      <input
-        type="number"
-        className="choice-number"
-        value={value}
-        min={min}
-        max={max}
-        disabled={disabled}
-        onChange={(event) => {
-          const asked = insideTheRange(Number(event.target.value), min, max);
-          if (asked !== null) {
-            onPick(asked);
-          }
-        }}
-      />
-    </label>
-  );
+function languagesAmong(among: string[], speaking: string, none: string): [string, string][] {
+  return [["", none], ...among.map((code): [string, string] => [code, languageName(code, speaking)])];
+}
+
+/** A closed list of choices, each under the wording the interface has for it. */
+function worded<T extends string>(
+  among: readonly T[],
+  naming: string,
+  t: (key: string) => string,
+): [T, string][] {
+  return among.map((one): [T, string] => [one, t(`player.${naming}.${one}`)]);
 }
