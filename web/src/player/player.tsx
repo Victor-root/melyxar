@@ -37,7 +37,7 @@ import { PlaybackFacts } from "./facts";
 import { useFullscreen } from "./fullscreen";
 import { languageName } from "../languages";
 import { markFor, useBranding } from "./logo";
-import { Overlay } from "./overlay";
+import { Overlay, SkipStretch } from "./overlay";
 import type { Panel, Shape } from "./overlay";
 import { rememberSettings, storedSettings } from "./settings";
 import { Spinner } from "./spinner";
@@ -301,6 +301,10 @@ export function Player({
             </p>
           )}
         </div>
+
+        {/* Beside the controls and not inside them: they fade out when
+            nobody touches anything, and this is wanted exactly then. */}
+        <SkipStretch playback={playback} t={t} />
 
         <Overlay
           playback={playback}

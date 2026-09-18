@@ -8,12 +8,14 @@
 use std::path::{Path, PathBuf};
 
 use melyxar_core::id::{
-    ChapterId, ExtraVideoId, LibraryId, LibraryRootId, MediaSourceId, UserId, WorkId,
+    ChapterId, ExtraVideoId, LibraryId, LibraryRootId, MediaSegmentId, MediaSourceId, UserId,
+    WorkId,
 };
 use melyxar_core::media::{
     AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, Margins, SubtitleDetails,
     SubtitleLayout, Track, TrackKind, VideoDetails,
 };
+use melyxar_core::segments::{MediaSegment, SegmentKind, SegmentOrigin};
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::{now, Millis, Timestamp};
 use melyxar_core::work::{IdentificationNote, IdentificationState, Work, WorkKind};
@@ -1637,6 +1639,14 @@ impl Database {
             .bind(source_id.to_db_string())
             .execute(&mut *transaction)
             .await?;
+        // The stretches read off those chapters go with them. Anything a
+        // person said themselves stays: a correction made by hand is not the
+        // analysis's to undo, and reading the file again is not somebody
+        // changing their mind.
+        sqlx::query("DELETE FROM media_segments WHERE source_id = ? AND origin <> 'manual'")
+            .bind(source_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
 
         for track in tracks {
             insert_track(&mut transaction, source_id, track).await?;
@@ -1661,8 +1671,42 @@ impl Database {
             .await?;
         }
 
+        // Read from the chapters that were just written, in the same step:
+        // the two are one reading of one file and a reader must never see the
+        // chapters of today beside the stretches of yesterday.
+        for segment in melyxar_core::segments::segments_from_chapters(chapters, analysis.duration) {
+            insert_segment(&mut *transaction, source_id, &segment).await?;
+        }
+
         transaction.commit().await?;
         Ok(())
+    }
+
+    /// The stretches of one file nobody wants to sit through.
+    pub async fn segments_of_source(&self, source_id: MediaSourceId) -> Result<Vec<MediaSegment>> {
+        let rows = sqlx::query(
+            "SELECT kind, start_ms, end_ms, origin FROM media_segments
+             WHERE source_id = ? ORDER BY start_ms",
+        )
+        .bind(source_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                let kind: String = row.try_get("kind")?;
+                let origin: String = row.try_get("origin")?;
+                Ok(MediaSegment {
+                    kind: SegmentKind::parse(&kind)
+                        .ok_or_else(|| DatabaseError::Corrupt(format!("segment kind '{kind}'")))?,
+                    start: Millis::new(row.try_get("start_ms")?),
+                    end: Millis::new(row.try_get("end_ms")?),
+                    origin: SegmentOrigin::parse(&origin).ok_or_else(|| {
+                        DatabaseError::Corrupt(format!("segment origin '{origin}'"))
+                    })?,
+                })
+            })
+            .collect()
     }
 
     /// Records what a work is called at an external provider.
@@ -2100,6 +2144,30 @@ where
         added_at: moment,
         updated_at: moment,
     })
+}
+
+async fn insert_segment<'e, E>(
+    executor: E,
+    source_id: MediaSourceId,
+    segment: &MediaSegment,
+) -> Result<()>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
+    sqlx::query(
+        "INSERT INTO media_segments (id, source_id, kind, start_ms, end_ms, origin, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(MediaSegmentId::new().to_db_string())
+    .bind(source_id.to_db_string())
+    .bind(segment.kind.as_str())
+    .bind(segment.start.get())
+    .bind(segment.end.get())
+    .bind(segment.origin.as_str())
+    .bind(timestamp_to_text(now()))
+    .execute(executor)
+    .await?;
+    Ok(())
 }
 
 pub(crate) fn work_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Work> {

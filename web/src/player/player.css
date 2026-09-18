@@ -1742,3 +1742,28 @@
     transition: none;
   }
 }
+
+/* The button that skips a stretch nobody wants to sit through.
+
+   Drawn beside the controls rather than inside them, because the whole set of
+   them fades out when nobody touches anything and this is wanted exactly then.
+   Low and to the right, where every other player puts it and where a subtitle
+   never sits. */
+.player-skip {
+  position: absolute;
+  right: var(--gap-wide);
+  bottom: 22%;
+  z-index: 3;
+  background: color-mix(in srgb, var(--surface-deep) 82%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  box-shadow: var(--shadow-raised);
+}
+
+.player-skip:hover,
+.player-skip:focus-visible {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

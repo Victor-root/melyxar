@@ -93,6 +93,10 @@ define_id!(
     ChapterId
 );
 define_id!(
+    /// Identifies one stretch of a media source nobody wants to sit through.
+    MediaSegmentId
+);
+define_id!(
     /// Identifies a video attached to a work without being the work itself,
     /// such as a trailer.
     ExtraVideoId
