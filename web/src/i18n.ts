@@ -242,6 +242,10 @@ const en: Dictionary = {
   "settings.read_companion_files": "Read them during a scan",
   "settings.key_frames_during_scan": "Read where films can be started during the scan",
   "settings.thumbnails_during_scan": "Make the pictures of the playback bar during the scan",
+  "settings.metadata_language": "Films described in",
+  "settings.metadata_language_why":
+    "The language the titles and synopses of a library are fetched in. Nothing to do with the language of this interface, which is yours alone. Changing it asks the provider about every film of that library again; what was fetched before is kept under its old language, so going back is immediate.",
+  "settings.asked_about_again": "{count} films are being asked about again.",
 
   "downmix.none": "Leave it to the tool",
   "downmix.none_why": "Nothing is asked for, so the sound is carried over untouched wherever it can be. The browser folds it itself, and browsers bury dialogue under the effects.",
@@ -676,6 +680,10 @@ const fr: Dictionary = {
   "settings.read_companion_files": "Les lire pendant un scan",
   "settings.key_frames_during_scan": "Relever les points de départ pendant le scan",
   "settings.thumbnails_during_scan": "Fabriquer les vignettes de la barre pendant le scan",
+  "settings.metadata_language": "Fiches en",
+  "settings.metadata_language_why":
+    "La langue dans laquelle les titres et les résumés d'une bibliothèque sont récupérés. Rien à voir avec la langue de cette interface, qui n'appartient qu'à vous. En changer redemande la fiche de chaque film de cette bibliothèque ; ce qui avait été récupéré reste rangé sous son ancienne langue, donc revenir en arrière est immédiat.",
+  "settings.asked_about_again": "{count} films sont redemandés au fournisseur.",
 
   "downmix.none": "Laisser faire l'outil",
   "downmix.none_why": "Rien n'est demandé, donc le son est transmis intact partout où c'est possible. C'est le navigateur qui replie, et les navigateurs enterrent les dialogues sous les effets.",

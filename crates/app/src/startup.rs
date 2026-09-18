@@ -7,11 +7,9 @@
 //! other hand, stops everything: carrying on with half a configuration hides
 //! the real problem.
 
-use std::sync::Arc;
-
 use melyxar_config::Config;
 use melyxar_core::job::{Job, JobKind, JobPriority};
-use melyxar_core::library::{Library, LibraryKind, RootAccess};
+use melyxar_core::library::{LibraryKind, RootAccess};
 use melyxar_core::refresh::RefreshMode;
 use melyxar_core::user::Permissions;
 use melyxar_database::Database;
@@ -22,25 +20,8 @@ use crate::{AppError, AppState, Result};
 /// Name given to the account created on a brand new server.
 pub const DEFAULT_ACCOUNT_NAME: &str = "admin";
 
-/// What bringing the server up turned up, besides the server itself.
-pub struct BroughtUp {
-    pub state: AppState,
-    /// Libraries whose language changed in the configuration. Their films have
-    /// been put back in the queue and are waiting to be asked about again.
-    pub waiting_on_a_new_language: Vec<Library>,
-}
-
 /// Opens everything and returns the assembled server.
-///
-/// What was found on the way is closed and then forgotten here, which is what
-/// the diagnostic and the command line want. The server itself wants to know,
-/// and asks for it by name.
 pub async fn bring_up(config: Config) -> Result<AppState> {
-    Ok(bring_up_and_say_what_is_waiting(config).await?.state)
-}
-
-/// The same, handing back what the server alone is meant to act on.
-pub async fn bring_up_and_say_what_is_waiting(config: Config) -> Result<BroughtUp> {
     prepare_directories(&config)?;
 
     // Log redaction is switched on before anything is logged, so a media name
@@ -52,7 +33,7 @@ pub async fn bring_up_and_say_what_is_waiting(config: Config) -> Result<BroughtU
     let (tools, capabilities) = detect_media_tools(&config).await;
 
     ensure_default_account(&database).await?;
-    let waiting_on_a_new_language = reconcile_libraries(&database, &config).await?;
+    reconcile_libraries(&database, &config).await?;
     refresh_root_access(&database).await?;
 
     // Deliberately not closing the jobs that are still marked as running.
@@ -61,10 +42,7 @@ pub async fn bring_up_and_say_what_is_waiting(config: Config) -> Result<BroughtU
     // report asked for while a scan is under way would close that scan's row
     // under a server that is very much alive and still working. See
     // `close_what_a_previous_run_left`, which the server alone calls.
-    Ok(BroughtUp {
-        state: AppState::new(config, database, tools, capabilities),
-        waiting_on_a_new_language,
-    })
+    Ok(AppState::new(config, database, tools, capabilities))
 }
 
 /// Closes the jobs a previous run left hanging, and says what they were.
@@ -76,50 +54,6 @@ pub async fn bring_up_and_say_what_is_waiting(config: Config) -> Result<BroughtU
 /// way of telling a leftover row from work happening right now.
 pub async fn close_what_a_previous_run_left(state: &AppState) -> Result<Vec<Job>> {
     Ok(state.jobs().close_interrupted().await?)
-}
-
-/// Asks a provider about every film of the libraries whose language changed.
-///
-/// Only the server calls this. The films were put back in the queue when the
-/// change was noticed; this is what makes somebody see it happen rather than
-/// find, months later, that half the library is still described in a language
-/// nobody asked for. At the low priority, since nobody is waiting on it.
-pub async fn ask_again_about(state: &AppState, libraries: &[Library]) -> usize {
-    if libraries.is_empty() {
-        return 0;
-    }
-    let Some(provider) = state.metadata_provider() else {
-        // A server without a key browses without one. The films stay in the
-        // queue, and the day a key is configured they are asked about.
-        tracing::info!(
-            libraries = libraries.len(),
-            "a language changed but no provider key is configured, so the films wait"
-        );
-        return 0;
-    };
-
-    let mut started = 0;
-    for library in libraries {
-        // What is missing, since a language that changed is exactly a library
-        // whose every film is short of something: the queue they were put back
-        // in is what this run empties.
-        match crate::identify::start_identification(
-            state,
-            Arc::clone(&provider),
-            library.clone(),
-            RefreshMode::WhatIsMissing,
-        )
-        .await
-        {
-            Ok(_) => started += 1,
-            Err(error) => tracing::warn!(
-                library = library.name,
-                %error,
-                "the films of this library could not be asked about again"
-            ),
-        }
-    }
-    started
 }
 
 /// Starts again what a restart cut short, and says how many that was.
@@ -386,12 +320,12 @@ pub async fn ensure_default_account(database: &Database) -> Result<()> {
 /// alone rather than deleted, because a typo in a file must never destroy a
 /// watch history.
 ///
-/// Answers the libraries whose language changed, whose films are waiting to be
-/// asked about again. Answered rather than acted on here, because this runs
-/// for the diagnostic and the command line too, and neither has any business
-/// starting a download.
-pub async fn reconcile_libraries(database: &Database, config: &Config) -> Result<Vec<Library>> {
-    let mut changed = Vec::new();
+/// The language a library describes its films in is read here **only when the
+/// library is created**. After that it belongs to the library's own settings,
+/// where a screen changes it: a file that imposed it again on every start
+/// would undo that choice at the next restart, and the only sign would be a
+/// library quietly going back to a language nobody there speaks.
+pub async fn reconcile_libraries(database: &Database, config: &Config) -> Result<()> {
     for declared in &config.libraries {
         let Some(kind) = LibraryKind::parse(&declared.kind) else {
             // Validation already refused this, so reaching here means the file
@@ -454,29 +388,10 @@ pub async fn reconcile_libraries(database: &Database, config: &Config) -> Result
                     }
                 }
 
-                // The language was read once, when the library was created,
-                // and never again: somebody who installed this server and then
-                // wrote their own language in the file saw nothing happen, and
-                // had no way at all of putting it right.
-                if database
-                    .set_metadata_language(existing.id, &declared.metadata_language)
-                    .await?
-                {
-                    let waiting = database.ask_again_about_every_work(existing.id).await?;
-                    tracing::info!(
-                        library = declared.name,
-                        was = existing.metadata_language,
-                        now = declared.metadata_language,
-                        films = waiting,
-                        "this library is described in another language now, and its films \
-                         are being asked about again"
-                    );
-                    changed.push(existing);
-                }
             }
         }
     }
-    Ok(changed)
+    Ok(())
 }
 
 /// Tests every root and records what it found.
@@ -545,13 +460,13 @@ mod tests {
     /// the server itself does it: brought up, then what a previous run left is
     /// closed.
     async fn server_with_a_library(directory: &std::path::Path) -> (AppState, Vec<Job>) {
-        let brought_up = bring_up_and_say_what_is_waiting(config_on(directory))
+        let state = bring_up(config_on(directory))
             .await
             .expect("the server comes up");
-        let cut_short = close_what_a_previous_run_left(&brought_up.state)
+        let cut_short = close_what_a_previous_run_left(&state)
             .await
             .expect("what a previous run left is closed");
-        (brought_up.state, cut_short)
+        (state, cut_short)
     }
 
     #[tokio::test]
@@ -587,12 +502,11 @@ mod tests {
 
         // The report, the scan and the identification from a terminal all come
         // through here, alongside a server that is very much alive.
-        let alongside = bring_up_and_say_what_is_waiting(config_on(directory.path()))
+        let alongside = bring_up(config_on(directory.path()))
             .await
             .expect("the report opens the database too");
 
         let seen = alongside
-            .state
             .database()
             .job(running.id)
             .await
@@ -605,72 +519,12 @@ mod tests {
         );
         assert!(
             !alongside
-                .state
                 .database()
                 .unfinished_jobs()
                 .await
                 .expect("read")
                 .is_empty(),
             "and the screen would have said nothing was running"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_language_changed_in_the_file_reaches_a_library_that_already_exists() {
-        // What somebody who installed this and then wrote their own language
-        // into the file used to get: nothing at all, with no way out short of
-        // editing the database by hand.
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let mut config = config_on(directory.path());
-        config.libraries[0].metadata_language = "fr".into();
-
-        let first = bring_up_and_say_what_is_waiting(config.clone())
-            .await
-            .expect("the server comes up");
-        assert!(
-            first.waiting_on_a_new_language.is_empty(),
-            "a library just created is already in the language it was asked for"
-        );
-        let library = first
-            .state
-            .database()
-            .library_by_name("Films")
-            .await
-            .expect("read")
-            .expect("declared");
-        assert_eq!(library.metadata_language, "fr");
-        first.state.database().close().await;
-
-        config.libraries[0].metadata_language = "en".into();
-        let second = bring_up_and_say_what_is_waiting(config.clone())
-            .await
-            .expect("the server comes up again");
-        assert_eq!(
-            second.waiting_on_a_new_language.len(),
-            1,
-            "the change is noticed and handed to the server to act on"
-        );
-        assert_eq!(
-            second
-                .state
-                .database()
-                .library_by_name("Films")
-                .await
-                .expect("read")
-                .expect("declared")
-                .metadata_language,
-            "en"
-        );
-        second.state.database().close().await;
-
-        // Starting again on an unchanged file must not send a provider the
-        // whole library a second time.
-        let third = bring_up_and_say_what_is_waiting(config)
-            .await
-            .expect("the server comes up a third time");
-        assert!(
-            third.waiting_on_a_new_language.is_empty(),
-            "nothing changed, so nothing is asked about again"
         );
     }
 

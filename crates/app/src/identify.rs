@@ -719,6 +719,71 @@ impl IdentifyJob {
     }
 }
 
+/// Describes a library in another language from now on.
+///
+/// Says how many films were put back in the queue, and nothing when the
+/// language was already the one asked for: writing the same value again must
+/// not send a provider four hundred films to describe once more.
+///
+/// Every film goes back in the queue and not only the ones to come. A library
+/// half described in a language nobody there speaks is exactly what somebody
+/// changing this is trying to get out of, and a change that only applied to
+/// films added later would never get them out of it.
+///
+/// What was already fetched stays where it is: texts are filed by work and by
+/// language, so nothing is lost while the new language arrives, and a film the
+/// provider cannot describe in it keeps what it had. That is also what makes
+/// going back immediate.
+///
+/// A film somebody named by hand is never touched, here as everywhere.
+///
+/// Nothing is looked up when no provider key is configured: the films stay in
+/// the queue, and the day a key is there they are asked about.
+pub async fn change_the_language_of(
+    state: &AppState,
+    library: &Library,
+    language: &str,
+) -> Result<Option<u64>> {
+    let database = state.database();
+    if !database.set_metadata_language(library.id, language).await? {
+        return Ok(None);
+    }
+
+    let waiting = database.ask_again_about_every_work(library.id).await?;
+    tracing::info!(
+        library = library.name,
+        was = library.metadata_language,
+        now = language,
+        films = waiting,
+        "this library is described in another language now, and its films are \
+         being asked about again"
+    );
+
+    if let Some(provider) = state.metadata_provider() {
+        let asked_again = Library {
+            metadata_language: language.to_string(),
+            ..library.clone()
+        };
+        match start_identification(state, provider, asked_again, RefreshMode::WhatIsMissing).await {
+            Ok(_) => {}
+            // Already under way on this library, which is a run that will pick
+            // these up as it goes: the queue is what it reads from.
+            Err(AppError::Jobs(melyxar_jobs::JobError::AlreadyUnderWay)) => {}
+            Err(error) => tracing::warn!(
+                library = library.name,
+                %error,
+                "the films of this library could not be asked about again"
+            ),
+        }
+    } else {
+        tracing::info!(
+            library = library.name,
+            "no provider key is configured, so the films wait in the queue"
+        );
+    }
+    Ok(Some(waiting))
+}
+
 /// Starts an identification run as a background job.
 pub async fn start_identification<P>(
     state: &AppState,
@@ -1424,6 +1489,65 @@ mod tests {
         identify_library(state, provider, library, &handle, RefreshMode::default())
             .await
             .expect("the run finished")
+    }
+
+    #[tokio::test]
+    async fn describing_a_library_in_another_language_asks_about_every_film_again() {
+        // The one that used to need a text editor on the server and a restart,
+        // and even then only reached libraries that did not exist yet. A film
+        // somebody named by hand is never touched, which is what picking by
+        // hand means.
+        let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
+        state
+            .database()
+            .apply_identification(work.id, &to_record(&details("111", "Quiet Harbour", Some(2019)), "tmdb", "fr"), false)
+            .await
+            .expect("the provider named it");
+        assert!(
+            state
+                .database()
+                .works_awaiting_identification(library.id)
+                .await
+                .expect("read")
+                .is_empty(),
+            "it is described, so nothing is waiting"
+        );
+
+        assert_eq!(
+            change_the_language_of(&state, &library, "en")
+                .await
+                .expect("the language changed"),
+            Some(1),
+            "the film goes back in the queue to be described again"
+        );
+        assert_eq!(
+            state
+                .database()
+                .library_by_name(&library.name)
+                .await
+                .expect("read")
+                .expect("still there")
+                .metadata_language,
+            "en"
+        );
+        assert_eq!(
+            state
+                .database()
+                .works_awaiting_identification(library.id)
+                .await
+                .expect("read")
+                .len(),
+            1
+        );
+
+        assert_eq!(
+            change_the_language_of(&state, &library, "en")
+                .await
+                .expect("nothing to do"),
+            None,
+            "the same language written again is not a change, and must not send \
+             a provider four hundred films to describe once more"
+        );
     }
 
     #[tokio::test]
