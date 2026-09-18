@@ -118,6 +118,10 @@ struct RootView {
     /// instead of the path and one that reads badly is worth putting right.
     id: String,
     label: String,
+    /// Its whole path on the server's disk. Shown only on the screen where
+    /// roots are managed, for the administrator who has to tell two roots
+    /// apart by more than a label they gave one themselves.
+    path: String,
     /// What the server may actually do with this folder, told by trying.
     access: &'static str,
     /// Stable code the interface turns into a sentence in its own language.
@@ -144,6 +148,7 @@ async fn libraries(State(state): State<AppState>) -> Result<Json<Vec<LibraryView
                     .map(|root| RootView {
                         id: root.id.to_string(),
                         label: root.label,
+                        path: root.path.to_string_lossy().into_owned(),
                         access: root.access.as_str(),
                         explanation_code: root.access.explanation_code(),
                     })
