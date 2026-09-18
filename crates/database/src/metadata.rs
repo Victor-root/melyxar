@@ -104,6 +104,8 @@ pub struct CreditedPerson {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IncompleteNamedWork {
     pub id: WorkId,
+    /// What it is, so the right catalogue is asked about it again.
+    pub kind: melyxar_core::work::WorkKind,
     /// What the provider calls it, which is how it is asked about again.
     pub external_id: String,
     pub wants_pictures: bool,
@@ -410,7 +412,7 @@ impl Database {
         language: &str,
     ) -> Result<Vec<IncompleteNamedWork>> {
         let rows = sqlx::query(
-            "SELECT w.id, e.external_id,
+            "SELECT w.id, w.kind, e.external_id,
                     NOT EXISTS (
                         SELECT 1 FROM images i
                          WHERE i.owner_kind = 'work' AND i.owner_id = w.id
@@ -446,11 +448,14 @@ impl Database {
             if !wants_pictures && !wants_a_title_image && !wants_a_synopsis {
                 continue;
             }
+            let kind_text: String = row.try_get("kind")?;
             waiting.push(IncompleteNamedWork {
                 id: row
                     .try_get::<String, _>("id")?
                     .parse()
                     .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?,
+                kind: melyxar_core::work::WorkKind::parse(&kind_text)
+                    .ok_or_else(|| DatabaseError::Corrupt(format!("work kind '{kind_text}'")))?,
                 external_id: row.try_get("external_id")?,
                 wants_pictures,
                 wants_a_title_image,

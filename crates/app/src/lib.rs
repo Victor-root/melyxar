@@ -56,7 +56,7 @@ pub mod settings {
 /// Re-exported for the same reason as the rest: the layer above asks this
 /// crate for a provider and never reaches past it for the trait it satisfies.
 pub mod metadata {
-    pub use melyxar_metadata::{MetadataProvider, MovieCandidate};
+    pub use melyxar_metadata::{Candidate, MetadataProvider};
 }
 
 #[derive(Debug, thiserror::Error)]

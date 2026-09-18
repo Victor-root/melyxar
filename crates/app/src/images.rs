@@ -17,7 +17,7 @@ use melyxar_core::fingerprint;
 use melyxar_core::id::WorkId;
 use melyxar_database::images::StoredImage;
 use melyxar_database::metadata::CreditedPerson;
-use melyxar_metadata::{MetadataProvider, MovieDetails};
+use melyxar_metadata::{Details, MetadataProvider};
 
 use crate::{AppState, Result};
 
@@ -81,7 +81,7 @@ pub async fn store_provider_images(
     state: &AppState,
     provider: &impl MetadataProvider,
     work_id: WorkId,
-    details: &MovieDetails,
+    details: &Details,
 ) -> usize {
     let Some(tools) = state.tools() else {
         return 0;

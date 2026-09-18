@@ -24,7 +24,7 @@ use melyxar_database::metadata::{
 use melyxar_jobs::{JobHandle, StartedJob};
 use melyxar_library::naming;
 use melyxar_metadata::provider::Trailer;
-use melyxar_metadata::{MetadataProvider, MovieCandidate, MovieDetails, ProviderError};
+use melyxar_metadata::{Candidate, Catalogue, Details, MetadataProvider, ProviderError};
 
 use crate::{AppError, AppState, Result};
 
@@ -220,9 +220,10 @@ const THE_LANGUAGE_MOST_FILMS_ARE_DESCRIBED_IN: &str = "en";
 /// synopsis that is missing, not the film.
 async fn fill_in_the_synopsis(
     provider: &impl MetadataProvider,
-    details: MovieDetails,
+    catalogue: Catalogue,
+    details: Details,
     language: &str,
-) -> MovieDetails {
+) -> Details {
     let has_one = details
         .overview
         .as_deref()
@@ -232,7 +233,8 @@ async fn fill_in_the_synopsis(
     }
 
     match provider
-        .movie_details(
+        .details(
+            catalogue,
             &details.external_id,
             THE_LANGUAGE_MOST_FILMS_ARE_DESCRIBED_IN,
         )
@@ -243,7 +245,7 @@ async fn fill_in_the_synopsis(
                 work = %MediaName::new(&details.title),
                 "no synopsis in the language asked for; the original one is used"
             );
-            MovieDetails {
+            Details {
                 overview: elsewhere.overview,
                 tagline: details.tagline.clone().or(elsewhere.tagline),
                 ..details
@@ -303,8 +305,17 @@ where
         if handle.is_cancelled() {
             break;
         }
-        let details = match provider.movie_details(&work.external_id, language).await {
-            Ok(details) => fill_in_the_synopsis(provider.as_ref(), details, language).await,
+        let Some(catalogue) = Catalogue::of(work.kind) else {
+            handle.advance(1).await;
+            continue;
+        };
+        let details = match provider
+            .details(catalogue, &work.external_id, language)
+            .await
+        {
+            Ok(details) => {
+                fill_in_the_synopsis(provider.as_ref(), catalogue, details, language).await
+            }
             Err(error) => {
                 tracing::warn!(reason = %error, "the provider would not describe a film again");
                 handle.advance(1).await;
@@ -364,59 +375,69 @@ where
     let database = state.database();
     let language = &library.metadata_language;
 
+    // A season and an episode are named by the series they hang under and are
+    // never looked up on their own, so nothing here has anything to ask about
+    // them. The list this comes from already leaves them out; this is what
+    // keeps that true if anything else ever calls in.
+    let Some(catalogue) = Catalogue::of(work.kind) else {
+        return Ok(Outcome::Unknown(IdentificationNote::NoMatch));
+    };
+
     // An identifier already known beats any search: it was either read from a
     // description file or chosen by someone, and either way it is not a guess.
     let known_ids = database.work_external_ids(work.id).await?;
     let chosen = match known_id(&known_ids, provider.name()) {
         Some(external_id) => external_id,
-        None => match find_candidate(provider.as_ref(), work, &known_ids, language).await {
-            Ok(WhatCameBack::Found(candidate)) => candidate.external_id,
-            // Nothing at all came back, however it was asked. The only thing
-            // the provider was given is the title read off the file name, so
-            // that title is what the line has to say.
-            Ok(WhatCameBack::NothingAtAll) => {
-                tracing::info!(
-                    work = %MediaName::new(&work.title),
-                    year = work.release_year,
-                    provider = provider.name(),
-                    "no film came back under this title; the name on disk is most likely not the name of the film"
-                );
-                return Ok(Outcome::Unknown(IdentificationNote::NoMatch));
-            }
-            // Films came back and every one was refused. That is a different
-            // fault entirely, and the nearest miss is what says which: a name
-            // half in common is a title written by two hands, and one barely
-            // in common is a search that understood nothing.
-            Ok(WhatCameBack::NoneCarriedTheName { offered, nearest }) => {
-                match nearest {
-                    Some(miss) => tracing::info!(
+        None => {
+            match find_candidate(provider.as_ref(), catalogue, work, &known_ids, language).await {
+                Ok(WhatCameBack::Found(candidate)) => candidate.external_id,
+                // Nothing at all came back, however it was asked. The only thing
+                // the provider was given is the title read off the file name, so
+                // that title is what the line has to say.
+                Ok(WhatCameBack::NothingAtAll) => {
+                    tracing::info!(
                         work = %MediaName::new(&work.title),
                         year = work.release_year,
-                        asked = %MediaName::new(&miss.asked),
-                        offered,
-                        nearest = %MediaName::new(&miss.title),
-                        nearest_year = miss.release_year,
-                        closeness = format!("{:.2}", miss.closeness),
-                        needed = format!("{CLOSE_ENOUGH:.2}"),
                         provider = provider.name(),
-                        "films came back but not one carries this name; the name on disk and the name of the film are not quite the same"
-                    ),
-                    None => tracing::info!(
-                        work = %MediaName::new(&work.title),
-                        year = work.release_year,
-                        offered,
-                        provider = provider.name(),
-                        "films came back but not one carries this name"
-                    ),
+                        "no film came back under this title; the name on disk is most likely not the name of the film"
+                    );
+                    return Ok(Outcome::Unknown(IdentificationNote::NoMatch));
                 }
-                return Ok(Outcome::Unknown(IdentificationNote::NoMatch));
+                // Films came back and every one was refused. That is a different
+                // fault entirely, and the nearest miss is what says which: a name
+                // half in common is a title written by two hands, and one barely
+                // in common is a search that understood nothing.
+                Ok(WhatCameBack::NoneCarriedTheName { offered, nearest }) => {
+                    match nearest {
+                        Some(miss) => tracing::info!(
+                            work = %MediaName::new(&work.title),
+                            year = work.release_year,
+                            asked = %MediaName::new(&miss.asked),
+                            offered,
+                            nearest = %MediaName::new(&miss.title),
+                            nearest_year = miss.release_year,
+                            closeness = format!("{:.2}", miss.closeness),
+                            needed = format!("{CLOSE_ENOUGH:.2}"),
+                            provider = provider.name(),
+                            "films came back but not one carries this name; the name on disk and the name of the film are not quite the same"
+                        ),
+                        None => tracing::info!(
+                            work = %MediaName::new(&work.title),
+                            year = work.release_year,
+                            offered,
+                            provider = provider.name(),
+                            "films came back but not one carries this name"
+                        ),
+                    }
+                    return Ok(Outcome::Unknown(IdentificationNote::NoMatch));
+                }
+                Err(error) => return Ok(postpone(work, &error)),
             }
-            Err(error) => return Ok(postpone(work, &error)),
-        },
+        }
     };
 
-    let details = match provider.movie_details(&chosen, language).await {
-        Ok(details) => fill_in_the_synopsis(provider.as_ref(), details, language).await,
+    let details = match provider.details(catalogue, &chosen, language).await {
+        Ok(details) => fill_in_the_synopsis(provider.as_ref(), catalogue, details, language).await,
         Err(error) => return Ok(postpone(work, &error)),
     };
 
@@ -497,7 +518,7 @@ fn known_id(ids: &[(String, String)], provider: &str) -> Option<String> {
 /// whoever named the file to fix, the second is for this code, so the two have
 /// to be told apart out loud.
 enum WhatCameBack {
-    Found(Box<MovieCandidate>),
+    Found(Box<Candidate>),
     /// Films came back and every one of them was refused. Carries the nearest
     /// miss, which is what says why.
     NoneCarriedTheName {
@@ -527,12 +548,20 @@ struct NearestMiss {
 /// last one without a shorthand somebody numbered a series with.
 async fn find_candidate(
     provider: &impl MetadataProvider,
+    catalogue: Catalogue,
     work: &Work,
     known_ids: &[(String, String)],
     language: &str,
 ) -> melyxar_metadata::provider::Result<WhatCameBack> {
     if let Some(imdb_id) = known_id(known_ids, "imdb") {
-        if let Some(found) = provider.movie_by_imdb_id(&imdb_id, language).await? {
+        // Only when it answers the same catalogue that was asked for: one
+        // identifier stands for one work, and a series whose identifier came
+        // back as a film would be filled in from the wrong page entirely.
+        if let Some(found) = provider
+            .by_imdb_id(&imdb_id, language)
+            .await?
+            .filter(|found| found.catalogue == catalogue)
+        {
             return Ok(WhatCameBack::Found(Box::new(found)));
         }
     }
@@ -543,7 +572,7 @@ async fn find_candidate(
     let mut nearest: Option<NearestMiss> = None;
 
     let candidates = provider
-        .search_movie(&work.title, work.release_year, language)
+        .search(catalogue, &work.title, work.release_year, language)
         .await?;
     if let Some(found) = choose(&candidates, work) {
         return Ok(WhatCameBack::Found(Box::new(found.clone())));
@@ -553,7 +582,9 @@ async fn find_candidate(
     // A year read off a file name is often the year of the copy rather than of
     // the film, so a search that found nothing is worth one more try without it.
     if work.release_year.is_some() {
-        let without_year = provider.search_movie(&work.title, None, language).await?;
+        let without_year = provider
+            .search(catalogue, &work.title, None, language)
+            .await?;
         if let Some(found) = choose(&without_year, work) {
             return Ok(WhatCameBack::Found(Box::new(found.clone())));
         }
@@ -567,7 +598,7 @@ async fn find_candidate(
     // and settles it, whichever way the file was written.
     if naming::carries_accents(&work.title) {
         let plain = naming::fold_accents(&work.title);
-        let folded = provider.search_movie(&plain, None, language).await?;
+        let folded = provider.search(catalogue, &plain, None, language).await?;
         if let Some(found) = choose(&folded, work) {
             return Ok(WhatCameBack::Found(Box::new(found.clone())));
         }
@@ -580,7 +611,7 @@ async fn find_candidate(
     // and those have already found themselves above.
     if let Some(without) = naming::without_a_shorthand_prefix(&work.title) {
         let shortened = provider
-            .search_movie(&without, work.release_year, language)
+            .search(catalogue, &without, work.release_year, language)
             .await?;
         // Judged on the shortened title, since that is what was asked: the
         // work still carries the shorthand and nothing would ever match it.
@@ -602,7 +633,7 @@ async fn find_candidate(
 /// down, since the last question asks about a shortened one and a number
 /// measured against the wrong title would only mislead.
 fn note_what_was_offered(
-    candidates: &[MovieCandidate],
+    candidates: &[Candidate],
     asked: &str,
     offered: &mut usize,
     nearest: &mut Option<NearestMiss>,
@@ -665,7 +696,7 @@ const YEARS_APART: i32 = 1;
 /// two films of a series and then, both carrying one identifier, put those two
 /// films on one page. A film nobody could name says so and waits, which is
 /// visible, correctable, and the whole reason the report names them.
-fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a MovieCandidate> {
+fn choose<'a>(candidates: &'a [Candidate], work: &Work) -> Option<&'a Candidate> {
     choose_for(candidates, &work.title, work.release_year)
 }
 
@@ -676,10 +707,10 @@ fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a Movie
 /// the title that was asked rather than on the one still carrying a shorthand
 /// nothing would ever match.
 fn choose_for<'a>(
-    candidates: &'a [MovieCandidate],
+    candidates: &'a [Candidate],
     title: &str,
     release_year: Option<i32>,
-) -> Option<&'a MovieCandidate> {
+) -> Option<&'a Candidate> {
     if candidates.is_empty() {
         return None;
     }
@@ -691,23 +722,23 @@ fn choose_for<'a>(
     // second reading of the very same title and not a different one.
     let wanted_elided = naming::with_elisions_glued(&wanted);
 
-    let names_of = |candidate: &MovieCandidate| {
+    let names_of = |candidate: &Candidate| {
         let mut names = vec![naming::matchable_title(&candidate.title)];
         if let Some(original) = candidate.original_title.as_deref() {
             names.push(naming::matchable_title(original));
         }
         names
     };
-    let matches_title = |candidate: &&MovieCandidate| {
+    let matches_title = |candidate: &&Candidate| {
         let names = names_of(candidate);
         names.contains(&wanted) || (wanted_elided != wanted && names.contains(&wanted_elided))
     };
-    let near_the_year = |candidate: &&MovieCandidate| match (release_year, candidate.release_year) {
+    let near_the_year = |candidate: &&Candidate| match (release_year, candidate.release_year) {
         (Some(wanted), Some(found)) => (wanted - found).abs() <= YEARS_APART,
         _ => false,
     };
 
-    let carrying_the_name: Vec<&MovieCandidate> = candidates.iter().filter(matches_title).collect();
+    let carrying_the_name: Vec<&Candidate> = candidates.iter().filter(matches_title).collect();
 
     let word_for_word = carrying_the_name
         .iter()
@@ -730,12 +761,12 @@ fn choose_for<'a>(
     //
     // **Only ever with a year that agrees**, since without one nothing tells
     // this from a sequel, and only where the provider named a year too.
-    let begins_the_same = |candidate: &&MovieCandidate| {
+    let begins_the_same = |candidate: &&Candidate| {
         names_of(candidate)
             .iter()
             .any(|name| naming::one_is_how_the_other_begins(name, &wanted))
     };
-    let same_beginning: Vec<&MovieCandidate> = candidates
+    let same_beginning: Vec<&Candidate> = candidates
         .iter()
         .filter(begins_the_same)
         .filter(near_the_year)
@@ -764,12 +795,12 @@ fn choose_for<'a>(
     // candidate lacks, `Bad Boys 1` searched and `Bad Boys` offered, is the
     // ordinary way a collection numbers even its first film on disk, and is
     // never refused by this.
-    let is_the_next_one = |candidate: &&MovieCandidate| {
+    let is_the_next_one = |candidate: &&Candidate| {
         names_of(candidate)
             .iter()
             .any(|name| naming::candidate_is_a_later_instalment(name, &wanted))
     };
-    let year_allows = |candidate: &&MovieCandidate| match (release_year, candidate.release_year) {
+    let year_allows = |candidate: &&Candidate| match (release_year, candidate.release_year) {
         (Some(_), Some(_)) => near_the_year(candidate),
         _ => true,
     };
@@ -788,13 +819,10 @@ fn choose_for<'a>(
         .filter(|(_, closeness)| *closeness >= CLOSE_ENOUGH)
         // The closest wins, and on a tie the provider's order does: it puts
         // the film nearly everybody means first, so the first of equals stays.
-        .fold(
-            None,
-            |best: Option<(&MovieCandidate, f64)>, next| match best {
-                Some((_, closeness)) if closeness >= next.1 => best,
-                _ => Some(next),
-            },
-        )
+        .fold(None, |best: Option<(&Candidate, f64)>, next| match best {
+            Some((_, closeness)) if closeness >= next.1 => best,
+            _ => Some(next),
+        })
         .map(|(candidate, _)| candidate)
 }
 
@@ -808,7 +836,7 @@ fn choose_for<'a>(
 const CLOSE_ENOUGH: f64 = 0.5;
 
 /// Turns what the provider said into what the storage takes.
-fn to_record(details: &MovieDetails, provider: &str, language: &str) -> IdentifiedWork {
+fn to_record(details: &Details, provider: &str, language: &str) -> IdentifiedWork {
     IdentifiedWork {
         provider: provider.to_string(),
         external_id: details.external_id.clone(),
@@ -1025,7 +1053,7 @@ pub async fn candidates_for<P>(
     provider: &Arc<P>,
     work_id: WorkId,
     query: &str,
-) -> Result<Vec<MovieCandidate>>
+) -> Result<Vec<Candidate>>
 where
     P: MetadataProvider + 'static,
 {
@@ -1044,11 +1072,16 @@ where
         .map(|library| library.metadata_language)
         .unwrap_or_else(|| "en".to_string());
 
+    // The catalogue that answers for what this is: somebody correcting a
+    // series by hand is offered series, not films of the same name.
+    let catalogue = Catalogue::of(work.kind)
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("catalogue")))?;
+
     // Whatever was typed, and never the year: a person searching by hand is
     // already saying the automatic attempt was wrong, and the year it used
     // came from the same file name that was wrong.
     provider
-        .search_movie(query, None, &language)
+        .search(catalogue, query, None, &language)
         .await
         .map_err(|error| AppError::Domain(melyxar_core::Error::invalid_input(error.to_string())))
 }
@@ -1072,8 +1105,17 @@ where
         .find(|library| library.id == library_id)
         .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("library")))?;
 
+    let kind = state
+        .database()
+        .work(work_id)
+        .await?
+        .map(|work| work.kind)
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("work")))?;
+    let catalogue = Catalogue::of(kind)
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("catalogue")))?;
+
     let details = provider
-        .movie_details(external_id, &library.metadata_language)
+        .details(catalogue, external_id, &library.metadata_language)
         .await
         .map_err(|error| AppError::Domain(melyxar_core::Error::invalid_input(error.to_string())))?;
 
@@ -1108,8 +1150,10 @@ mod tests {
     /// A provider that answers from memory, so the rules can be tested without
     /// anyone else's server being involved.
     struct StandIn {
-        candidates: Vec<MovieCandidate>,
-        details: Vec<MovieDetails>,
+        candidates: Vec<Candidate>,
+        details: Vec<Details>,
+        /// The seasons this provider knows about, for a series.
+        seasons: Vec<melyxar_metadata::SeasonDetails>,
         /// What to fail with instead of answering, if anything.
         failure: Option<fn() -> ProviderError>,
         searches: Mutex<Vec<(String, Option<i32>)>>,
@@ -1126,11 +1170,12 @@ mod tests {
     }
 
     impl StandIn {
-        fn new(candidates: Vec<MovieCandidate>, details: Vec<MovieDetails>) -> Self {
+        fn new(candidates: Vec<Candidate>, details: Vec<Details>) -> Self {
             Self {
                 candidates,
                 details,
                 failure: None,
+                seasons: Vec::new(),
                 searches: Mutex::new(Vec::new()),
                 fetched: Mutex::new(Vec::new()),
                 picture: None,
@@ -1143,7 +1188,7 @@ mod tests {
         /// accents folded on its side, so a title spelled with them or without
         /// matches, and nothing at all for an accent written as a separate
         /// mark, which it does not know how to read.
-        fn matching_exactly(candidates: Vec<MovieCandidate>, details: Vec<MovieDetails>) -> Self {
+        fn matching_exactly(candidates: Vec<Candidate>, details: Vec<Details>) -> Self {
             Self {
                 exact: true,
                 ..Self::new(candidates, details)
@@ -1161,6 +1206,7 @@ mod tests {
                 candidates: Vec::new(),
                 details: Vec::new(),
                 failure: Some(failure),
+                seasons: Vec::new(),
                 searches: Mutex::new(Vec::new()),
                 fetched: Mutex::new(Vec::new()),
                 picture: None,
@@ -1189,12 +1235,13 @@ mod tests {
             "tmdb"
         }
 
-        async fn search_movie(
+        async fn search(
             &self,
+            _catalogue: Catalogue,
             title: &str,
             year: Option<i32>,
             _language: &str,
-        ) -> melyxar_metadata::provider::Result<Vec<MovieCandidate>> {
+        ) -> melyxar_metadata::provider::Result<Vec<Candidate>> {
             self.searches
                 .lock()
                 .expect("free")
@@ -1228,11 +1275,12 @@ mod tests {
             })
         }
 
-        async fn movie_details(
+        async fn details(
             &self,
+            _catalogue: Catalogue,
             external_id: &str,
             language: &str,
-        ) -> melyxar_metadata::provider::Result<MovieDetails> {
+        ) -> melyxar_metadata::provider::Result<Details> {
             if let Some(failure) = self.failure {
                 return Err(failure());
             }
@@ -1246,7 +1294,7 @@ mod tests {
             // A provider answers with what it holds in the language it was
             // asked for, and with nothing where nobody has written it yet.
             match self.only_in_english && language != "en" {
-                true => Ok(MovieDetails {
+                true => Ok(Details {
                     overview: None,
                     tagline: None,
                     ..found
@@ -1267,11 +1315,34 @@ mod tests {
             }
         }
 
-        async fn movie_by_imdb_id(
+        async fn season(
+            &self,
+            _series_id: &str,
+            season_number: i32,
+            _language: &str,
+        ) -> melyxar_metadata::provider::Result<melyxar_metadata::SeasonDetails> {
+            if let Some(failure) = self.failure {
+                return Err(failure());
+            }
+            Ok(self
+                .seasons
+                .iter()
+                .find(|season| season.season_number == season_number)
+                .cloned()
+                .unwrap_or(melyxar_metadata::SeasonDetails {
+                    season_number,
+                    name: None,
+                    overview: None,
+                    poster_path: None,
+                    episodes: Vec::new(),
+                }))
+        }
+
+        async fn by_imdb_id(
             &self,
             imdb_id: &str,
             _language: &str,
-        ) -> melyxar_metadata::provider::Result<Option<MovieCandidate>> {
+        ) -> melyxar_metadata::provider::Result<Option<Candidate>> {
             if let Some(failure) = self.failure {
                 return Err(failure());
             }
@@ -1285,9 +1356,10 @@ mod tests {
         }
     }
 
-    fn candidate(id: &str, title: &str, year: Option<i32>) -> MovieCandidate {
-        MovieCandidate {
+    fn candidate(id: &str, title: &str, year: Option<i32>) -> Candidate {
+        Candidate {
             external_id: id.to_string(),
+            catalogue: Catalogue::Films,
             title: title.to_string(),
             original_title: None,
             release_year: year,
@@ -1372,7 +1444,7 @@ mod tests {
         let wanted = work_named("Quiet Harbour", Some(2019));
         let offered = vec![
             candidate("1", "Un Autre Film", Some(2019)),
-            MovieCandidate {
+            Candidate {
                 original_title: Some("Quiet Harbour".to_string()),
                 ..candidate("2", "Port Tranquille", Some(2019))
             },
@@ -1528,8 +1600,9 @@ mod tests {
         );
     }
 
-    fn details(id: &str, title: &str, year: Option<i32>) -> MovieDetails {
-        MovieDetails {
+    fn details(id: &str, title: &str, year: Option<i32>) -> Details {
+        Details {
+            season_count: None,
             external_id: id.to_string(),
             imdb_id: Some(format!("tt{id}")),
             title: title.to_string(),
@@ -2247,7 +2320,7 @@ mod tests {
         let silent = StandIn::new(Vec::new(), Vec::new());
         assert!(
             matches!(
-                find_candidate(&silent, &work, &[], "fr").await,
+                find_candidate(&silent, Catalogue::Films, &work, &[], "fr").await,
                 Ok(WhatCameBack::NothingAtAll)
             ),
             "a provider that offered nothing says so"
@@ -2266,7 +2339,7 @@ mod tests {
             vec![details("111", "Amber Field", Some(2019))],
         );
         let Ok(WhatCameBack::NoneCarriedTheName { offered, nearest }) =
-            find_candidate(&crowded, &work, &[], "fr").await
+            find_candidate(&crowded, Catalogue::Films, &work, &[], "fr").await
         else {
             panic!("films came back, so that is what it has to say");
         };
@@ -2835,7 +2908,7 @@ mod tests {
             .serving(picture),
         );
 
-        let described = MovieDetails {
+        let described = Details {
             logo_path: Some("/title.png".to_string()),
             ..details("111", "Quiet Harbour", Some(2019))
         };
@@ -3144,10 +3217,10 @@ mod tests {
         }
 
         // Named on a day the provider had no words for any of them.
-        let wordless: Vec<MovieDetails> = described
+        let wordless: Vec<Details> = described
             .iter()
             .cloned()
-            .map(|details| MovieDetails {
+            .map(|details| Details {
                 overview: None,
                 ..details
             })
@@ -3296,7 +3369,7 @@ mod tests {
         let with = Arc::new(
             StandIn::new(
                 vec![candidate("111", "Quiet Harbour", Some(2019))],
-                vec![MovieDetails {
+                vec![Details {
                     logo_path: Some("/title.png".to_string()),
                     ..details("111", "Quiet Harbour", Some(2019))
                 }],

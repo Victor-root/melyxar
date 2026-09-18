@@ -11,8 +11,8 @@ use melyxar_core::time::Millis;
 use serde::Deserialize;
 
 use crate::provider::{
-    Collection, Credit, MetadataProvider, MovieCandidate, MovieDetails, ProviderError, Result,
-    Trailer,
+    Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, MetadataProvider,
+    ProviderError, Result, SeasonDetails, Trailer,
 };
 
 const BASE_URL: &str = "https://api.themoviedb.org/3";
@@ -128,44 +128,98 @@ impl TmdbProvider {
     }
 }
 
+/// The word this provider puts in an address for one of its catalogues, and
+/// the word it names a release date by.
+///
+/// The two catalogues answer the same shapes under different words, which is
+/// why one reader serves both and only these differ.
+const fn road_of(catalogue: Catalogue) -> &'static str {
+    match catalogue {
+        Catalogue::Films => "movie",
+        Catalogue::Series => "tv",
+    }
+}
+
+/// What comes back alongside a work, asked for in the one request rather than
+/// in four. The two catalogues name their age ratings differently.
+const fn extras_of(catalogue: Catalogue) -> &'static str {
+    match catalogue {
+        Catalogue::Films => "credits,release_dates,videos,images",
+        Catalogue::Series => "credits,content_ratings,videos,images",
+    }
+}
+
 impl MetadataProvider for TmdbProvider {
     fn name(&self) -> &'static str {
         "tmdb"
     }
 
-    async fn search_movie(
+    async fn search(
         &self,
+        catalogue: Catalogue,
         title: &str,
         year: Option<i32>,
         language: &str,
-    ) -> Result<Vec<MovieCandidate>> {
+    ) -> Result<Vec<Candidate>> {
         let mut query = vec![
             ("query", title.to_string()),
             ("language", language.to_string()),
-            // Films nobody asked for have no business turning up in a search
+            // Works nobody asked for have no business turning up in a search
             // made from a file name.
             ("include_adult", "false".to_string()),
         ];
         if let Some(year) = year {
-            query.push(("year", year.to_string()));
+            // The two catalogues narrow by year under different words, and the
+            // wrong one is ignored rather than refused: a search that silently
+            // stops narrowing is a search that answers the wrong film.
+            query.push(match catalogue {
+                Catalogue::Films => ("year", year.to_string()),
+                Catalogue::Series => ("first_air_date_year", year.to_string()),
+            });
         }
 
-        let found: SearchResponse = self.get("/search/movie", &query).await?;
-        Ok(found.results.into_iter().map(candidate_from).collect())
+        let found: SearchResponse = self
+            .get(&format!("/search/{}", road_of(catalogue)), &query)
+            .await?;
+        Ok(found
+            .results
+            .into_iter()
+            .map(|raw| candidate_from(raw, catalogue))
+            .collect())
     }
 
-    async fn movie_details(&self, external_id: &str, language: &str) -> Result<MovieDetails> {
+    async fn details(
+        &self,
+        catalogue: Catalogue,
+        external_id: &str,
+        language: &str,
+    ) -> Result<Details> {
         let raw: DetailsResponse = self
             .get(
-                &format!("/movie/{external_id}"),
+                &format!("/{}/{external_id}", road_of(catalogue)),
                 &[
                     ("language", language.to_string()),
-                    ("append_to_response", DETAIL_EXTRAS.to_string()),
+                    ("append_to_response", extras_of(catalogue).to_string()),
                     ("include_image_language", image_languages(language)),
                 ],
             )
             .await?;
         Ok(details_from(raw, language))
+    }
+
+    async fn season(
+        &self,
+        series_id: &str,
+        season_number: i32,
+        language: &str,
+    ) -> Result<SeasonDetails> {
+        let raw: RawSeason = self
+            .get(
+                &format!("/tv/{series_id}/season/{season_number}"),
+                &[("language", language.to_string())],
+            )
+            .await?;
+        Ok(season_from(raw, season_number))
     }
 
     fn image_url(&self, path: &str) -> String {
@@ -224,11 +278,7 @@ impl MetadataProvider for TmdbProvider {
         Ok(bytes.to_vec())
     }
 
-    async fn movie_by_imdb_id(
-        &self,
-        imdb_id: &str,
-        language: &str,
-    ) -> Result<Option<MovieCandidate>> {
+    async fn by_imdb_id(&self, imdb_id: &str, language: &str) -> Result<Option<Candidate>> {
         let found: FindResponse = self
             .get(
                 &format!("/find/{imdb_id}"),
@@ -238,7 +288,20 @@ impl MetadataProvider for TmdbProvider {
                 ],
             )
             .await?;
-        Ok(found.movie_results.into_iter().next().map(candidate_from))
+        // One answer carries both catalogues, and the identifier says which it
+        // belongs to by which list it turns up in.
+        Ok(found
+            .movie_results
+            .into_iter()
+            .next()
+            .map(|raw| candidate_from(raw, Catalogue::Films))
+            .or_else(|| {
+                found
+                    .tv_results
+                    .into_iter()
+                    .next()
+                    .map(|raw| candidate_from(raw, Catalogue::Series))
+            }))
     }
 }
 
@@ -268,16 +331,25 @@ struct SearchResponse {
 struct FindResponse {
     #[serde(default)]
     movie_results: Vec<RawMovie>,
+    #[serde(default)]
+    tv_results: Vec<RawMovie>,
 }
 
+/// One work as it comes back from either catalogue.
+///
+/// The words differ and the shapes do not: a film has a title and a release
+/// date, a series has a name and a first air date, and every other field is
+/// spelled the same. Read under both spellings rather than copied into a
+/// second set of structs, because a field added to one copy and forgotten in
+/// the other is a series that quietly stops carrying it.
 #[derive(Debug, Deserialize)]
 struct RawMovie {
     id: i64,
-    #[serde(default)]
+    #[serde(default, alias = "name")]
     title: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "original_name")]
     original_title: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "first_air_date")]
     release_date: Option<String>,
     #[serde(default)]
     overview: Option<String>,
@@ -292,9 +364,9 @@ struct DetailsResponse {
     id: i64,
     #[serde(default)]
     imdb_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "name")]
     title: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "original_name")]
     original_title: Option<String>,
     #[serde(default)]
     original_language: Option<String>,
@@ -302,10 +374,19 @@ struct DetailsResponse {
     tagline: Option<String>,
     #[serde(default)]
     overview: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "first_air_date")]
     release_date: Option<String>,
     #[serde(default)]
     runtime: Option<i64>,
+    /// A series says how long its episodes run rather than how long it does,
+    /// and says it as a list because the answer has changed over the years.
+    #[serde(default)]
+    episode_run_time: Vec<i64>,
+    /// How many seasons the provider counts. Absent for a film.
+    #[serde(default)]
+    number_of_seasons: Option<i32>,
+    #[serde(default)]
+    content_ratings: Option<RawContentRatings>,
     #[serde(default)]
     vote_average: Option<f64>,
     #[serde(default)]
@@ -394,6 +475,52 @@ struct RawCrew {
     profile_path: Option<String>,
 }
 
+/// What a series answers where a film answers its release dates.
+#[derive(Debug, Default, Deserialize)]
+struct RawContentRatings {
+    #[serde(default)]
+    results: Vec<RawContentRating>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawContentRating {
+    #[serde(default)]
+    iso_3166_1: String,
+    #[serde(default)]
+    rating: String,
+}
+
+/// One season, with the episodes under it.
+#[derive(Debug, Deserialize)]
+struct RawSeason {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    overview: Option<String>,
+    #[serde(default)]
+    poster_path: Option<String>,
+    #[serde(default)]
+    episodes: Vec<RawEpisode>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawEpisode {
+    #[serde(default)]
+    episode_number: i32,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    overview: Option<String>,
+    #[serde(default)]
+    still_path: Option<String>,
+    #[serde(default)]
+    air_date: Option<String>,
+    #[serde(default)]
+    runtime: Option<i64>,
+    #[serde(default)]
+    vote_average: Option<f64>,
+}
+
 #[derive(Debug, Default, Deserialize)]
 struct RawReleaseDates {
     #[serde(default)]
@@ -440,9 +567,10 @@ struct RawVideo {
 // Turning it into what the rest of the server speaks
 // ---------------------------------------------------------------------------
 
-fn candidate_from(raw: RawMovie) -> MovieCandidate {
-    MovieCandidate {
+fn candidate_from(raw: RawMovie, catalogue: Catalogue) -> Candidate {
+    Candidate {
         external_id: raw.id.to_string(),
+        catalogue,
         title: raw
             .title
             .or_else(|| raw.original_title.clone())
@@ -455,7 +583,7 @@ fn candidate_from(raw: RawMovie) -> MovieCandidate {
     }
 }
 
-fn details_from(raw: DetailsResponse, language: &str) -> MovieDetails {
+fn details_from(raw: DetailsResponse, language: &str) -> Details {
     let credits = raw.credits.unwrap_or_default();
     let mut people: Vec<Credit> = credits
         .cast
@@ -513,7 +641,7 @@ fn details_from(raw: DetailsResponse, language: &str) -> MovieDetails {
         })
         .collect();
 
-    MovieDetails {
+    Details {
         external_id: raw.id.to_string(),
         imdb_id: raw.imdb_id.filter(|value| value.starts_with("tt")),
         title: raw
@@ -528,12 +656,19 @@ fn details_from(raw: DetailsResponse, language: &str) -> MovieDetails {
         tagline: raw.tagline.filter(|value| !value.trim().is_empty()),
         overview: raw.overview.filter(|value| !value.trim().is_empty()),
         release_year: year_of(raw.release_date.as_deref()),
+        // A film says how long it runs. A series says how long its episodes
+        // run, as a list, because the answer has changed over the years; the
+        // first is the one a page means by "an episode of this".
         runtime: raw
             .runtime
+            .or_else(|| raw.episode_run_time.first().copied())
             .filter(|minutes| *minutes > 0)
             .map(|minutes| Millis::new(minutes * 60_000)),
         community_rating: raw.vote_average.filter(|value| *value > 0.0),
-        age_rating_label: age_rating(raw.release_dates.unwrap_or_default(), language),
+        age_rating_label: match raw.content_ratings {
+            Some(ratings) => rating_for_series(ratings, language),
+            None => age_rating(raw.release_dates.unwrap_or_default(), language),
+        },
         genres: raw.genres.into_iter().map(|value| value.name).collect(),
         studios: raw
             .production_companies
@@ -551,6 +686,33 @@ fn details_from(raw: DetailsResponse, language: &str) -> MovieDetails {
         backdrop_path: raw.backdrop_path,
         logo_path: best_logo(raw.images.unwrap_or_default(), language),
         trailers,
+        season_count: raw.number_of_seasons,
+    }
+}
+
+/// One season and its episodes, as the rest of the server speaks of them.
+fn season_from(raw: RawSeason, season_number: i32) -> SeasonDetails {
+    SeasonDetails {
+        season_number,
+        name: raw.name.filter(|value| !value.trim().is_empty()),
+        overview: raw.overview.filter(|value| !value.trim().is_empty()),
+        poster_path: raw.poster_path,
+        episodes: raw
+            .episodes
+            .into_iter()
+            .map(|episode| EpisodeDetails {
+                episode_number: episode.episode_number,
+                name: episode.name.filter(|value| !value.trim().is_empty()),
+                overview: episode.overview.filter(|value| !value.trim().is_empty()),
+                still_path: episode.still_path,
+                release_year: year_of(episode.air_date.as_deref()),
+                runtime: episode
+                    .runtime
+                    .filter(|minutes| *minutes > 0)
+                    .map(|minutes| Millis::new(minutes * 60_000)),
+                community_rating: episode.vote_average.filter(|value| *value > 0.0),
+            })
+            .collect(),
     }
 }
 
@@ -650,6 +812,23 @@ fn age_rating(releases: RawReleaseDates, language: &str) -> Option<String> {
     pick(preferred).or_else(|| pick("US"))
 }
 
+/// The same reading, of what a series answers instead.
+///
+/// The same rule either way: the country that speaks the language being asked
+/// for, and failing that the one whose ratings everybody recognises.
+fn rating_for_series(ratings: RawContentRatings, language: &str) -> Option<String> {
+    let pick = |country: &str| -> Option<String> {
+        ratings
+            .results
+            .iter()
+            .filter(|entry| entry.iso_3166_1.eq_ignore_ascii_case(country))
+            .map(|entry| entry.rating.trim())
+            .find(|rating| !rating.is_empty())
+            .map(str::to_string)
+    };
+    pick(country_for_language(language)).or_else(|| pick("US"))
+}
+
 fn country_for_language(language: &str) -> &'static str {
     match language.split(['-', '_']).next().unwrap_or(language) {
         "fr" | "fre" | "fra" => "FR",
@@ -736,7 +915,7 @@ mod tests {
         }
     }"#;
 
-    fn details(language: &str) -> MovieDetails {
+    fn details(language: &str) -> Details {
         let raw: DetailsResponse = serde_json::from_str(DETAILS).expect("the answer parses");
         details_from(raw, language)
     }
@@ -744,8 +923,11 @@ mod tests {
     #[test]
     fn a_search_answer_becomes_candidates_in_the_order_it_arrived() {
         let found: SearchResponse = serde_json::from_str(SEARCH).expect("the answer parses");
-        let candidates: Vec<MovieCandidate> =
-            found.results.into_iter().map(candidate_from).collect();
+        let candidates: Vec<Candidate> = found
+            .results
+            .into_iter()
+            .map(|raw| candidate_from(raw, Catalogue::Films))
+            .collect();
 
         assert_eq!(candidates.len(), 2);
         assert_eq!(candidates[0].external_id, "111");
@@ -970,7 +1152,7 @@ mod live {
     async fn a_key_the_provider_refuses_is_told_apart_from_a_provider_that_is_down() {
         let provider = TmdbProvider::new("definitely-not-a-key").expect("a client");
         let outcome = provider
-            .search_movie("Quiet Harbour", Some(2019), "fr")
+            .search(Catalogue::Films, "Quiet Harbour", Some(2019), "fr")
             .await;
 
         match outcome {
@@ -994,7 +1176,7 @@ mod live {
         // A film picked from a public catalogue for being well illustrated,
         // and drawn under a title in both languages asked for here.
         let film = provider
-            .movie_details("603", "fr")
+            .details(Catalogue::Films, "603", "fr")
             .await
             .expect("the provider answered");
 
@@ -1013,7 +1195,7 @@ mod live {
             .expect("a client")
             .with_base_url("https://melyxar.invalid/3");
         let error = provider
-            .search_movie("Quiet Harbour", None, "fr")
+            .search(Catalogue::Films, "Quiet Harbour", None, "fr")
             .await
             .expect_err("nothing answers there");
 
