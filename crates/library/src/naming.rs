@@ -66,8 +66,62 @@ pub fn parse(file_name: &str, current_year: i32) -> ParsedName {
 /// from any list: what is dropped here is what those names carry and no title
 /// ever does.
 pub fn parse_signed(file_name: &str, current_year: i32, signs: &LibrarySigns) -> ParsedName {
+    with_the_words_of(file_name, current_year, signs, |words| {
+        let markers = signs.marks();
+
+        // A year written in front of the title says so plainly, so the rest of
+        // the name is read as one that carries no year at all. Reading it for a
+        // year as well would let a title carrying a number of its own outrank
+        // the date somebody took the trouble to write down.
+        if let Some((year, rest)) = a_year_written_in_front(words, current_year) {
+            let boundary = first_technical_tag(rest, 1).unwrap_or(rest.len());
+            return ParsedName {
+                title: title_of(&rest[..boundary], markers),
+                year: Some(year),
+                tags: tags_from(&rest[boundary..]),
+            };
+        }
+
+        if let Some(position) = find_year(words, current_year) {
+            return ParsedName {
+                title: title_of(&words[..position], markers),
+                year: bare(words[position]).parse().ok(),
+                tags: tags_from(&words[position + 1..]),
+            };
+        }
+
+        // No year to cut at. The name still has to give up a title, and a name
+        // with nothing technical in it at all would have been found by now, so
+        // what is left is the two shapes a year would have handled.
+        let boundary = first_technical_tag(words, 1).unwrap_or(words.len());
+        ParsedName {
+            title: title_of(&words[..boundary], markers),
+            year: None,
+            tags: tags_from(&words[boundary..]),
+        }
+    })
+}
+
+/// Prepares a file name for reading and hands the words to whoever asked.
+///
+/// Everything that has to happen before a name can be read at all: what the
+/// library signs with taken off the front, the address of a site taken off,
+/// the extension dropped, the separators turned back into spaces, a year
+/// welded to the word after it pulled apart, and a group in brackets of its
+/// own dropped from the front.
+///
+/// Handed over rather than returned because the words borrow a string that has
+/// to outlive them, and a title read out of a name is not worth one allocation
+/// per word of every file of the collection. Shared so that a film and an
+/// episode are read from exactly the same words: a name prepared two ways is a
+/// name that means two things.
+pub(crate) fn with_the_words_of<T>(
+    file_name: &str,
+    current_year: i32,
+    signs: &LibrarySigns,
+    read: impl FnOnce(&[&str]) -> T,
+) -> T {
     let file_name = without_the_site_in_front(signs.without_the_glued_prefix(file_name));
-    let markers = &signs.marks;
     let stem = strip_extension(file_name);
     // The underscore separates words just like the dot does. Personal markers
     // attach themselves to the previous tag with one, and without this rule
@@ -75,38 +129,7 @@ pub fn parse_signed(file_name: &str, current_year: i32, signs: &LibrarySigns) ->
     let normalised = stem.replace(['.', '_'], " ");
     let separated: Vec<&str> = normalised.split_whitespace().collect();
     let whole = separate_a_year_from_what_is_glued_to_it(&separated, current_year);
-    let words = drop_what_is_bracketed_in_front(&whole);
-
-    // A year written in front of the title says so plainly, so the rest of the
-    // name is read as one that carries no year at all. Reading it for a year
-    // as well would let a title carrying a number of its own outrank the date
-    // somebody took the trouble to write down.
-    if let Some((year, rest)) = a_year_written_in_front(words, current_year) {
-        let boundary = first_technical_tag(rest).unwrap_or(rest.len());
-        return ParsedName {
-            title: title_of(&rest[..boundary], markers),
-            year: Some(year),
-            tags: tags_from(&rest[boundary..]),
-        };
-    }
-
-    if let Some(position) = find_year(words, current_year) {
-        return ParsedName {
-            title: title_of(&words[..position], markers),
-            year: bare(words[position]).parse().ok(),
-            tags: tags_from(&words[position + 1..]),
-        };
-    }
-
-    // No year to cut at. The name still has to give up a title, and a name
-    // with nothing technical in it at all would have been found by now, so
-    // what is left is the two shapes a year would have handled.
-    let boundary = first_technical_tag(words).unwrap_or(words.len());
-    ParsedName {
-        title: title_of(&words[..boundary], markers),
-        year: None,
-        tags: tags_from(&words[boundary..]),
-    }
+    read(drop_what_is_bracketed_in_front(&whole))
 }
 
 /// A year somebody wrote in front of the title, and the rest of the name.
@@ -135,7 +158,7 @@ fn a_year_written_in_front<'a, 'b>(
 }
 
 /// Builds the title out of the words that came before the boundary.
-fn title_of(words: &[&str], markers: &BTreeSet<String>) -> String {
+pub(crate) fn title_of(words: &[&str], markers: &BTreeSet<String>) -> String {
     let spoken = drop_bracketed_asides(words);
     join_title(trim_the_end(&spoken, markers))
 }
@@ -310,6 +333,11 @@ pub struct LibrarySigns {
 }
 
 impl LibrarySigns {
+    /// The words this library ends name after name with.
+    pub(crate) fn marks(&self) -> &BTreeSet<String> {
+        &self.marks
+    }
+
     /// The name with what was stuck to its front taken off.
     ///
     /// The longest one that fits, so a short sign is never preferred to the
@@ -464,6 +492,22 @@ fn trim_dangling_separators<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
     kept
 }
 
+/// Drops a separator left standing at the front of what follows a boundary.
+///
+/// The mirror of the one above, and needed for the same reason at the other
+/// end: a name written `Series - S01E02 - Title` leaves the second dash in
+/// front of the episode's own title once the marker has been cut out.
+pub(crate) fn trim_leading_separators<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
+    let mut kept = words;
+    while let Some((first, rest)) = kept.split_first() {
+        if first.chars().any(|c| c.is_alphanumeric()) {
+            break;
+        }
+        kept = rest;
+    }
+    kept
+}
+
 /// Drops the marks this library signs with, however many are stacked up.
 ///
 /// Knowing the mark is what lets it go from a title written wholly in
@@ -549,7 +593,7 @@ fn trim_edition_words<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
 }
 
 /// Lowercased technical markers, with any release group split off.
-fn tags_from(words: &[&str]) -> BTreeSet<String> {
+pub(crate) fn tags_from(words: &[&str]) -> BTreeSet<String> {
     words
         .iter()
         .flat_map(|word| split_release_group(word))
@@ -559,7 +603,7 @@ fn tags_from(words: &[&str]) -> BTreeSet<String> {
 }
 
 /// A word without the brackets a release may have wrapped it in.
-fn bare(word: &str) -> &str {
+pub(crate) fn bare(word: &str) -> &str {
     word.trim_matches(|c| matches!(c, '(' | ')' | '[' | ']' | '{' | '}'))
 }
 
@@ -578,22 +622,30 @@ fn bare(word: &str) -> &str {
 /// leaving it there is not the cautious reading: it is the one that never
 /// finds the film.
 fn find_year(words: &[&str], current_year: i32) -> Option<usize> {
-    let latest = current_year + YEARS_AHEAD;
     words
         .iter()
         .enumerate()
-        .filter(|(index, word)| {
-            let stripped = bare(word);
-            // A title cannot be only a year.
-            *index > 0
-                && stripped.len() == 4
-                && stripped.chars().all(|c| c.is_ascii_digit())
-                && stripped
-                    .parse::<i32>()
-                    .is_ok_and(|year| (EARLIEST_YEAR..=latest).contains(&year))
-        })
+        // A title cannot be only a year.
+        .filter(|(index, word)| *index > 0 && a_plausible_year(word, current_year).is_some())
         .map(|(index, _)| index)
         .next_back()
+}
+
+/// The year a word holds, when it holds one that could be a release year.
+///
+/// Four digits and inside the range a film can have come out in. Written once
+/// because an episode's name is read for the same thing at the other end: the
+/// series it belongs to may carry its year, and half the files of one series
+/// carrying it while the other half do not is how a series splits in two.
+pub(crate) fn a_plausible_year(word: &str, current_year: i32) -> Option<i32> {
+    let stripped = bare(word);
+    if stripped.len() != 4 || !stripped.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    stripped
+        .parse::<i32>()
+        .ok()
+        .filter(|year| (EARLIEST_YEAR..=current_year + YEARS_AHEAD).contains(year))
 }
 
 /// Words that can only ever describe the file, never name a film.
@@ -663,16 +715,20 @@ const TECHNICAL_TAGS: &[&str] = &[
 /// The same marker turns up both ways, and a name where it went unrecognised
 /// hands a provider a title with a description stuck on the end, which finds
 /// nothing at all.
-fn first_technical_tag(words: &[&str]) -> Option<usize> {
-    words.iter().enumerate().skip(1).find_map(|(index, word)| {
-        let lowered = bare(word).to_lowercase();
-        let is_a_tag = TECHNICAL_TAGS.contains(&lowered.as_str())
-            || words
-                .get(index + 1)
-                .map(|next| format!("{lowered}{}", bare(next).to_lowercase()))
-                .is_some_and(|joined| TECHNICAL_TAGS.contains(&joined.as_str()));
-        is_a_tag.then_some(index)
-    })
+pub(crate) fn first_technical_tag(words: &[&str], from: usize) -> Option<usize> {
+    words
+        .iter()
+        .enumerate()
+        .skip(from)
+        .find_map(|(index, word)| {
+            let lowered = bare(word).to_lowercase();
+            let is_a_tag = TECHNICAL_TAGS.contains(&lowered.as_str())
+                || words
+                    .get(index + 1)
+                    .map(|next| format!("{lowered}{}", bare(next).to_lowercase()))
+                    .is_some_and(|joined| TECHNICAL_TAGS.contains(&joined.as_str()));
+            is_a_tag.then_some(index)
+        })
 }
 
 /// Drops the marker a release or a person put at the end of a name.
