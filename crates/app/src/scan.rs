@@ -40,14 +40,6 @@ pub struct ScanReport {
     pub restored: usize,
     pub unchanged: usize,
     pub analysed: usize,
-    /// Files read for where their picture can be started.
-    ///
-    /// Reading one means reading the whole file through once, so a scan that
-    /// was stopped leaves the rest for the next one.
-    pub key_frames_read: usize,
-    /// Files read for the thumbnails of the playback bar. Another whole
-    /// reading of each file, and stopped the same way.
-    pub thumbnails_made: usize,
     /// Files the analyser could not read. Recorded rather than hidden: a file
     /// nobody can analyse is a file nobody will be able to play either.
     pub unreadable_files: usize,
@@ -195,10 +187,9 @@ pub async fn start_scan_and_identification(
 
     // Without a provider key there is nothing to look anything up with. The
     // scan still runs, and the library still browses: that is a server
-    // configured without a key, not a broken one.
-    let Some(provider) = state.metadata_provider() else {
-        return Ok(id);
-    };
+    // configured without a key, not a broken one. The readings below still
+    // follow, since they are about the files and not about the pages.
+    let provider = state.metadata_provider();
 
     let waiting = state.clone();
     tokio::spawn(async move {
@@ -208,14 +199,67 @@ pub async fn start_scan_and_identification(
             // and whoever reads the list of jobs can already see why.
             return;
         }
-        if let Err(error) =
-            crate::identify::start_identification(&waiting, provider, library, mode).await
-        {
-            tracing::warn!(%error, "the scan finished but the look up would not start");
+
+        // The pages and the pictures first, and waited for.
+        if let Some(provider) = provider {
+            match crate::identify::start_identification(&waiting, provider, library.clone(), mode)
+                .await
+            {
+                Ok(job) => {
+                    job.wait().await;
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "the scan finished but the look up would not start");
+                }
+            }
         }
+
+        // And only then the two readings that go through every film. A look up
+        // that went wrong does not hold them back: they are about the files.
+        read_what_this_library_asked_for(&waiting, &library, priority).await;
     });
 
     Ok(id)
+}
+
+/// Sets going the readings a library asked its scan to do, once the pages are in.
+///
+/// **After the pages and the pictures, never before.** Each of these goes
+/// through every film from end to end, hours of it on a collection of any
+/// size, and a grid that sits empty for those hours while the posters wait
+/// behind them is the thing everybody complains about. Emby and Jellyfin both
+/// put the pages first for exactly this reason, and so does this.
+///
+/// Started as jobs of their own rather than carried inside the scan, which is
+/// what lets them be watched and stopped one by one: somebody who wants their
+/// thumbnails later can stop that alone and keep everything else.
+///
+/// One after the other, in the order `UpkeepTask::ALL` puts them: each reads
+/// every file of the collection from end to end, and two of those at once on
+/// one disk is two slow readings rather than two quick ones. Where a jump can
+/// land comes first, because that is the one a film goes wrong without.
+async fn read_what_this_library_asked_for(
+    state: &AppState,
+    library: &Library,
+    priority: JobPriority,
+) {
+    for task in crate::upkeep::UpkeepTask::ALL {
+        if !task.is_done_during_the_scan_of(library) {
+            continue;
+        }
+        match crate::upkeep::start(state, task, library.clone(), priority).await {
+            // Waited for, so the next one starts on a disk that is free.
+            Ok(job) => {
+                let _ = job.completion.await;
+            }
+            Err(error) => tracing::warn!(
+                library = library.name,
+                task = task.as_str(),
+                %error,
+                "the pages are in but this reading would not start; the upkeep has it"
+            ),
+        }
+    }
 }
 
 /// Scans every root of a library.
@@ -319,18 +363,11 @@ pub async fn scan_library(
     report.merged = reread.merged;
     analyse_pending(state, library, handle, &mut report).await?;
 
-    // The two readings that go through every film from end to end happen here
-    // only if this library asked for them. Otherwise they belong to the upkeep,
-    // which runs of a night and can be set going from a button: a scan that
-    // carried them turned minutes into days on a collection of any size.
-    if library.options.key_frames_during_scan {
-        report.key_frames_read =
-            crate::upkeep::read_the_key_frames_of(state, library, handle).await?;
-    }
-    if library.options.thumbnails_during_scan {
-        report.thumbnails_made =
-            crate::upkeep::make_the_thumbnails_of(state, library, handle).await?;
-    }
+    // The two readings that go through every film from end to end are not part
+    // of a scan, whether or not this library asks for them: they follow the
+    // pages and the pictures rather than standing in front of them, which is
+    // what `start_scan_and_identification` arranges. A grid that fills with
+    // posters while the long readings grind away behind it is the whole point.
     if library.options.leaves_something_to_the_upkeep() {
         say_what_is_left_to_the_upkeep(state, library).await;
     }
@@ -351,8 +388,6 @@ pub async fn scan_library(
         restored = report.restored,
         unchanged = report.unchanged,
         analysed = report.analysed,
-        key_frames_read = report.key_frames_read,
-        thumbnails_made = report.thumbnails_made,
         extras = report.extras,
         subtitles = report.external_subtitles,
         cancelled = report.cancelled,
@@ -1353,6 +1388,94 @@ mod tests {
             && work.kind == WorkKind::Movie));
     }
 
+    /// Runs every reading that is waiting and waits for it to end.
+    ///
+    /// What the chain after a scan does, and what the button on the upkeep
+    /// screen does. Answers how many jobs it took, since the readings are jobs
+    /// of their own now rather than steps of the scan.
+    async fn read_everything_that_is_waiting(state: &AppState) -> usize {
+        let started = crate::upkeep::start_what_is_waiting(state, JobPriority::REQUESTED).await;
+        // The jobs are written down before they start, so waiting on the rows
+        // is waiting on the work.
+        while !state
+            .database()
+            .unfinished_jobs()
+            .await
+            .expect("read")
+            .is_empty()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        started
+    }
+
+    #[tokio::test]
+    async fn the_pages_come_before_the_two_long_readings_and_not_after_them() {
+        // What somebody watches after adding a disk: the grid filling with
+        // posters. Each of the two readings goes through every film from end
+        // to end, hours of it on a real collection, so a library that asks for
+        // them used to leave the grid blank for those hours and only then
+        // fetch a single page. Emby and Jellyfin both put the pages first.
+        //
+        // Read off the jobs rather than off a clock: each is written down when
+        // it starts, so the order they were written down in is the order they
+        // ran in.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("films");
+        std::fs::create_dir_all(&media).expect("the media folder");
+        std::fs::write(media.join("Quiet.Harbour.2019.mkv"), b"not really a film")
+            .expect("the file is written");
+
+        let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        let library = reading_everything_during_the_scan(&state, &library).await;
+
+        start_scan_and_identification(
+            &state,
+            library.clone(),
+            JobPriority::REQUESTED,
+            RefreshMode::default(),
+        )
+        .await
+        .expect("the chain started");
+
+        // Every job of the chain, in the order each was written down.
+        let mut ran: Vec<JobKind> = Vec::new();
+        for _ in 0..600 {
+            let all = state.database().recent_jobs(50).await.expect("read");
+            ran = all.iter().rev().map(|job| job.kind).collect();
+            let done = ran.contains(&JobKind::ReadKeyFrames)
+                && ran.contains(&JobKind::GenerateThumbnails)
+                && state
+                    .database()
+                    .unfinished_jobs()
+                    .await
+                    .expect("read")
+                    .is_empty();
+            if done {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+
+        let place_of = |kind: JobKind| {
+            ran.iter()
+                .position(|ran| *ran == kind)
+                .unwrap_or_else(|| panic!("{kind:?} never ran: {ran:?}"))
+        };
+        assert!(
+            place_of(JobKind::ScanLibrary) < place_of(JobKind::IdentifyWork),
+            "the scan comes first: {ran:?}"
+        );
+        assert!(
+            place_of(JobKind::IdentifyWork) < place_of(JobKind::ReadKeyFrames),
+            "the pages come before the film is read for its jumps: {ran:?}"
+        );
+        assert!(
+            place_of(JobKind::IdentifyWork) < place_of(JobKind::GenerateThumbnails),
+            "and before it is read for its bar: {ran:?}"
+        );
+    }
+
     #[tokio::test]
     async fn a_scan_leaves_the_two_heavy_readings_to_the_upkeep_unless_it_is_told_not_to() {
         // The defect this exists for: both readings went through every film of
@@ -1372,11 +1495,6 @@ mod tests {
         let (state, library) = state_with_roots(directory.path(), vec![("disk-one", media)]).await;
         let report = scan(&state, &library).await;
         assert_eq!(report.added, 1);
-        assert_eq!(
-            (report.key_frames_read, report.thumbnails_made),
-            (0, 0),
-            "a scan of a library nobody configured reads no film from end to end"
-        );
 
         // And what it left is counted, which is what the upkeep screen shows
         // and what the button acts on.
@@ -1392,21 +1510,10 @@ mod tests {
         }
 
         assert_eq!(
-            crate::upkeep::start_what_is_waiting(&state, JobPriority::REQUESTED).await,
+            read_everything_that_is_waiting(&state).await,
             2,
             "one job for each reading, on the one library that has anything waiting"
         );
-        // The jobs are written down before they start, so waiting on the rows
-        // is waiting on the work.
-        while !state
-            .database()
-            .unfinished_jobs()
-            .await
-            .expect("read")
-            .is_empty()
-        {
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
 
         let done = crate::upkeep::what_is_left(&state).await.expect("counted");
         for task in crate::upkeep::UpkeepTask::ALL {
@@ -1465,8 +1572,14 @@ mod tests {
         let library = reading_everything_during_the_scan(&state, &library).await;
         let report = scan(&state, &library).await;
         assert_eq!(report.added, 1);
-        assert_eq!(report.key_frames_read, 1, "the film was read for its jumps");
-        assert_eq!(report.thumbnails_made, 1, "the film was read for its bar");
+        // The readings follow the scan rather than sitting inside it, so that
+        // the pages and the pictures come first. This is what the chain runs
+        // once they are in.
+        assert_eq!(
+            read_everything_that_is_waiting(&state).await,
+            2,
+            "one job for each reading"
+        );
 
         let source_id = state
             .database()
@@ -1506,9 +1619,14 @@ mod tests {
             .count();
         assert_eq!(left, 0);
 
-        // A second scan reads nothing again: the film already has them.
-        let again = scan(&state, &library).await;
-        assert_eq!(again.thumbnails_made, 0);
+        // A second scan reads nothing again: the film already has them, so
+        // there is nothing left waiting for the readings to be started for.
+        scan(&state, &library).await;
+        assert_eq!(
+            read_everything_that_is_waiting(&state).await,
+            0,
+            "nothing is waiting, so nothing is started"
+        );
 
         // And a server whose table is gone takes up what is on the disk rather
         // than reading every film again. Three hundred films are a night of
@@ -1526,8 +1644,22 @@ mod tests {
         let same_library = reading_everything_during_the_scan(&fresh, &same_library).await;
         let from_nothing = scan(&fresh, &same_library).await;
         assert_eq!(from_nothing.added, 1, "the table knew nothing of this film");
-        assert_eq!(
-            from_nothing.thumbnails_made, 1,
+        read_everything_that_is_waiting(&fresh).await;
+        let found_again = fresh
+            .database()
+            .sources_of_root(same_library.roots[0].id)
+            .await
+            .expect("read")
+            .first()
+            .map(|source| source.id)
+            .expect("the film was recorded again");
+        assert!(
+            fresh
+                .database()
+                .thumbnails_of(found_again)
+                .await
+                .expect("read")
+                .is_some(),
             "and it has its thumbnails again"
         );
         assert_eq!(

@@ -23,7 +23,7 @@
 //! exactly where it was without anything having been written down about where
 //! that was.
 
-use melyxar_core::id::{JobId, LibraryId, MediaSourceId};
+use melyxar_core::id::{LibraryId, MediaSourceId};
 use melyxar_core::job::{JobKind, JobPriority, JobStep};
 use melyxar_core::library::Library;
 use melyxar_core::privacy::MediaName;
@@ -209,7 +209,7 @@ pub async fn start(
     task: UpkeepTask,
     library: Library,
     priority: JobPriority,
-) -> Result<JobId> {
+) -> Result<melyxar_jobs::StartedJob> {
     let owned = state.clone();
     let target = library.id.to_string();
     let name = library.name.clone();
@@ -241,7 +241,7 @@ pub async fn start(
             },
         )
         .await?;
-    Ok(started.id)
+    Ok(started)
 }
 
 /// Starts whatever is waiting, on every library, and says how many jobs that
@@ -288,7 +288,7 @@ pub async fn start_what_is_waiting(state: &AppState, priority: JobPriority) -> u
                 library = entry.library_name,
                 task = entry.task.as_str(),
                 waiting = entry.waiting,
-                "a scan of this library is under way, so the upkeep leaves it to the scan"
+                "a scan of this library is under way, so the upkeep waits for it to end"
             );
             continue;
         }
