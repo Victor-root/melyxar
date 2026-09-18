@@ -254,10 +254,23 @@ Fait depuis, en avance sur ce jalon : la moitié serveur du refus de la conversi
 - Service HTTPS par le serveur lui-même pour les options concernées.
 - Résultat visible : l'administrateur choisit son mode dans l'interface et sait ce que chacun implique.
 
+## Jalon 10 : séries
+
+État : fait, sauf la détection des génériques sur les fichiers qui n'en disent rien.
+
+- Le rangement : un fichier d'une bibliothèque de séries devient un épisode d'une saison d'une série. Le nom du fichier est lu en premier et le dossier ne fait que combler ce qui manque, ce qui fait marcher les quatre rangements qu'on trouve vraiment sur un disque : un dossier par série avec un dossier par saison, un dossier par série avec les épisodes à plat, tout en vrac dans un seul dossier, et des dossiers de saison nommés dans n'importe quelle forme ou absents.
+- La lecture des noms : `S01E02` sous toutes ses ponctuations, `1x02`, la forme en toutes lettres dans les deux langues, l'épisode double, le numéro seul dont la saison vient du dossier. Deux formes sont refusées exprès : le nombre nu (`102`) et la forme croisée à un seul chiffre (`16x9`), qui sont aussi une année, une résolution et un format d'image.
+- La navigation : une série rend ses saisons, une saison ses épisodes, et chacune porte le chemin de retour, le tout dans la seule requête dont la page est déjà faite.
+- Les métadonnées : le fournisseur est interrogé sur son catalogue des séries, et une série nommée fait décrire ses saisons et leurs épisodes. Les règles qui choisissent la bonne réponse sont les mêmes que pour un film, écrites une seule fois.
+- Le confort : la série dit par quel épisode reprendre, un épisode enchaîne sur le suivant tout seul, une saison dit combien d'épisodes restent à voir et un épisode vu porte une coche.
+- Le saut de générique : lu sur les chapitres que le fichier nomme lui-même, avec un bouton qui dit ce qu'il saute. Ce qui reste à faire est la détection par comparaison des empreintes sonores d'une saison, seule façon d'y arriver sur un fichier sans chapitres, et la correction à la main.
+
+Vérifié dans un vrai navigateur contre un serveur qui tourne : les quatre rangements en même temps, une vraie série identifiée avec ses affiches de saison et ses épisodes nommés, un fichier que personne n'a su numéroter qui reste visible, trois épisodes qui s'enchaînent tout seuls, et le bouton de saut qui apparaît dans le générique, disparaît en plein film et revient au générique de fin.
+
 ## Après la V0.1
 
-- Séries : modèle série, saison, épisode, compteurs visibles, navigation dédiée, enchaînement automatique de l'épisode suivant, saut d'intro et de générique (chapitres du fichier, détection par comparaison des empreintes sonores d'une saison, correction manuelle).
-- Animés : fournisseur de métadonnées adapté et numérotation propre au domaine.
+- Séries : détection des génériques par comparaison des empreintes sonores d'une saison, pour les fichiers qui ne portent aucun chapitre, et correction à la main.
+- Animés : fournisseur de métadonnées adapté et numérotation propre au domaine, la numérotation absolue n'étant pas lue aujourd'hui.
 - Plusieurs fournisseurs de métadonnées : un second catalogue interrogé quand le premier ne connaît pas un film, des règles claires pour départager deux réponses, et la provenance restant visible champ par champ. Constaté en conditions réelles : un téléfilm rattaché à une série existe chez le fournisseur actuel du côté des séries et pas du côté des films, donc aucune recherche de film ne le trouvera jamais, alors qu'un catalogue construit sur les données IMDb le classe comme film. Les autres serveurs y arrivent parce qu'ils ont un second catalogue sous la main, pas parce que leur lecture des noms est meilleure.
 - Bibliothèque musicale : modèle artiste, album, morceau, fournisseur MusicBrainz, navigation dédiée, listes de lecture.
 - Normalisation audio : mesure de sonie au scan, application au gain à la lecture, modes morceau et album, compression de plage dynamique pour les films.
