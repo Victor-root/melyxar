@@ -16,7 +16,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { JournalLine } from "../api";
-import { timeOfDay, useJournalScreen } from "../screens/journal";
+import { timeOfDay } from "../readable";
+import { useJournalScreen } from "../screens/journal";
 import { useSettings } from "../settings";
 
 export function JournalPage() {

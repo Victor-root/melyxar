@@ -19,22 +19,6 @@ import type { Job, RefreshMode, Upkeep, UpkeepTask } from "../api";
 import { refusalOf, useAsked } from "../asking";
 import { useRunning } from "../running";
 
-/**
- * An instant from the server, in the hour of whoever is reading it.
- *
- * The server keeps one clock and it is UTC, which is the only one it can read
- * with certainty. Three in the morning there is four here half the year, and
- * announcing the server's hour to somebody looking at their own clock is how a
- * run that happened on time looks like a run that did not.
- */
-export function whenItIs(instant: string | null): string {
-  if (!instant) {
-    return "";
-  }
-  const when = new Date(instant);
-  return Number.isNaN(when.getTime()) ? instant : when.toLocaleString();
-}
-
 /** Everything the activity screen is handed to draw itself and be driven by. */
 export interface ActivityScreen {
   /** What is running right now, from the one place that watches it. */

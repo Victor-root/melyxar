@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
-import { outOfAHundred } from "./job";
+import { outOfAHundred } from "../readable";
 import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
 import { useSettings } from "../settings";

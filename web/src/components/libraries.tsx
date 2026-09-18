@@ -13,7 +13,7 @@
 import { useState } from "react";
 import type { Library, WouldGo } from "../api";
 import { FolderPicker } from "./folders";
-import { languageName, METADATA_LANGUAGES } from "../player/languages";
+import { languageName, METADATA_LANGUAGES } from "../languages";
 import {
   KINDS,
   useDeclaring,

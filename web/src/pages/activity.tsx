@@ -18,7 +18,8 @@ import type { Library, RefreshMode, UpkeepTask } from "../api";
 import { JobLine } from "../components/job";
 import { CopyReport } from "../components/report";
 import { refusalKey } from "../i18n";
-import { useActivityScreen, whenItIs } from "../screens/activity";
+import { whenItIs } from "../readable";
+import { useActivityScreen } from "../screens/activity";
 import { useSettings } from "../settings";
 
 export function ActivityPage({ libraries }: { libraries: Library[] }) {

@@ -18,7 +18,7 @@ import { pictureSet } from "../api";
 import { asClock } from "./clock";
 import type { Playback } from "./engine";
 import { PlayIcon } from "./icons";
-import { languageName } from "./languages";
+import { languageName } from "../languages";
 import { heightAt, Thumbnail } from "./thumbnail";
 
 /** The three sheets, in the order their tabs stand. */

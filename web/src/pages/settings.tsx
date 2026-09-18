@@ -22,9 +22,10 @@ import {
   SIZES,
 } from "../player/appearance";
 import { LibraryEditor } from "../components/libraries";
-import { languageName } from "../player/languages";
+import { languageName } from "../languages";
 import { DeviceOptimization } from "../player/DeviceOptimization";
-import { asLocalTime, asUtcMinutes, insideTheRange, useSettingsScreen } from "../screens/settings";
+import { asLocalTime, asUtcMinutes, insideTheRange } from "../readable";
+import { useSettingsScreen } from "../screens/settings";
 import { useSettings } from "../settings";
 
 export function SettingsPage() {

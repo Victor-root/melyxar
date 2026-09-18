@@ -6,23 +6,8 @@
  */
 
 import type { Job } from "../api";
+import { outOfAHundred } from "../readable";
 import { useSettings } from "../settings";
-
-/*
- * How far along, rounded down until it really is finished.
- *
- * Rounded the usual way, a pass on its last film out of three hundred and
- * forty seven reads a hundred per cent while it still has a whole film to
- * read: seen on the scan, where that last film was several minutes. A hundred
- * per cent is said when it is a hundred per cent.
- *
- * Shared with the mark in the page header rather than worked out twice: the
- * two sit on the same screen, and one saying a hundred while the other says
- * ninety nine is a screen nobody can believe.
- */
-export function outOfAHundred(ratio: number): number {
-  return ratio >= 1 ? 100 : Math.min(99, Math.floor(ratio * 100));
-}
 
 export function JobLine({ job, onCancel }: { job: Job; onCancel?: () => void }) {
   const { t } = useSettings();

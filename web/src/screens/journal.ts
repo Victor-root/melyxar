@@ -16,21 +16,10 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import type { Journal } from "../api";
 import { useAsked } from "../asking";
-import { putOnTheClipboard } from "../clipboard";
+import { handOver } from "../copying";
 
 /** How often the screen looks again while it is open. */
 const EVERY_MS = 2_000;
-
-/**
- * The time of day a journal line carries.
- *
- * The server writes a whole instant; a screen reading a test as it happens
- * wants the clock and nothing else, and the day is the day the reader is
- * living through.
- */
-export function timeOfDay(instant: string): string {
-  return instant.slice(11, 19);
-}
 
 /** Everything the journal screen is handed to draw itself and be driven by. */
 export interface JournalScreen {
@@ -99,21 +88,17 @@ export function useJournalScreen(): JournalScreen {
 
   const copy = useCallback(async () => {
     setShown("");
-    let text: string;
-    try {
-      text = await api.journalText({ tags: ticked, holding });
-    } catch {
+    const handed = await handOver(() => api.journalText({ tags: ticked, holding }));
+    if (handed.how === "not at all") {
       setCouldNotCopy(true);
       return;
     }
-    // Every way a browser offers, the old one included, which is the one that
-    // works on a plain address.
-    if (await putOnTheClipboard(text)) {
+    if (handed.how === "clipboard") {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2_000);
       return;
     }
-    setShown(text);
+    setShown(handed.text);
   }, [ticked, holding]);
 
   const { again } = asked;

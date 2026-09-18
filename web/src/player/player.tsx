@@ -35,7 +35,7 @@ import { storedArrangement } from "./arrangement";
 import { canBePlayedAsItIs, usePlayback } from "./engine";
 import { PlaybackFacts } from "./facts";
 import { useFullscreen } from "./fullscreen";
-import { languageName } from "./languages";
+import { languageName } from "../languages";
 import { markFor, useBranding } from "./logo";
 import { Overlay } from "./overlay";
 import type { Panel, Shape } from "./overlay";

@@ -1,6 +1,10 @@
 /*
  * Turning a language code into a word a viewer reads.
  *
+ * Beside the rest of the interface rather than inside the player: a soundtrack
+ * is named here, and so is the language a library's films are described in,
+ * which has nothing to do with watching anything.
+ *
  * Files carry three letter codes, and two competing sets of them at that: the
  * server settles on one so a picker never shows the same language twice, and
  * this turns that one back into a name, in whichever language the interface is
