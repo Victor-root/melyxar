@@ -88,15 +88,41 @@ export interface UpkeepTask {
   during_the_scan: boolean;
   /** Whether it is running right now. */
   under_way: boolean;
+  /** When it last ran to an end here, as an instant, or nothing when it never
+      has. A reading that never ran and one that ran last night and found
+      nothing look alike without it. */
+  last_run: string | null;
+  /** How that run ended, in the words every other job uses. */
+  last_run_state: string | null;
+  last_run_seconds: number | null;
 }
 
 export interface Upkeep {
   tasks: UpkeepTask[];
-  /** Whether the upkeep runs on its own of a night. */
-  nightly: boolean;
-  /** When it next will, as an instant: shown in the hour of whoever reads it
-      rather than in the server's. */
+  /** When it next runs on its own, as an instant: shown in the hour of whoever
+      reads it rather than in the server's. Absent when it never does. */
   next_run: string | null;
+  settings: LibraryWork;
+}
+
+/**
+ * What the server does with a library, on its own and in what shape.
+ *
+ * Every one of these was a line of the configuration file, which meant a
+ * terminal and a restart to change one.
+ */
+export interface LibraryWork {
+  /** Read the description files some collections keep next to a film. */
+  read_companion_files: boolean;
+  thumbnails_enabled: boolean;
+  thumbnails_every_seconds: number;
+  thumbnails_height: number;
+  thumbnails_columns: number;
+  thumbnails_rows: number;
+  upkeep_nightly: boolean;
+  /** Minutes since midnight, **in UTC**. The server keeps the one clock it can
+      read with certainty; this side turns it into the time of whoever looks. */
+  upkeep_at_utc_minutes: number;
 }
 
 export interface Filters {
@@ -743,6 +769,14 @@ export const api = {
      the server will next do them on its own. */
   upkeep: (signal?: AbortSignal) => get<Upkeep>("/api/v1/upkeep", signal),
   runUpkeep: () => post<{ started: number }>("/api/v1/upkeep/run"),
+  /* What the server does with a library. Everything travels together, because
+     it is one screen and one answer, and what comes back is what was kept:
+     a shape that cannot hold a thumbnail is brought into range rather than
+     refused. */
+  libraryWork: (signal?: AbortSignal) =>
+    get<LibraryWork>("/api/v1/settings/libraries", signal),
+  setLibraryWork: (work: LibraryWork) =>
+    put<LibraryWork>("/api/v1/settings/libraries", work),
   runUpkeepTask: (library: string, task: string) =>
     post<{ job_id: string }>(`/api/v1/libraries/${library}/upkeep/${task}`),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),

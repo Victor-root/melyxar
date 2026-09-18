@@ -162,7 +162,9 @@
   white-space: nowrap;
 }
 
-.choice select {
+.choice select,
+.choice input[type="time"],
+.choice input[type="number"] {
   padding: 6px 10px;
   border-radius: var(--radius-control);
   border: 1px solid var(--border);
@@ -170,6 +172,20 @@
   color: var(--text);
   font: inherit;
   font-size: 13px;
+}
+
+/* A setting that is a count: narrow, and the digits lined up so that reading
+   two of them under each other compares them. */
+.choice input[type="number"] {
+  width: 6.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A setting switched off by the one above it. Still readable, so that what it
+   is set to can be seen before it is turned back on. */
+.choice input:disabled,
+.choice select:disabled {
+  opacity: 0.55;
 }
 
 /* --------------------------------------------------------------------------
