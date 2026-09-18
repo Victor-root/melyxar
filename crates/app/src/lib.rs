@@ -77,3 +77,30 @@ pub enum AppError {
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
+
+/// The file behind one copy, refused with a reason when it cannot be opened.
+///
+/// Every piece of work that reads a film asks the same two questions first:
+/// is there a copy of that name, and is the disk it lives on there right now.
+/// Four places asked them, each writing out the same two refusals, so a third
+/// condition worth refusing on would have had to be remembered four times and
+/// would have been remembered once.
+///
+/// Refused with an explanation rather than opened and failing halfway
+/// through, which is what a viewer would otherwise see.
+pub async fn playable_file(
+    database: &melyxar_database::Database,
+    source_id: melyxar_core::id::MediaSourceId,
+) -> Result<melyxar_database::playback::PlayableSource> {
+    let source = database
+        .playable_source(source_id)
+        .await?
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("media source")))?;
+    if source.missing {
+        return Err(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::RootUnavailable,
+            "the file is not on the disk at the moment",
+        )));
+    }
+    Ok(source)
+}

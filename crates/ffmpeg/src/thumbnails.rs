@@ -159,11 +159,7 @@ pub async fn make(
         .await?;
 
     if !output.status.success() {
-        return Err(FfmpegError::Failed {
-            tool: "ffmpeg",
-            status: output.status.to_string(),
-            output: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
+        return Err(FfmpegError::from_output("ffmpeg", &output));
     }
 
     // One byte was asked for per thumbnail, so this is their number.

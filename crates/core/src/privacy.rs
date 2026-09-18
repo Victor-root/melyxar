@@ -43,6 +43,20 @@ impl<'a> MediaName<'a> {
     pub fn new(name: &'a str) -> Self {
         Self(name)
     }
+
+    /// The name of the file at this path, redacted the same way.
+    ///
+    /// Written out by hand wherever a journal line names a film, which is
+    /// seven places and growing. A path with no name at all, which no file on
+    /// a disk has, reads as nothing rather than as the whole path: the whole
+    /// point of this type is that a path never reaches a journal.
+    pub fn of_file(path: &'a std::path::Path) -> Self {
+        Self(
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default(),
+        )
+    }
 }
 
 impl fmt::Display for MediaName<'_> {

@@ -47,6 +47,37 @@ pub enum FfmpegError {
     MalformedReport(String),
 }
 
+impl FfmpegError {
+    /// What a tool that would not do what it was asked said about it.
+    ///
+    /// Written once because it was written seven times, in two shapes that
+    /// disagreed: five kept the whole of what the tool complained about and
+    /// two kept the first few lines of it. A journal line is a line, and a
+    /// tool that fails on every track of a film can say a great deal, so the
+    /// shorter rule wins and is now the only one. What is lost is never the
+    /// first thing said, which is what names the fault.
+    pub fn from_output(tool: &'static str, output: &std::process::Output) -> Self {
+        Self::Failed {
+            tool,
+            status: output.status.to_string(),
+            output: Self::what_it_complained_about(output),
+        }
+    }
+
+    /// How much of a tool's complaint is worth carrying into a journal line.
+    pub fn what_it_complained_about(output: &std::process::Output) -> String {
+        String::from_utf8_lossy(&output.stderr)
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .take(ENOUGH_OF_A_COMPLAINT)
+            .collect::<Vec<_>>()
+            .join(" | ")
+    }
+}
+
+/// How many lines of a tool's complaint are kept.
+const ENOUGH_OF_A_COMPLAINT: usize = 5;
+
 pub type Result<T> = std::result::Result<T, FfmpegError>;
 
 /// Where the two external tools live.

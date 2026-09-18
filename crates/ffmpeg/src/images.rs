@@ -120,7 +120,7 @@ pub async fn resize(tool: &Path, source: &Path, destinations: &[(u32, &Path)]) -
         .await?;
 
     if !output.status.success() {
-        return Err(failure(&output));
+        return Err(FfmpegError::from_output("ffmpeg", &output));
     }
     Ok(())
 }
@@ -134,21 +134,13 @@ pub async fn average_colour(tool: &Path, source: &Path) -> Result<String> {
         .await?;
 
     if !output.status.success() {
-        return Err(failure(&output));
+        return Err(FfmpegError::from_output("ffmpeg", &output));
     }
     to_hex(&output.stdout).ok_or_else(|| FfmpegError::Failed {
         tool: "ffmpeg",
         status: "0".to_string(),
         output: "no pixel came back to read a colour from".to_string(),
     })
-}
-
-fn failure(output: &std::process::Output) -> FfmpegError {
-    FfmpegError::Failed {
-        tool: "ffmpeg",
-        status: output.status.to_string(),
-        output: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-    }
 }
 
 /// Turns three bytes into the form a stylesheet takes.

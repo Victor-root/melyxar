@@ -891,13 +891,20 @@ impl Database {
     /// than how far this one run of it has. A pass that picks up where it left
     /// off and one that starts again from nothing look exactly alike from a
     /// bar that always begins at zero.
+    ///
+    /// Over the same films the count of what is waiting is taken over: the two
+    /// are added together to make a total, and a file read once and since taken
+    /// off the disk was counted by one of them and not the other, so the total
+    /// described a set neither of them did.
     pub async fn count_read_for_key_frames(&self, library_id: LibraryId) -> Result<i64> {
         let row: (i64,) = sqlx::query_as(
             "SELECT count(*)
              FROM media_source_key_frames
              JOIN media_sources ON media_sources.id = media_source_key_frames.source_id
              JOIN library_roots ON library_roots.id = media_sources.root_id
-             WHERE library_roots.library_id = ?",
+             WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL",
         )
         .bind(library_id.to_db_string())
         .fetch_one(self.reader())
@@ -1081,6 +1088,8 @@ impl Database {
              JOIN media_sources ON media_sources.id = media_source_thumbnails.source_id
              JOIN library_roots ON library_roots.id = media_sources.root_id
              WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL
                AND media_source_thumbnails.every_ms = ?
                AND media_source_thumbnails.rows_per_sheet = ?
                AND media_source_thumbnails.columns_per_sheet = ?",
@@ -1212,7 +1221,9 @@ impl Database {
              FROM media_source_subtitles
              JOIN media_sources ON media_sources.id = media_source_subtitles.source_id
              JOIN library_roots ON library_roots.id = media_sources.root_id
-             WHERE library_roots.library_id = ?",
+             WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL",
         )
         .bind(library_id.to_db_string())
         .fetch_one(self.reader())
@@ -2741,6 +2752,65 @@ mod tests {
             .await
             .expect("analysis stored");
         source_id
+    }
+
+    #[tokio::test]
+    async fn what_is_done_and_what_is_waiting_are_counted_over_the_same_films() {
+        // The two are added together to make the total of a progress bar, so
+        // they have to describe the same set. A film read once and since taken
+        // off the disk was counted as done and not as waiting, so the total
+        // named a set neither number described, and the report subtracted one
+        // from the other and could go below nought.
+        let (database, library_id, root_id) = library().await;
+        let here = a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        let gone =
+            a_described_film(&database, library_id, root_id, "Distant.Signal.2021.mkv").await;
+        for film in [here, gone] {
+            database
+                .store_key_frames(film, &[Millis::ZERO])
+                .await
+                .expect("kept");
+        }
+        assert_eq!(
+            database
+                .count_read_for_key_frames(library_id)
+                .await
+                .expect("read"),
+            2
+        );
+
+        database
+            .mark_source_missing(gone)
+            .await
+            .expect("marked absent");
+        assert_eq!(
+            database
+                .count_read_for_key_frames(library_id)
+                .await
+                .expect("read"),
+            1,
+            "a film off the disk is not waiting, so it is not done either"
+        );
+        assert_eq!(
+            database
+                .count_awaiting_key_frames(library_id)
+                .await
+                .expect("read"),
+            0
+        );
+
+        // And it comes back on both sides the day the disk does.
+        database
+            .mark_source_present(gone)
+            .await
+            .expect("marked present");
+        assert_eq!(
+            database
+                .count_read_for_key_frames(library_id)
+                .await
+                .expect("read"),
+            2
+        );
     }
 
     #[tokio::test]

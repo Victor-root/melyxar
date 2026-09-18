@@ -791,13 +791,7 @@ async fn attach_companions(
         }
         let Some(owner) = film_of(companion, media) else {
             tracing::debug!(
-                file = %MediaName::new(
-                    companion
-                        .relative_path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or_default()
-                ),
+                file = %MediaName::of_file(&companion.relative_path),
                 "a companion clip matches no film next to it and was left alone"
             );
             continue;
@@ -1148,12 +1142,7 @@ async fn analyse_one(database: &Database, analyser: &Path, file: &PendingFile) -
     let lining_up = melyxar_media_probe::HowTheStreamsLineUp::of(&report);
     if lining_up.is_worth_saying() {
         tracing::info!(
-            file = %MediaName::new(
-                file.relative_path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or_default()
-            ),
+            file = %MediaName::of_file(&file.relative_path),
             video_starts_at_ms = lining_up.video_starts_at,
             audio_starts_at_ms = lining_up.audio_starts_at,
             sound_after_picture_ms = lining_up.offset(),

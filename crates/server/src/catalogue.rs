@@ -676,11 +676,7 @@ fn version_view(version: &Version) -> VersionView {
                 height: details.visible_height(),
                 aspect_ratio: details.aspect_ratio.clone(),
                 is_interlaced: details.is_interlaced,
-                hdr: details.hdr.map(|hdr| match hdr {
-                    melyxar_core::media::HdrFormat::Hdr10 => "hdr10",
-                    melyxar_core::media::HdrFormat::Hlg => "hlg",
-                    melyxar_core::media::HdrFormat::DolbyVision { .. } => "dolby_vision",
-                }),
+                hdr: details.hdr.map(|hdr| hdr.as_word()),
                 frame_rate: details.frame_rate,
                 bitrate: details.bitrate,
                 pixel_format: details.pixel_format.clone(),

@@ -21,6 +21,21 @@ use crate::convert::parse_timestamp;
 use crate::images::StoredImage;
 use crate::{Database, DatabaseError, Result};
 
+/// What a viewer meets on their own, out of everything a library holds.
+///
+/// A season is opened from its series and an episode from its season; neither
+/// is ever met on its own in the middle of the films. So neither is shown in a
+/// grid, counted in its total, offered as a letter, or counted in the menus
+/// that narrow it.
+///
+/// Written once because the five places that answer "what is in this library"
+/// have to agree. Two of them had already been written without it: the genre
+/// menu and the decade menu counted seasons and episodes, so the day a series
+/// is in the collection they would have offered "Drama, forty eight" over a
+/// grid holding four. Which is precisely the fault the genre menu's own
+/// comment says it exists to avoid.
+const MET_ON_ITS_OWN: &str = "kind IN ('movie', 'series', 'album')";
+
 /// What a grid can be ordered by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -241,9 +256,7 @@ impl Database {
                   JOIN genres g ON g.id = wg.genre_id",
             );
         }
-        // Only works a viewer picks are shown in a grid. A season is opened
-        // from its series, never met on its own in the middle of the films.
-        sql.push_str(" WHERE w.kind IN ('movie', 'series', 'album')");
+        sql.push_str(&format!(" WHERE w.{MET_ON_ITS_OWN}"));
 
         if request.library_id.is_some() {
             sql.push_str(" AND w.library_id = ?");
@@ -385,18 +398,17 @@ impl Database {
     pub async fn count_browsable(&self, library_id: Option<LibraryId>) -> Result<i64> {
         let row: (i64,) = match library_id {
             Some(id) => {
-                sqlx::query_as(
-                    "SELECT count(*) FROM works
-                 WHERE library_id = ? AND kind IN ('movie', 'series', 'album')",
-                )
+                sqlx::query_as(AssertSqlSafe(format!(
+                    "SELECT count(*) FROM works WHERE library_id = ? AND {MET_ON_ITS_OWN}"
+                )))
                 .bind(id.to_db_string())
                 .fetch_one(self.reader())
                 .await?
             }
             None => {
-                sqlx::query_as(
-                    "SELECT count(*) FROM works WHERE kind IN ('movie', 'series', 'album')",
-                )
+                sqlx::query_as(AssertSqlSafe(format!(
+                    "SELECT count(*) FROM works WHERE {MET_ON_ITS_OWN}"
+                )))
                 .fetch_one(self.reader())
                 .await?
             }
@@ -411,23 +423,25 @@ impl Database {
     pub async fn genres_in_use(&self, library_id: Option<LibraryId>) -> Result<Vec<(String, i64)>> {
         let rows = match library_id {
             Some(id) => {
-                sqlx::query(
+                sqlx::query(AssertSqlSafe(format!(
                     "SELECT g.name, count(*) AS total FROM genres g
                  JOIN work_genres wg ON wg.genre_id = g.id
                  JOIN works w ON w.id = wg.work_id
-                 WHERE w.library_id = ?
-                 GROUP BY g.id ORDER BY total DESC, g.name",
-                )
+                 WHERE w.library_id = ? AND w.{MET_ON_ITS_OWN}
+                 GROUP BY g.id ORDER BY total DESC, g.name"
+                )))
                 .bind(id.to_db_string())
                 .fetch_all(self.reader())
                 .await?
             }
             None => {
-                sqlx::query(
+                sqlx::query(AssertSqlSafe(format!(
                     "SELECT g.name, count(*) AS total FROM genres g
                  JOIN work_genres wg ON wg.genre_id = g.id
-                 GROUP BY g.id ORDER BY total DESC, g.name",
-                )
+                 JOIN works w ON w.id = wg.work_id
+                 WHERE w.{MET_ON_ITS_OWN}
+                 GROUP BY g.id ORDER BY total DESC, g.name"
+                )))
                 .fetch_all(self.reader())
                 .await?
             }
@@ -456,7 +470,8 @@ impl Database {
                          END AS initial,
                          count(*) AS total
                        FROM works
-                       WHERE kind IN ('movie', 'series', 'album')";
+                       WHERE ";
+        let counted = format!("{counted}{MET_ON_ITS_OWN}");
 
         let rows = match library_id {
             Some(id) => {
@@ -485,21 +500,21 @@ impl Database {
     pub async fn decades_in_use(&self, library_id: Option<LibraryId>) -> Result<Vec<(i32, i64)>> {
         let rows = match library_id {
             Some(id) => {
-                sqlx::query(
+                sqlx::query(AssertSqlSafe(format!(
                     "SELECT (release_year / 10) * 10 AS decade, count(*) AS total FROM works
-                 WHERE release_year IS NOT NULL AND library_id = ?
-                 GROUP BY decade ORDER BY decade DESC",
-                )
+                 WHERE release_year IS NOT NULL AND library_id = ? AND {MET_ON_ITS_OWN}
+                 GROUP BY decade ORDER BY decade DESC"
+                )))
                 .bind(id.to_db_string())
                 .fetch_all(self.reader())
                 .await?
             }
             None => {
-                sqlx::query(
+                sqlx::query(AssertSqlSafe(format!(
                     "SELECT (release_year / 10) * 10 AS decade, count(*) AS total FROM works
-                 WHERE release_year IS NOT NULL
-                 GROUP BY decade ORDER BY decade DESC",
-                )
+                 WHERE release_year IS NOT NULL AND {MET_ON_ITS_OWN}
+                 GROUP BY decade ORDER BY decade DESC"
+                )))
                 .fetch_all(self.reader())
                 .await?
             }
@@ -596,6 +611,103 @@ mod tests {
             .expect("film completed");
         }
         (database, library.id)
+    }
+
+    #[tokio::test]
+    async fn every_way_of_counting_a_library_counts_the_same_works() {
+        // A season is opened from its series and an episode from its season:
+        // neither is ever met on its own in a grid. Five places answer "what
+        // is in this library" and they have to agree. Two of them did not: the
+        // genre menu and the decade menu counted seasons and episodes, so a
+        // collection holding one series would have offered "Drame, three" over
+        // a grid holding one card.
+        let (database, library_id) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+
+        // The one film, plus a series with a season and an episode under it,
+        // all of the same decade and all carrying the same genre.
+        let mut every = vec![
+            database
+                .browse_works(&BrowseRequest {
+                    library_id: Some(library_id),
+                    ..Default::default()
+                })
+                .await
+                .expect("read")
+                .cards[0]
+                .id,
+        ];
+        for (kind, title) in [
+            (WorkKind::Series, "Distant Signal"),
+            (WorkKind::Season, "Distant Signal, first year"),
+            (WorkKind::Episode, "Distant Signal, first night"),
+        ] {
+            let work = database
+                .create_work(library_id, kind, title, &title.to_lowercase(), Some(2019))
+                .await
+                .expect("work created");
+            every.push(work.id);
+        }
+
+        sqlx::query("INSERT INTO genres (id, name) VALUES ('g1', 'Drame')")
+            .execute(database.writer())
+            .await
+            .expect("genre created");
+        for work in &every {
+            sqlx::query("INSERT INTO work_genres (work_id, genre_id) VALUES (?, 'g1')")
+                .bind(work.to_db_string())
+                .execute(database.writer())
+                .await
+                .expect("genre attached");
+        }
+
+        // What the grid really shows: the film and the series, not the season
+        // and not the episode.
+        let shown = database
+            .browse_works(&BrowseRequest {
+                library_id: Some(library_id),
+                ..Default::default()
+            })
+            .await
+            .expect("read")
+            .cards
+            .len() as i64;
+        assert_eq!(shown, 2);
+
+        assert_eq!(
+            database
+                .count_browsable(Some(library_id))
+                .await
+                .expect("read"),
+            shown,
+            "the total says what the grid shows"
+        );
+        assert_eq!(
+            database
+                .genres_in_use(Some(library_id))
+                .await
+                .expect("read"),
+            vec![("Drame".to_string(), shown)],
+            "and so does the genre menu, which used to count all four"
+        );
+        assert_eq!(
+            database
+                .decades_in_use(Some(library_id))
+                .await
+                .expect("read"),
+            vec![(2010, shown)],
+            "and the decade menu, which used to count all four as well"
+        );
+        assert_eq!(
+            database
+                .initials_in_use(Some(library_id))
+                .await
+                .expect("read")
+                .iter()
+                .map(|(_, total)| total)
+                .sum::<i64>(),
+            shown,
+            "and the letters beside the grid"
+        );
     }
 
     /// The ordering title, folded the way the library crate folds it. Repeated

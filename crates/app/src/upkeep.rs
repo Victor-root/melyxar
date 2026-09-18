@@ -762,11 +762,21 @@ pub(crate) async fn make_the_thumbnails_of(
             tracing::warn!(
                 library = library.name,
                 waiting = left,
-                "no film of this batch could be written down, so the reading stops here"
+                "nothing of this batch could be written down, so the reading stops here"
             );
             break;
         }
         still_waiting = left;
+    }
+    if made > 0 {
+        // Said at the end like the other two readings say it. Without this a
+        // night of thumbnails left nothing in the journal at all, so the one
+        // pass that really costs hours was the one nobody could see finish.
+        tracing::info!(
+            library = library.name,
+            films = made,
+            "the films of this library were read for the thumbnails of their bar"
+        );
     }
     Ok(made)
 }
@@ -849,13 +859,7 @@ async fn read_one_film_for_its_key_frames(
         // cuts.
         Ok(_) => {
             tracing::warn!(
-                file = %MediaName::new(
-                    source
-                        .path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or_default()
-                ),
+                file = %MediaName::of_file(&source.path),
                 "this film says nowhere its picture can be started, so it is cut on the usual \
                  grid from now on and never read for this again"
             );
@@ -869,13 +873,7 @@ async fn read_one_film_for_its_key_frames(
         }
         Err(error) => {
             tracing::warn!(
-                file = %MediaName::new(
-                    source
-                        .path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or_default()
-                ),
+                file = %MediaName::of_file(&source.path),
                 error = %error,
                 "this film could not be read for where its picture can be started"
             );

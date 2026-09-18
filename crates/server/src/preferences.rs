@@ -7,11 +7,11 @@
 use axum::extract::State;
 use axum::{Json, Router};
 use melyxar_app::AppState;
-use melyxar_core::id::UserId;
 use melyxar_core::user::{DownmixMethod, Preferences};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
+use crate::viewer;
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/api/v1/preferences", axum::routing::get(read).put(write))
@@ -110,20 +110,6 @@ async fn view(state: &AppState, chosen: Preferences) -> Result<Json<PreferencesV
         audio_languages: available.audio,
         subtitle_languages: available.subtitle,
     }))
-}
-
-/// Whose settings these are.
-///
-/// One account until there is a way to sign in, which is the same stand-in the
-/// rest of the server uses.
-async fn viewer(state: &AppState) -> Result<UserId> {
-    state
-        .database()
-        .user_by_name(melyxar_app::startup::DEFAULT_ACCOUNT_NAME)
-        .await
-        .map_err(|error| ServerError::internal(error.to_string()))?
-        .map(|(user, _)| user.id)
-        .ok_or_else(|| ServerError::internal("this server has no account at all"))
 }
 
 #[cfg(test)]

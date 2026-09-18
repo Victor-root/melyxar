@@ -76,7 +76,13 @@ pub fn router() -> Router<AppState> {
 // ---------------------------------------------------------------------------
 
 /// What the client says it can open, and what the viewer chose.
-#[derive(Debug, Default, Deserialize)]
+///
+/// Read into a request in one place, because the plan a page is shown and the
+/// session it then opens have to decide exactly the same thing. Written out
+/// twice, a field added here and wired up on one road only gives a session
+/// that produces something other than what the page announced, which is the
+/// one failure of this whole area that nothing downstream can recover from.
+#[derive(Debug, Clone, Default, Deserialize)]
 struct PlanBody {
     #[serde(default)]
     profile: Option<ClientProfile>,
@@ -89,6 +95,27 @@ struct PlanBody {
     /// negotiation.
     #[serde(default)]
     preferred_video_codec: Option<String>,
+}
+
+impl PlanBody {
+    /// What was asked for, with the track identifiers read.
+    fn asked_for(self, source_id: MediaSourceId) -> Result<PlayRequest> {
+        Ok(PlayRequest {
+            source_id,
+            profile: self.profile,
+            audio_track_id: self
+                .audio_track_id
+                .as_deref()
+                .map(parse_track)
+                .transpose()?,
+            subtitle_track_id: self
+                .subtitle_track_id
+                .as_deref()
+                .map(parse_track)
+                .transpose()?,
+            preferred_video_codec: self.preferred_video_codec,
+        })
+    }
 }
 
 /// The same question, plus where the picture will actually be started.
@@ -271,21 +298,7 @@ async fn plan(
     let source_id = parse_source(&id)?;
     let body = body.map(|Json(body)| body).unwrap_or_default();
 
-    let request = PlayRequest {
-        source_id,
-        profile: body.profile,
-        audio_track_id: body
-            .audio_track_id
-            .as_deref()
-            .map(parse_track)
-            .transpose()?,
-        subtitle_track_id: body
-            .subtitle_track_id
-            .as_deref()
-            .map(parse_track)
-            .transpose()?,
-        preferred_video_codec: body.preferred_video_codec,
-    };
+    let request = body.asked_for(source_id)?;
 
     let plan = melyxar_app::playback::plan(&state, viewer(&state).await?, &request).await?;
     Ok(Json(plan_view(&plan)))
@@ -410,11 +423,7 @@ fn film_view(plan: &PlayPlan) -> FilmView {
             frame_height: details.margins.map(|_| details.height),
             frame_rate: details.frame_rate,
             bitrate: details.bitrate,
-            hdr: details.hdr.map(|hdr| match hdr {
-                melyxar_core::media::HdrFormat::Hdr10 => "hdr10",
-                melyxar_core::media::HdrFormat::Hlg => "hlg",
-                melyxar_core::media::HdrFormat::DolbyVision { .. } => "dolby_vision",
-            }),
+            hdr: details.hdr.map(|hdr| hdr.as_word()),
             bit_depth: details.color.bit_depth,
         }),
         _ => None,
@@ -621,23 +630,7 @@ async fn open_session(
     let plan = melyxar_app::playback::plan(
         &state,
         viewer(&state).await?,
-        &PlayRequest {
-            source_id,
-            profile: body.wanted.profile,
-            audio_track_id: body
-                .wanted
-                .audio_track_id
-                .as_deref()
-                .map(parse_track)
-                .transpose()?,
-            subtitle_track_id: body
-                .wanted
-                .subtitle_track_id
-                .as_deref()
-                .map(parse_track)
-                .transpose()?,
-            preferred_video_codec: body.wanted.preferred_video_codec,
-        },
+        &body.wanted.clone().asked_for(source_id)?,
     )
     .await?;
 
