@@ -17,7 +17,8 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { api, ApiError } from "./api";
+import { api } from "./api";
+import { refusalOf, useTold } from "./asking";
 import type { Job, Library } from "./api";
 
 /** How often the server is asked while it is busy. */
@@ -117,23 +118,16 @@ function useStartWork(
   ask: (library: string) => Promise<unknown>,
 ): Starter {
   const { watch } = useRunning();
-  const [starting, setStarting] = useState(false);
-  const [refused, setRefused] = useState<string | null>(null);
+  const told = useTold(async () => {
+    await Promise.all(libraries.map((library) => ask(library.id)));
+    watch();
+  });
 
-  const start = useCallback(async () => {
-    setStarting(true);
-    setRefused(null);
-    try {
-      await Promise.all(libraries.map((library) => ask(library.id)));
-      watch();
-    } catch (error) {
-      setRefused(error instanceof ApiError ? error.code : "generic");
-    } finally {
-      setStarting(false);
-    }
-  }, [libraries, ask, watch]);
-
-  return { start, starting, refused };
+  return {
+    start: told.tell,
+    starting: told.busy,
+    refused: told.failure && refusalOf(told.failure),
+  };
 }
 
 /** How a scan is asked for, wherever the button lives. */

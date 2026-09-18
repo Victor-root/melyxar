@@ -8,9 +8,9 @@
  * the folder I meant" without naming a single film.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "../api";
-import type { Listing } from "../api";
+import { useState } from "react";
+import { api } from "../api";
+import { refusalAbout, useAsked } from "../asking";
 import { useSettings } from "../settings";
 
 export function FolderPicker({
@@ -24,35 +24,13 @@ export function FolderPicker({
   const { t } = useSettings();
   /* Null until the server has said where the top of the tree is: asking for
      nothing is how somebody with nothing typed in starts. */
-  const [listing, setListing] = useState<Listing | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
-  const [refused, setRefused] = useState<string | null>(null);
-  const [busy, setBusy] = useState(true);
-
-  const look = useCallback(async (path: string | null, signal?: AbortSignal) => {
-    setBusy(true);
-    setRefused(null);
-    try {
-      setListing(await api.folders(path, signal));
-    } catch (error) {
-      if (error instanceof DOMException) {
-        return;
-      }
-      setRefused(
-        error instanceof ApiError && error.reason
-          ? `refused.library.${error.reason}`
-          : "refused.generic",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    look(asking, controller.signal);
-    return () => controller.abort();
-  }, [asking, look]);
+  const {
+    answer: listing,
+    failure,
+    waiting: busy,
+  } = useAsked((signal) => api.folders(asking, signal), [asking]);
+  const refused = failure && refusalAbout(failure, "library");
 
   return (
     <div className="picker">

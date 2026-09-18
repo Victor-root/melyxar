@@ -13,8 +13,8 @@
 import { useState } from "react";
 import { api } from "../api";
 import type { Candidate } from "../api";
+import { refusalOf } from "../asking";
 import { refusalKey } from "../i18n";
-import { ApiError } from "../api";
 import { useSettings } from "../settings";
 
 export function IdentifyByHand({
@@ -40,7 +40,7 @@ export function IdentifyByHand({
     try {
       setCandidates(await api.candidates(workId, query));
     } catch (error) {
-      setRefused(error instanceof ApiError ? error.code : "generic");
+      setRefused(refusalOf(error));
     } finally {
       setBusy(false);
     }
@@ -53,7 +53,7 @@ export function IdentifyByHand({
       await api.identifyByHand(workId, candidate.external_id);
       onIdentified();
     } catch (error) {
-      setRefused(error instanceof ApiError ? error.code : "generic");
+      setRefused(refusalOf(error));
       setBusy(false);
     }
   };
