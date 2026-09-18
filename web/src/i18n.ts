@@ -89,6 +89,13 @@ const en: Dictionary = {
   "work.left_to_watch": "{count} left",
   "work.left_to_watch_one": "1 left",
   "work.watched": "Watched",
+  // The button that skips a stretch nobody wants to sit through. Named after
+  // what it skips, because a button that only says "skip" leaves the viewer to
+  // guess what they are about to lose.
+  "player.skip.recap": "Skip the recap",
+  "player.skip.intro": "Skip the opening",
+  "player.skip.outro": "Skip the credits",
+  "player.skip.advertisement": "Skip the advertisement",
   // Short enough for the marker on a card, where the space is the poster's.
   "note.short.no_match": "Name not found",
   "note.short.provider_unreachable": "Provider unreachable",
@@ -609,6 +616,10 @@ const fr: Dictionary = {
   "work.left_to_watch": "{count} à voir",
   "work.left_to_watch_one": "1 à voir",
   "work.watched": "Vu",
+  "player.skip.recap": "Passer le résumé",
+  "player.skip.intro": "Passer le générique",
+  "player.skip.outro": "Passer le générique de fin",
+  "player.skip.advertisement": "Passer la publicité",
   "note.short.no_match": "Nom introuvable",
   "note.short.provider_unreachable": "Fournisseur injoignable",
   "note.short.provider_busy": "Fournisseur saturé",

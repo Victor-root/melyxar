@@ -20,7 +20,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlaybackChapter, PlaybackThumbnails, PlaybackTrack, Work } from "../api";
+import type {
+  PlaybackChapter,
+  PlaybackSegment,
+  PlaybackThumbnails,
+  PlaybackTrack,
+  Work,
+} from "../api";
 import type { Arrangement, Control, Zone } from "./arrangement";
 import { asClock } from "./clock";
 import { Drawer, SHEETS } from "./drawer";
@@ -1161,5 +1167,55 @@ function Menu({
       </div>
       <div className="player-menu-body">{children}</div>
     </div>
+  );
+}
+
+/**
+ * The button that skips the stretch the film is in the middle of.
+ *
+ * Shown only while the film is actually inside one, and it takes the film to
+ * where that stretch ends and nowhere else. Named after what it skips: a
+ * button that only says "skip" leaves a viewer guessing what they are about
+ * to lose.
+ *
+ * Drawn beside the controls rather than inside them. The whole set of
+ * controls fades out when nobody touches anything, and this one is wanted
+ * precisely then: a viewer sitting through an opening is a viewer who has not
+ * touched anything for a minute.
+ */
+export function SkipStretch({
+  playback,
+  t,
+}: {
+  playback: Playback;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  const inside = theStretchAt(playback.plan?.segments ?? [], playback.at);
+  if (!inside) {
+    return null;
+  }
+
+  return (
+    <button
+      className="button player-skip"
+      onClick={() => playback.goTo(inside.to_second)}
+    >
+      {t(`player.skip.${inside.kind}`)}
+    </button>
+  );
+}
+
+/**
+ * The stretch a film is in the middle of at this second, if it is in one.
+ *
+ * The first that holds the second, so two that overlap answer the earlier:
+ * whichever a viewer entered first is the one they are sitting through.
+ */
+export function theStretchAt(
+  segments: PlaybackSegment[],
+  at: number,
+): PlaybackSegment | null {
+  return (
+    segments.find((segment) => at >= segment.from_second && at < segment.to_second) ?? null
   );
 }

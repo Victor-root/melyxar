@@ -14,6 +14,7 @@ use std::sync::Arc;
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::media::{Chapter, Track};
 use melyxar_core::privacy::MediaName;
+use melyxar_core::segments::MediaSegment;
 use melyxar_core::thumbnails::Thumbnails;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::user::DownmixMethod;
@@ -107,6 +108,13 @@ pub struct PlayPlan {
     /// marked on it from the first frame, and a bar whose marks appear a
     /// moment after it does is a bar that jumps under the hand.
     pub chapters: Vec<Chapter>,
+    /// The stretches nobody wants to sit through, when this file says where
+    /// they are.
+    ///
+    /// On the plan for the same reason as the chapters: a skip button that
+    /// appears a moment after the film starts is a button somebody has already
+    /// scrolled past.
+    pub segments: Vec<MediaSegment>,
     /// Whether this viewer has marked this film as one they like.
     ///
     /// Carried on the plan rather than asked for on its own, for the same
@@ -301,6 +309,12 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         .chapters_of_source(source.id)
         .await
         .unwrap_or_default();
+    // And the same again: most files name none, and a film with no skip button
+    // is every film anybody watched before there was one.
+    let segments = database
+        .segments_of_source(source.id)
+        .await
+        .unwrap_or_default();
     // Never a reason to refuse to play: a film whose mark could not be read is
     // a film with the button unlit, and pressing it says so plainly.
     let favourite = database
@@ -324,6 +338,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         rebuild,
         thumbnails,
         chapters,
+        segments,
         favourite,
     })
 }

@@ -686,10 +686,21 @@ export interface PlaybackPlan {
   thumbnails: PlaybackThumbnails | null;
   /** Where the film changes scene, when its file names them. Empty for most. */
   chapters: PlaybackChapter[];
+  /** The stretches nobody wants to sit through, when the file says where they
+   *  are. Empty for most files. */
+  segments: PlaybackSegment[];
   /** Whether this viewer has marked the film as one they like. */
   favourite: boolean;
   /** What the file itself holds, beside what is being made of it. */
   film: FilmHolds;
+}
+
+/** One stretch of a film a button offers to skip. */
+export interface PlaybackSegment {
+  /** recap, intro, outro or advertisement. */
+  kind: string;
+  from_second: number;
+  to_second: number;
 }
 
 /**

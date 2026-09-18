@@ -163,6 +163,10 @@ struct PlanView {
     /// is something the bar helps with. Empty for a film whose file names
     /// none, which is most of them.
     chapters: Vec<ChapterView>,
+    /// The stretches nobody wants to sit through, so a button can offer to
+    /// skip exactly that. Empty for a file that says nothing about them, which
+    /// is most of them.
+    segments: Vec<SegmentView>,
     /// Whether this viewer has marked the film as one they like.
     favourite: bool,
     /// What the file itself holds, beside what is being made of it.
@@ -239,6 +243,15 @@ struct ThumbnailsView {
     /// How many the film has. Past the last one there is nothing: a sheet is
     /// filled to the end with black whatever the film gave.
     counted: u32,
+}
+
+/// One stretch of a film a button offers to skip.
+#[derive(Debug, Serialize)]
+struct SegmentView {
+    /// recap, intro, outro or advertisement.
+    kind: &'static str,
+    from_second: f64,
+    to_second: f64,
 }
 
 /// One place the film changes scene.
@@ -387,6 +400,15 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
             .map(|chapter| ChapterView {
                 at_second: chapter.start.as_seconds_f64(),
                 title: chapter.title.clone(),
+            })
+            .collect(),
+        segments: plan
+            .segments
+            .iter()
+            .map(|segment| SegmentView {
+                kind: segment.kind.as_str(),
+                from_second: segment.start.as_seconds_f64(),
+                to_second: segment.end.as_seconds_f64(),
             })
             .collect(),
         favourite: plan.favourite,
@@ -1034,6 +1056,7 @@ mod tests {
         };
 
         PlayPlan {
+            segments: Vec::new(),
             source_id,
             work_id: WorkId::new(),
             path: "Quiet.Harbour.2019.mkv".into(),

@@ -15,6 +15,8 @@ pub mod library;
 pub mod media;
 pub mod privacy;
 pub mod refresh;
+pub mod segments;
+pub mod text;
 pub mod thumbnails;
 pub mod time;
 pub mod user;
