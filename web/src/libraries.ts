@@ -13,8 +13,9 @@
  * makes a library grow.
  */
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
 import { api } from "./api";
+import { useAsked } from "./asking";
 import type { Library } from "./api";
 
 export interface Libraries {
@@ -35,24 +36,11 @@ export const LibrariesContext = createContext<Libraries>({
  * grows during a scan without anybody asking.
  */
 export function useWatchedLibraries(finished: number): Libraries {
-  const [all, setAll] = useState<Library[]>([]);
-  const [asked, setAsked] = useState(0);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    api
-      .libraries(controller.signal)
-      .then(setAll)
-      // A server that did not answer keeps the list that was there: emptying
-      // the navigation over one failed request would say the collection is
-      // gone, which is a far worse thing to say than nothing.
-      .catch(() => {});
-    return () => controller.abort();
-  }, [finished, asked]);
-
-  const refresh = useCallback(() => setAsked((count) => count + 1), []);
-
-  return { all, refresh };
+  // A server that did not answer keeps the list that was there, which is what
+  // asking is built to do: emptying the navigation over one failed request
+  // would say the collection is gone, a far worse thing to say than nothing.
+  const asked = useAsked((signal) => api.libraries(signal), [finished]);
+  return { all: asked.answer ?? [], refresh: asked.again };
 }
 
 /** The libraries, for any page or part of the bar that shows them. */

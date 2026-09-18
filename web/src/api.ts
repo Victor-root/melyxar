@@ -583,7 +583,14 @@ async function send<T>(
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     });
-  } catch {
+  } catch (cause) {
+    // Walking away from a question is not the server failing to answer it, and
+    // the two are told apart here exactly as they are for a plain read above.
+    // Swallowed, a viewer who leaves a screen while it is saving something is
+    // shown "the server cannot be reached" on the way out.
+    if (cause instanceof DOMException && cause.name === "AbortError") {
+      throw cause;
+    }
     throw new ApiError("unreachable", 0);
   }
   if (!response.ok) {
