@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, REFRESH_MODES } from "../api";
-import type { Job, Library, RefreshMode, Upkeep } from "../api";
+import type { Job, Library, RefreshMode, Upkeep, UpkeepTask } from "../api";
 import { JobLine } from "../components/job";
 import { CopyReport } from "../components/report";
 import { refusalKey } from "../i18n";
@@ -176,7 +176,7 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
           </div>
           <p className="settings-why">{t("upkeep.why")}</p>
           <p className="settings-why">
-            {upkeep.nightly
+            {upkeep.next_run
               ? t("upkeep.next_run", { when: whenItIs(upkeep.next_run) })
               : t("upkeep.nightly_off")}
           </p>
@@ -193,6 +193,10 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
                   : t("upkeep.nothing_waiting")}
                 {task.done > 0 && ` · ${t("upkeep.done_count", { count: task.done })}`}
               </span>
+              {/* When it last ran, beside how much is left. A reading that has
+                  never run and one that ran last night and found nothing look
+                  alike from a count alone. */}
+              <span className="upkeep-note">{lastRun(task, t)}</span>
               {task.during_the_scan && (
                 <span className="upkeep-note">{t("upkeep.during_the_scan")}</span>
               )}
@@ -245,6 +249,27 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
  * announcing the server's hour to somebody looking at their own clock is how a
  * run that happened on time looks like a run that did not.
  */
+/*
+ * When a reading last ran, in one short phrase.
+ *
+ * The time it took comes with it wherever it is known: a reading that took
+ * four seconds and one that took four hours are two different answers to
+ * "did the upkeep run last night", and only the second one explains a machine
+ * that was busy all night.
+ */
+function lastRun(
+  task: UpkeepTask,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  if (!task.last_run) {
+    return t("upkeep.never_run");
+  }
+  const when = whenItIs(task.last_run);
+  return task.last_run_seconds === null
+    ? t("upkeep.last_run_unknown", { when })
+    : t("upkeep.last_run", { when, seconds: task.last_run_seconds });
+}
+
 function whenItIs(instant: string | null): string {
   if (!instant) {
     return "";

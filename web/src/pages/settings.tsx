@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
-import type { Library, ViewerPreferences } from "../api";
+import type { Library, LibraryWork, ViewerPreferences } from "../api";
 import {
   appearanceClasses,
   BACKGROUNDS,
@@ -40,6 +40,10 @@ export function SettingsPage() {
      libraries for the navigation: this is the one screen that changes them,
      so it is the one screen that has to be looking at what it changed. */
   const [libraries, setLibraries] = useState<Library[]>([]);
+  /* What the server does with every library: the shape of the thumbnails, the
+     description files, and when the upkeep runs. All three were lines of the
+     configuration file until now. */
+  const [work, setWork] = useState<LibraryWork | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -69,6 +73,43 @@ export function SettingsPage() {
       });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .libraryWork(controller.signal)
+      .then(setWork)
+      .catch((error) => {
+        if (!(error instanceof DOMException)) {
+          setFailed("error.unreachable");
+        }
+      });
+    return () => controller.abort();
+  }, []);
+
+  /* Shown straight away and sent at once, and what the server kept is what the
+     page then shows: a shape that cannot hold a thumbnail comes back brought
+     into range rather than refused. */
+  const setWorkTo = (changes: Partial<LibraryWork>) => {
+    if (!work) {
+      return;
+    }
+    const before = work;
+    const wanted = { ...work, ...changes };
+    setWork(wanted);
+    api
+      .setLibraryWork(wanted)
+      .then((kept) => {
+        setWork(kept);
+        setFailed(null);
+      })
+      .catch((error) => {
+        // Put back what the server still holds, rather than showing a setting
+        // next to a server that never heard of it.
+        setWork(before);
+        setFailed(error instanceof ApiError ? "settings.not_kept" : "error.unreachable");
+      });
+  };
 
   /* Shown straight away and sent at once, like everything else here. The two
      switches always travel together, because they are one answer to one
@@ -193,6 +234,108 @@ export function SettingsPage() {
           <p className="settings-why">{t("settings.no_languages_yet")}</p>
         )}
       </section>
+
+      {work && (
+        <section className="settings-block">
+          <h2>{t("settings.upkeep")}</h2>
+          <p className="settings-why">{t("settings.upkeep_why")}</p>
+
+          <div className="controls">
+            <button
+              className={`button button-small${work.upkeep_nightly ? " button-on" : ""}`}
+              aria-pressed={work.upkeep_nightly}
+              onClick={() => setWorkTo({ upkeep_nightly: !work.upkeep_nightly })}
+            >
+              {t("settings.upkeep_nightly")}
+            </button>
+            {/* Chosen and shown in the time of this browser. The server keeps
+                it in universal time, which is the only clock it can read with
+                certainty, so the hour shown here shifts by one when the clocks
+                change until somebody sets it again. */}
+            <label className="choice">
+              <span className="choice-label">{t("settings.upkeep_at")}</span>
+              <input
+                type="time"
+                value={asLocalTime(work.upkeep_at_utc_minutes)}
+                disabled={!work.upkeep_nightly}
+                onChange={(event) =>
+                  setWorkTo({ upkeep_at_utc_minutes: asUtcMinutes(event.target.value) })
+                }
+              />
+            </label>
+          </div>
+          <p className="settings-why">{t("settings.upkeep_at_why")}</p>
+        </section>
+      )}
+
+      {work && (
+        <section className="settings-block">
+          <h2>{t("settings.thumbnails")}</h2>
+          <p className="settings-why">{t("settings.thumbnails_why")}</p>
+
+          <div className="controls">
+            <button
+              className={`button button-small${work.thumbnails_enabled ? " button-on" : ""}`}
+              aria-pressed={work.thumbnails_enabled}
+              onClick={() => setWorkTo({ thumbnails_enabled: !work.thumbnails_enabled })}
+            >
+              {t("settings.thumbnails_on")}
+            </button>
+            <NumberChoice
+              label={t("settings.thumbnails_every")}
+              value={work.thumbnails_every_seconds}
+              min={1}
+              max={600}
+              disabled={!work.thumbnails_enabled}
+              onPick={(thumbnails_every_seconds) => setWorkTo({ thumbnails_every_seconds })}
+            />
+            <NumberChoice
+              label={t("settings.thumbnails_height")}
+              value={work.thumbnails_height}
+              min={1}
+              max={1080}
+              disabled={!work.thumbnails_enabled}
+              onPick={(thumbnails_height) => setWorkTo({ thumbnails_height })}
+            />
+            <NumberChoice
+              label={t("settings.thumbnails_columns")}
+              value={work.thumbnails_columns}
+              min={1}
+              max={20}
+              disabled={!work.thumbnails_enabled}
+              onPick={(thumbnails_columns) => setWorkTo({ thumbnails_columns })}
+            />
+            <NumberChoice
+              label={t("settings.thumbnails_rows")}
+              value={work.thumbnails_rows}
+              min={1}
+              max={20}
+              disabled={!work.thumbnails_enabled}
+              onPick={(thumbnails_rows) => setWorkTo({ thumbnails_rows })}
+            />
+          </div>
+          {/* Said before the change and not after it: changing the shape puts
+              every film back in front of the upkeep. */}
+          <p className="settings-why">{t("settings.thumbnails_shape_why")}</p>
+        </section>
+      )}
+
+      {work && (
+        <section className="settings-block">
+          <h2>{t("settings.companion_files")}</h2>
+          <p className="settings-why">{t("settings.companion_files_why")}</p>
+
+          <div className="controls">
+            <button
+              className={`button button-small${work.read_companion_files ? " button-on" : ""}`}
+              aria-pressed={work.read_companion_files}
+              onClick={() => setWorkTo({ read_companion_files: !work.read_companion_files })}
+            >
+              {t("settings.read_companion_files")}
+            </button>
+          </div>
+        </section>
+      )}
 
       {libraries.length > 0 && (
         <section className="settings-block">
@@ -343,6 +486,83 @@ function Look<T extends string>({
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+/*
+ * A time of day the server keeps in universal time, in the time of this
+ * browser.
+ *
+ * The server keeps one clock and it is UTC, which is the only one it can read
+ * with certainty. Nobody should have to do that conversion in their head, so
+ * it is done here, where the browser knows its own offset. What this cannot do
+ * is follow the clocks changing: a time set in winter shows an hour later in
+ * summer until somebody sets it again. That is said on the screen rather than
+ * hidden, and it is a nightly piece of upkeep, so an hour either way costs
+ * nothing.
+ */
+function asLocalTime(utcMinutes: number): string {
+  const local = wrapIntoADay(utcMinutes - new Date().getTimezoneOffset());
+  const hours = String(Math.floor(local / 60)).padStart(2, "0");
+  const minutes = String(local % 60).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+/** The other way, for what a time field hands back. */
+function asUtcMinutes(localTime: string): number {
+  const [hours, minutes] = localTime.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return 0;
+  }
+  return wrapIntoADay(hours * 60 + minutes + new Date().getTimezoneOffset());
+}
+
+const MINUTES_IN_A_DAY = 24 * 60;
+
+function wrapIntoADay(minutes: number): number {
+  return ((minutes % MINUTES_IN_A_DAY) + MINUTES_IN_A_DAY) % MINUTES_IN_A_DAY;
+}
+
+/**
+ * One number of a setting, with the range the server will keep it inside.
+ *
+ * The bounds are on the field as well as on the server, so somebody dragging
+ * the arrows is stopped where the server would have stopped them rather than
+ * being silently corrected afterwards.
+ */
+function NumberChoice({
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  onPick,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled?: boolean;
+  onPick: (value: number) => void;
+}) {
+  return (
+    <label className="choice">
+      <span className="choice-label">{label}</span>
+      <input
+        type="number"
+        className="choice-number"
+        value={value}
+        min={min}
+        max={max}
+        disabled={disabled}
+        onChange={(event) => {
+          const asked = Number(event.target.value);
+          if (Number.isFinite(asked)) {
+            onPick(Math.min(max, Math.max(min, Math.round(asked))));
+          }
+        }}
+      />
     </label>
   );
 }

@@ -32,9 +32,11 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(set_library_options),
         )
         .route("/api/v1/upkeep", axum::routing::get(upkeep))
+        // One name, two verbs: reading what the server is set to do and
+        // saying what it is to do from now on.
         .route(
             "/api/v1/settings/libraries",
-            axum::routing::put(set_library_work),
+            axum::routing::get(library_work).put(set_library_work),
         )
         .route("/api/v1/upkeep/run", axum::routing::post(run_the_upkeep))
         .route(
@@ -530,6 +532,17 @@ fn work_view(work: melyxar_app::settings::LibraryWork) -> WorkView {
         upkeep_nightly: work.upkeep_nightly,
         upkeep_at_utc_minutes: work.upkeep_at_utc_minutes,
     }
+}
+
+/// What the server is set to do with a library.
+///
+/// Its own route rather than a corner of the upkeep's: a screen of settings
+/// wants one row of the settings, and asking the upkeep would count every
+/// film of every library to answer it.
+async fn library_work(State(state): State<AppState>) -> Result<Json<WorkView>> {
+    Ok(Json(work_view(
+        state.database().library_work().await.map_err(internal)?,
+    )))
 }
 
 /// Says what the server is to do with a library from now on.

@@ -190,7 +190,10 @@ const en: Dictionary = {
   "upkeep.started": "{count} started. Watch them under Activity.",
   "upkeep.nothing_started": "Nothing was waiting.",
   "upkeep.next_run": "Next run on its own: {when}",
-  "upkeep.nightly_off": "The nightly run is switched off in the server configuration.",
+  "upkeep.nightly_off": "It never runs on its own. You can turn that on under Settings.",
+  "upkeep.last_run": "Last run {when}, in {seconds} s",
+  "upkeep.last_run_unknown": "Last run {when}",
+  "upkeep.never_run": "Never run",
   "upkeep.disabled": "Switched off in the server configuration.",
 
   "settings.title": "Settings",
@@ -216,6 +219,27 @@ const en: Dictionary = {
   "settings.libraries": "Libraries",
   "settings.libraries_why":
     "Two readings go through every film of a library from end to end. A scan can do them as it goes, which is fine on a small library and turns a scan of minutes into one of days on a large one. Left off, they happen of a night, or whenever you press the button on the upkeep screen.",
+  "settings.upkeep": "Upkeep",
+  "settings.upkeep_why":
+    "When the server reads, on its own, the films nobody has read yet: where a jump can land, and the little pictures of the playback bar. Pick an hour when nobody is watching anything.",
+  "settings.upkeep_nightly": "Run it on its own",
+  "settings.upkeep_at": "At",
+  "settings.upkeep_at_why":
+    "In the time of this device. The server keeps it in universal time, so the hour shown here shifts by one when the clocks change, until you set it again.",
+  "settings.thumbnails": "Pictures of the playback bar",
+  "settings.thumbnails_why":
+    "The little pictures that scroll past while you drag along the bar. Making them means reading every film from end to end, which is why they are the upkeep's work and not a scan's.",
+  "settings.thumbnails_on": "Make them",
+  "settings.thumbnails_every": "One picture every (seconds)",
+  "settings.thumbnails_height": "Height (pixels)",
+  "settings.thumbnails_columns": "Pictures across a sheet",
+  "settings.thumbnails_rows": "Pictures down a sheet",
+  "settings.thumbnails_shape_why":
+    "Changing any of these puts every film back in front of the upkeep, since what is already made no longer answers what is asked for. Nothing is thrown away: set it back and what was made is found again as it stands.",
+  "settings.companion_files": "Description files",
+  "settings.companion_files_why":
+    "Some collections keep a description file next to each film. Off, because such a file may hold anything. Turned on, only the provider identifiers in it are taken, never a title or a synopsis: an identifier can be checked with the provider, a title would be believed.",
+  "settings.read_companion_files": "Read them during a scan",
   "settings.key_frames_during_scan": "Read where films can be started during the scan",
   "settings.thumbnails_during_scan": "Make the pictures of the playback bar during the scan",
 
@@ -600,7 +624,10 @@ const fr: Dictionary = {
   "upkeep.started": "{count} lancés. Suivez-les dans Activité.",
   "upkeep.nothing_started": "Rien n'attendait.",
   "upkeep.next_run": "Prochain passage automatique : {when}",
-  "upkeep.nightly_off": "Le passage de nuit est désactivé dans la configuration du serveur.",
+  "upkeep.nightly_off": "Ne se lance jamais tout seul. Vous pouvez l'activer dans les Réglages.",
+  "upkeep.last_run": "Dernier passage {when}, en {seconds} s",
+  "upkeep.last_run_unknown": "Dernier passage {when}",
+  "upkeep.never_run": "Jamais passé",
   "upkeep.disabled": "Désactivé dans la configuration du serveur.",
 
   "settings.title": "Réglages",
@@ -626,6 +653,27 @@ const fr: Dictionary = {
   "settings.libraries": "Bibliothèques",
   "settings.libraries_why":
     "Deux lectures parcourent chaque film d'une bibliothèque d'un bout à l'autre. Le scan peut les faire au passage, ce qui va très bien sur une petite bibliothèque et transforme un scan de quelques minutes en scan de plusieurs jours sur une grosse. Laissées décochées, elles se font la nuit, ou quand vous appuyez sur le bouton de l'écran d'entretien.",
+  "settings.upkeep": "Entretien",
+  "settings.upkeep_why":
+    "Quand le serveur lit tout seul les films que personne n'a encore lus : les endroits où un saut peut atterrir, et les petites images de la barre de lecture. Choisissez une heure où personne ne regarde rien.",
+  "settings.upkeep_nightly": "Le lancer tout seul",
+  "settings.upkeep_at": "À",
+  "settings.upkeep_at_why":
+    "À l'heure de cet appareil. Le serveur la garde en temps universel, donc l'heure affichée ici décale d'une heure au changement d'heure, jusqu'à ce que vous la remettiez.",
+  "settings.thumbnails": "Vignettes de la barre de lecture",
+  "settings.thumbnails_why":
+    "Les petites images qui défilent quand on glisse le long de la barre. Les fabriquer demande de lire chaque film d'un bout à l'autre, c'est pour ça que c'est le travail de l'entretien et pas celui du scan.",
+  "settings.thumbnails_on": "Les fabriquer",
+  "settings.thumbnails_every": "Une image toutes les (secondes)",
+  "settings.thumbnails_height": "Hauteur (pixels)",
+  "settings.thumbnails_columns": "Images en largeur sur une planche",
+  "settings.thumbnails_rows": "Images en hauteur sur une planche",
+  "settings.thumbnails_shape_why":
+    "Changer l'un de ces réglages remet tous les films devant l'entretien, puisque ce qui est déjà fabriqué ne correspond plus à ce qui est demandé. Rien n'est jeté : remettez la valeur d'avant et ce qui avait été fabriqué est retrouvé tel quel.",
+  "settings.companion_files": "Fichiers de description",
+  "settings.companion_files_why":
+    "Certaines collections gardent un fichier de description à côté de chaque film. Désactivé, parce qu'un tel fichier peut contenir n'importe quoi. Activé, seuls les identifiants de fournisseur qu'il contient sont repris, jamais un titre ni un résumé : un identifiant peut être vérifié auprès du fournisseur, un titre serait cru sur parole.",
+  "settings.read_companion_files": "Les lire pendant un scan",
   "settings.key_frames_during_scan": "Relever les points de départ pendant le scan",
   "settings.thumbnails_during_scan": "Fabriquer les vignettes de la barre pendant le scan",
 
