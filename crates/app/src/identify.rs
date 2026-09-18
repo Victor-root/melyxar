@@ -492,7 +492,7 @@ where
     P: MetadataProvider + 'static,
 {
     let database = state.database();
-    for season in database.children_of(series_id).await? {
+    for season in database.children_ranked(series_id).await? {
         let Some(number) = season.ordinal else {
             continue;
         };
@@ -524,7 +524,7 @@ where
         )
         .await?;
 
-        for episode in database.children_of(season.id).await? {
+        for episode in database.children_ranked(season.id).await? {
             let Some(number) = episode.ordinal else {
                 continue;
             };
@@ -2009,7 +2009,11 @@ mod tests {
         // A season keeps the name drawn from its number: what the provider
         // calls it is that number written out, and a page that draws the
         // number itself would show it twice.
-        let seasons = state.database().children_of(series.id).await.expect("read");
+        let seasons = state
+            .database()
+            .children_ranked(series.id)
+            .await
+            .expect("read");
         assert_eq!(
             seasons
                 .iter()
@@ -2038,7 +2042,7 @@ mod tests {
         // runs and what people thought of it.
         let episodes = state
             .database()
-            .children_of(written[0])
+            .children_ranked(written[0])
             .await
             .expect("read");
         assert_eq!(
@@ -2095,8 +2099,30 @@ mod tests {
         let report = run(&state, &provider, &library).await;
         assert_eq!(report.identified, 1, "the series is named all the same");
 
-        let seasons = state.database().children_of(series.id).await.expect("read");
+        let seasons = state
+            .database()
+            .children_ranked(series.id)
+            .await
+            .expect("read");
         assert_eq!(seasons.len(), 2, "both seasons are still there");
+    }
+
+    /// Somebody to answer for, since what a page shows depends on who is
+    /// looking at it.
+    ///
+    /// The one account rather than a new one each time: a server has one until
+    /// signing in arrives, and asking twice for a second would be asking for
+    /// somebody who cannot exist.
+    async fn a_viewer(state: &AppState) -> melyxar_core::id::UserId {
+        let database = state.database();
+        if let Some((already, _)) = database.user_by_name("Viewer").await.expect("read") {
+            return already.id;
+        }
+        database
+            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id
     }
 
     async fn run(state: &AppState, provider: &Arc<StandIn>, library: &Library) -> IdentifyReport {
@@ -3343,7 +3369,7 @@ mod tests {
 
         run(&state, &provider, &library).await;
 
-        let detail = crate::detail::work_detail(&state, work.id)
+        let detail = crate::detail::work_detail(&state, a_viewer(&state).await, work.id)
             .await
             .expect("read")
             .expect("present");
@@ -3548,7 +3574,7 @@ mod tests {
 
         assert_eq!(run(&state, &provider, &library).await.identified, 1);
 
-        let detail = crate::detail::work_detail(&state, work.id)
+        let detail = crate::detail::work_detail(&state, a_viewer(&state).await, work.id)
             .await
             .expect("read")
             .expect("present");
@@ -3620,12 +3646,14 @@ mod tests {
             vec![wordless],
         ));
         assert_eq!(run(&state, &silent, &library).await.identified, 1);
-        assert!(crate::detail::work_detail(&state, work.id)
-            .await
-            .expect("read")
-            .expect("present")
-            .overview
-            .is_none());
+        assert!(
+            crate::detail::work_detail(&state, a_viewer(&state).await, work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .overview
+                .is_none()
+        );
 
         // The same film, a day the provider has words for it.
         let talking = Arc::new(StandIn::new(
@@ -3636,7 +3664,7 @@ mod tests {
         assert_eq!(report.identified, 0);
         assert_eq!(report.synopses_filled, 1);
 
-        let detail = crate::detail::work_detail(&state, work.id)
+        let detail = crate::detail::work_detail(&state, a_viewer(&state).await, work.id)
             .await
             .expect("read")
             .expect("present");

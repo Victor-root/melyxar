@@ -43,6 +43,25 @@ pub struct WorkDetail {
     /// is drawn before anything else and a page that asks for its own parent
     /// draws a heading that arrives late.
     pub ancestry: Vec<Ancestor>,
+    /// The episode this viewer would watch next, on the page of a series or of
+    /// a season. Absent when there is none left to watch, and for anything met
+    /// on its own.
+    pub carry_on_with: Option<CarryOn>,
+}
+
+/// The episode a page offers to play next, and where in it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CarryOn {
+    pub id: WorkId,
+    /// Which season and which episode it is, so a button can say so.
+    pub season: Option<i32>,
+    pub episode: Option<i32>,
+    pub title: String,
+    /// Whether this title says anything its number does not.
+    pub has_own_name: bool,
+    /// The file it would be played from. Absent would mean nothing to play,
+    /// and such an episode is never offered.
+    pub source_id: Option<MediaSourceId>,
 }
 
 /// One work hanging under this one, with what its card shows.
@@ -144,8 +163,68 @@ pub struct TrailerLink {
     pub remote_url: Option<String>,
 }
 
+/// The episode a page offers to play next, ready to be drawn.
+///
+/// Whichever of a series the viewer has not watched comes first, and failing
+/// that nothing: a series watched through is one to start again from its own
+/// list rather than from a button that says "carry on".
+async fn what_to_carry_on_with(
+    state: &AppState,
+    viewer: melyxar_core::id::UserId,
+    series_id: WorkId,
+) -> Result<Option<CarryOn>> {
+    let database = state.database();
+    let Some(episode) = database.where_to_resume(viewer, series_id).await? else {
+        return Ok(None);
+    };
+    Ok(Some(as_carry_on(state, episode).await?))
+}
+
+/// One episode, ready for the button that offers it.
+///
+/// Written once because two questions end here: the one a series page asks and
+/// the one an episode page asks. A button that says the season on one page and
+/// not on the other would be the same button behaving differently.
+async fn as_carry_on(state: &AppState, episode: melyxar_core::work::Work) -> Result<CarryOn> {
+    let database = state.database();
+
+    // The season it sits in, for a button that says which episode it means.
+    let season = match episode.parent_id {
+        Some(parent) => database
+            .work(parent)
+            .await?
+            .and_then(|season| season.ordinal),
+        None => None,
+    };
+
+    Ok(CarryOn {
+        has_own_name: !crate::episodes::is_only_a_number(
+            episode.kind,
+            episode.ordinal,
+            &episode.title,
+        ),
+        // The biggest copy, which is what pressing play without choosing means
+        // everywhere else in this server.
+        source_id: database
+            .sources_of_work(episode.id)
+            .await?
+            .into_iter()
+            .filter(|source| source.missing_since.is_none())
+            .max_by_key(|source| source.size_bytes)
+            .map(|source| source.id),
+        id: episode.id,
+        season,
+        episode: episode.ordinal,
+        title: episode.title,
+    })
+}
+
 /// Reads everything one page shows about one work.
-pub async fn work_detail(state: &AppState, work_id: WorkId) -> Result<Option<WorkDetail>> {
+pub async fn work_detail(
+    state: &AppState,
+    viewer: melyxar_core::id::UserId,
+    work_id: WorkId,
+) -> Result<Option<WorkDetail>> {
     let database = state.database();
     let Some(work) = database.work(work_id).await? else {
         return Ok(None);
@@ -247,7 +326,7 @@ pub async fn work_detail(state: &AppState, work_id: WorkId) -> Result<Option<Wor
     // joins its own card, exactly as the faces do above.
     let pictures = database.pictures_of_children(work_id).await?;
     let children = database
-        .children_of(work_id)
+        .children_of(viewer, work_id)
         .await?
         .into_iter()
         .map(|child| {
@@ -275,9 +354,34 @@ pub async fn work_detail(state: &AppState, work_id: WorkId) -> Result<Option<Wor
         })
         .collect();
 
+    // What a page offers to play next, from what it already knows. A series
+    // and a season both answer for the whole series: somebody who opens season
+    // one having watched it all means to carry on into season two, not to sit
+    // on a button that starts again where they already are.
+    let carry_on_with = match work.kind {
+        melyxar_core::work::WorkKind::Series => {
+            what_to_carry_on_with(state, viewer, work.id).await?
+        }
+        melyxar_core::work::WorkKind::Season => match work.parent_id {
+            Some(series_id) => what_to_carry_on_with(state, viewer, series_id).await?,
+            None => None,
+        },
+        // On an episode it is the one after this one, watched or not: somebody
+        // at the end of an episode means the next one, not the next one they
+        // happen to have missed.
+        melyxar_core::work::WorkKind::Episode => {
+            match database.next_episode_after(viewer, work.id).await? {
+                Some(next) => Some(as_carry_on(state, next).await?),
+                None => None,
+            }
+        }
+        _ => None,
+    };
+
     Ok(Some(WorkDetail {
         children,
         ancestry,
+        carry_on_with,
         tagline: texts.as_ref().and_then(|(_, tagline, _)| tagline.clone()),
         overview: texts.as_ref().and_then(|(_, _, overview)| overview.clone()),
         genres: database.work_genres(work_id).await?,
@@ -492,9 +596,14 @@ mod tests {
     #[tokio::test]
     async fn a_page_speaks_the_language_of_the_library_the_film_is_in() {
         let (database, work_id) = two_libraries().await;
+        let viewer = database
+            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
         let state = AppState::new(melyxar_config::Config::default(), database, None, None);
 
-        let detail = work_detail(&state, work_id)
+        let detail = work_detail(&state, viewer, work_id)
             .await
             .expect("read")
             .expect("present");

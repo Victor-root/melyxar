@@ -1430,6 +1430,24 @@ mod tests {
             .expect("the library is still there")
     }
 
+    /// Somebody to answer for, since what a page shows depends on who is
+    /// looking at it.
+    ///
+    /// The one account rather than a new one each time: a server has one until
+    /// signing in arrives, and asking twice for a second would be asking for
+    /// somebody who cannot exist.
+    async fn a_viewer(state: &AppState) -> melyxar_core::id::UserId {
+        let database = state.database();
+        if let Some((already, _)) = database.user_by_name("Viewer").await.expect("read") {
+            return already.id;
+        }
+        database
+            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id
+    }
+
     /// Runs a scan the way the server does, and gives back what it did.
     async fn scan(state: &AppState, library: &Library) -> ScanReport {
         let (job_state, report) = start_scan(
@@ -1813,7 +1831,7 @@ mod tests {
         let works = arrangement(&state, &library).await;
         let series = of_kind(&works, WorkKind::Series)[0].clone();
 
-        let page = crate::detail::work_detail(&state, series.id)
+        let page = crate::detail::work_detail(&state, a_viewer(&state).await, series.id)
             .await
             .expect("read")
             .expect("the series has a page");
@@ -1830,7 +1848,7 @@ mod tests {
         );
 
         let first_season = page.children[0].work.id;
-        let season_page = crate::detail::work_detail(&state, first_season)
+        let season_page = crate::detail::work_detail(&state, a_viewer(&state).await, first_season)
             .await
             .expect("read")
             .expect("the season has a page");
@@ -1860,7 +1878,7 @@ mod tests {
         );
 
         let episode = season_page.children[0].work.id;
-        let episode_page = crate::detail::work_detail(&state, episode)
+        let episode_page = crate::detail::work_detail(&state, a_viewer(&state).await, episode)
             .await
             .expect("read")
             .expect("the episode has a page");

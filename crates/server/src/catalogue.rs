@@ -66,7 +66,7 @@ async fn serve_trailer(
     request: Request<Body>,
 ) -> Result<Response> {
     let work_id = parse_work(id)?;
-    let detail = melyxar_app::detail::work_detail(state, work_id)
+    let detail = melyxar_app::detail::work_detail(state, crate::viewer(state).await?, work_id)
         .await?
         .ok_or_else(|| ServerError::not_found("no work with that identifier"))?;
 
@@ -326,6 +326,9 @@ fn child_view(child: &melyxar_app::detail::Child) -> ChildView {
         title: its_own_name(child.work.kind, child.work.ordinal, &child.work.title),
         runtime_minutes: child.work.runtime.map(whole_minutes),
         child_count: child.work.child_count,
+        unwatched: child.work.unwatched,
+        watched: child.work.watched,
+        resume_from_seconds: child.work.resume_from.map(Millis::as_seconds_f64),
         playable: child.work.playable,
         identification: child.work.identification.as_str(),
         color: child.work.dominant_color.clone(),
@@ -452,6 +455,21 @@ struct WorkView {
     /// The way back up, nearest first: an episode carries its season and then
     /// its series. Empty for anything met on its own.
     ancestry: Vec<AncestorView>,
+    /// The episode this viewer would watch next, on the page of a series or a
+    /// season. Absent when there is none left to watch.
+    carry_on_with: Option<NextEpisodeView>,
+}
+
+/// The episode a page offers to play next.
+#[derive(Debug, Serialize)]
+struct NextEpisodeView {
+    id: String,
+    season: Option<i32>,
+    episode: Option<i32>,
+    /// Its own name, when it has one its number does not already say.
+    title: Option<String>,
+    /// The file it plays from, so a button can start it without asking again.
+    source_id: Option<String>,
 }
 
 /// One work hanging under this one, as a card on its page.
@@ -470,6 +488,12 @@ struct ChildView {
     runtime_minutes: Option<i64>,
     /// How many episodes a season holds. Zero for an episode.
     child_count: i64,
+    /// How many of those this viewer has left to watch.
+    unwatched: i64,
+    /// Whether this viewer has watched it. Only ever true of an episode.
+    watched: bool,
+    /// Where this viewer stopped in it, when they stopped partway.
+    resume_from_seconds: Option<f64>,
     /// False when no file of it is on the disk right now, so a page can say so
     /// rather than offer it and fail.
     playable: bool,
@@ -600,7 +624,8 @@ struct ExternalIdView {
 
 async fn work(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<WorkView>> {
     let work_id = parse_work(&id)?;
-    let detail = melyxar_app::detail::work_detail(&state, work_id)
+    let viewer = crate::viewer(&state).await?;
+    let detail = melyxar_app::detail::work_detail(&state, viewer, work_id)
         .await?
         .ok_or_else(|| ServerError::not_found("no work with that identifier"))?;
 
@@ -683,6 +708,13 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         poster: images_of("poster"),
         backdrop: images_of("backdrop"),
         logo: images_of("logo"),
+        carry_on_with: detail.carry_on_with.as_ref().map(|next| NextEpisodeView {
+            id: next.id.to_string(),
+            season: next.season,
+            episode: next.episode,
+            title: next.has_own_name.then(|| next.title.clone()),
+            source_id: next.source_id.map(|id| id.to_string()),
+        }),
         children: detail.children.iter().map(child_view).collect(),
         ancestry: detail
             .ancestry
