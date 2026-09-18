@@ -13,6 +13,7 @@ import { api, pictureSet } from "../api";
 import type { Credit, Version } from "../api";
 import { useTold } from "../asking";
 import { IdentifyByHand } from "../components/byhand";
+import { outOfTen, readableBitrate, readableDate, readableSize } from "../readable";
 import { elsewhere, groupCrew, useWorkScreen } from "../screens/work";
 import { useSettings } from "../settings";
 import { Player } from "../player/player";
@@ -76,7 +77,7 @@ export function WorkPage() {
     work.year !== null ? String(work.year) : null,
     work.runtime_minutes ? t("work.minutes", { count: work.runtime_minutes }) : null,
     work.age_rating,
-    work.rating !== null ? `${work.rating.toFixed(1)} / 10` : null,
+    work.rating !== null ? outOfTen(work.rating) : null,
   ].filter((fact): fact is string => Boolean(fact));
 
   if (playing) {
@@ -571,31 +572,4 @@ function Fact({
       <dd>{value}</dd>
     </div>
   );
-}
-
-function readableBitrate(bits: number | null): string | null {
-  if (bits === null || bits <= 0) {
-    return null;
-  }
-  return bits >= 1_000_000
-    ? `${(bits / 1_000_000).toFixed(1)} Mb/s`
-    : `${Math.round(bits / 1000)} kb/s`;
-}
-
-function readableDate(value: string, language: string): string | null {
-  const moment = new Date(value);
-  return Number.isNaN(moment.getTime())
-    ? null
-    : moment.toLocaleString(language, { dateStyle: "medium", timeStyle: "short" });
-}
-
-function readableSize(bytes: number): string {
-  const units = ["B", "kB", "MB", "GB", "TB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit += 1;
-  }
-  return unit === 0 ? `${value} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
 }

@@ -13,9 +13,9 @@
  * already selected, to be copied by hand.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { putOnTheClipboard } from "../clipboard";
+import { handOver } from "../copying";
 import { useSettings } from "../settings";
 
 type State = "idle" | "working" | "copied" | "shown" | "failed";
@@ -28,24 +28,27 @@ export function CopyReport() {
 
   const copy = async () => {
     setState("working");
-    let report: string;
-    try {
-      report = await api.report();
-    } catch {
+    const handed = await handOver(api.report);
+    if (handed.how === "not at all") {
       setState("failed");
       return;
     }
-    setText(report);
-
-    if (await putOnTheClipboard(report)) {
+    if (handed.how === "clipboard") {
       setState("copied");
       return;
     }
-    // Nothing could take it, so it is shown instead and selected, which leaves
-    // one key press to do rather than a terminal to open.
+    // Nothing could take it, so it is shown instead.
+    setText(handed.text);
     setState("shown");
-    window.setTimeout(() => shown.current?.select(), 0);
   };
+
+  /* Shown, it is selected, which leaves one key press to do rather than a
+     terminal to open. */
+  useEffect(() => {
+    if (state === "shown") {
+      shown.current?.select();
+    }
+  }, [state]);
 
   return (
     // Once the report is on the page it needs the whole width to be readable,

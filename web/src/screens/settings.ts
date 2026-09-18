@@ -27,54 +27,6 @@ import type { Appearance } from "../player/appearance";
 /** What went wrong last, when something did. */
 export type Trouble = "unreachable" | "not_kept" | null;
 
-const MINUTES_IN_A_DAY = 24 * 60;
-
-function wrapIntoADay(minutes: number): number {
-  return ((minutes % MINUTES_IN_A_DAY) + MINUTES_IN_A_DAY) % MINUTES_IN_A_DAY;
-}
-
-/**
- * A time of day the server keeps in universal time, in the time of this
- * browser.
- *
- * The server keeps one clock and it is UTC, which is the only one it can read
- * with certainty. Nobody should have to do that conversion in their head, so
- * it is done here, where the browser knows its own offset. What this cannot do
- * is follow the clocks changing: a time set in winter shows an hour later in
- * summer until somebody sets it again. That is said on the screen rather than
- * hidden, and it is a nightly piece of upkeep, so an hour either way costs
- * nothing.
- */
-export function asLocalTime(utcMinutes: number): string {
-  const local = wrapIntoADay(utcMinutes - new Date().getTimezoneOffset());
-  const hours = String(Math.floor(local / 60)).padStart(2, "0");
-  const minutes = String(local % 60).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
-/** The other way, for what a time field hands back. */
-export function asUtcMinutes(localTime: string): number {
-  const [hours, minutes] = localTime.split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return 0;
-  }
-  return wrapIntoADay(hours * 60 + minutes + new Date().getTimezoneOffset());
-}
-
-/**
- * A number a field handed back, brought inside what the server will keep.
- *
- * The bounds are here as well as on the server, so somebody dragging the
- * arrows is stopped where the server would have stopped them rather than
- * being silently corrected afterwards.
- */
-export function insideTheRange(asked: number, min: number, max: number): number | null {
-  if (!Number.isFinite(asked)) {
-    return null;
-  }
-  return Math.min(max, Math.max(min, Math.round(asked)));
-}
-
 /** Everything the settings screen is handed to draw itself and be driven by. */
 export interface SettingsScreen {
   /** What this viewer has decided, or nothing until the server has said. */

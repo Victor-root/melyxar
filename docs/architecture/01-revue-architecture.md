@@ -136,6 +136,8 @@ Trois sujets structurent tout : le **modèle de données** (une œuvre n'est pas
 
 **Risque long terme.** Les clients Android et TV ne réutiliseront rien du code React : c'est l'API qui est réutilisée. Ne jamais mettre de logique métier (choix Direct Play ou transcodage) dans le frontend.
 
+**Fait depuis.** Le dossier `web/src` est coupé en deux dans le même esprit que le lecteur : `api.ts`, `i18n.ts`, `asking.ts`, `readable.ts`, `languages.ts`, `copying.ts`, les contextes, et un moteur par écran sous `screens/` d'un côté ; de l'autre, `pages/` et `components/`, qui ne reçoivent que des valeurs et des fonctions. Un écran redessiné ne réécrit plus rien de ce qui parle au serveur.
+
 ### 2.9 Le principe du monolithe modulaire (Solide)
 
 **Solide.** Un seul processus à déployer, pas de réseau interne, et des frontières nettes imposées par Cargo (une crate n'utilise que ce qu'elle déclare, pas de cycles).
