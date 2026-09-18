@@ -40,6 +40,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/public/branding", get(public_branding))
         .merge(crate::calibration::router())
         .merge(crate::catalogue::router())
+        .merge(crate::general::router())
         .merge(crate::images::router())
         .merge(crate::jobs::router())
         .merge(crate::libraries::router())

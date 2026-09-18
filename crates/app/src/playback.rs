@@ -238,6 +238,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
         .as_ref()
         .map(|values| values.downmix_gain)
         .unwrap_or(melyxar_core::user::DEFAULT_DOWNMIX_GAIN);
+    let never_tone_map = database.tone_mapping_disabled().await?;
 
     let decision = decide(
         &media,
@@ -251,6 +252,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
             // copy into a rebuild for nothing. When the preference arrives it
             // goes here, and the answer will say it was asked for.
             level_loudness: false,
+            never_tone_map,
         },
     );
 
@@ -1256,6 +1258,57 @@ mod tests {
         assert_eq!(plan.size_bytes, 12_000);
         assert_eq!(plan.duration, Some(Millis::new(7_200_000)));
         assert!(plan.resume_from.is_none(), "nobody has watched it yet");
+    }
+
+    #[tokio::test]
+    async fn the_general_switch_against_converting_wide_gamut_colour_is_read_from_the_server() {
+        // The one thing this layer adds over the pure decision itself: the
+        // switch comes from the database rather than from the request, so
+        // turning it on affects every viewer of this server without asking
+        // each of them.
+        let mut hdr = video(MediaSourceId::new(), "h264", 2160);
+        let TrackKind::Video(details) = &mut hdr.kind else {
+            unreachable!()
+        };
+        details.hdr = Some(melyxar_core::media::HdrFormat::Hdr10);
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![
+                    {
+                        hdr.source_id = id;
+                        hdr.clone()
+                    },
+                    audio(id, "aac", 2, true),
+                ]
+            })
+            .await;
+
+        let request = PlayRequest {
+            source_id,
+            profile: None,
+            audio_track_id: None,
+            subtitle_track_id: None,
+            preferred_video_codec: None,
+        };
+
+        let before = plan(&state, user_id, &request).await.expect("a plan");
+        assert_eq!(before.decision.method, PlaybackMethod::FullTranscode);
+        assert!(before.decision.tone_map, "converted by default");
+
+        state
+            .database()
+            .set_tone_mapping_disabled(true)
+            .await
+            .expect("switched");
+
+        let after = plan(&state, user_id, &request).await.expect("a plan");
+        assert_ne!(
+            after.decision.method,
+            PlaybackMethod::FullTranscode,
+            "nothing but the colour was ever a reason to rebuild this film"
+        );
+        assert!(!after.decision.tone_map);
     }
 
     #[tokio::test]

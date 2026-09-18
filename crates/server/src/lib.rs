@@ -10,6 +10,7 @@
 pub mod calibration;
 pub mod catalogue;
 pub mod error;
+pub mod general;
 pub mod images;
 pub mod interface;
 pub mod jobs;

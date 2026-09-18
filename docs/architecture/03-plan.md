@@ -221,6 +221,8 @@ Reste à faire :
 
 État : à faire.
 
+Fait depuis, en avance sur ce jalon : la moitié serveur du refus de la conversion des couleurs, réglage général sous « Image » dans les paramètres, décoché par défaut. Demandé pour un processeur trop lent pour reconstruire l'image des films HDR d'une collection, plutôt que pour un écran réellement HDR. Le Dolby Vision sans couche de base compatible reste converti dans tous les cas, pour ne jamais laisser une image cassée à l'écran. L'interrupteur pendant la lecture et le réglage par spectateur, pensés pour l'écran plutôt que pour le processeur, restent à faire avec le reste de ce jalon.
+
 - Écran d'administration : nom du serveur, logo, écran de démarrage, fond et apparence de la page de connexion.
 - Couleur d'accentuation choisie par l'utilisateur, avec palette dérivée et vérification automatique du contraste.
 - Modes clair, sombre et automatique, stockés dans les préférences.
