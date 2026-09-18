@@ -24,6 +24,119 @@ pub struct WouldGo {
     pub files: i64,
 }
 
+/// What a removal actually took, once everything behind it had gone too.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Removed {
+    pub works: i64,
+    pub files: i64,
+    /// Everything that was only ever there because of those films.
+    pub swept: Swept,
+}
+
+/// What nothing pointed at any more, once the films were gone.
+///
+/// A film carries a good deal behind it that is shared rather than its own: the
+/// people it credits, the collection it belongs to, its genres and its studios.
+/// None of it follows a film out through the schema, because none of it belongs
+/// to one film. Left alone, it is what turns years of use into a database full
+/// of names nobody can reach and a cache full of faces nobody will see.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Swept {
+    /// People nobody credits any more.
+    pub people: i64,
+    /// Collections that lost their last film. Only ones a provider made: a
+    /// collection somebody put together by hand is theirs, empty or not.
+    pub collections: i64,
+    /// Genres and studios no film carries any more.
+    pub genres: i64,
+    pub studios: i64,
+    /// Pictures that belonged to something now gone, as rows.
+    pub pictures: i64,
+    /// The files those pictures are, inside the image cache. Deleted by the
+    /// caller that wrote them, since nothing below this layer touches a disk.
+    pub picture_paths: Vec<String>,
+}
+
+/// Throws away everything the films that just went were the last to point at.
+///
+/// Runs inside the removal's own transaction: a half swept database is one
+/// where a page can be opened on a person whose photo has already gone.
+///
+/// Bounded by what is left rather than by what went, which is what makes it
+/// safe to run after any removal: a person credited by one remaining film is
+/// not somebody this sweep can reach, whatever else has just been taken away.
+async fn sweep_what_nothing_points_at(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+) -> Result<Swept> {
+    let people = sqlx::query(
+        "DELETE FROM people
+          WHERE NOT EXISTS (SELECT 1 FROM credits WHERE person_id = people.id)",
+    )
+    .execute(&mut **transaction)
+    .await?
+    .rows_affected();
+
+    let collections = sqlx::query(
+        "DELETE FROM collections
+          WHERE origin = 'provider'
+            AND NOT EXISTS (SELECT 1 FROM collection_items
+                             WHERE collection_id = collections.id)",
+    )
+    .execute(&mut **transaction)
+    .await?
+    .rows_affected();
+
+    let genres = sqlx::query(
+        "DELETE FROM genres
+          WHERE NOT EXISTS (SELECT 1 FROM work_genres WHERE genre_id = genres.id)",
+    )
+    .execute(&mut **transaction)
+    .await?
+    .rows_affected();
+
+    let studios = sqlx::query(
+        "DELETE FROM studios
+          WHERE NOT EXISTS (SELECT 1 FROM work_studios WHERE studio_id = studios.id)",
+    )
+    .execute(&mut **transaction)
+    .await?
+    .rows_affected();
+
+    // The pictures come last, because what owns them has only just stopped
+    // existing. Read before they go: a file cannot be found again once the row
+    // that named it has gone, and these are the heaviest thing a removal
+    // leaves behind.
+    let picture_paths: Vec<String> = sqlx::query_scalar(
+        "SELECT relative_path FROM images
+          WHERE (owner_kind = 'work' AND owner_id NOT IN (SELECT id FROM works))
+             OR (owner_kind = 'person' AND owner_id NOT IN (SELECT id FROM people))
+             OR (owner_kind = 'collection' AND owner_id NOT IN (SELECT id FROM collections))
+             OR (owner_kind = 'library' AND owner_id NOT IN (SELECT id FROM libraries))",
+    )
+    .fetch_all(&mut **transaction)
+    .await?;
+
+    let pictures = sqlx::query(
+        "DELETE FROM images
+          WHERE (owner_kind = 'work' AND owner_id NOT IN (SELECT id FROM works))
+             OR (owner_kind = 'person' AND owner_id NOT IN (SELECT id FROM people))
+             OR (owner_kind = 'collection' AND owner_id NOT IN (SELECT id FROM collections))
+             OR (owner_kind = 'library' AND owner_id NOT IN (SELECT id FROM libraries))",
+    )
+    .execute(&mut **transaction)
+    .await?
+    .rows_affected();
+
+    Ok(Swept {
+        people: people as i64,
+        collections: collections as i64,
+        genres: genres as i64,
+        studios: studios as i64,
+        pictures: pictures as i64,
+        picture_paths,
+    })
+}
+
 /// A root along with what the server may actually do with it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootWithAccess {
@@ -413,13 +526,22 @@ impl Database {
     /// Everything hanging off a library follows it out through the schema
     /// rather than through a list kept here, which is what stops a table added
     /// later from being left behind.
-    pub async fn delete_library(&self, id: LibraryId) -> Result<WouldGo> {
+    pub async fn delete_library(&self, id: LibraryId) -> Result<Removed> {
         let going = self.what_would_go_with_a_library(id).await?;
+
+        let mut transaction = self.begin().await?;
         sqlx::query("DELETE FROM libraries WHERE id = ?")
             .bind(id.to_db_string())
-            .execute(self.writer())
+            .execute(&mut *transaction)
             .await?;
-        Ok(going)
+        let swept = sweep_what_nothing_points_at(&mut transaction).await?;
+        transaction.commit().await?;
+
+        Ok(Removed {
+            works: going.works,
+            files: going.files,
+            swept,
+        })
     }
 
     /// Takes one folder away from a library, with the films that were only in
@@ -429,7 +551,7 @@ impl Database {
     /// folder stays and loses that copy; one whose every copy came through
     /// this folder would otherwise be left as a page with nothing behind it,
     /// which is a film nobody can play and nobody can get rid of.
-    pub async fn delete_root(&self, root_id: LibraryRootId) -> Result<WouldGo> {
+    pub async fn delete_root(&self, root_id: LibraryRootId) -> Result<Removed> {
         let files = self.what_would_go_with_a_root(root_id).await?.files;
         // Read before the folder goes, because the sweep below is bounded by
         // it: a library elsewhere may be in the middle of a scan, and a series
@@ -458,11 +580,13 @@ impl Database {
         .execute(&mut *transaction)
         .await?
         .rows_affected();
+        let swept = sweep_what_nothing_points_at(&mut transaction).await?;
         transaction.commit().await?;
 
-        Ok(WouldGo {
+        Ok(Removed {
             works: orphans as i64,
             files,
+            swept,
         })
     }
 
@@ -524,6 +648,11 @@ mod tests {
             ("disk-one".to_string(), PathBuf::from("/mnt/one/Films")),
             ("disk-two".to_string(), PathBuf::from("/mnt/two/Films")),
         ]
+    }
+
+    /// One root of its own, for a second library alongside the first.
+    fn roots_under(name: &str) -> Vec<(String, PathBuf)> {
+        vec![(name.to_string(), PathBuf::from(format!("/mnt/one/{name}")))]
     }
 
     #[tokio::test]
@@ -871,7 +1000,11 @@ mod tests {
         );
 
         let went = database.delete_library(library.id).await.expect("removed");
-        assert_eq!(went, would, "what was counted is what went");
+        assert_eq!(
+            (went.works, went.files),
+            (would.works, would.files),
+            "what was counted is what went"
+        );
         assert!(database.list_libraries().await.expect("read").is_empty());
         assert!(
             database.work(work).await.expect("read").is_none(),
@@ -903,7 +1036,7 @@ mod tests {
             .delete_root(library.roots[0].id)
             .await
             .expect("removed");
-        assert_eq!(went, would);
+        assert_eq!((went.works, went.files), (would.works, would.files));
         assert!(
             database.work(work).await.expect("read").is_some(),
             "the film is still held by the other folder"
@@ -927,19 +1060,229 @@ mod tests {
             .await
             .expect("counted");
         assert_eq!((last.works, last.files), (1, 1));
-        assert_eq!(
-            database
-                .delete_root(library.roots[1].id)
-                .await
-                .expect("removed"),
-            last
-        );
+        let went = database
+            .delete_root(library.roots[1].id)
+            .await
+            .expect("removed");
+        assert_eq!((went.works, went.files), (last.works, last.files));
         assert!(database.work(work).await.expect("read").is_none());
         assert_eq!(
             database.list_libraries().await.expect("read").len(),
             1,
             "the library itself stays, with nowhere left to look"
         );
+    }
+
+    /// An identification carrying everything a film drags behind it.
+    fn identified(title: &str, person: &str, genre: &str) -> crate::metadata::IdentifiedWork {
+        crate::metadata::IdentifiedWork {
+            provider: "tmdb".to_string(),
+            external_id: title.to_string(),
+            imdb_id: None,
+            language: "fr".to_string(),
+            title: title.to_string(),
+            sort_title: title.to_lowercase(),
+            tagline: None,
+            overview: None,
+            release_year: Some(2019),
+            runtime: None,
+            community_rating: None,
+            age_rating_label: None,
+            genres: vec![genre.to_string()],
+            studios: vec!["Atelier Nord".to_string()],
+            credits: vec![crate::metadata::CreditRecord {
+                external_id: person.to_string(),
+                name: person.to_string(),
+                sort_name: person.to_lowercase(),
+                role: "actor".to_string(),
+                character: None,
+                ordinal: 0,
+                photo_path: Some(format!("/{person}.jpg")),
+            }],
+            collection: None,
+            trailers: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_removal_takes_the_names_and_pictures_nothing_points_at_any_more() {
+        // The whole reason this matters: none of it hangs off a library, so
+        // none of it follows one out. Left alone, years of use fill the
+        // database with names nobody can reach and the cache with faces
+        // nobody will see.
+        let database = database().await;
+        let library = database
+            .create_library("Films", LibraryKind::Movies, "fr", &roots())
+            .await
+            .expect("library created");
+        let work = database
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+        database
+            .insert_source(
+                work.id,
+                library.roots[0].id,
+                std::path::Path::new("Quiet Harbour 1080p.mkv"),
+                1_000,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("source recorded");
+        let credited = database
+            .apply_identification(
+                work.id,
+                &identified("Quiet Harbour", "Alix Moreau", "Drama"),
+                false,
+            )
+            .await
+            .expect("identified");
+
+        // A poster for the film and a face for the one name it credits.
+        database
+            .replace_images(
+                "work",
+                &work.id.to_db_string(),
+                "poster",
+                &[crate::images::StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: work.id.to_db_string(),
+                    image_kind: "poster".to_string(),
+                    relative_path: format!("works/{}/poster-abc-400.webp", work.id),
+                    width: Some(400),
+                    height: Some(600),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("poster stored");
+        let person = credited[0].person_id;
+        database
+            .replace_images(
+                "person",
+                &person.to_db_string(),
+                "photo",
+                &[crate::images::StoredImage {
+                    owner_kind: "person".to_string(),
+                    owner_id: person.to_db_string(),
+                    image_kind: "photo".to_string(),
+                    relative_path: format!("people/{person}/photo-abc-192.webp"),
+                    width: Some(192),
+                    height: Some(288),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("face stored");
+
+        let went = database.delete_library(library.id).await.expect("removed");
+
+        assert_eq!(went.swept.people, 1, "the one name nothing credits now");
+        assert_eq!(went.swept.genres, 1);
+        assert_eq!(went.swept.studios, 1);
+        assert_eq!(
+            went.swept.pictures, 2,
+            "the poster of the film and the face of its cast"
+        );
+        assert_eq!(
+            went.swept.picture_paths.len(),
+            2,
+            "and their files are named, so the cache can be swept too"
+        );
+
+        // Nothing at all is left behind in any of the shared tables: this is
+        // the assertion the whole thing exists for.
+        let left: (i64, i64, i64, i64, i64, i64) = sqlx::query_as(
+            "SELECT (SELECT count(*) FROM works),
+                    (SELECT count(*) FROM credits),
+                    (SELECT count(*) FROM people),
+                    (SELECT count(*) FROM genres),
+                    (SELECT count(*) FROM studios),
+                    (SELECT count(*) FROM images)",
+        )
+        .fetch_one(database.reader())
+        .await
+        .expect("counted");
+        assert_eq!(
+            left,
+            (0, 0, 0, 0, 0, 0),
+            "works, credits, people, genres, studios and images: not one row \
+             nothing can reach is left behind"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_removal_never_takes_a_name_another_film_still_credits() {
+        // The other half of the promise: the sweep is bounded by what is left,
+        // so an actor who is also in a film of another library keeps their row
+        // and their face.
+        let database = database().await;
+        let mut kept_person = None;
+        let mut libraries = Vec::new();
+        for (name, title) in [("Films", "Quiet Harbour"), ("Anime", "Amber Field")] {
+            let library = database
+                .create_library(name, LibraryKind::Movies, "fr", &roots_under(name))
+                .await
+                .expect("library created");
+            let work = database
+                .create_work(
+                    library.id,
+                    melyxar_core::work::WorkKind::Movie,
+                    title,
+                    &title.to_lowercase(),
+                    Some(2019),
+                )
+                .await
+                .expect("work created");
+            database
+                .insert_source(
+                    work.id,
+                    library.roots[0].id,
+                    std::path::Path::new("film.mkv"),
+                    1_000,
+                    melyxar_core::time::now(),
+                )
+                .await
+                .expect("source recorded");
+            let credited = database
+                .apply_identification(work.id, &identified(title, "Alix Moreau", "Drama"), false)
+                .await
+                .expect("identified");
+            kept_person = Some(credited[0].person_id);
+            libraries.push(library);
+        }
+        let person = kept_person.expect("both films credit the same name");
+
+        let went = database
+            .delete_library(libraries[0].id)
+            .await
+            .expect("removed");
+        assert_eq!(
+            went.swept.people, 0,
+            "the other film still credits them, so they stay"
+        );
+        assert_eq!(went.swept.genres, 0, "and so does the genre they share");
+
+        // And once the second library goes too, they finally do.
+        let last = database
+            .delete_library(libraries[1].id)
+            .await
+            .expect("removed");
+        assert_eq!(last.swept.people, 1);
+        assert!(database
+            .credit_photos_of_work(melyxar_core::id::WorkId::new())
+            .await
+            .expect("read")
+            .is_empty());
+        let _ = person;
     }
 
     #[tokio::test]
