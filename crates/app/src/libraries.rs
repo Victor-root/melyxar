@@ -135,12 +135,24 @@ pub async fn create(state: &AppState, asked: Asked) -> Result<Library> {
     }
 
     let mut roots: Vec<(String, PathBuf)> = Vec::new();
+    let mut resolved: Vec<PathBuf> = Vec::new();
     for path in &asked.roots {
         let path = folder_to_look_in(state, path).await?;
-        if roots.iter().any(|(_, kept)| nested(&path, kept)) {
+        if resolved.iter().any(|kept| nested(&path, kept)) {
             return Err(Trouble::Refused(Refused::FoldersNested));
         }
-        roots.push((label_for(state, &path).await?, path));
+        resolved.push(path.clone());
+    }
+
+    // Whether a folder's own name is worth using depends on whether another
+    // folder of this very declaration answers to the same one: a root not
+    // yet written to the database cannot otherwise be found colliding with
+    // one being declared alongside it.
+    let own_names: Vec<String> = resolved.iter().map(|path| name_of_folder(path)).collect();
+    for (index, path) in resolved.into_iter().enumerate() {
+        let already_taken = own_names[..index].contains(&own_names[index])
+            || own_names[index + 1..].contains(&own_names[index]);
+        roots.push((label_for(state, &path, already_taken).await?, path));
     }
 
     let library = state
@@ -182,7 +194,7 @@ pub async fn add_root(state: &AppState, library_id: LibraryId, path: &Path) -> R
         return Err(Trouble::Refused(Refused::FolderAlreadyLookedIn));
     }
 
-    let label = label_for(state, &path).await?;
+    let label = label_for(state, &path, false).await?;
     let root = state.database().add_root(library.id, &label, &path).await?;
     let access = melyxar_library::check_root_access(&root.path);
     state.database().set_root_access(root.id, access).await?;
@@ -440,14 +452,23 @@ async fn forget_the_pictures(state: &AppState, paths: &[String]) -> usize {
 
 /// Gives a folder the name it is called by in logs and on screens.
 ///
-/// Its own name would do until a collection is spread across four disks, where
-/// every one of them holds a folder called `Films` and four roots would answer
-/// to one word. The folder above it is what tells them apart, which is exactly
-/// what somebody reading a log needs.
+/// **Its own name, whenever that name is worth anything.** For most people
+/// that is every root they will ever add: a folder called `Movie` says what
+/// it holds, and the folder above it is only ever where a disk happens to be
+/// mounted, which is `mnt` on every root anyone will ever declare and tells
+/// nobody anything.
 ///
-/// A name already taken by another root gets the two together, and a number
-/// after that: a label nobody can tell apart is a log line nobody can place.
-async fn label_for(state: &AppState, path: &Path) -> Result<String> {
+/// Only when that name collides, because a collection is spread across four
+/// disks and every one of them holds a folder called `Films`, does the folder
+/// above it take over: that is what tells the four apart, and it is what
+/// somebody reading a log needs at that point. `already_taken` says whether
+/// this call already knows the own name collides with another root being
+/// declared in the same breath, which a root not yet written to the database
+/// could not otherwise be found colliding with.
+///
+/// A name still taken after that gets the two together, and a number after
+/// that: a label nobody can tell apart is a log line nobody can place.
+async fn label_for(state: &AppState, path: &Path, already_taken: bool) -> Result<String> {
     let own = name_of_folder(path);
     let above = path.parent().map(name_of_folder).unwrap_or_default();
     let taken: Vec<String> = state
@@ -457,6 +478,10 @@ async fn label_for(state: &AppState, path: &Path) -> Result<String> {
         .into_iter()
         .map(|entry| entry.root.label)
         .collect();
+
+    if !own.is_empty() && !already_taken && !taken.contains(&own) {
+        return Ok(own);
+    }
 
     let wanted = if above.is_empty() { own.clone() } else { above };
     let mut candidates = vec![wanted.clone()];
@@ -824,6 +849,30 @@ mod tests {
             "nothing but the name moves: the folders and everything found \
              through them belong to the library"
         );
+    }
+
+    #[tokio::test]
+    async fn a_folder_with_a_name_of_its_own_is_called_by_that_name_and_not_by_where_it_is_mounted()
+    {
+        // The ordinary case, and the one the bug was in: a single disk mounted
+        // under /mnt, holding one folder called Movie. The folder above it is
+        // only ever where the disk happens to sit, and every root anyone will
+        // ever declare on this machine shares it: it says nothing.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let state = state_on(directory.path()).await;
+        let mnt = folder(directory.path(), "mnt");
+        let movie = folder(&mnt, "Movie");
+
+        let library = create(&state, asked("Films", vec![movie]))
+            .await
+            .expect("declared");
+        assert_eq!(library.roots[0].label, "Movie");
+
+        // A second, differently named folder under the same mount point keeps
+        // its own name too: nothing about "mnt" being shared makes it collide.
+        let series = folder(&mnt, "Series");
+        let root = add_root(&state, library.id, &series).await.expect("added");
+        assert_eq!(root.label, "Series");
     }
 
     #[tokio::test]
