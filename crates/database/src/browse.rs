@@ -28,13 +28,29 @@ use crate::{Database, DatabaseError, Result};
 /// grid, counted in its total, offered as a letter, or counted in the menus
 /// that narrow it.
 ///
+/// An episode that belongs to no season is the exception, and it is met on its
+/// own: a file whose name never said which episode it is has no season to be
+/// opened from, so hiding it here is hiding it everywhere. It was scanned,
+/// analysed and stored, and no page could reach it. A file that is merely
+/// misnamed shows up in the report and gets corrected; a file that is nowhere
+/// is never even looked for.
+///
 /// Written once because the five places that answer "what is in this library"
 /// have to agree. Two of them had already been written without it: the genre
 /// menu and the decade menu counted seasons and episodes, so the day a series
 /// is in the collection they would have offered "Drama, forty eight" over a
 /// grid holding four. Which is precisely the fault the genre menu's own
 /// comment says it exists to avoid.
-const MET_ON_ITS_OWN: &str = "kind IN ('movie', 'series', 'album')";
+///
+/// Takes the table it is written about, because half these queries join and
+/// half do not, and `kind` alone is ambiguous as soon as something else in the
+/// statement carries one.
+fn met_on_its_own(table: &str) -> String {
+    format!(
+        "({table}kind IN ('movie', 'series', 'album')
+          OR ({table}kind = 'episode' AND {table}parent_id IS NULL))"
+    )
+}
 
 /// What a grid can be ordered by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -256,7 +272,7 @@ impl Database {
                   JOIN genres g ON g.id = wg.genre_id",
             );
         }
-        sql.push_str(&format!(" WHERE w.{MET_ON_ITS_OWN}"));
+        sql.push_str(&format!(" WHERE {}", met_on_its_own("w.")));
 
         if request.library_id.is_some() {
             sql.push_str(" AND w.library_id = ?");
@@ -399,7 +415,8 @@ impl Database {
         let row: (i64,) = match library_id {
             Some(id) => {
                 sqlx::query_as(AssertSqlSafe(format!(
-                    "SELECT count(*) FROM works WHERE library_id = ? AND {MET_ON_ITS_OWN}"
+                    "SELECT count(*) FROM works WHERE library_id = ? AND {}",
+                    met_on_its_own("")
                 )))
                 .bind(id.to_db_string())
                 .fetch_one(self.reader())
@@ -407,7 +424,8 @@ impl Database {
             }
             None => {
                 sqlx::query_as(AssertSqlSafe(format!(
-                    "SELECT count(*) FROM works WHERE {MET_ON_ITS_OWN}"
+                    "SELECT count(*) FROM works WHERE {}",
+                    met_on_its_own("")
                 )))
                 .fetch_one(self.reader())
                 .await?
@@ -427,8 +445,9 @@ impl Database {
                     "SELECT g.name, count(*) AS total FROM genres g
                  JOIN work_genres wg ON wg.genre_id = g.id
                  JOIN works w ON w.id = wg.work_id
-                 WHERE w.library_id = ? AND w.{MET_ON_ITS_OWN}
-                 GROUP BY g.id ORDER BY total DESC, g.name"
+                 WHERE w.library_id = ? AND {}
+                 GROUP BY g.id ORDER BY total DESC, g.name",
+                    met_on_its_own("w.")
                 )))
                 .bind(id.to_db_string())
                 .fetch_all(self.reader())
@@ -439,8 +458,9 @@ impl Database {
                     "SELECT g.name, count(*) AS total FROM genres g
                  JOIN work_genres wg ON wg.genre_id = g.id
                  JOIN works w ON w.id = wg.work_id
-                 WHERE w.{MET_ON_ITS_OWN}
-                 GROUP BY g.id ORDER BY total DESC, g.name"
+                 WHERE {}
+                 GROUP BY g.id ORDER BY total DESC, g.name",
+                    met_on_its_own("w.")
                 )))
                 .fetch_all(self.reader())
                 .await?
@@ -471,7 +491,7 @@ impl Database {
                          count(*) AS total
                        FROM works
                        WHERE ";
-        let counted = format!("{counted}{MET_ON_ITS_OWN}");
+        let counted = format!("{counted}{}", met_on_its_own(""));
 
         let rows = match library_id {
             Some(id) => {
@@ -502,8 +522,9 @@ impl Database {
             Some(id) => {
                 sqlx::query(AssertSqlSafe(format!(
                     "SELECT (release_year / 10) * 10 AS decade, count(*) AS total FROM works
-                 WHERE release_year IS NOT NULL AND library_id = ? AND {MET_ON_ITS_OWN}
-                 GROUP BY decade ORDER BY decade DESC"
+                 WHERE release_year IS NOT NULL AND library_id = ? AND {}
+                 GROUP BY decade ORDER BY decade DESC",
+                    met_on_its_own("")
                 )))
                 .bind(id.to_db_string())
                 .fetch_all(self.reader())
@@ -512,8 +533,9 @@ impl Database {
             None => {
                 sqlx::query(AssertSqlSafe(format!(
                     "SELECT (release_year / 10) * 10 AS decade, count(*) AS total FROM works
-                 WHERE release_year IS NOT NULL AND {MET_ON_ITS_OWN}
-                 GROUP BY decade ORDER BY decade DESC"
+                 WHERE release_year IS NOT NULL AND {}
+                 GROUP BY decade ORDER BY decade DESC",
+                    met_on_its_own("")
                 )))
                 .fetch_all(self.reader())
                 .await?
@@ -642,6 +664,19 @@ mod tests {
             every.push(work.id);
         }
 
+        // Hung together the way a scan will hang them: the season under its
+        // series, the episode under its season. An episode under nothing at
+        // all is a different case entirely and is met on its own, which the
+        // test below is about.
+        for (child, parent) in [(2, 1), (3, 2)] {
+            sqlx::query("UPDATE works SET parent_id = ? WHERE id = ?")
+                .bind(every[parent].to_db_string())
+                .bind(every[child].to_db_string())
+                .execute(database.writer())
+                .await
+                .expect("hung under its parent");
+        }
+
         sqlx::query("INSERT INTO genres (id, name) VALUES ('g1', 'Drame')")
             .execute(database.writer())
             .await
@@ -701,6 +736,85 @@ mod tests {
                 .sum::<i64>(),
             shown,
             "and the letters beside the grid"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_episode_that_belongs_to_no_season_is_met_on_its_own() {
+        // The fault this guards against is not about series at all: a file
+        // dropped into a library of series became an episode with no parent,
+        // and the filter that keeps episodes out of grids kept that one out
+        // too. The file was scanned, analysed and stored, and no page in the
+        // whole server could reach it. Every way of counting has to agree
+        // about it, exactly as they agree about a season under its series.
+        let (database, library_id) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+
+        let stray = database
+            .create_work(
+                library_id,
+                WorkKind::Episode,
+                "Distant Signal, a night nobody numbered",
+                "distant signal, a night nobody numbered",
+                Some(2019),
+            )
+            .await
+            .expect("work created");
+
+        sqlx::query("INSERT INTO genres (id, name) VALUES ('g1', 'Drame')")
+            .execute(database.writer())
+            .await
+            .expect("genre created");
+        sqlx::query("INSERT INTO work_genres (work_id, genre_id) VALUES (?, 'g1')")
+            .bind(stray.id.to_db_string())
+            .execute(database.writer())
+            .await
+            .expect("genre attached");
+
+        let page = database
+            .browse_works(&BrowseRequest {
+                library_id: Some(library_id),
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert!(
+            page.cards.iter().any(|card| card.id == stray.id),
+            "a file nobody could number still has somewhere to be seen"
+        );
+
+        let shown = page.cards.len() as i64;
+        assert_eq!(shown, 2, "the film, and the episode belonging to nothing");
+        assert_eq!(
+            database
+                .count_browsable(Some(library_id))
+                .await
+                .expect("read"),
+            shown
+        );
+        assert_eq!(
+            database
+                .genres_in_use(Some(library_id))
+                .await
+                .expect("read"),
+            vec![("Drame".to_string(), 1)],
+            "and the menus count it once, like any other card"
+        );
+        assert_eq!(
+            database
+                .decades_in_use(Some(library_id))
+                .await
+                .expect("read"),
+            vec![(2010, shown)]
+        );
+        assert_eq!(
+            database
+                .initials_in_use(Some(library_id))
+                .await
+                .expect("read")
+                .iter()
+                .map(|(_, total)| total)
+                .sum::<i64>(),
+            shown
         );
     }
 
