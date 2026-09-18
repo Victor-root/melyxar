@@ -120,8 +120,9 @@ async fn create(
     Json(asked): Json<NewLibrary>,
 ) -> Result<Json<DeclaredView>> {
     crate::administrator(&state).await?;
-    let kind = LibraryKind::parse(&asked.kind)
-        .ok_or_else(|| ServerError::invalid_input("there is no library of that kind"))?;
+    let kind = LibraryKind::parse(&asked.kind).ok_or(melyxar_app::libraries::Trouble::Refused(
+        melyxar_app::libraries::Refused::UnknownKind,
+    ))?;
 
     let library = melyxar_app::libraries::create(
         &state,
@@ -254,5 +255,30 @@ mod tests {
     #[test]
     fn a_library_identifier_that_is_not_one_is_refused_rather_than_guessed_at() {
         assert!(library_id("not-an-identifier").is_err());
+    }
+
+    /// Every refusal somebody can meet while declaring a library has words in
+    /// both languages.
+    ///
+    /// The words live in the interface and the reasons live in the app crate,
+    /// so nothing but a test crossing from one to the other can catch a
+    /// refusal nobody worded. One with no words reaches the screen as
+    /// `refused.library.folder_already_looked_in`, in front of somebody who is
+    /// in the middle of filling a form in.
+    #[test]
+    fn every_reason_a_library_is_refused_for_has_words_in_both_languages() {
+        let words = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/i18n.ts"),
+        )
+        .expect("the words of the interface");
+
+        for refused in melyxar_app::libraries::Refused::ALL {
+            let key = format!("refused.library.{}", refused.as_str());
+            assert_eq!(
+                words.matches(&format!("\"{key}\":")).count(),
+                2,
+                "{key} needs a sentence in English and one in French"
+            );
+        }
     }
 }

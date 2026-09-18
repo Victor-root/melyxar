@@ -1324,6 +1324,147 @@
   min-width: 120px;
 }
 
+/* One library and everything about it: its settings on one line, its folders
+   on the next, and the folder picker under both when it is open. */
+.library-block {
+  padding: var(--gap) 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--gap);
+}
+
+.library-block:last-of-type {
+  border-bottom: none;
+}
+
+.library-roots {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  flex-wrap: wrap;
+}
+
+.library-root {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+/* A folder the server cannot reach. Said beside the folder it is about, since
+   that is the only place the answer means anything. */
+.library-root-trouble {
+  color: var(--accent-bright);
+}
+
+/* The whole path of a folder being chosen. Shown only while a library is being
+   declared, where the path is the subject. */
+.library-root-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+/* A word that can be typed over. Drawn as text until it is touched, so a list
+   of names reads as a list of names rather than as a form. */
+.editable {
+  padding: 4px 8px;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  min-width: 8em;
+}
+
+.editable:hover,
+.editable:focus {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.choice input[type="text"] {
+  padding: 6px 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* --------------------------------------------------------------------------
+ * Looking around the server's disk
+ *
+ * The one screen where a path is the subject. It sits inside the block that
+ * opened it rather than over the page: what is being filled in has to stay
+ * readable while a folder is chosen for it.
+ * ----------------------------------------------------------------------- */
+
+.picker {
+  margin: var(--gap) 0;
+  padding: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  margin-bottom: var(--gap-tight);
+}
+
+.picker-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.picker-actions {
+  display: flex;
+  gap: var(--gap-tight);
+  margin-bottom: var(--gap-tight);
+}
+
+/* Bounded on purpose: a folder of five hundred entries must not push the form
+   it belongs to off the screen. */
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.picker-folder {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker-folder:hover,
+.picker-folder:focus-visible {
+  background: var(--surface-raised, var(--border));
+}
+
+.picker-folder-videos {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* --------------------------------------------------------------------------
  * Foot of the page
  * ----------------------------------------------------------------------- */

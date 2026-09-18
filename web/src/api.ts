@@ -50,6 +50,8 @@ export interface Root {
   label: string;
   access: "missing" | "unreadable" | "read_only" | "read_write";
   explanation_code: string;
+  /** What renaming this folder needs. */
+  id: string;
 }
 
 export interface Library {
@@ -67,6 +69,26 @@ export interface Library {
       Changing it asks the provider about every film again. */
   metadata_language: string;
   roots: Root[];
+}
+
+/** One folder of the server's disk, as the picker shows it. */
+export interface Folder {
+  name: string;
+  /** Its whole path: what asking for its contents needs, and what becomes a
+      root if it is chosen. */
+  path: string;
+  /** How many videos sit directly inside, counted up to a bound. No file is
+      ever named, here or on the server. */
+  videos: number;
+  more_videos: boolean;
+}
+
+export interface Listing {
+  path: string;
+  /** Where going up leads, absent at the top of the tree. */
+  parent: string | null;
+  folders: Folder[];
+  cut_short: boolean;
 }
 
 /** How much of a library a scan or an identification goes over. */
@@ -455,6 +477,10 @@ export class ApiError extends Error {
   constructor(
     readonly code: string,
     readonly status: number,
+    /** The word saying which thing to put right, when the server sent one.
+        A refusal somebody meets while filling a form in has to say which
+        field, and `invalid_input` alone says nothing anybody can act on. */
+    readonly reason?: string,
   ) {
     super(code);
   }
@@ -473,7 +499,7 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new ApiError(body?.code ?? "generic", response.status);
+    throw new ApiError(body?.code ?? "generic", response.status, body?.details?.reason);
   }
   return (await response.json()) as T;
 }
@@ -534,7 +560,7 @@ async function send<T>(
   }
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new ApiError(body?.code ?? "generic", response.status);
+    throw new ApiError(body?.code ?? "generic", response.status, body?.details?.reason);
   }
   return (await response.json()) as T;
 }
@@ -781,6 +807,29 @@ export const api = {
      it is one screen and one answer, and what comes back is what was kept:
      a shape that cannot hold a thumbnail is brought into range rather than
      refused. */
+  /* The folders inside one folder of the server's disk. Nothing means the top
+     of the tree, which is where somebody with nothing typed in starts. */
+  folders: (path: string | null, signal?: AbortSignal) =>
+    get<Listing>(
+      `/api/v1/folders${path ? `?path=${encodeURIComponent(path)}` : ""}`,
+      signal,
+    ),
+  /* Declaring a library, and the two ways of putting one right afterwards. */
+  createLibrary: (library: {
+    name: string;
+    kind: string;
+    metadata_language: string;
+    roots: string[];
+  }) => post<{ id: string; name: string; scanning: boolean }>("/api/v1/libraries", library),
+  renameLibrary: (library: string, name: string) =>
+    put<{ name: string }>(`/api/v1/libraries/${library}/name`, { name }),
+  addRoot: (library: string, path: string) =>
+    post<{ id: string; label: string }>(`/api/v1/libraries/${library}/roots`, { path }),
+  renameRoot: (library: string, root: string, label: string) =>
+    put<{ id: string; label: string }>(
+      `/api/v1/libraries/${library}/roots/${root}/label`,
+      { label },
+    ),
   libraryWork: (signal?: AbortSignal) =>
     get<LibraryWork>("/api/v1/settings/libraries", signal),
   setLibraryWork: (work: LibraryWork) =>
