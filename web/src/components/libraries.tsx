@@ -10,9 +10,9 @@
  * sends somebody back to try the same thing again.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
-import type { Library } from "../api";
+import type { Library, WouldGo } from "../api";
 import { FolderPicker } from "./folders";
 import { refusalKey } from "../i18n";
 import { languageName, METADATA_LANGUAGES } from "../player/languages";
@@ -47,6 +47,9 @@ export function LibraryEditor({
   const [said, setSaid] = useState<string | null>(null);
   /* Which library is being given another folder, when one is. */
   const [addingTo, setAddingTo] = useState<string | null>(null);
+  /* What the question of taking something away is being put about, when it is.
+     A folder when one is named, the whole library otherwise. */
+  const [removing, setRemoving] = useState<{ library: string; root?: string } | null>(null);
 
   /* The three settings of a library travel together, because they are one
      answer to one question: sending half would leave the other half to be
@@ -174,6 +177,18 @@ export function LibraryEditor({
                 {root.access !== "read_only" && root.access !== "read_write" && (
                   <span className="library-root-trouble">{t(`root.${root.explanation_code}`)}</span>
                 )}
+                <button
+                  className="button button-small"
+                  onClick={() =>
+                    setRemoving(
+                      removing?.root === root.id
+                        ? null
+                        : { library: library.id, root: root.id },
+                    )
+                  }
+                >
+                  {t("settings.remove_folder")}
+                </button>
               </span>
             ))}
             <button
@@ -182,12 +197,42 @@ export function LibraryEditor({
             >
               {t("settings.add_folder")}
             </button>
+            <button
+              className="button button-small"
+              onClick={() =>
+                setRemoving(
+                  removing?.library === library.id && !removing.root
+                    ? null
+                    : { library: library.id },
+                )
+              }
+            >
+              {t("settings.remove_library")}
+            </button>
           </div>
 
           {addingTo === library.id && (
             <FolderPicker
               onPick={(path) => addFolderTo(library.id, path)}
               onClose={() => setAddingTo(null)}
+            />
+          )}
+
+          {removing?.library === library.id && (
+            <Removal
+              library={library}
+              root={removing.root}
+              onDone={(went) => {
+                setRemoving(null);
+                setSaid(t("settings.removal_done", { works: went.works, files: went.files }));
+                onChanged();
+              }}
+              onRefused={(key) => {
+                setRemoving(null);
+                setRefused(key);
+                onChanged();
+              }}
+              onCancel={() => setRemoving(null)}
             />
           )}
         </div>
@@ -208,6 +253,104 @@ export function LibraryEditor({
         </button>
       )}
     </>
+  );
+}
+
+/**
+ * The question put before a library, or one of its folders, is taken away.
+ *
+ * Two steps on purpose, and the count is fetched the moment the question
+ * appears rather than read off the listing: somebody is about to lose what the
+ * server learned about a few hundred films, and the number they say yes to has
+ * to be the number that goes.
+ *
+ * The one thing this screen cannot be unclear about is that nothing leaves the
+ * disk. It is written out in full, every time, under the count.
+ */
+function Removal({
+  library,
+  root,
+  onDone,
+  onRefused,
+  onCancel,
+}: {
+  library: Library;
+  /** The folder being taken out, or nothing for the whole library. */
+  root?: string;
+  onDone: (went: WouldGo) => void;
+  onRefused: (key: string) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useSettings();
+  const [going, setGoing] = useState<WouldGo | null>(null);
+  /* A count that would not come is shown here rather than at the top of the
+     page: nobody has asked for anything yet, so there is nothing to put right
+     anywhere else. */
+  const [counting, setCounting] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const asked = root
+      ? api.whatRemovingAFolderTakes(library.id, root, controller.signal)
+      : api.whatRemovingTakes(library.id, controller.signal);
+    asked.then(setGoing).catch((error) => {
+      if (!(error instanceof DOMException)) {
+        setCounting(refusal(error));
+      }
+    });
+    return () => controller.abort();
+  }, [library.id, root]);
+
+  const goAhead = async () => {
+    setBusy(true);
+    try {
+      onDone(root ? await api.removeRoot(library.id, root) : await api.removeLibrary(library.id));
+    } catch (error) {
+      onRefused(refusal(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const label = library.roots.find((one) => one.id === root)?.label ?? "";
+
+  return (
+    <div className="removal">
+      {counting ? (
+        <p className="notice">{t(counting)}</p>
+      ) : going === null ? (
+        <p className="notice notice-faint">{t("settings.removal_counting")}</p>
+      ) : (
+        <p className="notice">
+          {root
+            ? t("settings.removal_folder_asks", {
+                works: going.works,
+                files: going.files,
+                name: library.name,
+                label,
+              })
+            : t("settings.removal_library_asks", {
+                works: going.works,
+                files: going.files,
+                name: library.name,
+              })}
+        </p>
+      )}
+      <p className="settings-why">{t("settings.removal_keeps_the_files")}</p>
+      <div className="controls">
+        <button
+          className="button button-accent"
+          disabled={busy || going === null}
+          onClick={goAhead}
+        >
+          {t("settings.removal_go_ahead")}
+        </button>
+        <button className="button" onClick={onCancel}>
+          {t("settings.cancel")}
+        </button>
+      </div>
+    </div>
   );
 }
 

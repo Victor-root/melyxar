@@ -71,6 +71,18 @@ export interface Library {
   roots: Root[];
 }
 
+/**
+ * What taking a library or one of its folders away would take with it.
+ *
+ * Films the server would stop knowing about, and the files behind them as
+ * rows. Not one file leaves the disk: the collection is not this server's to
+ * remove.
+ */
+export interface WouldGo {
+  works: number;
+  files: number;
+}
+
 /** One folder of the server's disk, as the picker shows it. */
 export interface Folder {
   name: string;
@@ -830,6 +842,17 @@ export const api = {
       `/api/v1/libraries/${library}/roots/${root}/label`,
       { label },
     ),
+  /* Taking one away. The count is asked for the moment the question is put,
+     rather than read off a listing that may be an hour old: the number
+     somebody says yes to has to be the number that goes. No file on the disk
+     is touched by any of these. */
+  whatRemovingTakes: (library: string, signal?: AbortSignal) =>
+    get<WouldGo>(`/api/v1/libraries/${library}/removal`, signal),
+  removeLibrary: (library: string) => remove<WouldGo>(`/api/v1/libraries/${library}`),
+  whatRemovingAFolderTakes: (library: string, root: string, signal?: AbortSignal) =>
+    get<WouldGo>(`/api/v1/libraries/${library}/roots/${root}/removal`, signal),
+  removeRoot: (library: string, root: string) =>
+    remove<WouldGo>(`/api/v1/libraries/${library}/roots/${root}`),
   libraryWork: (signal?: AbortSignal) =>
     get<LibraryWork>("/api/v1/settings/libraries", signal),
   setLibraryWork: (work: LibraryWork) =>

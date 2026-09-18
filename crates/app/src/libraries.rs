@@ -12,8 +12,9 @@
 
 use std::path::{Path, PathBuf};
 
-use melyxar_core::id::{LibraryId, LibraryRootId};
+use melyxar_core::id::{LibraryId, LibraryRootId, MediaSourceId};
 use melyxar_core::library::{Library, LibraryKind, LibraryRoot, RootAccess};
+pub use melyxar_database::libraries::WouldGo;
 
 use crate::{AppError, AppState};
 
@@ -28,6 +29,9 @@ pub enum Refused {
     NameNeeded,
     NameTooLong,
     NameTaken,
+    /// Something is already at work on this library, so taking it away would
+    /// make that work fail for a reason nobody could read.
+    SomethingIsRunning,
     /// A kind of library this server does not have.
     UnknownKind,
     /// A library has to look somewhere.
@@ -51,6 +55,7 @@ impl Refused {
             Self::NameNeeded => "name_needed",
             Self::NameTooLong => "name_too_long",
             Self::NameTaken => "name_taken",
+            Self::SomethingIsRunning => "something_is_running",
             Self::UnknownKind => "unknown_kind",
             Self::NoFolder => "no_folder",
             Self::NotAWholePath => "not_a_whole_path",
@@ -65,10 +70,11 @@ impl Refused {
 
     /// Every one of them, so that a test can cross from here to the words the
     /// interface shows and catch a refusal nobody worded.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::NameNeeded,
         Self::NameTooLong,
         Self::NameTaken,
+        Self::SomethingIsRunning,
         Self::UnknownKind,
         Self::NoFolder,
         Self::NotAWholePath,
@@ -220,6 +226,146 @@ pub async fn rename(state: &AppState, library_id: LibraryId, name: &str) -> Resu
     state.database().rename_library(library.id, &name).await?;
     tracing::info!(was = library.name, now = name, "a library was renamed");
     library_by_id(state, library_id).await
+}
+
+/// What taking a library away would take with it.
+///
+/// Asked for just before the question is put, rather than read off a listing
+/// that may be an hour old: the number somebody says yes to has to be the
+/// number that goes.
+pub async fn what_removing_takes(state: &AppState, library_id: LibraryId) -> Result<WouldGo> {
+    library_by_id(state, library_id).await?;
+    Ok(state
+        .database()
+        .what_would_go_with_a_library(library_id)
+        .await?)
+}
+
+/// What taking one folder away from a library would take with it.
+///
+/// Fewer films than the folder holds whenever one of them is also held in
+/// another folder of the library: that one stays, and loses a copy.
+pub async fn what_removing_a_folder_takes(
+    state: &AppState,
+    library_id: LibraryId,
+    root_id: LibraryRootId,
+) -> Result<WouldGo> {
+    let root = root_of(state, library_id, root_id).await?;
+    Ok(state.database().what_would_go_with_a_root(root.id).await?)
+}
+
+/// Takes a library away, and everything the server knew about it.
+///
+/// **Not one file on the disk is touched.** The collection is not this
+/// server's to remove: what goes is what it wrote down about it, which is the
+/// films, their pages, their pictures, what was watched of them, the files as
+/// rows and the folders as declared folders. Removing a film from the disk is
+/// a different thing entirely, asked for film by film, and it never comes
+/// through here.
+///
+/// Says how much went, which is the same count the screen showed before
+/// anybody said yes.
+pub async fn remove(state: &AppState, library_id: LibraryId) -> Result<WouldGo> {
+    let library = library_by_id(state, library_id).await?;
+    refuse_while_something_is_running_on(state, library_id).await?;
+
+    // Read before the rows go: what is keyed on a file outside the database
+    // cannot be found again once the row that named it is gone.
+    let sources = state.database().source_ids_of_library(library_id).await?;
+    let went = state.database().delete_library(library_id).await?;
+    forget_the_thumbnails_of(state, &sources).await;
+
+    tracing::info!(
+        library = library.name,
+        works = went.works,
+        files = went.files,
+        "a library was taken away; no file on the disk was touched"
+    );
+    Ok(went)
+}
+
+/// Takes one folder away from a library, with the films that were only in it.
+///
+/// No file on the disk is touched here either. A film also held in another
+/// folder stays and loses that copy.
+pub async fn remove_root(
+    state: &AppState,
+    library_id: LibraryId,
+    root_id: LibraryRootId,
+) -> Result<WouldGo> {
+    let library = library_by_id(state, library_id).await?;
+    let root = root_of(state, library_id, root_id).await?;
+    refuse_while_something_is_running_on(state, library_id).await?;
+
+    let sources = state.database().source_ids_of_root(root_id).await?;
+    let went = state.database().delete_root(root_id).await?;
+    forget_the_thumbnails_of(state, &sources).await;
+    if went.works > 0 {
+        state.database().bump_library_version(library_id).await?;
+    }
+
+    tracing::info!(
+        library = library.name,
+        root = root.label,
+        works = went.works,
+        files = went.files,
+        "a folder was taken away from a library; no file on the disk was touched"
+    );
+    Ok(went)
+}
+
+/// Refuses while this library has work under way.
+///
+/// Taking a library out from under a scan makes it fail, and a job that fails
+/// for a reason nobody can read is worse than a button that waits. Every kind
+/// of work this server does to a library is asked about, rather than the scan
+/// alone: the readings of the upkeep are just as much in the middle of it.
+async fn refuse_while_something_is_running_on(
+    state: &AppState,
+    library_id: LibraryId,
+) -> Result<()> {
+    let target = library_id.to_string();
+    for kind in [
+        melyxar_core::job::JobKind::ScanLibrary,
+        melyxar_core::job::JobKind::IdentifyWork,
+        melyxar_core::job::JobKind::ReadKeyFrames,
+        melyxar_core::job::JobKind::GenerateThumbnails,
+    ] {
+        if state
+            .database()
+            .has_unfinished_job(kind, Some(&target))
+            .await?
+        {
+            return Err(Trouble::Refused(Refused::SomethingIsRunning));
+        }
+    }
+    Ok(())
+}
+
+/// Throws away the sheets of thumbnails of files that are no longer known.
+///
+/// The one thing worth clearing out of the cache: a library of three hundred
+/// films leaves as many folders of sheets, and nothing would ever go looking
+/// for them again. The converted subtitles and the pictures stay, which is
+/// written down in the architecture notes: the first are tiny and have their
+/// own button, and the second are named after their contents and may belong to
+/// a film that is still here.
+///
+/// Never a failure of the removal: the rows are gone either way, and a cache
+/// that could not be swept is a cache, not a library.
+async fn forget_the_thumbnails_of(state: &AppState, sources: &[MediaSourceId]) {
+    for source in sources {
+        let folder = state
+            .config()
+            .directories
+            .thumbnails()
+            .join(source.to_string());
+        if let Err(error) = tokio::fs::remove_dir_all(&folder).await {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::debug!(%error, "sheets of thumbnails left behind in the cache");
+            }
+        }
+    }
 }
 
 /// Gives a folder the name it is called by in logs and on screens.
@@ -418,6 +564,24 @@ mod tests {
         let made = inside.join(name);
         std::fs::create_dir_all(&made).expect("folder made");
         made
+    }
+
+    /// Waits for the scan a declaration set going.
+    ///
+    /// Declaring a library scans it, and a library being scanned is one the
+    /// server refuses to take away. A test that takes one away has to let the
+    /// scan it asked for end first, exactly as somebody pressing the button
+    /// would.
+    async fn once_nothing_is_running(state: &AppState) {
+        while !state
+            .database()
+            .unfinished_jobs()
+            .await
+            .expect("read")
+            .is_empty()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
     }
 
     fn asked(name: &str, roots: Vec<PathBuf>) -> Asked {
@@ -619,6 +783,113 @@ mod tests {
         let root = add_root(&state, library.id, &again).await.expect("added");
         assert_ne!(root.label, "one");
         assert!(!root.label.is_empty());
+    }
+
+    #[tokio::test]
+    async fn taking_a_library_away_leaves_every_file_exactly_where_it_was() {
+        // The promise this whole thing rests on: the collection is not this
+        // server's to remove. It reads it.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let state = state_on(directory.path()).await;
+        let films = folder(directory.path(), "Films");
+        let film = films.join("Quiet Harbour 2019.mkv");
+        std::fs::write(&film, b"a film").expect("film written");
+
+        let library = create(&state, asked("Films", vec![films.clone()]))
+            .await
+            .expect("declared");
+        once_nothing_is_running(&state).await;
+        remove(&state, library.id).await.expect("taken away");
+
+        assert!(
+            state
+                .database()
+                .list_libraries()
+                .await
+                .expect("read")
+                .is_empty(),
+            "the library is gone from what the server knows"
+        );
+        assert!(film.exists(), "and the film is still on the disk");
+        assert_eq!(
+            std::fs::read(&film).expect("still readable"),
+            b"a film",
+            "untouched, to the byte"
+        );
+        assert!(films.is_dir(), "and so is the folder it sits in");
+    }
+
+    #[tokio::test]
+    async fn taking_a_folder_away_leaves_its_files_where_they_are_too() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let state = state_on(directory.path()).await;
+        let films = folder(directory.path(), "Films");
+        let more = folder(directory.path(), "More");
+        std::fs::write(more.join("Amber Field 2021.mkv"), b"another film").expect("film written");
+
+        let library = create(&state, asked("Films", vec![films]))
+            .await
+            .expect("declared");
+        let root = add_root(&state, library.id, &more).await.expect("added");
+        once_nothing_is_running(&state).await;
+
+        remove_root(&state, library.id, root.id)
+            .await
+            .expect("taken away");
+
+        assert_eq!(
+            state
+                .database()
+                .library_roots(library.id)
+                .await
+                .expect("read")
+                .len(),
+            1,
+            "the library keeps the folder it still looks in"
+        );
+        assert!(more.join("Amber Field 2021.mkv").exists());
+    }
+
+    #[tokio::test]
+    async fn nothing_is_taken_away_while_something_is_at_work_on_it() {
+        // Taking a library out from under a scan makes that scan fail for a
+        // reason nobody could read.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let state = state_on(directory.path()).await;
+        let library = create(
+            &state,
+            asked("Films", vec![folder(directory.path(), "Films")]),
+        )
+        .await
+        .expect("declared");
+        once_nothing_is_running(&state).await;
+
+        let running = state
+            .database()
+            .create_job(
+                melyxar_core::job::JobKind::GenerateThumbnails,
+                melyxar_core::job::JobPriority::BACKGROUND,
+                Some(&library.id.to_string()),
+            )
+            .await
+            .expect("a reading is under way");
+
+        assert!(matches!(
+            remove(&state, library.id).await,
+            Err(Trouble::Refused(Refused::SomethingIsRunning))
+        ));
+        assert_eq!(
+            state.database().list_libraries().await.expect("read").len(),
+            1,
+            "and nothing was taken away"
+        );
+
+        state
+            .database()
+            .finish_job(running.id, melyxar_core::job::JobState::Succeeded, None)
+            .await
+            .expect("the reading ended");
+        remove(&state, library.id).await.expect("and now it can go");
     }
 
     #[tokio::test]
