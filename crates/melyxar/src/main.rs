@@ -177,10 +177,9 @@ fn install_logging(config: &Config) {
 
 async fn serve(config: Config) -> anyhow::Result<()> {
     let address = SocketAddr::new(config.bind_address, config.port);
-    let brought_up = melyxar_app::startup::bring_up_and_say_what_is_waiting(config)
+    let state = melyxar_app::startup::bring_up(config)
         .await
         .context("bringing the server up")?;
-    let state = brought_up.state;
 
     if !state.can_play_media() {
         tracing::warn!(
@@ -209,12 +208,6 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .await
         .context("closing what a previous run left")?;
     melyxar_app::startup::take_up_again_what_a_restart_cut_short(&state, &cut_short).await;
-
-    // A language changed in the configuration puts every film of that library
-    // back in the queue. Asking about them now is what makes the change
-    // something somebody watches happen, rather than something they discover
-    // months later.
-    melyxar_app::startup::ask_again_about(&state, &brought_up.waiting_on_a_new_language).await;
 
     melyxar_server::serve(address, state.clone(), shutdown_signal())
         .await

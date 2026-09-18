@@ -27,7 +27,7 @@ import {
   storedAppearance,
 } from "../player/appearance";
 import type { Appearance } from "../player/appearance";
-import { languageName } from "../player/languages";
+import { languageName, METADATA_LANGUAGES } from "../player/languages";
 import { DeviceOptimization } from "../player/DeviceOptimization";
 import { useSettings } from "../settings";
 
@@ -44,6 +44,8 @@ export function SettingsPage() {
      description files, and when the upkeep runs. All three were lines of the
      configuration file until now. */
   const [work, setWork] = useState<LibraryWork | null>(null);
+  /* What a change set going, when it set anything going. */
+  const [said, setSaid] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -123,8 +125,18 @@ export function SettingsPage() {
       .setLibraryOptions(library.id, {
         key_frames_during_scan: wanted.key_frames_during_scan,
         thumbnails_during_scan: wanted.thumbnails_during_scan,
+        metadata_language: wanted.metadata_language,
       })
-      .then(() => setFailed(null))
+      .then((kept) => {
+        setFailed(null);
+        // A language that changed set a run going on every film of the
+        // library. Somebody who just pressed that is owed its size.
+        setSaid(
+          kept.asked_about_again === null
+            ? null
+            : t("settings.asked_about_again", { count: kept.asked_about_again }),
+        );
+      })
       .catch((error) => {
         // Put back what the server still holds, rather than leaving a ticked
         // box next to a server that never heard of it.
@@ -342,9 +354,31 @@ export function SettingsPage() {
           <h2>{t("settings.libraries")}</h2>
           <p className="settings-why">{t("settings.libraries_why")}</p>
 
+          <p className="settings-why">{t("settings.metadata_language_why")}</p>
+
+          {said && <p className="notice">{said}</p>}
+
           {libraries.map((library) => (
             <div className="library-options" key={library.id}>
               <span className="library-options-name">{library.name}</span>
+              {/* The language its films are described in. Changing it asks the
+                  provider about every one of them again, which is said under
+                  the list rather than found out afterwards. */}
+              <label className="choice">
+                <span className="choice-label">{t("settings.metadata_language")}</span>
+                <select
+                  value={library.metadata_language}
+                  onChange={(event) =>
+                    switchTo(library, { metadata_language: event.target.value })
+                  }
+                >
+                  {METADATA_LANGUAGES.map((code) => (
+                    <option key={code} value={code}>
+                      {languageName(code, language)}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {/* Buttons that stay pressed rather than tick boxes, which is
                   how every other switch in this interface is drawn. */}
               <button

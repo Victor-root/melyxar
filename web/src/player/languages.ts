@@ -40,6 +40,16 @@ const PAIRS: Record<string, string> = {
   vie: "vi",
 };
 
+/**
+ * The languages a library can ask a provider to describe its films in.
+ *
+ * The two letter codes above, which are the ones a provider takes, without the
+ * duplicates the three letter side carries. A list rather than a text field so
+ * that nobody can leave a library asking for a language nothing answers in,
+ * and the names come out in whatever the interface is speaking.
+ */
+export const METADATA_LANGUAGES: string[] = [...new Set(Object.values(PAIRS))].sort();
+
 export function languageName(code: string, speaking: string): string {
   const short = PAIRS[code.toLowerCase()] ?? code.toLowerCase();
   try {

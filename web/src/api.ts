@@ -63,6 +63,9 @@ export interface Library {
   key_frames_during_scan: boolean;
   /** The same, for the pictures of the playback bar. */
   thumbnails_during_scan: boolean;
+  /** The language this library's films are described in, as a two letter code.
+      Changing it asks the provider about every film again. */
+  metadata_language: string;
   roots: Root[];
 }
 
@@ -760,11 +763,16 @@ export const api = {
   setLibraryOptions: (library: string, options: {
     key_frames_during_scan: boolean;
     thumbnails_during_scan: boolean;
+    metadata_language: string;
   }) =>
-    put<{ key_frames_during_scan: boolean; thumbnails_during_scan: boolean; changed: boolean }>(
-      `/api/v1/libraries/${library}/options`,
-      options,
-    ),
+    put<{
+      key_frames_during_scan: boolean;
+      thumbnails_during_scan: boolean;
+      metadata_language: string;
+      changed: boolean;
+      /** How many films went back in the queue, when the language changed. */
+      asked_about_again: number | null;
+    }>(`/api/v1/libraries/${library}/options`, options),
   /* The two readings that go through every film, what each has left, and when
      the server will next do them on its own. */
   upkeep: (signal?: AbortSignal) => get<Upkeep>("/api/v1/upkeep", signal),

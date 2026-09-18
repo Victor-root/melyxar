@@ -25,6 +25,8 @@ pub struct LibrarySummary {
     /// What a scan of this library does in one sitting, so the screen that
     /// offers the switches shows where they stand.
     pub options: LibraryOptions,
+    /// The language its films are described in, for the same screen.
+    pub metadata_language: String,
     pub roots: Vec<RootSummary>,
 }
 
@@ -98,6 +100,7 @@ pub async fn libraries(state: &AppState) -> Result<Vec<LibrarySummary>> {
             name: library.name,
             kind: library.kind,
             options: library.options,
+            metadata_language: library.metadata_language,
         });
     }
     Ok(summaries)

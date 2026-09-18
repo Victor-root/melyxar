@@ -377,28 +377,53 @@ fn provider_of(
 struct OptionsAsked {
     key_frames_during_scan: bool,
     thumbnails_during_scan: bool,
+    /// The language this library's films are described in, as a two letter
+    /// code. Changing it asks the provider about every film again.
+    metadata_language: String,
 }
 
 #[derive(Debug, Serialize)]
 struct OptionsView {
     key_frames_during_scan: bool,
     thumbnails_during_scan: bool,
+    metadata_language: String,
     /// Whether anything really moved. A screen that sent what was already
     /// there gets a plain no rather than a second copy of the same answer.
     changed: bool,
+    /// How many films went back in the queue to be described again, when the
+    /// language is what changed. A number somebody is owed: it is the size of
+    /// what they just set going.
+    asked_about_again: Option<u64>,
 }
 
-/// Says whether a scan of this library does the two heavy readings itself.
+/// A language code the provider can be asked in.
 ///
-/// Both switches always travel together, because they are one answer to one
-/// question on one screen: sending half of it would leave the other half to be
-/// guessed at, and the guess would be wrong every other time.
+/// Two letters, which is what the provider takes and what a library has always
+/// been declared with. Refused rather than corrected: a code nobody can use
+/// would leave a library described in nothing at all, and the screen offers a
+/// list rather than a text field, so anything else is a client with a defect.
+fn language_of(asked: &str) -> Result<String> {
+    let language = asked.trim().to_lowercase();
+    if language.len() != 2 || !language.chars().all(|letter| letter.is_ascii_lowercase()) {
+        return Err(ServerError::invalid_input(
+            "a language is two letters, such as fr or en",
+        ));
+    }
+    Ok(language)
+}
+
+/// Says what a scan of this library does, and what language it is described in.
+///
+/// Everything travels together, because it is one screen and one answer:
+/// sending half of it would leave the other half to be guessed at, and the
+/// guess would be wrong every other time.
 async fn set_library_options(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(asked): Json<OptionsAsked>,
 ) -> Result<Json<OptionsView>> {
     let library = library_of(&state, &id).await?;
+    let language = language_of(&asked.metadata_language)?;
     let options = melyxar_core::library::LibraryOptions {
         key_frames_during_scan: asked.key_frames_during_scan,
         thumbnails_during_scan: asked.thumbnails_during_scan,
@@ -409,6 +434,12 @@ async fn set_library_options(
         .await
         .map_err(internal)?;
 
+    // After the switches and not before: a language that changes sets a run
+    // going, and a run that started while the switches failed to be written
+    // would be a run under settings nobody asked for.
+    let asked_about_again =
+        melyxar_app::identify::change_the_language_of(&state, &library, &language).await?;
+
     // A switch flipped on a screen and a switch the server took are two
     // different things, and the only difference a person sees is a scan that
     // behaves as it did before.
@@ -416,14 +447,18 @@ async fn set_library_options(
         library = library.name,
         key_frames_during_scan = options.key_frames_during_scan,
         thumbnails_during_scan = options.thumbnails_during_scan,
+        metadata_language = language,
         changed,
+        asked_about_again,
         "what a scan of this library does was set"
     );
 
     Ok(Json(OptionsView {
         key_frames_during_scan: options.key_frames_during_scan,
         thumbnails_during_scan: options.thumbnails_during_scan,
-        changed,
+        metadata_language: language,
+        changed: changed || asked_about_again.is_some(),
+        asked_about_again,
     }))
 }
 

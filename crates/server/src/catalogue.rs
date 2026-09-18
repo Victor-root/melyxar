@@ -107,6 +107,8 @@ struct LibraryView {
     key_frames_during_scan: bool,
     /// The same for the thumbnails of the playback bar.
     thumbnails_during_scan: bool,
+    /// The language its films are described in, as a two letter code.
+    metadata_language: String,
     roots: Vec<RootView>,
 }
 
@@ -132,6 +134,7 @@ async fn libraries(State(state): State<AppState>) -> Result<Json<Vec<LibraryView
                 version: library.version,
                 key_frames_during_scan: library.options.key_frames_during_scan,
                 thumbnails_during_scan: library.options.thumbnails_during_scan,
+                metadata_language: library.metadata_language,
                 roots: library
                     .roots
                     .into_iter()
