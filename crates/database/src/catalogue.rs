@@ -15,13 +15,30 @@ use melyxar_core::media::{
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::{now, Millis, Timestamp};
 use melyxar_core::work::{IdentificationNote, IdentificationState, Work, WorkKind};
-use sqlx::{Row, Sqlite};
+use sqlx::{AssertSqlSafe, Row, Sqlite};
 
 use crate::convert::{
     bool_to_int, int_to_bool, parse_id, parse_optional_timestamp, parse_timestamp,
     timestamp_to_text,
 };
 use crate::{Database, DatabaseError, Result};
+
+/// Everything a work is, as every reader of one asks for it.
+///
+/// Written once because five queries hand their rows to the same reader, and a
+/// column added to the reader and forgotten in one of them is a field that
+/// comes back wrong depending on which question was asked.
+///
+/// Takes the table it is written about: one of the five joins, and a bare
+/// column name is ambiguous the moment a statement carries two tables.
+pub(crate) fn what_a_work_is(table: &str) -> String {
+    format!(
+        "{table}id, {table}library_id, {table}parent_id, {table}ordinal, {table}kind,
+         {table}title, {table}sort_title, {table}release_year, {table}runtime_ms,
+         {table}community_rating, {table}age_rating_label, {table}identification,
+         {table}identification_note, {table}dominant_color, {table}added_at, {table}updated_at"
+    )
+}
 
 /// Works one provider says are the same film.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,13 +155,51 @@ impl Database {
     ) -> Result<Work> {
         insert_work(
             self.writer(),
-            library_id,
+            Placed::on_its_own(library_id),
             kind,
             title,
             sort_title,
             release_year,
         )
         .await
+    }
+
+    /// Writes a work that hangs under another: a season under its series, an
+    /// episode under its season.
+    ///
+    /// The parent's count of children is brought up to date in the same
+    /// transaction, by counting them rather than by adding one: a count that
+    /// is recomputed cannot drift, and a scan that is interrupted halfway
+    /// leaves a number that is still true of what is there.
+    pub async fn create_child_work(
+        &self,
+        library_id: LibraryId,
+        parent_id: WorkId,
+        ordinal: i32,
+        kind: WorkKind,
+        title: &str,
+        sort_title: &str,
+    ) -> Result<Work> {
+        let mut transaction = self.begin().await?;
+        let work = insert_work(
+            &mut *transaction,
+            Placed::under(library_id, parent_id, ordinal),
+            kind,
+            title,
+            sort_title,
+            None,
+        )
+        .await?;
+        sqlx::query(
+            "UPDATE works
+                SET child_count = (SELECT count(*) FROM works AS child WHERE child.parent_id = works.id)
+              WHERE id = ?",
+        )
+        .bind(parent_id.to_db_string())
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(work)
     }
 
     /// Takes one copy away from the film it sits on and makes it a film of its
@@ -189,7 +244,7 @@ impl Database {
         let mut transaction = self.begin().await?;
         let work = insert_work(
             &mut *transaction,
-            library_id,
+            Placed::on_its_own(library_id),
             kind,
             title,
             sort_title,
@@ -207,12 +262,10 @@ impl Database {
 
     /// One work by identifier.
     pub async fn work(&self, id: WorkId) -> Result<Option<Work>> {
-        let row = sqlx::query(
-            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
-                    community_rating, age_rating_label, identification, identification_note,
-                    dominant_color, added_at, updated_at
-             FROM works WHERE id = ?",
-        )
+        let row = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM works WHERE id = ?",
+            what_a_work_is("")
+        )))
         .bind(id.to_db_string())
         .fetch_optional(self.reader())
         .await?;
@@ -231,20 +284,62 @@ impl Database {
         sort_title: &str,
         release_year: Option<i32>,
     ) -> Result<Option<Work>> {
-        let row = sqlx::query(
-            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
-                    community_rating, age_rating_label, identification, identification_note,
-                    dominant_color, added_at, updated_at
-             FROM works
+        self.work_named(library_id, sort_title, release_year, None)
+            .await
+    }
+
+    /// The series of this library going by that name, if one is written down.
+    ///
+    /// Asks the same question as the one above and narrows it to a series on
+    /// purpose. A library of series also holds episodes nobody could number,
+    /// and one of those going by the name of a series would otherwise be
+    /// handed back as the series itself, with seasons hung under a file.
+    pub async fn series_by_name(
+        &self,
+        library_id: LibraryId,
+        sort_title: &str,
+        release_year: Option<i32>,
+    ) -> Result<Option<Work>> {
+        self.work_named(library_id, sort_title, release_year, Some(WorkKind::Series))
+            .await
+    }
+
+    /// The child of a work sitting at that number: season two, episode five.
+    pub async fn child_by_ordinal(&self, parent_id: WorkId, ordinal: i32) -> Result<Option<Work>> {
+        let row = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM works WHERE parent_id = ? AND ordinal = ? LIMIT 1",
+            what_a_work_is("")
+        )))
+        .bind(parent_id.to_db_string())
+        .bind(ordinal)
+        .fetch_optional(self.reader())
+        .await?;
+
+        row.map(|row| work_from_row(&row)).transpose()
+    }
+
+    async fn work_named(
+        &self,
+        library_id: LibraryId,
+        sort_title: &str,
+        release_year: Option<i32>,
+        kind: Option<WorkKind>,
+    ) -> Result<Option<Work>> {
+        let row = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM works
              WHERE library_id = ? AND sort_title = ?
                AND (release_year IS ? OR (release_year IS NULL AND ? IS NULL))
+               AND (? IS NULL OR kind = ?)
              ORDER BY added_at
              LIMIT 1",
-        )
+            what_a_work_is("")
+        )))
         .bind(library_id.to_db_string())
         .bind(sort_title)
         .bind(release_year)
         .bind(release_year)
+        .bind(kind.map(WorkKind::as_str))
+        .bind(kind.map(WorkKind::as_str))
         .fetch_optional(self.reader())
         .await?;
 
@@ -253,12 +348,10 @@ impl Database {
 
     /// Works of a library, newest first, which is the order the home page uses.
     pub async fn recent_works(&self, library_id: LibraryId, limit: i64) -> Result<Vec<Work>> {
-        let rows = sqlx::query(
-            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
-                    community_rating, age_rating_label, identification, identification_note,
-                    dominant_color, added_at, updated_at
-             FROM works WHERE library_id = ? ORDER BY added_at DESC LIMIT ?",
-        )
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM works WHERE library_id = ? ORDER BY added_at DESC LIMIT ?",
+            what_a_work_is("")
+        )))
         .bind(library_id.to_db_string())
         .bind(limit)
         .fetch_all(self.reader())
@@ -1650,9 +1743,40 @@ fn stored_source_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredSource>
 
 /// Writes a new work, wherever the caller is writing: on the pool for a plain
 /// creation, inside a transaction when something else has to land with it.
+/// Where a work sits the moment it is first written down.
+///
+/// The three together rather than one by one: a work met on its own has no
+/// parent and no rank, and a season or an episode has both. Passing them apart
+/// is how one of them ends up written and the other forgotten.
+struct Placed {
+    library_id: LibraryId,
+    parent_id: Option<WorkId>,
+    ordinal: Option<i32>,
+}
+
+impl Placed {
+    /// Met on its own: a film, a series, an album.
+    fn on_its_own(library_id: LibraryId) -> Self {
+        Self {
+            library_id,
+            parent_id: None,
+            ordinal: None,
+        }
+    }
+
+    /// Hung under another work at a given rank.
+    fn under(library_id: LibraryId, parent_id: WorkId, ordinal: i32) -> Self {
+        Self {
+            library_id,
+            parent_id: Some(parent_id),
+            ordinal: Some(ordinal),
+        }
+    }
+}
+
 async fn insert_work<'e, E>(
     executor: E,
-    library_id: LibraryId,
+    placed: Placed,
     kind: WorkKind,
     title: &str,
     sort_title: &str,
@@ -1661,16 +1785,24 @@ async fn insert_work<'e, E>(
 where
     E: sqlx::Executor<'e, Database = Sqlite>,
 {
+    let Placed {
+        library_id,
+        parent_id,
+        ordinal,
+    } = placed;
     let id = WorkId::new();
     let moment = now();
     let timestamp = timestamp_to_text(moment);
 
     sqlx::query(
-        "INSERT INTO works (id, library_id, kind, title, sort_title, release_year, added_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO works (id, library_id, parent_id, ordinal, kind, title, sort_title,
+                            release_year, added_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(library_id.to_db_string())
+    .bind(parent_id.map(|parent| parent.to_db_string()))
+    .bind(ordinal)
     .bind(kind.as_str())
     .bind(title)
     .bind(sort_title)
@@ -1683,7 +1815,8 @@ where
     Ok(Work {
         id,
         library_id,
-        parent_id: None,
+        parent_id,
+        ordinal,
         kind,
         title: title.to_string(),
         sort_title: sort_title.to_string(),
@@ -1705,6 +1838,7 @@ pub(crate) fn work_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Work> {
     Ok(Work {
         id: parse_id(&row.try_get::<String, _>("id")?)?,
         library_id: parse_id(&row.try_get::<String, _>("library_id")?)?,
+        ordinal: row.try_get("ordinal")?,
         parent_id: row
             .try_get::<Option<String>, _>("parent_id")?
             .map(|value| parse_id(&value))

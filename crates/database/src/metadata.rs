@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use melyxar_core::id::{CollectionId, CreditId, ExtraVideoId, LibraryId, NameId, PersonId, WorkId};
 use melyxar_core::time::{now, Millis};
 use melyxar_core::work::{IdentificationNote, IdentificationState};
-use sqlx::{Row, Sqlite, Transaction};
+use sqlx::{AssertSqlSafe, Row, Sqlite, Transaction};
 
 use crate::convert::{int_to_bool, timestamp_to_text};
 use crate::{Database, DatabaseError, Result};
@@ -196,18 +196,25 @@ impl Database {
     /// in the list, so the same handful comes back and everything behind it is
     /// never reached. A library is bounded by the disks it sits on, and these
     /// rows are small.
+    ///
+    /// Only what the provider has a catalogue for. It has one for films, so a
+    /// film is asked about; a season and an episode are named by the series
+    /// they hang under and are never looked up on their own, and a series
+    /// joins this list the day the provider is given its television catalogue.
+    /// Without the rule, every episode of every series is handed to a search
+    /// for films, which answers nothing several hundred times over and fills
+    /// the report with it.
     pub async fn works_awaiting_identification(
         &self,
         library_id: melyxar_core::id::LibraryId,
     ) -> Result<Vec<melyxar_core::work::Work>> {
-        let rows = sqlx::query(
-            "SELECT id, library_id, parent_id, kind, title, sort_title, release_year, runtime_ms,
-                    community_rating, age_rating_label, identification, identification_note,
-                    dominant_color, added_at, updated_at
-             FROM works
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM works
              WHERE library_id = ? AND identification IN ('pending', 'unidentified')
+               AND kind = 'movie'
              ORDER BY added_at",
-        )
+            crate::catalogue::what_a_work_is("")
+        )))
         .bind(library_id.to_db_string())
         .fetch_all(self.reader())
         .await?;
@@ -225,20 +232,23 @@ impl Database {
     /// ever as good as the name it was read from, so a title that looks wrong
     /// leaves one question, and the answer to it has to be in the same report
     /// rather than a query away.
+    ///
+    /// Nothing that hangs under another work. A season and an episode are
+    /// named by where they sit and are never looked up on their own, so they
+    /// would sit in this report for ever without anything being able to take
+    /// them out of it, and a report that can never empty is one nobody reads.
     pub async fn works_still_nameless(&self, limit: i64) -> Result<Vec<NamelessWork>> {
-        let rows = sqlx::query(
-            "SELECT w.id, w.library_id, w.parent_id, w.kind, w.title, w.sort_title,
-                    w.release_year, w.runtime_ms, w.community_rating, w.age_rating_label,
-                    w.identification, w.identification_note, w.dominant_color,
-                    w.added_at, w.updated_at,
-                    min(s.relative_path) AS relative_path
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {}, min(s.relative_path) AS relative_path
              FROM works w
              LEFT JOIN media_sources s ON s.work_id = w.id
              WHERE w.identification IN ('pending', 'unidentified')
+               AND w.parent_id IS NULL
              GROUP BY w.id
              ORDER BY w.sort_title
              LIMIT ?",
-        )
+            crate::catalogue::what_a_work_is("w.")
+        )))
         .bind(limit)
         .fetch_all(self.reader())
         .await?;
@@ -502,6 +512,15 @@ impl Database {
     /// that read file names improve, this is the list that has to be read
     /// again. A work someone chose by hand, or a provider named, is left out:
     /// its title no longer comes from a file name.
+    ///
+    /// Films only, because reading a name again means reading it as a film.
+    /// A season and an episode are named by where they sit, and an episode
+    /// read as a film comes back under the name of its own series: the reading
+    /// that trims a marker shouting in capitals off the end of a title trims
+    /// `S01E01` along with it, so every episode of one series reads as that
+    /// series and is then joined into it as another copy of itself. Measured,
+    /// not argued: two episodes went in and the series came out holding both
+    /// their files.
     pub async fn works_named_after_their_file(
         &self,
         library_id: LibraryId,
@@ -511,6 +530,7 @@ impl Database {
              FROM works w
              JOIN media_sources s ON s.work_id = w.id
              WHERE w.library_id = ? AND w.identification IN ('pending', 'unidentified')
+               AND w.kind = 'movie'
              GROUP BY w.id
              ORDER BY w.added_at",
         )

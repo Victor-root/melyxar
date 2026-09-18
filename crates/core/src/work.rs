@@ -144,6 +144,9 @@ pub struct Work {
     pub library_id: LibraryId,
     /// Parent work, used by seasons and episodes. Absent for a film.
     pub parent_id: Option<WorkId>,
+    /// Where this sits among its parent's children: the season number, the
+    /// episode number, the track number. Absent for anything met on its own.
+    pub ordinal: Option<i32>,
     pub kind: WorkKind,
     /// Title as displayed, in the preferred language when one is available.
     pub title: String,
