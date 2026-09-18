@@ -370,17 +370,45 @@ where
     let chosen = match known_id(&known_ids, provider.name()) {
         Some(external_id) => external_id,
         None => match find_candidate(provider.as_ref(), work, &known_ids, language).await {
-            Ok(Some(candidate)) => candidate.external_id,
-            // The provider answered and offered nothing at all. The only thing
-            // it was given is the title read off the file name, so that title
-            // is what the line has to say.
-            Ok(None) => {
+            Ok(WhatCameBack::Found(candidate)) => candidate.external_id,
+            // Nothing at all came back, however it was asked. The only thing
+            // the provider was given is the title read off the file name, so
+            // that title is what the line has to say.
+            Ok(WhatCameBack::NothingAtAll) => {
                 tracing::info!(
                     work = %MediaName::new(&work.title),
                     year = work.release_year,
                     provider = provider.name(),
                     "no film came back under this title; the name on disk is most likely not the name of the film"
                 );
+                return Ok(Outcome::Unknown(IdentificationNote::NoMatch));
+            }
+            // Films came back and every one was refused. That is a different
+            // fault entirely, and the nearest miss is what says which: a name
+            // half in common is a title written by two hands, and one barely
+            // in common is a search that understood nothing.
+            Ok(WhatCameBack::NoneCarriedTheName { offered, nearest }) => {
+                match nearest {
+                    Some(miss) => tracing::info!(
+                        work = %MediaName::new(&work.title),
+                        year = work.release_year,
+                        asked = %MediaName::new(&miss.asked),
+                        offered,
+                        nearest = %MediaName::new(&miss.title),
+                        nearest_year = miss.release_year,
+                        closeness = format!("{:.2}", miss.closeness),
+                        needed = format!("{CLOSE_ENOUGH:.2}"),
+                        provider = provider.name(),
+                        "films came back but not one carries this name; the name on disk and the name of the film are not quite the same"
+                    ),
+                    None => tracing::info!(
+                        work = %MediaName::new(&work.title),
+                        year = work.release_year,
+                        offered,
+                        provider = provider.name(),
+                        "films came back but not one carries this name"
+                    ),
+                }
                 return Ok(Outcome::Unknown(IdentificationNote::NoMatch));
             }
             Err(error) => return Ok(postpone(work, &error)),
@@ -459,36 +487,77 @@ fn known_id(ids: &[(String, String)], provider: &str) -> Option<String> {
         .map(|(_, id)| id.clone())
 }
 
+/// What every way of asking about one film came to.
+///
+/// A film nobody could name has two quite different stories behind it, and
+/// until now the line about it told them as one. Either the provider never
+/// offered anything, which means the name on the disk is not a name it knows;
+/// or it offered films and not one of them carried the name, which means the
+/// name is nearly right and something small is in the way. The first is for
+/// whoever named the file to fix, the second is for this code, so the two have
+/// to be told apart out loud.
+enum WhatCameBack {
+    Found(Box<MovieCandidate>),
+    /// Films came back and every one of them was refused. Carries the nearest
+    /// miss, which is what says why.
+    NoneCarriedTheName {
+        offered: usize,
+        nearest: Option<NearestMiss>,
+    },
+    /// Nothing came back at all, however it was asked.
+    NothingAtAll,
+}
+
+/// The candidate that came nearest to a name, and how near it came.
+struct NearestMiss {
+    title: String,
+    release_year: Option<i32>,
+    /// Share of words in common with the title it was measured against, which
+    /// is the same number `CLOSE_ENOUGH` is the bar for.
+    closeness: f64,
+    /// The title it was measured against, which is not always the one written
+    /// down: the last question is asked about a shortened one.
+    asked: String,
+}
+
 /// Finds the film a work is about.
 ///
 /// An identifier from another site is tried first, then a search by title and
-/// year, then the same search without the year.
+/// year, then the same search without the year, then one in plain letters, and
+/// last one without a shorthand somebody numbered a series with.
 async fn find_candidate(
     provider: &impl MetadataProvider,
     work: &Work,
     known_ids: &[(String, String)],
     language: &str,
-) -> melyxar_metadata::provider::Result<Option<MovieCandidate>> {
+) -> melyxar_metadata::provider::Result<WhatCameBack> {
     if let Some(imdb_id) = known_id(known_ids, "imdb") {
         if let Some(found) = provider.movie_by_imdb_id(&imdb_id, language).await? {
-            return Ok(Some(found));
+            return Ok(WhatCameBack::Found(Box::new(found)));
         }
     }
+
+    // Everything every question brought back, kept only so that a film nobody
+    // could name can say which of the two stories is its own.
+    let mut offered = 0;
+    let mut nearest: Option<NearestMiss> = None;
 
     let candidates = provider
         .search_movie(&work.title, work.release_year, language)
         .await?;
     if let Some(found) = choose(&candidates, work) {
-        return Ok(Some(found.clone()));
+        return Ok(WhatCameBack::Found(Box::new(found.clone())));
     }
+    note_what_was_offered(&candidates, &work.title, &mut offered, &mut nearest);
 
     // A year read off a file name is often the year of the copy rather than of
     // the film, so a search that found nothing is worth one more try without it.
     if work.release_year.is_some() {
         let without_year = provider.search_movie(&work.title, None, language).await?;
         if let Some(found) = choose(&without_year, work) {
-            return Ok(Some(found.clone()));
+            return Ok(WhatCameBack::Found(Box::new(found.clone())));
         }
+        note_what_was_offered(&without_year, &work.title, &mut offered, &mut nearest);
     }
 
     // An accent reaches us written one of two ways, and a provider that
@@ -500,8 +569,9 @@ async fn find_candidate(
         let plain = naming::fold_accents(&work.title);
         let folded = provider.search_movie(&plain, None, language).await?;
         if let Some(found) = choose(&folded, work) {
-            return Ok(Some(found.clone()));
+            return Ok(WhatCameBack::Found(Box::new(found.clone())));
         }
+        note_what_was_offered(&folded, &plain, &mut offered, &mut nearest);
     }
 
     // Last of all: whoever keeps a series together often numbers it in front of
@@ -515,10 +585,48 @@ async fn find_candidate(
         // Judged on the shortened title, since that is what was asked: the
         // work still carries the shorthand and nothing would ever match it.
         if let Some(found) = choose_for(&shortened, &without, work.release_year) {
-            return Ok(Some(found.clone()));
+            return Ok(WhatCameBack::Found(Box::new(found.clone())));
+        }
+        note_what_was_offered(&shortened, &without, &mut offered, &mut nearest);
+    }
+
+    if offered == 0 {
+        return Ok(WhatCameBack::NothingAtAll);
+    }
+    Ok(WhatCameBack::NoneCarriedTheName { offered, nearest })
+}
+
+/// Keeps count of what one question brought back, and of its nearest miss.
+///
+/// Measured against the title that question asked rather than the one written
+/// down, since the last question asks about a shortened one and a number
+/// measured against the wrong title would only mislead.
+fn note_what_was_offered(
+    candidates: &[MovieCandidate],
+    asked: &str,
+    offered: &mut usize,
+    nearest: &mut Option<NearestMiss>,
+) {
+    *offered += candidates.len();
+    let wanted = naming::matchable_title(asked);
+
+    for candidate in candidates {
+        let closeness = std::iter::once(candidate.title.as_str())
+            .chain(candidate.original_title.as_deref())
+            .map(|name| naming::how_alike(&naming::matchable_title(name), &wanted))
+            .fold(0.0_f64, f64::max);
+        if nearest
+            .as_ref()
+            .is_none_or(|best| closeness > best.closeness)
+        {
+            *nearest = Some(NearestMiss {
+                title: candidate.title.clone(),
+                release_year: candidate.release_year,
+                closeness,
+                asked: asked.to_string(),
+            });
         }
     }
-    Ok(None)
 }
 
 /// How far a year read off a file name may be from the year a provider gives.
@@ -1926,6 +2034,70 @@ mod tests {
             "one question was enough: {:?}",
             provider.searches()
         );
+    }
+
+    #[tokio::test]
+    async fn a_film_nobody_could_name_says_which_of_the_two_faults_it_is() {
+        // The two look the same from outside and are not the same thing at
+        // all. Nothing came back means the name on the disk is not a name the
+        // provider knows, and is for whoever named the file to fix. Films came
+        // back and were refused means the name is nearly right and something
+        // here is in the way. A line that said one thing for both sent
+        // everybody looking in the wrong place.
+        let (_directory, state, _library, _work) =
+            state_with_work("Something Invented", Some(2019)).await;
+        let work = only_work(&state).await;
+
+        let silent = StandIn::new(Vec::new(), Vec::new());
+        assert!(
+            matches!(
+                find_candidate(&silent, &work, &[], "fr").await,
+                Ok(WhatCameBack::NothingAtAll)
+            ),
+            "a provider that offered nothing says so"
+        );
+
+        // The same work, against a provider holding only films of other names.
+        let crowded = StandIn::new(
+            vec![
+                candidate("111", "Amber Field", Some(2019)),
+                candidate(
+                    "222",
+                    "Something Different Entirely Made Up Here",
+                    Some(2019),
+                ),
+            ],
+            vec![details("111", "Amber Field", Some(2019))],
+        );
+        let Ok(WhatCameBack::NoneCarriedTheName { offered, nearest }) =
+            find_candidate(&crowded, &work, &[], "fr").await
+        else {
+            panic!("films came back, so that is what it has to say");
+        };
+        assert!(offered >= 2, "it says how many were turned down");
+        let miss = nearest.expect("and which came nearest");
+        assert_eq!(miss.asked, "Something Invented");
+        assert!(
+            miss.closeness > 0.0 && miss.closeness < CLOSE_ENOUGH,
+            "near enough to be worth naming, not near enough to take: {}",
+            miss.closeness
+        );
+    }
+
+    /// The one work of a library set up by `state_with_work`, read back.
+    async fn only_work(state: &AppState) -> Work {
+        let library = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .remove(0);
+        state
+            .database()
+            .recent_works(library.id, 1)
+            .await
+            .expect("read")
+            .remove(0)
     }
 
     #[tokio::test]
