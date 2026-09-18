@@ -1,0 +1,780 @@
+//! Reading a season and an episode out of a file name and the folders above it.
+//!
+//! The film side of the house rests on one idea: the year is the boundary of a
+//! name. An episode almost never carries a year, so the same idea is applied to
+//! the thing an episode does carry: **the episode marker is the boundary**.
+//! What comes before it names the series, the marker itself gives the season
+//! and the number, and what comes after is the episode's own title followed by
+//! the usual technical words.
+//!
+//! The words are prepared by the naming module and by nothing else, so a name
+//! means the same thing whether it is read as a film or as an episode.
+//!
+//! Four arrangements exist on real disks and all four have to work: a folder
+//! per series with a folder per season inside it, which is what most people do;
+//! a folder per series with the episodes laid flat in it; everything in one
+//! folder with nothing but the file names to tell them apart; and season
+//! folders named in whatever language and shape their owner felt like, or
+//! missing entirely for a series that only ever had one season.
+//!
+//! That is why the name is read first and the folder only ever confirms or
+//! fills in. Reading the folder first works beautifully on a tidy collection
+//! and collapses on the other three.
+
+use std::collections::BTreeSet;
+
+use crate::naming::{self, LibrarySigns};
+
+/// Highest number still read as a season.
+///
+/// A resolution is written exactly like a crossed pair, and `1920x1080` is not
+/// the eighty eighth episode of the one thousand nine hundred and twentieth
+/// season.
+const HIGHEST_SEASON: i32 = 99;
+
+/// How many digits a number in a marker may carry.
+///
+/// Four, because a season or an episode never needs more and a year does: it
+/// keeps a bare year from being read as a number of something.
+const LONGEST_NUMBER: usize = 4;
+
+/// What a file name turned out to say about an episode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedEpisode {
+    /// The series, as this name gave it.
+    ///
+    /// Empty when the name opened with the marker, which is what a file named
+    /// inside a season folder does. The folder above is what names it then.
+    pub series: String,
+    /// The season, when the name said which one.
+    ///
+    /// Absent when the name carried only an episode number, and the folder is
+    /// then the one to answer.
+    pub season: Option<i32>,
+    /// The first episode this file holds.
+    pub first: i32,
+    /// The last one, which differs only for a file holding several episodes.
+    pub last: i32,
+    /// The year the series carries in its own name, when it carries one.
+    pub year: Option<i32>,
+    /// The episode's own title, when the name carried one after the marker.
+    pub title: Option<String>,
+    /// Technical tags found after the title, lowercased. Hints only, exactly
+    /// as they are for a film.
+    pub tags: BTreeSet<String>,
+}
+
+impl ParsedEpisode {
+    /// Whether this file stands for more than one episode.
+    pub fn holds_several(&self) -> bool {
+        self.last > self.first
+    }
+}
+
+/// Reads a file name as an episode, or says it is not one.
+///
+/// `current_year` is passed in rather than read from the clock, so the same
+/// name always reads the same way in a test.
+pub fn parse_episode(
+    file_name: &str,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<ParsedEpisode> {
+    naming::with_the_words_of(file_name, current_year, signs, |words| {
+        let marker = find_the_marker(words)?;
+
+        let after = &words[marker.through..];
+        let boundary = naming::first_technical_tag(after, 0).unwrap_or(after.len());
+        let title = naming::title_of(
+            naming::trim_leading_separators(&after[..boundary]),
+            signs.marks(),
+        );
+
+        // The series stops at the first word that can only describe a file,
+        // exactly as a film's title does. A name carrying one before the
+        // marker would otherwise hand it to the series, and a series named
+        // with a technical word in it groups apart from the same series
+        // without one.
+        let named = &words[..marker.at];
+        let named = &named[..naming::first_technical_tag(named, 1).unwrap_or(named.len())];
+        let (named, year) = the_series(named, current_year);
+
+        Some(ParsedEpisode {
+            series: naming::title_of(named, signs.marks()),
+            year,
+            season: marker.season,
+            first: marker.first,
+            last: marker.last,
+            title: (!title.is_empty()).then_some(title),
+            tags: naming::tags_from(&after[boundary..]),
+        })
+    })
+}
+
+/// The series part of a name, and the year it carried if it carried one.
+///
+/// A series written `Distant Signal 2019 S01E02` and the same one written
+/// `Distant Signal S01E03` are one series, and grouping them by the name as
+/// written would make two. The year is taken off so both land together, and
+/// kept because it is worth knowing when the time comes to look the series up.
+///
+/// Never the whole of the name: a series really can be called `1883`, and one
+/// called that has a name of one word which happens to read like a year.
+fn the_series<'a>(words: &'a [&'a str], current_year: i32) -> (&'a [&'a str], Option<i32>) {
+    let Some((last, rest)) = words.split_last() else {
+        return (words, None);
+    };
+    if rest.is_empty() {
+        return (words, None);
+    }
+    match naming::a_plausible_year(last, current_year) {
+        Some(year) => (rest, Some(year)),
+        None => (words, None),
+    }
+}
+
+/// The season a folder says it holds.
+///
+/// Answers for the shapes people really use, in both languages, plus the one
+/// that stands for everything that belongs to no season: a special, which is
+/// season zero by long convention and is where every other server puts them.
+///
+/// A folder that says nothing recognisable answers nothing, and the caller is
+/// then left with whatever the file name gave it. Guessing a season out of a
+/// folder named something else is how a series ends up with a season nobody
+/// ever wrote.
+pub fn season_of_folder(folder: &str) -> Option<i32> {
+    let folded = naming::fold_accents(folder).to_lowercase();
+    let normalised = folded.replace(['.', '_'], " ");
+    let words: Vec<&str> = normalised.split_whitespace().collect();
+    let (first, rest) = words.split_first()?;
+
+    if rest.is_empty() {
+        if is_a_special(first) {
+            return Some(0);
+        }
+        // `S01` on its own, the shape somebody types when they are in a hurry.
+        return match read_a_mark(first) {
+            Some(Mark::Season(season)) => Some(season),
+            _ => None,
+        };
+    }
+
+    // `Saison 1`, `Season 01`, and the `Series 1` the British write. That last
+    // word is only ever read here, never in a file name: a file called
+    // `Series 1 ...` is far more likely to be a series actually called that.
+    (is_a_season_word(first) || *first == "series").then(|| number_of(rest[0]))?
+}
+
+/// Whether a folder holds what belongs to no season.
+fn is_a_special(word: &str) -> bool {
+    matches!(word, "specials" | "special" | "speciaux" | "hors")
+}
+
+/// Where the marker sits in a name, and what it says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Marker {
+    /// First word of the marker: everything before it names the series.
+    at: usize,
+    /// First word after the marker: everything from there is the episode's.
+    through: usize,
+    season: Option<i32>,
+    first: i32,
+    last: i32,
+}
+
+/// What one word of a name turned out to be.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mark {
+    /// A season and an episode in one word: `S01E02`, `1x02`.
+    Both { season: i32, first: i32, last: i32 },
+    /// A season with nothing after it, waiting for the next word.
+    Season(i32),
+    /// An episode with no season said anywhere: `E02`.
+    Episode { first: i32, last: i32 },
+}
+
+/// Finds the marker, strongest shape first.
+///
+/// The order is the whole point. A name carrying both an aspect ratio and a
+/// proper marker, `Series 16x9 S01E02`, has to be read on the marker; asked
+/// for the first thing shaped like a crossed pair it would come back as the
+/// ninth episode of the sixteenth season. So every shape that names its parts
+/// is looked for across the whole name before any shape that does not.
+fn find_the_marker(words: &[&str]) -> Option<Marker> {
+    a_named_pair(words)
+        .or_else(|| a_crossed_pair_somewhere(words))
+        .or_else(|| an_episode_on_its_own(words))
+}
+
+/// A season and an episode that both say which they are.
+///
+/// Three shapes, all naming their parts: welded into one word, split across
+/// two, or spelled out in full with the numbers between the words.
+fn a_named_pair(words: &[&str]) -> Option<Marker> {
+    (0..words.len()).find_map(|at| {
+        if let Some(Mark::Both {
+            season,
+            first,
+            last,
+        }) = a_season_and_an_episode(&plain(words[at]))
+        {
+            return Some(Marker {
+                at,
+                through: at + 1,
+                season: Some(season),
+                first,
+                last,
+            });
+        }
+
+        let Some(Mark::Season(season)) = a_season_alone(&plain(words[at])) else {
+            return spelled_out(words, at);
+        };
+        let (next, after) = word_after(words, at)?;
+        let Some(Mark::Episode { first, last }) = an_episode_alone(&plain(next)) else {
+            return None;
+        };
+        Some(Marker {
+            at,
+            through: after,
+            season: Some(season),
+            first,
+            last,
+        })
+    })
+}
+
+/// `Season 1 Episode 2`, in either language, however it is punctuated.
+fn spelled_out(words: &[&str], at: usize) -> Option<Marker> {
+    if !is_a_season_word(&plain(words[at])) {
+        return None;
+    }
+    let (season, after) = word_after(words, at)?;
+    let season = number_of(&plain(season))?;
+    let (word, after) = word_after(words, after - 1)?;
+    if !is_an_episode_word(&plain(word)) {
+        return None;
+    }
+    let (episode, after) = word_after(words, after - 1)?;
+    let first = number_of(&plain(episode))?;
+    Some(Marker {
+        at,
+        through: after,
+        season: Some(season),
+        first,
+        last: first,
+    })
+}
+
+/// `1x02`, once nothing better has been found anywhere in the name.
+fn a_crossed_pair_somewhere(words: &[&str]) -> Option<Marker> {
+    (0..words.len()).find_map(|at| {
+        let Some(Mark::Both {
+            season,
+            first,
+            last,
+        }) = a_crossed_pair(&plain(words[at]))
+        else {
+            return None;
+        };
+        Some(Marker {
+            at,
+            through: at + 1,
+            season: Some(season),
+            first,
+            last,
+        })
+    })
+}
+
+/// An episode number with no season beside it, which the folder will answer for.
+fn an_episode_on_its_own(words: &[&str]) -> Option<Marker> {
+    (0..words.len()).find_map(|at| {
+        if let Some(Mark::Episode { first, last }) = an_episode_alone(&plain(words[at])) {
+            return Some(Marker {
+                at,
+                through: at + 1,
+                season: None,
+                first,
+                last,
+            });
+        }
+
+        // `Episode 2`, spelled out with the number beside it.
+        if !is_an_episode_word(&plain(words[at])) {
+            return None;
+        }
+        let (episode, after) = word_after(words, at)?;
+        let first = number_of(&plain(episode))?;
+        Some(Marker {
+            at,
+            through: after,
+            season: None,
+            first,
+            last: first,
+        })
+    })
+}
+
+/// The next word that says something, and where the one after it starts.
+///
+/// Separators are stepped over rather than dropped, because a dash inside an
+/// episode's own title belongs to it and only the ones around the marker do
+/// not.
+fn word_after<'a>(words: &[&'a str], at: usize) -> Option<(&'a str, usize)> {
+    words
+        .iter()
+        .enumerate()
+        .skip(at + 1)
+        .find(|(_, word)| !is_only_a_separator(word))
+        .map(|(index, word)| (*word, index + 1))
+}
+
+/// Whether a word is nothing but the punctuation somebody put between parts.
+fn is_only_a_separator(word: &str) -> bool {
+    !word.is_empty() && !word.chars().any(|c| c.is_alphanumeric())
+}
+
+/// A word stripped of its brackets and lowercased, ready to be recognised.
+fn plain(word: &str) -> String {
+    naming::bare(word).to_lowercase()
+}
+
+fn is_a_season_word(word: &str) -> bool {
+    matches!(naming::fold_accents(word).as_str(), "season" | "saison")
+}
+
+fn is_an_episode_word(word: &str) -> bool {
+    matches!(
+        naming::fold_accents(word).as_str(),
+        "episode" | "episodes" | "ep"
+    )
+}
+
+/// A word that is only a number, small enough to be one of ours.
+fn number_of(word: &str) -> Option<i32> {
+    let (value, rest) = digits_at(word)?;
+    rest.is_empty().then_some(value)
+}
+
+/// Reads a run of digits off the front, and gives back what follows.
+fn digits_at(text: &str) -> Option<(i32, &str)> {
+    let end = text
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(text.len());
+    if end == 0 || end > LONGEST_NUMBER {
+        return None;
+    }
+    text[..end].parse().ok().map(|value| (value, &text[end..]))
+}
+
+/// What one word says, whatever shape it says it in.
+fn read_a_mark(word: &str) -> Option<Mark> {
+    a_season_and_an_episode(word)
+        .or_else(|| a_crossed_pair(word))
+        .or_else(|| an_episode_alone(word))
+        .or_else(|| a_season_alone(word))
+}
+
+/// `S01E02`, and every way of writing an episode that spans several.
+fn a_season_and_an_episode(word: &str) -> Option<Mark> {
+    let rest = word.strip_prefix('s')?;
+    let (season, rest) = digits_at(rest)?;
+    let rest = rest.strip_prefix('-').unwrap_or(rest);
+    let rest = rest.strip_prefix('e')?;
+    let (first, rest) = digits_at(rest)?;
+    let last = a_range_ending(rest, first)?;
+    Some(Mark::Both {
+        season,
+        first,
+        last,
+    })
+}
+
+/// `1x02`.
+///
+/// The episode must be written with at least two digits, which is what tells
+/// this shape apart from an aspect ratio. Everybody who numbers this way pads
+/// the episode, `1x02` and `2x11`; nobody writes a screen as `16x09`. A real
+/// `1x2` is refused along with them, and a file nobody could number stays
+/// visible and correctable rather than being filed under the wrong season.
+fn a_crossed_pair(word: &str) -> Option<Mark> {
+    let (season, rest) = digits_at(word)?;
+    if season > HIGHEST_SEASON {
+        return None;
+    }
+    let rest = rest.strip_prefix('x')?;
+    if rest.len() < 2 || !rest.starts_with(|c: char| c.is_ascii_digit()) {
+        return None;
+    }
+    let (first, rest) = digits_at(rest)?;
+    let last = a_range_ending(rest, first)?;
+    Some(Mark::Both {
+        season,
+        first,
+        last,
+    })
+}
+
+/// `E02`, or `Ep02`, with no season anywhere near it.
+fn an_episode_alone(word: &str) -> Option<Mark> {
+    let rest = word.strip_prefix("ep").or_else(|| word.strip_prefix('e'))?;
+    let (first, rest) = digits_at(rest)?;
+    let last = a_range_ending(rest, first)?;
+    Some(Mark::Episode { first, last })
+}
+
+/// `S01`, with the episode expected in the word after it.
+fn a_season_alone(word: &str) -> Option<Mark> {
+    let rest = word.strip_prefix('s')?;
+    let (season, rest) = digits_at(rest)?;
+    rest.is_empty().then_some(Mark::Season(season))
+}
+
+/// The second half of a file holding several episodes, if it holds several.
+///
+/// `S01E01E02`, `S01E01-E02` and `S01E01-02` all say the same thing. Nothing
+/// at all says the file holds the one episode. Anything else means the word
+/// was never a marker, so it is refused whole rather than read up to the part
+/// that stopped making sense.
+fn a_range_ending(rest: &str, first: i32) -> Option<i32> {
+    if rest.is_empty() {
+        return Some(first);
+    }
+    let rest = rest.strip_prefix('-').unwrap_or(rest);
+    let rest = rest.strip_prefix('e').unwrap_or(rest);
+    let (last, rest) = digits_at(rest)?;
+    (rest.is_empty() && last >= first).then_some(last)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The year every test reads names against, so a name always reads the
+    /// same way however long this code lives.
+    const THIS_YEAR: i32 = 2026;
+
+    /// Reads a name the way a library that knows nothing about itself would.
+    fn read(file_name: &str) -> Option<ParsedEpisode> {
+        parse_episode(file_name, THIS_YEAR, &LibrarySigns::default())
+    }
+
+    /// What a name said, in the short form the tests below compare against:
+    /// series, season, first episode, last episode, episode title.
+    fn said(file_name: &str) -> (String, Option<i32>, i32, i32, Option<String>) {
+        let read = read(file_name).expect("this name says which episode it is");
+        (read.series, read.season, read.first, read.last, read.title)
+    }
+
+    #[test]
+    fn the_tidy_shape_is_read_whole() {
+        // A folder per series, a folder per season, and the episode named
+        // after both. What most people do and what every other server asks
+        // for, so it is the shape that has to be right before any other.
+        assert_eq!(
+            said("Distant Signal - S01E02 - The Long Night.mkv"),
+            (
+                "Distant Signal".to_string(),
+                Some(1),
+                2,
+                2,
+                Some("The Long Night".to_string())
+            )
+        );
+    }
+
+    #[test]
+    fn a_name_written_by_a_tool_is_read_the_same() {
+        // Dots for spaces and a tail of technical words, which is what comes
+        // off a download rather than off a keyboard.
+        assert_eq!(
+            said("Distant.Signal.S01E02.1080p.WEB-DL.x264-GROUP.mkv"),
+            ("Distant Signal".to_string(), Some(1), 2, 2, None)
+        );
+    }
+
+    #[test]
+    fn the_marker_is_read_however_it_is_punctuated() {
+        // The same episode, written the six ways it gets written.
+        for name in [
+            "Distant Signal S01E02.mkv",
+            "Distant Signal s01e02.mkv",
+            "Distant Signal S1E2.mkv",
+            "Distant.Signal.S01.E02.mkv",
+            "Distant Signal S01 E02.mkv",
+            "Distant Signal S01-E02.mkv",
+        ] {
+            assert_eq!(
+                said(name),
+                ("Distant Signal".to_string(), Some(1), 2, 2, None),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_crossed_pair_is_read() {
+        assert_eq!(
+            said("Distant Signal 1x02.mkv"),
+            ("Distant Signal".to_string(), Some(1), 2, 2, None)
+        );
+        assert_eq!(
+            said("Distant Signal - 2x11 - The Long Night.mkv"),
+            (
+                "Distant Signal".to_string(),
+                Some(2),
+                11,
+                11,
+                Some("The Long Night".to_string())
+            )
+        );
+    }
+
+    #[test]
+    fn the_marker_spelled_out_is_read_in_both_languages() {
+        for name in [
+            "Distant Signal Season 1 Episode 2.mkv",
+            "Distant Signal Saison 1 Episode 2.mkv",
+            "Distant Signal Saison 1 Épisode 2.mkv",
+            "Distant Signal - Season 1 - Episode 2.mkv",
+        ] {
+            assert_eq!(
+                said(name),
+                ("Distant Signal".to_string(), Some(1), 2, 2, None),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_holding_several_episodes_says_so() {
+        for name in [
+            "Distant Signal S01E01-E02.mkv",
+            "Distant Signal S01E01E02.mkv",
+            "Distant Signal S01E01-02.mkv",
+        ] {
+            let read = read(name).expect("read");
+            assert_eq!((read.first, read.last), (1, 2), "{name}");
+            assert!(read.holds_several(), "{name}");
+        }
+        assert!(!read("Distant Signal S01E01.mkv")
+            .expect("read")
+            .holds_several());
+    }
+
+    #[test]
+    fn an_episode_number_with_no_season_leaves_the_season_to_the_folder() {
+        // What a file named inside a season folder looks like: the season is
+        // written on the folder and nowhere else.
+        for name in [
+            "Distant Signal - E02 - The Long Night.mkv",
+            "Distant Signal Ep02.mkv",
+            "Distant Signal Episode 2.mkv",
+            "Distant Signal Épisode 2.mkv",
+        ] {
+            let read = read(name).expect("read");
+            assert_eq!(read.season, None, "{name}");
+            assert_eq!(read.first, 2, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_name_that_is_only_a_marker_leaves_the_series_to_the_folder() {
+        // Everything this name says is the number. The folders above it are
+        // what name the series, and that is step three's business.
+        assert_eq!(said("S01E02.mkv"), (String::new(), Some(1), 2, 2, None));
+        assert_eq!(
+            said("E02 - The Long Night.mkv"),
+            (
+                String::new(),
+                None,
+                2,
+                2,
+                Some("The Long Night".to_string())
+            )
+        );
+    }
+
+    #[test]
+    fn a_film_is_not_an_episode() {
+        // The whole point of answering nothing: these go on being read as
+        // films, and a library of films never asks this question at all.
+        for name in [
+            "Quiet Harbour 2019 1080p BluRay x264.mkv",
+            "Quiet Harbour (2019).mkv",
+            "2 Fast 2 Furious.mkv",
+            "Quiet Harbour.mkv",
+        ] {
+            assert_eq!(read(name), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_measurement_is_never_read_as_a_season() {
+        // A crossed pair is also how a screen and a picture shape are written,
+        // and reading one as an episode files the film under a season nobody
+        // ever wrote. The name has to say nothing at all instead.
+        for name in [
+            "Quiet Harbour 1920x1080.mkv",
+            "Quiet Harbour 16x9.mkv",
+            "Quiet Harbour 4x3.mkv",
+            "Quiet Harbour x264.mkv",
+            "Quiet Harbour 2xAAC.mkv",
+        ] {
+            assert_eq!(read(name), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_marker_is_preferred_to_anything_shaped_like_one() {
+        // Both are in the name and only one of them is the episode. Asked for
+        // whatever comes first, this reads as the ninth of season sixteen.
+        let read = read("Distant Signal 16x9 S02E05.mkv").expect("read");
+        assert_eq!((read.season, read.first), (Some(2), 5));
+    }
+
+    #[test]
+    fn the_series_stops_where_the_technical_words_start() {
+        // The same series written with a technical word before the marker and
+        // without has to come out under one name, or it becomes two series.
+        assert_eq!(
+            read("Distant Signal 1080p S02E05.mkv")
+                .expect("read")
+                .series,
+            read("Distant Signal S02E06.mkv").expect("read").series
+        );
+    }
+
+    #[test]
+    fn a_bare_number_is_never_a_marker() {
+        // `102` for season one episode two is a real habit and an unreadable
+        // one: it is also a year, a resolution and a piece of a title. A file
+        // nobody could number stays visible and gets corrected, which is what
+        // saying nothing here brings about.
+        for name in [
+            "Distant Signal 102.mkv",
+            "Distant Signal - 02.mkv",
+            "[Group] Distant Signal - 02 [1080p].mkv",
+        ] {
+            assert_eq!(read(name), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_series_named_with_numbers_keeps_its_name() {
+        assert_eq!(
+            said("24 S01E01.mkv"),
+            ("24".to_string(), Some(1), 1, 1, None)
+        );
+        // A name of one word that reads like a year is the name, not a year.
+        let read = read("1883 S01E01.mkv").expect("read");
+        assert_eq!(read.series, "1883");
+        assert_eq!(read.year, None);
+    }
+
+    #[test]
+    fn the_year_of_a_series_is_taken_out_of_its_name() {
+        // Half the files of one series carrying the year and half not is how
+        // one series becomes two, so the name has to come out the same way
+        // whichever half it came from.
+        let with = read("Distant Signal 2019 S01E02.mkv").expect("read");
+        let without = read("Distant Signal S01E03.mkv").expect("read");
+        assert_eq!(with.series, without.series);
+        assert_eq!(with.year, Some(2019));
+        assert_eq!(without.year, None);
+
+        // Written in brackets it was already being dropped, and still is.
+        assert_eq!(
+            read("Distant Signal (2019) S01E04.mkv")
+                .expect("read")
+                .series,
+            without.series
+        );
+    }
+
+    #[test]
+    fn the_episode_title_stops_where_the_technical_words_start() {
+        assert_eq!(
+            said("Distant Signal S01E02 The Long Night 1080p x264.mkv"),
+            (
+                "Distant Signal".to_string(),
+                Some(1),
+                2,
+                2,
+                Some("The Long Night".to_string())
+            )
+        );
+        // Nothing but technical words after the marker is no title at all,
+        // rather than a title made of them.
+        assert_eq!(
+            read("Distant Signal S01E02 1080p.mkv").expect("read").title,
+            None
+        );
+    }
+
+    #[test]
+    fn a_dash_inside_an_episode_title_belongs_to_it() {
+        // The dashes around the marker are punctuation somebody typed. The one
+        // in the middle of a title is part of the title.
+        assert_eq!(
+            read("Distant Signal - S02E10 - Part 1 - The End.mkv")
+                .expect("read")
+                .title,
+            Some("Part 1 - The End".to_string())
+        );
+    }
+
+    #[test]
+    fn the_technical_words_are_kept_as_hints() {
+        let read = read("Distant.Signal.S01E02.1080p.x264.mkv").expect("read");
+        assert!(read.tags.contains("1080p"), "{:?}", read.tags);
+        assert!(read.tags.contains("x264"), "{:?}", read.tags);
+    }
+
+    #[test]
+    fn a_season_folder_says_which_season_it_holds() {
+        for (folder, season) in [
+            ("Saison 1", 1),
+            ("Saison 01", 1),
+            ("Season 1", 1),
+            ("Season 01", 1),
+            ("SEASON 2", 2),
+            ("S01", 1),
+            ("S1", 1),
+            ("s02", 2),
+            ("Series 1", 1),
+            ("Saison 10", 10),
+        ] {
+            assert_eq!(season_of_folder(folder), Some(season), "{folder}");
+        }
+    }
+
+    #[test]
+    fn what_belongs_to_no_season_is_season_zero() {
+        // Where every other server puts them, so a collection moved from one
+        // lands where its owner expects.
+        for folder in ["Specials", "specials", "Spéciaux", "Saison 0", "Season 00"] {
+            assert_eq!(season_of_folder(folder), Some(0), "{folder}");
+        }
+    }
+
+    #[test]
+    fn a_folder_that_says_nothing_is_not_guessed_at() {
+        // Guessing a season out of a folder named something else is how a
+        // series ends up with a season nobody ever wrote.
+        for folder in [
+            "Distant Signal",
+            "Season",
+            "Saison",
+            "Films",
+            "Sous-titres",
+            "Extras",
+            "S",
+            "",
+        ] {
+            assert_eq!(season_of_folder(folder), None, "{folder}");
+        }
+    }
+}
