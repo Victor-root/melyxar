@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use melyxar_core::id::{LibraryId, LibraryRootId, MediaSourceId};
 use melyxar_core::library::{Library, LibraryKind, LibraryRoot, RootAccess};
-pub use melyxar_database::libraries::WouldGo;
+pub use melyxar_database::libraries::{Removed, WouldGo};
 
 use crate::{AppError, AppState};
 
@@ -265,7 +265,7 @@ pub async fn what_removing_a_folder_takes(
 ///
 /// Says how much went, which is the same count the screen showed before
 /// anybody said yes.
-pub async fn remove(state: &AppState, library_id: LibraryId) -> Result<WouldGo> {
+pub async fn remove(state: &AppState, library_id: LibraryId) -> Result<Removed> {
     let library = library_by_id(state, library_id).await?;
     refuse_while_something_is_running_on(state, library_id).await?;
 
@@ -273,13 +273,22 @@ pub async fn remove(state: &AppState, library_id: LibraryId) -> Result<WouldGo> 
     // cannot be found again once the row that named it is gone.
     let sources = state.database().source_ids_of_library(library_id).await?;
     let went = state.database().delete_library(library_id).await?;
-    forget_the_thumbnails_of(state, &sources).await;
+    let sheets = forget_the_thumbnails_of(state, &sources).await;
+    let pictures = forget_the_pictures(state, &went.swept.picture_paths).await;
 
     tracing::info!(
         library = library.name,
         works = went.works,
         files = went.files,
-        "a library was taken away; no file on the disk was touched"
+        people = went.swept.people,
+        collections = went.swept.collections,
+        genres = went.swept.genres,
+        studios = went.swept.studios,
+        picture_rows = went.swept.pictures,
+        pictures_deleted = pictures,
+        thumbnail_sheets_deleted = sheets,
+        "a library was taken away: its films, their pages and everything only \
+         they pointed at are gone, and no file of the collection was touched"
     );
     Ok(went)
 }
@@ -292,14 +301,15 @@ pub async fn remove_root(
     state: &AppState,
     library_id: LibraryId,
     root_id: LibraryRootId,
-) -> Result<WouldGo> {
+) -> Result<Removed> {
     let library = library_by_id(state, library_id).await?;
     let root = root_of(state, library_id, root_id).await?;
     refuse_while_something_is_running_on(state, library_id).await?;
 
     let sources = state.database().source_ids_of_root(root_id).await?;
     let went = state.database().delete_root(root_id).await?;
-    forget_the_thumbnails_of(state, &sources).await;
+    let sheets = forget_the_thumbnails_of(state, &sources).await;
+    let pictures = forget_the_pictures(state, &went.swept.picture_paths).await;
     if went.works > 0 {
         state.database().bump_library_version(library_id).await?;
     }
@@ -309,7 +319,16 @@ pub async fn remove_root(
         root = root.label,
         works = went.works,
         files = went.files,
-        "a folder was taken away from a library; no file on the disk was touched"
+        people = went.swept.people,
+        collections = went.swept.collections,
+        genres = went.swept.genres,
+        studios = went.swept.studios,
+        picture_rows = went.swept.pictures,
+        pictures_deleted = pictures,
+        thumbnail_sheets_deleted = sheets,
+        "a folder was taken away from a library: the films only it held, their \
+         pages and everything only they pointed at are gone, and no file of \
+         the collection was touched"
     );
     Ok(went)
 }
@@ -344,28 +363,79 @@ async fn refuse_while_something_is_running_on(
 
 /// Throws away the sheets of thumbnails of files that are no longer known.
 ///
-/// The one thing worth clearing out of the cache: a library of three hundred
-/// films leaves as many folders of sheets, and nothing would ever go looking
-/// for them again. The converted subtitles and the pictures stay, which is
-/// written down in the architecture notes: the first are tiny and have their
-/// own button, and the second are named after their contents and may belong to
-/// a film that is still here.
+/// A library of three hundred films leaves as many folders of sheets, and
+/// nothing would ever go looking for them again. Answers how many folders
+/// really went, so the journal states it rather than implying it.
 ///
 /// Never a failure of the removal: the rows are gone either way, and a cache
 /// that could not be swept is a cache, not a library.
-async fn forget_the_thumbnails_of(state: &AppState, sources: &[MediaSourceId]) {
+async fn forget_the_thumbnails_of(state: &AppState, sources: &[MediaSourceId]) -> usize {
+    let mut gone = 0;
     for source in sources {
         let folder = state
             .config()
             .directories
             .thumbnails()
             .join(source.to_string());
-        if let Err(error) = tokio::fs::remove_dir_all(&folder).await {
-            if error.kind() != std::io::ErrorKind::NotFound {
-                tracing::debug!(%error, "sheets of thumbnails left behind in the cache");
+        match tokio::fs::remove_dir_all(&folder).await {
+            Ok(()) => gone += 1,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                tracing::debug!(%error, "sheets of thumbnails left behind in the cache")
             }
         }
     }
+    gone
+}
+
+/// Throws away the pictures of everything that has just gone.
+///
+/// The posters, the backdrops, the title images and the faces of a cast, in
+/// every size they were prepared in. This is the heaviest thing a removal
+/// leaves behind and the one that would grow without bound: a film's pictures
+/// are of no use to anybody once the film is not here, and nothing would ever
+/// come looking for them again.
+///
+/// Each file is named rather than its folder swept, because the row that named
+/// it is the only thing that ever knew it was ours. The folder is then removed
+/// if the last file in it has gone, which is what stops the cache filling with
+/// empty folders.
+///
+/// Never a failure of the removal, for the same reason as the sheets above.
+async fn forget_the_pictures(state: &AppState, paths: &[String]) -> usize {
+    let root = state.config().directories.images();
+    let mut gone = 0;
+    let mut folders: Vec<std::path::PathBuf> = Vec::new();
+
+    for path in paths {
+        let file = root.join(path);
+        // A path from the database, but never trusted as one: a row that
+        // pointed outside the cache must not let a removal reach outside it.
+        if !file.starts_with(&root) {
+            tracing::warn!("a stored picture sat outside the cache and was left alone");
+            continue;
+        }
+        match tokio::fs::remove_file(&file).await {
+            Ok(()) => gone += 1,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                tracing::debug!(%error, "a picture was left behind in the cache");
+                continue;
+            }
+        }
+        if let Some(folder) = file.parent().map(Path::to_path_buf) {
+            if !folders.contains(&folder) {
+                folders.push(folder);
+            }
+        }
+    }
+
+    // Only ever the ones that are now empty: remove_dir refuses the rest, which
+    // is exactly the check wanted and one nothing can race.
+    for folder in folders {
+        let _ = tokio::fs::remove_dir(&folder).await;
+    }
+    gone
 }
 
 /// Gives a folder the name it is called by in logs and on screens.
@@ -817,6 +887,65 @@ mod tests {
             "untouched, to the byte"
         );
         assert!(films.is_dir(), "and so is the folder it sits in");
+    }
+
+    #[tokio::test]
+    async fn the_pictures_of_a_library_that_is_gone_leave_the_cache_with_it() {
+        // Years of use is what this is really about: posters, title images and
+        // the faces of every cast are the heaviest thing a removal would
+        // otherwise leave behind, and nothing would ever come looking for them.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let state = state_on(directory.path()).await;
+        let films = folder(directory.path(), "Films");
+        std::fs::write(films.join("Quiet Harbour 2019.mkv"), b"a film").expect("film written");
+
+        let library = create(&state, asked("Films", vec![films]))
+            .await
+            .expect("declared");
+        once_nothing_is_running(&state).await;
+
+        let work = state
+            .database()
+            .recent_works(library.id, 1)
+            .await
+            .expect("read")
+            .first()
+            .expect("the scan found the film")
+            .id;
+
+        // A poster, as the identification would have left one.
+        let relative = format!("works/{work}/poster-abc-400.webp");
+        let poster = state.config().directories.images().join(&relative);
+        std::fs::create_dir_all(poster.parent().expect("a folder")).expect("folder made");
+        std::fs::write(&poster, b"a poster").expect("poster written");
+        state
+            .database()
+            .replace_images(
+                "work",
+                &work.to_string(),
+                "poster",
+                &[melyxar_database::images::StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: work.to_string(),
+                    image_kind: "poster".to_string(),
+                    relative_path: relative,
+                    width: Some(400),
+                    height: Some(600),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("poster recorded");
+
+        let went = remove(&state, library.id).await.expect("taken away");
+
+        assert_eq!(went.swept.pictures, 1, "the poster row went");
+        assert!(!poster.exists(), "and so did the file it named");
+        assert!(
+            !poster.parent().expect("a folder").exists(),
+            "and the folder it was the last thing in"
+        );
     }
 
     #[tokio::test]

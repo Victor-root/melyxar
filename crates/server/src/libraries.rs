@@ -265,6 +265,20 @@ impl From<melyxar_app::libraries::WouldGo> for WouldGoView {
     }
 }
 
+/// What a removal really took, as the two numbers the screen said out loud.
+///
+/// The rest of what went with it, the people nobody credits any more and the
+/// pictures of films that are not here, is in the journal: it is the answer to
+/// "is this thing cleaning up after itself", not to "what am I about to lose".
+impl From<melyxar_app::libraries::Removed> for WouldGoView {
+    fn from(went: melyxar_app::libraries::Removed) -> Self {
+        Self {
+            works: went.works,
+            files: went.files,
+        }
+    }
+}
+
 /// How much a library holds, asked just before the question is put.
 async fn what_removing_takes(
     State(state): State<AppState>,
