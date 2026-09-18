@@ -10,8 +10,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, pictureSet } from "../api";
-import type { Credit, Version, Work } from "../api";
+import type { Credit, Version } from "../api";
+import { useTold } from "../asking";
 import { IdentifyByHand } from "../components/byhand";
+import { elsewhere, groupCrew, useWorkScreen } from "../screens/work";
 import { useSettings } from "../settings";
 import { Player } from "../player/player";
 import { TrailerPlayer } from "../player/trailer";
@@ -20,53 +22,21 @@ export function WorkPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useSettings();
-  const [work, setWork] = useState<Work | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const [chosen, setChosen] = useState(0);
-  const [playing, setPlaying] = useState<{ source: string; fromTheStart: boolean } | null>(null);
-  /* A trailer sitting next to the film, which plays from here. One hosted
-     elsewhere is watched where it lives instead. */
-  const [trailer, setTrailer] = useState<string | null>(null);
-  /* Where this viewer stopped, asked for once the page is open rather than
-     when play is pressed: the button has to say what it will do before it is
-     pressed. */
-  const [resumeFrom, setResumeFrom] = useState<number | null>(null);
-  /* Counted up when the page has to read the film again, which is what a
-     match chosen by hand asks for. */
-  const [again, setAgain] = useState(0);
-
-  useEffect(() => {
-    if (!id) {
-      return;
-    }
-    const controller = new AbortController();
-    setWork(null);
-    setFailed(null);
-    setChosen(0);
-    api
-      .work(id, controller.signal)
-      .then(setWork)
-      .catch((error) => {
-        if (!(error instanceof DOMException)) {
-          setFailed(error.code === "not_found" ? "error.not_found" : "error.unreachable");
-        }
-      });
-    return () => controller.abort();
-  }, [id, again]);
-
-  useEffect(() => {
-    const version = work?.versions[chosen];
-    if (!version || version.missing) {
-      setResumeFrom(null);
-      return;
-    }
-    const controller = new AbortController();
-    api
-      .plan(version.id, {}, controller.signal)
-      .then((plan) => setResumeFrom(plan.resume_from_seconds))
-      .catch(() => setResumeFrom(null));
-    return () => controller.abort();
-  }, [work, chosen]);
+  const {
+    work,
+    failed,
+    chosen,
+    choose,
+    resumeFrom,
+    readAgain,
+    playing,
+    play,
+    stopPlaying,
+    onOffer,
+    trailer,
+    watchTrailer,
+    stopTrailer,
+  } = useWorkScreen(id);
 
   /* Escape goes back, which is what a remote control and a keyboard both
      expect after opening something. Not while something is being watched: the
@@ -90,7 +60,7 @@ export function WorkPage() {
   if (failed) {
     return (
       <main className="page">
-        <p className="notice">{t(failed)}</p>
+        <p className="notice">{t(failed === "not_found" ? "error.not_found" : "error.unreachable")}</p>
       </main>
     );
   }
@@ -98,6 +68,7 @@ export function WorkPage() {
     return <main className="page" aria-busy="true" />;
   }
 
+  const { here, away } = onOffer;
   const backdrop = pictureSet(work.backdrop);
   const poster = pictureSet(work.poster);
   const version = work.versions[chosen];
@@ -114,14 +85,14 @@ export function WorkPage() {
         sourceId={playing.source}
         work={work}
         fromTheStart={playing.fromTheStart}
-        onClose={() => setPlaying(null)}
+        onClose={stopPlaying}
       />
     );
   }
 
   if (trailer) {
     return (
-      <TrailerPlayer url={trailer} title={work.title} onClose={() => setTrailer(null)} />
+      <TrailerPlayer url={trailer} title={work.title} onClose={() => stopTrailer()} />
     );
   }
 
@@ -178,7 +149,7 @@ export function WorkPage() {
             <IdentifyByHand
               workId={id}
               title={work.title}
-              onIdentified={() => setAgain((count) => count + 1)}
+              onIdentified={() => readAgain()}
             />
           )}
 
@@ -187,7 +158,7 @@ export function WorkPage() {
               className="button button-accent button-large"
               disabled={!version || version.missing}
               onClick={() =>
-                version && setPlaying({ source: version.id, fromTheStart: false })
+                version && play(version.id, false)
               }
             >
               <span className="play-mark" aria-hidden="true" />
@@ -200,7 +171,7 @@ export function WorkPage() {
               <button
                 className="button"
                 onClick={() =>
-                  version && setPlaying({ source: version.id, fromTheStart: true })
+                  version && play(version.id, true)
                 }
               >
                 {t("player.from_the_start")}
@@ -209,27 +180,16 @@ export function WorkPage() {
             {/* One sitting next to the film plays here; failing that, a link
                 is opened where it lives. This server never goes and fetches
                 someone else's video to pass it on. */}
-            {(() => {
-              const here = work.trailers.find((one) => one.url);
-              if (here?.url) {
-                return (
-                  <button className="button" onClick={() => setTrailer(here.url)}>
-                    {t("work.trailer")}
-                  </button>
-                );
-              }
-              const elsewhere = work.trailers.find((one) => one.remote_url);
-              return elsewhere?.remote_url ? (
-                <a
-                  className="button"
-                  href={elsewhere.remote_url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  {t("work.trailer")}
-                </a>
-              ) : null;
-            })()}
+            {here && (
+              <button className="button" onClick={() => watchTrailer(here)}>
+                {t("work.trailer")}
+              </button>
+            )}
+            {away && (
+              <a className="button" href={away} target="_blank" rel="noreferrer noopener">
+                {t("work.trailer")}
+              </a>
+            )}
           </div>
 
           <Synopsis text={work.overview} />
@@ -317,7 +277,7 @@ export function WorkPage() {
                   role="tab"
                   aria-selected={index === chosen}
                   className={`toggle ${index === chosen ? "toggle-on" : ""}`}
-                  onClick={() => setChosen(index)}
+                  onClick={() => choose(index)}
                 >
                   {entry.summary || `${t("work.version")} ${index + 1}`}
                 </button>
@@ -329,7 +289,7 @@ export function WorkPage() {
               version={version}
               /* A film held once has nothing to take this copy away from. */
               separable={work.versions.length > 1}
-              onDetached={() => setAgain((count) => count + 1)}
+              onDetached={() => readAgain()}
             />
           )}
         </section>
@@ -348,27 +308,23 @@ export function WorkPage() {
  */
 function DetachCopy({ copy, onDetached }: { copy: string; onDetached: () => void }) {
   const { t } = useSettings();
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  const detach = async () => {
-    setBusy(true);
-    setFailed(false);
-    try {
-      await api.detachCopy(copy);
-      onDetached();
-    } catch {
-      setFailed(true);
-      setBusy(false);
-    }
-  };
+  const [detached, setDetached] = useState(false);
+  const told = useTold(async () => {
+    await api.detachCopy(copy);
+    /* Kept quiet from here on: the film is about to be read again without
+       this copy, and a button that comes back to life in between is a button
+       somebody presses twice. */
+    setDetached(true);
+    onDetached();
+  });
+  const busy = told.busy || detached;
 
   return (
     <>
-      <button className="button button-small" onClick={detach} disabled={busy}>
+      <button className="button button-small" onClick={() => told.tell()} disabled={busy}>
         {busy ? t("detach.busy") : t("detach.open")}
       </button>
-      {failed && <span className="notice">{t("detach.failed")}</span>}
+      {told.failure && <span className="notice">{t("detach.failed")}</span>}
     </>
   );
 }
@@ -387,27 +343,17 @@ function DetachCopy({ copy, onDetached }: { copy: string; onDetached: () => void
  */
 function ReadCopyAgain({ copy, onRead }: { copy: string; onRead: () => void }) {
   const { t } = useSettings();
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  const readAgain = async () => {
-    setBusy(true);
-    setFailed(false);
-    try {
-      await api.readCopyAgain(copy);
-      onRead();
-    } catch {
-      setFailed(true);
-    }
-    setBusy(false);
-  };
+  const told = useTold(async () => {
+    await api.readCopyAgain(copy);
+    onRead();
+  });
 
   return (
     <>
-      <button className="button button-small" onClick={readAgain} disabled={busy}>
-        {busy ? t("read_again.busy") : t("read_again.open")}
+      <button className="button button-small" onClick={() => told.tell()} disabled={told.busy}>
+        {told.busy ? t("read_again.busy") : t("read_again.open")}
       </button>
-      {failed && <span className="notice">{t("read_again.failed")}</span>}
+      {told.failure && <span className="notice">{t("read_again.failed")}</span>}
     </>
   );
 }
@@ -627,18 +573,6 @@ function Fact({
   );
 }
 
-/** Where a film lives at the site that named it. */
-function elsewhere(provider: string, id: string): string {
-  switch (provider) {
-    case "tmdb":
-      return `https://www.themoviedb.org/movie/${id}`;
-    case "imdb":
-      return `https://www.imdb.com/title/${id}/`;
-    default:
-      return "";
-  }
-}
-
 function readableBitrate(bits: number | null): string | null {
   if (bits === null || bits <= 0) {
     return null;
@@ -653,31 +587,6 @@ function readableDate(value: string, language: string): string | null {
   return Number.isNaN(moment.getTime())
     ? null
     : moment.toLocaleString(language, { dateStyle: "medium", timeStyle: "short" });
-}
-
-/**
- * Groups the crew so one person credited three times is read once per part,
- * and puts the parts in the order a viewer looks for them: whoever made the
- * film first, and the people a page mentions out of completeness last.
- */
-const CREW_ORDER = ["director", "writer", "composer", "producer"];
-
-function groupCrew(crew: { name: string; role: string }[]): [string, string[]][] {
-  const grouped = new Map<string, string[]>();
-  for (const credit of crew) {
-    const names = grouped.get(credit.role) ?? [];
-    if (!names.includes(credit.name)) {
-      names.push(credit.name);
-    }
-    grouped.set(credit.role, names);
-  }
-
-  return Array.from(grouped.entries()).sort(([left], [right]) => {
-    const leftRank = CREW_ORDER.indexOf(left);
-    const rightRank = CREW_ORDER.indexOf(right);
-    return (leftRank < 0 ? CREW_ORDER.length : leftRank) -
-      (rightRank < 0 ? CREW_ORDER.length : rightRank);
-  });
 }
 
 function readableSize(bytes: number): string {

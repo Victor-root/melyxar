@@ -13,148 +13,35 @@
  * saving.
  */
 
-import { useEffect, useState } from "react";
-import { api, ApiError } from "../api";
-import type { LibraryWork, PlaybackSettings, ViewerPreferences } from "../api";
 import {
   appearanceClasses,
   BACKGROUNDS,
   COLOURS,
   EDGES,
   HEIGHTS,
-  rememberAppearance,
   SIZES,
-  storedAppearance,
 } from "../player/appearance";
-import type { Appearance } from "../player/appearance";
 import { LibraryEditor } from "../components/libraries";
-import { useLibraries } from "../libraries";
 import { languageName } from "../player/languages";
 import { DeviceOptimization } from "../player/DeviceOptimization";
+import { asLocalTime, asUtcMinutes, insideTheRange, useSettingsScreen } from "../screens/settings";
 import { useSettings } from "../settings";
 
 export function SettingsPage() {
   const { t, language } = useSettings();
-  const [kept, setKept] = useState<ViewerPreferences | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const [appearance, setAppearanceState] = useState<Appearance>(storedAppearance);
-  /* The one list the whole interface is drawn from. Taken from the shell
-     rather than fetched again here: this is the screen that changes them, and
-     a change nobody else saw would leave the bar at the top listing a library
-     that is no longer there. */
-  const { all: libraries, refresh: readLibraries } = useLibraries();
-  /* What the server does with every library: the shape of the thumbnails, the
-     description files, and when the upkeep runs. All three were lines of the
-     configuration file until now. */
-  const [work, setWork] = useState<LibraryWork | null>(null);
-  /* Whether wide gamut colour is ever converted for a viewer who cannot show
-     it, everywhere on this server: an administrator's own switch, not one
-     browser's preference. */
-  const [playback, setPlayback] = useState<PlaybackSettings | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    api
-      .preferences(controller.signal)
-      .then((answer) => {
-        setKept(answer);
-        setFailed(null);
-      })
-      .catch((error) => {
-        if (!(error instanceof DOMException)) {
-          setFailed("error.unreachable");
-        }
-      });
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    api
-      .libraryWork(controller.signal)
-      .then(setWork)
-      .catch((error) => {
-        if (!(error instanceof DOMException)) {
-          setFailed("error.unreachable");
-        }
-      });
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    api
-      .playbackSettings(controller.signal)
-      .then(setPlayback)
-      .catch((error) => {
-        if (!(error instanceof DOMException)) {
-          setFailed("error.unreachable");
-        }
-      });
-    return () => controller.abort();
-  }, []);
-
-  /* Shown straight away and sent at once, and what the server kept is what the
-     page then shows: a shape that cannot hold a thumbnail comes back brought
-     into range rather than refused. */
-  const setWorkTo = (changes: Partial<LibraryWork>) => {
-    if (!work) {
-      return;
-    }
-    const before = work;
-    const wanted = { ...work, ...changes };
-    setWork(wanted);
-    api
-      .setLibraryWork(wanted)
-      .then((kept) => {
-        setWork(kept);
-        setFailed(null);
-      })
-      .catch((error) => {
-        // Put back what the server still holds, rather than showing a setting
-        // next to a server that never heard of it.
-        setWork(before);
-        setFailed(error instanceof ApiError ? "settings.not_kept" : "error.unreachable");
-      });
-  };
-
-  const setPlaybackTo = (changes: Partial<PlaybackSettings>) => {
-    if (!playback) {
-      return;
-    }
-    const before = playback;
-    const wanted = { ...playback, ...changes };
-    setPlayback(wanted);
-    api
-      .setPlaybackSettings(wanted)
-      .then(setPlayback)
-      .catch((error) => {
-        setPlayback(before);
-        setFailed(error instanceof ApiError ? "settings.not_kept" : "error.unreachable");
-      });
-  };
-
-  /* Sent as it is made, and the answer is what the page then shows: the server
-     brings a value back into range rather than refusing the lot, so what it
-     kept is not always what was asked for. */
-  const change = (changes: Partial<ViewerPreferences>) => {
-    setKept((before) => (before ? { ...before, ...changes } : before));
-    api
-      .savePreferences(changes)
-      .then((answer) => {
-        setKept(answer);
-        setFailed(null);
-      })
-      .catch((error) => {
-        setFailed(error instanceof ApiError ? "settings.not_kept" : "error.unreachable");
-      });
-  };
-
-  const look = (changes: Partial<Appearance>) => {
-    const next = { ...appearance, ...changes };
-    setAppearanceState(next);
-    rememberAppearance(next);
-  };
+  const {
+    kept,
+    change,
+    work,
+    setWorkTo,
+    playback,
+    setPlaybackTo,
+    appearance,
+    look,
+    libraries,
+    readLibraries,
+    failed,
+  } = useSettingsScreen();
 
   return (
     <main className="page settings">
@@ -162,7 +49,7 @@ export function SettingsPage() {
         <h1>{t("settings.title")}</h1>
       </div>
 
-      {failed && <p className="notice">{t(failed)}</p>}
+      {failed && <p className="notice">{t(failed === "not_kept" ? "settings.not_kept" : "error.unreachable")}</p>}
 
       <DeviceOptimization />
 
@@ -479,40 +366,6 @@ function Look<T extends string>({
   );
 }
 
-/*
- * A time of day the server keeps in universal time, in the time of this
- * browser.
- *
- * The server keeps one clock and it is UTC, which is the only one it can read
- * with certainty. Nobody should have to do that conversion in their head, so
- * it is done here, where the browser knows its own offset. What this cannot do
- * is follow the clocks changing: a time set in winter shows an hour later in
- * summer until somebody sets it again. That is said on the screen rather than
- * hidden, and it is a nightly piece of upkeep, so an hour either way costs
- * nothing.
- */
-function asLocalTime(utcMinutes: number): string {
-  const local = wrapIntoADay(utcMinutes - new Date().getTimezoneOffset());
-  const hours = String(Math.floor(local / 60)).padStart(2, "0");
-  const minutes = String(local % 60).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
-/** The other way, for what a time field hands back. */
-function asUtcMinutes(localTime: string): number {
-  const [hours, minutes] = localTime.split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return 0;
-  }
-  return wrapIntoADay(hours * 60 + minutes + new Date().getTimezoneOffset());
-}
-
-const MINUTES_IN_A_DAY = 24 * 60;
-
-function wrapIntoADay(minutes: number): number {
-  return ((minutes % MINUTES_IN_A_DAY) + MINUTES_IN_A_DAY) % MINUTES_IN_A_DAY;
-}
-
 /**
  * One number of a setting, with the range the server will keep it inside.
  *
@@ -546,9 +399,9 @@ function NumberChoice({
         max={max}
         disabled={disabled}
         onChange={(event) => {
-          const asked = Number(event.target.value);
-          if (Number.isFinite(asked)) {
-            onPick(Math.min(max, Math.max(min, Math.round(asked))));
+          const asked = insideTheRange(Number(event.target.value), min, max);
+          if (asked !== null) {
+            onPick(asked);
           }
         }}
       />
