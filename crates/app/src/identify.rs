@@ -684,6 +684,12 @@ fn choose_for<'a>(
         return None;
     }
     let wanted = naming::matchable_title(title);
+    // A release named entirely in dots turns an apostrophe into a separator
+    // like any other, leaving apart two words a provider's own title reads as
+    // one: `l` and `automne` where the provider has `lautomne`. Never used for
+    // anything but this one extra chance at an exact match, since it is a
+    // second reading of the very same title and not a different one.
+    let wanted_elided = naming::with_elisions_glued(&wanted);
 
     let names_of = |candidate: &MovieCandidate| {
         let mut names = vec![naming::matchable_title(&candidate.title)];
@@ -692,7 +698,10 @@ fn choose_for<'a>(
         }
         names
     };
-    let matches_title = |candidate: &&MovieCandidate| names_of(candidate).contains(&wanted);
+    let matches_title = |candidate: &&MovieCandidate| {
+        let names = names_of(candidate);
+        names.contains(&wanted) || (wanted_elided != wanted && names.contains(&wanted_elided))
+    };
     let near_the_year = |candidate: &&MovieCandidate| match (release_year, candidate.release_year) {
         (Some(wanted), Some(found)) => (wanted - found).abs() <= YEARS_APART,
         _ => false,
@@ -2102,6 +2111,35 @@ mod tests {
                 "Quiet Harbour 5 : The Ties of Blood",
                 Some(2012),
             )],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 1, "searches: {:?}", provider.searches());
+        assert_eq!(
+            state
+                .database()
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification,
+            IdentificationState::Identified
+        );
+    }
+
+    #[tokio::test]
+    async fn a_title_whose_apostrophe_became_a_separator_is_still_found() {
+        // Measured on a real file: a release named entirely in dots turns the
+        // apostrophe of "Quand vient l'automne" into a separator like any
+        // other, and the file's own title reads as "Quand vient l automne",
+        // two words apart from the provider's own "lautomne". Weighed as
+        // ordinary words that is barely half the title, well under the bar;
+        // read as the same elision it always was, it is an exact match.
+        let (_directory, state, library, work) =
+            state_with_work("Quand vient l automne", Some(2024)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("111", "Quand vient l'automne", Some(2024))],
+            vec![details("111", "Quand vient l'automne", Some(2024))],
         ));
 
         let report = run(&state, &provider, &library).await;
