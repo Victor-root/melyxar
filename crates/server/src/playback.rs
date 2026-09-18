@@ -11,6 +11,7 @@
 //! to the last ten minutes fetches the last ten minutes. Writing that by hand
 //! would mean writing an entire specification by hand.
 
+use crate::identifiers::{parse_source, parse_track, parse_work};
 use axum::body::Body;
 use axum::extract::{Path as RoutePath, State};
 use axum::http::{header, HeaderValue, Request, StatusCode};
@@ -20,12 +21,10 @@ use melyxar_app::playback::{
     ClientProfile, PlayPlan, PlayRequest, Preparation, Session, SEGMENT_DURATION,
 };
 use melyxar_app::AppState;
-use melyxar_core::id::{MediaSourceId, TrackId, WorkId};
+use melyxar_core::id::MediaSourceId;
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::{Millis, Timestamp};
 use serde::{Deserialize, Serialize};
-use tower::ServiceExt;
-use tower_http::services::ServeFile;
 
 use crate::error::{Result, ServerError};
 use crate::viewer;
@@ -497,11 +496,7 @@ async fn serve_file(state: &AppState, id: &str, request: Request<Body>) -> Resul
         ));
     }
 
-    ServeFile::new(&source.path)
-        .oneshot(request)
-        .await
-        .map(IntoResponse::into_response)
-        .map_err(|error| ServerError::internal(error.to_string()))
+    crate::serve_the_file(&source.path, request).await
 }
 
 // ---------------------------------------------------------------------------
@@ -538,11 +533,7 @@ async fn serve_subtitle(
     let track_id = parse_track(track.strip_suffix(".vtt").unwrap_or(track))?;
 
     let path = melyxar_app::subtitles::as_web_vtt(state, source_id, track_id).await?;
-    let mut response = ServeFile::new(&path)
-        .oneshot(request)
-        .await
-        .map(IntoResponse::into_response)
-        .map_err(|error| ServerError::internal(error.to_string()))?;
+    let mut response = crate::serve_the_file(&path, request).await?;
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/vtt; charset=utf-8"),
@@ -586,11 +577,7 @@ async fn serve_sheet(
         .map_err(|_| ServerError::not_found("that sheet of thumbnails"))?;
 
     let path = melyxar_app::thumbnails::sheet_of(state, source_id, number).await?;
-    let mut response = ServeFile::new(&path)
-        .oneshot(request)
-        .await
-        .map(IntoResponse::into_response)
-        .map_err(|error| ServerError::internal(error.to_string()))?;
+    let mut response = crate::serve_the_file(&path, request).await?;
     response
         .headers_mut()
         .insert(header::CONTENT_TYPE, HeaderValue::from_static("image/jpeg"));
@@ -846,9 +833,9 @@ async fn live_session(state: &AppState, id: &str) -> Result<std::sync::Arc<Sessi
 
 /// Hands over a file the session produced.
 async fn serve(path: std::path::PathBuf, request: Request<Body>, kind: &str) -> Response {
-    let mut response = match ServeFile::new(&path).oneshot(request).await {
-        Ok(response) => response.into_response(),
-        Err(error) => return ServerError::internal(error.to_string()).into_response(),
+    let mut response = match crate::serve_the_file(&path, request).await {
+        Ok(response) => response,
+        Err(error) => return error.into_response(),
     };
     if let Ok(value) = HeaderValue::from_str(kind) {
         response.headers_mut().insert(header::CONTENT_TYPE, value);
@@ -885,10 +872,7 @@ async fn record_progress(
     State(state): State<AppState>,
     Json(body): Json<ProgressBody>,
 ) -> Result<Json<ProgressView>> {
-    let work_id: WorkId = body
-        .work_id
-        .parse()
-        .map_err(|_| ServerError::invalid_input("the work identifier is malformed"))?;
+    let work_id = parse_work(&body.work_id)?;
 
     let kept = melyxar_app::playback::record_position(
         &state,
@@ -917,10 +901,7 @@ async fn remember_tracks(
     State(state): State<AppState>,
     Json(body): Json<TracksBody>,
 ) -> Result<Json<serde_json::Value>> {
-    let work_id: WorkId = body
-        .work_id
-        .parse()
-        .map_err(|_| ServerError::invalid_input("the work identifier is malformed"))?;
+    let work_id = parse_work(&body.work_id)?;
     let source_id = parse_source(&body.source_id)?;
 
     // The tracks are read back from the file rather than taken on trust: what
@@ -952,21 +933,10 @@ async fn remember_tracks(
     Ok(Json(serde_json::json!({ "remembered": true })))
 }
 
-fn parse_source(value: &str) -> Result<MediaSourceId> {
-    value
-        .parse()
-        .map_err(|_| ServerError::invalid_input("the file identifier is malformed"))
-}
-
-fn parse_track(value: &str) -> Result<TrackId> {
-    value
-        .parse()
-        .map_err(|_| ServerError::invalid_input("the track identifier is malformed"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use melyxar_core::id::{TrackId, WorkId};
 
     #[test]
     fn what_a_player_sends_to_open_a_session_is_read_whole() {

@@ -18,7 +18,8 @@ use melyxar_core::work::{IdentificationNote, IdentificationState, Work, WorkKind
 use sqlx::{Row, Sqlite};
 
 use crate::convert::{
-    bool_to_int, int_to_bool, parse_optional_timestamp, parse_timestamp, timestamp_to_text,
+    bool_to_int, int_to_bool, parse_id, parse_optional_timestamp, parse_timestamp,
+    timestamp_to_text,
 };
 use crate::{Database, DatabaseError, Result};
 
@@ -848,12 +849,7 @@ impl Database {
         .await?;
 
         rows.into_iter()
-            .map(|row| {
-                let id: String = row.try_get("id")?;
-                id.parse().map_err(|_| {
-                    DatabaseError::Corrupt("media source identifier is malformed".to_string())
-                })
-            })
+            .map(|row| parse_id(&row.try_get::<String, _>("id")?))
             .collect()
     }
 
@@ -1028,12 +1024,7 @@ impl Database {
         .await?;
 
         rows.into_iter()
-            .map(|row| {
-                let id: String = row.try_get("id")?;
-                id.parse().map_err(|_| {
-                    DatabaseError::Corrupt("media source identifier is malformed".to_string())
-                })
-            })
+            .map(|row| parse_id(&row.try_get::<String, _>("id")?))
             .collect()
     }
 
@@ -1179,12 +1170,7 @@ impl Database {
         .await?;
 
         rows.into_iter()
-            .map(|row| {
-                let id: String = row.try_get("id")?;
-                id.parse().map_err(|_| {
-                    DatabaseError::Corrupt("media source identifier is malformed".to_string())
-                })
-            })
+            .map(|row| parse_id(&row.try_get::<String, _>("id")?))
             .collect()
     }
 
@@ -1854,12 +1840,6 @@ fn hdr_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Option<HdrFormat>> {
             _ => None,
         },
     )
-}
-
-fn parse_id<T: std::str::FromStr>(value: &str) -> Result<T> {
-    value
-        .parse()
-        .map_err(|_| DatabaseError::Corrupt(format!("identifier '{value}' is malformed")))
 }
 
 /// Writes a list of positions the way the column holds them.

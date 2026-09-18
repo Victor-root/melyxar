@@ -7,11 +7,10 @@
 use melyxar_core::id::{LibraryId, UserId};
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::user::{DownmixMethod, Permissions, Preferences, ThemeMode, User};
-use sqlx::Row;
-use std::str::FromStr;
+use sqlx::{AssertSqlSafe, Row};
 
-use crate::convert::{bool_to_int, int_to_bool, parse_timestamp, timestamp_to_text};
-use crate::{Database, DatabaseError, Result};
+use crate::convert::{bool_to_int, int_to_bool, parse_id, parse_timestamp, timestamp_to_text};
+use crate::{Database, Result};
 
 /// The languages a library holds, ready to fill a picker.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -20,7 +19,40 @@ pub struct AvailableLanguages {
     pub subtitle: Vec<String>,
 }
 
+/// Everything an account is made of, rights and preferences together.
+///
+/// Written once: three reads load the same account, and a column added to one
+/// of them and forgotten in the others is a field that silently goes missing
+/// depending on which screen asked.
+const WHAT_AN_ACCOUNT_IS: &str =
+    "u.id, u.name, u.avatar_path, u.is_administrator, u.max_age_rating,
+     u.may_download, u.may_delete, u.may_delete_from_disk, u.max_sessions, u.created_at,
+     p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
+     p.theme_mode, p.accent_color, p.custom_css, p.volume,
+     p.downmix_method, p.downmix_gain";
+
+/// The read of an account, with whatever else the caller needs alongside and
+/// however it picks the rows.
+fn reading_accounts(also: &str, ending: &str) -> String {
+    format!(
+        "SELECT {WHAT_AN_ACCOUNT_IS}{also}
+         FROM users u
+         JOIN user_preferences p ON p.user_id = u.id
+         {ending}"
+    )
+}
+
 impl Database {
+    /// The libraries one account has been granted.
+    async fn libraries_allowed_to(&self, id: UserId) -> Result<Vec<(String,)>> {
+        Ok(
+            sqlx::query_as("SELECT library_id FROM user_library_access WHERE user_id = ?")
+                .bind(id.to_db_string())
+                .fetch_all(self.reader())
+                .await?,
+        )
+    }
+
     /// Creates an account along with its preferences row.
     pub async fn create_user(
         &self,
@@ -98,29 +130,15 @@ impl Database {
 
     /// Loads one account with its rights and preferences.
     pub async fn user(&self, id: UserId) -> Result<Option<User>> {
-        let Some(row) = sqlx::query(
-            "SELECT u.id, u.name, u.avatar_path, u.is_administrator, u.max_age_rating,
-                    u.may_download, u.may_delete, u.may_delete_from_disk, u.max_sessions,
-                    u.created_at,
-                    p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
-                    p.theme_mode, p.accent_color, p.custom_css, p.volume,
-                    p.downmix_method, p.downmix_gain
-             FROM users u
-             JOIN user_preferences p ON p.user_id = u.id
-             WHERE u.id = ?",
-        )
-        .bind(id.to_db_string())
-        .fetch_optional(self.reader())
-        .await?
+        let Some(row) = sqlx::query(AssertSqlSafe(reading_accounts("", "WHERE u.id = ?")))
+            .bind(id.to_db_string())
+            .fetch_optional(self.reader())
+            .await?
         else {
             return Ok(None);
         };
 
-        let allowed: Vec<(String,)> =
-            sqlx::query_as("SELECT library_id FROM user_library_access WHERE user_id = ?")
-                .bind(id.to_db_string())
-                .fetch_all(self.reader())
-                .await?;
+        let allowed = self.libraries_allowed_to(id).await?;
 
         Ok(Some(build_user(&row, &allowed)?))
     }
@@ -128,17 +146,10 @@ impl Database {
     /// Loads an account by name, for signing in. The comparison ignores case,
     /// because nobody remembers how they capitalised their own name.
     pub async fn user_by_name(&self, name: &str) -> Result<Option<(User, Option<String>)>> {
-        let Some(row) = sqlx::query(
-            "SELECT u.id, u.name, u.avatar_path, u.is_administrator, u.max_age_rating,
-                    u.may_download, u.may_delete, u.may_delete_from_disk, u.max_sessions,
-                    u.created_at, u.password_hash,
-                    p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
-                    p.theme_mode, p.accent_color, p.custom_css, p.volume,
-                    p.downmix_method, p.downmix_gain
-             FROM users u
-             JOIN user_preferences p ON p.user_id = u.id
-             WHERE u.name = ? COLLATE NOCASE",
-        )
+        let Some(row) = sqlx::query(AssertSqlSafe(reading_accounts(
+            ", u.password_hash",
+            "WHERE u.name = ? COLLATE NOCASE",
+        )))
         .bind(name)
         .fetch_optional(self.reader())
         .await?
@@ -147,11 +158,7 @@ impl Database {
         };
 
         let id = parse_id::<UserId>(&row.try_get::<String, _>("id")?)?;
-        let allowed: Vec<(String,)> =
-            sqlx::query_as("SELECT library_id FROM user_library_access WHERE user_id = ?")
-                .bind(id.to_db_string())
-                .fetch_all(self.reader())
-                .await?;
+        let allowed = self.libraries_allowed_to(id).await?;
 
         let password_hash: Option<String> = row.try_get("password_hash")?;
         Ok(Some((build_user(&row, &allowed)?, password_hash)))
@@ -159,28 +166,17 @@ impl Database {
 
     /// Every account, ordered by name. Small by nature: this is a home server.
     pub async fn list_users(&self) -> Result<Vec<User>> {
-        let rows = sqlx::query(
-            "SELECT u.id, u.name, u.avatar_path, u.is_administrator, u.max_age_rating,
-                    u.may_download, u.may_delete, u.may_delete_from_disk, u.max_sessions,
-                    u.created_at,
-                    p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
-                    p.theme_mode, p.accent_color, p.custom_css, p.volume,
-                    p.downmix_method, p.downmix_gain
-             FROM users u
-             JOIN user_preferences p ON p.user_id = u.id
-             ORDER BY u.name COLLATE NOCASE",
-        )
+        let rows = sqlx::query(AssertSqlSafe(reading_accounts(
+            "",
+            "ORDER BY u.name COLLATE NOCASE",
+        )))
         .fetch_all(self.reader())
         .await?;
 
         let mut users = Vec::with_capacity(rows.len());
         for row in &rows {
             let id = parse_id::<UserId>(&row.try_get::<String, _>("id")?)?;
-            let allowed: Vec<(String,)> =
-                sqlx::query_as("SELECT library_id FROM user_library_access WHERE user_id = ?")
-                    .bind(id.to_db_string())
-                    .fetch_all(self.reader())
-                    .await?;
+            let allowed = self.libraries_allowed_to(id).await?;
             users.push(build_user(row, &allowed)?);
         }
         Ok(users)
@@ -237,12 +233,6 @@ impl Database {
         .await?;
         Ok(())
     }
-}
-
-fn parse_id<T: FromStr>(value: &str) -> Result<T> {
-    value
-        .parse()
-        .map_err(|_| DatabaseError::Corrupt(format!("identifier '{value}' is malformed")))
 }
 
 /// Builds a domain account out of a row and its granted libraries.

@@ -17,7 +17,7 @@ use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::{IdentificationNote, IdentificationState, WorkKind};
 use sqlx::{AssertSqlSafe, Row};
 
-use crate::convert::parse_timestamp;
+use crate::convert::{parse_id, parse_timestamp};
 use crate::images::StoredImage;
 use crate::{Database, DatabaseError, Result};
 
@@ -561,12 +561,6 @@ pub(crate) fn card_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<WorkCard> {
         added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
         poster: Vec::new(),
     })
-}
-
-fn parse_id<T: std::str::FromStr>(value: &str) -> Result<T> {
-    value
-        .parse()
-        .map_err(|_| DatabaseError::Corrupt(format!("identifier '{value}' is malformed")))
 }
 
 #[cfg(test)]
