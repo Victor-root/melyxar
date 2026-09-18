@@ -1305,6 +1305,7 @@ mod tests {
             id: WorkId::new(),
             library_id: LibraryId::new(),
             parent_id: None,
+            ordinal: None,
             kind: WorkKind::Movie,
             sort_title: naming::sort_title(title),
             title: title.to_string(),

@@ -25,7 +25,7 @@ use melyxar_database::catalogue::{LocalExtraVideo, SourceAnalysis, StoredSource}
 use melyxar_database::Database;
 use melyxar_jobs::{JobHandle, StartedJob};
 use melyxar_library::scan::{walk, FoundFile, KnownFile, ScanError};
-use melyxar_library::{naming, sidecar};
+use melyxar_library::{episode, naming, sidecar};
 
 use crate::{AppError, AppState, Result};
 
@@ -719,6 +719,12 @@ async fn work_for(
     relative_path: &Path,
     signs: &naming::LibrarySigns,
 ) -> Result<WorkId> {
+    if library.kind.is_episodic() {
+        if let Some(work) = episode_work_for(state, library, relative_path, signs).await? {
+            return Ok(work);
+        }
+    }
+
     let database = state.database();
     let file_name = relative_path
         .file_name()
@@ -750,11 +756,175 @@ async fn work_for(
     Ok(work.id)
 }
 
-/// The kind of work a file in this library stands for.
+/// Finds the episode a file stands for, with its season and its series above
+/// it, or says the name never told which episode this is.
 ///
-/// Only films are laid out one file to one work today. The episodic kinds get
-/// their own arrangement when series arrive, and until then a file found in
-/// such a library is recorded as an episode, which is what it is.
+/// Saying nothing is a real answer and not a failure: the file goes on to the
+/// ordinary path, which records it as an episode belonging to nothing, and
+/// such an episode is met on its own in the grid. A file nobody could number
+/// stays visible and gets corrected; a file filed under a season nobody wrote
+/// is never even looked at.
+async fn episode_work_for(
+    state: &AppState,
+    library: &Library,
+    relative_path: &Path,
+    signs: &naming::LibrarySigns,
+) -> Result<Option<WorkId>> {
+    let file_name = relative_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let Some(read) = episode::parse_episode(file_name, melyxar_core::time::current_year(), signs)
+    else {
+        return Ok(None);
+    };
+
+    let folders = folders_above(relative_path);
+    let Some(series_title) = the_series(&read, &folders) else {
+        return Ok(None);
+    };
+    // The name first, the folder only to fill in, and the one season a series
+    // has when nobody ever wrote a season anywhere: a show with a single
+    // season is written without one, and that is what it means.
+    let season = read
+        .season
+        .or_else(|| {
+            folders
+                .first()
+                .and_then(|folder| episode::season_of_folder(folder))
+        })
+        .unwrap_or(THE_ONLY_SEASON);
+
+    let database = state.database();
+    let series_sort = naming::sort_title(&series_title);
+    let series = match database
+        .series_by_name(library.id, &series_sort, read.year)
+        .await?
+    {
+        Some(found) => found,
+        None => {
+            database
+                .create_work(
+                    library.id,
+                    WorkKind::Series,
+                    &series_title,
+                    &series_sort,
+                    read.year,
+                )
+                .await?
+        }
+    };
+
+    let season_work = child_at(state, library, series.id, season, WorkKind::Season, || {
+        name_of_season(season)
+    })
+    .await?;
+
+    let episode_work = child_at(
+        state,
+        library,
+        season_work.id,
+        read.first,
+        WorkKind::Episode,
+        || {
+            read.title
+                .clone()
+                .unwrap_or_else(|| name_of_episode(read.first, read.last))
+        },
+    )
+    .await?;
+
+    Ok(Some(episode_work.id))
+}
+
+/// The child of a work sitting at that number, written down if it is not there.
+///
+/// The name is only worked out when one has to be written, because naming a
+/// season costs nothing and naming it for a season already on the page costs a
+/// string per file of the collection.
+async fn child_at(
+    state: &AppState,
+    library: &Library,
+    parent_id: WorkId,
+    ordinal: i32,
+    kind: WorkKind,
+    name: impl FnOnce() -> String,
+) -> Result<melyxar_core::work::Work> {
+    let database = state.database();
+    if let Some(found) = database.child_by_ordinal(parent_id, ordinal).await? {
+        return Ok(found);
+    }
+    let title = name();
+    let sort_title = naming::sort_title(&title);
+    Ok(database
+        .create_child_work(library.id, parent_id, ordinal, kind, &title, &sort_title)
+        .await?)
+}
+
+/// The season a series has when nobody wrote a season anywhere.
+const THE_ONLY_SEASON: i32 = 1;
+
+/// The season everything that belongs to no season is filed under.
+const SEASON_OF_SPECIALS: i32 = 0;
+
+/// The folders between a file and the root of its library, nearest first.
+fn folders_above(relative_path: &Path) -> Vec<&str> {
+    let Some(parent) = relative_path.parent() else {
+        return Vec::new();
+    };
+    let mut folders: Vec<&str> = parent
+        .components()
+        .filter_map(|part| part.as_os_str().to_str())
+        .collect();
+    folders.reverse();
+    folders
+}
+
+/// What names the series this file belongs to.
+///
+/// The name of the file first, because it is the only thing that is there in
+/// all four ways a collection gets laid out. The folder answers only when the
+/// name did not, which is what a file named after nothing but its number
+/// inside a season folder needs: the folder holding that season folder is the
+/// series, and a season folder itself never names anything.
+fn the_series(read: &episode::ParsedEpisode, folders: &[&str]) -> Option<String> {
+    if !read.series.is_empty() {
+        return Some(read.series.clone());
+    }
+    folders
+        .iter()
+        .find(|folder| episode::season_of_folder(folder).is_none())
+        .map(|folder| (*folder).to_string())
+        .filter(|folder| !folder.is_empty())
+}
+
+/// What a season is called before anything better is known about it.
+///
+/// English, like every other name written into the database. What a page shows
+/// is worked out from the number, in whichever language the page is being read
+/// in, so this is what is left if a season is ever met outside a page.
+fn name_of_season(season: i32) -> String {
+    if season == SEASON_OF_SPECIALS {
+        return "Specials".to_string();
+    }
+    format!("Season {season}")
+}
+
+/// What an episode is called when its own name never said.
+fn name_of_episode(first: i32, last: i32) -> String {
+    if last > first {
+        return format!("Episodes {first}-{last}");
+    }
+    format!("Episode {first}")
+}
+
+/// The kind of work a file in this library stands for when nothing better is
+/// known about it.
+///
+/// A film is one file to one work. In an episodic library this is only reached
+/// by a file whose name never said which episode it is: it is an episode all
+/// the same, belonging to no season, and it is met on its own in the grid
+/// rather than disappearing behind a series it was never attached to.
 fn work_kind_for(kind: LibraryKind) -> WorkKind {
     match kind {
         LibraryKind::Movies => WorkKind::Movie,
@@ -1191,6 +1361,24 @@ mod tests {
         roots: Vec<(&str, PathBuf)>,
         read_companion_files: bool,
     ) -> (AppState, Library) {
+        state_of_kind(directory, roots, read_companion_files, "movies").await
+    }
+
+    /// A state whose only library holds series rather than films.
+    async fn series_state_with_roots(
+        directory: &Path,
+        roots: Vec<(&str, PathBuf)>,
+    ) -> (AppState, Library) {
+        state_of_kind(directory, roots, false, "series").await
+    }
+
+    /// The one that really builds it, whatever the library is meant to hold.
+    async fn state_of_kind(
+        directory: &Path,
+        roots: Vec<(&str, PathBuf)>,
+        read_companion_files: bool,
+        kind: &str,
+    ) -> (AppState, Library) {
         let config = Config {
             directories: Directories {
                 data: directory.join("data"),
@@ -1199,7 +1387,7 @@ mod tests {
             },
             libraries: vec![LibraryConfig {
                 name: "Films".into(),
-                kind: "movies".into(),
+                kind: kind.into(),
                 metadata_language: "fr".into(),
                 roots: roots
                     .into_iter()
@@ -1303,6 +1491,318 @@ mod tests {
             collection: None,
             trailers: Vec::new(),
         }
+    }
+
+    /// Every work of a library, whatever it hangs under, for reading an
+    /// arrangement back.
+    async fn arrangement(state: &AppState, library: &Library) -> Vec<melyxar_core::work::Work> {
+        state
+            .database()
+            .recent_works(library.id, 100)
+            .await
+            .expect("read")
+    }
+
+    /// The works of one kind, in the order they are numbered.
+    fn of_kind(
+        works: &[melyxar_core::work::Work],
+        kind: WorkKind,
+    ) -> Vec<melyxar_core::work::Work> {
+        let mut found: Vec<_> = works
+            .iter()
+            .filter(|work| work.kind == kind)
+            .cloned()
+            .collect();
+        found.sort_by_key(|work| work.ordinal);
+        found
+    }
+
+    #[tokio::test]
+    async fn the_tidy_arrangement_becomes_a_series_a_season_and_its_episodes() {
+        // A folder per series with a folder per season inside it: what the
+        // maintainer does and what every other server asks for.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Saison 1/Distant Signal - S01E01 - The Long Night.mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Distant Signal/Saison 1/Distant Signal - S01E02 - Cold Water.mkv",
+            b"xx",
+        );
+        write(
+            &media,
+            "Distant Signal/Saison 2/Distant Signal - S02E01 - First Light.mkv",
+            b"xxx",
+        );
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        let series = of_kind(&works, WorkKind::Series);
+        assert_eq!(series.len(), 1, "one series, not one per file");
+        assert_eq!(series[0].title, "Distant Signal");
+        assert_eq!(series[0].parent_id, None);
+
+        let seasons = of_kind(&works, WorkKind::Season);
+        assert_eq!(
+            seasons.iter().map(|s| s.ordinal).collect::<Vec<_>>(),
+            vec![Some(1), Some(2)]
+        );
+        assert!(seasons.iter().all(|s| s.parent_id == Some(series[0].id)));
+
+        let episodes = of_kind(&works, WorkKind::Episode);
+        assert_eq!(episodes.len(), 3);
+        // The first season holds two, numbered one and two; the second holds
+        // one, numbered one again, because an episode is numbered inside its
+        // own season and not across the series.
+        let first = episodes
+            .iter()
+            .filter(|e| e.parent_id == Some(seasons[0].id))
+            .map(|e| e.ordinal)
+            .collect::<Vec<_>>();
+        assert_eq!(first, vec![Some(1), Some(2)]);
+        assert_eq!(
+            episodes
+                .iter()
+                .filter(|e| e.parent_id == Some(seasons[1].id))
+                .map(|e| e.ordinal)
+                .collect::<Vec<_>>(),
+            vec![Some(1)]
+        );
+
+        // The episode keeps the name its file gave it.
+        assert!(
+            episodes.iter().any(|e| e.title == "The Long Night"),
+            "{:?}",
+            episodes.iter().map(|e| &e.title).collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn episodes_laid_flat_in_a_series_folder_are_arranged_the_same() {
+        // No season folder anywhere. The name carries the season, so nothing
+        // is missing and the arrangement comes out identical.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Distant.Signal.S01E01.1080p.mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Distant Signal/Distant.Signal.S01E02.1080p.mkv",
+            b"xx",
+        );
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        assert_eq!(of_kind(&works, WorkKind::Series).len(), 1);
+        assert_eq!(of_kind(&works, WorkKind::Season).len(), 1);
+        assert_eq!(
+            of_kind(&works, WorkKind::Episode)
+                .iter()
+                .map(|e| e.ordinal)
+                .collect::<Vec<_>>(),
+            vec![Some(1), Some(2)]
+        );
+    }
+
+    #[tokio::test]
+    async fn episodes_in_bulk_are_arranged_from_their_names_alone() {
+        // Two series thrown into one folder with no folder of their own. The
+        // names are the only thing there is, and they are enough.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Distant.Signal.S01E01.mkv", b"x");
+        write(&media, "Distant.Signal.S01E02.mkv", b"xx");
+        write(&media, "Amber.Field.S03E07.mkv", b"xxx");
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        let series = of_kind(&works, WorkKind::Series);
+        let mut names: Vec<_> = series.iter().map(|s| s.title.clone()).collect();
+        names.sort();
+        assert_eq!(names, vec!["Amber Field", "Distant Signal"]);
+        assert_eq!(of_kind(&works, WorkKind::Season).len(), 2);
+        assert_eq!(of_kind(&works, WorkKind::Episode).len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_folder_answers_for_what_a_name_never_said() {
+        // The file says only its number. The folder it sits in says which
+        // season, and the folder above that names the series.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Distant Signal/Saison 2/Episode 03.mkv", b"x");
+        write(&media, "Distant Signal/Specials/E01.mkv", b"xx");
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        let series = of_kind(&works, WorkKind::Series);
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].title, "Distant Signal");
+
+        let seasons = of_kind(&works, WorkKind::Season);
+        assert_eq!(
+            seasons.iter().map(|s| s.ordinal).collect::<Vec<_>>(),
+            vec![Some(0), Some(2)],
+            "what belongs to no season is season zero"
+        );
+
+        let episodes = of_kind(&works, WorkKind::Episode);
+        assert_eq!(
+            episodes.iter().map(|e| e.ordinal).collect::<Vec<_>>(),
+            vec![Some(1), Some(3)]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_series_with_no_season_anywhere_gets_the_one_it_has() {
+        // Nothing says a season: not the name, not a folder. A show written
+        // this way has one season, and that is what it means.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Distant Signal/Episode 1.mkv", b"x");
+        write(&media, "Distant Signal/Episode 2.mkv", b"xx");
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        let seasons = of_kind(&works, WorkKind::Season);
+        assert_eq!(seasons.len(), 1);
+        assert_eq!(seasons[0].ordinal, Some(1));
+        assert_eq!(of_kind(&works, WorkKind::Episode).len(), 2);
+    }
+
+    #[tokio::test]
+    async fn two_copies_of_one_episode_are_one_episode() {
+        // Exactly what two copies of one film are: one work carrying two
+        // files, which is what puts a chooser on the page instead of the same
+        // episode twice.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Distant.Signal.S01E01.1080p.mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Distant Signal/Distant.Signal.S01E01.2160p.mkv",
+            b"xx",
+        );
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        let episodes = of_kind(&works, WorkKind::Episode);
+        assert_eq!(episodes.len(), 1, "one episode, two files");
+        assert_eq!(
+            state
+                .database()
+                .sources_of_work(episodes[0].id)
+                .await
+                .expect("read")
+                .len(),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_nobody_could_number_is_still_somewhere_to_be_seen() {
+        // The decision written down in the architecture notes: a file whose
+        // name never said which episode it is belongs to no season, and an
+        // episode belonging to nothing is met on its own rather than being
+        // filed under a season nobody wrote.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Distant Signal/Distant.Signal.S01E01.mkv", b"x");
+        write(&media, "Distant Signal/A Night Nobody Numbered.mkv", b"xx");
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        let stray: Vec<_> = works
+            .iter()
+            .filter(|work| work.kind == WorkKind::Episode && work.parent_id.is_none())
+            .collect();
+        assert_eq!(stray.len(), 1);
+        assert_eq!(stray[0].title, "A Night Nobody Numbered");
+
+        let shown = state
+            .database()
+            .browse_works(&melyxar_database::browse::BrowseRequest {
+                library_id: Some(library.id),
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert!(
+            shown.cards.iter().any(|card| card.id == stray[0].id),
+            "it has somewhere to be seen: {:?}",
+            shown.cards.iter().map(|c| &c.title).collect::<Vec<_>>()
+        );
+        // And the series it sits beside is on the same grid, while its seasons
+        // and its episodes are not.
+        assert_eq!(shown.cards.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn only_what_the_provider_has_a_catalogue_for_is_asked_about() {
+        // Without this, every episode of every series is handed to a search
+        // for films, which answers nothing several hundred times over.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Saison 1/Distant.Signal.S01E01.mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Distant Signal/Saison 1/Distant.Signal.S01E02.mkv",
+            b"xx",
+        );
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+
+        let waiting = state
+            .database()
+            .works_awaiting_identification(library.id)
+            .await
+            .expect("read");
+        assert!(
+            waiting.is_empty(),
+            "nothing here is a film: {:?}",
+            waiting
+                .iter()
+                .map(|w| (&w.title, w.kind))
+                .collect::<Vec<_>>()
+        );
     }
 
     fn write(root: &Path, relative: &str, contents: &[u8]) {
