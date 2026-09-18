@@ -1357,6 +1357,51 @@ mod tests {
         output.status.success()
     }
 
+    /// The same film, carrying a subtitle made of words inside it.
+    ///
+    /// The words have to be inside the film rather than beside it: a subtitle
+    /// in a file of its own is already the file it would be pulled out into,
+    /// and the reading this exercises is exactly the one such a file spares.
+    /// So the sidecar the tool is given is taken away again the moment it has
+    /// been muxed, before anything walks the folder.
+    fn write_real_video_carrying_words(path: &Path) -> bool {
+        let beside = path.with_extension("srt");
+        if std::fs::write(
+            &beside,
+            "1\n00:00:00,100 --> 00:00:00,900\nQuiet Harbour\n\n",
+        )
+        .is_err()
+        {
+            return false;
+        }
+        let made = Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=duration=1:size=320x240:rate=10",
+            ])
+            .arg("-i")
+            .arg(&beside)
+            .args([
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-c:s",
+                "srt",
+                "-shortest",
+            ])
+            .arg(path)
+            .output();
+        let _ = std::fs::remove_file(&beside);
+        made.is_ok_and(|output| output.status.success())
+    }
+
     #[tokio::test]
     async fn a_first_scan_records_every_film_it_finds() {
         let directory = tempfile::tempdir().expect("temporary directory");
@@ -1477,17 +1522,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_scan_leaves_the_two_heavy_readings_to_the_upkeep_unless_it_is_told_not_to() {
-        // The defect this exists for: both readings went through every film of
+    async fn a_scan_leaves_the_heavy_readings_to_the_upkeep_unless_it_is_told_not_to() {
+        // The defect this exists for: the readings went through every film of
         // the library inside the scan, so a scan of a real collection took
         // days and the first five thousand films were all anybody ever got.
         // They belong to the upkeep now, which runs of a night and can be set
         // going from a button, and a library that wants them in one sitting
         // says so.
+        //
+        // The film carries words inside it, so that all three readings have
+        // something to do rather than two of them.
         let directory = tempfile::tempdir().expect("temporary directory");
         let media = directory.path().join("films");
         std::fs::create_dir_all(&media).expect("the media folder");
-        if !write_real_video(&media.join("Quiet.Harbour.2019.mkv")) {
+        if !write_real_video_carrying_words(&media.join("Quiet.Harbour.2019.mkv")) {
             eprintln!("no media tool here, the readings were not exercised");
             return;
         }
@@ -1503,7 +1551,7 @@ mod tests {
             let entry = left
                 .iter()
                 .find(|entry| entry.task == task && entry.library == library.id)
-                .expect("every library answers for both readings");
+                .expect("every library answers for every reading");
             assert_eq!(entry.waiting, 1, "{}", task.as_str());
             assert!(!entry.during_the_scan);
             assert!(!entry.under_way);
@@ -1511,7 +1559,7 @@ mod tests {
 
         assert_eq!(
             read_everything_that_is_waiting(&state).await,
-            2,
+            3,
             "one job for each reading, on the one library that has anything waiting"
         );
 
@@ -1520,7 +1568,7 @@ mod tests {
             let entry = done
                 .iter()
                 .find(|entry| entry.task == task && entry.library == library.id)
-                .expect("every library answers for both readings");
+                .expect("every library answers for every reading");
             assert_eq!(entry.waiting, 0, "{}", task.as_str());
             assert_eq!(entry.done, 1, "{}", task.as_str());
         }

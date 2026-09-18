@@ -483,12 +483,15 @@ pub async fn open_session(
     let session = sessions.open(recipe, expensive).await?;
     say_how_the_film_was_cut(&session);
 
-    // Started now rather than when somebody asks for a subtitle. Pulling one
-    // out of a film means reading the whole file through, because the words
-    // are interleaved with the picture from end to end: measured at three
-    // quarters of a minute on a 4K film. Asked for at the moment of the click,
-    // that wait falls entirely on somebody who has already pressed the button
-    // and sees nothing happen. Started here, it runs while the film plays.
+    // The upkeep normally pulled these out of the film long before anybody
+    // opened it, and then this costs a look at the cache and stops. What is
+    // left for it is the film added since the last run of the upkeep, and a
+    // server whose upkeep has never run at all. Pulling one out means reading
+    // the whole file through, because the words are interleaved with the
+    // picture from end to end: measured at three quarters of a minute on a 4K
+    // film. Asked for at the moment somebody asks for the subtitle itself,
+    // that wait falls entirely on them; started here, it runs while the film
+    // plays.
     prepare_the_subtitles(state, plan);
 
     Ok(session)
