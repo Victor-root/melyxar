@@ -13,7 +13,7 @@
  * saving.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Library, LibraryWork, ViewerPreferences } from "../api";
 import {
@@ -27,7 +27,8 @@ import {
   storedAppearance,
 } from "../player/appearance";
 import type { Appearance } from "../player/appearance";
-import { languageName, METADATA_LANGUAGES } from "../player/languages";
+import { LibraryEditor } from "../components/libraries";
+import { languageName } from "../player/languages";
 import { DeviceOptimization } from "../player/DeviceOptimization";
 import { useSettings } from "../settings";
 
@@ -44,8 +45,6 @@ export function SettingsPage() {
      description files, and when the upkeep runs. All three were lines of the
      configuration file until now. */
   const [work, setWork] = useState<LibraryWork | null>(null);
-  /* What a change set going, when it set anything going. */
-  const [said, setSaid] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -63,18 +62,24 @@ export function SettingsPage() {
     return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    const controller = new AbortController();
+  /* Read again whenever the editor has changed something, so what is on the
+     screen is what the server kept rather than what the screen hoped for. */
+  const readLibraries = useCallback((signal?: AbortSignal) => {
     api
-      .libraries(controller.signal)
+      .libraries(signal)
       .then(setLibraries)
       .catch((error) => {
         if (!(error instanceof DOMException)) {
           setFailed("error.unreachable");
         }
       });
-    return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    readLibraries(controller.signal);
+    return () => controller.abort();
+  }, [readLibraries]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -109,40 +114,6 @@ export function SettingsPage() {
         // Put back what the server still holds, rather than showing a setting
         // next to a server that never heard of it.
         setWork(before);
-        setFailed(error instanceof ApiError ? "settings.not_kept" : "error.unreachable");
-      });
-  };
-
-  /* Shown straight away and sent at once, like everything else here. The two
-     switches always travel together, because they are one answer to one
-     question: sending half would leave the other half to be guessed at. */
-  const switchTo = (library: Library, changes: Partial<Library>) => {
-    const wanted = { ...library, ...changes };
-    setLibraries((before) =>
-      before.map((one) => (one.id === library.id ? wanted : one)),
-    );
-    api
-      .setLibraryOptions(library.id, {
-        key_frames_during_scan: wanted.key_frames_during_scan,
-        thumbnails_during_scan: wanted.thumbnails_during_scan,
-        metadata_language: wanted.metadata_language,
-      })
-      .then((kept) => {
-        setFailed(null);
-        // A language that changed set a run going on every film of the
-        // library. Somebody who just pressed that is owed its size.
-        setSaid(
-          kept.asked_about_again === null
-            ? null
-            : t("settings.asked_about_again", { count: kept.asked_about_again }),
-        );
-      })
-      .catch((error) => {
-        // Put back what the server still holds, rather than leaving a ticked
-        // box next to a server that never heard of it.
-        setLibraries((before) =>
-          before.map((one) => (one.id === library.id ? library : one)),
-        );
         setFailed(error instanceof ApiError ? "settings.not_kept" : "error.unreachable");
       });
   };
@@ -349,64 +320,13 @@ export function SettingsPage() {
         </section>
       )}
 
-      {libraries.length > 0 && (
-        <section className="settings-block">
-          <h2>{t("settings.libraries")}</h2>
-          <p className="settings-why">{t("settings.libraries_why")}</p>
+      <section className="settings-block">
+        <h2>{t("settings.libraries")}</h2>
+        <p className="settings-why">{t("settings.libraries_why")}</p>
+        <p className="settings-why">{t("settings.metadata_language_why")}</p>
 
-          <p className="settings-why">{t("settings.metadata_language_why")}</p>
-
-          {said && <p className="notice">{said}</p>}
-
-          {libraries.map((library) => (
-            <div className="library-options" key={library.id}>
-              <span className="library-options-name">{library.name}</span>
-              {/* The language its films are described in. Changing it asks the
-                  provider about every one of them again, which is said under
-                  the list rather than found out afterwards. */}
-              <label className="choice">
-                <span className="choice-label">{t("settings.metadata_language")}</span>
-                <select
-                  value={library.metadata_language}
-                  onChange={(event) =>
-                    switchTo(library, { metadata_language: event.target.value })
-                  }
-                >
-                  {METADATA_LANGUAGES.map((code) => (
-                    <option key={code} value={code}>
-                      {languageName(code, language)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {/* Buttons that stay pressed rather than tick boxes, which is
-                  how every other switch in this interface is drawn. */}
-              <button
-                className={`button button-small${library.key_frames_during_scan ? " button-on" : ""}`}
-                aria-pressed={library.key_frames_during_scan}
-                onClick={() =>
-                  switchTo(library, {
-                    key_frames_during_scan: !library.key_frames_during_scan,
-                  })
-                }
-              >
-                {t("settings.key_frames_during_scan")}
-              </button>
-              <button
-                className={`button button-small${library.thumbnails_during_scan ? " button-on" : ""}`}
-                aria-pressed={library.thumbnails_during_scan}
-                onClick={() =>
-                  switchTo(library, {
-                    thumbnails_during_scan: !library.thumbnails_during_scan,
-                  })
-                }
-              >
-                {t("settings.thumbnails_during_scan")}
-              </button>
-            </div>
-          ))}
-        </section>
-      )}
+        <LibraryEditor libraries={libraries} onChanged={readLibraries} />
+      </section>
 
       <section className={`settings-block ${appearanceClasses(appearance)}`}>
         <h2>{t("settings.subtitles")}</h2>

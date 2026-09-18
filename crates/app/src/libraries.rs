@@ -15,7 +15,91 @@ use std::path::{Path, PathBuf};
 use melyxar_core::id::{LibraryId, LibraryRootId};
 use melyxar_core::library::{Library, LibraryKind, LibraryRoot, RootAccess};
 
-use crate::{AppError, AppState, Result};
+use crate::{AppError, AppState};
+
+/// Why a library, or a folder for one, was refused.
+///
+/// A word and never a sentence: the wording belongs to whatever is showing it,
+/// in the language of whoever is reading. These are the refusals somebody
+/// meets while filling a form in, so each one has to say which thing to put
+/// right rather than that something was wrong.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refused {
+    NameNeeded,
+    NameTooLong,
+    NameTaken,
+    /// A kind of library this server does not have.
+    UnknownKind,
+    /// A library has to look somewhere.
+    NoFolder,
+    /// A path that is not a whole path, which nothing can resolve.
+    NotAWholePath,
+    FolderMissing,
+    NotAFolder,
+    FolderUnreadable,
+    /// A library, this one or another, already looks in that folder or in one
+    /// that holds it: every film in it would be found twice.
+    FolderAlreadyLookedIn,
+    /// Two of the folders chosen at once are inside one another.
+    FoldersNested,
+    LanguageNotTwoLetters,
+}
+
+impl Refused {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NameNeeded => "name_needed",
+            Self::NameTooLong => "name_too_long",
+            Self::NameTaken => "name_taken",
+            Self::UnknownKind => "unknown_kind",
+            Self::NoFolder => "no_folder",
+            Self::NotAWholePath => "not_a_whole_path",
+            Self::FolderMissing => "folder_missing",
+            Self::NotAFolder => "not_a_folder",
+            Self::FolderUnreadable => "folder_unreadable",
+            Self::FolderAlreadyLookedIn => "folder_already_looked_in",
+            Self::FoldersNested => "folders_nested",
+            Self::LanguageNotTwoLetters => "language_not_two_letters",
+        }
+    }
+
+    /// Every one of them, so that a test can cross from here to the words the
+    /// interface shows and catch a refusal nobody worded.
+    pub const ALL: [Self; 12] = [
+        Self::NameNeeded,
+        Self::NameTooLong,
+        Self::NameTaken,
+        Self::UnknownKind,
+        Self::NoFolder,
+        Self::NotAWholePath,
+        Self::FolderMissing,
+        Self::NotAFolder,
+        Self::FolderUnreadable,
+        Self::FolderAlreadyLookedIn,
+        Self::FoldersNested,
+        Self::LanguageNotTwoLetters,
+    ];
+}
+
+/// What can go wrong here: something somebody typed, or the server itself.
+///
+/// Kept apart on purpose. The first is a form to correct and is shown where it
+/// was typed; the second is a failure and is shown as one.
+#[derive(Debug, thiserror::Error)]
+pub enum Trouble {
+    #[error("refused: {}", .0.as_str())]
+    Refused(Refused),
+    #[error(transparent)]
+    Failed(#[from] AppError),
+}
+
+impl From<melyxar_database::DatabaseError> for Trouble {
+    fn from(error: melyxar_database::DatabaseError) -> Self {
+        Self::Failed(AppError::from(error))
+    }
+}
+
+type Result<T> = std::result::Result<T, Trouble>;
 
 /// A library somebody is asking for.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,20 +122,17 @@ pub async fn create(state: &AppState, asked: Asked) -> Result<Library> {
     let name = name_of(&asked.name)?;
     let language = language_of(&asked.language)?;
     if asked.roots.is_empty() {
-        return Err(refused("a library has to look somewhere, so name a folder"));
+        return Err(Trouble::Refused(Refused::NoFolder));
     }
     if state.database().library_by_name(&name).await?.is_some() {
-        return Err(refused("a library of that name is already here"));
+        return Err(Trouble::Refused(Refused::NameTaken));
     }
 
     let mut roots: Vec<(String, PathBuf)> = Vec::new();
     for path in &asked.roots {
         let path = folder_to_look_in(state, path).await?;
         if roots.iter().any(|(_, kept)| nested(&path, kept)) {
-            return Err(refused(
-                "two of those folders are inside one another, so every film in \
-                 them would be found twice",
-            ));
+            return Err(Trouble::Refused(Refused::FoldersNested));
         }
         roots.push((label_for(state, &path).await?, path));
     }
@@ -92,10 +173,7 @@ pub async fn add_root(state: &AppState, library_id: LibraryId, path: &Path) -> R
     let library = library_by_id(state, library_id).await?;
     let path = folder_to_look_in(state, path).await?;
     if library.roots.iter().any(|root| nested(&path, &root.path)) {
-        return Err(refused(
-            "that folder is inside one this library already looks in, or holds \
-             one, so every film in it would be found twice",
-        ));
+        return Err(Trouble::Refused(Refused::FolderAlreadyLookedIn));
     }
 
     let label = label_for(state, &path).await?;
@@ -136,7 +214,7 @@ pub async fn rename(state: &AppState, library_id: LibraryId, name: &str) -> Resu
         return Ok(library);
     }
     if state.database().library_by_name(&name).await?.is_some() {
-        return Err(refused("a library of that name is already here"));
+        return Err(Trouble::Refused(Refused::NameTaken));
     }
 
     state.database().rename_library(library.id, &name).await?;
@@ -208,20 +286,19 @@ fn nested(one: &Path, other: &Path) -> bool {
 /// and that is exactly this server.
 async fn folder_to_look_in(state: &AppState, path: &Path) -> Result<PathBuf> {
     if !path.is_absolute() {
-        return Err(refused("a folder is given by its whole path"));
+        return Err(Trouble::Refused(Refused::NotAWholePath));
     }
-    let path = std::fs::canonicalize(path)
-        .map_err(|_| refused("there is no such folder on this server"))?;
+    let path = std::fs::canonicalize(path).map_err(|_| Trouble::Refused(Refused::FolderMissing))?;
     if !path.is_dir() {
-        return Err(refused("that is a file, not a folder"));
+        return Err(Trouble::Refused(Refused::NotAFolder));
     }
 
     let access = melyxar_library::check_root_access(&path);
     if !access.is_usable() {
-        return Err(match access {
-            RootAccess::Missing => refused("there is no such folder on this server"),
-            _ => refused("this server is not allowed to read that folder"),
-        });
+        return Err(Trouble::Refused(match access {
+            RootAccess::Missing => Refused::FolderMissing,
+            _ => Refused::FolderUnreadable,
+        }));
     }
 
     // Against every root of every library, not only of this one: two libraries
@@ -229,9 +306,7 @@ async fn folder_to_look_in(state: &AppState, path: &Path) -> Result<PathBuf> {
     // second one would carry its own history of what was watched.
     for entry in state.database().roots_with_access().await? {
         if nested(&path, &entry.root.path) {
-            return Err(refused(
-                "a library already looks in that folder, or in one that holds it",
-            ));
+            return Err(Trouble::Refused(Refused::FolderAlreadyLookedIn));
         }
     }
     Ok(path)
@@ -259,17 +334,17 @@ async fn library_by_id(state: &AppState, library_id: LibraryId) -> Result<Librar
         .await?
         .into_iter()
         .find(|library| library.id == library_id)
-        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("library")))
+        .ok_or_else(|| Trouble::Failed(AppError::Domain(melyxar_core::Error::not_found("library"))))
 }
 
 /// The name a library is to be called, or a refusal saying why not.
 fn name_of(asked: &str) -> Result<String> {
     let name = asked.trim();
     if name.is_empty() {
-        return Err(refused("a library needs a name"));
+        return Err(Trouble::Refused(Refused::NameNeeded));
     }
     if name.chars().count() > 60 {
-        return Err(refused("that name is too long to sit in a menu"));
+        return Err(Trouble::Refused(Refused::NameTooLong));
     }
     Ok(name.to_string())
 }
@@ -279,13 +354,9 @@ fn name_of(asked: &str) -> Result<String> {
 fn language_of(asked: &str) -> Result<String> {
     let language = asked.trim().to_lowercase();
     if language.len() != 2 || !language.chars().all(|letter| letter.is_ascii_lowercase()) {
-        return Err(refused("a language is two letters, such as fr or en"));
+        return Err(Trouble::Refused(Refused::LanguageNotTwoLetters));
     }
     Ok(language)
-}
-
-fn refused(why: &str) -> AppError {
-    AppError::Domain(melyxar_core::Error::invalid_input(why))
 }
 
 /// What the screen that adds a library shows: the folders inside one folder.
@@ -294,7 +365,13 @@ fn refused(why: &str) -> AppError {
 /// opened, served or removed: a path arrives, it is made canonical, and the
 /// folders inside it are named. See the decision in the architecture notes.
 pub fn folders_in(path: &Path) -> Result<melyxar_library::Listing> {
-    melyxar_library::folders_in(path).map_err(|error| refused(&error.to_string()))
+    melyxar_library::folders_in(path).map_err(|error| {
+        Trouble::Refused(match error {
+            melyxar_library::FolderError::Missing => Refused::FolderMissing,
+            melyxar_library::FolderError::NotAFolder => Refused::NotAFolder,
+            melyxar_library::FolderError::Unreadable => Refused::FolderUnreadable,
+        })
+    })
 }
 
 /// Whether the root identifier belongs to the library named, which is what
@@ -309,7 +386,11 @@ pub async fn root_of(
         .roots
         .into_iter()
         .find(|root| root.id == root_id)
-        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("library root")))
+        .ok_or_else(|| {
+            Trouble::Failed(AppError::Domain(melyxar_core::Error::not_found(
+                "library root",
+            )))
+        })
 }
 
 #[cfg(test)]
@@ -421,40 +502,45 @@ mod tests {
         let state = state_on(directory.path()).await;
         let films = folder(directory.path(), "Films");
 
-        let said = |error: AppError| error.to_string();
-        assert!(said(
-            create(&state, asked("  ", vec![films.clone()]))
+        // A refusal is a word the screen showing it words itself, never a
+        // sentence: whoever reads it is not reading English.
+        let why = |trouble: Trouble| match trouble {
+            Trouble::Refused(refused) => refused,
+            Trouble::Failed(error) => panic!("this is a form to correct, not a failure: {error}"),
+        };
+
+        assert_eq!(
+            why(create(&state, asked("  ", vec![films.clone()]))
                 .await
-                .expect_err("a library needs a name")
-        )
-        .contains("name"));
-        assert!(said(
-            create(&state, asked("Films", Vec::new()))
+                .expect_err("a library needs a name")),
+            Refused::NameNeeded
+        );
+        assert_eq!(
+            why(create(&state, asked("Films", Vec::new()))
                 .await
-                .expect_err("a library has to look somewhere")
-        )
-        .contains("folder"));
-        assert!(said(
-            create(
+                .expect_err("a library has to look somewhere")),
+            Refused::NoFolder
+        );
+        assert_eq!(
+            why(create(
                 &state,
                 asked("Films", vec![directory.path().join("nowhere")]),
             )
             .await
-            .expect_err("a folder that is not there")
-        )
-        .contains("no such folder"));
+            .expect_err("a folder that is not there")),
+            Refused::FolderMissing
+        );
 
         let not_a_folder = directory.path().join("a-file.txt");
         std::fs::write(&not_a_folder, b"x").expect("file written");
-        assert!(said(
-            create(&state, asked("Films", vec![not_a_folder]))
+        assert_eq!(
+            why(create(&state, asked("Films", vec![not_a_folder]))
                 .await
-                .expect_err("a file is not a folder")
-        )
-        .contains("not a folder"));
-
-        assert!(said(
-            create(
+                .expect_err("a file is not a folder")),
+            Refused::NotAFolder
+        );
+        assert_eq!(
+            why(create(
                 &state,
                 Asked {
                     language: "klingon".into(),
@@ -462,9 +548,9 @@ mod tests {
                 },
             )
             .await
-            .expect_err("a language is two letters")
-        )
-        .contains("two letters"));
+            .expect_err("a language is two letters")),
+            Refused::LanguageNotTwoLetters
+        );
 
         create(&state, asked("Films", vec![films]))
             .await

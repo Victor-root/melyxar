@@ -32,6 +32,7 @@ pub struct LibrarySummary {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootSummary {
+    pub id: melyxar_core::id::LibraryRootId,
     pub label: String,
     /// What the server may actually do with the folder, established by trying
     /// rather than by reading permission bits.
@@ -86,6 +87,7 @@ pub async fn libraries(state: &AppState) -> Result<Vec<LibrarySummary>> {
                 .roots
                 .iter()
                 .map(|root| RootSummary {
+                    id: root.id,
                     label: root.label.clone(),
                     // A root nobody has tested counts as missing, the most
                     // cautious of the four states.

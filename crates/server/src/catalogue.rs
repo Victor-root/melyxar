@@ -114,6 +114,9 @@ struct LibraryView {
 
 #[derive(Debug, Serialize)]
 struct RootView {
+    /// What renaming it needs, since a label is what every log line shows
+    /// instead of the path and one that reads badly is worth putting right.
+    id: String,
     label: String,
     /// What the server may actually do with this folder, told by trying.
     access: &'static str,
@@ -139,6 +142,7 @@ async fn libraries(State(state): State<AppState>) -> Result<Json<Vec<LibraryView
                     .roots
                     .into_iter()
                     .map(|root| RootView {
+                        id: root.id.to_string(),
                         label: root.label,
                         access: root.access.as_str(),
                         explanation_code: root.access.explanation_code(),
