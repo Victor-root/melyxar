@@ -711,10 +711,51 @@ fn choose_for<'a>(
         return word_for_word;
     }
 
+    // Nothing carries the name exactly. Before weighing how alike the names
+    // are, the one case a weighing is bad at: a film released under a subtitle
+    // the file name left out. The share of words two titles have in common
+    // falls as the subtitle grows, so the same collection named the same way
+    // passes on the film with a short subtitle and fails on the one with a
+    // long one, which is a difference about nothing at all. A name that is
+    // exactly how the other begins says it far better.
+    //
+    // **Only ever with a year that agrees**, since without one nothing tells
+    // this from a sequel, and only where the provider named a year too.
+    let begins_the_same = |candidate: &&MovieCandidate| {
+        names_of(candidate)
+            .iter()
+            .any(|name| naming::one_is_how_the_other_begins(name, &wanted))
+    };
+    let same_beginning: Vec<&MovieCandidate> = candidates
+        .iter()
+        .filter(begins_the_same)
+        .filter(near_the_year)
+        .collect();
+    if !same_beginning.is_empty() {
+        // The year told exactly settles it first, then the provider's order,
+        // which puts the film nearly everybody means at the front.
+        return same_beginning
+            .iter()
+            .copied()
+            .find(|candidate| candidate.release_year == release_year)
+            .or_else(|| same_beginning.first().copied());
+    }
+
     // Nothing carries the name exactly. The closest of those whose year agrees
     // is taken, and only if it is close enough to be the same film named by
     // two different hands. A year that is not known on both sides decides
     // nothing, so only the closeness is left to go on.
+    //
+    // One thing is refused outright first, whatever it weighs: a name that is
+    // the searched one with an instalment number after it. It shares every
+    // word the shorter has, so it reads as alike as anything ever does, and
+    // two instalments come out a year apart as readily as not, so the year
+    // does not save it either. `Quiet Harbour 2` is not `Quiet Harbour`.
+    let is_the_next_one = |candidate: &&MovieCandidate| {
+        names_of(candidate)
+            .iter()
+            .any(|name| naming::tells_apart_only_by_an_instalment(name, &wanted))
+    };
     let year_allows = |candidate: &&MovieCandidate| match (release_year, candidate.release_year) {
         (Some(_), Some(_)) => near_the_year(candidate),
         _ => true,
@@ -722,6 +763,7 @@ fn choose_for<'a>(
 
     candidates
         .iter()
+        .filter(|candidate| !is_the_next_one(candidate))
         .filter(year_allows)
         .map(|candidate| {
             let closeness = names_of(candidate)
@@ -2034,6 +2076,89 @@ mod tests {
             "one question was enough: {:?}",
             provider.searches()
         );
+    }
+
+    #[tokio::test]
+    async fn a_film_released_under_a_subtitle_the_file_left_out_is_still_found() {
+        // Measured on a real collection: a series named on the disk without
+        // the subtitles, where the provider carries them. Weighing how alike
+        // the names are passed on the instalment whose subtitle is two words
+        // and failed on the one whose subtitle is four, which is a difference
+        // about nothing whatsoever. The long one is the one tested here.
+        let (_directory, state, library, work) =
+            state_with_work("Quiet Harbour 5", Some(2012)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate(
+                "111",
+                "Quiet Harbour 5 : The Ties of Blood",
+                Some(2012),
+            )],
+            vec![details(
+                "111",
+                "Quiet Harbour 5 : The Ties of Blood",
+                Some(2012),
+            )],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 1, "searches: {:?}", provider.searches());
+        assert_eq!(
+            state
+                .database()
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification,
+            IdentificationState::Identified
+        );
+    }
+
+    #[tokio::test]
+    async fn a_sequel_is_never_taken_for_the_film_whose_name_it_begins_with() {
+        // The danger the rule above would carry on its own. The file is the
+        // first of a series and the provider offered only the second, whose
+        // year is near enough to pass every other test. A number is not a
+        // subtitle, so nothing here may be taken.
+        let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2004)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("222", "Quiet Harbour 2", Some(2005))],
+            vec![details("222", "Quiet Harbour 2", Some(2005))],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.unidentified, 1);
+        assert_eq!(
+            state
+                .database()
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification,
+            IdentificationState::Unidentified
+        );
+    }
+
+    #[tokio::test]
+    async fn a_subtitle_from_another_time_is_still_not_the_film() {
+        // The year is what makes the rule safe, so it has to be what stops it.
+        let (_directory, state, library, _work) =
+            state_with_work("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate(
+                "333",
+                "Quiet Harbour The Long Way Round",
+                Some(1974),
+            )],
+            vec![details(
+                "333",
+                "Quiet Harbour The Long Way Round",
+                Some(1974),
+            )],
+        ));
+
+        assert_eq!(run(&state, &provider, &library).await.unidentified, 1);
     }
 
     #[tokio::test]

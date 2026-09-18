@@ -882,6 +882,62 @@ pub fn how_alike(left: &[String], right: &[String]) -> f64 {
     shared / between_them
 }
 
+/// Whether one title is the other with more said after it.
+///
+/// A film released under a subtitle is very often written on a disk without
+/// it: `Détour Mortel 5` for a film the provider calls `Détour mortel 5 : Les
+/// Liens du sang`. A share of words is bad at seeing that, and bad in a way
+/// that depends on nothing that matters: the same collection named the same
+/// way passes on the film whose subtitle is two words and fails on the one
+/// whose subtitle is four. What actually says these are one film is that the
+/// shorter name is exactly how the longer one begins.
+///
+/// **What the longer one adds must not be a number**, which is what keeps this
+/// from swallowing a sequel: `Saw` begins `Saw II` too, and they are not one
+/// film. A subtitle is words.
+///
+/// Word for word from the start, so `Mortel 5` is not how `Détour mortel 5`
+/// begins. The caller decides what to do with it, and this is only ever worth
+/// anything alongside a year that agrees.
+pub fn one_is_how_the_other_begins(left: &[String], right: &[String]) -> bool {
+    what_the_longer_adds(left, right).is_some_and(|added| !is_an_instalment(&added[0]))
+}
+
+/// Whether two titles are one name told apart only by an instalment number.
+///
+/// `Quiet Harbour` and `Quiet Harbour 2` are not one film, and nothing about
+/// how alike they read says so: they share every word one of them has. Two
+/// instalments of a series come out a year apart as readily as not, so a year
+/// does not say it either. This is the one thing that does, and it holds
+/// wherever a name is weighed rather than read.
+pub fn tells_apart_only_by_an_instalment(left: &[String], right: &[String]) -> bool {
+    what_the_longer_adds(left, right).is_some_and(|added| is_an_instalment(&added[0]))
+}
+
+/// What the longer of two titles says after the shorter one it begins with.
+///
+/// Nothing at all unless one really is how the other begins, word for word
+/// from the start and with something left to say after it.
+fn what_the_longer_adds<'a>(left: &'a [String], right: &'a [String]) -> Option<&'a [String]> {
+    let (shorter, longer) = if left.len() <= right.len() {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    // Equal lengths are the same title or two different ones, and either way
+    // nothing here is what answers that.
+    if shorter.is_empty() || shorter.len() == longer.len() || !longer.starts_with(shorter) {
+        return None;
+    }
+    Some(&longer[shorter.len()..])
+}
+
+/// Whether a word is the number a sequel is counted by rather than a word of a
+/// subtitle. Roman numerals arrive here already written as digits.
+fn is_an_instalment(word: &str) -> bool {
+    !word.is_empty() && word.chars().all(|letter| letter.is_ascii_digit())
+}
+
 /// Whether a title is written in plain letters, which decides whether asking a
 /// provider for its folded form is a second question or the same one twice.
 pub fn carries_accents(title: &str) -> bool {
@@ -1635,6 +1691,56 @@ mod tests {
                 "{written}"
             );
         }
+    }
+
+    #[test]
+    fn a_name_that_is_how_a_longer_one_begins_is_told_from_one_that_is_not() {
+        let words = |title: &str| matchable_title(title);
+        let begins =
+            |short: &str, long: &str| one_is_how_the_other_begins(&words(short), &words(long));
+
+        // The shape this exists for: a subtitle the file name left out, of any
+        // length at all, which is the whole point.
+        assert!(begins(
+            "Quiet Harbour 5",
+            "Quiet Harbour 5 : The Ties of Blood"
+        ));
+        assert!(begins(
+            "Quiet Harbour 4",
+            "Quiet Harbour 4 : Bloody Origins"
+        ));
+        assert!(begins("Quiet Harbour", "Quiet Harbour The Long Way Round"));
+        // Either way round.
+        assert!(begins(
+            "Quiet Harbour 5 : The Ties of Blood",
+            "Quiet Harbour 5"
+        ));
+
+        // A sequel is not a subtitle, whichever way it is numbered, and it is
+        // told apart by name rather than merely left out.
+        assert!(!begins("Quiet Harbour", "Quiet Harbour 2"));
+        assert!(!begins("Quiet Harbour", "Quiet Harbour II"));
+        let next_one = |short: &str, long: &str| {
+            tells_apart_only_by_an_instalment(&words(short), &words(long))
+        };
+        assert!(next_one("Quiet Harbour", "Quiet Harbour 2"));
+        assert!(next_one("Quiet Harbour", "Quiet Harbour II"));
+        assert!(next_one("Quiet Harbour", "Quiet Harbour 2 The Return"));
+        // And a subtitle is never one of those, which is what keeps the two
+        // rules from ever answering yes together.
+        assert!(!next_one(
+            "Quiet Harbour 5",
+            "Quiet Harbour 5 : The Ties of Blood"
+        ));
+        assert!(!next_one("Quiet Harbour", "Amber Field"));
+        // Word for word from the start, so the middle of a title is not a
+        // beginning of it.
+        assert!(!begins("Harbour 5", "Quiet Harbour 5"));
+        // The same title is not this question.
+        assert!(!begins("Quiet Harbour", "Quiet Harbour"));
+        assert!(!begins("", "Quiet Harbour"));
+        // And two titles that merely share their first word are not one film.
+        assert!(!begins("Quiet Harbour", "Amber Field"));
     }
 
     #[test]
