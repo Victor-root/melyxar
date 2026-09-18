@@ -32,6 +32,9 @@ pub use melyxar_playback::decision::{
 };
 pub use melyxar_playback::profile::{ClientProfile, RebuiltCapability};
 
+/// How long one piece of a rebuilt film lasts, for turning a count of them
+/// into a length of film. Travels the same way the session does.
+pub use melyxar_streaming::playlist::SEGMENT_DURATION;
 /// A film being converted as it is watched, as the layer above handles it.
 ///
 /// Re-exported for the same reason as the decision: the HTTP layer talks to
@@ -39,9 +42,6 @@ pub use melyxar_playback::profile::{ClientProfile, RebuiltCapability};
 pub use melyxar_streaming::session::{
     Preparation, PreparationStep, Producing, Recipe, Session, SessionId,
 };
-/// How long one piece of a rebuilt film lasts, for turning a count of them
-/// into a length of film. Travels the same way the session does.
-pub use melyxar_streaming::playlist::SEGMENT_DURATION;
 pub use melyxar_streaming::StreamingError;
 
 /// What a viewer asked to play, in the words of a client.
@@ -694,7 +694,11 @@ fn how_to_rebuild(
     // less, so a codec is offered only where it was measured to keep up.
     let rebuilt_height = decision.scale_to_height.or(source_height);
 
-    let allowed = |codec: &&&str| enabled_codecs.iter().any(|one| one.eq_ignore_ascii_case(codec));
+    let allowed = |codec: &&&str| {
+        enabled_codecs
+            .iter()
+            .any(|one| one.eq_ignore_ascii_case(codec))
+    };
 
     let on_a_card = card.and_then(|card| {
         let writes = |codec: &&&str| card.encoder_for(codec).is_some();
@@ -705,7 +709,9 @@ fn how_to_rebuild(
         // stutter, rather than have the usual negotiation decide it again
         // every time.
         if let Some(codec) = requested_codec.filter(|wanted| {
-            enabled_codecs.iter().any(|one| one.eq_ignore_ascii_case(wanted))
+            enabled_codecs
+                .iter()
+                .any(|one| one.eq_ignore_ascii_case(wanted))
                 && card.encoder_for(wanted).is_some()
         }) {
             return Some((card, codec.to_string(), None));
@@ -2413,17 +2419,16 @@ mod tests {
             ..a_card(&["h264", "hevc"], true)
         }));
 
-        let on_the_card =
-            how_to_rebuild(
-                &plan.decision,
-                &tracks,
-                &profile,
-                Some(&reads_hevc),
-                false,
-                &all_codecs(),
-                None,
-            )
-            .expect("this picture is rebuilt");
+        let on_the_card = how_to_rebuild(
+            &plan.decision,
+            &tracks,
+            &profile,
+            Some(&reads_hevc),
+            false,
+            &all_codecs(),
+            None,
+        )
+        .expect("this picture is rebuilt");
         assert!(on_the_card.reads_the_film, "the card was proved to read it");
 
         let handed_up = how_to_rebuild(

@@ -159,9 +159,7 @@ impl Database {
             codec: row.try_get("codec")?,
             height: row.try_get("height")?,
             frame_rate: row.try_get("frame_rate")?,
-            wide_gamut: row
-                .try_get::<Option<String>, _>("hdr_format")?
-                .is_some(),
+            wide_gamut: row.try_get::<Option<String>, _>("hdr_format")?.is_some(),
         }))
     }
 
@@ -579,10 +577,16 @@ mod tests {
 
         assert_eq!(calibrations.len(), 2, "still one row per codec, not two");
         assert_eq!(calibrations[0].codec, "av1");
-        assert!(calibrations[0].usable, "the fresh measurement replaced the old one");
+        assert!(
+            calibrations[0].usable,
+            "the fresh measurement replaced the old one"
+        );
         assert_eq!(calibrations[0].tested_height, 2160);
         assert_eq!(calibrations[1].codec, "h264");
-        assert!(calibrations[1].usable, "untouched by calibrating another codec");
+        assert!(
+            calibrations[1].usable,
+            "untouched by calibrating another codec"
+        );
     }
 
     #[tokio::test]
@@ -609,9 +613,17 @@ mod tests {
             .await
             .expect("forgotten");
 
-        assert!(database.codec_calibrations_of(client).await.expect("read").is_empty());
+        assert!(database
+            .codec_calibrations_of(client)
+            .await
+            .expect("read")
+            .is_empty());
         assert_eq!(
-            database.codec_calibrations_of(other).await.expect("read").len(),
+            database
+                .codec_calibrations_of(other)
+                .await
+                .expect("read")
+                .len(),
             1,
             "forgetting one client must not touch another one's calibration"
         );

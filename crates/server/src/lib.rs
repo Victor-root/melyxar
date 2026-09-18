@@ -13,6 +13,7 @@ pub mod error;
 pub mod images;
 pub mod interface;
 pub mod jobs;
+pub mod libraries;
 pub mod page;
 pub mod playback;
 pub mod preferences;
@@ -43,6 +44,31 @@ pub(crate) async fn viewer(state: &AppState) -> error::Result<melyxar_core::id::
         .map_err(|error| ServerError::internal(error.to_string()))?
         .map(|(user, _)| user.id)
         .ok_or_else(|| ServerError::internal("this server has no account at all"))
+}
+
+/// Whoever is asking, when what they are asking for is an administrator's.
+///
+/// The check is written here now, at the one place it belongs, even though
+/// there is nobody else to be yet: the account the server made for itself is
+/// an administrator, so today it always passes. The day signing in arrives,
+/// `viewer` above starts answering something else and this begins to bite
+/// without anything around it moving.
+pub(crate) async fn administrator(state: &AppState) -> error::Result<melyxar_core::id::UserId> {
+    let (user, _) = state
+        .database()
+        .user_by_name(melyxar_app::startup::DEFAULT_ACCOUNT_NAME)
+        .await
+        .map_err(|error| ServerError::internal(error.to_string()))?
+        .ok_or_else(|| ServerError::internal("this server has no account at all"))?;
+
+    if !user.permissions.is_administrator {
+        return Err(ServerError::new(
+            axum::http::StatusCode::FORBIDDEN,
+            melyxar_core::error::ErrorCode::Forbidden,
+            "this is an administrator's to do",
+        ));
+    }
+    Ok(user.id)
 }
 
 /// Builds the application with the layers every response goes through.

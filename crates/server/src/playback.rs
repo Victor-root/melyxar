@@ -989,10 +989,7 @@ mod tests {
 
         assert_eq!(body.wanted.audio_track_id.as_deref(), Some("2"));
         assert_eq!(body.wanted.subtitle_track_id.as_deref(), Some("3"));
-        assert_eq!(
-            body.wanted.preferred_video_codec.as_deref(),
-            Some("av1")
-        );
+        assert_eq!(body.wanted.preferred_video_codec.as_deref(), Some("av1"));
         assert_eq!(body.start_at_seconds, Some(1024.5));
     }
 

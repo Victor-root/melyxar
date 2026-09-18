@@ -387,7 +387,6 @@ pub async fn reconcile_libraries(database: &Database, config: &Config) -> Result
                         );
                     }
                 }
-
             }
         }
     }

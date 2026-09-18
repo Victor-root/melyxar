@@ -103,6 +103,21 @@ impl Database {
         Ok(result.rows_affected() > 0)
     }
 
+    /// Calls a library something else.
+    ///
+    /// The way a name typed wrongly is put right. Nothing else moves: the
+    /// films, the folders and everything anybody has watched hang off the
+    /// library and not off its name.
+    pub async fn rename_library(&self, id: LibraryId, name: &str) -> Result<()> {
+        sqlx::query("UPDATE libraries SET name = ?, updated_at = ? WHERE id = ?")
+            .bind(name)
+            .bind(timestamp_to_text(now()))
+            .bind(id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// Changes the language a library's films are described in.
     ///
     /// Answers whether anything moved, so a caller can tell a change from a

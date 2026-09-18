@@ -352,7 +352,11 @@ mod tests {
         );
 
         let running = database
-            .create_job(JobKind::ReadKeyFrames, JobPriority::BACKGROUND, Some("films"))
+            .create_job(
+                JobKind::ReadKeyFrames,
+                JobPriority::BACKGROUND,
+                Some("films"),
+            )
             .await
             .expect("job created");
         assert_eq!(

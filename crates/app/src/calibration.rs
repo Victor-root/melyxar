@@ -177,12 +177,10 @@ fn video_encode_for(
         .filter(|card| !against.wide_gamut || card.can_tone_map);
 
     let mut encode = match usable_card {
-        Some(card) => melyxar_ffmpeg::command::VideoEncode::on_a_card(
-            card,
-            codec,
-            against.card_reads_it,
-        )
-        .expect("just proved this card writes this codec"),
+        Some(card) => {
+            melyxar_ffmpeg::command::VideoEncode::on_a_card(card, codec, against.card_reads_it)
+                .expect("just proved this card writes this codec")
+        }
         None if codec.eq_ignore_ascii_case(melyxar_playback::profile::ALWAYS_READ) => {
             melyxar_ffmpeg::command::VideoEncode::software_h264()
         }
@@ -333,7 +331,10 @@ pub async fn calibration_profile(
 /// Forgets everything measured for one client, all codecs at once.
 pub async fn forget_calibration(state: &AppState, client_id: PlaybackClientId) -> Result<()> {
     tracing::info!(client = %client_id, "a client's whole calibration was forgotten");
-    state.database().forget_codec_calibrations(client_id).await?;
+    state
+        .database()
+        .forget_codec_calibrations(client_id)
+        .await?;
     Ok(())
 }
 
@@ -373,7 +374,10 @@ mod tests {
     async fn a_server_with_no_media_tools_cannot_calibrate_anything() {
         let (_directory, state) = state_without_media_tools().await;
         let outcome = open_calibration_session(&state, "h264", 1080).await;
-        assert!(outcome.is_err(), "nothing can be produced without the tools");
+        assert!(
+            outcome.is_err(),
+            "nothing can be produced without the tools"
+        );
     }
 
     #[tokio::test]
@@ -493,7 +497,9 @@ mod tests {
             found_by: FoundBy::Test,
             measured_at: melyxar_core::time::now(),
         };
-        record_calibration(&state, client, &av1).await.expect("recorded");
+        record_calibration(&state, client, &av1)
+            .await
+            .expect("recorded");
 
         let profile = calibration_profile(&state, client).await.expect("read");
         assert!(
@@ -525,6 +531,9 @@ mod tests {
 
         forget_calibration(&state, client).await.expect("forgotten");
 
-        assert!(calibration_profile(&state, client).await.expect("read").is_empty());
+        assert!(calibration_profile(&state, client)
+            .await
+            .expect("read")
+            .is_empty());
     }
 }
