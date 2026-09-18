@@ -72,16 +72,25 @@ impl WhatIsOnDisk {
 const WHAT_IT_IS: &str = "made.json";
 
 /// The shape this server is set to make them in, when it makes them at all.
-pub fn wanted(state: &AppState) -> Option<Layout> {
-    let asked = &state.config().thumbnails;
-    if !asked.enabled || asked.every_seconds == 0 || asked.columns == 0 || asked.rows == 0 {
+///
+/// Read from the settings rather than from the configuration file, so that
+/// changing it is a switch on a screen rather than a terminal, a text editor
+/// and a restart. Read each time rather than kept: it changes rarely and it
+/// decides what a reading of a whole film produces, so an answer a minute old
+/// is an answer that makes the wrong thing.
+pub async fn wanted(state: &AppState) -> Option<Layout> {
+    let asked = state.database().library_work().await.ok()?;
+    if !asked.thumbnails_enabled {
         return None;
     }
+    // Every value is brought into a range that can work on its way into the
+    // settings, so nothing here has to guard against a nought. Guarded anyway,
+    // because a database somebody has edited by hand is still a database.
     Some(Layout {
-        every: Millis::new(i64::from(asked.every_seconds) * 1_000),
-        height: asked.height.max(1),
-        columns: asked.columns,
-        rows: asked.rows,
+        every: Millis::new(asked.thumbnails_every_seconds.max(1) * 1_000),
+        height: asked.thumbnails_height.max(1) as u32,
+        columns: asked.thumbnails_columns.max(1) as u32,
+        rows: asked.thumbnails_rows.max(1) as u32,
     })
 }
 
@@ -142,7 +151,7 @@ async fn already_on_disk(folder: &Path, layout: Layout) -> Option<Thumbnails> {
 /// a film folder that hold no picture, and it is written down so the file is
 /// never read through again for the same nothing.
 pub async fn make_for(state: &AppState, source_id: MediaSourceId) -> Result<Thumbnails> {
-    let Some(layout) = wanted(state) else {
+    let Some(layout) = wanted(state).await else {
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
             "this server is not making thumbnails for the playback bar",
         )));
@@ -295,24 +304,34 @@ pub async fn sheet_of(state: &AppState, source_id: MediaSourceId, number: u32) -
 mod tests {
     use super::*;
 
-    /// Nothing below touches the disk or the database: only the shape the
-    /// settings ask for is being read.
-    async fn state_with(asked: melyxar_config::ThumbnailsConfig) -> AppState {
-        let config = melyxar_config::Config {
-            thumbnails: asked,
-            ..melyxar_config::Config::default()
-        };
+    /// A server whose settings say this about the thumbnails of the bar.
+    ///
+    /// Written through the settings the way a screen writes them, so what is
+    /// read back below is what somebody would really have left behind.
+    async fn state_with(asked: melyxar_database::settings::LibraryWork) -> AppState {
         let database = melyxar_database::Database::open_in_memory()
             .await
             .expect("database opens");
-        AppState::new(config, database, None, None)
+        database
+            .save_library_work(asked)
+            .await
+            .expect("the settings are written");
+        AppState::new(melyxar_config::Config::default(), database, None, None)
+    }
+
+    /// What a server nobody has configured asks for.
+    async fn as_it_comes() -> melyxar_database::settings::LibraryWork {
+        let database = melyxar_database::Database::open_in_memory()
+            .await
+            .expect("database opens");
+        database.library_work().await.expect("read")
     }
 
     #[tokio::test]
     async fn the_shape_asked_for_is_the_one_the_settings_say() {
-        let state = state_with(melyxar_config::ThumbnailsConfig::default()).await;
+        let state = state_with(as_it_comes().await).await;
         assert_eq!(
-            wanted(&state),
+            wanted(&state).await,
             Some(Layout {
                 every: Millis::new(10_000),
                 height: 180,
@@ -389,34 +408,40 @@ mod tests {
 
     #[tokio::test]
     async fn a_server_told_not_to_make_them_makes_none() {
-        let state = state_with(melyxar_config::ThumbnailsConfig {
-            enabled: false,
-            ..Default::default()
+        let state = state_with(melyxar_database::settings::LibraryWork {
+            thumbnails_enabled: false,
+            ..as_it_comes().await
         })
         .await;
-        assert_eq!(wanted(&state), None);
+        assert_eq!(wanted(&state).await, None);
     }
 
     #[tokio::test]
-    async fn a_shape_that_cannot_hold_a_thumbnail_is_refused_rather_than_made() {
+    async fn a_shape_that_cannot_hold_a_thumbnail_never_reaches_a_reading() {
         // Nought seconds apart is a film's worth of pictures at one moment, and
-        // a sheet with no rows holds nothing. Both are a settings file somebody
-        // typed into, and neither is worth reading three hundred films for.
-        for wrong in [
-            melyxar_config::ThumbnailsConfig {
-                every_seconds: 0,
-                ..Default::default()
-            },
-            melyxar_config::ThumbnailsConfig {
-                columns: 0,
-                ..Default::default()
-            },
-            melyxar_config::ThumbnailsConfig {
-                rows: 0,
-                ..Default::default()
-            },
-        ] {
-            assert_eq!(wanted(&state_with(wrong).await), None);
-        }
+        // a sheet with no rows holds nothing. Neither is worth reading three
+        // hundred films for. The settings bring such a number back into range
+        // as it is written, so what comes out here is the nearest shape that
+        // works rather than nothing at all: the screen that sent it has a
+        // defect, and a server that stops making thumbnails until somebody
+        // notices is a worse answer than one that makes them a little wrong.
+        let state = state_with(melyxar_database::settings::LibraryWork {
+            thumbnails_every_seconds: 0,
+            thumbnails_columns: 0,
+            thumbnails_rows: 0,
+            thumbnails_height: 0,
+            ..as_it_comes().await
+        })
+        .await;
+
+        assert_eq!(
+            wanted(&state).await,
+            Some(Layout {
+                every: Millis::new(1_000),
+                height: 1,
+                columns: 1,
+                rows: 1,
+            })
+        );
     }
 }

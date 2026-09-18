@@ -183,9 +183,9 @@ pub struct CatalogueReport {
 pub struct UpkeepReport {
     /// Whether the upkeep runs on its own.
     pub nightly: bool,
-    /// The hour of the day it starts, in UTC, which is the clock a server can
-    /// read with certainty.
-    pub at_utc_hour: u32,
+    /// The time of day it starts, in minutes since midnight, UTC, which is the
+    /// clock a server can read with certainty.
+    pub at_utc_minutes: i64,
     /// Libraries whose own scan does at least one of the two readings, by
     /// name. These do not wait for the night.
     pub during_the_scan: Vec<String>,
@@ -331,6 +331,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
 
     let journal_mode = database.journal_mode().await?;
     let libraries = database.list_libraries().await?;
+    let work = database.library_work().await?;
 
     let counts: std::collections::HashMap<_, _> =
         database.file_counts_by_root().await?.into_iter().collect();
@@ -436,8 +437,8 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
         accounts: database.user_count().await?,
         libraries: libraries.len(),
         upkeep: UpkeepReport {
-            nightly: config.tasks.nightly_upkeep,
-            at_utc_hour: config.tasks.nightly_upkeep_at_utc_hour,
+            nightly: work.upkeep_nightly,
+            at_utc_minutes: work.upkeep_at_utc_minutes,
             during_the_scan: libraries
                 .iter()
                 .filter(|library| {
@@ -984,8 +985,9 @@ pub fn render_text(report: &Diagnostics) -> String {
         if report.upkeep.nightly { "+" } else { "!" },
         match report.upkeep.nightly {
             true => format!(
-                "the upkeep runs on its own at {:02}:00 UTC",
-                report.upkeep.at_utc_hour
+                "the upkeep runs on its own at {:02}:{:02} UTC",
+                report.upkeep.at_utc_minutes / 60,
+                report.upkeep.at_utc_minutes % 60
             ),
             false => "the upkeep never runs on its own; it waits for the button".to_string(),
         },
@@ -1376,7 +1378,7 @@ mod tests {
 
         let report = collect(&state).await.expect("report collected");
         assert!(report.upkeep.nightly, "a server nobody configured runs it");
-        assert_eq!(report.upkeep.at_utc_hour, 3);
+        assert_eq!(report.upkeep.at_utc_minutes, 3 * 60);
         assert!(
             report.upkeep.during_the_scan.is_empty(),
             "no library has been told to do the readings in one sitting"

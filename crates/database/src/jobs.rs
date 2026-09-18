@@ -82,6 +82,35 @@ impl Database {
         rows.iter().map(job_from_row).collect()
     }
 
+    /// The last job of this kind on this subject that came to an end.
+    ///
+    /// What a screen shows beside a piece of work nobody is waiting on: when
+    /// it last ran, and how it went. Without it, a reading that has never run
+    /// and one that ran last night and found nothing look exactly alike, and
+    /// the difference is whether anybody should be worried.
+    ///
+    /// A job forgotten from the history is a job that never ran as far as this
+    /// is concerned, which is the honest answer: the history is what it is
+    /// read from, and clearing it is something somebody asked for.
+    pub async fn last_finished_job(
+        &self,
+        kind: JobKind,
+        target_id: Option<&str>,
+    ) -> Result<Option<Job>> {
+        let row = sqlx::query(
+            "SELECT * FROM jobs
+             WHERE kind = ? AND finished_at IS NOT NULL
+               AND (target_id IS ? OR (target_id IS NULL AND ? IS NULL))
+             ORDER BY finished_at DESC LIMIT 1",
+        )
+        .bind(kind.as_str())
+        .bind(target_id)
+        .bind(target_id)
+        .fetch_optional(self.reader())
+        .await?;
+        row.map(|row| job_from_row(&row)).transpose()
+    }
+
     /// Whether a job of this kind is already under way on the same subject.
     ///
     /// This is what stops two scans of one library from running at once and
@@ -304,6 +333,63 @@ mod tests {
         assert_eq!(
             database.job(job.id).await.expect("read").expect("present"),
             job
+        );
+    }
+
+    #[tokio::test]
+    async fn the_last_run_of_one_piece_of_work_is_found_back_by_what_it_was_about() {
+        // What a screen shows beside work nobody is waiting on. A reading that
+        // has never run and one that ran last night and found nothing look
+        // alike without it, and the difference is whether to worry.
+        let database = database().await;
+        assert_eq!(
+            database
+                .last_finished_job(JobKind::ReadKeyFrames, Some("films"))
+                .await
+                .expect("read"),
+            None,
+            "nothing has run, which is an answer rather than a gap"
+        );
+
+        let running = database
+            .create_job(JobKind::ReadKeyFrames, JobPriority::BACKGROUND, Some("films"))
+            .await
+            .expect("job created");
+        assert_eq!(
+            database
+                .last_finished_job(JobKind::ReadKeyFrames, Some("films"))
+                .await
+                .expect("read"),
+            None,
+            "a run still going is not a run that happened"
+        );
+
+        database
+            .finish_job(running.id, JobState::Succeeded, None)
+            .await
+            .expect("job finished");
+        let last = database
+            .last_finished_job(JobKind::ReadKeyFrames, Some("films"))
+            .await
+            .expect("read")
+            .expect("it ran");
+        assert_eq!(last.id, running.id);
+        assert!(last.finished_at.is_some());
+
+        // Another library and another kind of work are another question.
+        assert_eq!(
+            database
+                .last_finished_job(JobKind::ReadKeyFrames, Some("series"))
+                .await
+                .expect("read"),
+            None
+        );
+        assert_eq!(
+            database
+                .last_finished_job(JobKind::GenerateThumbnails, Some("films"))
+                .await
+                .expect("read"),
+            None
         );
     }
 

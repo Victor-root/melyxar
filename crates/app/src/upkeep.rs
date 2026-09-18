@@ -107,6 +107,26 @@ pub struct WhatIsLeft {
     pub during_the_scan: bool,
     /// Whether a job of this kind is under way on this library right now.
     pub under_way: bool,
+    /// The last time this reading ran to an end on this library, if it ever
+    /// has and the history still holds it.
+    pub last_run: Option<LastRun>,
+}
+
+/// When a reading last ran, and how it went.
+///
+/// A reading that has never run and one that ran last night and found nothing
+/// look exactly alike from a count of what is waiting, and the difference is
+/// whether anybody should be worried. Jellyfin puts the same line under each
+/// of its tasks, for the same reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LastRun {
+    pub at: melyxar_core::time::Timestamp,
+    /// How it ended, in the words the job layer uses: succeeded, failed,
+    /// cancelled, or cut short by a restart.
+    pub state: melyxar_core::job::JobState,
+    /// How long it took. Absent for a job whose start was never written down,
+    /// which is a row from a run that went away under it.
+    pub took_seconds: Option<i64>,
 }
 
 /// What each library still has waiting, for the screen that shows the upkeep.
@@ -124,7 +144,7 @@ pub async fn what_is_left(state: &AppState) -> Result<Vec<WhatIsLeft>> {
             let waiting = what_is_waiting_for(state, task, library.id).await?;
             let done = match task {
                 UpkeepTask::KeyFrames => database.count_read_for_key_frames(library.id).await?,
-                UpkeepTask::Thumbnails => match crate::thumbnails::wanted(state) {
+                UpkeepTask::Thumbnails => match crate::thumbnails::wanted(state).await {
                     Some(layout) => database.count_made_thumbnails(library.id, layout).await?,
                     None => 0,
                 },
@@ -140,6 +160,19 @@ pub async fn what_is_left(state: &AppState) -> Result<Vec<WhatIsLeft>> {
                 under_way: database
                     .has_unfinished_job(task.job_kind(), Some(&library.id.to_string()))
                     .await?,
+                last_run: database
+                    .last_finished_job(task.job_kind(), Some(&library.id.to_string()))
+                    .await?
+                    .and_then(|job| {
+                        let at = job.finished_at?;
+                        Some(LastRun {
+                            at,
+                            state: job.state,
+                            took_seconds: job
+                                .started_at
+                                .map(|started| (at - started).whole_seconds()),
+                        })
+                    }),
             });
         }
     }
@@ -160,7 +193,7 @@ pub async fn what_is_waiting_for(
     let database = state.database();
     Ok(match task {
         UpkeepTask::KeyFrames => database.count_awaiting_key_frames(library).await?,
-        UpkeepTask::Thumbnails => match crate::thumbnails::wanted(state) {
+        UpkeepTask::Thumbnails => match crate::thumbnails::wanted(state).await {
             Some(layout) => database.count_awaiting_thumbnails(library, layout).await?,
             None => 0,
         },
@@ -278,51 +311,63 @@ pub async fn start_what_is_waiting(state: &AppState, priority: JobPriority) -> u
 
 /// How often the clock is looked at.
 ///
-/// Every quarter of an hour rather than one long sleep to the exact minute: a
-/// sleep of hours is a promise about a machine that may be suspended, moved
-/// between hosts or simply slow, and a run missed that way would be missed in
-/// silence until somebody noticed a library with no thumbnails in it.
-const LOOK_AT_THE_CLOCK_EVERY: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+/// Every five minutes rather than one long sleep to the exact minute: a sleep
+/// of hours is a promise about a machine that may be suspended, moved between
+/// hosts or simply slow, and a run missed that way would be missed in silence
+/// until somebody noticed a library with no thumbnails in it. What decides a
+/// run is the time itself and not the tick, so the tick only sets how late a
+/// run can be.
+const LOOK_AT_THE_CLOCK_EVERY: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
 /// Keeps the upkeep running of a night, for as long as the server runs.
 ///
-/// The hour is written in the configuration as an hour of the day in UTC,
-/// because that is the only clock this server can read with certainty: the
-/// hour a machine calls its own depends on a setting no program should be
-/// asking for from several threads at once. The screen turns it into the hour
-/// of whoever is looking at it, which is the only place that conversion can be
-/// made honestly.
+/// The time of day is a setting, read again on every look at the clock, so a
+/// change made on a screen takes hold without anybody restarting anything. It
+/// is kept in UTC because that is the only clock this server can read with
+/// certainty: the hour a machine calls its own depends on a setting no program
+/// should be asking for from several threads at once. The screen turns it into
+/// the time of whoever is looking at it, which is the only place that
+/// conversion can be made honestly.
+///
+/// A run happens when the time has come round and this server has not run
+/// since. What it would have done before it started up is not its to do: it
+/// begins as though it had just run, so coming up at ten in the morning does
+/// not set three hundred films reading because three o'clock is behind us.
 pub fn keep_the_upkeep_running(state: &AppState) -> tokio::task::JoinHandle<()> {
     let state = state.clone();
     tokio::spawn(async move {
         // Said once, on the way up. The question somebody asks a week later is
         // whether this server is going to read those films at all, and a loop
         // that says nothing until it fires cannot answer it.
-        let asked = &state.config().tasks;
-        tracing::debug!(
-            nightly = asked.nightly_upkeep,
-            at_utc_hour = asked.nightly_upkeep_at_utc_hour,
-            "the upkeep is watching the clock"
-        );
+        match state.database().library_work().await {
+            Ok(work) => tracing::debug!(
+                nightly = work.upkeep_nightly,
+                at_utc_minutes = work.upkeep_at_utc_minutes,
+                "the upkeep is watching the clock"
+            ),
+            Err(error) => tracing::warn!(%error, "the upkeep could not read when it is due"),
+        }
 
-        let mut last_run_on = None;
+        let mut last_run = melyxar_core::time::now();
         loop {
             tokio::time::sleep(LOOK_AT_THE_CLOCK_EVERY).await;
 
-            let asked = &state.config().tasks;
-            if !asked.nightly_upkeep {
+            let Ok(work) = state.database().library_work().await else {
+                continue;
+            };
+            if !work.upkeep_nightly {
                 continue;
             }
 
-            if melyxar_core::time::hour_of_day_utc() != asked.nightly_upkeep_at_utc_hour {
+            let now = melyxar_core::time::now();
+            let due = melyxar_core::time::at_utc_minutes_on(now, work.upkeep_at_utc_minutes);
+            // Due, and not run since it fell due. Written against the moment
+            // rather than against the day, so a time moved to this evening
+            // from a screen is honoured this evening rather than tomorrow.
+            if now < due || last_run >= due {
                 continue;
             }
-            // Once a day, whatever the clock is looked at inside that hour.
-            let today = melyxar_core::time::today_utc();
-            if last_run_on == Some(today) {
-                continue;
-            }
-            last_run_on = Some(today);
+            last_run = now;
 
             let started = start_what_is_waiting(&state, JobPriority::BACKGROUND).await;
             if started > 0 {
@@ -462,7 +507,7 @@ pub(crate) async fn make_the_thumbnails_of(
         );
         return Ok(0);
     }
-    let Some(layout) = crate::thumbnails::wanted(state) else {
+    let Some(layout) = crate::thumbnails::wanted(state).await else {
         tracing::debug!(
             library = library.name,
             "the thumbnails of the playback bar are switched off in the configuration"

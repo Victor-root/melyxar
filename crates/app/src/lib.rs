@@ -40,6 +40,15 @@ pub mod picture {
     pub use melyxar_database::images::StoredImage;
 }
 
+/// What the server does with a library, as it is stored.
+///
+/// Re-exported for the same reason as the rest: the layer above asks this
+/// crate what the server is set to do, and never reaches past it to the
+/// storage.
+pub mod settings {
+    pub use melyxar_database::settings::LibraryWork;
+}
+
 /// What a metadata provider is and what it answers.
 ///
 /// Re-exported for the same reason as the rest: the layer above asks this

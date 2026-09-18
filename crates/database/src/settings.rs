@@ -22,15 +22,74 @@ pub struct ServerSettings {
     pub maintenance_enabled: bool,
     pub maintenance_message: Option<String>,
     pub maintenance_until: Option<Timestamp>,
-    /// Read companion metadata files sitting next to a media file.
-    pub read_companion_files: bool,
-    /// Write them. Needs a writable root, which is checked before anything is
-    /// attempted rather than failing file by file.
+    /// Write companion metadata files next to a media file. Needs a writable
+    /// root, which is checked before anything is attempted rather than failing
+    /// file by file. Reading them is a setting of the work below.
     pub write_companion_files: bool,
     pub watched_threshold: f64,
     pub activity_retention_days: i64,
     pub check_for_updates: bool,
+    /// What the server does to a library on its own, and in what shape.
+    pub work: LibraryWork,
     pub updated_at: Timestamp,
+}
+
+/// What the server does with the films of a library, and when.
+///
+/// Kept together because they are one screen and one answer: how deeply a scan
+/// reads what sits next to a film, what the thumbnails of the playback bar look
+/// like, and when the upkeep that makes them runs. All three used to live in
+/// the configuration file, which meant a terminal and a restart to change one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LibraryWork {
+    /// Read the description files some collections keep next to a film.
+    ///
+    /// Off by default: such a file may hold anything, and a server that
+    /// believes it without being asked is a server that takes a stranger's
+    /// word over a provider's. Only identifiers are ever taken from one.
+    pub read_companion_files: bool,
+    /// Whether the little pictures of the playback bar are made at all.
+    pub thumbnails_enabled: bool,
+    /// How far apart in the film two of them stand.
+    pub thumbnails_every_seconds: i64,
+    /// Height of one, in pixels. The width follows the film's shape.
+    pub thumbnails_height: i64,
+    /// How many stand on one sheet.
+    pub thumbnails_columns: i64,
+    pub thumbnails_rows: i64,
+    /// Whether the upkeep runs on its own of a night.
+    pub upkeep_nightly: bool,
+    /// When it does, in minutes since midnight, UTC.
+    ///
+    /// UTC because it is the only clock a server can read with certainty, and
+    /// minutes because an offset is not always a whole hour. Whatever shows it
+    /// turns it into the time of whoever is looking.
+    pub upkeep_at_utc_minutes: i64,
+}
+
+/// Minutes in a day, which is the one thing a time of day has to stay inside.
+const MINUTES_IN_A_DAY: i64 = 24 * 60;
+
+impl LibraryWork {
+    /// The same settings with every value brought back into a range that can
+    /// work.
+    ///
+    /// Brought back rather than refused: a screen sending nonsense is a screen
+    /// with a defect, and answering it with the nearest thing that works keeps
+    /// a server running while somebody fixes the screen. A shape with a nought
+    /// in it would mean films read for ever and no picture to show for it.
+    pub fn brought_into_range(self) -> Self {
+        Self {
+            thumbnails_every_seconds: self.thumbnails_every_seconds.clamp(1, 600),
+            thumbnails_height: self.thumbnails_height.clamp(1, 1080),
+            thumbnails_columns: self.thumbnails_columns.clamp(1, 20),
+            thumbnails_rows: self.thumbnails_rows.clamp(1, 20),
+            upkeep_at_utc_minutes: self
+                .upkeep_at_utc_minutes
+                .rem_euclid(MINUTES_IN_A_DAY),
+            ..self
+        }
+    }
 }
 
 impl Database {
@@ -41,7 +100,9 @@ impl Database {
                     global_custom_css, show_user_picker, maintenance_enabled,
                     maintenance_message, maintenance_until, read_companion_files,
                     write_companion_files, watched_threshold, activity_retention_days,
-                    check_for_updates, updated_at
+                    check_for_updates, thumbnails_enabled, thumbnails_every_seconds,
+                    thumbnails_height, thumbnails_columns, thumbnails_rows,
+                    upkeep_nightly, upkeep_at_utc_minutes, updated_at
              FROM server_settings WHERE id = 1",
         )
         .fetch_one(self.reader())
@@ -60,11 +121,20 @@ impl Database {
                 row.try_get::<Option<String>, _>("maintenance_until")?
                     .as_deref(),
             )?,
-            read_companion_files: int_to_bool(row.try_get("read_companion_files")?),
             write_companion_files: int_to_bool(row.try_get("write_companion_files")?),
             watched_threshold: row.try_get("watched_threshold")?,
             activity_retention_days: row.try_get("activity_retention_days")?,
             check_for_updates: int_to_bool(row.try_get("check_for_updates")?),
+            work: LibraryWork {
+                read_companion_files: int_to_bool(row.try_get("read_companion_files")?),
+                thumbnails_enabled: int_to_bool(row.try_get("thumbnails_enabled")?),
+                thumbnails_every_seconds: row.try_get("thumbnails_every_seconds")?,
+                thumbnails_height: row.try_get("thumbnails_height")?,
+                thumbnails_columns: row.try_get("thumbnails_columns")?,
+                thumbnails_rows: row.try_get("thumbnails_rows")?,
+                upkeep_nightly: int_to_bool(row.try_get("upkeep_nightly")?),
+                upkeep_at_utc_minutes: row.try_get("upkeep_at_utc_minutes")?,
+            },
             updated_at: parse_timestamp(&row.try_get::<String, _>("updated_at")?)?,
         })
     }
@@ -89,7 +159,7 @@ impl Database {
         .bind(bool_to_int(settings.maintenance_enabled))
         .bind(&settings.maintenance_message)
         .bind(settings.maintenance_until.map(timestamp_to_text))
-        .bind(bool_to_int(settings.read_companion_files))
+        .bind(bool_to_int(settings.work.read_companion_files))
         .bind(bool_to_int(settings.write_companion_files))
         .bind(settings.watched_threshold)
         .bind(settings.activity_retention_days)
@@ -98,6 +168,48 @@ impl Database {
         .execute(self.writer())
         .await?;
         Ok(())
+    }
+
+    /// Replaces what the server does with a library, and nothing else.
+    ///
+    /// A call of its own rather than a full save, for the same reason as
+    /// maintenance below: this is one screen with one button, and a screen
+    /// that wrote the whole row back would carry with it whatever somebody
+    /// else had changed since it was opened.
+    ///
+    /// Every value is brought into a range that can work on the way in, so a
+    /// screen with a defect cannot leave a server making thumbnails every
+    /// nought seconds.
+    pub async fn save_library_work(&self, work: LibraryWork) -> Result<LibraryWork> {
+        let work = work.brought_into_range();
+        sqlx::query(
+            "UPDATE server_settings SET
+                read_companion_files = ?, thumbnails_enabled = ?,
+                thumbnails_every_seconds = ?, thumbnails_height = ?,
+                thumbnails_columns = ?, thumbnails_rows = ?,
+                upkeep_nightly = ?, upkeep_at_utc_minutes = ?, updated_at = ?
+             WHERE id = 1",
+        )
+        .bind(bool_to_int(work.read_companion_files))
+        .bind(bool_to_int(work.thumbnails_enabled))
+        .bind(work.thumbnails_every_seconds)
+        .bind(work.thumbnails_height)
+        .bind(work.thumbnails_columns)
+        .bind(work.thumbnails_rows)
+        .bind(bool_to_int(work.upkeep_nightly))
+        .bind(work.upkeep_at_utc_minutes)
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(work)
+    }
+
+    /// What the server does with a library, on its own.
+    ///
+    /// Read far more often than the rest of the settings, since every reading
+    /// of a film asks it what shape to make things in.
+    pub async fn library_work(&self) -> Result<LibraryWork> {
+        Ok(self.server_settings().await?.work)
     }
 
     /// Turns maintenance on or off, along with its message.
@@ -142,8 +254,21 @@ mod tests {
             "nothing is ever written next to media unless asked"
         );
         assert!(
-            !settings.read_companion_files,
+            !settings.work.read_companion_files,
             "reading companion files is opt in too"
+        );
+        // What the configuration file used to carry, so a server coming up on
+        // this migration behaves exactly as it did the moment before.
+        assert!(settings.work.thumbnails_enabled);
+        assert_eq!(settings.work.thumbnails_every_seconds, 10);
+        assert_eq!(settings.work.thumbnails_height, 180);
+        assert_eq!(settings.work.thumbnails_columns, 10);
+        assert_eq!(settings.work.thumbnails_rows, 10);
+        assert!(settings.work.upkeep_nightly);
+        assert_eq!(
+            settings.work.upkeep_at_utc_minutes,
+            3 * 60,
+            "three in the morning, the hour Jellyfin settles on for the same work"
         );
         assert!(settings.show_user_picker);
         assert_eq!(settings.watched_threshold, 0.9);
@@ -160,7 +285,7 @@ mod tests {
         settings.server_name = "Salon".into();
         settings.logo_path = Some("uploads/logo.png".into());
         settings.show_user_picker = false;
-        settings.read_companion_files = true;
+        settings.work.read_companion_files = true;
         settings.activity_retention_days = 90;
 
         database
@@ -172,8 +297,80 @@ mod tests {
         assert_eq!(reloaded.server_name, "Salon");
         assert_eq!(reloaded.logo_path.as_deref(), Some("uploads/logo.png"));
         assert!(!reloaded.show_user_picker);
-        assert!(reloaded.read_companion_files);
+        assert!(reloaded.work.read_companion_files);
         assert_eq!(reloaded.activity_retention_days, 90);
+    }
+
+    #[tokio::test]
+    async fn what_the_server_does_with_a_library_is_written_on_its_own() {
+        // One screen, one button. A screen that wrote the whole row back would
+        // carry with it whatever somebody else had changed since it opened.
+        let database = Database::open_in_memory().await.expect("database opens");
+        let mut settings = database.server_settings().await.expect("settings readable");
+        settings.server_name = "Salon".into();
+        database
+            .save_server_settings(&settings)
+            .await
+            .expect("settings saved");
+
+        let kept = database
+            .save_library_work(LibraryWork {
+                read_companion_files: true,
+                thumbnails_enabled: true,
+                thumbnails_every_seconds: 5,
+                thumbnails_height: 240,
+                thumbnails_columns: 8,
+                thumbnails_rows: 8,
+                upkeep_nightly: false,
+                upkeep_at_utc_minutes: 90,
+            })
+            .await
+            .expect("work saved");
+
+        assert_eq!(kept, database.library_work().await.expect("read back"));
+        assert_eq!(kept.thumbnails_every_seconds, 5);
+        assert!(!kept.upkeep_nightly);
+        assert_eq!(kept.upkeep_at_utc_minutes, 90);
+        assert_eq!(
+            database
+                .server_settings()
+                .await
+                .expect("settings readable")
+                .server_name,
+            "Salon",
+            "writing what the server does must not carry stale neighbours"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_shape_that_cannot_work_is_brought_back_rather_than_refused() {
+        // A nought anywhere in the shape means every film read for ever with
+        // no picture to show for it, and a time of day outside a day means an
+        // upkeep that never comes round. A screen with a defect must not be
+        // able to leave a server in either state.
+        let database = Database::open_in_memory().await.expect("database opens");
+        let kept = database
+            .save_library_work(LibraryWork {
+                thumbnails_every_seconds: 0,
+                thumbnails_height: 0,
+                thumbnails_columns: 0,
+                thumbnails_rows: 0,
+                upkeep_at_utc_minutes: -30,
+                ..database.library_work().await.expect("read")
+            })
+            .await
+            .expect("work saved");
+
+        assert_eq!(kept.thumbnails_every_seconds, 1);
+        assert_eq!(kept.thumbnails_height, 1);
+        assert_eq!(kept.thumbnails_columns, 1);
+        assert_eq!(kept.thumbnails_rows, 1);
+        assert_eq!(
+            kept.upkeep_at_utc_minutes,
+            23 * 60 + 30,
+            "half an hour before midnight, which is what half an hour before              midnight is"
+        );
+        assert_eq!(kept, database.library_work().await.expect("read back"));
     }
 
     #[tokio::test]
