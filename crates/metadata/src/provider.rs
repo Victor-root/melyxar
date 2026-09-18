@@ -36,10 +36,39 @@ impl ProviderError {
 
 pub type Result<T> = std::result::Result<T, ProviderError>;
 
-/// A film the provider thinks the name might be about.
+/// Which of a provider's catalogues a question is about.
+///
+/// A provider keeps films and series apart and answers a different road for
+/// each. Everything above this line is the same question asked twice, which is
+/// why the rules that read an answer never learn which one it was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Catalogue {
+    Films,
+    Series,
+}
+
+impl Catalogue {
+    /// What a work of this kind is looked up in.
+    ///
+    /// A season and an episode are never looked up on their own: they are
+    /// named by the series they hang under, which is what carries the
+    /// identifier the provider answers to.
+    pub fn of(kind: melyxar_core::work::WorkKind) -> Option<Self> {
+        match kind {
+            melyxar_core::work::WorkKind::Movie => Some(Self::Films),
+            melyxar_core::work::WorkKind::Series => Some(Self::Series),
+            _ => None,
+        }
+    }
+}
+
+/// A work the provider thinks the name might be about.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MovieCandidate {
+pub struct Candidate {
     pub external_id: String,
+    /// Which catalogue it came out of, so an answer found by an identifier
+    /// rather than by a name still says what it is.
+    pub catalogue: Catalogue,
     pub title: String,
     /// Title in its own country, which is often how a file is named.
     pub original_title: Option<String>,
@@ -53,9 +82,15 @@ pub struct MovieCandidate {
     pub popularity: f64,
 }
 
-/// Everything the provider knows about one film.
+/// Everything the provider knows about one work.
+///
+/// One shape for a film and for a series, because a page shows the same things
+/// about both and the rules that fill it never ask which it is. What a series
+/// has and a film has not is its seasons, and those are asked for separately:
+/// a series of nine seasons is nine more answers, and a page that only lists
+/// them needs none of them.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MovieDetails {
+pub struct Details {
     pub external_id: String,
     pub imdb_id: Option<String>,
     pub title: String,
@@ -79,6 +114,34 @@ pub struct MovieDetails {
     /// the backdrop, and plenty of films have none.
     pub logo_path: Option<String>,
     pub trailers: Vec<Trailer>,
+    /// How many seasons a series holds, as the provider counts them. Absent
+    /// for a film, which holds none.
+    pub season_count: Option<i32>,
+}
+
+/// One season of a series, with the episodes under it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SeasonDetails {
+    pub season_number: i32,
+    /// The name this season goes by, when it has one that is not its number.
+    pub name: Option<String>,
+    pub overview: Option<String>,
+    pub poster_path: Option<String>,
+    pub episodes: Vec<EpisodeDetails>,
+}
+
+/// One episode, as the provider describes it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EpisodeDetails {
+    pub episode_number: i32,
+    pub name: Option<String>,
+    pub overview: Option<String>,
+    /// The picture taken from the episode itself, which is what a list of
+    /// episodes shows instead of a poster.
+    pub still_path: Option<String>,
+    pub release_year: Option<i32>,
+    pub runtime: Option<Millis>,
+    pub community_rating: Option<f64>,
 }
 
 /// One person's part in a film.
@@ -133,20 +196,30 @@ pub trait MetadataProvider: Send + Sync {
     /// A name the provider goes by, stored alongside every field it supplied.
     fn name(&self) -> &'static str;
 
-    /// Films whose name could be the one asked about, best first.
-    fn search_movie(
+    /// Works whose name could be the one asked about, best first.
+    fn search(
         &self,
+        catalogue: Catalogue,
         title: &str,
         year: Option<i32>,
         language: &str,
-    ) -> impl Future<Output = Result<Vec<MovieCandidate>>> + Send;
+    ) -> impl Future<Output = Result<Vec<Candidate>>> + Send;
 
-    /// Everything about one film.
-    fn movie_details(
+    /// Everything about one work.
+    fn details(
         &self,
+        catalogue: Catalogue,
         external_id: &str,
         language: &str,
-    ) -> impl Future<Output = Result<MovieDetails>> + Send;
+    ) -> impl Future<Output = Result<Details>> + Send;
+
+    /// One season of a series, with its episodes.
+    fn season(
+        &self,
+        series_id: &str,
+        season_number: i32,
+        language: &str,
+    ) -> impl Future<Output = Result<SeasonDetails>> + Send;
 
     /// The address a picture the provider named can be fetched from.
     ///
@@ -157,15 +230,15 @@ pub trait MetadataProvider: Send + Sync {
     /// Fetches a picture the provider named.
     fn fetch_image(&self, path: &str) -> impl Future<Output = Result<Vec<u8>>> + Send;
 
-    /// The film an identifier from another site stands for.
+    /// The work an identifier from another site stands for.
     ///
     /// This is what makes a description file worth reading: an identifier can
     /// be handed straight to the provider instead of guessing from a name.
-    fn movie_by_imdb_id(
+    fn by_imdb_id(
         &self,
         imdb_id: &str,
         language: &str,
-    ) -> impl Future<Output = Result<Option<MovieCandidate>>> + Send;
+    ) -> impl Future<Output = Result<Option<Candidate>>> + Send;
 }
 
 #[cfg(test)]
