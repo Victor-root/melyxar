@@ -164,8 +164,10 @@ export function LibraryEditor({
             </button>
           </div>
 
-          {/* The folders it looks in, by the name logs call them: the path
-              itself is the server's business and is never shown here. */}
+          {/* The folders it looks in. A log line shows only the label, but
+              this is the one screen an administrator manages roots from, and
+              telling two of them apart by more than a label they gave one
+              themselves is the point of being here. */}
           <div className="library-roots">
             {library.roots.map((root) => (
               <span className="library-root" key={root.id}>
@@ -174,6 +176,7 @@ export function LibraryEditor({
                   label={t("settings.folder_label")}
                   onSettled={(label) => renameFolder(library, root.id, label)}
                 />
+                <span className="library-root-path">{root.path}</span>
                 {root.access !== "read_only" && root.access !== "read_write" && (
                   <span className="library-root-trouble">{t(`root.${root.explanation_code}`)}</span>
                 )}

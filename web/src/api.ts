@@ -48,6 +48,10 @@ export interface Page {
 
 export interface Root {
   label: string;
+  /** Its whole path on the server's disk. Shown only on the screen where
+      roots are managed: the one place telling two of them apart by more than
+      a label matters. */
+  path: string;
   access: "missing" | "unreadable" | "read_only" | "read_write";
   explanation_code: string;
   /** What renaming this folder needs. */

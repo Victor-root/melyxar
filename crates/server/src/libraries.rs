@@ -184,10 +184,14 @@ struct NewRoot {
 #[derive(Debug, Serialize)]
 struct RootView {
     id: String,
-    /// What it is called in logs and on screens, worked out from the folder
-    /// above it so that four disks each holding a folder called Films do not
-    /// all answer to one word.
+    /// What it is called in logs, worked out from its own name or, when that
+    /// collides, from the folder above it: four disks each holding a folder
+    /// called Films would otherwise all answer to one word.
     label: String,
+    /// Its whole path on the server's disk. Shown only here, on the screen
+    /// where roots are managed, for the administrator who has to tell two
+    /// roots apart by more than a label they gave one themselves.
+    path: String,
 }
 
 /// Gives a library another folder to look in, and scans it.
@@ -207,6 +211,7 @@ async fn add_root(
     Ok(Json(RootView {
         id: root.id.to_string(),
         label: root.label,
+        path: root.path.to_string_lossy().into_owned(),
     }))
 }
 
@@ -243,6 +248,7 @@ async fn rename_root(
     Ok(Json(RootView {
         id: root.id.to_string(),
         label: label.to_string(),
+        path: root.path.to_string_lossy().into_owned(),
     }))
 }
 

@@ -34,6 +34,11 @@ pub struct LibrarySummary {
 pub struct RootSummary {
     pub id: melyxar_core::id::LibraryRootId,
     pub label: String,
+    /// Its whole path on the server's disk. Shown on the one screen an
+    /// administrator manages roots from, where knowing exactly which folder a
+    /// label stands for is the point of being there; a log line still shows
+    /// only the label, which is the rule everywhere else.
+    pub path: std::path::PathBuf,
     /// What the server may actually do with the folder, established by trying
     /// rather than by reading permission bits.
     pub access: RootAccess,
@@ -89,6 +94,7 @@ pub async fn libraries(state: &AppState) -> Result<Vec<LibrarySummary>> {
                 .map(|root| RootSummary {
                     id: root.id,
                     label: root.label.clone(),
+                    path: root.path.clone(),
                     // A root nobody has tested counts as missing, the most
                     // cautious of the four states.
                     access: access
