@@ -29,6 +29,13 @@ pub struct ServerSettings {
     pub watched_threshold: f64,
     pub activity_retention_days: i64,
     pub check_for_updates: bool,
+    /// Never convert wide gamut colour for a viewer who cannot show it,
+    /// everywhere on this server. Off by default: the conversion is the right
+    /// answer on its own, and this exists for a processor too slow to keep up
+    /// with what it costs. Dolby Vision without a compatible base layer is
+    /// converted regardless, since left alone it looks broken rather than
+    /// merely washed out.
+    pub tone_mapping_disabled: bool,
     /// What the server does to a library on its own, and in what shape.
     pub work: LibraryWork,
     pub updated_at: Timestamp,
@@ -98,9 +105,9 @@ impl Database {
                     global_custom_css, show_user_picker, maintenance_enabled,
                     maintenance_message, maintenance_until, read_companion_files,
                     write_companion_files, watched_threshold, activity_retention_days,
-                    check_for_updates, thumbnails_enabled, thumbnails_every_seconds,
-                    thumbnails_height, thumbnails_columns, thumbnails_rows,
-                    upkeep_nightly, upkeep_at_utc_minutes, updated_at
+                    check_for_updates, tone_mapping_disabled, thumbnails_enabled,
+                    thumbnails_every_seconds, thumbnails_height, thumbnails_columns,
+                    thumbnails_rows, upkeep_nightly, upkeep_at_utc_minutes, updated_at
              FROM server_settings WHERE id = 1",
         )
         .fetch_one(self.reader())
@@ -123,6 +130,7 @@ impl Database {
             watched_threshold: row.try_get("watched_threshold")?,
             activity_retention_days: row.try_get("activity_retention_days")?,
             check_for_updates: int_to_bool(row.try_get("check_for_updates")?),
+            tone_mapping_disabled: int_to_bool(row.try_get("tone_mapping_disabled")?),
             work: LibraryWork {
                 read_companion_files: int_to_bool(row.try_get("read_companion_files")?),
                 thumbnails_enabled: int_to_bool(row.try_get("thumbnails_enabled")?),
@@ -145,7 +153,7 @@ impl Database {
                 global_custom_css = ?, show_user_picker = ?, maintenance_enabled = ?,
                 maintenance_message = ?, maintenance_until = ?, read_companion_files = ?,
                 write_companion_files = ?, watched_threshold = ?, activity_retention_days = ?,
-                check_for_updates = ?, updated_at = ?
+                check_for_updates = ?, tone_mapping_disabled = ?, updated_at = ?
              WHERE id = 1",
         )
         .bind(&settings.server_name)
@@ -162,6 +170,39 @@ impl Database {
         .bind(settings.watched_threshold)
         .bind(settings.activity_retention_days)
         .bind(bool_to_int(settings.check_for_updates))
+        .bind(bool_to_int(settings.tone_mapping_disabled))
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// Whether wide gamut colour is ever converted for a viewer who cannot
+    /// show it, everywhere on this server.
+    ///
+    /// Read on every single film played, so its own small query rather than
+    /// the whole settings row: the row also carries branding and maintenance
+    /// text nobody needs to answer this.
+    pub async fn tone_mapping_disabled(&self) -> Result<bool> {
+        let value: i64 =
+            sqlx::query_scalar("SELECT tone_mapping_disabled FROM server_settings WHERE id = 1")
+                .fetch_one(self.reader())
+                .await?;
+        Ok(int_to_bool(value))
+    }
+
+    /// Turns the conversion of wide gamut colour on or off for the whole
+    /// server.
+    ///
+    /// A dedicated call rather than a full save, for the same reason as
+    /// maintenance below: this is one switch on one screen, and a screen that
+    /// wrote the whole row back would carry with it whatever somebody else had
+    /// changed since it opened.
+    pub async fn set_tone_mapping_disabled(&self, disabled: bool) -> Result<()> {
+        sqlx::query(
+            "UPDATE server_settings SET tone_mapping_disabled = ?, updated_at = ? WHERE id = 1",
+        )
+        .bind(bool_to_int(disabled))
         .bind(timestamp_to_text(now()))
         .execute(self.writer())
         .await?;
@@ -270,6 +311,10 @@ mod tests {
         );
         assert!(settings.show_user_picker);
         assert_eq!(settings.watched_threshold, 0.9);
+        assert!(
+            !settings.tone_mapping_disabled,
+            "the automatic rule is the right answer on its own"
+        );
         // The accent colour lives in per-user preferences, not here, but the
         // default must match the one the domain declares.
         assert_eq!(DEFAULT_ACCENT_COLOR, "#c81e1e");
@@ -285,6 +330,7 @@ mod tests {
         settings.show_user_picker = false;
         settings.work.read_companion_files = true;
         settings.activity_retention_days = 90;
+        settings.tone_mapping_disabled = true;
 
         database
             .save_server_settings(&settings)
@@ -297,6 +343,7 @@ mod tests {
         assert!(!reloaded.show_user_picker);
         assert!(reloaded.work.read_companion_files);
         assert_eq!(reloaded.activity_retention_days, 90);
+        assert!(reloaded.tone_mapping_disabled);
     }
 
     #[tokio::test]
@@ -369,6 +416,42 @@ mod tests {
             "half an hour before midnight, which is what half an hour before              midnight is"
         );
         assert_eq!(kept, database.library_work().await.expect("read back"));
+    }
+
+    #[tokio::test]
+    async fn never_converting_wide_gamut_colour_is_switched_on_its_own() {
+        // One switch on one screen. A save of the whole row would carry with
+        // it whatever somebody else had changed since it opened.
+        let database = Database::open_in_memory().await.expect("database opens");
+        let mut settings = database.server_settings().await.expect("settings readable");
+        settings.server_name = "Salon".into();
+        database
+            .save_server_settings(&settings)
+            .await
+            .expect("settings saved");
+
+        assert!(!database.tone_mapping_disabled().await.expect("read"));
+
+        database
+            .set_tone_mapping_disabled(true)
+            .await
+            .expect("switched");
+        assert!(database.tone_mapping_disabled().await.expect("read"));
+        assert_eq!(
+            database
+                .server_settings()
+                .await
+                .expect("settings readable")
+                .server_name,
+            "Salon",
+            "switching it must not carry stale neighbours"
+        );
+
+        database
+            .set_tone_mapping_disabled(false)
+            .await
+            .expect("switched back");
+        assert!(!database.tone_mapping_disabled().await.expect("read"));
     }
 
     #[tokio::test]

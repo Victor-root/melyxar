@@ -190,6 +190,20 @@ pub struct PlaybackRequest<'a> {
     pub downmix: DownmixMethod,
     /// Whether loudness levelling was asked for and a measurement exists.
     pub level_loudness: bool,
+    /// Never convert wide gamut colour, whatever the client's own profile
+    /// says about it.
+    ///
+    /// The operator's own switch, made for the weight of the conversion
+    /// rather than for the picture: on a processor too slow to keep up with
+    /// it, this turns what would otherwise be a full rebuild into a copy, for
+    /// every film whose only reason to rebuild was its colour. Such a film
+    /// then looks washed out and grey rather than correct, which is the whole
+    /// of what is being traded away.
+    ///
+    /// **Never reaches Dolby Vision without a compatible base layer.** Left
+    /// unconverted that looks broken rather than merely washed out, so it is
+    /// converted regardless of this.
+    pub never_tone_map: bool,
 }
 
 /// Decides how a source reaches a client.
@@ -200,7 +214,13 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
     let audio = chosen_audio(source, request.audio_track);
     let subtitle = chosen_subtitle(request.subtitle_track);
 
-    let video_action = decide_video(video, source, request.profile, &mut reasons);
+    let video_action = decide_video(
+        video,
+        source,
+        request.profile,
+        request.never_tone_map,
+        &mut reasons,
+    );
     let audio_action = decide_audio(audio, request, &mut reasons);
     let (delivery, subtitle_forces_burn) =
         decide_subtitles(subtitle, request.profile, &mut reasons);
@@ -213,8 +233,9 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         video_action
     };
 
-    let tone_map = video.is_some_and(|(_, details)| details.needs_tone_mapping())
-        && !request.profile.supports_hdr;
+    let tone_map = video.is_some_and(|(_, details)| {
+        details.needs_tone_mapping() && must_convert_wide_gamut(details, request.never_tone_map)
+    }) && !request.profile.supports_hdr;
 
     let scale_to_height = match (request.profile.max_height, video) {
         (Some(max), Some((_, details))) if details.visible_height() > max => Some(max),
@@ -389,10 +410,23 @@ fn chose_a_non_default_track(source: &MediaSource, request: &PlaybackRequest<'_>
     Some(chosen.stream_index) != default_index
 }
 
+/// Whether this stream's wide gamut colour must be converted before a client
+/// that cannot show it plays it.
+///
+/// Almost always the operator's own choice, but not always: Dolby Vision
+/// without a compatible base layer looks broken rather than merely washed out
+/// when left alone, and no switch may leave that on a screen.
+fn must_convert_wide_gamut(details: &VideoDetails, never_tone_map: bool) -> bool {
+    details
+        .hdr
+        .is_some_and(|format| format.is_incompatible_without_conversion() || !never_tone_map)
+}
+
 fn decide_video(
     video: Option<(&Track, &VideoDetails)>,
     source: &MediaSource,
     profile: &ClientProfile,
+    never_tone_map: bool,
     reasons: &mut Vec<Reason>,
 ) -> StreamAction {
     let Some((_, details)) = video else {
@@ -422,7 +456,7 @@ fn decide_video(
     }
 
     if let Some(format) = details.hdr {
-        if !profile.supports_hdr {
+        if !profile.supports_hdr && must_convert_wide_gamut(details, never_tone_map) {
             if format.is_incompatible_without_conversion() {
                 reasons.push(Reason::DolbyVisionWithoutBaseLayer {
                     profile: match format {
@@ -677,6 +711,7 @@ mod tests {
             subtitle_track: None,
             downmix: DownmixMethod::None,
             level_loudness: false,
+            never_tone_map: false,
         }
     }
 
@@ -788,6 +823,71 @@ mod tests {
             .reasons
             .iter()
             .any(|reason| matches!(reason, Reason::WideGamutNotSupported { .. })));
+    }
+
+    #[test]
+    fn the_operators_own_switch_skips_the_conversion_a_slow_processor_cannot_afford() {
+        // The reason this switch exists: on a processor too slow to rebuild
+        // film after film, the automatic rule alone can mean nothing plays at
+        // a usable speed. Asked to skip it, a film whose only reason to
+        // rebuild was its colour is carried over untouched instead.
+        let profile = ClientProfile::conservative_browser();
+        let source = source(
+            "matroska,webm",
+            vec![
+                video_track(0, "h264", 2160, Some(HdrFormat::Hdr10)),
+                audio_track(1, "aac", 2, true),
+            ],
+        );
+        let decision = decide(
+            &source,
+            &PlaybackRequest {
+                never_tone_map: true,
+                ..request(&profile)
+            },
+        );
+
+        assert_eq!(decision.video, StreamAction::Copy);
+        assert!(!decision.tone_map, "nothing is being converted any more");
+        assert!(!decision
+            .reasons
+            .iter()
+            .any(|reason| matches!(reason, Reason::WideGamutNotSupported { .. })));
+    }
+
+    #[test]
+    fn the_operators_switch_never_reaches_the_flavour_that_looks_broken_unconverted() {
+        // Dolby Vision without a compatible base layer is not merely washed
+        // out when left alone, it is green and purple. No switch may leave
+        // that on a screen, whatever it was asked to skip.
+        let profile = ClientProfile::conservative_browser();
+        let source = source(
+            "matroska,webm",
+            vec![
+                video_track(
+                    0,
+                    "h264",
+                    2160,
+                    Some(HdrFormat::DolbyVision { profile: Some(5) }),
+                ),
+                audio_track(1, "aac", 2, true),
+            ],
+        );
+        let decision = decide(
+            &source,
+            &PlaybackRequest {
+                never_tone_map: true,
+                ..request(&profile)
+            },
+        );
+
+        assert_eq!(decision.method, PlaybackMethod::FullTranscode);
+        assert_eq!(decision.video, StreamAction::Transcode);
+        assert!(decision.tone_map, "converted regardless of the switch");
+        assert!(decision.reasons.iter().any(|reason| matches!(
+            reason,
+            Reason::DolbyVisionWithoutBaseLayer { profile: Some(5) }
+        )));
     }
 
     #[test]

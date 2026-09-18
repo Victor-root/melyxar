@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
-import type { LibraryWork, ViewerPreferences } from "../api";
+import type { LibraryWork, PlaybackSettings, ViewerPreferences } from "../api";
 import {
   appearanceClasses,
   BACKGROUNDS,
@@ -47,6 +47,10 @@ export function SettingsPage() {
      description files, and when the upkeep runs. All three were lines of the
      configuration file until now. */
   const [work, setWork] = useState<LibraryWork | null>(null);
+  /* Whether wide gamut colour is ever converted for a viewer who cannot show
+     it, everywhere on this server: an administrator's own switch, not one
+     browser's preference. */
+  const [playback, setPlayback] = useState<PlaybackSettings | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -77,6 +81,19 @@ export function SettingsPage() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .playbackSettings(controller.signal)
+      .then(setPlayback)
+      .catch((error) => {
+        if (!(error instanceof DOMException)) {
+          setFailed("error.unreachable");
+        }
+      });
+    return () => controller.abort();
+  }, []);
+
   /* Shown straight away and sent at once, and what the server kept is what the
      page then shows: a shape that cannot hold a thumbnail comes back brought
      into range rather than refused. */
@@ -97,6 +114,22 @@ export function SettingsPage() {
         // Put back what the server still holds, rather than showing a setting
         // next to a server that never heard of it.
         setWork(before);
+        setFailed(error instanceof ApiError ? "settings.not_kept" : "error.unreachable");
+      });
+  };
+
+  const setPlaybackTo = (changes: Partial<PlaybackSettings>) => {
+    if (!playback) {
+      return;
+    }
+    const before = playback;
+    const wanted = { ...playback, ...changes };
+    setPlayback(wanted);
+    api
+      .setPlaybackSettings(wanted)
+      .then(setPlayback)
+      .catch((error) => {
+        setPlayback(before);
         setFailed(error instanceof ApiError ? "settings.not_kept" : "error.unreachable");
       });
   };
@@ -298,6 +331,25 @@ export function SettingsPage() {
               onClick={() => setWorkTo({ read_companion_files: !work.read_companion_files })}
             >
               {t("settings.read_companion_files")}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {playback && (
+        <section className="settings-block">
+          <h2>{t("settings.picture")}</h2>
+          <p className="settings-why">{t("settings.tone_mapping_disabled_why")}</p>
+
+          <div className="controls">
+            <button
+              className={`button button-small${playback.tone_mapping_disabled ? " button-on" : ""}`}
+              aria-pressed={playback.tone_mapping_disabled}
+              onClick={() =>
+                setPlaybackTo({ tone_mapping_disabled: !playback.tone_mapping_disabled })
+              }
+            >
+              {t("settings.tone_mapping_disabled")}
             </button>
           </div>
         </section>

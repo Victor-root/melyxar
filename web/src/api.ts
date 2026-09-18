@@ -166,6 +166,18 @@ export interface LibraryWork {
   upkeep_at_utc_minutes: number;
 }
 
+/**
+ * What the server is set to do about wide gamut colour it cannot show a
+ * client, for every viewer of this server rather than any one of them.
+ */
+export interface PlaybackSettings {
+  /** Never convert such colour, even where a client cannot show it correctly.
+      Off by default. Dolby Vision without a compatible base layer is
+      converted regardless, since left alone it looks broken rather than
+      merely washed out. */
+  tone_mapping_disabled: boolean;
+}
+
 export interface Filters {
   genres: { name: string; works: number }[];
   decades: { decade: number; works: number }[];
@@ -861,6 +873,10 @@ export const api = {
     get<LibraryWork>("/api/v1/settings/libraries", signal),
   setLibraryWork: (work: LibraryWork) =>
     put<LibraryWork>("/api/v1/settings/libraries", work),
+  playbackSettings: (signal?: AbortSignal) =>
+    get<PlaybackSettings>("/api/v1/settings/playback", signal),
+  setPlaybackSettings: (settings: PlaybackSettings) =>
+    put<PlaybackSettings>("/api/v1/settings/playback", settings),
   runUpkeepTask: (library: string, task: string) =>
     post<{ job_id: string }>(`/api/v1/libraries/${library}/upkeep/${task}`),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),

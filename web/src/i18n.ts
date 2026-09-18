@@ -240,6 +240,10 @@ const en: Dictionary = {
   "settings.companion_files_why":
     "Some collections keep a description file next to each film. Off, because such a file may hold anything. Turned on, only the provider identifiers in it are taken, never a title or a synopsis: an identifier can be checked with the provider, a title would be believed.",
   "settings.read_companion_files": "Read them during a scan",
+  "settings.picture": "Picture",
+  "settings.tone_mapping_disabled": "Never convert HDR colour",
+  "settings.tone_mapping_disabled_why":
+    "A film with colour no browser here shows correctly is converted before it reaches one, which redraws every pixel and can turn a plain copy into a full rebuild. Turning this off skips that conversion everywhere on this server: such a film looks washed out and grey instead of correct, but a processor too slow to rebuild film after film gets to serve them at all. Dolby Vision without a compatible base layer is converted regardless, since left alone it looks broken rather than merely washed out.",
   "settings.key_frames_during_scan": "Read where films can be started after each scan",
   "settings.thumbnails_during_scan": "Make the pictures of the playback bar after each scan",
   "settings.metadata_language": "Films described in",
@@ -728,6 +732,10 @@ const fr: Dictionary = {
   "settings.companion_files_why":
     "Certaines collections gardent un fichier de description à côté de chaque film. Désactivé, parce qu'un tel fichier peut contenir n'importe quoi. Activé, seuls les identifiants de fournisseur qu'il contient sont repris, jamais un titre ni un résumé : un identifiant peut être vérifié auprès du fournisseur, un titre serait cru sur parole.",
   "settings.read_companion_files": "Les lire pendant un scan",
+  "settings.picture": "Image",
+  "settings.tone_mapping_disabled": "Ne jamais convertir les couleurs HDR",
+  "settings.tone_mapping_disabled_why":
+    "Un film dont les couleurs ne s'affichent pas correctement dans un navigateur est converti avant de lui être envoyé, ce qui redessine chaque pixel et peut transformer une simple copie en reconstruction complète. Désactiver ceci saute cette conversion partout sur ce serveur : un tel film apparaît alors délavé et grisâtre plutôt que correct, mais un processeur trop lent pour reconstruire film après film arrive au moins à les servir. Le Dolby Vision sans couche de base compatible est toujours converti malgré tout, car laissé tel quel il apparaît cassé plutôt que simplement délavé.",
   "settings.key_frames_during_scan": "Relever les points de départ après chaque scan",
   "settings.thumbnails_during_scan": "Fabriquer les vignettes de la barre après chaque scan",
   "settings.metadata_language": "Fiches en",
