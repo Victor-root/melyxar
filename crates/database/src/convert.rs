@@ -9,6 +9,17 @@ use time::format_description::well_known::Rfc3339;
 
 use crate::{DatabaseError, Result};
 
+/// Reads an identifier back from the stored form.
+///
+/// A value that no longer parses means the column holds something no version
+/// of the schema ever wrote, so it is reported as corruption rather than
+/// quietly replaced.
+pub fn parse_id<T: std::str::FromStr>(value: &str) -> Result<T> {
+    value
+        .parse()
+        .map_err(|_| DatabaseError::Corrupt(format!("identifier '{value}' is malformed")))
+}
+
 /// Renders an instant in the stored form.
 pub fn timestamp_to_text(value: Timestamp) -> String {
     melyxar_core::time::to_text(value)

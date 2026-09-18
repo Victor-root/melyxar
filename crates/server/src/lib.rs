@@ -11,6 +11,7 @@ pub mod calibration;
 pub mod catalogue;
 pub mod error;
 pub mod general;
+pub(crate) mod identifiers;
 pub mod images;
 pub mod interface;
 pub mod jobs;
@@ -70,6 +71,26 @@ pub(crate) async fn administrator(state: &AppState) -> error::Result<melyxar_cor
         ));
     }
     Ok(user.id)
+}
+
+/// Hands a file on the disk straight to the client.
+///
+/// Ranges, conditional requests and the sending itself are all the file
+/// server's; what the routes add on top is only their own headers, so this is
+/// the one place that knows how to reach it and what a failure to reach it
+/// reads as.
+pub(crate) async fn serve_the_file(
+    path: &std::path::Path,
+    request: axum::http::Request<axum::body::Body>,
+) -> error::Result<axum::response::Response> {
+    use axum::response::IntoResponse;
+    use tower::ServiceExt;
+
+    tower_http::services::ServeFile::new(path)
+        .oneshot(request)
+        .await
+        .map(IntoResponse::into_response)
+        .map_err(|error| ServerError::internal(error.to_string()))
 }
 
 /// Builds the application with the layers every response goes through.

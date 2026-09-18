@@ -5,6 +5,7 @@
 //! whole point of the job layer, and it is why nothing here does any work of
 //! its own beyond translating.
 
+use crate::identifiers::parse_work;
 use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
 use melyxar_app::metadata::MetadataProvider;
@@ -191,13 +192,7 @@ async fn start_identification(
     Query(asked): Query<HowMuch>,
 ) -> Result<Json<StartedView>> {
     let library = library_of(&state, &id).await?;
-    let provider = state.metadata_provider().ok_or_else(|| {
-        ServerError::new(
-            axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            melyxar_core::error::ErrorCode::ExternalServiceUnavailable,
-            "no metadata provider is available",
-        )
-    })?;
+    let provider = provider_of(&state)?;
 
     let job = melyxar_app::identify::start_identification(&state, provider, library, asked.mode()?)
         .await
@@ -354,11 +349,6 @@ async fn read_copy_again(
 struct DetachedView {
     /// Where the copy went, so a page can go and look at it.
     work_id: String,
-}
-
-fn parse_work(id: &str) -> Result<melyxar_core::id::WorkId> {
-    id.parse()
-        .map_err(|_| ServerError::invalid_input("the work identifier is malformed"))
 }
 
 fn provider_of(

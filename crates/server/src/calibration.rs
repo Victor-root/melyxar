@@ -5,15 +5,15 @@
 //! other's answer. The client names itself with a value it made up and keeps
 //! to itself; nothing here checks it against anything.
 
+use crate::identifiers::parse_client;
 use axum::extract::{Path as RoutePath, State};
 use axum::{Json, Router};
 use melyxar_app::calibration::{CodecCalibration, FoundBy};
 use melyxar_app::AppState;
-use melyxar_core::id::PlaybackClientId;
 use melyxar_core::time::now;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Result, ServerError};
+use crate::error::Result;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -152,15 +152,10 @@ async fn forget(
     Ok(Json(serde_json::json!({ "forgotten": true })))
 }
 
-fn parse_client(value: &str) -> Result<PlaybackClientId> {
-    value
-        .parse()
-        .map_err(|_| ServerError::invalid_input("the client identifier is malformed"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use melyxar_core::id::PlaybackClientId;
 
     #[test]
     fn every_route_this_module_declares_is_one_a_router_accepts() {

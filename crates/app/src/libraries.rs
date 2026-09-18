@@ -288,19 +288,14 @@ pub async fn remove(state: &AppState, library_id: LibraryId) -> Result<Removed> 
     let sheets = forget_the_thumbnails_of(state, &sources).await;
     let pictures = forget_the_pictures(state, &went.swept.picture_paths).await;
 
-    tracing::info!(
-        library = library.name,
-        works = went.works,
-        files = went.files,
-        people = went.swept.people,
-        collections = went.swept.collections,
-        genres = went.swept.genres,
-        studios = went.swept.studios,
-        picture_rows = went.swept.pictures,
-        pictures_deleted = pictures,
-        thumbnail_sheets_deleted = sheets,
+    tell_what_went(
+        &library.name,
+        None,
+        &went,
+        pictures,
+        sheets,
         "a library was taken away: its films, their pages and everything only \
-         they pointed at are gone, and no file of the collection was touched"
+         they pointed at are gone, and no file of the collection was touched",
     );
     Ok(went)
 }
@@ -326,9 +321,35 @@ pub async fn remove_root(
         state.database().bump_library_version(library_id).await?;
     }
 
+    tell_what_went(
+        &library.name,
+        Some(&root.label),
+        &went,
+        pictures,
+        sheets,
+        "a folder was taken away from a library: the films only it held, their \
+         pages and everything only they pointed at are gone, and no file of \
+         the collection was touched",
+    );
+    Ok(went)
+}
+
+/// Says what a removal took with it, in the one shape both removals use.
+///
+/// A library and one of its folders leave behind the same nine counts, and a
+/// count added to one journal line and not the other is a removal that reads
+/// differently depending on what was removed.
+fn tell_what_went(
+    library: &str,
+    root: Option<&str>,
+    went: &Removed,
+    pictures: usize,
+    sheets: usize,
+    what: &'static str,
+) {
     tracing::info!(
-        library = library.name,
-        root = root.label,
+        library,
+        root,
         works = went.works,
         files = went.files,
         people = went.swept.people,
@@ -338,11 +359,8 @@ pub async fn remove_root(
         picture_rows = went.swept.pictures,
         pictures_deleted = pictures,
         thumbnail_sheets_deleted = sheets,
-        "a folder was taken away from a library: the films only it held, their \
-         pages and everything only they pointed at are gone, and no file of \
-         the collection was touched"
+        "{what}"
     );
-    Ok(went)
 }
 
 /// Refuses while this library has work under way.

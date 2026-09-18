@@ -1,15 +1,24 @@
 //! Libraries and their root folders.
 
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use melyxar_core::id::{LibraryId, LibraryRootId, MediaSourceId};
 use melyxar_core::library::{Library, LibraryKind, LibraryOptions, LibraryRoot, RootAccess};
 use melyxar_core::time::{now, Timestamp};
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 
-use crate::convert::{parse_optional_timestamp, timestamp_to_text};
+use crate::convert::{parse_id, parse_optional_timestamp, timestamp_to_text};
 use crate::{Database, DatabaseError, Result};
+
+/// Pictures whose owner no longer exists.
+///
+/// Written once: the list is read to know which files to remove from the disk
+/// and then run again to delete the rows, and the two drifting apart would
+/// leave files behind with nothing left pointing at them.
+const NOBODY_OWNS_THEM: &str = "(owner_kind = 'work' AND owner_id NOT IN (SELECT id FROM works))
+     OR (owner_kind = 'person' AND owner_id NOT IN (SELECT id FROM people))
+     OR (owner_kind = 'collection' AND owner_id NOT IN (SELECT id FROM collections))
+     OR (owner_kind = 'library' AND owner_id NOT IN (SELECT id FROM libraries))";
 
 /// What taking a library or one of its folders away would take with it.
 ///
@@ -106,23 +115,15 @@ async fn sweep_what_nothing_points_at(
     // existing. Read before they go: a file cannot be found again once the row
     // that named it has gone, and these are the heaviest thing a removal
     // leaves behind.
-    let picture_paths: Vec<String> = sqlx::query_scalar(
-        "SELECT relative_path FROM images
-          WHERE (owner_kind = 'work' AND owner_id NOT IN (SELECT id FROM works))
-             OR (owner_kind = 'person' AND owner_id NOT IN (SELECT id FROM people))
-             OR (owner_kind = 'collection' AND owner_id NOT IN (SELECT id FROM collections))
-             OR (owner_kind = 'library' AND owner_id NOT IN (SELECT id FROM libraries))",
-    )
+    let picture_paths: Vec<String> = sqlx::query_scalar(AssertSqlSafe(format!(
+        "SELECT relative_path FROM images WHERE {NOBODY_OWNS_THEM}"
+    )))
     .fetch_all(&mut **transaction)
     .await?;
 
-    let pictures = sqlx::query(
-        "DELETE FROM images
-          WHERE (owner_kind = 'work' AND owner_id NOT IN (SELECT id FROM works))
-             OR (owner_kind = 'person' AND owner_id NOT IN (SELECT id FROM people))
-             OR (owner_kind = 'collection' AND owner_id NOT IN (SELECT id FROM collections))
-             OR (owner_kind = 'library' AND owner_id NOT IN (SELECT id FROM libraries))",
-    )
+    let pictures = sqlx::query(AssertSqlSafe(format!(
+        "DELETE FROM images WHERE {NOBODY_OWNS_THEM}"
+    )))
     .execute(&mut **transaction)
     .await?
     .rows_affected();
@@ -614,12 +615,6 @@ impl Database {
         .await?;
         Ok(row.0)
     }
-}
-
-fn parse_id<T: FromStr>(value: &str) -> Result<T> {
-    value
-        .parse()
-        .map_err(|_| DatabaseError::Corrupt(format!("identifier '{value}' is malformed")))
 }
 
 /// Reads a stored access state.

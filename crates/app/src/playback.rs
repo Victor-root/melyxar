@@ -681,11 +681,7 @@ fn how_to_rebuild(
     // less, so a codec is offered only where it was measured to keep up.
     let rebuilt_height = decision.scale_to_height.or(source_height);
 
-    let allowed = |codec: &&&str| {
-        enabled_codecs
-            .iter()
-            .any(|one| one.eq_ignore_ascii_case(codec))
-    };
+    let allowed = |codec: &&&str| is_enabled(enabled_codecs, codec);
 
     let on_a_card = card.and_then(|card| {
         let writes = |codec: &&&str| card.encoder_for(codec).is_some();
@@ -696,10 +692,7 @@ fn how_to_rebuild(
         // stutter, rather than have the usual negotiation decide it again
         // every time.
         if let Some(codec) = requested_codec.filter(|wanted| {
-            enabled_codecs
-                .iter()
-                .any(|one| one.eq_ignore_ascii_case(wanted))
-                && card.encoder_for(wanted).is_some()
+            is_enabled(enabled_codecs, wanted) && card.encoder_for(wanted).is_some()
         }) {
             return Some((card, codec.to_string(), None));
         }
@@ -737,13 +730,7 @@ fn how_to_rebuild(
     });
 
     let Some((card, codec, hold_to)) = on_a_card else {
-        return Some(PictureRebuild {
-            codec: melyxar_playback::profile::ALWAYS_READ.to_string(),
-            card: None,
-            reads_the_film: false,
-            height: height_to_rebuild_at(source_height, decision.scale_to_height),
-            bitrate: decision.bitrate_ceiling,
-        });
+        return Some(read_by_the_processor(source_height, decision));
     };
 
     // What the viewer asked for, and never more than the client said it keeps
@@ -791,15 +778,29 @@ fn codec_of(tracks: &[Track]) -> Option<String> {
     })
 }
 
-/// The same answer with the card left out, which is what a session falls back
-/// to if the card will not have the film after all.
-fn without_the_card(plan: &PlayPlan) -> PictureRebuild {
+/// Whether this server allows a codec to be written at all.
+fn is_enabled(enabled_codecs: &[String], codec: &str) -> bool {
+    enabled_codecs
+        .iter()
+        .any(|one| one.eq_ignore_ascii_case(codec))
+}
+
+/// The answer with no card in it: the processor reads the film and writes it
+/// back in the codec every client shows.
+///
+/// Reached twice, and it has to read the same both times: once when no card
+/// will have this film, and once when a session falls back after the card
+/// turned it down.
+fn read_by_the_processor(
+    source_height: Option<i32>,
+    decision: &PlaybackDecision,
+) -> PictureRebuild {
     PictureRebuild {
         codec: melyxar_playback::profile::ALWAYS_READ.to_string(),
         card: None,
         reads_the_film: false,
-        height: height_to_rebuild_at(height_of(&plan.tracks), plan.decision.scale_to_height),
-        bitrate: plan.decision.bitrate_ceiling,
+        height: height_to_rebuild_at(source_height, decision.scale_to_height),
+        bitrate: decision.bitrate_ceiling,
     }
 }
 
@@ -851,7 +852,7 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
             )?));
         }
         if_the_card_refuses.push(VideoOutput::Encode(encode_for(
-            &without_the_card(plan),
+            &read_by_the_processor(height_of(&plan.tracks), &plan.decision),
             plan,
             painted_on,
         )?));

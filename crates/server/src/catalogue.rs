@@ -5,6 +5,7 @@
 //! draws and nothing else, because a page of sixty cards carrying a synopsis
 //! each is ten times the weight for text nobody reads there.
 
+use crate::identifiers::{parse_library, parse_work};
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::Request;
@@ -14,13 +15,10 @@ use melyxar_app::browse::{BrowseRequest, Initial, WorkCard, WorkOrder, DEFAULT_P
 use melyxar_app::detail::{Credit, Version, WorkDetail};
 use melyxar_app::picture::StoredImage;
 use melyxar_app::AppState;
-use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::Millis;
 use melyxar_core::work::IdentificationNote;
 use serde::{Deserialize, Serialize};
-use tower::ServiceExt;
-use tower_http::services::ServeFile;
 
 use crate::error::{Result, ServerError};
 
@@ -67,9 +65,7 @@ async fn serve_trailer(
     rank: usize,
     request: Request<Body>,
 ) -> Result<Response> {
-    let work_id: WorkId = id
-        .parse()
-        .map_err(|_| ServerError::invalid_input("the work identifier is malformed"))?;
+    let work_id = parse_work(id)?;
     let detail = melyxar_app::detail::work_detail(state, work_id)
         .await?
         .ok_or_else(|| ServerError::not_found("no work with that identifier"))?;
@@ -80,11 +76,7 @@ async fn serve_trailer(
         .and_then(|trailer| trailer.local.as_ref())
         .ok_or_else(|| ServerError::not_found("no trailer of this work sits on the disk"))?;
 
-    ServeFile::new(&file.path)
-        .oneshot(request)
-        .await
-        .map(IntoResponse::into_response)
-        .map_err(|error| ServerError::internal(error.to_string()))
+    crate::serve_the_file(&file.path, request).await
 }
 
 // ---------------------------------------------------------------------------
@@ -730,18 +722,6 @@ fn version_view(version: &Version) -> VersionView {
         audio,
         subtitles,
     }
-}
-
-fn parse_library(value: &str) -> Result<LibraryId> {
-    value
-        .parse()
-        .map_err(|_| ServerError::invalid_input("the library identifier is malformed"))
-}
-
-fn parse_work(value: &str) -> Result<WorkId> {
-    value
-        .parse()
-        .map_err(|_| ServerError::invalid_input("the work identifier is malformed"))
 }
 
 #[cfg(test)]
