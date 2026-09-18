@@ -667,7 +667,7 @@ async fn run_one_upkeep_task(
     .map_err(already_running)?;
 
     Ok(Json(StartedView {
-        job_id: job.to_string(),
+        job_id: job.id.to_string(),
     }))
 }
 

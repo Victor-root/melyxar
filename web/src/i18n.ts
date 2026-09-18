@@ -183,7 +183,7 @@ const en: Dictionary = {
   "upkeep.waiting": "{count} waiting",
   "upkeep.done_count": "{count} done",
   "upkeep.nothing_waiting": "Nothing waiting",
-  "upkeep.during_the_scan": "Done during the scan of this library",
+  "upkeep.during_the_scan": "Done after each scan of this library",
   "upkeep.run": "Run now",
   "upkeep.run_all": "Run everything waiting",
   "upkeep.under_way": "Running",
@@ -218,7 +218,7 @@ const en: Dictionary = {
   "settings.not_kept": "The server would not keep that.",
   "settings.libraries": "Libraries",
   "settings.libraries_why":
-    "Two readings go through every film of a library from end to end. A scan can do them as it goes, which is fine on a small library and turns a scan of minutes into one of days on a large one. Left off, they happen of a night, or whenever you press the button on the upkeep screen.",
+    "Two readings go through every film of a library from end to end. Turned on, they follow every scan, once the pages and the posters are in, so the grid fills first and the long reading runs behind it. Left off, they wait for the night, or for the button on the upkeep screen.",
   "settings.upkeep": "Upkeep",
   "settings.upkeep_why":
     "When the server reads, on its own, the films nobody has read yet: where a jump can land, and the little pictures of the playback bar. Pick an hour when nobody is watching anything.",
@@ -240,8 +240,8 @@ const en: Dictionary = {
   "settings.companion_files_why":
     "Some collections keep a description file next to each film. Off, because such a file may hold anything. Turned on, only the provider identifiers in it are taken, never a title or a synopsis: an identifier can be checked with the provider, a title would be believed.",
   "settings.read_companion_files": "Read them during a scan",
-  "settings.key_frames_during_scan": "Read where films can be started during the scan",
-  "settings.thumbnails_during_scan": "Make the pictures of the playback bar during the scan",
+  "settings.key_frames_during_scan": "Read where films can be started after each scan",
+  "settings.thumbnails_during_scan": "Make the pictures of the playback bar after each scan",
   "settings.metadata_language": "Films described in",
   "settings.library_name": "Name",
   "settings.library_kind": "Holds",
@@ -671,7 +671,7 @@ const fr: Dictionary = {
   "upkeep.waiting": "{count} en attente",
   "upkeep.done_count": "{count} faits",
   "upkeep.nothing_waiting": "Rien en attente",
-  "upkeep.during_the_scan": "Fait pendant le scan de cette bibliothèque",
+  "upkeep.during_the_scan": "Fait après chaque scan de cette bibliothèque",
   "upkeep.run": "Lancer maintenant",
   "upkeep.run_all": "Lancer tout ce qui attend",
   "upkeep.under_way": "En cours",
@@ -706,7 +706,7 @@ const fr: Dictionary = {
   "settings.not_kept": "Le serveur n'a pas accepté cette valeur.",
   "settings.libraries": "Bibliothèques",
   "settings.libraries_why":
-    "Deux lectures parcourent chaque film d'une bibliothèque d'un bout à l'autre. Le scan peut les faire au passage, ce qui va très bien sur une petite bibliothèque et transforme un scan de quelques minutes en scan de plusieurs jours sur une grosse. Laissées décochées, elles se font la nuit, ou quand vous appuyez sur le bouton de l'écran d'entretien.",
+    "Deux lectures parcourent chaque film d'une bibliothèque d'un bout à l'autre. Cochées, elles suivent chaque scan, une fois les fiches et les affiches récupérées : la grille se remplit d'abord, la longue lecture tourne derrière. Décochées, elles attendent la nuit, ou le bouton de l'écran d'entretien.",
   "settings.upkeep": "Entretien",
   "settings.upkeep_why":
     "Quand le serveur lit tout seul les films que personne n'a encore lus : les endroits où un saut peut atterrir, et les petites images de la barre de lecture. Choisissez une heure où personne ne regarde rien.",
@@ -728,8 +728,8 @@ const fr: Dictionary = {
   "settings.companion_files_why":
     "Certaines collections gardent un fichier de description à côté de chaque film. Désactivé, parce qu'un tel fichier peut contenir n'importe quoi. Activé, seuls les identifiants de fournisseur qu'il contient sont repris, jamais un titre ni un résumé : un identifiant peut être vérifié auprès du fournisseur, un titre serait cru sur parole.",
   "settings.read_companion_files": "Les lire pendant un scan",
-  "settings.key_frames_during_scan": "Relever les points de départ pendant le scan",
-  "settings.thumbnails_during_scan": "Fabriquer les vignettes de la barre pendant le scan",
+  "settings.key_frames_during_scan": "Relever les points de départ après chaque scan",
+  "settings.thumbnails_during_scan": "Fabriquer les vignettes de la barre après chaque scan",
   "settings.metadata_language": "Fiches en",
   "settings.library_name": "Nom",
   "settings.library_kind": "Contient",
