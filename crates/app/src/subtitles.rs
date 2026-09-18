@@ -274,6 +274,11 @@ pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Re
     }
 
     if wanted.is_empty() {
+        // Nothing left to pull out is an answer about this film, and it is
+        // written down like any other: without it the upkeep would take the
+        // whole file past again at every run, for ever, to find the same
+        // nothing.
+        written_down(state, source_id, 0).await;
         return Ok(0);
     }
 
@@ -330,12 +335,37 @@ pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Re
             }
         }
     }
+    written_down(state, source_id, pulled).await;
     tracing::info!(
         pulled,
         asked_for = wanted.len(),
         "the subtitles of this film are ready for the browser"
     );
     Ok(pulled)
+}
+
+/// Writes down that one film has been taken past for its words.
+///
+/// What the upkeep asks for is "which films still have words in them nobody
+/// has pulled out", and only this answers it: the cache is a folder of files
+/// named after tracks, so nothing in it says which film has been done and
+/// which merely carries no subtitle at all.
+///
+/// A failure here is said and let go. The words are in the cache either way,
+/// which is what a viewer needs; what is lost is that the film is offered up
+/// again at the next run of the upkeep, where it will find everything already
+/// there and cost one reading of nothing.
+async fn written_down(state: &AppState, source_id: MediaSourceId, pulled_out: usize) {
+    if let Err(error) = state
+        .database()
+        .store_pulled_out_subtitles(source_id, pulled_out)
+        .await
+    {
+        tracing::warn!(
+            %error,
+            "that this film has been taken past for its words could not be kept"
+        );
+    }
 }
 
 /// Throws away every subtitle already converted, and says how many that was.
@@ -350,7 +380,21 @@ pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Re
 /// not finish. Nothing else in there is touched, and a folder that does not
 /// exist yet is not an error, it is a server nobody has asked for a subtitle
 /// from.
+///
+/// What the upkeep remembers goes with them. A film written down as taken past
+/// for its words, whose words are no longer anywhere, is a film the upkeep
+/// would never offer up again: emptying one without the other leaves a library
+/// that only converts a subtitle when somebody is waiting for it, which is the
+/// state this whole pass exists to get out of.
 pub async fn forget_what_was_converted(state: &AppState) -> Result<usize> {
+    let waiting_again = state.database().forget_pulled_out_subtitles().await?;
+    if waiting_again > 0 {
+        tracing::info!(
+            films = waiting_again,
+            "these films are waiting for their words again, and the upkeep will pull them out"
+        );
+    }
+
     let folder = state.config().directories.subtitles();
     let mut reading = match tokio::fs::read_dir(&folder).await {
         Ok(reading) => reading,

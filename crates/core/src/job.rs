@@ -36,6 +36,13 @@ pub enum JobKind {
     ReadKeyFrames,
     /// The same, for the thumbnails somebody drags along the playback bar.
     GenerateThumbnails,
+    /// The same, for the subtitles made of words a film carries inside it.
+    ///
+    /// The words are interleaved with the picture from end to end, so pulling
+    /// them out means reading the file through exactly as the other two do.
+    /// Asked for when somebody opened the film, that reading fell on the one
+    /// person who was waiting.
+    PullOutSubtitles,
     PurgeActivity,
     Backup,
 }
@@ -47,7 +54,7 @@ impl JobKind {
     /// several things have to cover all of them: the interface needs a
     /// sentence for each, and a kind with none reaches the screen as its own
     /// name.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::ScanLibrary,
         Self::IdentifyWork,
         Self::ReadCopyAgain,
@@ -55,6 +62,7 @@ impl JobKind {
         Self::AnalyseLoudness,
         Self::ReadKeyFrames,
         Self::GenerateThumbnails,
+        Self::PullOutSubtitles,
         Self::PurgeActivity,
         Self::Backup,
     ];
@@ -68,6 +76,7 @@ impl JobKind {
             Self::AnalyseLoudness => "analyse_loudness",
             Self::ReadKeyFrames => "read_key_frames",
             Self::GenerateThumbnails => "generate_thumbnails",
+            Self::PullOutSubtitles => "pull_out_subtitles",
             Self::PurgeActivity => "purge_activity",
             Self::Backup => "backup",
         }
@@ -82,6 +91,7 @@ impl JobKind {
             "analyse_loudness" => Some(Self::AnalyseLoudness),
             "read_key_frames" => Some(Self::ReadKeyFrames),
             "generate_thumbnails" => Some(Self::GenerateThumbnails),
+            "pull_out_subtitles" => Some(Self::PullOutSubtitles),
             "purge_activity" => Some(Self::PurgeActivity),
             "backup" => Some(Self::Backup),
             _ => None,
@@ -111,6 +121,8 @@ pub enum JobStep {
     ReadingKeyFrames,
     /// Reading each film through for the thumbnails of its playback bar.
     MakingThumbnails,
+    /// Reading each film through for the subtitles made of words inside it.
+    PullingOutSubtitles,
     /// Asking the metadata provider about the works that are waiting.
     AskingTheProvider,
     /// Asking again about the films that have a name and are missing the rest.
@@ -119,12 +131,13 @@ pub enum JobStep {
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
         Self::ReadingKeyFrames,
         Self::MakingThumbnails,
+        Self::PullingOutSubtitles,
         Self::AskingTheProvider,
         Self::FillingInWhatIsMissing,
     ];
@@ -136,6 +149,7 @@ impl JobStep {
             Self::AnalysingFiles => "analysing_files",
             Self::ReadingKeyFrames => "reading_key_frames",
             Self::MakingThumbnails => "making_thumbnails",
+            Self::PullingOutSubtitles => "pulling_out_subtitles",
             Self::AskingTheProvider => "asking_the_provider",
             Self::FillingInWhatIsMissing => "filling_in_what_is_missing",
         }
@@ -148,6 +162,7 @@ impl JobStep {
             "analysing_files" => Some(Self::AnalysingFiles),
             "reading_key_frames" => Some(Self::ReadingKeyFrames),
             "making_thumbnails" => Some(Self::MakingThumbnails),
+            "pulling_out_subtitles" => Some(Self::PullingOutSubtitles),
             "asking_the_provider" => Some(Self::AskingTheProvider),
             "filling_in_what_is_missing" => Some(Self::FillingInWhatIsMissing),
             _ => None,

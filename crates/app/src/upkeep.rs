@@ -1,4 +1,4 @@
-//! The upkeep: the two readings of a film a scan does not wait for.
+//! The upkeep: the readings of a film a scan does not wait for.
 //!
 //! A scan walks the folders, writes down what moved and asks the analyser what
 //! each new file holds. All of that is quick, and all of it is what somebody
@@ -32,28 +32,35 @@ use melyxar_jobs::JobHandle;
 
 use crate::{AppState, Result};
 
-/// One of the two readings the upkeep is made of.
+/// One of the readings the upkeep is made of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UpkeepTask {
     /// Reading each film for where its picture can be started.
     KeyFrames,
+    /// Pulling the subtitles made of words out of each film that carries any.
+    Subtitles,
     /// Reading each film for the thumbnails of its playback bar.
     Thumbnails,
 }
 
 impl UpkeepTask {
-    /// Both of them, in the order they are worth doing.
+    /// All of them, in the order they are worth doing.
     ///
-    /// Key frames first: they cost a reading that touches nothing else, and
-    /// they are what makes a jump land where it was asked to. A bar with no
-    /// pictures on it is a comfort missing; a jump landing six seconds early
-    /// is the film itself going wrong.
-    pub const ALL: [Self; 2] = [Self::KeyFrames, Self::Thumbnails];
+    /// Key frames first: most films now answer that one out of their own index
+    /// without being read at all, so it costs almost nothing and it is what
+    /// makes a jump land where it was asked to. Words next: the reading only
+    /// has to take the file past, with nothing to rebuild. Thumbnails last:
+    /// that one decodes a picture every ten seconds of film, and it is the
+    /// only one whose cost is the processor rather than the disk. A bar with
+    /// no pictures on it is a comfort missing; a jump landing six seconds
+    /// early is the film itself going wrong.
+    pub const ALL: [Self; 3] = [Self::KeyFrames, Self::Subtitles, Self::Thumbnails];
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::KeyFrames => "key_frames",
+            Self::Subtitles => "subtitles",
             Self::Thumbnails => "thumbnails",
         }
     }
@@ -61,6 +68,7 @@ impl UpkeepTask {
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "key_frames" => Some(Self::KeyFrames),
+            "subtitles" => Some(Self::Subtitles),
             "thumbnails" => Some(Self::Thumbnails),
             _ => None,
         }
@@ -70,15 +78,25 @@ impl UpkeepTask {
     pub fn job_kind(self) -> JobKind {
         match self {
             Self::KeyFrames => JobKind::ReadKeyFrames,
+            Self::Subtitles => JobKind::PullOutSubtitles,
             Self::Thumbnails => JobKind::GenerateThumbnails,
         }
     }
 
     /// Whether this library has asked its scan to do this one itself.
+    ///
+    /// The words never are. The other two switches exist for a small library
+    /// on a machine with time to spare, where waiting for the scan to do
+    /// everything is the simpler thing to want. The words are different: they
+    /// are only ever needed by somebody watching, the film asks for them
+    /// itself if the upkeep has not got there yet, and nothing at all is lost
+    /// by leaving them to the night. A switch here would be a setting with no
+    /// question behind it.
     pub fn is_done_during_the_scan_of(self, library: &Library) -> bool {
         match self {
             Self::KeyFrames => library.options.key_frames_during_scan,
             Self::Thumbnails => library.options.thumbnails_during_scan,
+            Self::Subtitles => false,
         }
     }
 }
@@ -131,7 +149,7 @@ pub struct LastRun {
 
 /// What each library still has waiting, for the screen that shows the upkeep.
 ///
-/// Both readings for every library, including the ones with nothing left:
+/// Every reading for every library, including the ones with nothing left:
 /// "nothing to do" is an answer somebody came to the screen for, and a row
 /// that disappears when it is done looks exactly like a row that was never
 /// there.
@@ -144,6 +162,9 @@ pub async fn what_is_left(state: &AppState) -> Result<Vec<WhatIsLeft>> {
             let waiting = what_is_waiting_for(state, task, library.id).await?;
             let done = match task {
                 UpkeepTask::KeyFrames => database.count_read_for_key_frames(library.id).await?,
+                UpkeepTask::Subtitles => {
+                    database.count_with_pulled_out_subtitles(library.id).await?
+                }
                 UpkeepTask::Thumbnails => match crate::thumbnails::wanted(state).await {
                     Some(layout) => database.count_made_thumbnails(library.id, layout).await?,
                     None => 0,
@@ -179,7 +200,7 @@ pub async fn what_is_left(state: &AppState) -> Result<Vec<WhatIsLeft>> {
     Ok(left)
 }
 
-/// How many films of one library are waiting on one of the two readings.
+/// How many films of one library are waiting on one of the readings.
 ///
 /// The one number a scan says out loud when it hands the work over, and the
 /// one the screen counts down. Nothing is ever waiting for thumbnails on a
@@ -193,6 +214,11 @@ pub async fn what_is_waiting_for(
     let database = state.database();
     Ok(match task {
         UpkeepTask::KeyFrames => database.count_awaiting_key_frames(library).await?,
+        UpkeepTask::Subtitles => {
+            database
+                .count_awaiting_pulled_out_subtitles(library)
+                .await?
+        }
         UpkeepTask::Thumbnails => match crate::thumbnails::wanted(state).await {
             Some(layout) => database.count_awaiting_thumbnails(library, layout).await?,
             None => 0,
@@ -200,7 +226,7 @@ pub async fn what_is_waiting_for(
     })
 }
 
-/// Starts one of the two readings on one library, as a job of its own.
+/// Starts one of the readings on one library, as a job of its own.
 ///
 /// The priority says who is waiting: somebody who pressed a button, or nobody
 /// at all, which is what the nightly run is.
@@ -225,6 +251,9 @@ pub async fn start(
                 let read = match task {
                     UpkeepTask::KeyFrames => {
                         read_the_key_frames_of(&owned, &library, &handle).await
+                    }
+                    UpkeepTask::Subtitles => {
+                        pull_the_subtitles_out_of(&owned, &library, &handle).await
                     }
                     UpkeepTask::Thumbnails => {
                         make_the_thumbnails_of(&owned, &library, &handle).await
@@ -502,6 +531,129 @@ pub(crate) async fn read_the_key_frames_of(
             from_their_own_index,
             by_reading_them_through = read - from_their_own_index,
             "the films of this library were read for where their picture can be started"
+        );
+    }
+    Ok(read)
+}
+
+/// Pulls the subtitles made of words out of every film of a library carrying
+/// any that nobody has pulled out yet.
+///
+/// The words of a film are interleaved with its picture from end to end, so
+/// getting them out means taking the whole file past, measured at three
+/// quarters of a minute on a 4K film. That reading used to be started when
+/// somebody opened the film, which put it in front of the one person who was
+/// waiting. Done here it is done once, of a night, for everybody afterwards.
+///
+/// Only films that carry such a track inside them ever reach this: a subtitle
+/// made of pictures is painted into the film at the moment it is watched, and
+/// one living in a file of its own is already the file it would be pulled out
+/// into.
+pub(crate) async fn pull_the_subtitles_out_of(
+    state: &AppState,
+    library: &Library,
+    handle: &JobHandle,
+) -> Result<usize> {
+    if state.tools().is_none() {
+        tracing::debug!(
+            library = library.name,
+            "no media tool here, so no subtitle is pulled out of anything"
+        );
+        return Ok(0);
+    }
+    let database = state.database();
+    let waiting = database
+        .count_awaiting_pulled_out_subtitles(library.id)
+        .await?;
+    if waiting == 0 {
+        return Ok(0);
+    }
+
+    handle.at_step(JobStep::PullingOutSubtitles).await;
+    let already_done = database.count_with_pulled_out_subtitles(library.id).await?;
+    if already_done > 0 {
+        handle.advance(already_done).await;
+    }
+    handle.set_total(already_done + waiting).await;
+    tracing::debug!(
+        library = library.name,
+        waiting,
+        already_done,
+        "pulling the words out of the films of this library that carry any"
+    );
+
+    let mut read = 0;
+    let mut pulled_out = 0;
+    let mut still_waiting = waiting;
+    loop {
+        if handle.is_cancelled() {
+            break;
+        }
+        let batch = database
+            .sources_without_pulled_out_subtitles(library.id, IN_ONE_BATCH)
+            .await?;
+        if batch.is_empty() {
+            break;
+        }
+
+        let owned_state = state.clone();
+        let owned_handle = handle.clone();
+        // Bounded like the other two: this is the disk from end to end, and
+        // the upkeep must leave the film somebody is watching alone.
+        let done = melyxar_jobs::for_each_bounded(
+            batch,
+            state.config().limits.concurrent_probes,
+            move |source_id| {
+                let state = owned_state.clone();
+                let handle = owned_handle.clone();
+                async move {
+                    if handle.is_cancelled() {
+                        return None;
+                    }
+                    if let Some(name) = file_name_of(state.database(), source_id).await {
+                        handle.now_working_on(Some(&name)).await;
+                    }
+                    // Every way this fails has already said so with the film
+                    // it was about, and the film is left waiting rather than
+                    // written down: a reading that could not happen is not an
+                    // answer about the file.
+                    let pulled = crate::subtitles::pull_them_all_out(&state, source_id)
+                        .await
+                        .ok();
+                    handle.advance(1).await;
+                    pulled
+                }
+            },
+        )
+        .await;
+
+        read += done.iter().filter(|pulled| pulled.is_some()).count();
+        pulled_out += done.into_iter().flatten().sum::<usize>();
+
+        // What is left decides whether the run is moving, for the same reason
+        // as the other two readings. Counting the films that gave up a track
+        // would not do here: a film whose every track was already in the cache
+        // honestly gives none, is written down as done, and is no longer
+        // waiting.
+        let left = database
+            .count_awaiting_pulled_out_subtitles(library.id)
+            .await?;
+        if left >= still_waiting {
+            tracing::warn!(
+                library = library.name,
+                waiting = left,
+                "nothing of this batch could be written down, so the reading stops here"
+            );
+            break;
+        }
+        still_waiting = left;
+    }
+    if read > 0 {
+        tracing::info!(
+            library = library.name,
+            films = read,
+            subtitles = pulled_out,
+            "the words of these films are ready for a browser before anybody asks for them"
         );
     }
     Ok(read)

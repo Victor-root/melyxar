@@ -1094,6 +1094,132 @@ impl Database {
         Ok(row.0)
     }
 
+    /// Keeps that one file has had its subtitles made of words pulled out.
+    ///
+    /// Replaces whatever was there, for the same reason as the key frames: a
+    /// file read again has been read again.
+    pub async fn store_pulled_out_subtitles(
+        &self,
+        source_id: MediaSourceId,
+        pulled_out: usize,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO media_source_subtitles (source_id, pulled_out, read_at)
+             VALUES (?, ?, ?)
+             ON CONFLICT (source_id) DO UPDATE
+             SET pulled_out = excluded.pulled_out,
+                 read_at = excluded.read_at",
+        )
+        .bind(source_id.to_db_string())
+        .bind(pulled_out as i64)
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// Forgets every answer about subtitles pulled out, for every library.
+    ///
+    /// What was pulled out lives in the cache, which anybody may empty. The
+    /// two have to be emptied together: a row left behind says a film is done
+    /// when its words are no longer anywhere, and the upkeep would never pull
+    /// them out again. Answers how many files went back into the queue.
+    pub async fn forget_pulled_out_subtitles(&self) -> Result<u64> {
+        let done = sqlx::query("DELETE FROM media_source_subtitles")
+            .execute(self.writer())
+            .await?;
+        Ok(done.rows_affected())
+    }
+
+    /// Files carrying subtitles made of words that nobody has pulled out yet,
+    /// oldest first, a few at a time.
+    ///
+    /// Only files that carry such a track inside them. A film with none, and a
+    /// film whose only subtitles are pictures or files of their own, has
+    /// nothing to pull out and never enters this queue: picture subtitles are
+    /// painted into the film at the moment it is watched, and a subtitle in a
+    /// file of its own is already the file it would be pulled out into.
+    pub async fn sources_without_pulled_out_subtitles(
+        &self,
+        library_id: LibraryId,
+        limit: i64,
+    ) -> Result<Vec<MediaSourceId>> {
+        let rows = sqlx::query(
+            "SELECT media_sources.id
+             FROM media_sources
+             JOIN library_roots ON library_roots.id = media_sources.root_id
+             LEFT JOIN media_source_subtitles
+                    ON media_source_subtitles.source_id = media_sources.id
+             WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL
+               AND media_source_subtitles.source_id IS NULL
+               AND EXISTS (
+                   SELECT 1 FROM tracks
+                   WHERE tracks.source_id = media_sources.id
+                     AND tracks.kind = 'subtitle'
+                     AND tracks.subtitle_layout = 'text'
+                     AND tracks.is_external = 0
+               )
+             ORDER BY media_sources.added_at
+             LIMIT ?",
+        )
+        .bind(library_id.to_db_string())
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                id.parse().map_err(|_| {
+                    DatabaseError::Corrupt("media source identifier is malformed".to_string())
+                })
+            })
+            .collect()
+    }
+
+    /// How many files of one library are still waiting for their words.
+    pub async fn count_awaiting_pulled_out_subtitles(&self, library_id: LibraryId) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(*)
+             FROM media_sources
+             JOIN library_roots ON library_roots.id = media_sources.root_id
+             LEFT JOIN media_source_subtitles
+                    ON media_source_subtitles.source_id = media_sources.id
+             WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL
+               AND media_source_subtitles.source_id IS NULL
+               AND EXISTS (
+                   SELECT 1 FROM tracks
+                   WHERE tracks.source_id = media_sources.id
+                     AND tracks.kind = 'subtitle'
+                     AND tracks.subtitle_layout = 'text'
+                     AND tracks.is_external = 0
+               )",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0)
+    }
+
+    /// How many files of one library have had their words pulled out already.
+    pub async fn count_with_pulled_out_subtitles(&self, library_id: LibraryId) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(*)
+             FROM media_source_subtitles
+             JOIN media_sources ON media_sources.id = media_source_subtitles.source_id
+             JOIN library_roots ON library_roots.id = media_sources.root_id
+             WHERE library_roots.library_id = ?",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0)
+    }
+
     /// Marks a file absent. Never a deletion: a disconnected disk must not
     /// cost a library.
     pub async fn mark_source_missing(&self, id: MediaSourceId) -> Result<()> {
@@ -2561,6 +2687,351 @@ mod tests {
                 .expect("read"),
             1,
             "the one still on the disk, whatever was made for it in another shape"
+        );
+    }
+
+    /// A subtitle track of whatever shape, for the queue that only wants one
+    /// of them.
+    fn subtitle_of(
+        source_id: MediaSourceId,
+        stream_index: i32,
+        codec: &str,
+        layout: SubtitleLayout,
+        is_external: bool,
+    ) -> Track {
+        Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index,
+            language: Some("fre".to_string()),
+            title: None,
+            is_default: false,
+            is_forced: false,
+            kind: TrackKind::Subtitle(SubtitleDetails {
+                codec: codec.to_string(),
+                layout,
+                is_hearing_impaired: false,
+                is_external,
+                external_relative_path: is_external.then(|| PathBuf::from("Quiet.Harbour.fr.srt")),
+            }),
+        }
+    }
+
+    /// Records a film carrying exactly the subtitle tracks given.
+    async fn a_film_with_subtitles(
+        database: &Database,
+        library_id: LibraryId,
+        root_id: LibraryRootId,
+        name: &str,
+        tracks: impl Fn(MediaSourceId) -> Vec<Track>,
+    ) -> MediaSourceId {
+        let (_, source_id) = work_with_source(database, library_id, root_id, name).await;
+        let carried = tracks(source_id);
+        database
+            .store_analysis(
+                source_id,
+                &SourceAnalysis {
+                    container: Some("matroska,webm".to_string()),
+                    duration: Some(Millis::new(7_200_000)),
+                    overall_bitrate: None,
+                },
+                &carried,
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+        source_id
+    }
+
+    #[tokio::test]
+    async fn only_a_film_carrying_words_of_its_own_waits_for_them_to_be_pulled_out() {
+        // Pulling the words out of a film means reading the whole file
+        // through, so the queue must hold exactly the files that would give
+        // something for it. Pictures are painted into the film at the moment
+        // it is watched and are never pulled out; a subtitle in a file of its
+        // own is already the file it would be pulled out into; and a film with
+        // no subtitle at all has nothing to read for.
+        let (database, library_id, root_id) = library().await;
+
+        let carries_words = a_film_with_subtitles(
+            &database,
+            library_id,
+            root_id,
+            "Quiet.Harbour.2019.mkv",
+            |source_id| {
+                vec![
+                    video_track(source_id),
+                    subtitle_of(source_id, 2, "subrip", SubtitleLayout::Text, false),
+                ]
+            },
+        )
+        .await;
+        a_film_with_subtitles(
+            &database,
+            library_id,
+            root_id,
+            "Distant.Signal.2021.mkv",
+            |source_id| {
+                vec![
+                    video_track(source_id),
+                    subtitle_of(
+                        source_id,
+                        2,
+                        "hdmv_pgs_subtitle",
+                        SubtitleLayout::Bitmap,
+                        false,
+                    ),
+                ]
+            },
+        )
+        .await;
+        a_film_with_subtitles(
+            &database,
+            library_id,
+            root_id,
+            "Paper.Lanterns.2018.mkv",
+            |source_id| {
+                vec![
+                    video_track(source_id),
+                    subtitle_of(source_id, 2, "subrip", SubtitleLayout::Text, true),
+                ]
+            },
+        )
+        .await;
+        a_described_film(&database, library_id, root_id, "Broken.Compass.2020.mkv").await;
+
+        assert_eq!(
+            database
+                .sources_without_pulled_out_subtitles(library_id, 10)
+                .await
+                .expect("read"),
+            vec![carries_words],
+            "one of the four, and it is the one carrying words inside it"
+        );
+        assert_eq!(
+            database
+                .count_awaiting_pulled_out_subtitles(library_id)
+                .await
+                .expect("read"),
+            1
+        );
+        assert_eq!(
+            database
+                .count_with_pulled_out_subtitles(library_id)
+                .await
+                .expect("read"),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_whose_words_are_pulled_out_is_never_offered_up_again() {
+        // Nought is an answer here as it is everywhere else: a film whose
+        // every track was already in the cache gave nothing to this reading
+        // and is still done with. Left out, it would cost a whole reading at
+        // every run of the upkeep, for ever.
+        let (database, library_id, root_id) = library().await;
+        let source_id = a_film_with_subtitles(
+            &database,
+            library_id,
+            root_id,
+            "Quiet.Harbour.2019.mkv",
+            |source_id| {
+                vec![
+                    video_track(source_id),
+                    subtitle_of(source_id, 2, "subrip", SubtitleLayout::Text, false),
+                ]
+            },
+        )
+        .await;
+
+        database
+            .store_pulled_out_subtitles(source_id, 0)
+            .await
+            .expect("kept");
+        assert!(
+            database
+                .sources_without_pulled_out_subtitles(library_id, 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "read once is read, whatever the reading gave"
+        );
+        assert_eq!(
+            database
+                .count_awaiting_pulled_out_subtitles(library_id)
+                .await
+                .expect("read"),
+            0
+        );
+        assert_eq!(
+            database
+                .count_with_pulled_out_subtitles(library_id)
+                .await
+                .expect("read"),
+            1
+        );
+
+        // Read again is read again: one answer per file, never two.
+        database
+            .store_pulled_out_subtitles(source_id, 3)
+            .await
+            .expect("kept");
+        assert_eq!(
+            database
+                .count_with_pulled_out_subtitles(library_id)
+                .await
+                .expect("read"),
+            1
+        );
+
+        // Emptying the cache puts the film back in the queue. A row left
+        // behind would say it is done when its words are nowhere any more.
+        assert_eq!(
+            database
+                .forget_pulled_out_subtitles()
+                .await
+                .expect("forgotten"),
+            1
+        );
+        assert_eq!(
+            database
+                .sources_without_pulled_out_subtitles(library_id, 10)
+                .await
+                .expect("read"),
+            vec![source_id]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_off_the_disk_or_never_described_is_not_a_film_to_pull_words_out_of() {
+        let (database, library_id, root_id) = library().await;
+        let (_, never_described) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        assert!(
+            database
+                .sources_without_pulled_out_subtitles(library_id, 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "nothing has described this file yet, so nothing knows it carries words"
+        );
+
+        let gone = a_film_with_subtitles(
+            &database,
+            library_id,
+            root_id,
+            "Distant.Signal.2021.mkv",
+            |source_id| {
+                vec![
+                    video_track(source_id),
+                    subtitle_of(source_id, 2, "subrip", SubtitleLayout::Text, false),
+                ]
+            },
+        )
+        .await;
+        database
+            .mark_source_missing(gone)
+            .await
+            .expect("marked absent");
+        assert!(
+            database
+                .sources_without_pulled_out_subtitles(library_id, 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "a file off the disk cannot be read"
+        );
+        assert_eq!(
+            database
+                .count_awaiting_pulled_out_subtitles(library_id)
+                .await
+                .expect("read"),
+            0
+        );
+
+        // And it is offered again the day the disk comes back.
+        database
+            .mark_source_present(gone)
+            .await
+            .expect("marked present");
+        assert_eq!(
+            database
+                .sources_without_pulled_out_subtitles(library_id, 10)
+                .await
+                .expect("read"),
+            vec![gone]
+        );
+        assert_ne!(gone, never_described);
+    }
+
+    #[tokio::test]
+    async fn one_library_s_words_are_not_counted_against_another_s() {
+        let (database, films, films_root) = library().await;
+        let series = database
+            .create_library(
+                "Series",
+                LibraryKind::Series,
+                "fr",
+                &[("disk-two".to_string(), PathBuf::from("/mnt/two/Series"))],
+            )
+            .await
+            .expect("library created");
+
+        let carries = |source_id: MediaSourceId| {
+            vec![
+                video_track(source_id),
+                subtitle_of(source_id, 2, "subrip", SubtitleLayout::Text, false),
+            ]
+        };
+        let in_films = a_film_with_subtitles(
+            &database,
+            films,
+            films_root,
+            "Quiet.Harbour.2019.mkv",
+            carries,
+        )
+        .await;
+        a_film_with_subtitles(
+            &database,
+            series.id,
+            series.roots[0].id,
+            "Distant.Signal.S01E01.mkv",
+            carries,
+        )
+        .await;
+
+        assert_eq!(
+            database
+                .sources_without_pulled_out_subtitles(films, 10)
+                .await
+                .expect("read"),
+            vec![in_films]
+        );
+        database
+            .store_pulled_out_subtitles(in_films, 2)
+            .await
+            .expect("kept");
+        assert_eq!(
+            database
+                .count_with_pulled_out_subtitles(films)
+                .await
+                .expect("read"),
+            1
+        );
+        assert_eq!(
+            database
+                .count_with_pulled_out_subtitles(series.id)
+                .await
+                .expect("read"),
+            0
+        );
+        assert_eq!(
+            database
+                .count_awaiting_pulled_out_subtitles(series.id)
+                .await
+                .expect("read"),
+            1
         );
     }
 

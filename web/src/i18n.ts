@@ -134,6 +134,7 @@ const en: Dictionary = {
   "jobs.analyse_loudness": "Loudness",
   "jobs.read_key_frames": "Where films can be started",
   "jobs.generate_thumbnails": "Thumbnails",
+  "jobs.pull_out_subtitles": "Subtitles of the films",
   "jobs.purge_activity": "Tidying",
   "jobs.backup": "Backup",
   "jobs.state.queued": "Waiting",
@@ -157,6 +158,7 @@ const en: Dictionary = {
   "jobs.step.analysing_files": "Analysing the files",
   "jobs.step.reading_key_frames": "Reading where each film can be started",
   "jobs.step.making_thumbnails": "Making the pictures of the playback bar",
+  "jobs.step.pulling_out_subtitles": "Pulling the subtitles out of each film",
   "jobs.step.asking_the_provider": "Asking about the films",
   "jobs.step.filling_in_what_is_missing": "Filling in what is missing",
 
@@ -173,13 +175,16 @@ const en: Dictionary = {
 
   "upkeep.title": "Upkeep",
   "upkeep.why":
-    "Two things have to be read out of every film, and each one reads it from end to end: where a jump can land, and the little pictures of the playback bar. They are not part of a scan, which has to be over quickly. They run of a night, or now if you press the button.",
+    "Three things have to be read out of every film: where a jump can land, the subtitles it carries, and the little pictures of the playback bar. They are not part of a scan, which has to be over quickly. They run of a night, or now if you press the button.",
   "upkeep.key_frames": "Where films can be started",
   "upkeep.key_frames_why":
     "Without this, a jump lands a few seconds before where you asked. Quick on each film, and worth doing first.",
+  "upkeep.subtitles": "Subtitles of the films",
+  "upkeep.subtitles_why":
+    "The subtitles made of words live mixed into the film, so getting them out means reading it from end to end. Done here, nobody waits for it when they open the film. Only films that carry some are counted.",
   "upkeep.thumbnails": "Pictures of the playback bar",
   "upkeep.thumbnails_why":
-    "The little pictures that scroll past while you drag along the bar. The longest of the two.",
+    "The little pictures that scroll past while you drag along the bar. The longest of the three.",
   "upkeep.waiting": "{count} waiting",
   "upkeep.done_count": "{count} done",
   "upkeep.nothing_waiting": "Nothing waiting",
@@ -626,6 +631,7 @@ const fr: Dictionary = {
   "jobs.analyse_loudness": "Sonie",
   "jobs.read_key_frames": "Points de départ des films",
   "jobs.generate_thumbnails": "Vignettes",
+  "jobs.pull_out_subtitles": "Sous-titres des films",
   "jobs.purge_activity": "Rangement",
   "jobs.backup": "Sauvegarde",
   "jobs.state.queued": "En attente",
@@ -649,6 +655,7 @@ const fr: Dictionary = {
   "jobs.step.analysing_files": "Analyse des fichiers",
   "jobs.step.reading_key_frames": "Repérage des points de départ des films",
   "jobs.step.making_thumbnails": "Fabrication des miniatures de la barre",
+  "jobs.step.pulling_out_subtitles": "Extraction des sous-titres de chaque film",
   "jobs.step.asking_the_provider": "Recherche des fiches",
   "jobs.step.filling_in_what_is_missing": "Complément des fiches",
 
@@ -665,13 +672,16 @@ const fr: Dictionary = {
 
   "upkeep.title": "Entretien",
   "upkeep.why":
-    "Deux choses doivent être lues dans chaque film, et chacune le lit d'un bout à l'autre : les endroits où un saut peut atterrir, et les vignettes de la barre de lecture. Elles ne font pas partie du scan, qui doit être vite fini. Elles tournent la nuit, ou maintenant si vous appuyez sur le bouton.",
+    "Trois choses doivent être lues dans chaque film : les endroits où un saut peut atterrir, les sous-titres qu'il contient, et les vignettes de la barre de lecture. Elles ne font pas partie du scan, qui doit être vite fini. Elles tournent la nuit, ou maintenant si vous appuyez sur le bouton.",
   "upkeep.key_frames": "Points de départ des films",
   "upkeep.key_frames_why":
     "Sans ça, un saut atterrit quelques secondes avant l'endroit demandé. Rapide sur chaque film, et à faire en premier.",
+  "upkeep.subtitles": "Sous-titres des films",
+  "upkeep.subtitles_why":
+    "Les sous-titres faits de mots sont mêlés au film, donc les sortir demande de le lire d'un bout à l'autre. Fait ici, personne ne l'attend en ouvrant le film. Seuls les films qui en portent sont comptés.",
   "upkeep.thumbnails": "Vignettes de la barre de lecture",
   "upkeep.thumbnails_why":
-    "Les petites images qui défilent quand on glisse le long de la barre. La plus longue des deux.",
+    "Les petites images qui défilent quand on glisse le long de la barre. La plus longue des trois.",
   "upkeep.waiting": "{count} en attente",
   "upkeep.done_count": "{count} faits",
   "upkeep.nothing_waiting": "Rien en attente",
