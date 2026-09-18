@@ -1748,8 +1748,10 @@ mod tests {
 
     #[tokio::test]
     async fn only_what_the_provider_has_a_catalogue_for_is_asked_about() {
-        // Without this, every episode of every series is handed to a search
-        // for films, which answers nothing several hundred times over.
+        // A series is asked about; its seasons and its episodes are described
+        // by the one answer that describes the series, so asking about them
+        // separately is several hundred questions for what one answer already
+        // said.
         let directory = tempfile::tempdir().expect("temporary folder");
         let media = directory.path().join("media");
         write(
@@ -1772,13 +1774,13 @@ mod tests {
             .works_awaiting_identification(library.id)
             .await
             .expect("read");
-        assert!(
-            waiting.is_empty(),
-            "nothing here is a film: {:?}",
+        assert_eq!(
             waiting
                 .iter()
-                .map(|w| (&w.title, w.kind))
-                .collect::<Vec<_>>()
+                .map(|work| (work.title.clone(), work.kind))
+                .collect::<Vec<_>>(),
+            vec![("Distant Signal".to_string(), WorkKind::Series)],
+            "the series, and neither its season nor its episodes"
         );
     }
 

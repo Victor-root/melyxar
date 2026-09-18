@@ -122,6 +122,9 @@ pub struct Details {
 /// One season of a series, with the episodes under it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SeasonDetails {
+    /// What the provider calls this season, which is not what it calls the
+    /// series: a season is a page of its own there as it is here.
+    pub external_id: String,
     pub season_number: i32,
     /// The name this season goes by, when it has one that is not its number.
     pub name: Option<String>,
@@ -133,6 +136,7 @@ pub struct SeasonDetails {
 /// One episode, as the provider describes it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EpisodeDetails {
+    pub external_id: String,
     pub episode_number: i32,
     pub name: Option<String>,
     pub overview: Option<String>,

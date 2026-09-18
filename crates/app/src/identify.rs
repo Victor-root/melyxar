@@ -455,12 +455,175 @@ where
     crate::images::store_provider_images(state, provider.as_ref(), work.id, &details).await;
     crate::images::store_person_photos(state, provider, &people).await;
 
+    // A series is not done when it has a name: what a viewer opens next is its
+    // seasons and then its episodes, and those are described by the same
+    // provider in answers of their own.
+    if catalogue == Catalogue::Series {
+        fill_in_the_seasons_of(state, provider, work.id, &details.external_id, language).await?;
+    }
+
     tracing::debug!(
         work = %MediaName::new(&details.title),
         provider = provider.name(),
         "work identified"
     );
     Ok(Outcome::Identified)
+}
+
+/// Describes the seasons a series holds, and the episodes under them.
+///
+/// Only the seasons that are really here: a provider knows about nine and the
+/// disk holds two, and asking about the seven nobody can watch is seven
+/// requests for nothing. One request per season covers every episode of it.
+///
+/// A season keeps the name drawn from its number rather than the one the
+/// provider gives it. That name is almost always the number written out, in
+/// whichever language was asked for, and a page that draws the number itself
+/// would then show it twice. What a season really gains here is its synopsis
+/// and its picture.
+async fn fill_in_the_seasons_of<P>(
+    state: &AppState,
+    provider: &Arc<P>,
+    series_id: WorkId,
+    external_id: &str,
+    language: &str,
+) -> Result<()>
+where
+    P: MetadataProvider + 'static,
+{
+    let database = state.database();
+    for season in database.children_of(series_id).await? {
+        let Some(number) = season.ordinal else {
+            continue;
+        };
+        let described = match provider.season(external_id, number, language).await {
+            Ok(described) => described,
+            Err(error) => {
+                // One season nobody could describe leaves the rest alone: the
+                // series already has its name, and a run that stops here would
+                // have to start over from the top.
+                tracing::warn!(reason = %error, season = number, "a season went undescribed");
+                continue;
+            }
+        };
+
+        write_down(
+            state,
+            provider,
+            season.id,
+            &as_details(
+                described.external_id.clone(),
+                season.title.clone(),
+                described.overview.clone(),
+                described.poster_path.clone(),
+                None,
+                None,
+                None,
+            ),
+            language,
+        )
+        .await?;
+
+        for episode in database.children_of(season.id).await? {
+            let Some(number) = episode.ordinal else {
+                continue;
+            };
+            let Some(found) = described
+                .episodes
+                .iter()
+                .find(|described| described.episode_number == number)
+            else {
+                continue;
+            };
+
+            write_down(
+                state,
+                provider,
+                episode.id,
+                &as_details(
+                    found.external_id.clone(),
+                    // The name the provider gives, and failing that whatever
+                    // the file said, which is better than nothing at all.
+                    found.name.clone().unwrap_or_else(|| episode.title.clone()),
+                    found.overview.clone(),
+                    // What an episode is shown by is the picture taken from
+                    // the episode itself, which is where its poster would be.
+                    found.still_path.clone(),
+                    found.release_year,
+                    found.runtime,
+                    found.community_rating,
+                ),
+                language,
+            )
+            .await?;
+        }
+    }
+    Ok(())
+}
+
+/// One season or one episode in the shape everything else is described in.
+///
+/// Written as a set of details rather than as something of its own, so it goes
+/// through the very same writing a film goes through: the same fields, the
+/// same locked fields left alone, the same pictures prepared in the same
+/// sizes. A second way of writing a work down is a second place to fix
+/// anything that turns out to be wrong with the first.
+#[allow(clippy::too_many_arguments)]
+fn as_details(
+    external_id: String,
+    title: String,
+    overview: Option<String>,
+    poster_path: Option<String>,
+    release_year: Option<i32>,
+    runtime: Option<melyxar_core::time::Millis>,
+    community_rating: Option<f64>,
+) -> Details {
+    Details {
+        external_id,
+        imdb_id: None,
+        title,
+        original_title: None,
+        original_language: None,
+        tagline: None,
+        overview,
+        release_year,
+        runtime,
+        community_rating,
+        age_rating_label: None,
+        genres: Vec::new(),
+        studios: Vec::new(),
+        credits: Vec::new(),
+        collection: None,
+        poster_path,
+        backdrop_path: None,
+        logo_path: None,
+        trailers: Vec::new(),
+        season_count: None,
+    }
+}
+
+/// Writes one described work down and prepares its picture.
+async fn write_down<P>(
+    state: &AppState,
+    provider: &Arc<P>,
+    work_id: WorkId,
+    details: &Details,
+    language: &str,
+) -> Result<()>
+where
+    P: MetadataProvider + 'static,
+{
+    state
+        .database()
+        .apply_identification(
+            work_id,
+            &to_record(details, provider.name(), language),
+            false,
+        )
+        .await
+        .map_err(AppError::from)?;
+    crate::images::store_provider_images(state, provider.as_ref(), work_id, details).await;
+    Ok(())
 }
 
 /// Decides what to do about a provider that did not answer.
@@ -1154,6 +1317,9 @@ mod tests {
         details: Vec<Details>,
         /// The seasons this provider knows about, for a series.
         seasons: Vec<melyxar_metadata::SeasonDetails>,
+        /// Which catalogue each question went down, so a test can show that a
+        /// series is never asked about among the films.
+        catalogues: Mutex<Vec<Catalogue>>,
         /// What to fail with instead of answering, if anything.
         failure: Option<fn() -> ProviderError>,
         searches: Mutex<Vec<(String, Option<i32>)>>,
@@ -1176,6 +1342,7 @@ mod tests {
                 details,
                 failure: None,
                 seasons: Vec::new(),
+                catalogues: Mutex::new(Vec::new()),
                 searches: Mutex::new(Vec::new()),
                 fetched: Mutex::new(Vec::new()),
                 picture: None,
@@ -1207,6 +1374,7 @@ mod tests {
                 details: Vec::new(),
                 failure: Some(failure),
                 seasons: Vec::new(),
+                catalogues: Mutex::new(Vec::new()),
                 searches: Mutex::new(Vec::new()),
                 fetched: Mutex::new(Vec::new()),
                 picture: None,
@@ -1237,11 +1405,12 @@ mod tests {
 
         async fn search(
             &self,
-            _catalogue: Catalogue,
+            catalogue: Catalogue,
             title: &str,
             year: Option<i32>,
             _language: &str,
         ) -> melyxar_metadata::provider::Result<Vec<Candidate>> {
+            self.catalogues.lock().expect("free").push(catalogue);
             self.searches
                 .lock()
                 .expect("free")
@@ -1330,6 +1499,7 @@ mod tests {
                 .find(|season| season.season_number == season_number)
                 .cloned()
                 .unwrap_or(melyxar_metadata::SeasonDetails {
+                    external_id: format!("season-{season_number}"),
                     season_number,
                     name: None,
                     overview: None,
@@ -1659,7 +1829,15 @@ mod tests {
         title: &str,
         year: Option<i32>,
     ) -> (tempfile::TempDir, AppState, Library, Work) {
-        build_state(title, year, false).await
+        build_state(title, year, false, "movies", WorkKind::Movie).await
+    }
+
+    /// The same, for a library that holds series rather than films.
+    async fn state_with_series(
+        title: &str,
+        year: Option<i32>,
+    ) -> (tempfile::TempDir, AppState, Library, Work) {
+        build_state(title, year, false, "series", WorkKind::Series).await
     }
 
     /// The same, with the media tools, which the preparation of a picture
@@ -1668,13 +1846,15 @@ mod tests {
         title: &str,
         year: Option<i32>,
     ) -> (tempfile::TempDir, AppState, Library, Work) {
-        build_state(title, year, true).await
+        build_state(title, year, true, "movies", WorkKind::Movie).await
     }
 
     async fn build_state(
         title: &str,
         year: Option<i32>,
         with_tools: bool,
+        holds: &str,
+        kind: WorkKind,
     ) -> (tempfile::TempDir, AppState, Library, Work) {
         let directory = tempfile::tempdir().expect("temporary directory");
         let config = Config {
@@ -1685,7 +1865,7 @@ mod tests {
             },
             libraries: vec![LibraryConfig {
                 name: "Films".into(),
-                kind: "movies".into(),
+                kind: holds.into(),
                 metadata_language: "fr".into(),
                 roots: vec![RootConfig {
                     label: "disk-one".into(),
@@ -1706,13 +1886,7 @@ mod tests {
             .expect("read")
             .expect("declared");
         let work = database
-            .create_work(
-                library.id,
-                WorkKind::Movie,
-                title,
-                &naming::sort_title(title),
-                year,
-            )
+            .create_work(library.id, kind, title, &naming::sort_title(title), year)
             .await
             .expect("work created");
 
@@ -1727,6 +1901,202 @@ mod tests {
             library,
             work,
         )
+    }
+
+    /// A season carrying the episodes it really holds, as the provider gives
+    /// them: the name it goes by, a sentence about it, and a picture.
+    fn a_season(number: i32, episodes: &[(i32, &str)]) -> melyxar_metadata::SeasonDetails {
+        melyxar_metadata::SeasonDetails {
+            external_id: format!("s{number}"),
+            season_number: number,
+            name: Some(format!("Saison {number}")),
+            overview: Some(format!("Ce que raconte la saison {number}.")),
+            poster_path: Some(format!("/season-{number}.jpg")),
+            episodes: episodes
+                .iter()
+                .map(|(number, name)| melyxar_metadata::EpisodeDetails {
+                    external_id: format!("e{number}"),
+                    episode_number: *number,
+                    name: Some((*name).to_string()),
+                    overview: Some(format!("Ce qui arrive dans le {number}.")),
+                    still_path: Some(format!("/still-{number}.jpg")),
+                    release_year: Some(2019),
+                    runtime: Some(melyxar_core::time::Millis::new(48 * 60_000)),
+                    community_rating: Some(8.1),
+                })
+                .collect(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_series_is_looked_for_among_series_and_never_among_films() {
+        // The whole point of telling the two catalogues apart: a series asked
+        // about down the films road answers nothing at all, or worse answers a
+        // film that happens to share its name.
+        let (_kept, state, library, work) = state_with_series("Distant Signal", Some(2019)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("42", "Distant Signal", Some(2019))],
+            vec![details("42", "Distant Signal", Some(2019))],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 1);
+        assert_eq!(
+            provider.catalogues.lock().expect("free").as_slice(),
+            &[Catalogue::Series]
+        );
+
+        let named = state
+            .database()
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("still there");
+        assert_eq!(named.identification, IdentificationState::Identified);
+        assert_eq!(named.title, "Distant Signal");
+    }
+
+    #[tokio::test]
+    async fn naming_a_series_describes_the_seasons_and_episodes_it_really_holds() {
+        let (_kept, state, library, series) = state_with_series("Distant Signal", Some(2019)).await;
+
+        // Two seasons on the disk, the first holding two episodes. The
+        // provider knows about a third season nobody has.
+        let mut written = Vec::new();
+        for (number, episodes) in [(1, vec![1, 2]), (2, vec![1])] {
+            let season = state
+                .database()
+                .create_child_work(
+                    library.id,
+                    series.id,
+                    number,
+                    WorkKind::Season,
+                    &crate::episodes::name_of_season(number),
+                    &format!("season {number}"),
+                )
+                .await
+                .expect("season written");
+            for episode in episodes {
+                state
+                    .database()
+                    .create_child_work(
+                        library.id,
+                        season.id,
+                        episode,
+                        WorkKind::Episode,
+                        &crate::episodes::name_of_episode(episode, episode),
+                        &format!("episode {episode}"),
+                    )
+                    .await
+                    .expect("episode written");
+            }
+            written.push(season.id);
+        }
+
+        let mut provider = StandIn::new(
+            vec![candidate("42", "Distant Signal", Some(2019))],
+            vec![details("42", "Distant Signal", Some(2019))],
+        );
+        provider.seasons = vec![
+            a_season(1, &[(1, "The Long Night"), (2, "Cold Water")]),
+            a_season(2, &[(1, "First Light")]),
+            a_season(3, &[(1, "Nobody Has This")]),
+        ];
+        let provider = Arc::new(provider);
+
+        run(&state, &provider, &library).await;
+
+        // A season keeps the name drawn from its number: what the provider
+        // calls it is that number written out, and a page that draws the
+        // number itself would show it twice.
+        let seasons = state.database().children_of(series.id).await.expect("read");
+        assert_eq!(
+            seasons
+                .iter()
+                .map(|season| (season.ordinal, season.title.clone()))
+                .collect::<Vec<_>>(),
+            vec![
+                (Some(1), "Season 1".to_string()),
+                (Some(2), "Season 2".to_string())
+            ],
+            "and the season the provider knows of and nobody has is not written down"
+        );
+
+        // What it does gain is a sentence about it.
+        assert_eq!(
+            state
+                .database()
+                .work_translation(written[0], "fr")
+                .await
+                .expect("read")
+                .and_then(|(_, _, overview)| overview)
+                .as_deref(),
+            Some("Ce que raconte la saison 1.")
+        );
+
+        // An episode gains everything: its name, its sentence, how long it
+        // runs and what people thought of it.
+        let episodes = state
+            .database()
+            .children_of(written[0])
+            .await
+            .expect("read");
+        assert_eq!(
+            episodes
+                .iter()
+                .map(|episode| episode.title.clone())
+                .collect::<Vec<_>>(),
+            vec!["The Long Night".to_string(), "Cold Water".to_string()]
+        );
+        let first = state
+            .database()
+            .work(episodes[0].id)
+            .await
+            .expect("read")
+            .expect("still there");
+        assert_eq!(first.identification, IdentificationState::Identified);
+        assert_eq!(
+            first.runtime,
+            Some(melyxar_core::time::Millis::new(48 * 60_000))
+        );
+        assert_eq!(first.community_rating, Some(8.1));
+        assert_eq!(first.release_year, Some(2019));
+    }
+
+    #[tokio::test]
+    async fn a_season_nobody_could_describe_leaves_the_rest_of_the_series_alone() {
+        // The series already has its name by the time the seasons are asked
+        // about. Giving up on all of them because one went wrong would mean
+        // starting the whole series again from nothing.
+        let (_kept, state, library, series) = state_with_series("Distant Signal", Some(2019)).await;
+        for number in [1, 2] {
+            state
+                .database()
+                .create_child_work(
+                    library.id,
+                    series.id,
+                    number,
+                    WorkKind::Season,
+                    &crate::episodes::name_of_season(number),
+                    &format!("season {number}"),
+                )
+                .await
+                .expect("season written");
+        }
+
+        let mut provider = StandIn::new(
+            vec![candidate("42", "Distant Signal", Some(2019))],
+            vec![details("42", "Distant Signal", Some(2019))],
+        );
+        // Only the second is described; the first answers an empty season.
+        provider.seasons = vec![a_season(2, &[(1, "First Light")])];
+        let provider = Arc::new(provider);
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 1, "the series is named all the same");
+
+        let seasons = state.database().children_of(series.id).await.expect("read");
+        assert_eq!(seasons.len(), 2, "both seasons are still there");
     }
 
     async fn run(state: &AppState, provider: &Arc<StandIn>, library: &Library) -> IdentifyReport {

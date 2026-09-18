@@ -38,10 +38,6 @@ const LARGEST_IMAGE: u64 = 16 * 1024 * 1024;
 /// will not be identified today, and the job comes back to it later.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Everything asked for in one go, so one film costs one request rather than
-/// five.
-const DETAIL_EXTRAS: &str = "credits,release_dates,videos,images";
-
 /// Which picture files the pictures asked for are worth reading.
 ///
 /// The provider offers some title images as drawings rather than pixels, and
@@ -140,8 +136,9 @@ const fn road_of(catalogue: Catalogue) -> &'static str {
     }
 }
 
-/// What comes back alongside a work, asked for in the one request rather than
-/// in four. The two catalogues name their age ratings differently.
+/// What comes back alongside a work, so one work costs one request rather than
+/// five. The two catalogues name their age ratings differently and agree on
+/// everything else.
 const fn extras_of(catalogue: Catalogue) -> &'static str {
     match catalogue {
         Catalogue::Films => "credits,release_dates,videos,images",
@@ -494,6 +491,8 @@ struct RawContentRating {
 #[derive(Debug, Deserialize)]
 struct RawSeason {
     #[serde(default)]
+    id: i64,
+    #[serde(default)]
     name: Option<String>,
     #[serde(default)]
     overview: Option<String>,
@@ -505,6 +504,8 @@ struct RawSeason {
 
 #[derive(Debug, Deserialize)]
 struct RawEpisode {
+    #[serde(default)]
+    id: i64,
     #[serde(default)]
     episode_number: i32,
     #[serde(default)]
@@ -693,6 +694,7 @@ fn details_from(raw: DetailsResponse, language: &str) -> Details {
 /// One season and its episodes, as the rest of the server speaks of them.
 fn season_from(raw: RawSeason, season_number: i32) -> SeasonDetails {
     SeasonDetails {
+        external_id: raw.id.to_string(),
         season_number,
         name: raw.name.filter(|value| !value.trim().is_empty()),
         overview: raw.overview.filter(|value| !value.trim().is_empty()),
@@ -701,6 +703,7 @@ fn season_from(raw: RawSeason, season_number: i32) -> SeasonDetails {
             .episodes
             .into_iter()
             .map(|episode| EpisodeDetails {
+                external_id: episode.id.to_string(),
                 episode_number: episode.episode_number,
                 name: episode.name.filter(|value| !value.trim().is_empty()),
                 overview: episode.overview.filter(|value| !value.trim().is_empty()),

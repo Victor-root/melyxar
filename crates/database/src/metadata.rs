@@ -199,13 +199,12 @@ impl Database {
     /// never reached. A library is bounded by the disks it sits on, and these
     /// rows are small.
     ///
-    /// Only what the provider has a catalogue for. It has one for films, so a
-    /// film is asked about; a season and an episode are named by the series
-    /// they hang under and are never looked up on their own, and a series
-    /// joins this list the day the provider is given its television catalogue.
-    /// Without the rule, every episode of every series is handed to a search
-    /// for films, which answers nothing several hundred times over and fills
-    /// the report with it.
+    /// Only what the provider has a catalogue for: a film and a series. A
+    /// season and an episode are named by the series they hang under, in the
+    /// one answer that describes the whole of it, and are never looked up on
+    /// their own. Without the rule, every episode of every series is handed to
+    /// a search of its own, which is several hundred questions asked to learn
+    /// what one answer already said.
     pub async fn works_awaiting_identification(
         &self,
         library_id: melyxar_core::id::LibraryId,
@@ -213,7 +212,7 @@ impl Database {
         let rows = sqlx::query(AssertSqlSafe(format!(
             "SELECT {} FROM works
              WHERE library_id = ? AND identification IN ('pending', 'unidentified')
-               AND kind = 'movie'
+               AND kind IN ('movie', 'series')
              ORDER BY added_at",
             crate::catalogue::what_a_work_is("")
         )))
