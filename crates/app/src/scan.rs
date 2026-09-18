@@ -1903,6 +1903,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_series_page_says_which_episode_to_carry_on_with() {
+        // One press has to reach something playable, so the page works it out
+        // rather than leaving a viewer to find their place in a list.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        for episode in 1..=3 {
+            write(
+                &media,
+                &format!("Distant Signal/Saison 1/Distant.Signal.S01E0{episode}.mkv"),
+                b"x",
+            );
+        }
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let viewer = a_viewer(&state).await;
+        let works = arrangement(&state, &library).await;
+        let series = of_kind(&works, WorkKind::Series)[0].clone();
+
+        let page = crate::detail::work_detail(&state, viewer, series.id)
+            .await
+            .expect("read")
+            .expect("the series has a page");
+        let first = page.carry_on_with.expect("nothing watched, so the first");
+        assert_eq!((first.season, first.episode), (Some(1), Some(1)));
+        assert!(
+            first.source_id.is_some(),
+            "and a file to play it from, or the button has nothing to press"
+        );
+
+        // Watched out of order: the first and the last.
+        for episode in [1, 3] {
+            let of_that_number = of_kind(&works, WorkKind::Episode)
+                .into_iter()
+                .find(|work| work.ordinal == Some(episode))
+                .expect("the episode is there");
+            state
+                .database()
+                .record_playback_progress(
+                    viewer,
+                    of_that_number.id,
+                    melyxar_core::time::Millis::new(0),
+                    melyxar_core::work::PlaybackState::Watched,
+                    melyxar_core::time::now(),
+                )
+                .await
+                .expect("marked");
+        }
+
+        let page = crate::detail::work_detail(&state, viewer, series.id)
+            .await
+            .expect("read")
+            .expect("still there");
+        assert_eq!(
+            page.carry_on_with.map(|next| next.episode),
+            Some(Some(2)),
+            "the hole, not the one after the last one played"
+        );
+        // And the season card says how many are left rather than how many
+        // there are.
+        assert_eq!(
+            page.children
+                .iter()
+                .map(|season| (season.work.child_count, season.work.unwatched))
+                .collect::<Vec<_>>(),
+            vec![(3, 1)]
+        );
+
+        // The one after an episode is simply the one after it, watched or not.
+        let second = of_kind(&works, WorkKind::Episode)
+            .into_iter()
+            .find(|work| work.ordinal == Some(2))
+            .expect("there");
+        assert_eq!(
+            crate::detail::work_detail(&state, viewer, second.id)
+                .await
+                .expect("read")
+                .expect("there")
+                .carry_on_with
+                .map(|next| next.episode),
+            Some(Some(3))
+        );
+    }
+
+    #[tokio::test]
     async fn a_grid_of_series_shows_the_series_and_not_what_hangs_under_them() {
         let directory = tempfile::tempdir().expect("temporary folder");
         let media = directory.path().join("media");

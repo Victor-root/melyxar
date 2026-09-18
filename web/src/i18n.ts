@@ -81,6 +81,14 @@ const en: Dictionary = {
   "work.seasons_none": "No season on the disk yet",
   // Said on an episode nothing can be played from, in place of its length.
   "work.not_on_disk": "Not on the disk",
+  // The button on a series or a season: which episode it would start.
+  "work.carry_on": "Carry on with S{season}E{episode}",
+  "work.start_series": "Start with S{season}E{episode}",
+  "work.next_episode": "Next episode",
+  "work.all_watched": "You have watched all of this",
+  "work.left_to_watch": "{count} left",
+  "work.left_to_watch_one": "1 left",
+  "work.watched": "Watched",
   // Short enough for the marker on a card, where the space is the poster's.
   "note.short.no_match": "Name not found",
   "note.short.provider_unreachable": "Provider unreachable",
@@ -594,6 +602,13 @@ const fr: Dictionary = {
   "work.episodes_none": "Aucun épisode sur le disque pour l'instant",
   "work.seasons_none": "Aucune saison sur le disque pour l'instant",
   "work.not_on_disk": "Absent du disque",
+  "work.carry_on": "Reprendre en S{season}E{episode}",
+  "work.start_series": "Commencer par S{season}E{episode}",
+  "work.next_episode": "Épisode suivant",
+  "work.all_watched": "Vous avez tout vu",
+  "work.left_to_watch": "{count} à voir",
+  "work.left_to_watch_one": "1 à voir",
+  "work.watched": "Vu",
   "note.short.no_match": "Nom introuvable",
   "note.short.provider_unreachable": "Fournisseur injoignable",
   "note.short.provider_busy": "Fournisseur saturé",

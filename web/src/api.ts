@@ -288,12 +288,29 @@ export interface Child {
   runtime_minutes: number | null;
   /** How many episodes a season holds. Zero for an episode. */
   child_count: number;
+  /** How many of those this viewer has left to watch. */
+  unwatched: number;
+  /** Whether this viewer has watched it. Only ever true of an episode. */
+  watched: boolean;
+  /** Where this viewer stopped in it, when they stopped partway. */
+  resume_from_seconds: number | null;
   /** False when no file of it is on the disk, so a page says so rather than
    *  offering a button that fails when it is pressed. */
   playable: boolean;
   identification: Card["identification"];
   color: string | null;
   poster: Picture[];
+}
+
+/** The episode a page offers to play next. */
+export interface NextEpisode {
+  id: string;
+  season: number | null;
+  episode: number | null;
+  /** Its own name, when it has one its number does not already say. */
+  title: string | null;
+  /** The file it plays from, so a button starts it without asking again. */
+  source_id: string | null;
 }
 
 /** One work this one hangs under, as a way back to it. */
@@ -342,6 +359,9 @@ export interface Work {
   children: Child[];
   /** The way back up, nearest first. Empty for anything met on its own. */
   ancestry: Ancestor[];
+  /** The episode to watch next: the first one left on a series or a season,
+   *  the one after this on an episode. Absent when there is none. */
+  carry_on_with: NextEpisode | null;
 }
 
 export interface Job {

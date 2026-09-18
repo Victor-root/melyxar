@@ -1948,7 +1948,7 @@
 
 .episode-link {
   display: grid;
-  grid-template-columns: 2.5rem 1fr auto;
+  grid-template-columns: 2.5rem 1fr auto 1.25rem;
   align-items: baseline;
   gap: var(--gap);
   padding: var(--gap-tight) var(--gap);
@@ -1980,4 +1980,25 @@
   color: var(--text-faint);
   font-size: 13px;
   white-space: nowrap;
+}
+
+.episode-watched {
+  color: var(--accent);
+  font-size: 13px;
+  text-align: right;
+}
+
+.work-all-watched {
+  margin: var(--gap) 0 0;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* The name of what a carry on button would play, beside it rather than in it:
+   a button whose wording changes length every time it is drawn moves the ones
+   beside it. */
+.carry-on-title {
+  align-self: center;
+  color: var(--text-soft);
+  font-size: 14px;
 }
