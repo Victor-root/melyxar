@@ -503,6 +503,21 @@ async fn find_candidate(
             return Ok(Some(found.clone()));
         }
     }
+
+    // Last of all: whoever keeps a series together often numbers it in front of
+    // the name and welded to it, and a provider given that answers nothing at
+    // all. Asked only here, because the shape is also the shape of real titles
+    // and those have already found themselves above.
+    if let Some(without) = naming::without_a_shorthand_prefix(&work.title) {
+        let shortened = provider
+            .search_movie(&without, work.release_year, language)
+            .await?;
+        // Judged on the shortened title, since that is what was asked: the
+        // work still carries the shorthand and nothing would ever match it.
+        if let Some(found) = choose_for(&shortened, &without, work.release_year) {
+            return Ok(Some(found.clone()));
+        }
+    }
     Ok(None)
 }
 
@@ -543,10 +558,24 @@ const YEARS_APART: i32 = 1;
 /// films on one page. A film nobody could name says so and waits, which is
 /// visible, correctable, and the whole reason the report names them.
 fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a MovieCandidate> {
+    choose_for(candidates, &work.title, work.release_year)
+}
+
+/// The same choice, made about a title that is not the one written down.
+///
+/// Every rule above holds whatever the title came from. It is split out for
+/// the one question asked about a shortened title, which has to be judged on
+/// the title that was asked rather than on the one still carrying a shorthand
+/// nothing would ever match.
+fn choose_for<'a>(
+    candidates: &'a [MovieCandidate],
+    title: &str,
+    release_year: Option<i32>,
+) -> Option<&'a MovieCandidate> {
     if candidates.is_empty() {
         return None;
     }
-    let wanted = naming::matchable_title(&work.title);
+    let wanted = naming::matchable_title(title);
 
     let names_of = |candidate: &MovieCandidate| {
         let mut names = vec![naming::matchable_title(&candidate.title)];
@@ -556,11 +585,10 @@ fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a Movie
         names
     };
     let matches_title = |candidate: &&MovieCandidate| names_of(candidate).contains(&wanted);
-    let near_the_year =
-        |candidate: &&MovieCandidate| match (work.release_year, candidate.release_year) {
-            (Some(wanted), Some(found)) => (wanted - found).abs() <= YEARS_APART,
-            _ => false,
-        };
+    let near_the_year = |candidate: &&MovieCandidate| match (release_year, candidate.release_year) {
+        (Some(wanted), Some(found)) => (wanted - found).abs() <= YEARS_APART,
+        _ => false,
+    };
 
     let carrying_the_name: Vec<&MovieCandidate> = candidates.iter().filter(matches_title).collect();
 
@@ -579,11 +607,10 @@ fn choose<'a>(candidates: &'a [MovieCandidate], work: &Work) -> Option<&'a Movie
     // is taken, and only if it is close enough to be the same film named by
     // two different hands. A year that is not known on both sides decides
     // nothing, so only the closeness is left to go on.
-    let year_allows =
-        |candidate: &&MovieCandidate| match (work.release_year, candidate.release_year) {
-            (Some(_), Some(_)) => near_the_year(candidate),
-            _ => true,
-        };
+    let year_allows = |candidate: &&MovieCandidate| match (release_year, candidate.release_year) {
+        (Some(_), Some(_)) => near_the_year(candidate),
+        _ => true,
+    };
 
     candidates
         .iter()
@@ -1835,6 +1862,69 @@ mod tests {
         assert!(
             asked.iter().any(|title| title.is_ascii()),
             "the last question is asked in plain letters: {asked:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_series_somebody_numbered_in_front_of_the_title_still_finds_its_films() {
+        // Whoever keeps a series together often numbers it themselves, welded
+        // to the front of the name. A provider given that answers nothing at
+        // all, because no film was released under a name beginning with it, so
+        // the title is asked again with the shorthand off.
+        let (_directory, state, library, work) =
+            state_with_work("QH1-Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(StandIn::matching_exactly(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            vec![details("111", "Quiet Harbour", Some(2019))],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 1, "searches: {:?}", provider.searches());
+        assert_eq!(
+            state
+                .database()
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification,
+            IdentificationState::Identified
+        );
+
+        let asked: Vec<String> = provider
+            .searches()
+            .into_iter()
+            .map(|(title, _)| title)
+            .collect();
+        assert_eq!(
+            asked.first().map(String::as_str),
+            Some("QH1-Quiet Harbour"),
+            "the title as written is still what is asked first"
+        );
+        assert!(
+            asked.iter().any(|title| title == "Quiet Harbour"),
+            "and the shortened one only after it found nothing: {asked:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_title_that_only_looks_like_it_carries_a_shorthand_is_never_shortened() {
+        // The shape is also the shape of real titles. This one answers on the
+        // first question, so nothing may ever ask a shortened version of it:
+        // doing so would offer up a different film under a name half gone.
+        let (_directory, state, library, _work) = state_with_work("2 Fast 2 Furious", None).await;
+        let provider = Arc::new(StandIn::matching_exactly(
+            vec![candidate("111", "2 Fast 2 Furious", Some(2003))],
+            vec![details("111", "2 Fast 2 Furious", Some(2003))],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 1);
+        assert_eq!(
+            provider.searches().len(),
+            1,
+            "one question was enough: {:?}",
+            provider.searches()
         );
     }
 

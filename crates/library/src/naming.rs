@@ -888,6 +888,54 @@ pub fn carries_accents(title: &str) -> bool {
     !title.is_ascii()
 }
 
+/// The longest a shorthand somebody wrote in front of a title can be.
+///
+/// Long enough for the ones people really write, which are the initials of a
+/// series and a number, and short enough that no word of a title reaches it.
+const SHORTHAND_AT_MOST: usize = 5;
+
+/// The title with a shorthand somebody wrote in front of it taken off.
+///
+/// Whoever keeps a series together often numbers it themselves, in front of
+/// the name and welded to it: `HP1-`, `SW3_`, `LOTR2 `. It sorts their folder
+/// and it is the first thing a provider is given, which is why the provider
+/// answers nothing at all: no film was ever released under a name beginning
+/// with it.
+///
+/// **A last resort and never a rule.** It is asked for only once the title as
+/// written has found nothing, because the shape it looks for is also the shape
+/// of real titles: `WALL-E` is a film, and so is `2 Fast 2 Furious`. Those find
+/// themselves on the first question and never reach this one.
+///
+/// Answers nothing when there is no such shorthand, which is the ordinary case.
+pub fn without_a_shorthand_prefix(title: &str) -> Option<String> {
+    let title = title.trim();
+    // Its end is whichever separator comes first: welded with a dash or an
+    // underscore, or simply left as the first word.
+    let cut = title.find(['-', '_', ' '])?;
+    let (shorthand, rest) = title.split_at(cut);
+    let rest = rest[1..].trim();
+
+    // A letter and a digit is what a shorthand is made of. Letters alone are a
+    // word of the title, and digits alone are a year or a number of it.
+    if shorthand.is_empty()
+        || shorthand.chars().count() > SHORTHAND_AT_MOST
+        || !shorthand
+            .chars()
+            .all(|letter| letter.is_ascii_alphanumeric())
+        || !shorthand.chars().any(|letter| letter.is_ascii_digit())
+        || !shorthand.chars().any(|letter| letter.is_ascii_alphabetic())
+    {
+        return None;
+    }
+
+    // And there has to be a title left to ask about.
+    if rest.chars().count() < 3 || !rest.chars().any(char::is_alphabetic) {
+        return None;
+    }
+    Some(rest.to_string())
+}
+
 /// File extensions treated as video.
 const VIDEO_EXTENSIONS: [&str; 14] = [
     "mkv", "mp4", "m4v", "avi", "mov", "wmv", "flv", "webm", "mpg", "mpeg", "ts", "m2ts", "mts",
@@ -1570,6 +1618,47 @@ mod tests {
         assert!(!carries_accents("Quiet Harbour"));
         assert!(carries_accents("La ru\u{e9}e vers l'or"));
         assert!(carries_accents("La rue\u{301}e vers l'or"));
+    }
+
+    #[test]
+    fn a_shorthand_somebody_numbered_a_series_with_comes_off_the_front() {
+        // Written every way people write it, welded or spaced.
+        for written in [
+            "QH1-Quiet Harbour",
+            "QH1_Quiet Harbour",
+            "QH1 Quiet Harbour",
+            "AF12-Quiet Harbour",
+        ] {
+            assert_eq!(
+                without_a_shorthand_prefix(written).as_deref(),
+                Some("Quiet Harbour"),
+                "{written}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_title_that_merely_looks_like_one_keeps_every_word_it_has() {
+        // Each of these is the shape a shorthand has, and each is a title. They
+        // find themselves on the question asked before this one, and this one
+        // must not offer a shortened name for them even so.
+        for real in [
+            // Letters alone in front: a word of the title, not a shorthand.
+            "WALL-E",
+            "Spider-Man",
+            // Digits alone: a number of the title.
+            "2 Fast 2 Furious",
+            "9-1-1",
+            // Nothing after it to ask about.
+            "QH1",
+            "QH1-",
+            // Too long to be one.
+            "Harbour1 Quiet",
+            // Not a name at all on the other side.
+            "QH1-77",
+        ] {
+            assert_eq!(without_a_shorthand_prefix(real), None, "{real}");
+        }
     }
 
     #[test]
