@@ -276,6 +276,34 @@ export interface Trailer {
   url: string | null;
 }
 
+/** One work hanging under another: a season of a series, an episode of a season. */
+export interface Child {
+  id: string;
+  kind: "season" | "episode";
+  /** The season number, the episode number. */
+  number: number | null;
+  /** The name it carries today. A page shows the number in the language it is
+   *  being read in and keeps this for whatever the name adds to it. */
+  title: string;
+  runtime_minutes: number | null;
+  /** How many episodes a season holds. Zero for an episode. */
+  child_count: number;
+  /** False when no file of it is on the disk, so a page says so rather than
+   *  offering a button that fails when it is pressed. */
+  playable: boolean;
+  identification: Card["identification"];
+  color: string | null;
+  poster: Picture[];
+}
+
+/** One work this one hangs under, as a way back to it. */
+export interface Ancestor {
+  id: string;
+  kind: string;
+  number: number | null;
+  title: string;
+}
+
 export interface Work {
   id: string;
   library_id: string;
@@ -290,6 +318,12 @@ export interface Work {
   identification: Card["identification"];
   identification_note: IdentificationNote | null;
   color: string | null;
+  /** Which season or episode this is, for a page that draws its own number. */
+  number: number | null;
+  /** Whether the title above says anything its number does not. False for a
+   *  season a scan could only number, whose name is drawn from the number in
+   *  the language the page is being read in. */
+  has_own_name: boolean;
   genres: string[];
   studios: string[];
   collection: string | null;
@@ -303,6 +337,11 @@ export interface Work {
   versions: Version[];
   trailers: Trailer[];
   external_ids: { provider: string; id: string }[];
+  /** The seasons of a series, the episodes of a season, in order. Empty for
+   *  anything met on its own. */
+  children: Child[];
+  /** The way back up, nearest first. Empty for anything met on its own. */
+  ancestry: Ancestor[];
 }
 
 export interface Job {

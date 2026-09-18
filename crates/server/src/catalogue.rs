@@ -308,12 +308,22 @@ fn card_view(card: &WorkCard) -> CardView {
 /// A film carries every kind of picture in one list, and each field of the
 /// page takes the kind it shows: a title image among the posters would be a
 /// card with a wordmark on it.
+/// The name of a work, when it has one of its own rather than its number
+/// written out in English.
+fn its_own_name(
+    kind: melyxar_core::work::WorkKind,
+    ordinal: Option<i32>,
+    title: &str,
+) -> Option<String> {
+    (!melyxar_app::episodes::is_only_a_number(kind, ordinal, title)).then(|| title.to_string())
+}
+
 fn child_view(child: &melyxar_app::detail::Child) -> ChildView {
     ChildView {
         id: child.work.id.to_string(),
         kind: child.work.kind.as_str(),
         number: child.work.ordinal,
-        title: child.work.title.clone(),
+        title: its_own_name(child.work.kind, child.work.ordinal, &child.work.title),
         runtime_minutes: child.work.runtime.map(whole_minutes),
         child_count: child.work.child_count,
         playable: child.work.playable,
@@ -418,6 +428,11 @@ struct WorkView {
     identification: &'static str,
     identification_note: Option<&'static str>,
     color: Option<String>,
+    /// Which season or episode this is, for a page that draws its own number.
+    number: Option<i32>,
+    /// Whether the title above says anything its number does not, so a season
+    /// a scan could only number is drawn in the language it is being read in.
+    has_own_name: bool,
     genres: Vec<String>,
     studios: Vec<String>,
     collection: Option<String>,
@@ -448,10 +463,10 @@ struct ChildView {
     /// The season number, the episode number. Absent only if a row was ever
     /// written without one.
     number: Option<i32>,
-    /// The name it carries today: what a provider gave it, or what its own
-    /// file said, or the placeholder a scan wrote. A page shows the number in
-    /// the language it is being read in and keeps this for the rest.
-    title: String,
+    /// The name it carries, when that name says anything the number does not.
+    /// Absent for a season a scan could only number, so a page draws the
+    /// number in its own language rather than the English one written down.
+    title: Option<String>,
     runtime_minutes: Option<i64>,
     /// How many episodes a season holds. Zero for an episode.
     child_count: i64,
@@ -469,7 +484,8 @@ struct AncestorView {
     id: String,
     kind: &'static str,
     number: Option<i32>,
-    title: String,
+    /// Absent for the same reason as above.
+    title: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -646,6 +662,9 @@ fn work_view(detail: &WorkDetail) -> WorkView {
             .identification_note
             .map(IdentificationNote::as_str),
         color: detail.work.dominant_color.clone(),
+        number: detail.work.ordinal,
+        has_own_name: its_own_name(detail.work.kind, detail.work.ordinal, &detail.work.title)
+            .is_some(),
         genres: detail.genres.clone(),
         studios: detail.studios.clone(),
         collection: detail.collection.clone(),
@@ -672,7 +691,7 @@ fn work_view(detail: &WorkDetail) -> WorkView {
                 id: up.id.to_string(),
                 kind: up.kind.as_str(),
                 number: up.ordinal,
-                title: up.title.clone(),
+                title: its_own_name(up.kind, up.ordinal, &up.title),
             })
             .collect(),
         versions: detail.versions.iter().map(version_view).collect(),

@@ -816,7 +816,7 @@ async fn episode_work_for(
     };
 
     let season_work = child_at(state, library, series.id, season, WorkKind::Season, || {
-        name_of_season(season)
+        crate::episodes::name_of_season(season)
     })
     .await?;
 
@@ -829,7 +829,7 @@ async fn episode_work_for(
         || {
             read.title
                 .clone()
-                .unwrap_or_else(|| name_of_episode(read.first, read.last))
+                .unwrap_or_else(|| crate::episodes::name_of_episode(read.first, read.last))
         },
     )
     .await?;
@@ -864,9 +864,6 @@ async fn child_at(
 /// The season a series has when nobody wrote a season anywhere.
 const THE_ONLY_SEASON: i32 = 1;
 
-/// The season everything that belongs to no season is filed under.
-const SEASON_OF_SPECIALS: i32 = 0;
-
 /// The folders between a file and the root of its library, nearest first.
 fn folders_above(relative_path: &Path) -> Vec<&str> {
     let Some(parent) = relative_path.parent() else {
@@ -896,26 +893,6 @@ fn the_series(read: &episode::ParsedEpisode, folders: &[&str]) -> Option<String>
         .find(|folder| episode::season_of_folder(folder).is_none())
         .map(|folder| (*folder).to_string())
         .filter(|folder| !folder.is_empty())
-}
-
-/// What a season is called before anything better is known about it.
-///
-/// English, like every other name written into the database. What a page shows
-/// is worked out from the number, in whichever language the page is being read
-/// in, so this is what is left if a season is ever met outside a page.
-fn name_of_season(season: i32) -> String {
-    if season == SEASON_OF_SPECIALS {
-        return "Specials".to_string();
-    }
-    format!("Season {season}")
-}
-
-/// What an episode is called when its own name never said.
-fn name_of_episode(first: i32, last: i32) -> String {
-    if last > first {
-        return format!("Episodes {first}-{last}");
-    }
-    format!("Episode {first}")
 }
 
 /// The kind of work a file in this library stands for when nothing better is
