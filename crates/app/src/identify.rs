@@ -746,15 +746,19 @@ fn choose_for<'a>(
     // two different hands. A year that is not known on both sides decides
     // nothing, so only the closeness is left to go on.
     //
-    // One thing is refused outright first, whatever it weighs: a name that is
-    // the searched one with an instalment number after it. It shares every
-    // word the shorter has, so it reads as alike as anything ever does, and
-    // two instalments come out a year apart as readily as not, so the year
-    // does not save it either. `Quiet Harbour 2` is not `Quiet Harbour`.
+    // One thing is refused outright first, whatever it weighs: a candidate
+    // that is the searched title with an instalment number after it. It
+    // shares every word the search had, so it reads as alike as anything ever
+    // does, and two instalments come out a year apart as readily as not, so
+    // the year does not save it either. `Quiet Harbour 2` is not `Quiet
+    // Harbour`. The direction matters: a search carrying a number the
+    // candidate lacks, `Bad Boys 1` searched and `Bad Boys` offered, is the
+    // ordinary way a collection numbers even its first film on disk, and is
+    // never refused by this.
     let is_the_next_one = |candidate: &&MovieCandidate| {
         names_of(candidate)
             .iter()
-            .any(|name| naming::tells_apart_only_by_an_instalment(name, &wanted))
+            .any(|name| naming::candidate_is_a_later_instalment(name, &wanted))
     };
     let year_allows = |candidate: &&MovieCandidate| match (release_year, candidate.release_year) {
         (Some(_), Some(_)) => near_the_year(candidate),
@@ -2098,6 +2102,34 @@ mod tests {
                 "Quiet Harbour 5 : The Ties of Blood",
                 Some(2012),
             )],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 1, "searches: {:?}", provider.searches());
+        assert_eq!(
+            state
+                .database()
+                .work(work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .identification,
+            IdentificationState::Identified
+        );
+    }
+
+    #[tokio::test]
+    async fn a_first_film_numbered_on_disk_is_still_found_under_its_plain_name() {
+        // The other direction of the same guard, and the fault it caused on a
+        // real collection: a set of films numbers even its first instalment on
+        // disk, `Bad Boys 1`, though the film itself is simply `Bad Boys`. The
+        // search carries the number here, not the candidate, and the year
+        // agrees, so nothing may refuse this one.
+        let (_directory, state, library, work) =
+            state_with_work("Quiet Harbour 1", Some(1995)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(1995))],
+            vec![details("111", "Quiet Harbour", Some(1995))],
         ));
 
         let report = run(&state, &provider, &library).await;
