@@ -1805,6 +1805,150 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn a_series_page_carries_its_seasons_and_a_season_page_its_episodes() {
+        // The whole page in one answer, ways back up included: a page that
+        // opens with eight requests opens eight times slower than one that
+        // opens with one, and the heading is drawn before anything else.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Saison 1/Distant Signal - S01E01 - The Long Night.mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Distant Signal/Saison 1/Distant Signal - S01E02 - Cold Water.mkv",
+            b"xx",
+        );
+        write(
+            &media,
+            "Distant Signal/Saison 2/Distant Signal - S02E01 - First Light.mkv",
+            b"xxx",
+        );
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+        let series = of_kind(&works, WorkKind::Series)[0].clone();
+
+        let page = crate::detail::work_detail(&state, series.id)
+            .await
+            .expect("read")
+            .expect("the series has a page");
+        assert!(page.ancestry.is_empty(), "a series stands on its own");
+        assert_eq!(
+            page.children
+                .iter()
+                .map(|child| (child.work.kind, child.work.ordinal, child.work.child_count))
+                .collect::<Vec<_>>(),
+            vec![
+                (WorkKind::Season, Some(1), 2),
+                (WorkKind::Season, Some(2), 1)
+            ]
+        );
+
+        let first_season = page.children[0].work.id;
+        let season_page = crate::detail::work_detail(&state, first_season)
+            .await
+            .expect("read")
+            .expect("the season has a page");
+        assert_eq!(
+            season_page
+                .ancestry
+                .iter()
+                .map(|up| (up.kind, up.id))
+                .collect::<Vec<_>>(),
+            vec![(WorkKind::Series, series.id)],
+            "the way back up travels with the page"
+        );
+        assert_eq!(
+            season_page
+                .children
+                .iter()
+                .map(|child| (
+                    child.work.ordinal,
+                    child.work.title.clone(),
+                    child.work.playable
+                ))
+                .collect::<Vec<_>>(),
+            vec![
+                (Some(1), "The Long Night".to_string(), true),
+                (Some(2), "Cold Water".to_string(), true)
+            ]
+        );
+
+        let episode = season_page.children[0].work.id;
+        let episode_page = crate::detail::work_detail(&state, episode)
+            .await
+            .expect("read")
+            .expect("the episode has a page");
+        assert!(
+            episode_page.children.is_empty(),
+            "nothing hangs under an episode"
+        );
+        assert_eq!(
+            episode_page
+                .ancestry
+                .iter()
+                .map(|up| (up.kind, up.ordinal))
+                .collect::<Vec<_>>(),
+            vec![(WorkKind::Season, Some(1)), (WorkKind::Series, None)],
+            "its season, then its series"
+        );
+        assert_eq!(
+            episode_page.versions.len(),
+            1,
+            "and the file it is played from"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_grid_of_series_shows_the_series_and_not_what_hangs_under_them() {
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Saison 1/Distant.Signal.S01E01.mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Distant Signal/Saison 1/Distant.Signal.S01E02.mkv",
+            b"xx",
+        );
+        write(
+            &media,
+            "Amber Field/Saison 3/Amber.Field.S03E07.mkv",
+            b"xxx",
+        );
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+
+        let shown = state
+            .database()
+            .browse_works(&melyxar_database::browse::BrowseRequest {
+                library_id: Some(library.id),
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert_eq!(
+            shown
+                .cards
+                .iter()
+                .map(|c| c.title.clone())
+                .collect::<Vec<_>>(),
+            vec!["Amber Field", "Distant Signal"],
+            "two series, and none of their seasons or episodes"
+        );
+        assert!(shown.cards.iter().all(|c| c.kind == WorkKind::Series));
+    }
+
     fn write(root: &Path, relative: &str, contents: &[u8]) {
         let path = root.join(relative);
         if let Some(parent) = path.parent() {
