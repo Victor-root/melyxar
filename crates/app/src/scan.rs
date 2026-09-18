@@ -230,11 +230,16 @@ pub async fn scan_library(
 ) -> Result<ScanReport> {
     let mut report = ScanReport::default();
     let database = state.database();
+    // Read once, at the start, rather than once per root: it is one answer
+    // about this run, and a setting changed halfway through would otherwise
+    // read one disk one way and the next another.
+    let work = database.library_work().await?;
     tracing::debug!(
         library = library.name,
         mode = mode.as_str(),
         key_frames_during_scan = library.options.key_frames_during_scan,
         thumbnails_during_scan = library.options.thumbnails_during_scan,
+        read_companion_files = work.read_companion_files,
         "a scan is starting"
     );
 
@@ -294,7 +299,7 @@ pub async fn scan_library(
         attach_companions(database, root.id, &companions, &media, &mut report).await?;
         attach_subtitles(database, root.id, &outcome.subtitles, &mut report).await?;
 
-        if state.config().scan.read_companion_files {
+        if work.read_companion_files {
             read_companion_files(
                 database,
                 &root.label,
@@ -1180,14 +1185,21 @@ mod tests {
                     })
                     .collect(),
             }],
-            scan: melyxar_config::ScanConfig {
-                read_companion_files,
-            },
             ..Config::default()
         };
         crate::startup::prepare_directories(&config).expect("directories prepared");
 
         let database = Database::open_in_memory().await.expect("database opens");
+        // Reading what sits next to a film is a setting of the server, written
+        // the way a screen writes it.
+        let work = database.library_work().await.expect("read");
+        database
+            .save_library_work(melyxar_database::settings::LibraryWork {
+                read_companion_files,
+                ..work
+            })
+            .await
+            .expect("the settings are written");
         crate::startup::reconcile_libraries(&database, &config)
             .await
             .expect("libraries reconciled");

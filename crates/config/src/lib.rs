@@ -166,99 +166,6 @@ impl Default for LimitsConfig {
     }
 }
 
-/// What a scan is allowed to do with the media folders.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ScanConfig {
-    /// Read the description files some collections keep next to a film.
-    ///
-    /// Off by default: such a file may hold anything, and a server that
-    /// believes it without being asked to is a server that takes a stranger's
-    /// word over a provider's. Turning it on only ever makes the server read;
-    /// writing into a media folder is a separate matter and a separate switch.
-    pub read_companion_files: bool,
-}
-
-/// The little pictures shown while somebody drags along the playback bar.
-///
-/// Making them means reading every film through from end to end, so this is
-/// the one piece of background work worth being able to switch off outright.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-// Every setting on its own: a section written with one line in it keeps the
-// usual value for everything else, rather than refusing to start over the
-// lines that were not written.
-#[serde(default)]
-pub struct ThumbnailsConfig {
-    pub enabled: bool,
-    /// How far apart in the film two thumbnails stand.
-    ///
-    /// Ten seconds, which is what Emby and Jellyfin settle on. Closer means a
-    /// smoother preview and more of everything: more reading, more sheets, more
-    /// disk.
-    pub every_seconds: u32,
-    /// Height of one thumbnail, in pixels. The width follows the film's shape.
-    pub height: u32,
-    /// How many thumbnails stand on one sheet.
-    ///
-    /// A hundred of them covers a thousand seconds of film in one request.
-    pub columns: u32,
-    pub rows: u32,
-}
-
-impl Default for ThumbnailsConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            every_seconds: 10,
-            height: 180,
-            columns: 10,
-            rows: 10,
-        }
-    }
-}
-
-/// The work that runs of a night rather than while somebody waits.
-///
-/// Two readings of a film are far heavier than anything else this server does
-/// to a library, and neither is anything a person is standing in front of: the
-/// places a picture can be started, and the thumbnails of the playback bar.
-/// Each library says whether its own scan does them; whatever is left over is
-/// read here, once a day, at an hour when nobody is watching anything.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-// Every setting on its own: a section written with one line in it keeps the
-// usual value for everything else, rather than refusing to start over the
-// lines that were not written.
-#[serde(default)]
-pub struct TasksConfig {
-    /// Whether the upkeep runs on its own at all.
-    ///
-    /// On. Off leaves both readings to the switches of each library and to
-    /// whoever presses the button, which is a server that has been told to do
-    /// nothing by itself rather than a server that forgets.
-    pub nightly_upkeep: bool,
-    /// The hour of the day it starts, **in UTC**.
-    ///
-    /// In UTC because it is the only clock this server can read with
-    /// certainty: the hour a machine calls its own comes from a setting that
-    /// cannot be asked for safely from several threads at once, and a value
-    /// that is wrong half the year is worse than one that is plainly stated.
-    /// The interface turns it into the hour of whoever is looking at it, which
-    /// is the only place that conversion can be made honestly.
-    ///
-    /// Three in the morning, which is the hour Jellyfin settles on for the
-    /// same work.
-    pub nightly_upkeep_at_utc_hour: u32,
-}
-
-impl Default for TasksConfig {
-    fn default() -> Self {
-        Self {
-            nightly_upkeep: true,
-            nightly_upkeep_at_utc_hour: 3,
-        }
-    }
-}
-
 /// What a transcode is allowed to produce.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 // Every setting on its own: a section written with one line in it keeps the
@@ -359,12 +266,6 @@ pub struct Config {
     #[serde(default)]
     pub limits: LimitsConfig,
     #[serde(default)]
-    pub scan: ScanConfig,
-    #[serde(default)]
-    pub thumbnails: ThumbnailsConfig,
-    #[serde(default)]
-    pub tasks: TasksConfig,
-    #[serde(default)]
     pub transcode: TranscodeConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
@@ -392,9 +293,6 @@ impl Default for Config {
             directories: Directories::default(),
             media_tools: MediaToolsConfig::default(),
             limits: LimitsConfig::default(),
-            scan: ScanConfig::default(),
-            thumbnails: ThumbnailsConfig::default(),
-            tasks: TasksConfig::default(),
             transcode: TranscodeConfig::default(),
             logging: LoggingConfig::default(),
             libraries: Vec::new(),
@@ -441,12 +339,6 @@ impl Config {
             return Err(ConfigError::Invalid(
                 "max_transcoding_sessions must be at least one, otherwise nothing can be transcoded".into(),
             ));
-        }
-        if self.tasks.nightly_upkeep_at_utc_hour > 23 {
-            return Err(ConfigError::Invalid(format!(
-                "tasks.nightly_upkeep_at_utc_hour is {}, and an hour of the day is nought to twenty three",
-                self.tasks.nightly_upkeep_at_utc_hour
-            )));
         }
         if self.transcode.enabled_video_codecs.is_empty() {
             return Err(ConfigError::Invalid(
@@ -532,15 +424,12 @@ mod tests {
 
     #[test]
     fn one_line_in_a_section_keeps_the_usual_value_for_the_rest() {
-        // What somebody writes when they want the thumbnails a little closer
-        // together. Refusing to start over the four lines they did not write
-        // is a server that will not come up because of a setting.
+        // What somebody writes when they want one thing changed. Refusing to
+        // start over the lines they did not write is a server that will not
+        // come up because of a setting.
         let config = Config::parse(
             r#"
             port = 2100
-
-            [thumbnails]
-            every_seconds = 5
 
             [logging]
             level = "debug"
@@ -551,16 +440,27 @@ mod tests {
         )
         .expect("valid configuration");
 
-        assert_eq!(config.thumbnails.every_seconds, 5);
-        assert!(
-            config.thumbnails.enabled,
-            "untouched, so still the usual one"
-        );
-        assert_eq!(config.thumbnails.columns, 10);
         assert_eq!(config.logging.level, "debug");
         assert!(!config.logging.reveal_media_names);
         assert_eq!(config.limits.concurrent_probes, 4);
         assert_eq!(config.limits.max_transcoding_sessions, 2);
+    }
+
+    #[test]
+    fn a_file_still_carrying_a_setting_that_has_moved_still_starts_the_server() {
+        // The thumbnails, the upkeep and the description files are settings of
+        // the server now, changed on a screen. A file written before that
+        // still holds their old sections, and a server that refused to start
+        // over three lines nobody can see any more would be a server somebody
+        // has to fix from a terminal to reach the screen that replaced them.
+        let text = format!(
+            "{MINIMAL}\n[thumbnails]\nevery_seconds = 5\n\n[tasks]\nnightly_upkeep = false\n\n\
+             [scan]\nread_companion_files = true\n"
+        );
+        assert!(
+            Config::parse(&text).is_ok(),
+            "a section nobody reads any more is a section to pass over"
+        );
     }
 
     #[test]
@@ -615,29 +515,6 @@ mod tests {
     fn an_empty_root_label_is_refused_because_logs_rely_on_it() {
         let text = MINIMAL.replace(r#"label = "disk-one""#, r#"label = "  ""#);
         assert!(Config::parse(&text).is_err());
-    }
-
-    #[test]
-    fn a_server_nobody_configured_does_its_upkeep_in_the_middle_of_the_night() {
-        let config = Config::default();
-        assert!(config.tasks.nightly_upkeep);
-        assert_eq!(config.tasks.nightly_upkeep_at_utc_hour, 3);
-    }
-
-    #[test]
-    fn an_hour_that_is_not_an_hour_of_the_day_is_refused_by_name() {
-        let text = format!("{MINIMAL}\n[tasks]\nnightly_upkeep_at_utc_hour = 25\n");
-        let error = Config::parse(&text).expect_err("an impossible hour must be refused");
-        assert!(error.to_string().contains("nightly_upkeep_at_utc_hour"));
-
-        let midnight = format!("{MINIMAL}\n[tasks]\nnightly_upkeep_at_utc_hour = 0\n");
-        assert_eq!(
-            Config::parse(&midnight)
-                .expect("midnight is an hour like any other")
-                .tasks
-                .nightly_upkeep_at_utc_hour,
-            0
-        );
     }
 
     #[test]

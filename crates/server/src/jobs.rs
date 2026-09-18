@@ -32,6 +32,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(set_library_options),
         )
         .route("/api/v1/upkeep", axum::routing::get(upkeep))
+        .route(
+            "/api/v1/settings/libraries",
+            axum::routing::put(set_library_work),
+        )
         .route("/api/v1/upkeep/run", axum::routing::post(run_the_upkeep))
         .route(
             "/api/v1/libraries/{id}/upkeep/{task}",
@@ -436,21 +440,30 @@ struct UpkeepTaskView {
     /// Whether it is running right now, so a screen offers to watch rather
     /// than to start.
     under_way: bool,
+    /// When this reading last ran to an end here, as an instant, or nothing
+    /// when it never has. A reading that never ran and one that ran last night
+    /// and found nothing look alike without it.
+    last_run: Option<String>,
+    /// How that run ended, in the words every other job uses.
+    last_run_state: Option<&'static str>,
+    /// How long it took, in seconds.
+    last_run_seconds: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
 struct UpkeepView {
     tasks: Vec<UpkeepTaskView>,
-    /// Whether the upkeep runs on its own of a night.
-    nightly: bool,
-    /// When it next will, written as an instant so that whoever reads it sees
-    /// it in their own hour rather than in the server's.
+    /// When the upkeep next runs on its own, written as an instant so that
+    /// whoever reads it sees it in their own hour rather than in the server's.
+    /// Absent when it never does.
     next_run: Option<String>,
+    /// What the server does with a library, which this screen also sets.
+    settings: WorkView,
 }
 
 /// What the upkeep has left to do, and when it will next do it on its own.
 async fn upkeep(State(state): State<AppState>) -> Result<Json<UpkeepView>> {
-    let asked = &state.config().tasks;
+    let work = state.database().library_work().await.map_err(internal)?;
     let left = melyxar_app::upkeep::what_is_left(&state).await?;
 
     Ok(Json(UpkeepView {
@@ -464,15 +477,103 @@ async fn upkeep(State(state): State<AppState>) -> Result<Json<UpkeepView>> {
                 done: entry.done,
                 during_the_scan: entry.during_the_scan,
                 under_way: entry.under_way,
+                last_run: entry
+                    .last_run
+                    .as_ref()
+                    .map(|last| melyxar_core::time::to_text(last.at)),
+                last_run_state: entry.last_run.as_ref().map(|last| last.state.as_str()),
+                last_run_seconds: entry.last_run.as_ref().and_then(|last| last.took_seconds),
             })
             .collect(),
-        nightly: asked.nightly_upkeep,
-        next_run: asked.nightly_upkeep.then(|| {
-            melyxar_core::time::to_text(melyxar_core::time::next_occurrence_of_utc_hour(
-                asked.nightly_upkeep_at_utc_hour,
+        next_run: work.upkeep_nightly.then(|| {
+            melyxar_core::time::to_text(melyxar_core::time::next_occurrence_of_utc_minutes(
+                work.upkeep_at_utc_minutes,
             ))
         }),
+        settings: work_view(work),
     }))
+}
+
+/// What the server does with a library, on its own and in what shape.
+///
+/// Every one of these was a line of the configuration file, which meant a
+/// terminal, a text editor and a restart to change one. None of them is a
+/// property of the machine: they are what somebody wants done with their
+/// films.
+#[derive(Debug, Serialize, Deserialize)]
+struct WorkView {
+    /// Read the description files some collections keep next to a film.
+    read_companion_files: bool,
+    /// Whether the thumbnails of the playback bar are made at all.
+    thumbnails_enabled: bool,
+    /// How far apart in the film two of them stand.
+    thumbnails_every_seconds: i64,
+    thumbnails_height: i64,
+    thumbnails_columns: i64,
+    thumbnails_rows: i64,
+    /// Whether the upkeep runs on its own of a night.
+    upkeep_nightly: bool,
+    /// When it does, in minutes since midnight, **in UTC**. Whatever shows it
+    /// turns it into the time of whoever is looking; the server keeps the one
+    /// clock it can read with certainty.
+    upkeep_at_utc_minutes: i64,
+}
+
+fn work_view(work: melyxar_app::settings::LibraryWork) -> WorkView {
+    WorkView {
+        read_companion_files: work.read_companion_files,
+        thumbnails_enabled: work.thumbnails_enabled,
+        thumbnails_every_seconds: work.thumbnails_every_seconds,
+        thumbnails_height: work.thumbnails_height,
+        thumbnails_columns: work.thumbnails_columns,
+        thumbnails_rows: work.thumbnails_rows,
+        upkeep_nightly: work.upkeep_nightly,
+        upkeep_at_utc_minutes: work.upkeep_at_utc_minutes,
+    }
+}
+
+/// Says what the server is to do with a library from now on.
+///
+/// Every value travels together, because they are one screen and one answer.
+/// What comes back is what was kept, which is not always what was asked for: a
+/// shape that cannot hold a thumbnail is brought back into range rather than
+/// refused, so a screen with a defect cannot leave a server making nothing.
+///
+/// Changing the shape of the thumbnails puts every film back in front of the
+/// upkeep, since what is already made no longer answers what is asked for. The
+/// screen says so before the change; nothing is thrown away, and a shape
+/// somebody changes back is found again as it stands.
+async fn set_library_work(
+    State(state): State<AppState>,
+    Json(asked): Json<WorkView>,
+) -> Result<Json<WorkView>> {
+    let kept = state
+        .database()
+        .save_library_work(melyxar_app::settings::LibraryWork {
+            read_companion_files: asked.read_companion_files,
+            thumbnails_enabled: asked.thumbnails_enabled,
+            thumbnails_every_seconds: asked.thumbnails_every_seconds,
+            thumbnails_height: asked.thumbnails_height,
+            thumbnails_columns: asked.thumbnails_columns,
+            thumbnails_rows: asked.thumbnails_rows,
+            upkeep_nightly: asked.upkeep_nightly,
+            upkeep_at_utc_minutes: asked.upkeep_at_utc_minutes,
+        })
+        .await
+        .map_err(internal)?;
+
+    tracing::debug!(
+        read_companion_files = kept.read_companion_files,
+        thumbnails_enabled = kept.thumbnails_enabled,
+        thumbnails_every_seconds = kept.thumbnails_every_seconds,
+        thumbnails_height = kept.thumbnails_height,
+        thumbnails_columns = kept.thumbnails_columns,
+        thumbnails_rows = kept.thumbnails_rows,
+        upkeep_nightly = kept.upkeep_nightly,
+        upkeep_at_utc_minutes = kept.upkeep_at_utc_minutes,
+        "what the server does with a library was set"
+    );
+    Ok(Json(work_view(kept)))
 }
 
 #[derive(Debug, Serialize)]
