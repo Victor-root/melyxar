@@ -1500,7 +1500,11 @@ mod tests {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
         state
             .database()
-            .apply_identification(work.id, &to_record(&details("111", "Quiet Harbour", Some(2019)), "tmdb", "fr"), false)
+            .apply_identification(
+                work.id,
+                &to_record(&details("111", "Quiet Harbour", Some(2019)), "tmdb", "fr"),
+                false,
+            )
             .await
             .expect("the provider named it");
         assert!(

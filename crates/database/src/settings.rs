@@ -84,9 +84,7 @@ impl LibraryWork {
             thumbnails_height: self.thumbnails_height.clamp(1, 1080),
             thumbnails_columns: self.thumbnails_columns.clamp(1, 20),
             thumbnails_rows: self.thumbnails_rows.clamp(1, 20),
-            upkeep_at_utc_minutes: self
-                .upkeep_at_utc_minutes
-                .rem_euclid(MINUTES_IN_A_DAY),
+            upkeep_at_utc_minutes: self.upkeep_at_utc_minutes.rem_euclid(MINUTES_IN_A_DAY),
             ..self
         }
     }

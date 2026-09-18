@@ -14,6 +14,7 @@ pub mod detail;
 pub mod diagnostics;
 pub mod identify;
 pub mod images;
+pub mod libraries;
 pub mod playback;
 pub mod preferences;
 pub mod scan;
