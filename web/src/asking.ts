@@ -78,11 +78,18 @@ export interface Asked<T> {
       interface abandoned itself. */
   failure: ApiError | null;
   /** Whether a question is in flight and nothing new has come back yet. True
-      again each time it is asked afresh, so a screen that says it is looking
-      says it every time it looks. */
+      again each time somebody asks afresh, so a screen that says it is looking
+      says it every time it is sent looking. */
   waiting: boolean;
-  /** Ask it again now. */
+  /** Somebody asked for it again: the last refusal is put aside and the screen
+      says it is looking, because a button that changes nothing when it is
+      pressed is a button that looks broken. */
   again: () => void;
+  /** The screen looking again of its own accord, on a beat nobody asked for.
+      Nothing on screen changes until something new comes back: a screen that
+      empties its own refusal twice a second flickers, and a viewer reading a
+      failure watches it blink at them. */
+  look: () => void;
 }
 
 /**
@@ -108,6 +115,10 @@ export function useAsked<T>(
   const [failure, setFailure] = useState<ApiError | null>(null);
   const [waiting, setWaiting] = useState(true);
   const [asked, setAsked] = useState(0);
+  /* Whether this round was asked for by somebody. A question the screen put
+     on its own beat leaves the screen exactly as it is until an answer or a
+     refusal really arrives. */
+  const wanted = useRef(true);
 
   const question = useRef(ask);
   useEffect(() => {
@@ -116,12 +127,18 @@ export function useAsked<T>(
 
   useEffect(() => {
     const controller = new AbortController();
-    setFailure(null);
-    setWaiting(true);
+    if (wanted.current) {
+      setFailure(null);
+      setWaiting(true);
+    }
+    wanted.current = true;
     question
       .current(controller.signal)
       .then((came) => {
         setAnswer(came);
+        // An answer is the end of whatever was wrong before it, which is what
+        // a screen looking again on its own beat is waiting to be told.
+        setFailure(null);
         setWaiting(false);
       })
       .catch((error) => {
@@ -135,9 +152,17 @@ export function useAsked<T>(
     // The question itself is deliberately not watched: see above.
   }, [asked, ...watching]);
 
-  const again = useCallback(() => setAsked((count) => count + 1), []);
+  const again = useCallback(() => {
+    wanted.current = true;
+    setAsked((count) => count + 1);
+  }, []);
 
-  return { answer, failure, waiting, again };
+  const look = useCallback(() => {
+    wanted.current = false;
+    setAsked((count) => count + 1);
+  }, []);
+
+  return { answer, failure, waiting, again, look };
 }
 
 /** Something the server was told to do, and what became of it. */

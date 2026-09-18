@@ -14,80 +14,39 @@
  * afterwards is then about that test alone.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../api";
-import type { Journal, JournalLine } from "../api";
-import { putOnTheClipboard } from "../clipboard";
+import { useEffect, useRef, useState } from "react";
+import type { JournalLine } from "../api";
+import { timeOfDay, useJournalScreen } from "../screens/journal";
 import { useSettings } from "../settings";
-
-/** How often the screen refreshes while it is open. */
-const EVERY_MS = 2_000;
 
 export function JournalPage() {
   const { t } = useSettings();
-  const [journal, setJournal] = useState<Journal>({ tags: [], lines: [] });
-  const [ticked, setTicked] = useState<string[]>([]);
-  const [holding, setHolding] = useState("");
-  const [failed, setFailed] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const {
+    journal,
+    failed,
+    ticked,
+    toggle,
+    everyTag,
+    holding,
+    setHolding,
+    copy,
+    copied,
+    shown,
+    forget,
+    forgetConvertedSubtitles,
+  } = useJournalScreen();
   /* What the last throwing away came to, shown on the button itself so the
      answer is where the question was asked. */
   const [thrownAway, setThrownAway] = useState("");
-  const [shown, setShown] = useState("");
   const selectable = useRef<HTMLTextAreaElement>(null);
 
-  const look = useCallback(
-    async (signal?: AbortSignal) => {
-      try {
-        setJournal(await api.journal({ tags: ticked, holding, most: 500 }, signal));
-        setFailed(false);
-      } catch (error) {
-        if (!(error instanceof DOMException)) {
-          setFailed(true);
-        }
-      }
-    },
-    [ticked, holding],
-  );
-
-  /* Read again on its own beat, so a test running right now fills the screen
-     as it goes rather than after a reload. */
+  /* Handed a box to select from, it is selected: nobody means "find the text
+     and highlight it yourself" by copy. */
   useEffect(() => {
-    const controller = new AbortController();
-    look(controller.signal);
-    const beat = window.setInterval(() => look(), EVERY_MS);
-    return () => {
-      controller.abort();
-      window.clearInterval(beat);
-    };
-  }, [look]);
-
-  const toggle = (tag: string) =>
-    setTicked((was) => (was.includes(tag) ? was.filter((one) => one !== tag) : [...was, tag]));
-
-  /* The server renders the text, so that what is pasted is what the command
-     line would print rather than a second rendering nobody checked. */
-  const copy = async () => {
-    setShown("");
-    let text: string;
-    try {
-      text = await api.journalText({ tags: ticked, holding });
-    } catch {
-      setFailed(true);
-      return;
+    if (shown) {
+      selectable.current?.select();
     }
-    // Every way a browser offers, the old one included, which is the one that
-    // works on a plain address. Showing the text to be copied by hand is the
-    // last resort and not the ordinary answer: being handed a box to select is
-    // not what anybody means by "copy".
-    if (await putOnTheClipboard(text)) {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2_000);
-      return;
-    }
-    setShown(text);
-    window.setTimeout(() => selectable.current?.select(), 0);
-  };
+  }, [shown]);
 
   return (
     <main className="page">
@@ -99,7 +58,7 @@ export function JournalPage() {
           </button>
           <button
             className="button button-small"
-            onClick={() => api.forgetJournal().then(() => look())}
+            onClick={forget}
           >
             {t("journal.forget")}
           </button>
@@ -109,12 +68,11 @@ export function JournalPage() {
           <button
             className="button button-small"
             onClick={() =>
-              api
-                .forgetConvertedSubtitles()
-                .then(({ forgotten }) =>
-                  setThrownAway(t("journal.subtitles_gone", { count: forgotten })),
-                )
-                .catch(() => setFailed(true))
+              void forgetConvertedSubtitles().then((forgotten) => {
+                if (forgotten !== null) {
+                  setThrownAway(t("journal.subtitles_gone", { count: forgotten }));
+                }
+              })
             }
           >
             {thrownAway || t("journal.forget_subtitles")}
@@ -135,7 +93,7 @@ export function JournalPage() {
           </button>
         ))}
         {ticked.length > 0 && (
-          <button className="button button-small" onClick={() => setTicked([])}>
+          <button className="button button-small" onClick={everyTag}>
             {t("journal.every_tag")}
           </button>
         )}
@@ -174,7 +132,7 @@ export function JournalPage() {
 function Line({ line }: { line: JournalLine }) {
   return (
     <div className={`journal-line journal-${line.level}`}>
-      <span className="journal-at">{line.at.slice(11, 19)}</span>
+      <span className="journal-at">{timeOfDay(line.at)}</span>
       <span className="journal-tag">{line.tag}</span>
       <span className="journal-said">{line.message}</span>
     </div>
