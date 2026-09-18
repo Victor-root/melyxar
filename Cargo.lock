@@ -1109,6 +1109,7 @@ name = "melyxar-app"
 version = "0.1.0"
 dependencies = [
  "melyxar-config",
+ "melyxar-container",
  "melyxar-core",
  "melyxar-database",
  "melyxar-ffmpeg",
@@ -1137,6 +1138,16 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "melyxar-container"
+version = "0.1.0"
+dependencies = [
+ "melyxar-core",
+ "melyxar-ffmpeg",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

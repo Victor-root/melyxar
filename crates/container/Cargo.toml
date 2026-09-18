@@ -1,0 +1,16 @@
+[package]
+name = "melyxar-container"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Reads a media file's own index of where its picture can be started."
+
+[dependencies]
+melyxar-core = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+melyxar-ffmpeg = { workspace = true }

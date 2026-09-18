@@ -14,6 +14,7 @@ melyxar-database = { workspace = true }
 melyxar-ffmpeg = { workspace = true }
 melyxar-jobs = { workspace = true }
 melyxar-library = { workspace = true }
+melyxar-container = { workspace = true }
 melyxar-media-probe = { workspace = true }
 melyxar-metadata = { workspace = true }
 melyxar-playback = { workspace = true }

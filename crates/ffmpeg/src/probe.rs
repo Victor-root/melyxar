@@ -335,6 +335,10 @@ pub async fn probe(analyser: &Path, media: &Path) -> Result<ProbeReport> {
 /// film the second would decode a thousand large pictures to learn where they
 /// were. It still reads the whole file once, which is why this belongs to the
 /// analysis and never to the moment somebody presses play.
+///
+/// This is the answer of last resort, asked for only when a film carries no
+/// index of its own that `melyxar_container` can read. It is also the only one
+/// that is always available, which is why it is what everything falls back to.
 pub async fn key_frames(analyser: &Path, media: &Path) -> Result<Vec<Millis>> {
     let output = TokioCommand::new(analyser)
         .args([
