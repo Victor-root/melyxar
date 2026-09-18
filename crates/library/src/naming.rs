@@ -903,15 +903,26 @@ pub fn one_is_how_the_other_begins(left: &[String], right: &[String]) -> bool {
     what_the_longer_adds(left, right).is_some_and(|added| !is_an_instalment(&added[0]))
 }
 
-/// Whether two titles are one name told apart only by an instalment number.
+/// Whether a candidate is a later instalment of the very film being searched
+/// for, rather than that film itself.
 ///
 /// `Quiet Harbour` and `Quiet Harbour 2` are not one film, and nothing about
 /// how alike they read says so: they share every word one of them has. Two
 /// instalments of a series come out a year apart as readily as not, so a year
-/// does not say it either. This is the one thing that does, and it holds
-/// wherever a name is weighed rather than read.
-pub fn tells_apart_only_by_an_instalment(left: &[String], right: &[String]) -> bool {
-    what_the_longer_adds(left, right).is_some_and(|added| is_an_instalment(&added[0]))
+/// does not say it either. This is the one thing that does.
+///
+/// **The direction matters, and only one of them is dangerous.** A candidate
+/// that carries a number the searched title lacks is a sequel offered instead
+/// of the film asked for, and has to be refused. A searched title that
+/// carries a number the candidate lacks is the ordinary way a collection
+/// numbers even its first film on disk, `Bad Boys 1` for a film simply called
+/// `Bad Boys`, and refusing that would turn a real match into a fault nobody
+/// could place with the year sitting right there in agreement.
+pub fn candidate_is_a_later_instalment(candidate: &[String], searched: &[String]) -> bool {
+    candidate.len() > searched.len()
+        && !searched.is_empty()
+        && candidate.starts_with(searched)
+        && is_an_instalment(&candidate[searched.len()])
 }
 
 /// What the longer of two titles says after the shorter one it begins with.
@@ -1716,23 +1727,9 @@ mod tests {
             "Quiet Harbour 5"
         ));
 
-        // A sequel is not a subtitle, whichever way it is numbered, and it is
-        // told apart by name rather than merely left out.
+        // A sequel is not a subtitle, whichever way it is numbered.
         assert!(!begins("Quiet Harbour", "Quiet Harbour 2"));
         assert!(!begins("Quiet Harbour", "Quiet Harbour II"));
-        let next_one = |short: &str, long: &str| {
-            tells_apart_only_by_an_instalment(&words(short), &words(long))
-        };
-        assert!(next_one("Quiet Harbour", "Quiet Harbour 2"));
-        assert!(next_one("Quiet Harbour", "Quiet Harbour II"));
-        assert!(next_one("Quiet Harbour", "Quiet Harbour 2 The Return"));
-        // And a subtitle is never one of those, which is what keeps the two
-        // rules from ever answering yes together.
-        assert!(!next_one(
-            "Quiet Harbour 5",
-            "Quiet Harbour 5 : The Ties of Blood"
-        ));
-        assert!(!next_one("Quiet Harbour", "Amber Field"));
         // Word for word from the start, so the middle of a title is not a
         // beginning of it.
         assert!(!begins("Harbour 5", "Quiet Harbour 5"));
@@ -1741,6 +1738,43 @@ mod tests {
         assert!(!begins("", "Quiet Harbour"));
         // And two titles that merely share their first word are not one film.
         assert!(!begins("Quiet Harbour", "Amber Field"));
+    }
+
+    #[test]
+    fn a_candidate_offering_a_sequel_is_told_from_a_search_naming_its_first_film() {
+        let words = |title: &str| matchable_title(title);
+        let is_a_sequel_offered = |candidate: &str, searched: &str| {
+            candidate_is_a_later_instalment(&words(candidate), &words(searched))
+        };
+
+        // The bug this exists for: a sequel offered up as the film that was
+        // searched for. `Quiet Harbour 2` shares every word `Quiet Harbour`
+        // has, so it reads as alike as anything ever does, and two instalments
+        // come out a year apart as readily as not, so the year does not save
+        // it either.
+        assert!(is_a_sequel_offered("Quiet Harbour 2", "Quiet Harbour"));
+        assert!(is_a_sequel_offered("Quiet Harbour II", "Quiet Harbour"));
+        assert!(is_a_sequel_offered(
+            "Quiet Harbour 2 The Return",
+            "Quiet Harbour"
+        ));
+
+        // **The direction matters, and this is the other one.** A collection
+        // often numbers even its first film on disk, `Bad Boys 1` for a film
+        // simply called `Bad Boys`: measured on a real collection where this
+        // very shape refused the film outright, with its year sitting right
+        // there in agreement. The search carries the number here, not the
+        // candidate, so nothing may be refused.
+        assert!(!is_a_sequel_offered("Bad Boys", "Bad Boys 1"));
+        assert!(!is_a_sequel_offered("Quiet Harbour", "Quiet Harbour 2"));
+
+        // A subtitle is never one of these either, which is what keeps the two
+        // rules from ever answering yes together.
+        assert!(!is_a_sequel_offered(
+            "Quiet Harbour 5 : The Ties of Blood",
+            "Quiet Harbour 5"
+        ));
+        assert!(!is_a_sequel_offered("Amber Field", "Quiet Harbour"));
     }
 
     #[test]
