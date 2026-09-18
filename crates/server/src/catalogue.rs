@@ -308,6 +308,21 @@ fn card_view(card: &WorkCard) -> CardView {
 /// A film carries every kind of picture in one list, and each field of the
 /// page takes the kind it shows: a title image among the posters would be a
 /// card with a wordmark on it.
+fn child_view(child: &melyxar_app::detail::Child) -> ChildView {
+    ChildView {
+        id: child.work.id.to_string(),
+        kind: child.work.kind.as_str(),
+        number: child.work.ordinal,
+        title: child.work.title.clone(),
+        runtime_minutes: child.work.runtime.map(whole_minutes),
+        child_count: child.work.child_count,
+        playable: child.work.playable,
+        identification: child.work.identification.as_str(),
+        color: child.work.dominant_color.clone(),
+        poster: pictures_of(&child.poster, "poster"),
+    }
+}
+
 fn pictures_of(images: &[StoredImage], kind: &str) -> Vec<ImageView> {
     images
         .iter()
@@ -416,6 +431,45 @@ struct WorkView {
     versions: Vec<VersionView>,
     trailers: Vec<TrailerView>,
     external_ids: Vec<ExternalIdView>,
+    /// The seasons of a series, the episodes of a season, in order. Empty for
+    /// anything met on its own.
+    children: Vec<ChildView>,
+    /// The way back up, nearest first: an episode carries its season and then
+    /// its series. Empty for anything met on its own.
+    ancestry: Vec<AncestorView>,
+}
+
+/// One work hanging under this one, as a card on its page.
+#[derive(Debug, Serialize)]
+struct ChildView {
+    id: String,
+    /// season or episode.
+    kind: &'static str,
+    /// The season number, the episode number. Absent only if a row was ever
+    /// written without one.
+    number: Option<i32>,
+    /// The name it carries today: what a provider gave it, or what its own
+    /// file said, or the placeholder a scan wrote. A page shows the number in
+    /// the language it is being read in and keeps this for the rest.
+    title: String,
+    runtime_minutes: Option<i64>,
+    /// How many episodes a season holds. Zero for an episode.
+    child_count: i64,
+    /// False when no file of it is on the disk right now, so a page can say so
+    /// rather than offer it and fail.
+    playable: bool,
+    identification: &'static str,
+    color: Option<String>,
+    poster: Vec<ImageView>,
+}
+
+/// One work this one hangs under, as a way back to it.
+#[derive(Debug, Serialize)]
+struct AncestorView {
+    id: String,
+    kind: &'static str,
+    number: Option<i32>,
+    title: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -610,6 +664,17 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         poster: images_of("poster"),
         backdrop: images_of("backdrop"),
         logo: images_of("logo"),
+        children: detail.children.iter().map(child_view).collect(),
+        ancestry: detail
+            .ancestry
+            .iter()
+            .map(|up| AncestorView {
+                id: up.id.to_string(),
+                kind: up.kind.as_str(),
+                number: up.ordinal,
+                title: up.title.clone(),
+            })
+            .collect(),
         versions: detail.versions.iter().map(version_view).collect(),
         trailers: detail
             .trailers

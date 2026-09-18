@@ -6,10 +6,16 @@
 
 use melyxar_core::id::{ImageId, WorkId};
 use melyxar_core::time::now;
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 
 use crate::convert::timestamp_to_text;
 use crate::{Database, Result};
+
+/// What a picture is, as every reader of one asks for it.
+///
+/// Written once because four queries hand their rows to the same reader.
+pub(crate) const WHAT_A_PICTURE_IS: &str =
+    "owner_kind, owner_id, image_kind, relative_path, width, height, fingerprint, dominant_color";
 
 /// One generated picture, as it is stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,12 +105,11 @@ impl Database {
 
     /// Every picture of one owner, largest first within each kind.
     pub async fn images_of(&self, owner_kind: &str, owner_id: &str) -> Result<Vec<StoredImage>> {
-        let rows = sqlx::query(
-            "SELECT owner_kind, owner_id, image_kind, relative_path, width, height,
-                    fingerprint, dominant_color
-             FROM images WHERE owner_kind = ? AND owner_id = ?
-             ORDER BY image_kind, width DESC",
-        )
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_PICTURE_IS} FROM images
+             WHERE owner_kind = ? AND owner_id = ?
+             ORDER BY image_kind, width DESC"
+        )))
         .bind(owner_kind)
         .bind(owner_id)
         .fetch_all(self.reader())
@@ -120,15 +125,33 @@ impl Database {
     /// the person they belong to, which is how a caller puts each face next to
     /// its name.
     pub async fn credit_photos_of_work(&self, work_id: WorkId) -> Result<Vec<StoredImage>> {
-        let rows = sqlx::query(
-            "SELECT owner_kind, owner_id, image_kind, relative_path, width, height,
-                    fingerprint, dominant_color
-             FROM images
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_PICTURE_IS} FROM images
              WHERE owner_kind = 'person'
                AND owner_id IN (SELECT person_id FROM credits WHERE work_id = ?)
-             ORDER BY width DESC",
-        )
+             ORDER BY width DESC"
+        )))
         .bind(work_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter().map(image_from_row).collect()
+    }
+
+    /// The pictures of everything hanging under one work, largest first.
+    ///
+    /// One query for a whole page of seasons or episodes, for the same reason
+    /// the faces come back in one: a season of twenty four episodes would
+    /// otherwise cost twenty four round trips. The rows carry the work they
+    /// belong to, which is how a caller puts each picture on its own card.
+    pub async fn pictures_of_children(&self, parent_id: WorkId) -> Result<Vec<StoredImage>> {
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_PICTURE_IS} FROM images
+             WHERE owner_kind = 'work'
+               AND owner_id IN (SELECT id FROM works WHERE parent_id = ?)
+             ORDER BY width DESC"
+        )))
+        .bind(parent_id.to_db_string())
         .fetch_all(self.reader())
         .await?;
 

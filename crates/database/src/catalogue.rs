@@ -40,6 +40,30 @@ pub(crate) fn what_a_work_is(table: &str) -> String {
     )
 }
 
+/// How many works can stand between an episode and the top: its season, and
+/// the series above that.
+const HOW_DEEP_IT_GOES: usize = 2;
+
+/// One work hanging under another, with what its card shows.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChildWork {
+    pub id: WorkId,
+    pub kind: WorkKind,
+    /// The season number, the episode number.
+    pub ordinal: Option<i32>,
+    pub title: String,
+    /// How long it runs: what the provider said, or failing that the longest
+    /// copy on disk, so an episode nobody has looked up still says something.
+    pub runtime: Option<Millis>,
+    /// How many hang under this one, for a season saying how many episodes.
+    pub child_count: i64,
+    /// Whether a file of it is on the disk right now.
+    pub playable: bool,
+    pub identification: IdentificationState,
+    pub dominant_color: Option<String>,
+    pub added_at: Timestamp,
+}
+
 /// Works one provider says are the same film.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SharedIdentity {
@@ -302,6 +326,77 @@ impl Database {
     ) -> Result<Option<Work>> {
         self.work_named(library_id, sort_title, release_year, Some(WorkKind::Series))
             .await
+    }
+
+    /// Everything hanging under one work, in the order it is numbered.
+    ///
+    /// A series answers with its seasons, a season with its episodes. Read in
+    /// one go, with what each card shows: whether anything can be played, how
+    /// long it runs, and how many the one below holds. A page of twenty four
+    /// episodes that asked those three questions per episode would be seventy
+    /// two round trips.
+    pub async fn children_of(&self, parent_id: WorkId) -> Result<Vec<ChildWork>> {
+        let rows = sqlx::query(
+            "SELECT w.id, w.kind, w.ordinal, w.title, w.runtime_ms, w.child_count,
+                    w.identification, w.dominant_color, w.added_at,
+                    (SELECT count(*) FROM media_sources s
+                      WHERE s.work_id = w.id AND s.missing_since IS NULL) AS playable,
+                    (SELECT max(s.duration_ms) FROM media_sources s WHERE s.work_id = w.id)
+                        AS longest_ms
+             FROM works w
+             WHERE w.parent_id = ?
+             ORDER BY w.ordinal, w.sort_title",
+        )
+        .bind(parent_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                let kind_text: String = row.try_get("kind")?;
+                let identification_text: String = row.try_get("identification")?;
+                Ok(ChildWork {
+                    id: parse_id(&row.try_get::<String, _>("id")?)?,
+                    kind: WorkKind::parse(&kind_text).ok_or_else(|| {
+                        DatabaseError::Corrupt(format!("work kind '{kind_text}'"))
+                    })?,
+                    ordinal: row.try_get("ordinal")?,
+                    title: row.try_get("title")?,
+                    runtime: row
+                        .try_get::<Option<i64>, _>("runtime_ms")?
+                        .or(row.try_get::<Option<i64>, _>("longest_ms")?)
+                        .map(Millis::new),
+                    child_count: row.try_get("child_count")?,
+                    playable: row.try_get::<i64, _>("playable")? > 0,
+                    identification: IdentificationState::parse(&identification_text).ok_or_else(
+                        || DatabaseError::Corrupt(format!("state '{identification_text}'")),
+                    )?,
+                    dominant_color: row.try_get("dominant_color")?,
+                    added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
+                })
+            })
+            .collect()
+    }
+
+    /// The works one work hangs under, nearest first.
+    ///
+    /// An episode answers with its season and then its series, a season with
+    /// its series, a film with nothing. Two reads at most, because that is how
+    /// deep the arrangement goes, and it stops at anything deeper rather than
+    /// walking for ever if a row ever pointed at itself.
+    pub async fn ancestry_of(&self, work_id: WorkId) -> Result<Vec<Work>> {
+        let mut climbed = Vec::new();
+        let mut looking = self.work(work_id).await?.and_then(|work| work.parent_id);
+        while let Some(parent_id) = looking {
+            let Some(parent) = self.work(parent_id).await? else {
+                break;
+            };
+            looking = parent
+                .parent_id
+                .filter(|_| climbed.len() < HOW_DEEP_IT_GOES);
+            climbed.push(parent);
+        }
+        Ok(climbed)
     }
 
     /// The child of a work sitting at that number: season two, episode five.
@@ -2021,6 +2116,170 @@ mod tests {
             .expect("library created");
         let root_id = library.roots[0].id;
         (database, library.id, root_id)
+    }
+
+    /// A series with two seasons, the first holding two episodes and the
+    /// second one, built the way a scan builds it.
+    async fn a_series(
+        database: &Database,
+        library_id: LibraryId,
+    ) -> (WorkId, Vec<WorkId>, Vec<WorkId>) {
+        let series = database
+            .create_work(
+                library_id,
+                WorkKind::Series,
+                "Distant Signal",
+                "distant signal",
+                Some(2019),
+            )
+            .await
+            .expect("series written");
+
+        let mut seasons = Vec::new();
+        let mut episodes = Vec::new();
+        for (season, count) in [(1, 2), (2, 1)] {
+            let written = database
+                .create_child_work(
+                    library_id,
+                    series.id,
+                    season,
+                    WorkKind::Season,
+                    &format!("Season {season}"),
+                    &format!("season {season}"),
+                )
+                .await
+                .expect("season written");
+            for number in 1..=count {
+                episodes.push(
+                    database
+                        .create_child_work(
+                            library_id,
+                            written.id,
+                            number,
+                            WorkKind::Episode,
+                            &format!("Episode {number}"),
+                            &format!("episode {number}"),
+                        )
+                        .await
+                        .expect("episode written")
+                        .id,
+                );
+            }
+            seasons.push(written.id);
+        }
+        (series.id, seasons, episodes)
+    }
+
+    #[tokio::test]
+    async fn a_series_answers_with_its_seasons_and_a_season_with_its_episodes() {
+        let (database, library_id, _) = library().await;
+        let (series, seasons, _) = a_series(&database, library_id).await;
+
+        let answered = database.children_of(series).await.expect("read");
+        assert_eq!(
+            answered
+                .iter()
+                .map(|child| child.ordinal)
+                .collect::<Vec<_>>(),
+            vec![Some(1), Some(2)],
+            "in the order they are numbered, not the order they were written"
+        );
+        assert!(answered.iter().all(|child| child.kind == WorkKind::Season));
+        assert_eq!(
+            answered
+                .iter()
+                .map(|child| child.child_count)
+                .collect::<Vec<_>>(),
+            vec![2, 1],
+            "a season says how many episodes it holds"
+        );
+
+        let first = database.children_of(seasons[0]).await.expect("read");
+        assert_eq!(first.len(), 2);
+        assert!(first.iter().all(|child| child.kind == WorkKind::Episode));
+        assert_eq!(
+            first.iter().map(|child| child.ordinal).collect::<Vec<_>>(),
+            vec![Some(1), Some(2)]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_has_nothing_hanging_under_it_and_nothing_above_it() {
+        let (database, library_id, _) = library().await;
+        let film = database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "Quiet Harbour",
+                "quiet harbour",
+                Some(2019),
+            )
+            .await
+            .expect("film written");
+
+        assert!(database
+            .children_of(film.id)
+            .await
+            .expect("read")
+            .is_empty());
+        assert!(database
+            .ancestry_of(film.id)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_episode_knows_its_season_and_then_its_series() {
+        // The way back up is drawn before anything else on the page, so it
+        // travels with the page rather than being asked for afterwards.
+        let (database, library_id, _) = library().await;
+        let (series, seasons, episodes) = a_series(&database, library_id).await;
+
+        let climbed = database.ancestry_of(episodes[0]).await.expect("read");
+        assert_eq!(
+            climbed.iter().map(|work| work.id).collect::<Vec<_>>(),
+            vec![seasons[0], series],
+            "nearest first"
+        );
+        assert_eq!(climbed[0].kind, WorkKind::Season);
+        assert_eq!(climbed[1].kind, WorkKind::Series);
+
+        assert_eq!(
+            database
+                .ancestry_of(seasons[1])
+                .await
+                .expect("read")
+                .iter()
+                .map(|work| work.id)
+                .collect::<Vec<_>>(),
+            vec![series]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_episode_says_whether_anything_of_it_is_on_the_disk() {
+        // A page that offers an episode with no file behind it offers a button
+        // that fails when it is pressed.
+        let (database, library_id, root_id) = library().await;
+        let (_, seasons, episodes) = a_series(&database, library_id).await;
+
+        database
+            .insert_source(
+                episodes[0],
+                root_id,
+                &PathBuf::from("Distant Signal/Saison 1/one.mkv"),
+                12,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("file written down");
+
+        let read = database.children_of(seasons[0]).await.expect("read");
+        assert_eq!(
+            read.iter().map(|child| child.playable).collect::<Vec<_>>(),
+            vec![true, false]
+        );
     }
 
     fn video_track(source_id: MediaSourceId) -> Track {

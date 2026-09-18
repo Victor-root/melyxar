@@ -379,11 +379,10 @@ impl Database {
         // from anything a caller sent.
         let placeholders = vec!["?"; owners.len()].join(", ");
         let sql = format!(
-            "SELECT owner_kind, owner_id, image_kind, relative_path, width, height,
-                    fingerprint, dominant_color
-             FROM images
+            "SELECT {} FROM images
              WHERE owner_kind = 'work' AND image_kind = 'poster' AND owner_id IN ({placeholders})
-             ORDER BY width DESC"
+             ORDER BY width DESC",
+            crate::images::WHAT_A_PICTURE_IS
         );
 
         // The only thing assembled here is a row of question marks, one per

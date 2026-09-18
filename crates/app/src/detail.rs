@@ -9,7 +9,7 @@ use melyxar_core::id::{MediaSourceId, PersonId, WorkId};
 use melyxar_core::media::{Chapter, Track};
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::Work;
-use melyxar_database::catalogue::{PlayableExtraVideo, SourceAnalysis};
+use melyxar_database::catalogue::{ChildWork, PlayableExtraVideo, SourceAnalysis};
 use melyxar_database::images::StoredImage;
 
 use crate::{AppState, Result};
@@ -33,6 +33,33 @@ pub struct WorkDetail {
     /// Trailers, the local ones first since they play without leaving here.
     pub trailers: Vec<TrailerLink>,
     pub external_ids: Vec<(String, String)>,
+    /// What hangs under this one, in order: the seasons of a series, the
+    /// episodes of a season. Empty for anything met on its own.
+    pub children: Vec<Child>,
+    /// What this one hangs under, nearest first: an episode answers with its
+    /// season and then its series. Empty for anything met on its own.
+    ///
+    /// Sent with the page rather than fetched by it, because the way back up
+    /// is drawn before anything else and a page that asks for its own parent
+    /// draws a heading that arrives late.
+    pub ancestry: Vec<Ancestor>,
+}
+
+/// One work hanging under this one, with what its card shows.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Child {
+    pub work: ChildWork,
+    /// Every size of its picture, largest first.
+    pub poster: Vec<StoredImage>,
+}
+
+/// One work this one hangs under, as a way back to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ancestor {
+    pub id: WorkId,
+    pub kind: melyxar_core::work::WorkKind,
+    pub ordinal: Option<i32>,
+    pub title: String,
 }
 
 /// One line of the credits, with the face shown next to it.
@@ -216,7 +243,41 @@ pub async fn work_detail(state: &AppState, work_id: WorkId) -> Result<Option<Wor
         })
         .collect();
 
+    // The pictures of a whole page of episodes in one read, then each one
+    // joins its own card, exactly as the faces do above.
+    let pictures = database.pictures_of_children(work_id).await?;
+    let children = database
+        .children_of(work_id)
+        .await?
+        .into_iter()
+        .map(|child| {
+            let owner = child.id.to_db_string();
+            Child {
+                poster: pictures
+                    .iter()
+                    .filter(|image| image.owner_id == owner)
+                    .cloned()
+                    .collect(),
+                work: child,
+            }
+        })
+        .collect();
+
+    let ancestry = database
+        .ancestry_of(work_id)
+        .await?
+        .into_iter()
+        .map(|work| Ancestor {
+            id: work.id,
+            kind: work.kind,
+            ordinal: work.ordinal,
+            title: work.title,
+        })
+        .collect();
+
     Ok(Some(WorkDetail {
+        children,
+        ancestry,
         tagline: texts.as_ref().and_then(|(_, tagline, _)| tagline.clone()),
         overview: texts.as_ref().and_then(|(_, _, overview)| overview.clone()),
         genres: database.work_genres(work_id).await?,
