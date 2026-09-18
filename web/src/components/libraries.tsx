@@ -10,26 +10,17 @@
  * sends somebody back to try the same thing again.
  */
 
-import { useEffect, useState } from "react";
-import { api, ApiError } from "../api";
+import { useState } from "react";
 import type { Library, WouldGo } from "../api";
 import { FolderPicker } from "./folders";
-import { refusalKey } from "../i18n";
 import { languageName, METADATA_LANGUAGES } from "../player/languages";
+import {
+  KINDS,
+  useDeclaring,
+  useLibraryEditing,
+  useRemoving,
+} from "../screens/declaring";
 import { useSettings } from "../settings";
-
-/** The kinds a library can be, in the order the server names them. */
-const KINDS = ["movies", "series", "anime", "shows", "music"];
-
-/** Turns whatever the server refused into the key of a sentence. */
-function refusal(error: unknown): string {
-  if (error instanceof ApiError) {
-    // A word saying which thing to put right when the server sent one, and
-    // otherwise the sentence every other refusal already has.
-    return error.reason ? `refused.library.${error.reason}` : refusalKey(error.code);
-  }
-  return "refused.generic";
-}
 
 export function LibraryEditor({
   libraries,
@@ -41,79 +32,21 @@ export function LibraryEditor({
   onChanged: () => void;
 }) {
   const { t, language } = useSettings();
+  const { refused, outcome, report, settle, addFolderTo, rename, renameFolder, refuse } =
+    useLibraryEditing(onChanged);
   const [adding, setAdding] = useState(false);
-  const [refused, setRefused] = useState<string | null>(null);
-  /* What a change set going, when it set anything going. */
-  const [said, setSaid] = useState<string | null>(null);
   /* Which library is being given another folder, when one is. */
   const [addingTo, setAddingTo] = useState<string | null>(null);
   /* What the question of taking something away is being put about, when it is.
      A folder when one is named, the whole library otherwise. */
   const [removing, setRemoving] = useState<{ library: string; root?: string } | null>(null);
 
-  /* The three settings of a library travel together, because they are one
-     answer to one question: sending half would leave the other half to be
-     guessed at, and the guess would be wrong every other time. */
-  const settle = (library: Library, changes: Partial<Library>) => {
-    const wanted = { ...library, ...changes };
-    setRefused(null);
-    api
-      .setLibraryOptions(library.id, {
-        key_frames_during_scan: wanted.key_frames_during_scan,
-        thumbnails_during_scan: wanted.thumbnails_during_scan,
-        metadata_language: wanted.metadata_language,
-      })
-      .then((kept) => {
-        // A language that changed set a run going on every film of the
-        // library. Somebody who just pressed that is owed its size.
-        setSaid(
-          kept.asked_about_again === null
-            ? null
-            : t("settings.asked_about_again", { count: kept.asked_about_again }),
-        );
-        onChanged();
-      })
-      .catch((error) => {
-        setRefused(refusal(error));
-        onChanged();
-      });
-  };
-
-  const addFolderTo = async (library: string, path: string) => {
-    setAddingTo(null);
-    setRefused(null);
-    try {
-      await api.addRoot(library, path);
-      onChanged();
-    } catch (error) {
-      setRefused(refusal(error));
-    }
-  };
-
-  const rename = async (library: Library, name: string) => {
-    if (name.trim() === library.name) {
-      return;
-    }
-    setRefused(null);
-    try {
-      await api.renameLibrary(library.id, name);
-      onChanged();
-    } catch (error) {
-      setRefused(refusal(error));
-      onChanged();
-    }
-  };
-
-  const renameFolder = async (library: Library, root: string, label: string) => {
-    setRefused(null);
-    try {
-      await api.renameRoot(library.id, root, label);
-      onChanged();
-    } catch (error) {
-      setRefused(refusal(error));
-      onChanged();
-    }
-  };
+  const said =
+    outcome === null
+      ? null
+      : outcome.kind === "asked_about_again"
+        ? t("settings.asked_about_again", { count: outcome.count })
+        : t("settings.removal_done", { works: outcome.works, files: outcome.files });
 
   return (
     <>
@@ -227,12 +160,12 @@ export function LibraryEditor({
               root={removing.root}
               onDone={(went) => {
                 setRemoving(null);
-                setSaid(t("settings.removal_done", { works: went.works, files: went.files }));
+                report({ kind: "removal_done", works: went.works, files: went.files });
                 onChanged();
               }}
               onRefused={(key) => {
                 setRemoving(null);
-                setRefused(key);
+                refuse(key);
                 onChanged();
               }}
               onCancel={() => setRemoving(null)}
@@ -248,7 +181,7 @@ export function LibraryEditor({
             onChanged();
           }}
           onCancel={() => setAdding(false)}
-          onRefused={setRefused}
+          onRefused={refuse}
         />
       ) : (
         <button className="button" onClick={() => setAdding(true)}>
@@ -278,43 +211,14 @@ function Removal({
   onCancel,
 }: {
   library: Library;
-  /** The folder being taken out, or nothing for the whole library. */
+  /** The folder being taken away, or nothing when it is the whole library. */
   root?: string;
   onDone: (went: WouldGo) => void;
   onRefused: (key: string) => void;
   onCancel: () => void;
 }) {
   const { t } = useSettings();
-  const [going, setGoing] = useState<WouldGo | null>(null);
-  /* A count that would not come is shown here rather than at the top of the
-     page: nobody has asked for anything yet, so there is nothing to put right
-     anywhere else. */
-  const [counting, setCounting] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const asked = root
-      ? api.whatRemovingAFolderTakes(library.id, root, controller.signal)
-      : api.whatRemovingTakes(library.id, controller.signal);
-    asked.then(setGoing).catch((error) => {
-      if (!(error instanceof DOMException)) {
-        setCounting(refusal(error));
-      }
-    });
-    return () => controller.abort();
-  }, [library.id, root]);
-
-  const goAhead = async () => {
-    setBusy(true);
-    try {
-      onDone(root ? await api.removeRoot(library.id, root) : await api.removeLibrary(library.id));
-    } catch (error) {
-      onRefused(refusal(error));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { going, counting, busy, goAhead } = useRemoving(library, root, onDone, onRefused);
 
   const label = library.roots.find((one) => one.id === root)?.label ?? "";
 
@@ -374,31 +278,9 @@ function NewLibrary({
   onRefused: (key: string) => void;
 }) {
   const { t, language } = useSettings();
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState("movies");
-  /* The interface language to begin with: somebody who reads this in French
-     is the likeliest to want their films described in it. */
-  const [metadata, setMetadata] = useState<string>(language);
-  const [roots, setRoots] = useState<string[]>([]);
+  const { name, setName, kind, setKind, metadata, setMetadata, roots, addRoot, dropRoot, busy, create } =
+    useDeclaring(language, onDone, onRefused);
   const [picking, setPicking] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const create = async () => {
-    setBusy(true);
-    try {
-      await api.createLibrary({
-        name,
-        kind,
-        metadata_language: metadata,
-        roots,
-      });
-      onDone();
-    } catch (error) {
-      onRefused(refusal(error));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <div className="library-block">
@@ -440,7 +322,7 @@ function NewLibrary({
             <span className="library-root-path">{path}</span>
             <button
               className="button button-small"
-              onClick={() => setRoots(roots.filter((one) => one !== path))}
+              onClick={() => dropRoot(path)}
             >
               {t("settings.forget_folder")}
             </button>
@@ -455,7 +337,7 @@ function NewLibrary({
         <FolderPicker
           onPick={(path) => {
             setPicking(false);
-            setRoots((before) => (before.includes(path) ? before : [...before, path]));
+            addRoot(path);
           }}
           onClose={() => setPicking(false)}
         />
