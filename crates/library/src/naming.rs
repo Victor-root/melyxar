@@ -849,6 +849,42 @@ pub fn matchable_title(title: &str) -> Vec<String> {
         .collect()
 }
 
+/// A short French word standing for a longer one an apostrophe was cut from,
+/// glued back to the word it introduces.
+///
+/// `matchable_title` already handles an apostrophe that survived on the file:
+/// it is dropped without leaving a space, so `l'automne` reads as one word,
+/// `lautomne`, exactly as a provider's own title does. A release that instead
+/// writes the whole name in dots, `Quand.vient.l.automne`, turns the
+/// apostrophe into a separator like any other, and the two words that were
+/// one become `l` and `automne`. Weighed against a provider's `lautomne`
+/// those two words are worth nothing at all, which is what let a real
+/// three-word title read as barely half itself.
+///
+/// A closed list rather than a rule: this is elisions actually written this
+/// way in French, not every one-letter word a title could ever hold.
+const ELISIONS: [&str; 12] = [
+    "l", "d", "j", "n", "s", "m", "t", "c", "qu", "jusqu", "lorsqu", "aujourd",
+];
+
+/// The words of a title with one of the elisions above glued to the word
+/// after it, exactly as `matchable_title` glues one an apostrophe survived on.
+///
+/// Answers the same list, unchanged, when nothing in it needs gluing: this is
+/// an extra chance at a title already read, never a title read differently.
+pub fn with_elisions_glued(words: &[String]) -> Vec<String> {
+    let mut glued = Vec::with_capacity(words.len());
+    let mut rest = words.iter().peekable();
+    while let Some(word) = rest.next() {
+        if ELISIONS.contains(&word.as_str()) && rest.peek().is_some() {
+            glued.push(format!("{word}{}", rest.next().expect("just peeked")));
+        } else {
+            glued.push(word.clone());
+        }
+    }
+    glued
+}
+
 /// The number a sequel written in roman numerals stands for.
 ///
 /// Only the ones a sequel is ever numbered with. Read as a whole word from a
@@ -1640,6 +1676,51 @@ mod tests {
             matchable_title("Dont Breathe 2")
         );
         assert_eq!(matchable_title("L'Auberge"), ["lauberge"]);
+    }
+
+    #[test]
+    fn an_apostrophe_that_became_a_separator_is_still_the_same_word() {
+        // A release named entirely in dots turns the apostrophe into a
+        // separator like any other, `Quand.vient.l.automne`, and leaves the
+        // two words that were one word apart: measured on a real title where
+        // that alone was the whole difference between finding the film and
+        // not.
+        assert_eq!(
+            with_elisions_glued(&matchable_title("Quand vient l automne")),
+            matchable_title("Quand vient l'automne"),
+        );
+        assert_eq!(
+            with_elisions_glued(&matchable_title("L Auberge")),
+            matchable_title("L'Auberge"),
+        );
+        // Every elision this covers, each glued to what follows it.
+        for (apart, together) in [
+            ("D une Vie", "D'une Vie"),
+            ("J habite Ici", "J'habite Ici"),
+            ("N est Pas Mort", "N'est Pas Mort"),
+            ("S il Vous Plaît", "S'il Vous Plaît"),
+            ("M appelle Encore", "M'appelle Encore"),
+            ("T aimer Toujours", "T'aimer Toujours"),
+            ("C est la Vie", "C'est la Vie"),
+            ("Qu il Vienne", "Qu'il Vienne"),
+            ("Jusqu au Bout", "Jusqu'au Bout"),
+            ("Lorsqu elle Dort", "Lorsqu'elle Dort"),
+            ("Aujourd hui", "Aujourd'hui"),
+        ] {
+            assert_eq!(
+                with_elisions_glued(&matchable_title(apart)),
+                matchable_title(together),
+                "{apart} / {together}"
+            );
+        }
+
+        // A word this covers with nothing left to glue to is left as it was,
+        // and a title with nothing to glue at all comes back unchanged.
+        assert_eq!(with_elisions_glued(&matchable_title("L")), ["l"]);
+        assert_eq!(
+            with_elisions_glued(&matchable_title("Quiet Harbour")),
+            matchable_title("Quiet Harbour"),
+        );
     }
 
     #[test]
