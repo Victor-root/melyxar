@@ -514,10 +514,36 @@ export class ApiError extends Error {
   }
 }
 
-async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+/**
+ * The one exchange with the server. Everything below is what is asked for.
+ *
+ * Written once because it was written three times: a plain read, a read of
+ * text the server rendered, and a change sent to it. The three had already
+ * come apart, and the one that reads text had stopped carrying back the word
+ * the server sends to say what it refused, so a refusal on that road arrived
+ * as "something went wrong" and nothing else.
+ *
+ * Two things happen here and nowhere else. A question this interface walked
+ * away from is handed on as it is, because that is not the server failing to
+ * answer: shown to a viewer it reads as a fault, on a screen they have
+ * already left. And a refusal is unwrapped into the code the server sent and
+ * the field it named, which is what lets a form say which box is wrong.
+ */
+async function exchange(
+  path: string,
+  accept: string,
+  method?: string,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
   let response: Response;
   try {
-    response = await fetch(path, { signal, headers: { accept: "application/json" } });
+    response = await fetch(path, {
+      method,
+      headers: body === undefined ? { accept } : { accept, "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === "AbortError") {
       throw cause;
@@ -526,10 +552,14 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new ApiError(body?.code ?? "generic", response.status, body?.details?.reason);
+    const said = await response.json().catch(() => null);
+    throw new ApiError(said?.code ?? "generic", response.status, said?.details?.reason);
   }
-  return (await response.json()) as T;
+  return response;
+}
+
+async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return (await exchange(path, "application/json", undefined, undefined, signal)).json() as Promise<T>;
 }
 
 /** Turns what a screen ticked into the query the server reads. */
@@ -543,20 +573,7 @@ function journalQuery(query: JournalQuery): string {
 
 /** The same as above for a report the server renders itself. */
 async function getText(path: string, signal?: AbortSignal): Promise<string> {
-  let response: Response;
-  try {
-    response = await fetch(path, { signal, headers: { accept: "text/plain" } });
-  } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError") {
-      throw cause;
-    }
-    throw new ApiError("unreachable", 0);
-  }
-
-  if (!response.ok) {
-    throw new ApiError("generic", response.status);
-  }
-  return response.text();
+  return (await exchange(path, "text/plain", undefined, undefined, signal)).text();
 }
 
 const post = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
@@ -572,32 +589,7 @@ async function send<T>(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(path, {
-      method,
-      headers:
-        body === undefined
-          ? { accept: "application/json" }
-          : { accept: "application/json", "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal,
-    });
-  } catch (cause) {
-    // Walking away from a question is not the server failing to answer it, and
-    // the two are told apart here exactly as they are for a plain read above.
-    // Swallowed, a viewer who leaves a screen while it is saving something is
-    // shown "the server cannot be reached" on the way out.
-    if (cause instanceof DOMException && cause.name === "AbortError") {
-      throw cause;
-    }
-    throw new ApiError("unreachable", 0);
-  }
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new ApiError(body?.code ?? "generic", response.status, body?.details?.reason);
-  }
-  return (await response.json()) as T;
+  return (await exchange(path, "application/json", method, body, signal)).json() as Promise<T>;
 }
 
 export interface PlaybackTrack {

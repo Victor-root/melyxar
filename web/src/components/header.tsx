@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
+import { Choice } from "./choice";
 import { outOfAHundred } from "../readable";
 import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
@@ -115,7 +116,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
           <Choice
             label={t("nav.theme")}
             value={theme}
-            onChange={(value) => setTheme(value as ThemeChoice)}
+            onPick={(value) => setTheme(value as ThemeChoice)}
             options={[
               ["system", t("theme.system")],
               ["dark", t("theme.dark")],
@@ -125,7 +126,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
           <Choice
             label={t("nav.language")}
             value={language}
-            onChange={(value) => setLanguage(value === "fr" ? "fr" : "en")}
+            onPick={(value) => setLanguage(value === "fr" ? "fr" : "en")}
             options={[
               ["en", "English"],
               ["fr", "Français"],
@@ -134,30 +135,5 @@ export function Header({ libraries }: { libraries: Library[] }) {
         </div>
       </div>
     </header>
-  );
-}
-
-function Choice({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: [string, string][];
-}) {
-  return (
-    <label className="choice">
-      <span className="choice-label">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map(([option, wording]) => (
-          <option key={option} value={option}>
-            {wording}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }

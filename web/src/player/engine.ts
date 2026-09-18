@@ -27,6 +27,7 @@ import type Hls from "hls.js";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "../api";
+import { wasAbandoned } from "../asking";
 import type { HowItMoved, PlaybackPlan, PlaybackSession } from "../api";
 import { qualityCalled, rememberQuality, storedQuality } from "./quality";
 import type { Quality } from "./quality";
@@ -527,7 +528,10 @@ export function usePlayback({
         setFailed(null);
       })
       .catch((error) => {
-        if (!(error instanceof DOMException)) {
+        // Walking away from the question is not the server failing to answer
+        // it, and that is one rule for the whole interface rather than one
+        // this file keeps its own copy of.
+        if (!wasAbandoned(error)) {
           setFailed(wording(error));
         }
       });
