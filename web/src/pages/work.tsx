@@ -262,20 +262,25 @@ export function WorkPage() {
             </p>
           )}
 
-          {work.external_ids.length > 0 && (
+          {/* Only the ones that really lead somewhere: a season and an
+              episode carry an identifier at the catalogue too, and the page
+              that shows one cannot be built from it alone. */}
+          {work.external_ids.some((entry) => elsewhere(entry.provider, entry.id, work.kind)) && (
             <p className="work-links">
               <span className="work-studios-label">{t("media.links")}</span>
-              {work.external_ids.map((entry) => (
-                <a
-                  key={entry.provider}
-                  className="work-link"
-                  href={elsewhere(entry.provider, entry.id, work.kind)}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  {t(`provider.${entry.provider}`)}
-                </a>
-              ))}
+              {work.external_ids
+                .filter((entry) => elsewhere(entry.provider, entry.id, work.kind))
+                .map((entry) => (
+                  <a
+                    key={entry.provider}
+                    className="work-link"
+                    href={elsewhere(entry.provider, entry.id, work.kind)}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    {t(`provider.${entry.provider}`)}
+                  </a>
+                ))}
             </p>
           )}
 

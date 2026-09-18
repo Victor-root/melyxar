@@ -22,8 +22,16 @@ import { useAsked } from "../asking";
  * The kind decides the road: one of these catalogues keeps films and series
  * apart, and a series asked for down the films road is a page that does not
  * exist. The other names everything the same way and does not care.
+ *
+ * Nothing at all for a season or an episode. They carry an identifier of
+ * their own there too, but the page that shows one is reached through its
+ * series and cannot be built from that identifier alone. A link that leads
+ * nowhere is worse than no link.
  */
 export function elsewhere(provider: string, id: string, kind: string): string {
+  if (kind !== "movie" && kind !== "series") {
+    return "";
+  }
   switch (provider) {
     case "tmdb":
       return `https://www.themoviedb.org/${kind === "movie" ? "movie" : "tv"}/${id}`;

@@ -679,23 +679,71 @@ mod tests {
         made
     }
 
-    /// Waits for the scan a declaration set going.
+    /// Waits for the work a declaration set going.
     ///
-    /// Declaring a library scans it, and a library being scanned is one the
-    /// server refuses to take away. A test that takes one away has to let the
-    /// scan it asked for end first, exactly as somebody pressing the button
-    /// would.
+    /// Declaring a library scans it, and a library with work under way is one
+    /// the server refuses to take away. A test that takes one away has to let
+    /// that work end first, exactly as somebody pressing the button would.
+    ///
+    /// Empty is not the same as ended. Declaring a library sets off a chain:
+    /// the scan, then the look up, then the readings, each started only once
+    /// the one before it has finished. Between two of them the list of
+    /// unfinished work is momentarily empty, and a removal landing in that gap
+    /// is refused because the next job appeared while it was being refused.
+    /// Measured, not argued: this failed roughly once in ten whole runs, and
+    /// always on a loaded machine, which is exactly when that gap is widest.
+    ///
+    /// So the list is watched until it has been empty for several rounds in a
+    /// row rather than once, and whatever the caller then does is done through
+    /// `once_it_is_allowed` below, which asks again rather than believing the
+    /// first refusal.
     async fn once_nothing_is_running(state: &AppState) {
-        while !state
-            .database()
-            .unfinished_jobs()
-            .await
-            .expect("read")
-            .is_empty()
-        {
+        let mut quiet = 0;
+        while quiet < ROUNDS_OF_QUIET {
+            if state
+                .database()
+                .unfinished_jobs()
+                .await
+                .expect("read")
+                .is_empty()
+            {
+                quiet += 1;
+            } else {
+                quiet = 0;
+            }
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
     }
+
+    /// How many quiet rounds mean the chain is really over rather than between
+    /// two of its links.
+    const ROUNDS_OF_QUIET: usize = 5;
+
+    /// Does something the server refuses while work is under way, asking again
+    /// until it is allowed.
+    ///
+    /// The only wait that cannot be raced: a chain always ends, so a refusal
+    /// that comes from work being under way always stops coming.
+    async fn once_it_is_allowed<T, F, Fut>(what: F) -> T
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = Result<T>>,
+    {
+        for _ in 0..HOWEVER_LONG_A_CHAIN_TAKES {
+            match what().await {
+                Ok(done) => return done,
+                Err(Trouble::Refused(Refused::SomethingIsRunning)) => {
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                }
+                Err(error) => panic!("refused for a reason that will not pass: {error:?}"),
+            }
+        }
+        panic!("the work under way never ended");
+    }
+
+    /// Long enough for a first scan of one file and the look up behind it,
+    /// short enough that a test which will never pass says so.
+    const HOWEVER_LONG_A_CHAIN_TAKES: usize = 1_500;
 
     fn asked(name: &str, roots: Vec<PathBuf>) -> Asked {
         Asked {
@@ -936,7 +984,7 @@ mod tests {
             .await
             .expect("declared");
         once_nothing_is_running(&state).await;
-        remove(&state, library.id).await.expect("taken away");
+        once_it_is_allowed(|| remove(&state, library.id)).await;
 
         assert!(
             state
@@ -1005,7 +1053,7 @@ mod tests {
             .await
             .expect("poster recorded");
 
-        let went = remove(&state, library.id).await.expect("taken away");
+        let went = once_it_is_allowed(|| remove(&state, library.id)).await;
 
         assert_eq!(went.swept.pictures, 1, "the poster row went");
         assert!(!poster.exists(), "and so did the file it named");
@@ -1029,9 +1077,7 @@ mod tests {
         let root = add_root(&state, library.id, &more).await.expect("added");
         once_nothing_is_running(&state).await;
 
-        remove_root(&state, library.id, root.id)
-            .await
-            .expect("taken away");
+        once_it_is_allowed(|| remove_root(&state, library.id, root.id)).await;
 
         assert_eq!(
             state
@@ -1085,7 +1131,7 @@ mod tests {
             .finish_job(running.id, melyxar_core::job::JobState::Succeeded, None)
             .await
             .expect("the reading ended");
-        remove(&state, library.id).await.expect("and now it can go");
+        once_it_is_allowed(|| remove(&state, library.id)).await;
     }
 
     #[tokio::test]
