@@ -16,11 +16,17 @@ import { api } from "../api";
 import type { Version, Work } from "../api";
 import { useAsked } from "../asking";
 
-/** Where a film lives at the site that named it. */
-export function elsewhere(provider: string, id: string): string {
+/**
+ * Where a work lives at the site that named it.
+ *
+ * The kind decides the road: one of these catalogues keeps films and series
+ * apart, and a series asked for down the films road is a page that does not
+ * exist. The other names everything the same way and does not care.
+ */
+export function elsewhere(provider: string, id: string, kind: string): string {
   switch (provider) {
     case "tmdb":
-      return `https://www.themoviedb.org/movie/${id}`;
+      return `https://www.themoviedb.org/${kind === "movie" ? "movie" : "tv"}/${id}`;
     case "imdb":
       return `https://www.imdb.com/title/${id}/`;
     default:

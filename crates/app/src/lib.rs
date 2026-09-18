@@ -12,6 +12,7 @@ pub mod calibration;
 pub mod catalogue;
 pub mod detail;
 pub mod diagnostics;
+pub mod episodes;
 pub mod identify;
 pub mod images;
 pub mod libraries;

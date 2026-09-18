@@ -62,6 +62,25 @@ const en: Dictionary = {
   "work.minutes": "{count} min",
   "work.unidentified": "Not identified",
   "work.pending": "Waiting to be looked up",
+
+  // A season and an episode are announced by their number, in the language
+  // the page is being read in. What a scan wrote down is English and is only
+  // a number spelled out, so it is never what a page shows.
+  "work.season": "Season {number}",
+  "work.specials": "Specials",
+  "work.episode": "Episode {number}",
+  // On an episode row, where the number sits in its own column.
+  "work.episode_short": "{number}",
+  "work.seasons": "Seasons",
+  "work.episodes": "Episodes",
+  "work.season_count": "{count} seasons",
+  "work.season_count_one": "1 season",
+  "work.episode_count": "{count} episodes",
+  "work.episode_count_one": "1 episode",
+  "work.episodes_none": "No episode on the disk yet",
+  "work.seasons_none": "No season on the disk yet",
+  // Said on an episode nothing can be played from, in place of its length.
+  "work.not_on_disk": "Not on the disk",
   // Short enough for the marker on a card, where the space is the poster's.
   "note.short.no_match": "Name not found",
   "note.short.provider_unreachable": "Provider unreachable",
@@ -561,6 +580,20 @@ const fr: Dictionary = {
   "work.minutes": "{count} min",
   "work.unidentified": "Non identifié",
   "work.pending": "En attente d'identification",
+
+  "work.season": "Saison {number}",
+  "work.specials": "Hors-série",
+  "work.episode": "Épisode {number}",
+  "work.episode_short": "{number}",
+  "work.seasons": "Saisons",
+  "work.episodes": "Épisodes",
+  "work.season_count": "{count} saisons",
+  "work.season_count_one": "1 saison",
+  "work.episode_count": "{count} épisodes",
+  "work.episode_count_one": "1 épisode",
+  "work.episodes_none": "Aucun épisode sur le disque pour l'instant",
+  "work.seasons_none": "Aucune saison sur le disque pour l'instant",
+  "work.not_on_disk": "Absent du disque",
   "note.short.no_match": "Nom introuvable",
   "note.short.provider_unreachable": "Fournisseur injoignable",
   "note.short.provider_busy": "Fournisseur saturé",

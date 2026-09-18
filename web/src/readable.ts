@@ -12,6 +12,49 @@
  * list and another way in the bar above it.
  */
 
+/** How the interface says a thing, in whichever language it is speaking. */
+export type Wording = (key: string, values?: Record<string, string | number>) => string;
+
+/**
+ * How a season or an episode is announced.
+ *
+ * Always by its number, because that is what somebody is looking for, and in
+ * the language the page is being read in. The name written in the database is
+ * only ever added to that: a scan that could read nothing but a number wrote
+ * the number out in English, and the server says so by sending no name at all.
+ */
+export function nameOfOne(
+  kind: string,
+  number: number | null,
+  title: string | null,
+  t: Wording,
+): string {
+  const numbered = numberOfOne(kind, number, t);
+  if (!numbered) {
+    return title ?? "";
+  }
+  return title ? `${numbered} · ${title}` : numbered;
+}
+
+/** The number alone, for a row that shows the name in a column of its own. */
+export function numberOfOne(kind: string, number: number | null, t: Wording): string {
+  if (number === null) {
+    return "";
+  }
+  if (kind === "season") {
+    return number === SEASON_OF_SPECIALS ? t("work.specials") : t("work.season", { number });
+  }
+  return kind === "episode" ? t("work.episode", { number }) : "";
+}
+
+/** The season everything belonging to no season is filed under. */
+const SEASON_OF_SPECIALS = 0;
+
+/** How many of something, said with the wording that fits one of it. */
+export function howMany(count: number, key: string, t: Wording): string {
+  return count === 1 ? t(`${key}_one`) : t(key, { count });
+}
+
 const MINUTES_IN_A_DAY = 24 * 60;
 
 function wrapIntoADay(minutes: number): number {

@@ -8,12 +8,20 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, pictureSet } from "../api";
-import type { Credit, Version } from "../api";
+import type { Child, Credit, Version, Work } from "../api";
 import { useTold } from "../asking";
 import { IdentifyByHand } from "../components/byhand";
-import { outOfTen, readableBitrate, readableDate, readableSize } from "../readable";
+import {
+  howMany,
+  nameOfOne,
+  numberOfOne,
+  outOfTen,
+  readableBitrate,
+  readableDate,
+  readableSize,
+} from "../readable";
 import { elsewhere, groupCrew, useWorkScreen } from "../screens/work";
 import { useSettings } from "../settings";
 import { Player } from "../player/player";
@@ -73,9 +81,26 @@ export function WorkPage() {
   const backdrop = pictureSet(work.backdrop);
   const poster = pictureSet(work.poster);
   const version = work.versions[chosen];
+  /* A season is announced by its number in the language being read, and by
+     the name it was given only when that name says something the number does
+     not. The server is the one that knows which is which. */
+  const heading =
+    nameOfOne(work.kind, work.number, work.has_own_name ? work.title : null, t) || work.title;
+  /* A series is nothing but its seasons and a season nothing but its
+     episodes: neither is played, neither has a copy on the disk, and neither
+     runs for a length of its own. */
+  const holdsOthers = work.children.length > 0 || work.kind === "series" || work.kind === "season";
   const facts = [
     work.year !== null ? String(work.year) : null,
-    work.runtime_minutes ? t("work.minutes", { count: work.runtime_minutes }) : null,
+    work.kind === "series" && work.children.length > 0
+      ? howMany(work.children.length, "work.season_count", t)
+      : null,
+    work.kind === "season" && work.children.length > 0
+      ? howMany(work.children.length, "work.episode_count", t)
+      : null,
+    !holdsOthers && work.runtime_minutes
+      ? t("work.minutes", { count: work.runtime_minutes })
+      : null,
     work.age_rating,
     work.rating !== null ? outOfTen(work.rating) : null,
   ].filter((fact): fact is string => Boolean(fact));
@@ -117,13 +142,26 @@ export function WorkPage() {
             />
           ) : (
             <div className="work-poster-empty" aria-hidden="true">
-              {work.title.slice(0, 1)}
+              {/* A season has a number and that is what it is looked for by.
+                  Everything else falls back to the letter it begins with. */}
+              {work.number ?? heading.slice(0, 1)}
             </div>
           )}
         </div>
 
         <div className="work-body">
-          <h1 className="work-title">{work.title}</h1>
+          {/* The way back up, drawn before anything else, out of what came
+              with the page rather than out of a second question. */}
+          {work.ancestry.length > 0 && (
+            <nav className="work-ancestry">
+              {[...work.ancestry].reverse().map((up) => (
+                <Link key={up.id} to={`/work/${up.id}`} className="work-ancestor">
+                  {nameOfOne(up.kind, up.number, up.title, t) || up.title}
+                </Link>
+              ))}
+            </nav>
+          )}
+          <h1 className="work-title">{heading}</h1>
           {work.tagline && <p className="work-tagline">{work.tagline}</p>}
 
           <div className="work-facts">
@@ -146,7 +184,7 @@ export function WorkPage() {
           {/* The last word, on every film and not only the nameless ones: a
               film named wrongly looks exactly like one named rightly, and the
               person looking at it is the only one who can tell. */}
-          {id && (
+          {id && work.kind === "movie" && (
             <IdentifyByHand
               workId={id}
               title={work.title}
@@ -154,6 +192,7 @@ export function WorkPage() {
             />
           )}
 
+          {!holdsOthers && (
           <div className="work-actions">
             <button
               className="button button-accent button-large"
@@ -192,8 +231,11 @@ export function WorkPage() {
               </a>
             )}
           </div>
+          )}
 
           <Synopsis text={work.overview} />
+
+          {holdsOthers && <WhatHangsUnder work={work} />}
 
           {work.genres.length > 0 && (
             <div className="pills">
@@ -227,7 +269,7 @@ export function WorkPage() {
                 <a
                   key={entry.provider}
                   className="work-link"
-                  href={elsewhere(entry.provider, entry.id)}
+                  href={elsewhere(entry.provider, entry.id, work.kind)}
                   target="_blank"
                   rel="noreferrer noopener"
                 >
@@ -571,5 +613,92 @@ function Fact({
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
+  );
+}
+
+/**
+ * What hangs under this one: the seasons of a series, the episodes of a season.
+ *
+ * Seasons are cards, because a season is chosen by its poster the way a film
+ * is. Episodes are rows, because an episode is chosen by its number and its
+ * name and there are twenty four of them.
+ */
+function WhatHangsUnder({ work }: { work: Work }) {
+  const { t } = useSettings();
+  const seasons = work.kind === "series";
+
+  if (work.children.length === 0) {
+    return (
+      <p className="notice">{t(seasons ? "work.seasons_none" : "work.episodes_none")}</p>
+    );
+  }
+
+  return (
+    <section className="work-children">
+      <h2 className="work-section">{t(seasons ? "work.seasons" : "work.episodes")}</h2>
+      {seasons ? (
+        <div className="season-grid">
+          {work.children.map((child) => (
+            <SeasonCard key={child.id} child={child} />
+          ))}
+        </div>
+      ) : (
+        <ol className="episode-list">
+          {work.children.map((child) => (
+            <EpisodeRow key={child.id} child={child} />
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function SeasonCard({ child }: { child: Child }) {
+  const { t } = useSettings();
+  const poster = pictureSet(child.poster);
+
+  return (
+    <Link
+      to={`/work/${child.id}`}
+      className="season-card"
+      style={{ ["--card-color" as string]: child.color ?? "var(--surface)" }}
+    >
+      <div className="season-poster">
+        {poster ? (
+          <img src={poster.src} srcSet={poster.srcSet} sizes="200px" alt="" />
+        ) : (
+          <div className="season-poster-empty" aria-hidden="true">
+            {child.number ?? ""}
+          </div>
+        )}
+      </div>
+      <span className="season-name">{numberOfOne(child.kind, child.number, t)}</span>
+      {child.title && <span className="season-title">{child.title}</span>}
+      <span className="season-count">
+        {howMany(child.child_count, "work.episode_count", t)}
+      </span>
+    </Link>
+  );
+}
+
+function EpisodeRow({ child }: { child: Child }) {
+  const { t } = useSettings();
+
+  return (
+    <li className="episode">
+      <Link to={`/work/${child.id}`} className="episode-link">
+        <span className="episode-number">{child.number ?? ""}</span>
+        <span className="episode-name">
+          {child.title ?? numberOfOne(child.kind, child.number, t)}
+        </span>
+        <span className="episode-length">
+          {!child.playable
+            ? t("work.not_on_disk")
+            : child.runtime_minutes
+              ? t("work.minutes", { count: child.runtime_minutes })
+              : ""}
+        </span>
+      </Link>
+    </li>
   );
 }

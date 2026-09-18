@@ -1828,3 +1828,156 @@
 .journal-debug .journal-said {
   color: var(--text-faint);
 }
+
+/* ---------------------------------------------------------------------------
+   A series and its seasons, a season and its episodes.
+
+   Seasons are cards because a season is chosen by its picture, the way a film
+   is. Episodes are rows because an episode is chosen by its number and its
+   name, and there are twenty four of them under one season.
+   --------------------------------------------------------------------------- */
+
+.work-ancestry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin: 0 0 var(--gap-tight);
+  font-size: 14px;
+}
+
+.work-ancestor {
+  color: var(--text-soft);
+  text-decoration: none;
+}
+
+.work-ancestor:hover,
+.work-ancestor:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* The mark between two steps of the way back, drawn rather than written, so
+   no language has to carry a separator. */
+.work-ancestor + .work-ancestor::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: var(--gap-tight);
+  border-top: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.work-children {
+  margin: var(--gap-wide) 0 0;
+}
+
+.work-section {
+  margin: 0 0 var(--gap);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.season-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--gap-wide) var(--gap);
+}
+
+.season-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.season-poster {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--card-color);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--calm) var(--ease), box-shadow var(--calm) var(--ease);
+}
+
+.season-card:hover .season-poster,
+.season-card:focus-visible .season-poster {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: var(--shadow-raised);
+}
+
+.season-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.season-poster-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text) 40%, transparent);
+}
+
+.season-name {
+  margin-top: 6px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.season-title,
+.season-count {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.episode-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.episode-link {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: baseline;
+  gap: var(--gap);
+  padding: var(--gap-tight) var(--gap);
+  border-radius: var(--radius-control);
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--quick) var(--ease);
+}
+
+.episode-link:hover,
+.episode-link:focus-visible {
+  background: color-mix(in srgb, var(--surface-raised) 85%, transparent);
+}
+
+.episode-number {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.episode-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.episode-length {
+  color: var(--text-faint);
+  font-size: 13px;
+  white-space: nowrap;
+}
