@@ -1269,6 +1269,9 @@ name = "melyxar-sound"
 version = "0.1.0"
 dependencies = [
  "melyxar-core",
+ "melyxar-ffmpeg",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
