@@ -19,7 +19,10 @@
 //!
 //! That is why the name is read first and the folder only ever confirms or
 //! fills in. Reading the folder first works beautifully on a tidy collection
-//! and collapses on the other three.
+//! and collapses on the other three. The one exception is what a season folder
+//! says: it is the single mark that tells a tidy collection apart from the
+//! others, so where there is one, the folder holding it names the series and
+//! groups everything under it, whatever each file calls itself.
 
 use std::collections::BTreeSet;
 
@@ -131,6 +134,44 @@ fn the_series<'a>(words: &'a [&'a str], current_year: i32) -> (&'a [&'a str], Op
         Some(year) => (rest, Some(year)),
         None => (words, None),
     }
+}
+
+/// A series as something naming it gave it: a folder, or a file name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamedSeries {
+    pub title: String,
+    /// The year written next to the name, when one was.
+    pub year: Option<i32>,
+}
+
+/// Reads a folder name as the name of a series, or says it names none.
+///
+/// Read exactly as a file name is read, because a folder is named the way a
+/// file is: separators of every shape, a year at the end, and the technical
+/// words a release sticks on. A folder carrying an episode marker names one
+/// episode rather than a series, so its name stops at the marker, the same way
+/// a file name does.
+///
+/// Answers nothing for a season folder, which never names anything, and
+/// nothing for a name that has no words left once all that is taken off.
+pub fn series_of_folder(
+    folder: &str,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<NamedSeries> {
+    if season_of_folder(folder).is_some() {
+        return None;
+    }
+    naming::with_the_words_of_a_folder(folder, current_year, signs, |words| {
+        let named = match find_the_marker(words) {
+            Some(marker) => &words[..marker.at],
+            None => words,
+        };
+        let named = &named[..naming::first_technical_tag(named, 1).unwrap_or(named.len())];
+        let (named, year) = the_series(named, current_year);
+        let title = naming::title_of(named, signs.marks());
+        (!title.is_empty()).then_some(NamedSeries { title, year })
+    })
 }
 
 /// The season a folder says it holds.
@@ -435,13 +476,27 @@ fn a_season_alone(word: &str) -> Option<Mark> {
 /// The second half of a file holding several episodes, if it holds several.
 ///
 /// `S01E01E02`, `S01E01-E02` and `S01E01-02` all say the same thing. Nothing
-/// at all says the file holds the one episode. Anything else means the word
-/// was never a marker, so it is refused whole rather than read up to the part
-/// that stopped making sense.
+/// at all says the file holds the one episode. Anything carrying another digit
+/// means the word was never a marker, so it is refused whole rather than read
+/// up to the part that stopped making sense.
 fn a_range_ending(rest: &str, first: i32) -> Option<i32> {
     if rest.is_empty() {
         return Some(first);
     }
+    if let Some(last) = a_second_number(rest, first) {
+        return Some(last);
+    }
+    // A letter left stuck on the end of the marker is a slip of somebody's
+    // keyboard and not a number: `S10E04n` is still the fourth episode of the
+    // tenth season, and refusing the whole marker over it left that one file
+    // of a season of twenty four belonging to no season at all. Anything
+    // carrying another digit is still refused: a number nobody can explain is
+    // exactly what must never be guessed at.
+    rest.chars().all(char::is_alphabetic).then_some(first)
+}
+
+/// The second number of a file holding several episodes.
+fn a_second_number(rest: &str, first: i32) -> Option<i32> {
     let rest = rest.strip_prefix('-').unwrap_or(rest);
     let rest = rest.strip_prefix('e').unwrap_or(rest);
     let (last, rest) = digits_at(rest)?;
@@ -562,6 +617,21 @@ mod tests {
         assert!(!read("Distant Signal S01E01.mkv")
             .expect("read")
             .holds_several());
+    }
+
+    #[test]
+    fn a_letter_stuck_on_the_end_of_the_marker_is_not_a_number() {
+        // Seen on a real collection: one file of a season of twenty four,
+        // named with a letter left over. Refusing the marker over it filed
+        // that episode under no season at all, which is the one thing worse
+        // than filing it wrongly.
+        assert_eq!(
+            said("Distant Signal_S10E04n.mkv"),
+            ("Distant Signal".to_string(), Some(10), 4, 4, None)
+        );
+        // What carries another number is still refused: a number nobody can
+        // explain is what must never be guessed at.
+        assert!(read("Distant Signal S01E02x264.mkv").is_none());
     }
 
     #[test]
@@ -775,6 +845,57 @@ mod tests {
             "",
         ] {
             assert_eq!(season_of_folder(folder), None, "{folder}");
+        }
+    }
+
+    /// Reads a folder the way a library that knows nothing about itself would.
+    fn folder(name: &str) -> Option<(String, Option<i32>)> {
+        series_of_folder(name, THIS_YEAR, &LibrarySigns::default())
+            .map(|named| (named.title, named.year))
+    }
+
+    #[test]
+    fn a_folder_of_a_series_is_read_as_a_name_is_read() {
+        for (name, title) in [
+            ("Distant Signal", "Distant Signal"),
+            ("Distant.Signal", "Distant Signal"),
+            ("Distant_Signal", "Distant Signal"),
+            // What looks like an extension at the end of a file name is the
+            // end of the title at the end of a folder's.
+            ("Mr.Vane", "Mr Vane"),
+            // The technical words a release sticks on the end of everything.
+            ("Distant Signal S01-S03 MULTi 1080p", "Distant Signal"),
+        ] {
+            assert_eq!(folder(name), Some((title.to_string(), None)), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_folder_gives_up_the_year_it_carries() {
+        for name in ["Distant Signal 2019", "Distant Signal (2019)"] {
+            assert_eq!(folder(name), Some(("Distant Signal".into(), Some(2019))));
+        }
+        // A series really can be called by a number that reads like a year,
+        // and a name of one word is never the year of something else.
+        assert_eq!(folder("1923"), Some(("1923".into(), None)));
+    }
+
+    #[test]
+    fn a_folder_holding_one_episode_names_the_series_and_not_the_episode() {
+        // What a release puts around a single file: the folder carries the
+        // whole name of the file inside it, marker and all.
+        assert_eq!(
+            folder("Distant.Signal.S01E07.MULTi.2160p.WEB.H265-TEAM"),
+            Some(("Distant Signal".into(), None))
+        );
+    }
+
+    #[test]
+    fn a_folder_that_names_no_series_names_nothing() {
+        // A season folder says which season it holds and never which series,
+        // and a name with nothing left in it names nothing at all.
+        for name in ["Saison 1", "Season 01", "Specials", "S02", ""] {
+            assert_eq!(folder(name), None, "{name}");
         }
     }
 }
