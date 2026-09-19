@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::media::{Chapter, Track};
-use melyxar_core::privacy::MediaName;
+use melyxar_core::media_log::file_name_of;
 use melyxar_core::segments::MediaSegment;
 use melyxar_core::thumbnails::Thumbnails;
 use melyxar_core::time::{Millis, Timestamp};
@@ -270,7 +270,7 @@ pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> R
     // answer used to be somewhere between a process listing and a guess.
     let shape = picture_shape(&tracks);
     tracing::info!(
-        file = %MediaName::of_file(&source.path),
+        file = %file_name_of(&source.path),
         method = decision.method.as_str(),
         video = ?decision.video,
         audio = ?decision.audio,

@@ -20,7 +20,6 @@ use std::time::{Duration, Instant};
 
 use melyxar_core::id::JobId;
 use melyxar_core::job::{Job, JobKind, JobPriority, JobState, JobStep};
-use melyxar_core::privacy::MediaName;
 use melyxar_database::Database;
 use tokio::task::{JoinHandle, JoinSet};
 
@@ -92,7 +91,7 @@ impl JobHandle {
         // whatever else the machine was doing at the same moment, and the
         // screen alone keeps no history once the next file replaces it.
         if let Some(name) = what {
-            tracing::debug!(job = %self.id, file = %MediaName::new(name), "a job moved on to a file");
+            tracing::debug!(job = %self.id, file = %name, "a job moved on to a file");
         }
         if let Err(error) = self.database.set_job_doing(self.id, what).await {
             tracing::warn!(job = %self.id, error = %error, "what a job is on could not be recorded");

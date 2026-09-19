@@ -202,16 +202,12 @@ impl Default for TranscodeConfig {
 pub struct LoggingConfig {
     /// Verbosity, using the usual filter syntax.
     pub level: String,
-    /// Show media names in full. Off by default, because logs get shared.
-    /// Turn it on only while diagnosing a scanning problem.
-    pub reveal_media_names: bool,
 }
 
 impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
             level: "info".to_string(),
-            reveal_media_names: false,
         }
     }
 }
@@ -441,7 +437,6 @@ mod tests {
         .expect("valid configuration");
 
         assert_eq!(config.logging.level, "debug");
-        assert!(!config.logging.reveal_media_names);
         assert_eq!(config.limits.concurrent_probes, 4);
         assert_eq!(config.limits.max_transcoding_sessions, 2);
     }
@@ -471,7 +466,6 @@ mod tests {
         assert_eq!(config.libraries[0].roots.len(), 2);
         // Defaults applied without being spelled out.
         assert_eq!(config.directories.data, PathBuf::from("/var/lib/melyxar"));
-        assert!(!config.logging.reveal_media_names);
         assert_eq!(config.limits.concurrent_probes, 2);
     }
 

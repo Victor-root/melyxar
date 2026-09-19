@@ -15,7 +15,6 @@ use std::sync::Arc;
 use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
 use melyxar_core::library::Library;
-use melyxar_core::privacy::MediaName;
 use melyxar_core::refresh::RefreshMode;
 use melyxar_core::work::{IdentificationNote, Work};
 use melyxar_database::metadata::{
@@ -242,7 +241,7 @@ async fn fill_in_the_synopsis(
     {
         Ok(elsewhere) => {
             tracing::debug!(
-                work = %MediaName::new(&details.title),
+                work = %details.title,
                 "no synopsis in the language asked for; the original one is used"
             );
             Details {
@@ -396,7 +395,7 @@ where
                 // that title is what the line has to say.
                 Ok(WhatCameBack::NothingAtAll) => {
                     tracing::info!(
-                        work = %MediaName::new(&work.title),
+                        work = %work.title,
                         year = work.release_year,
                         provider = provider.name(),
                         "no film came back under this title; the name on disk is most likely not the name of the film"
@@ -410,11 +409,11 @@ where
                 Ok(WhatCameBack::NoneCarriedTheName { offered, nearest }) => {
                     match nearest {
                         Some(miss) => tracing::info!(
-                            work = %MediaName::new(&work.title),
+                            work = %work.title,
                             year = work.release_year,
-                            asked = %MediaName::new(&miss.asked),
+                            asked = %miss.asked,
                             offered,
-                            nearest = %MediaName::new(&miss.title),
+                            nearest = %miss.title,
                             nearest_year = miss.release_year,
                             closeness = format!("{:.2}", miss.closeness),
                             needed = format!("{CLOSE_ENOUGH:.2}"),
@@ -422,7 +421,7 @@ where
                             "films came back but not one carries this name; the name on disk and the name of the film are not quite the same"
                         ),
                         None => tracing::info!(
-                            work = %MediaName::new(&work.title),
+                            work = %work.title,
                             year = work.release_year,
                             offered,
                             provider = provider.name(),
@@ -463,7 +462,7 @@ where
     }
 
     tracing::debug!(
-        work = %MediaName::new(&details.title),
+        work = %details.title,
         provider = provider.name(),
         "work identified"
     );
@@ -640,7 +639,7 @@ fn postpone(work: &Work, error: &ProviderError) -> Outcome {
             retry_after_seconds,
         } => {
             tracing::warn!(
-                work = %MediaName::new(&work.title),
+                work = %work.title,
                 retry_after_seconds,
                 "the provider asked to be left alone; this work stays on the waiting list"
             );
@@ -648,7 +647,7 @@ fn postpone(work: &Work, error: &ProviderError) -> Outcome {
         }
         error if error.is_worth_retrying() => {
             tracing::warn!(
-                work = %MediaName::new(&work.title),
+                work = %work.title,
                 reason = %error,
                 "the provider could not be reached; this work stays on the waiting list"
             );
@@ -656,7 +655,7 @@ fn postpone(work: &Work, error: &ProviderError) -> Outcome {
         }
         error => {
             tracing::warn!(
-                work = %MediaName::new(&work.title),
+                work = %work.title,
                 reason = %error,
                 "the provider answered something that could not be read"
             );

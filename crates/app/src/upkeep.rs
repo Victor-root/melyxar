@@ -26,7 +26,7 @@
 use melyxar_core::id::{LibraryId, MediaSourceId};
 use melyxar_core::job::{JobKind, JobPriority, JobStep};
 use melyxar_core::library::Library;
-use melyxar_core::privacy::MediaName;
+use melyxar_core::media_log::file_name_of as name_of_file;
 use melyxar_database::Database;
 use melyxar_jobs::JobHandle;
 
@@ -787,13 +787,7 @@ pub(crate) async fn make_the_thumbnails_of(
 /// on which disk is the report's business.
 async fn file_name_of(database: &Database, source_id: MediaSourceId) -> Option<String> {
     let source = database.playable_source(source_id).await.ok()??;
-    Some(
-        source
-            .path
-            .file_name()
-            .and_then(|name| name.to_str())?
-            .to_string(),
-    )
+    Some(name_of_file(&source.path).to_string()).filter(|name| !name.is_empty())
 }
 
 /// How one film gave up where its picture can be started.
@@ -859,7 +853,7 @@ async fn read_one_film_for_its_key_frames(
         // cuts.
         Ok(_) => {
             tracing::warn!(
-                file = %MediaName::of_file(&source.path),
+                file = %name_of_file(&source.path),
                 "this film says nowhere its picture can be started, so it is cut on the usual \
                  grid from now on and never read for this again"
             );
@@ -873,7 +867,7 @@ async fn read_one_film_for_its_key_frames(
         }
         Err(error) => {
             tracing::warn!(
-                file = %MediaName::of_file(&source.path),
+                file = %name_of_file(&source.path),
                 error = %error,
                 "this film could not be read for where its picture can be started"
             );

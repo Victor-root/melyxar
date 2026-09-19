@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use melyxar_core::id::MediaSourceId;
 use melyxar_core::media::TrackKind;
-use melyxar_core::privacy::MediaName;
+use melyxar_core::media_log::file_name_of;
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::Millis;
 
@@ -184,7 +184,7 @@ pub async fn make_for(state: &AppState, source_id: MediaSourceId) -> Result<Thum
         _ => false,
     });
 
-    let name = MediaName::of_file(&source.path);
+    let name = file_name_of(&source.path);
     let aside = while_it_is_read(state, source_id);
     let _ = tokio::fs::remove_dir_all(&aside).await;
     tokio::fs::create_dir_all(&aside)

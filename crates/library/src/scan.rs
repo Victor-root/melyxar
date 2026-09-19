@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 
 use melyxar_core::library::RootAccess;
-use melyxar_core::privacy::MediaPath;
+use melyxar_core::media_log::MediaPath;
 use melyxar_core::time::Timestamp;
 
 use crate::access;

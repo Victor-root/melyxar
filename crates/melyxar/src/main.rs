@@ -163,16 +163,9 @@ fn install_logging(config: &Config) {
         )
         .init();
 
-    melyxar_core::privacy::set_reveal_media_names(config.logging.reveal_media_names);
     // The first line of every log says which build wrote it. Without it, a
     // journal and a question about a fix cannot be put together.
     tracing::info!(build = melyxar_core::BUILD, "melyxar starting");
-
-    if config.logging.reveal_media_names {
-        tracing::warn!(
-            "media names appear in full in the logs; turn this off once the problem is found"
-        );
-    }
 }
 
 async fn serve(config: Config) -> anyhow::Result<()> {

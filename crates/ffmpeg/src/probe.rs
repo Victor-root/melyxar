@@ -360,7 +360,7 @@ pub async fn key_frames(analyser: &Path, media: &Path) -> Result<Vec<Millis>> {
     if found.is_empty() {
         let seen = what_was_seen(&listing);
         tracing::warn!(
-            file = %melyxar_core::privacy::MediaName::of_file(media),
+            file = %melyxar_core::media_log::file_name_of(media),
             packets = seen.packets,
             standing_alone = seen.standing_alone,
             standing_alone_with_no_time = seen.standing_alone_with_no_time,

@@ -24,10 +24,6 @@ pub const DEFAULT_ACCOUNT_NAME: &str = "admin";
 pub async fn bring_up(config: Config) -> Result<AppState> {
     prepare_directories(&config)?;
 
-    // Log redaction is switched on before anything is logged, so a media name
-    // cannot escape during start-up.
-    melyxar_core::privacy::set_reveal_media_names(config.logging.reveal_media_names);
-
     let database = Database::open(&config.directories.database_file()).await?;
 
     let (tools, capabilities) = detect_media_tools(&config).await;

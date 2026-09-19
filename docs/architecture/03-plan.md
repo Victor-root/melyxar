@@ -27,7 +27,7 @@ Vérifié dans l'environnement de travail : la compilation passe, `cargo clippy`
   - **journal d'activité**, indexé par date et purgeable ;
   - **appareils connectés** avec leur jeton et leur dernière activité.
 - Répertoire des fichiers envoyés par l'administrateur, dans les données et non dans le cache.
-- Journalisation structurée avec temps par requête, censure des noms de médias.
+- Journalisation structurée avec temps par requête.
 - **État d'accès de chaque racine** établi par un test réel : introuvable, illisible, lecture seule, lecture et écriture. Calculé au démarrage et à la demande, jamais sur le chemin de lecture.
 - Commande `melyxar doctor` : version de FFmpeg et accélérations, accès à `/dev/dri`, état d'accès de chaque racine, mode WAL, tailles.
 - **Script shell d'installation et de mise à jour**, aux conventions du dépôt `Proxmox-Tools` du mainteneur (bilingue intégré, couleurs 256 niveaux désactivables, bannière, indicateur animé, encadrés, menu numéroté, sauvegarde avant modification, aucune dépendance) : vérification du système, outils, utilisateur système et répertoires, récupération et compilation en priorité basse, configuration, service, migrations, redémarrage, adresse à ouvrir. Sert aussi à la mise à jour et à la désinstallation.
