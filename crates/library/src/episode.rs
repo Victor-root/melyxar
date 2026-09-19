@@ -994,6 +994,24 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_saying_it_holds_the_whole_series_still_names_the_series() {
+        // The shape a whole series arrives in, where the word saying so is
+        // written with its accent. Left on the end it is handed to a provider
+        // as part of the name, and the provider answers nothing at all.
+        for name in [
+            "Distant Signal Int\u{e9}grale 1080p x265 BluRay Multi Truefrench",
+            "Distant Signal Integrale 1080p x265 BluRay Multi Truefrench",
+            "Distant.Signal.iNT\u{c9}GRALE.MULTi.1080p",
+        ] {
+            assert_eq!(
+                folder(name),
+                Some(("Distant Signal".into(), None)),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
     fn a_folder_that_names_no_series_names_nothing() {
         // A season folder says which season it holds and never which series,
         // and a name with nothing left in it names nothing at all.
