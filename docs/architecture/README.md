@@ -74,7 +74,7 @@ Ces décisions ont été prises après discussion et ne sont pas à rediscuter s
 | Licence | GNU AGPL v3, comme les autres dépôts du mainteneur | Cohérence avec `Proxmox-Tools`. |
 | Utilisateurs | Un utilisateur par défaut et un jeton de session dès la V0.1 | Toute donnée de progression est rattachée à un utilisateur dès le départ. |
 | Réactivité | Rien de lourd sur le chemin de lecture : tout est précalculé à l'écriture | Exigence forte, voir le document 02. |
-| Compilation | **Directement dans le LXC de production**, via une commande unique de mise à jour (récupérer, compiler en priorité basse, migrer, redémarrer) | Les PC du mainteneur sont sous Windows ; aucun transfert de fichier. |
+| Compilation | **Directement dans le LXC de production**, via une commande unique de mise à jour (récupérer, compiler, migrer, redémarrer). Compile à la priorité la plus haute tant que le projet est en plein développement, ce qui devra repasser en priorité basse une fois la collection en usage réel au quotidien | Les PC du mainteneur sont sous Windows ; aucun transfert de fichier. En développement, une reconstruction rapide compte plus qu'une lecture en cours, qui n'arrive presque jamais pendant ces sessions. |
 | Ressources du LXC | 100 Go de disque, 16 Go de mémoire, 12 threads (monter à 16 si les autres services de l'hôte le permettent) | Le 16 Go et les threads servent surtout à la compilation ; le serveur lui-même est léger. |
 | Matériel de transcodage | Intel Arc A380 passée au LXC via `/dev/dri`, distribution FFmpeg de Jellyfin recommandée | Décodage, encodage H.264, HEVC, AV1 et tonemapping HDR sur la carte. |
 | Accès | Local en `ip:2100` pour commencer, reverse proxy nginx (autre LXC) et HTTPS plus tard | Voir la ligne « Port » pour le choix du numéro. |
