@@ -195,6 +195,11 @@ pub struct PlayableExtraVideo {
 
 impl Database {
     /// Creates a work. Nothing is looked up yet, which is what `pending` says.
+    ///
+    /// The name it is given is also written down as the name it was filed
+    /// under, because that is what it is: what the disk said. A provider will
+    /// rename it later, and the scan has to go on finding it under the name
+    /// the folder still carries.
     pub async fn create_work(
         &self,
         library_id: LibraryId,
@@ -203,15 +208,19 @@ impl Database {
         sort_title: &str,
         release_year: Option<i32>,
     ) -> Result<Work> {
-        insert_work(
-            self.writer(),
+        let mut transaction = self.begin().await?;
+        let work = insert_work(
+            &mut *transaction,
             Placed::on_its_own(library_id),
             kind,
             title,
             sort_title,
             release_year,
         )
-        .await
+        .await?;
+        remember_filing_name(&mut *transaction, work.id, sort_title, release_year).await?;
+        transaction.commit().await?;
+        Ok(work)
     }
 
     /// Writes a work that hangs under another: a season under its series, an
@@ -301,6 +310,7 @@ impl Database {
             release_year,
         )
         .await?;
+        remember_filing_name(&mut *transaction, work.id, sort_title, release_year).await?;
         sqlx::query("UPDATE media_sources SET work_id = ? WHERE id = ?")
             .bind(work.id.to_db_string())
             .bind(source_id.to_db_string())
@@ -582,6 +592,14 @@ impl Database {
         row.map(|row| work_from_row(&row)).transpose()
     }
 
+    /// A work of this library going by that name, by the name it carries now
+    /// or by a name it was once filed under.
+    ///
+    /// The second question is the one that matters after a look-up: a provider
+    /// renames a work to its own title and fills in its year, and the folder
+    /// on the disk says neither. Asked only by the name it carries, the next
+    /// scan would write the same series down a second time, every time a file
+    /// is added to it.
     async fn work_named(
         &self,
         library_id: LibraryId,
@@ -589,7 +607,7 @@ impl Database {
         release_year: Option<i32>,
         kind: Option<WorkKind>,
     ) -> Result<Option<Work>> {
-        let row = sqlx::query(AssertSqlSafe(format!(
+        let carried = sqlx::query(AssertSqlSafe(format!(
             "SELECT {} FROM works
              WHERE library_id = ? AND sort_title = ?
                AND (release_year IS ? OR (release_year IS NULL AND ? IS NULL))
@@ -606,8 +624,30 @@ impl Database {
         .bind(kind.map(WorkKind::as_str))
         .fetch_optional(self.reader())
         .await?;
+        if let Some(row) = carried {
+            return work_from_row(&row).map(Some);
+        }
 
-        row.map(|row| work_from_row(&row)).transpose()
+        let filed = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM works w
+             JOIN work_filing_names f ON f.work_id = w.id
+             WHERE w.library_id = ? AND f.sort_title = ?
+               AND (f.release_year IS ? OR (f.release_year IS NULL AND ? IS NULL))
+               AND (? IS NULL OR w.kind = ?)
+             ORDER BY w.added_at
+             LIMIT 1",
+            what_a_work_is("w.")
+        )))
+        .bind(library_id.to_db_string())
+        .bind(sort_title)
+        .bind(release_year)
+        .bind(release_year)
+        .bind(kind.map(WorkKind::as_str))
+        .bind(kind.map(WorkKind::as_str))
+        .fetch_optional(self.reader())
+        .await?;
+
+        filed.map(|row| work_from_row(&row)).transpose()
     }
 
     /// Works of a library, newest first, which is the order the home page uses.
@@ -1053,6 +1093,20 @@ impl Database {
             going.push(from);
             receiving.push(into);
         }
+
+        // The name the one that goes was filed under is the one its folder still
+        // carries. Dropped here, the next file added under that folder would
+        // write the same work down again, and the two would have to be put
+        // together all over again. Only the two at the top are filed under a
+        // name of their own; a season and an episode are placed by number.
+        sqlx::query(
+            "INSERT OR IGNORE INTO work_filing_names (work_id, sort_title, release_year)
+             SELECT ?, sort_title, release_year FROM work_filing_names WHERE work_id = ?",
+        )
+        .bind(into.to_db_string())
+        .bind(from.to_db_string())
+        .execute(&mut *transaction)
+        .await?;
 
         for work in going {
             sqlx::query("DELETE FROM works WHERE id = ?")
@@ -2138,6 +2192,28 @@ impl Placed {
             ordinal: Some(ordinal),
         }
     }
+}
+
+/// Writes down a name a work was filed under, if it is not written down yet.
+pub(crate) async fn remember_filing_name<'e, E>(
+    executor: E,
+    work_id: WorkId,
+    sort_title: &str,
+    release_year: Option<i32>,
+) -> Result<()>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
+    sqlx::query(
+        "INSERT OR IGNORE INTO work_filing_names (work_id, sort_title, release_year)
+         VALUES (?, ?, ?)",
+    )
+    .bind(work_id.to_db_string())
+    .bind(sort_title)
+    .bind(release_year)
+    .execute(executor)
+    .await?;
+    Ok(())
 }
 
 /// What hangs under a work, each with the number it is ranked at.
@@ -4882,6 +4958,44 @@ mod tests {
                 .len(),
             2,
             "one episode on two disks is one episode with two files"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_name_a_series_that_goes_was_filed_under_leads_to_the_one_that_stays() {
+        // Otherwise the next file dropped in that folder writes the series
+        // down again, and the two have to be put together all over again.
+        let (database, library_id, root_id) = library().await;
+        let kept = a_series_on_disk(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1])],
+        )
+        .await;
+        let gone = a_series_on_disk(
+            &database,
+            library_id,
+            root_id,
+            "Signal Lointain",
+            &[(1, &[1])],
+        )
+        .await;
+
+        database
+            .merge_work_into(gone, kept)
+            .await
+            .expect("the two are one series");
+
+        assert_eq!(
+            database
+                .series_by_name(library_id, "signal lointain", Some(2019))
+                .await
+                .expect("read")
+                .expect("the folder of the one that went leads to the one that stayed")
+                .id,
+            kept
         );
     }
 
