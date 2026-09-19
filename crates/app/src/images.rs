@@ -83,17 +83,57 @@ pub async fn store_provider_images(
     work_id: WorkId,
     details: &Details,
 ) -> usize {
+    store(
+        state,
+        provider,
+        work_id,
+        details,
+        &[
+            (Kind::Poster, details.poster_path.as_deref()),
+            (Kind::Backdrop, details.backdrop_path.as_deref()),
+            (Kind::Logo, details.logo_path.as_deref()),
+        ],
+    )
+    .await
+}
+
+/// Fetches the one picture a season or an episode has.
+///
+/// A provider describes a part of a series with a picture and nothing else:
+/// there is no backdrop of a season and no title drawn for an episode. Asking
+/// for the three would not fetch anything more; it would only say, of every
+/// season and every episode of the collection, that two pictures which cannot
+/// exist did not arrive.
+pub async fn store_provider_poster(
+    state: &AppState,
+    provider: &impl MetadataProvider,
+    work_id: WorkId,
+    details: &Details,
+) -> usize {
+    store(
+        state,
+        provider,
+        work_id,
+        details,
+        &[(Kind::Poster, details.poster_path.as_deref())],
+    )
+    .await
+}
+
+async fn store(
+    state: &AppState,
+    provider: &impl MetadataProvider,
+    work_id: WorkId,
+    details: &Details,
+    wanted: &[(Kind, Option<&str>)],
+) -> usize {
     let Some(tools) = state.tools() else {
         return 0;
     };
 
     let owner_id = work_id.to_db_string();
     let mut prepared = 0;
-    for (kind, path) in [
-        (Kind::Poster, details.poster_path.as_deref()),
-        (Kind::Backdrop, details.backdrop_path.as_deref()),
-        (Kind::Logo, details.logo_path.as_deref()),
-    ] {
+    for (kind, path) in wanted.iter().copied() {
         // Said out loud rather than passed over: a film with no picture is
         // indistinguishable from one whose picture failed to arrive, and the
         // two want opposite answers.
@@ -101,7 +141,7 @@ pub async fn store_provider_images(
             tracing::info!(
                 work = %melyxar_core::privacy::MediaName::new(&details.title),
                 kind = kind.as_str(),
-                "the provider named no picture of this kind for this film"
+                "the provider named no picture of this kind for this work"
             );
             continue;
         };

@@ -293,8 +293,8 @@ where
     }
 
     tracing::info!(
-        films = waiting.len(),
-        "some films have a name and are missing something; asking again"
+        works = waiting.len(),
+        "some works have a name and are missing something; asking again"
     );
 
     handle.at_step(JobStep::FillingInWhatIsMissing).await;
@@ -602,7 +602,7 @@ fn as_details(
     }
 }
 
-/// Writes one described work down and prepares its picture.
+/// Writes one described season or episode down and prepares its picture.
 async fn write_down<P>(
     state: &AppState,
     provider: &Arc<P>,
@@ -622,7 +622,7 @@ where
         )
         .await
         .map_err(AppError::from)?;
-    crate::images::store_provider_images(state, provider.as_ref(), work_id, details).await;
+    crate::images::store_provider_poster(state, provider.as_ref(), work_id, details).await;
     Ok(())
 }
 

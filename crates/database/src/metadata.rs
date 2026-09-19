@@ -400,10 +400,17 @@ impl Database {
         Ok(incomplete)
     }
 
-    /// A film that was named and is still missing something a provider has.
+    /// A film or a series that was named and is still missing something a
+    /// provider has.
     ///
     /// Carries what to ask about and what is worth writing when the answer
     /// comes back, so that one question serves both.
+    ///
+    /// Only what can be asked about on its own. A season and an episode are
+    /// described by asking the series above them, never by name, so one of
+    /// them here is a work nobody can do anything about: it would come back at
+    /// every run, and a title image, which no provider draws for a part of a
+    /// series, would keep every one of them waiting for ever.
     pub async fn works_missing_their_metadata(
         &self,
         library_id: LibraryId,
@@ -427,6 +434,7 @@ impl Database {
              FROM works w
              JOIN work_external_ids e ON e.work_id = w.id AND e.provider = ?
              WHERE w.library_id = ?
+               AND w.kind IN ('movie', 'series')
                AND w.identification IN ('identified', 'manual')
                AND NOT EXISTS (
                    SELECT 1 FROM work_locked_fields l
@@ -1766,6 +1774,53 @@ mod tests {
                 .expect("read")
                 .is_empty(),
             "and once it has one it is left alone"
+        );
+    }
+
+    /// A season and an episode are described by asking the series above them,
+    /// so one of them in this list is a work nobody can do anything about: it
+    /// would come back at every run for a title image no provider draws for a
+    /// part of a series, which is exactly what it was doing.
+    #[tokio::test]
+    async fn a_part_of_a_series_is_never_offered_to_be_asked_about_on_its_own() {
+        let (database, work) = work_in_library().await;
+        let season = database
+            .create_child_work(
+                work.library_id,
+                work.id,
+                1,
+                WorkKind::Season,
+                "Season 1",
+                "season 1",
+            )
+            .await
+            .expect("season written");
+        let episode = database
+            .create_child_work(
+                work.library_id,
+                season.id,
+                1,
+                WorkKind::Episode,
+                "Episode 1",
+                "episode 1",
+            )
+            .await
+            .expect("episode written");
+        for identified in [work.id, season.id, episode.id] {
+            database
+                .apply_identification(identified, &found(), false)
+                .await
+                .expect("identification applied");
+        }
+
+        let waiting = database
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+            .await
+            .expect("read");
+        assert_eq!(
+            waiting.iter().map(|one| one.id).collect::<Vec<_>>(),
+            vec![work.id],
+            "only what can be asked about on its own"
         );
     }
 
