@@ -277,7 +277,7 @@ Vérifié dans un vrai navigateur contre un serveur qui tourne : les quatre rang
 - Animés : fournisseur de métadonnées adapté et numérotation propre au domaine, la numérotation absolue n'étant pas lue aujourd'hui.
 - Plusieurs fournisseurs de métadonnées : un second catalogue interrogé quand le premier ne connaît pas un film, des règles claires pour départager deux réponses, et la provenance restant visible champ par champ. Constaté en conditions réelles : un téléfilm rattaché à une série existe chez le fournisseur actuel du côté des séries et pas du côté des films, donc aucune recherche de film ne le trouvera jamais, alors qu'un catalogue construit sur les données IMDb le classe comme film. Les autres serveurs y arrivent parce qu'ils ont un second catalogue sous la main, pas parce que leur lecture des noms est meilleure.
 - Bibliothèque musicale : modèle artiste, album, morceau, fournisseur MusicBrainz, navigation dédiée, listes de lecture.
-- Normalisation audio : mesure de sonie au scan, application au gain à la lecture, modes morceau et album, compression de plage dynamique pour les films.
+- Normalisation audio : c'est la vraie réponse au niveau sonore, et le gain de repliage appliqué aujourd'hui à toutes les pistes tient la place en attendant. Mesure de sonie au scan, application au gain à la lecture, modes morceau et album, compression de plage dynamique pour les films.
 - Plusieurs utilisateurs avec écran de connexion complet et gestion des droits.
 - Clients natifs : un projet Android, base commune (API, session, cache, lecteur), interface télévision d'abord, interface téléphone ensuite.
 - Émissions : type de bibliothèque à part entière (documentaires et programmes de télévision), réutilisant le modèle série, saison, épisode.

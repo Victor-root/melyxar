@@ -216,9 +216,27 @@ pub struct AudioEncode {
     pub bitrate: Option<i64>,
     /// Number of output channels. Two for a browser.
     pub channels: Option<i32>,
+    /// How many channels the track being rebuilt actually carries, when it is
+    /// known. Nothing is folded that is not wider than what comes out.
+    pub source_channels: Option<i32>,
     /// How multichannel audio is folded down.
     pub downmix: DownmixMethod,
-    /// Gain applied after folding, because folding lowers the perceived level.
+    /// Gain applied to a soundtrack on its way to a browser.
+    ///
+    /// It was put here to make up for the fold, which lowers the perceived
+    /// level, and it does that. It also does something else, which is why it
+    /// is applied to a track that was never folded: a film is mastered quiet,
+    /// with its room left for explosions rather than for dialogue, and handed
+    /// to a browser untouched it plays far below anything else that machine
+    /// plays. Reported of two other servers, which lift a folded soundtrack
+    /// and leave a stereo one alone: on the same television at the same
+    /// setting, their stereo tracks are almost inaudible beside their folded
+    /// ones.
+    ///
+    /// Measuring each film and levelling them against each other is the real
+    /// answer and is planned. Until then this is what keeps a soundtrack at a
+    /// level somebody can listen to, and taking it off a stereo track would
+    /// reproduce exactly the complaint above.
     pub downmix_gain: f64,
     /// Gain applied to even out loudness between files, from the measurement
     /// taken during the background pass.
@@ -239,6 +257,7 @@ impl AudioEncode {
             encoder: encoder.into(),
             bitrate: Some(192_000),
             channels: Some(2),
+            source_channels: None,
             downmix: DownmixMethod::BroadcastStandard,
             downmix_gain: melyxar_core::user::DEFAULT_DOWNMIX_GAIN,
             loudness_gain_db: None,
@@ -799,7 +818,7 @@ fn audio_filter_chain(encode: &AudioEncode) -> Option<String> {
         }
     }
 
-    if let Some(matrix) = downmix_matrix(encode.downmix, encode.channels) {
+    if let Some(matrix) = downmix_matrix(encode.downmix, encode.source_channels, encode.channels) {
         stages.push(matrix);
     }
 
@@ -820,9 +839,24 @@ fn audio_filter_chain(encode: &AudioEncode) -> Option<String> {
 ///
 /// Each method is a named set of gains rather than a string copied around, so
 /// the choice is one value in the model and one place in the builder.
-fn downmix_matrix(method: DownmixMethod, channels: Option<i32>) -> Option<String> {
+fn downmix_matrix(
+    method: DownmixMethod,
+    source_channels: Option<i32>,
+    channels: Option<i32>,
+) -> Option<String> {
     // Folding only applies when going down to two channels.
     if channels != Some(2) {
+        return None;
+    }
+    // And only when there is something to fold. A track already in two
+    // channels has no centre and no rears, so the matrix names channels that
+    // are not there: what it produces is the track it was given, unchanged,
+    // through a filter that had no work to do. Read in the maintainer's
+    // journal, asked of a stereo track word for word. A track whose width
+    // nobody could read is folded as before, because a fold that was not
+    // needed costs nothing and a fold that was missed is a soundtrack with no
+    // dialogue in it.
+    if source_channels.is_some_and(|carried| carried <= 2) {
         return None;
     }
     let coefficients = match method {
@@ -1320,7 +1354,7 @@ mod tests {
             channels: Some(6),
             ..AudioEncode::browser_stereo("aac")
         };
-        assert!(downmix_matrix(encode.downmix, encode.channels).is_none());
+        assert!(downmix_matrix(encode.downmix, encode.source_channels, encode.channels).is_none());
     }
 
     #[test]
@@ -1360,6 +1394,52 @@ mod tests {
         let args = arguments(command);
         let at = args.iter().position(|value| value == "-af")?;
         args.get(at + 1).cloned()
+    }
+
+    #[test]
+    fn a_track_already_in_two_channels_is_not_folded_and_is_still_lifted() {
+        // The matrix names a centre and two rears a stereo track does not
+        // have, so it hands back what it was given: work with nothing to do.
+        // The lift stays, because it is what keeps a film at a level anybody
+        // can listen to, whatever its track was made of.
+        let mut encode = AudioEncode::browser_stereo("aac");
+        encode.source_channels = Some(2);
+        let filters = sound_filters(
+            &segments_of(Input::new("/media/film.mkv")).with_audio(AudioOutput::Encode(encode)),
+        )
+        .expect("the sound is filtered");
+
+        assert!(
+            !filters.contains("pan="),
+            "there is nothing to fold in two channels: {filters}"
+        );
+        assert!(
+            filters.contains(&format!(
+                "volume={:.2}",
+                melyxar_core::user::DEFAULT_DOWNMIX_GAIN
+            )),
+            "the lift is what a stereo track would be far too quiet without: {filters}"
+        );
+    }
+
+    #[test]
+    fn a_track_wider_than_two_channels_is_folded_as_before() {
+        let mut encode = AudioEncode::browser_stereo("aac");
+        encode.source_channels = Some(6);
+        let filters = sound_filters(
+            &segments_of(Input::new("/media/film.mkv")).with_audio(AudioOutput::Encode(encode)),
+        )
+        .expect("the sound is filtered");
+        assert!(filters.contains("pan=stereo|"), "{filters}");
+    }
+
+    #[test]
+    fn a_track_whose_width_nobody_read_is_folded_rather_than_left_alone() {
+        // A fold that was not needed costs nothing; a fold that was missed is
+        // a soundtrack with its dialogue left in a channel nobody hears.
+        let filters = sound_filters(&segments_of(Input::new("/media/film.mkv")))
+            .expect("the sound is filtered");
+        assert!(filters.contains("pan=stereo|"), "{filters}");
     }
 
     #[test]

@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
-use melyxar_core::media::{Chapter, Track};
+use melyxar_core::media::{Chapter, Track, TrackKind};
 use melyxar_core::media_log::file_name_of;
 use melyxar_core::segments::MediaSegment;
 use melyxar_core::thumbnails::Thumbnails;
@@ -819,6 +819,18 @@ fn read_by_the_processor(
     }
 }
 
+/// How many channels the soundtrack about to be rebuilt carries.
+///
+/// Nothing at all when the track cannot be found or was never described,
+/// which reads as a width nobody knows rather than as a narrow one.
+fn channels_of_the_chosen_track(plan: &PlayPlan) -> Option<i32> {
+    let chosen = plan.decision.audio_stream_index?;
+    plan.tracks.iter().find_map(|track| match &track.kind {
+        TrackKind::Audio(details) if track.stream_index == chosen => Some(details.channels),
+        _ => None,
+    })
+}
+
 /// Turns a decision into what the tool is asked to do.
 fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> Result<Recipe> {
     use melyxar_ffmpeg::command::{AudioOutput, StreamSelection, VideoOutput};
@@ -889,6 +901,9 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
             // worst of both: the cost of the work without the point of it.
             encode.downmix = plan.downmix;
             encode.downmix_gain = plan.downmix_gain;
+            // How wide the track really is, so that nothing is folded that is
+            // not wider than what comes out of it.
+            encode.source_channels = channels_of_the_chosen_track(plan);
             AudioOutput::Encode(encode)
         }
     };
