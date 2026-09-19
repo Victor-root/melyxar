@@ -49,6 +49,13 @@ pub fn tag_of(module: &str) -> &'static str {
         // somebody asks is "why has my bar no pictures", and the answer is in
         // these lines rather than in the thousands a scan writes around them.
         ("melyxar_app::upkeep", "upkeep"),
+        // Finding the opening and closing titles of a season by listening to
+        // its episodes. A tag of its own rather than a corner of `upkeep`,
+        // because it is the one reading whose answer is a judgement about the
+        // films rather than a number: what it decided, for which season, and
+        // on how much agreement is exactly what somebody sends over when a
+        // skip button turns up in the wrong place.
+        ("melyxar_app::openings", "openings"),
         ("melyxar_app::identify", "identify"),
         ("melyxar_app::subtitles", "subtitles"),
         ("melyxar_app::playback", "playback"),
@@ -64,6 +71,9 @@ pub fn tag_of(module: &str) -> &'static str {
         ("melyxar_streaming", "streaming"),
         ("melyxar_ffmpeg::hardware", "card"),
         ("melyxar_ffmpeg::subtitles", "subtitles"),
+        // Reading the sound of an episode belongs with what it was read for,
+        // the same way pulling a subtitle out belongs with subtitles.
+        ("melyxar_ffmpeg::sound", "openings"),
         ("melyxar_ffmpeg", "ffmpeg"),
         ("melyxar_playback", "playback"),
         ("melyxar_library", "library"),
@@ -234,6 +244,12 @@ mod tests {
         assert_eq!(tag_of("melyxar_app::playback"), "playback");
         assert_eq!(tag_of("melyxar_app::startup"), "startup");
         assert_eq!(tag_of("melyxar_app::upkeep"), "upkeep");
+        assert_eq!(tag_of("melyxar_app::openings"), "openings");
+        assert_eq!(
+            tag_of("melyxar_ffmpeg::sound"),
+            "openings",
+            "reading the sound of an episode belongs with what it was read for"
+        );
         assert_eq!(tag_of("melyxar_ffmpeg::hardware"), "card");
         assert_eq!(tag_of("melyxar_ffmpeg::command"), "ffmpeg");
         assert_eq!(tag_of("melyxar_server::playback"), "playback");
