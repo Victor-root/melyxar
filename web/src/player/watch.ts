@@ -279,6 +279,12 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
   let frozenSaidSoAlready = false;
   let frozenPictures = picturesShown(element);
   let frozenClock = element.currentTime;
+  /* A browser draws nothing on a page nobody is looking at, so a film playing
+     behind another window counts no new pictures while its clock runs on:
+     the very shape of a standing still picture, and none of its substance.
+     Carried with the fault rather than used to swallow it, because a line
+     that quietly disappears under a rule is a line nobody can check. */
+  let hiddenWhileFrozen = false;
 
   /* Pictures dropped without ever costing the clock a whole second, which is
      what the two checks above are blind to: a decoder shedding pictures to
@@ -304,6 +310,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
       stoppedSaidSoAlready = false;
       frozenSince = null;
       frozenSaidSoAlready = false;
+      hiddenWhileFrozen = false;
       stillAt = at;
       frozenClock = at;
       frozenPictures = shown;
@@ -365,6 +372,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
     // The clock running on with nothing new on the screen. Counted rather than
     // watched: from the outside this and the stop above are one complaint.
     if (at !== frozenClock && shown === frozenPictures) {
+      hiddenWhileFrozen = hiddenWhileFrozen || document.hidden;
       if (frozenSince === null) {
         frozenSince = now;
       } else if (!frozenSaidSoAlready && now - frozenSince >= SAY_SO_ANYWAY_AFTER_MS) {
@@ -377,6 +385,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
           pictures_shown: shown,
           pictures_dropped: picturesDropped(element),
           ready_state: element.readyState,
+          page_was_hidden: hiddenWhileFrozen,
           ...whatIsHeldAround(element, at),
         });
       }
@@ -390,11 +399,13 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
           pictures_shown: shown,
           pictures_dropped: picturesDropped(element),
           ready_state: element.readyState,
+          page_was_hidden: hiddenWhileFrozen,
           ...whatIsHeldAround(element, frozenClock),
         });
       }
       frozenSince = null;
       frozenSaidSoAlready = false;
+      hiddenWhileFrozen = false;
     }
     frozenClock = at;
     frozenPictures = shown;

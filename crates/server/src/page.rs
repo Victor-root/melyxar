@@ -180,6 +180,14 @@ enum Seen {
         held_to_second: Option<f64>,
         stretches: u32,
         ready_state: u32,
+        /// Whether the page went out of sight while this lasted.
+        ///
+        /// A browser stops drawing a page nobody is looking at, so a film
+        /// playing behind another window counts no new pictures while its
+        /// clock runs on: exactly the shape of the fault above, and none of
+        /// its substance. Said rather than swallowed, because a line that
+        /// quietly disappears under a rule is a line nobody can check.
+        page_was_hidden: bool,
     },
     /// Pictures the browser dropped over one short stretch, said only when it
     /// dropped any.
@@ -439,12 +447,14 @@ async fn what_the_page_saw(
             held_to_second,
             stretches,
             ready_state,
+            page_was_hidden,
         } => tracing::debug!(
             %session,
             at_second,
             for_ms,
             pictures_shown,
             pictures_dropped,
+            page_was_hidden,
             held_from_second,
             held_to_second,
             stretches,
@@ -563,7 +573,7 @@ mod tests {
                 r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",
                     "saw":"the_picture_stood_still","at_second":612.5,"for_ms":5000,
                     "pictures_shown":14703,"pictures_dropped":2,"held_from_second":600.0,
-                    "held_to_second":612.6,"stretches":1,"ready_state":4}"#,
+                    "held_to_second":612.6,"stretches":1,"ready_state":4,"page_was_hidden":false}"#,
                 "a picture that stood still",
             ),
             (
