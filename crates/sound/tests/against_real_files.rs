@@ -26,7 +26,10 @@ const MADE_AT: u32 = 48_000;
 /// A run of made up sound that moves the way music moves.
 ///
 /// A sound holding still describes nothing on purpose, so a test built on a
-/// held note would prove only that.
+/// held note would prove only that. The note also lasts a different time for
+/// every seed: two runs that changed note in step would agree about when
+/// things happen even while disagreeing about what happens, which is not a
+/// thing real sound does and would flatter the comparison.
 fn a_tune(seconds: f32, seed: u32) -> Vec<i16> {
     let mut next = seed | 1;
     let mut roll = move || {
@@ -35,11 +38,11 @@ fn a_tune(seconds: f32, seed: u32) -> Vec<i16> {
     };
 
     let count = (seconds * MADE_AT as f32) as usize;
+    let note = MADE_AT as usize * (13 + (seed % 11) as usize) / 100;
     let mut samples = Vec::with_capacity(count);
     let mut pitch = 440.0f32;
     for at in 0..count {
-        // A new note every fifth of a second.
-        if at % (MADE_AT as usize / 5) == 0 {
+        if at % note == 0 {
             pitch = 400.0 + roll() * 2_000.0;
         }
         let moment = at as f32 / MADE_AT as f32;

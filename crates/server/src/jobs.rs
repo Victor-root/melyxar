@@ -462,6 +462,11 @@ struct UpkeepTaskView {
     /// Files already done, so a screen says four hundred of four hundred and
     /// ten rather than ten.
     done: i64,
+    /// Whether the two numbers above count seasons rather than files.
+    ///
+    /// Listening for the titles a season shares is done season by season, so
+    /// a screen saying files would be counting something nobody can act on.
+    counts_seasons: bool,
     /// Whether the scan of that library does this reading itself.
     during_the_scan: bool,
     /// Whether it is running right now, so a screen offers to watch rather
@@ -502,6 +507,7 @@ async fn upkeep(State(state): State<AppState>) -> Result<Json<UpkeepView>> {
                 library_name: entry.library_name,
                 waiting: entry.waiting,
                 done: entry.done,
+                counts_seasons: entry.task.counts_seasons(),
                 during_the_scan: entry.during_the_scan,
                 under_way: entry.under_way,
                 last_run: entry

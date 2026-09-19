@@ -43,6 +43,8 @@ pub enum UpkeepTask {
     Subtitles,
     /// Reading each film for the thumbnails of its playback bar.
     Thumbnails,
+    /// Listening to the episodes of a season for the titles they share.
+    Openings,
 }
 
 impl UpkeepTask {
@@ -56,13 +58,24 @@ impl UpkeepTask {
     /// only one whose cost is the processor rather than the disk. A bar with
     /// no pictures on it is a comfort missing; a jump landing six seconds
     /// early is the film itself going wrong.
-    pub const ALL: [Self; 3] = [Self::KeyFrames, Self::Subtitles, Self::Thumbnails];
+    /// Listening last, for two reasons of its own. It is the only one of the
+    /// four that cannot answer about a film on its own, and the only one a
+    /// library of films never does at all; and what it gives is a button
+    /// rather than a film that plays correctly, so nothing else should wait
+    /// behind it.
+    pub const ALL: [Self; 4] = [
+        Self::KeyFrames,
+        Self::Subtitles,
+        Self::Thumbnails,
+        Self::Openings,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::KeyFrames => "key_frames",
             Self::Subtitles => "subtitles",
             Self::Thumbnails => "thumbnails",
+            Self::Openings => "openings",
         }
     }
 
@@ -71,6 +84,7 @@ impl UpkeepTask {
             "key_frames" => Some(Self::KeyFrames),
             "subtitles" => Some(Self::Subtitles),
             "thumbnails" => Some(Self::Thumbnails),
+            "openings" => Some(Self::Openings),
             _ => None,
         }
     }
@@ -81,7 +95,30 @@ impl UpkeepTask {
             Self::KeyFrames => JobKind::ReadKeyFrames,
             Self::Subtitles => JobKind::PullOutSubtitles,
             Self::Thumbnails => JobKind::GenerateThumbnails,
+            Self::Openings => JobKind::ListenForOpenings,
         }
+    }
+
+    /// Whether this reading has anything to say about this library at all.
+    ///
+    /// Only the listening answers no, and only for a library of films: an
+    /// opening is what every episode of a season shares, and a film has no
+    /// season and no neighbours. A row that would read nought of nought for
+    /// ever is noise on a screen whose whole point is to be read at a glance.
+    pub fn applies_to(self, library: &Library) -> bool {
+        match self {
+            Self::KeyFrames | Self::Subtitles | Self::Thumbnails => true,
+            Self::Openings => library.kind.is_episodic(),
+        }
+    }
+
+    /// Whether what this reading counts is seasons rather than files.
+    ///
+    /// The listening is done season by season, so a screen counting its files
+    /// would count something nobody can act on: a season is what is read, and
+    /// a season is what is left to read.
+    pub fn counts_seasons(self) -> bool {
+        matches!(self, Self::Openings)
     }
 
     /// Whether this library has asked its scan to do this one itself.
@@ -97,7 +134,10 @@ impl UpkeepTask {
         match self {
             Self::KeyFrames => library.options.key_frames_during_scan,
             Self::Thumbnails => library.options.thumbnails_during_scan,
-            Self::Subtitles => false,
+            // Neither the words nor the titles are. A scan has to be over
+            // quickly, and listening to a whole season is the furthest thing
+            // from quick there is here.
+            Self::Subtitles | Self::Openings => false,
         }
     }
 }
@@ -160,6 +200,9 @@ pub async fn what_is_left(state: &AppState) -> Result<Vec<WhatIsLeft>> {
 
     for library in database.list_libraries().await? {
         for task in UpkeepTask::ALL {
+            if !task.applies_to(&library) {
+                continue;
+            }
             let waiting = what_is_waiting_for(state, task, library.id).await?;
             let done = match task {
                 UpkeepTask::KeyFrames => database.count_read_for_key_frames(library.id).await?,
@@ -170,6 +213,7 @@ pub async fn what_is_left(state: &AppState) -> Result<Vec<WhatIsLeft>> {
                     Some(layout) => database.count_made_thumbnails(library.id, layout).await?,
                     None => 0,
                 },
+                UpkeepTask::Openings => database.count_seasons_listened_to(library.id).await?,
             };
 
             left.push(WhatIsLeft {
@@ -224,6 +268,7 @@ pub async fn what_is_waiting_for(
             Some(layout) => database.count_awaiting_thumbnails(library, layout).await?,
             None => 0,
         },
+        UpkeepTask::Openings => database.count_seasons_to_listen_to(library).await?,
     })
 }
 
@@ -258,6 +303,9 @@ pub async fn start(
                     }
                     UpkeepTask::Thumbnails => {
                         make_the_thumbnails_of(&owned, &library, &handle).await
+                    }
+                    UpkeepTask::Openings => {
+                        crate::openings::listen_to_the_seasons_of(&owned, &library, &handle).await
                     }
                 }
                 .map_err(|error| error.to_string())?;

@@ -18,6 +18,7 @@ melyxar-container = { workspace = true }
 melyxar-media-probe = { workspace = true }
 melyxar-metadata = { workspace = true }
 melyxar-playback = { workspace = true }
+melyxar-sound = { workspace = true }
 melyxar-streaming = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

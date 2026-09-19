@@ -43,6 +43,13 @@ pub enum JobKind {
     /// Asked for when somebody opened the film, that reading fell on the one
     /// person who was waiting.
     PullOutSubtitles,
+    /// Listens to the episodes of a season to find the titles they share.
+    ///
+    /// The odd one out among the readings of the upkeep: the other three ask
+    /// a question of one file and get an answer from that file, while this one
+    /// can only ask a season. What marks an opening is that every episode
+    /// holds the same one, so one episode on its own has nothing to say.
+    ListenForOpenings,
     PurgeActivity,
     Backup,
 }
@@ -54,7 +61,7 @@ impl JobKind {
     /// several things have to cover all of them: the interface needs a
     /// sentence for each, and a kind with none reaches the screen as its own
     /// name.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::ScanLibrary,
         Self::IdentifyWork,
         Self::ReadCopyAgain,
@@ -63,6 +70,7 @@ impl JobKind {
         Self::ReadKeyFrames,
         Self::GenerateThumbnails,
         Self::PullOutSubtitles,
+        Self::ListenForOpenings,
         Self::PurgeActivity,
         Self::Backup,
     ];
@@ -77,6 +85,7 @@ impl JobKind {
             Self::ReadKeyFrames => "read_key_frames",
             Self::GenerateThumbnails => "generate_thumbnails",
             Self::PullOutSubtitles => "pull_out_subtitles",
+            Self::ListenForOpenings => "listen_for_openings",
             Self::PurgeActivity => "purge_activity",
             Self::Backup => "backup",
         }
@@ -92,6 +101,7 @@ impl JobKind {
             "read_key_frames" => Some(Self::ReadKeyFrames),
             "generate_thumbnails" => Some(Self::GenerateThumbnails),
             "pull_out_subtitles" => Some(Self::PullOutSubtitles),
+            "listen_for_openings" => Some(Self::ListenForOpenings),
             "purge_activity" => Some(Self::PurgeActivity),
             "backup" => Some(Self::Backup),
             _ => None,
@@ -123,6 +133,8 @@ pub enum JobStep {
     MakingThumbnails,
     /// Reading each film through for the subtitles made of words inside it.
     PullingOutSubtitles,
+    /// Listening to the episodes of a season for the titles they share.
+    ListeningForOpenings,
     /// Asking the metadata provider about the works that are waiting.
     AskingTheProvider,
     /// Asking again about the films that have a name and are missing the rest.
@@ -131,13 +143,14 @@ pub enum JobStep {
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
         Self::ReadingKeyFrames,
         Self::MakingThumbnails,
         Self::PullingOutSubtitles,
+        Self::ListeningForOpenings,
         Self::AskingTheProvider,
         Self::FillingInWhatIsMissing,
     ];
@@ -150,6 +163,7 @@ impl JobStep {
             Self::ReadingKeyFrames => "reading_key_frames",
             Self::MakingThumbnails => "making_thumbnails",
             Self::PullingOutSubtitles => "pulling_out_subtitles",
+            Self::ListeningForOpenings => "listening_for_openings",
             Self::AskingTheProvider => "asking_the_provider",
             Self::FillingInWhatIsMissing => "filling_in_what_is_missing",
         }
@@ -163,6 +177,7 @@ impl JobStep {
             "reading_key_frames" => Some(Self::ReadingKeyFrames),
             "making_thumbnails" => Some(Self::MakingThumbnails),
             "pulling_out_subtitles" => Some(Self::PullingOutSubtitles),
+            "listening_for_openings" => Some(Self::ListeningForOpenings),
             "asking_the_provider" => Some(Self::AskingTheProvider),
             "filling_in_what_is_missing" => Some(Self::FillingInWhatIsMissing),
             _ => None,
