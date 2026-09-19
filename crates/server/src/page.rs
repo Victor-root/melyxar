@@ -207,12 +207,15 @@ enum Seen {
         pictures_shown: u32,
         pictures_dropped: u32,
     },
-    /// The library gave up on this film, in its own words, and whether the
-    /// browser's own reader was handed the playlist instead.
+    /// Playback stopped outright, in whatever words the failure carried, and
+    /// whether the browser's own reader was handed the playlist instead.
     ///
     /// The one place a page's own wording reaches the journal, because the
-    /// wording is the answer: it is the library naming what it could not do
-    /// with a film this server produced. Cut short by the server all the same,
+    /// wording is the answer: either the library naming what it could not do
+    /// with a film this server produced, or the browser's own decoder failing
+    /// beneath it with the library none the wiser. `browser_took_over` only
+    /// ever answers yes for the first of the two: nothing takes over from a
+    /// decoder that has already failed. Cut short by the server all the same,
     /// and it is still a fact this module named, not a message a page chose to
     /// send.
     PlaybackRefused {
