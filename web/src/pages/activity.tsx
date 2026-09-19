@@ -74,7 +74,7 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
               {t("home.scan")} · {library.name}
             </button>
             <button className="button" onClick={() => startOn(api.identify(library.id, mode))}>
-              {t("home.identify")}
+              {t("home.identify")} · {library.name}
             </button>
           </span>
         ))}
