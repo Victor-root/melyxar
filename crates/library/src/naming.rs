@@ -124,7 +124,26 @@ pub(crate) fn with_the_words_of<T>(
     read: impl FnOnce(&[&str]) -> T,
 ) -> T {
     let file_name = without_the_site_in_front(signs.without_the_glued_prefix(file_name));
-    let stem = strip_extension(file_name);
+    the_words_of(strip_extension(file_name), current_year, read)
+}
+
+/// The same, for the name of a folder.
+///
+/// A folder has no extension to take off, and taking one off anyway eats the
+/// last word of a folder called `Mr.Robot`: what looks like an extension at
+/// the end of a file name is the second half of a title at the end of a
+/// folder's.
+pub(crate) fn with_the_words_of_a_folder<T>(
+    folder: &str,
+    current_year: i32,
+    signs: &LibrarySigns,
+    read: impl FnOnce(&[&str]) -> T,
+) -> T {
+    let folder = without_the_site_in_front(signs.without_the_glued_prefix(folder));
+    the_words_of(folder, current_year, read)
+}
+
+fn the_words_of<T>(stem: &str, current_year: i32, read: impl FnOnce(&[&str]) -> T) -> T {
     // The underscore separates words just like the dot does. Personal markers
     // attach themselves to the previous tag with one, and without this rule
     // the tag becomes unrecognisable and can land in the title.

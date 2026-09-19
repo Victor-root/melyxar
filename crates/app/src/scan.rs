@@ -774,31 +774,36 @@ async fn episode_work_for(
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_default();
-    let Some(read) = episode::parse_episode(file_name, melyxar_core::time::current_year(), signs)
-    else {
+    let year = melyxar_core::time::current_year();
+    let Some(read) = episode::parse_episode(file_name, year, signs) else {
         return Ok(None);
     };
 
     let folders = folders_above(relative_path);
-    let Some(series_title) = the_series(&read, &folders) else {
+    let Some(named) = the_series(&read, &folders, year, signs) else {
         return Ok(None);
     };
-    // The name first, the folder only to fill in, and the one season a series
-    // has when nobody ever wrote a season anywhere: a show with a single
-    // season is written without one, and that is what it means.
+    // The name first, the season folder to fill in wherever it sits above the
+    // file, and the one season a series has when nobody ever wrote a season
+    // anywhere: a show with a single season is written without one, and that
+    // is what it means.
     let season = read
         .season
         .or_else(|| {
             folders
-                .first()
-                .and_then(|folder| episode::season_of_folder(folder))
+                .iter()
+                .find_map(|folder| episode::season_of_folder(folder))
         })
         .unwrap_or(THE_ONLY_SEASON);
 
     let database = state.database();
-    let series_sort = naming::sort_title(&series_title);
+    let series_sort = naming::sort_title(&named.title);
+    // Looked up by its name and its year, exactly as a film is, which two
+    // series of the same name and two different years need. What used to split
+    // one series in two was not the year being asked for but where it came
+    // from: read off each file, one file carried it and the next did not.
     let series = match database
-        .series_by_name(library.id, &series_sort, read.year)
+        .series_by_name(library.id, &series_sort, named.year)
         .await?
     {
         Some(found) => found,
@@ -807,9 +812,9 @@ async fn episode_work_for(
                 .create_work(
                     library.id,
                     WorkKind::Series,
-                    &series_title,
+                    &named.title,
                     &series_sort,
-                    read.year,
+                    named.year,
                 )
                 .await?
         }
@@ -877,22 +882,47 @@ fn folders_above(relative_path: &Path) -> Vec<&str> {
     folders
 }
 
-/// What names the series this file belongs to.
+/// What names the series this file belongs to, and the year that name carries.
 ///
-/// The name of the file first, because it is the only thing that is there in
-/// all four ways a collection gets laid out. The folder answers only when the
-/// name did not, which is what a file named after nothing but its number
-/// inside a season folder needs: the folder holding that season folder is the
-/// series, and a season folder itself never names anything.
-fn the_series(read: &episode::ParsedEpisode, folders: &[&str]) -> Option<String> {
+/// A season folder is the one mark that says without any doubt that what sits
+/// above it is a series, so where there is one, the folder holding it is the
+/// series and it is that folder which names it. Everything under it lands in
+/// the same series however each file happens to be named: two seasons ripped
+/// by two teams that write the title in two languages are still one series,
+/// and reading the file names first made two.
+///
+/// Where there is no season folder nothing has changed: a folder holding files
+/// in bulk groups nothing by itself, so the file name names the series, and
+/// the folder answers only when the name did not.
+fn the_series(
+    read: &episode::ParsedEpisode,
+    folders: &[&str],
+    current_year: i32,
+    signs: &naming::LibrarySigns,
+) -> Option<episode::NamedSeries> {
+    if let Some(named) = the_folder_of_the_series(folders)
+        .and_then(|folder| episode::series_of_folder(folder, current_year, signs))
+    {
+        return Some(named);
+    }
     if !read.series.is_empty() {
-        return Some(read.series.clone());
+        return Some(episode::NamedSeries {
+            title: read.series.clone(),
+            year: read.year,
+        });
     }
     folders
         .iter()
-        .find(|folder| episode::season_of_folder(folder).is_none())
-        .map(|folder| (*folder).to_string())
-        .filter(|folder| !folder.is_empty())
+        .find_map(|folder| episode::series_of_folder(folder, current_year, signs))
+}
+
+/// The folder that names the series: the one holding the nearest season
+/// folder, when the path goes through one at all.
+fn the_folder_of_the_series<'a>(folders: &[&'a str]) -> Option<&'a str> {
+    let season = folders
+        .iter()
+        .position(|folder| episode::season_of_folder(folder).is_some())?;
+    folders.get(season + 1).copied()
 }
 
 /// The kind of work a file in this library stands for when nothing better is
@@ -1665,6 +1695,52 @@ mod tests {
             episodes.iter().map(|e| e.ordinal).collect::<Vec<_>>(),
             vec![Some(1), Some(3)]
         );
+    }
+
+    #[tokio::test]
+    async fn one_folder_of_seasons_holds_one_series_however_its_files_are_named() {
+        // Seen on a real collection: one season ripped by a team that writes
+        // the title of the series in one language, another by a team that
+        // writes it in another. Read from the names alone this is two series,
+        // one of which the provider recognises under no name at all.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Saison 1/Amber.Field.S01E01.mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Distant Signal/Saison 3/Distant.Signal.S03E01.1080p.mkv",
+            b"xx",
+        );
+        // And the shape a release takes when it wraps each episode in a folder
+        // of its own, which the folder holding the season still answers for.
+        write(
+            &media,
+            "Distant Signal/Saison 3/Distant.Signal.S03E02.WEB/Distant.Signal.S03E02.WEB.mkv",
+            b"xxx",
+        );
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        let series = of_kind(&works, WorkKind::Series);
+        assert_eq!(
+            series.iter().map(|s| s.title.clone()).collect::<Vec<_>>(),
+            vec!["Distant Signal"],
+            "the folder holding the seasons names the series, once"
+        );
+        let seasons = of_kind(&works, WorkKind::Season);
+        assert_eq!(
+            seasons.iter().map(|s| s.ordinal).collect::<Vec<_>>(),
+            vec![Some(1), Some(3)]
+        );
+        assert!(seasons.iter().all(|s| s.parent_id == Some(series[0].id)));
+        assert_eq!(of_kind(&works, WorkKind::Episode).len(), 3);
     }
 
     #[tokio::test]
