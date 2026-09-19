@@ -340,6 +340,65 @@ async fn a_season_whose_episodes_share_an_opening_gets_a_button_over_it() {
 }
 
 #[tokio::test]
+async fn a_season_already_settled_is_read_again_when_it_is_asked_for_by_name() {
+    // What the terminal command does, whole: a season the upkeep has already
+    // settled would be passed over for ever, so being asked for by name has
+    // to undo that answer before looking for a new one. This is how a rule
+    // about what an opening is gets tried on one series in a minute rather
+    // than on a whole collection in an evening.
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = directory.path().join("media");
+    let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here");
+    a_season_on_disk(&tools.ffmpeg, &root, true).await;
+
+    let (state, library) = a_server(directory.path(), root).await;
+    scan_then_listen(&state, &library).await;
+    assert_eq!(
+        state
+            .database()
+            .count_seasons_to_listen_to(library.id)
+            .await
+            .expect("read"),
+        0,
+        "the season is settled, which is what would stop it being read again"
+    );
+
+    // Part of the name, in the wrong case, the way somebody types it.
+    let seasons = state
+        .database()
+        .seasons_of_series(Some("DISTANT"), None)
+        .await
+        .expect("read");
+    assert_eq!(seasons.len(), 1, "the one season of the one series");
+
+    let (ran, went) =
+        melyxar_app::openings::start_listening_again(&state, Some("distant"), seasons)
+            .await
+            .expect("the listening starts")
+            .wait()
+            .await;
+    assert_eq!(ran, JobState::Succeeded, "the listening ran to the end");
+    assert_eq!(went.len(), 1);
+    assert_eq!(went[0].episodes, 3);
+    assert_eq!(
+        (went[0].with_an_opening, went[0].with_a_closing),
+        (3, 3),
+        "reading it again finds what reading it the first time found"
+    );
+
+    for (file, segments) in what_each_file_came_away_with(&state).await {
+        assert_eq!(
+            segments
+                .iter()
+                .map(|segment| segment.kind)
+                .collect::<Vec<_>>(),
+            vec![SegmentKind::Intro, SegmentKind::Outro],
+            "{file} kept exactly one of each rather than two copies of both"
+        );
+    }
+}
+
+#[tokio::test]
 async fn a_season_whose_episodes_share_nothing_gets_no_button_at_all() {
     // The answer that matters more than the other one. A season that opens
     // straight into the story must come away with nothing, rather than with a
