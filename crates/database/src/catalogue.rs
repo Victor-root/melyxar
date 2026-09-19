@@ -143,6 +143,33 @@ pub struct HeaviestSource {
     pub overall_bitrate: Option<i64>,
 }
 
+/// A season that still has files nobody has listened to for their openings.
+///
+/// The season rather than the file, because a file cannot answer this one on
+/// its own: what marks an opening is that every episode of the season holds
+/// the same one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeasonToListenTo {
+    pub id: WorkId,
+    /// The name of the series it belongs to, for the journal to say which.
+    pub series: String,
+    /// Its number, which a season read off a folder does not always have.
+    pub number: Option<i32>,
+    /// How many of its files nobody has listened to yet.
+    pub waiting: i64,
+}
+
+/// One file of one episode of a season, and what listening to it needs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EpisodeToListenTo {
+    /// The episode this file is a copy of. Two files of one episode are two
+    /// copies of the same sound and must never be compared with each other.
+    pub work_id: WorkId,
+    pub number: Option<i32>,
+    pub source_id: MediaSourceId,
+    pub duration: Option<Millis>,
+}
+
 /// What an analysis found about the file as a whole.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SourceAnalysis {
@@ -1688,6 +1715,171 @@ impl Database {
         Ok(row.0)
     }
 
+    /// Seasons still holding a file nobody has listened to for its openings,
+    /// oldest first, a few at a time.
+    ///
+    /// Asked of seasons rather than of files, because a file cannot answer
+    /// this on its own. One file with no row puts its whole season back in the
+    /// queue, which is exactly what has to happen the day an episode is added
+    /// to a season already done: the newcomer has nothing of its own to be
+    /// compared against, so the season is listened to again as a season.
+    pub async fn seasons_to_listen_to(
+        &self,
+        library_id: LibraryId,
+        limit: i64,
+    ) -> Result<Vec<SeasonToListenTo>> {
+        let rows = sqlx::query(
+            "SELECT season.id, season.ordinal, series.title AS series,
+                    count(*) AS waiting, min(season.added_at) AS added_at
+             FROM works season
+             JOIN works series ON series.id = season.parent_id
+             JOIN works episode ON episode.parent_id = season.id
+             JOIN media_sources s ON s.work_id = episode.id
+             LEFT JOIN media_source_openings o ON o.source_id = s.id
+             WHERE season.library_id = ? AND season.kind = 'season'
+               AND s.analysed_at IS NOT NULL AND s.missing_since IS NULL
+               AND o.source_id IS NULL
+             GROUP BY season.id
+             ORDER BY added_at
+             LIMIT ?",
+        )
+        .bind(library_id.to_db_string())
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                Ok(SeasonToListenTo {
+                    id: parse_id(&row.try_get::<String, _>("id")?)?,
+                    series: row.try_get("series")?,
+                    number: row.try_get("ordinal")?,
+                    waiting: row.try_get("waiting")?,
+                })
+            })
+            .collect()
+    }
+
+    /// How many seasons of one library are still waiting to be listened to.
+    pub async fn count_seasons_to_listen_to(&self, library_id: LibraryId) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(DISTINCT season.id)
+             FROM works season
+             JOIN works episode ON episode.parent_id = season.id
+             JOIN media_sources s ON s.work_id = episode.id
+             LEFT JOIN media_source_openings o ON o.source_id = s.id
+             WHERE season.library_id = ? AND season.kind = 'season'
+               AND s.analysed_at IS NOT NULL AND s.missing_since IS NULL
+               AND o.source_id IS NULL",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0)
+    }
+
+    /// How many seasons of one library have been listened to right through.
+    ///
+    /// Counted so a screen says how far the whole reading has got rather than
+    /// how far this one run of it has, as the three readings beside it do. A
+    /// season counts as done when it holds a file and none of its files is
+    /// still waiting, which is also true of a season where nothing was found:
+    /// nothing found is an answer and is written down as one.
+    pub async fn count_seasons_listened_to(&self, library_id: LibraryId) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(*) FROM (
+                 SELECT season.id
+                 FROM works season
+                 JOIN works episode ON episode.parent_id = season.id
+                 JOIN media_sources s ON s.work_id = episode.id
+                 LEFT JOIN media_source_openings o ON o.source_id = s.id
+                 WHERE season.library_id = ? AND season.kind = 'season'
+                   AND s.analysed_at IS NOT NULL AND s.missing_since IS NULL
+                 GROUP BY season.id
+                 HAVING sum(CASE WHEN o.source_id IS NULL THEN 1 ELSE 0 END) = 0
+             )",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0)
+    }
+
+    /// Every file of every episode of one season, in the order they are
+    /// numbered.
+    ///
+    /// All of them, including the ones already listened to: the answer for a
+    /// newcomer only exists beside its neighbours, so a season is read whole
+    /// or not at all.
+    pub async fn episodes_to_listen_to(&self, season_id: WorkId) -> Result<Vec<EpisodeToListenTo>> {
+        let rows = sqlx::query(
+            "SELECT episode.id AS work_id, episode.ordinal, s.id AS source_id, s.duration_ms
+             FROM works episode
+             JOIN media_sources s ON s.work_id = episode.id
+             WHERE episode.parent_id = ?
+               AND s.analysed_at IS NOT NULL AND s.missing_since IS NULL
+             ORDER BY episode.ordinal, s.added_at",
+        )
+        .bind(season_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                Ok(EpisodeToListenTo {
+                    work_id: parse_id(&row.try_get::<String, _>("work_id")?)?,
+                    number: row.try_get("ordinal")?,
+                    source_id: parse_id(&row.try_get::<String, _>("source_id")?)?,
+                    duration: row
+                        .try_get::<Option<i64>, _>("duration_ms")?
+                        .map(Millis::new),
+                })
+            })
+            .collect()
+    }
+
+    /// Keeps what listening to one file found, and that it was listened to.
+    ///
+    /// The two in one step, because a file written down as listened to with
+    /// its stretches missing would keep its silence for ever: being written
+    /// down is exactly what keeps a season out of the queue.
+    ///
+    /// Only what an earlier listening found is replaced. A stretch read off a
+    /// chapter the file names itself, and a stretch somebody set by hand, are
+    /// neither of them this reading's to undo: the file said the one and a
+    /// person said the other, and both know better than a comparison does.
+    pub async fn store_openings(
+        &self,
+        source_id: MediaSourceId,
+        found: &[MediaSegment],
+    ) -> Result<()> {
+        let mut transaction = self.begin().await?;
+
+        sqlx::query("DELETE FROM media_segments WHERE source_id = ? AND origin = 'detected'")
+            .bind(source_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        for segment in found {
+            insert_segment(&mut *transaction, source_id, segment).await?;
+        }
+
+        sqlx::query(
+            "INSERT INTO media_source_openings (source_id, found, listened_at)
+             VALUES (?, ?, ?)
+             ON CONFLICT (source_id) DO UPDATE
+             SET found = excluded.found,
+                 listened_at = excluded.listened_at",
+        )
+        .bind(source_id.to_db_string())
+        .bind(found.len() as i64)
+        .bind(timestamp_to_text(now()))
+        .execute(&mut *transaction)
+        .await?;
+
+        transaction.commit().await?;
+        Ok(())
+    }
+
     /// Marks a file absent. Never a deletion: a disconnected disk must not
     /// cost a library.
     pub async fn mark_source_missing(&self, id: MediaSourceId) -> Result<()> {
@@ -1750,6 +1942,15 @@ impl Database {
         // analysis's to undo, and reading the file again is not somebody
         // changing their mind.
         sqlx::query("DELETE FROM media_segments WHERE source_id = ? AND origin <> 'manual'")
+            .bind(source_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        // And with the stretches found by listening goes the note saying this
+        // file was listened to, for the same reason a film whose thumbnails
+        // were thrown away is written down as having none: a file marked as
+        // done with nothing to show for it is a file that is never read again,
+        // and its season would keep its silence for ever.
+        sqlx::query("DELETE FROM media_source_openings WHERE source_id = ?")
             .bind(source_id.to_db_string())
             .execute(&mut *transaction)
             .await?;
@@ -5398,5 +5599,419 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Listening to a season for its opening and closing titles
+    // -----------------------------------------------------------------------
+
+    /// A series whose every episode holds one analysed file, which is what
+    /// listening asks for: a file nobody has read yet says nothing about the
+    /// sound inside it.
+    async fn a_series_ready_to_be_listened_to(
+        database: &Database,
+        library_id: LibraryId,
+        root_id: LibraryRootId,
+        title: &str,
+        seasons: &[(i32, &[i32])],
+    ) -> Vec<WorkId> {
+        let series_id = a_series_on_disk(database, library_id, root_id, title, seasons).await;
+        for source in database
+            .sources_of_root(root_id)
+            .await
+            .expect("the files are there")
+        {
+            database
+                .store_analysis(
+                    source.id,
+                    &SourceAnalysis {
+                        duration: Some(Millis::new(2_400_000)),
+                        ..SourceAnalysis::default()
+                    },
+                    &[],
+                    &[],
+                )
+                .await
+                .expect("analysis stored");
+        }
+
+        let viewer = a_viewer(database).await;
+        database
+            .children_of(viewer, series_id)
+            .await
+            .expect("read")
+            .into_iter()
+            .map(|season| season.id)
+            .collect()
+    }
+
+    /// The files of one season, in the order listening reads them.
+    async fn files_of(database: &Database, season: WorkId) -> Vec<MediaSourceId> {
+        database
+            .episodes_to_listen_to(season)
+            .await
+            .expect("read")
+            .into_iter()
+            .map(|episode| episode.source_id)
+            .collect()
+    }
+
+    fn a_found_opening() -> MediaSegment {
+        MediaSegment {
+            kind: SegmentKind::Intro,
+            start: Millis::new(30_000),
+            end: Millis::new(90_000),
+            origin: SegmentOrigin::Detected,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_season_nobody_has_listened_to_is_waiting_with_its_series_named() {
+        let (database, library_id, root_id) = library().await;
+        let seasons = a_series_ready_to_be_listened_to(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1, 2, 3]), (2, &[1])],
+        )
+        .await;
+
+        let waiting = database
+            .seasons_to_listen_to(library_id, 10)
+            .await
+            .expect("read");
+        assert_eq!(waiting.len(), 2, "one row per season, not one per file");
+        assert!(waiting
+            .iter()
+            .all(|season| season.series == "Distant Signal"));
+        assert_eq!(
+            waiting
+                .iter()
+                .map(|season| (season.number, season.waiting))
+                .collect::<Vec<_>>(),
+            vec![(Some(1), 3), (Some(2), 1)],
+            "each says how many of its files are still waiting"
+        );
+        assert_eq!(
+            database
+                .count_seasons_to_listen_to(library_id)
+                .await
+                .expect("read"),
+            2
+        );
+        assert_eq!(
+            database
+                .count_seasons_listened_to(library_id)
+                .await
+                .expect("read"),
+            0
+        );
+        assert!(
+            seasons.contains(&waiting[0].id),
+            "the seasons answered are the seasons of that series"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_season_is_done_only_once_every_one_of_its_files_is() {
+        let (database, library_id, root_id) = library().await;
+        let seasons = a_series_ready_to_be_listened_to(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1, 2])],
+        )
+        .await;
+        let files = files_of(&database, seasons[0]).await;
+        assert_eq!(files.len(), 2);
+
+        database
+            .store_openings(files[0], &[a_found_opening()])
+            .await
+            .expect("kept");
+        assert_eq!(
+            database
+                .count_seasons_to_listen_to(library_id)
+                .await
+                .expect("read"),
+            1,
+            "one file of two settles nothing: the season is still waiting"
+        );
+        assert_eq!(
+            database
+                .count_seasons_listened_to(library_id)
+                .await
+                .expect("read"),
+            0
+        );
+
+        database.store_openings(files[1], &[]).await.expect("kept");
+        assert!(
+            database
+                .seasons_to_listen_to(library_id, 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "nothing found is an answer, and it settles that file"
+        );
+        assert_eq!(
+            database
+                .count_seasons_listened_to(library_id)
+                .await
+                .expect("read"),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn an_episode_added_later_puts_its_whole_season_back_in_the_queue() {
+        // A newcomer has nothing of its own to be compared against, so the
+        // season is listened to again as a season.
+        let (database, library_id, root_id) = library().await;
+        let seasons = a_series_ready_to_be_listened_to(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1, 2])],
+        )
+        .await;
+        for file in files_of(&database, seasons[0]).await {
+            database.store_openings(file, &[]).await.expect("kept");
+        }
+        assert_eq!(
+            database
+                .count_seasons_to_listen_to(library_id)
+                .await
+                .expect("read"),
+            0
+        );
+
+        let newcomer = database
+            .create_child_work(
+                library_id,
+                seasons[0],
+                3,
+                WorkKind::Episode,
+                "Episode 3",
+                "episode 3",
+            )
+            .await
+            .expect("episode written");
+        let arrived = database
+            .insert_source(
+                newcomer.id,
+                root_id,
+                Path::new("Distant Signal/1/3.mkv"),
+                1_000,
+                now(),
+            )
+            .await
+            .expect("file recorded");
+        database
+            .store_analysis(arrived, &SourceAnalysis::default(), &[], &[])
+            .await
+            .expect("analysis stored");
+
+        let waiting = database
+            .seasons_to_listen_to(library_id, 10)
+            .await
+            .expect("read");
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(waiting[0].id, seasons[0]);
+        assert_eq!(waiting[0].waiting, 1, "one file of it is new");
+        assert_eq!(
+            files_of(&database, seasons[0]).await.len(),
+            3,
+            "and the whole season is what comes back to be read"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_files_of_a_season_come_back_with_the_episode_each_is_a_copy_of() {
+        // Two copies of one episode hold the same sound from end to end, so
+        // whatever compares them has to be able to tell they are the same
+        // episode and leave them alone.
+        let (database, library_id, root_id) = library().await;
+        let seasons = a_series_ready_to_be_listened_to(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1, 2])],
+        )
+        .await;
+        let episodes = database
+            .episodes_to_listen_to(seasons[0])
+            .await
+            .expect("read");
+        assert_eq!(
+            episodes
+                .iter()
+                .map(|episode| episode.number)
+                .collect::<Vec<_>>(),
+            vec![Some(1), Some(2)],
+            "in the order they are numbered"
+        );
+        assert!(episodes
+            .iter()
+            .all(|episode| episode.duration == Some(Millis::new(2_400_000))));
+
+        let second_copy = database
+            .insert_source(
+                episodes[0].work_id,
+                root_id,
+                Path::new("Distant Signal/1/1 other.mkv"),
+                2_000,
+                now(),
+            )
+            .await
+            .expect("file recorded");
+        database
+            .store_analysis(second_copy, &SourceAnalysis::default(), &[], &[])
+            .await
+            .expect("analysis stored");
+
+        let again = database
+            .episodes_to_listen_to(seasons[0])
+            .await
+            .expect("read");
+        assert_eq!(again.len(), 3);
+        assert_eq!(
+            again
+                .iter()
+                .filter(|episode| episode.work_id == episodes[0].work_id)
+                .count(),
+            2,
+            "both copies say which episode they are a copy of"
+        );
+    }
+
+    #[tokio::test]
+    async fn what_listening_found_replaces_only_what_listening_found() {
+        let (database, library_id, root_id) = library().await;
+        let seasons = a_series_ready_to_be_listened_to(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1])],
+        )
+        .await;
+        let file = files_of(&database, seasons[0]).await[0];
+
+        // A file that names its own chapters, and somebody who corrected the
+        // closing titles by hand. Neither is a comparison's to undo.
+        database
+            .store_analysis(
+                file,
+                &SourceAnalysis {
+                    duration: Some(Millis::new(1_300_000)),
+                    ..SourceAnalysis::default()
+                },
+                &[],
+                &[
+                    Chapter {
+                        ordinal: 1,
+                        start: Millis::ZERO,
+                        title: Some("Recap".into()),
+                        thumbnail_path: None,
+                    },
+                    Chapter {
+                        ordinal: 2,
+                        start: Millis::new(40_000),
+                        title: Some("Part One".into()),
+                        thumbnail_path: None,
+                    },
+                ],
+            )
+            .await
+            .expect("analysis stored");
+        database
+            .store_openings(
+                file,
+                &[MediaSegment {
+                    kind: SegmentKind::Outro,
+                    start: Millis::new(1_200_000),
+                    end: Millis::new(1_260_000),
+                    origin: SegmentOrigin::Manual,
+                }],
+            )
+            .await
+            .expect("kept");
+
+        database
+            .store_openings(file, &[a_found_opening()])
+            .await
+            .expect("kept");
+        database
+            .store_openings(file, &[a_found_opening()])
+            .await
+            .expect("listening twice says the same thing once");
+
+        let kept = database.segments_of_source(file).await.expect("read");
+        assert_eq!(
+            kept.iter()
+                .map(|segment| (segment.kind, segment.origin))
+                .collect::<Vec<_>>(),
+            vec![
+                (SegmentKind::Recap, SegmentOrigin::Chapter),
+                (SegmentKind::Intro, SegmentOrigin::Detected),
+                (SegmentKind::Outro, SegmentOrigin::Manual),
+            ],
+            "the chapter and the hand stay, and listening replaces itself: {kept:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn reading_a_file_again_makes_its_season_wait_to_be_listened_to_again() {
+        // What the analysis throws away, it has to throw away whole. A file
+        // written down as listened to whose stretches are gone would keep its
+        // silence for ever.
+        let (database, library_id, root_id) = library().await;
+        let seasons = a_series_ready_to_be_listened_to(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1])],
+        )
+        .await;
+        let file = files_of(&database, seasons[0]).await[0];
+        database
+            .store_openings(file, &[a_found_opening()])
+            .await
+            .expect("kept");
+        assert_eq!(
+            database
+                .count_seasons_to_listen_to(library_id)
+                .await
+                .expect("read"),
+            0
+        );
+
+        database
+            .store_analysis(file, &SourceAnalysis::default(), &[], &[])
+            .await
+            .expect("read again");
+
+        assert!(
+            database
+                .segments_of_source(file)
+                .await
+                .expect("read")
+                .is_empty(),
+            "reading the file again threw away what listening had found"
+        );
+        assert_eq!(
+            database
+                .count_seasons_to_listen_to(library_id)
+                .await
+                .expect("read"),
+            1,
+            "so the season is waiting again rather than done and silent"
+        );
     }
 }
