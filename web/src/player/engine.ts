@@ -1290,7 +1290,16 @@ export function usePlayback({
 
   const notePictureRefused = useCallback((refused: MediaError | null) => {
     setFailed("player.cannot_play");
-    setRefusal(refused ? `${refused.code} · ${refused.message || "no reason given"}` : null);
+    const because = refused ? `${refused.code} · ${refused.message || "no reason given"}` : null;
+    setRefusal(because);
+    // The one other way a film stops playing outright, beside the library
+    // giving up on it: the browser's own decoder failing beneath it, with
+    // hls.js none the wiser. Left unreported, a fault this real left nothing
+    // behind but a screenshot. Sent only against a rebuilt session, since a
+    // file played as it lies on disk was never asked of the server at all.
+    if (because && session.current) {
+      sayItGaveUp(session.current, because, false);
+    }
   }, []);
 
   /* The picture in a corner of the screen while the viewer does something
