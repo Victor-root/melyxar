@@ -576,6 +576,7 @@ impl Database {
         sort_title: &str,
         release_year: Option<i32>,
     ) -> Result<()> {
+        let mut transaction = self.begin().await?;
         sqlx::query(
             "UPDATE works SET title = ?, sort_title = ?, release_year = ?,
                 -- The old reason spoke of the old title.
@@ -588,8 +589,18 @@ impl Database {
         .bind(release_year)
         .bind(timestamp_to_text(now()))
         .bind(work_id.to_db_string())
-        .execute(self.writer())
+        .execute(&mut *transaction)
         .await?;
+        // This name came off the disk like the first one did, so it is one
+        // more name the work answers to. The one a provider gives is not.
+        crate::catalogue::remember_filing_name(
+            &mut *transaction,
+            work_id,
+            sort_title,
+            release_year,
+        )
+        .await?;
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -1222,6 +1233,78 @@ mod tests {
                 .identification,
             IdentificationState::Manual
         );
+    }
+
+    #[tokio::test]
+    async fn a_work_the_provider_renamed_is_still_found_under_the_name_the_disk_gave() {
+        // The folder does not change when a provider answers, so the next scan
+        // reads the same name again. Asked only by the name the work carries,
+        // it would write the same work down a second time, and every file
+        // added to a series would cost a duplicate and a look-up.
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("named by the provider");
+
+        let renamed = database
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(renamed.sort_title, "quiet harbour");
+        assert_eq!(renamed.release_year, Some(2019));
+
+        let found_again = database
+            .work_by_identity(work.library_id, "quiet harbour 2019 multi", None)
+            .await
+            .expect("read")
+            .expect("the name on disk still leads to the work");
+        assert_eq!(found_again.id, work.id);
+
+        assert_eq!(
+            database
+                .work_by_identity(work.library_id, "quiet harbour", Some(2019))
+                .await
+                .expect("read")
+                .expect("the name it carries leads to it too")
+                .id,
+            work.id
+        );
+    }
+
+    #[tokio::test]
+    async fn a_name_read_off_the_file_again_becomes_one_more_name_it_answers_to() {
+        let (database, work) = work_in_library().await;
+        database
+            .rename_work(work.id, "Quiet Harbour", "quiet harbour", Some(2019))
+            .await
+            .expect("read again");
+
+        for (sort_title, year) in [
+            ("quiet harbour 2019 multi", None),
+            ("quiet harbour", Some(2019)),
+        ] {
+            assert_eq!(
+                database
+                    .work_by_identity(work.library_id, sort_title, year)
+                    .await
+                    .expect("read")
+                    .expect("both names lead to the work")
+                    .id,
+                work.id
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_name_nothing_was_ever_filed_under_finds_nothing() {
+        let (database, work) = work_in_library().await;
+        assert!(database
+            .work_by_identity(work.library_id, "amber field", None)
+            .await
+            .expect("read")
+            .is_none());
     }
 
     fn found() -> IdentifiedWork {
