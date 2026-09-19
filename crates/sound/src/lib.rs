@@ -34,6 +34,13 @@
 //! is all zeroes when nothing changes. Two files each holding two silent
 //! seconds have nothing in common, and a reading that said otherwise would put
 //! a skip button over the first scene of every quiet episode.
+//!
+//! Which is not the same as saying they end a stretch already under way. A
+//! title sequence that pauses for breath is one sound with a hole in it: both
+//! episodes fall silent at the same moment of the same opening, and reading
+//! that hole as a disagreement tore the opening in two. So a stretch carries a
+//! run of frames neither side can describe, for a bounded while, and never
+//! begins on one.
 
 #![forbid(unsafe_code)]
 
@@ -135,6 +142,23 @@ const ALIKE_ENOUGH: u32 = 11;
 /// through a third of its frames disagreeing, and a third disagreeing is not
 /// the same sound.
 const DISAGREEMENT_COSTS: i32 = 4;
+
+/// How long a stretch may carry frames neither side can describe.
+///
+/// A title sequence that pauses for breath, a second of black screen and
+/// silence between two halves of the same music, is one sound with a hole in
+/// it and not two sounds. Both episodes fall silent at the same moment of the
+/// same opening, which is neither of them agreeing nor either of them
+/// disagreeing: it is nothing being said. Counted as a disagreement the hole
+/// tears the opening in two and leaves each half too short for a button, which
+/// is how a series whose every episode opens the same way came away with none.
+///
+/// Bounded all the same, and tightly. Silence matches silence everywhere, so a
+/// hole long enough to span the quiet between two unrelated moments would let
+/// a stretch grow across ground it never really covered. Three seconds is more
+/// than any pause anybody writes into a title sequence and far less than the
+/// quiet between two scenes.
+const A_PAUSE_AT_MOST: usize = 3 * SAMPLES_A_SECOND as usize / STEP;
 
 /// One thirtieth of a second of sound, written down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -284,14 +308,32 @@ pub fn what_they_have_in_common(first: &Listened, second: &Listened) -> Option<I
 
         let mut running = 0i32;
         let mut began = from;
+        let mut carried = 0usize;
         for (step, (one, other)) in first[from..to]
             .iter()
             .zip(second[against..against + (to - from)].iter())
             .enumerate()
         {
-            if !the_same_moment(*one, *other) {
-                running = (running - DISAGREEMENT_COSTS).max(0);
-                continue;
+            match how_they_compare(*one, *other) {
+                HowTheyCompare::Disagree => {
+                    running = (running - DISAGREEMENT_COSTS).max(0);
+                    carried = 0;
+                    continue;
+                }
+                // Nothing said on either side never begins a stretch, only
+                // carries one already under way: a stretch begun on silence
+                // would match the quiet start of every episode there is.
+                HowTheyCompare::NeitherSays => {
+                    if running > 0 {
+                        carried += 1;
+                        if carried > A_PAUSE_AT_MOST {
+                            running = 0;
+                            carried = 0;
+                        }
+                    }
+                    continue;
+                }
+                HowTheyCompare::TheSameMoment => carried = 0,
             }
             let at = from + step;
             if running <= 0 {
@@ -311,6 +353,29 @@ pub fn what_they_have_in_common(first: &Listened, second: &Listened) -> Option<I
         }
     }
     best
+}
+
+/// What one frame of a stretch has to say about the frame it was put against.
+///
+/// Three answers rather than two, because a frame neither side can describe is
+/// not a frame the two disagree on. One of them silent while the other plays
+/// is a real disagreement; both silent at once is nothing being said, and the
+/// difference is what tells a pause inside an opening from the end of one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HowTheyCompare {
+    TheSameMoment,
+    NeitherSays,
+    Disagree,
+}
+
+fn how_they_compare(one: Frame, other: Frame) -> HowTheyCompare {
+    if !one.worth_comparing && !other.worth_comparing {
+        HowTheyCompare::NeitherSays
+    } else if the_same_moment(one, other) {
+        HowTheyCompare::TheSameMoment
+    } else {
+        HowTheyCompare::Disagree
+    }
 }
 
 /// Whether two frames describe the same moment of sound.
@@ -522,6 +587,62 @@ mod tests {
             about(found.in_the_second().start, 32_909.0 / 8_000.0),
             "and where it really sits in the second: {:?}",
             found.in_the_second()
+        );
+    }
+
+    #[test]
+    fn an_opening_that_pauses_for_breath_is_found_whole_rather_than_in_halves() {
+        // The defect this exists for: a real series opens on five seconds of
+        // music, a second of black screen and silence, and five seconds more.
+        // Both episodes are silent at the same moment of the same opening, so
+        // the pause is not two episodes disagreeing; it is neither of them
+        // saying anything. Read as a disagreement it tore the opening in two
+        // and left a stretch too short for a button, which is how a series
+        // with an opening on every episode came away with none.
+        let opening = {
+            let mut sound = MadeUpSound::new(7).tune(5.0, 1.0).silence(1.0).done();
+            sound.extend(MadeUpSound::new(13).tune(5.0, 1.0).done());
+            sound
+        };
+        let first = episode(4_137, &opening, 40_000, 11);
+        let second = episode(32_909, &opening, 40_000, 29);
+
+        let found = what_they_have_in_common(&Listened::of(&first), &Listened::of(&second))
+            .expect("two episodes sharing an opening share something");
+        assert!(
+            about(found.length(), 11.0),
+            "the whole opening, pause included, rather than one half of it: {:?}",
+            found.length()
+        );
+        assert!(
+            about(found.in_the_first().start, 4_137.0 / 8_000.0),
+            "starting where the opening really starts: {:?}",
+            found.in_the_first()
+        );
+    }
+
+    #[test]
+    fn a_long_silence_never_welds_two_shared_moments_into_one() {
+        // The other half of carrying a pause. Silence matches silence
+        // everywhere, so a hole allowed to grow without bound would let a
+        // stretch run from the opening titles across a quiet minute and into
+        // whatever else the two episodes happen to share, and a button
+        // offering to skip all of it would cut into the episode.
+        let both = {
+            let mut sound = MadeUpSound::new(7).tune(3.0, 1.0).silence(8.0).done();
+            sound.extend(MadeUpSound::new(13).tune(3.0, 1.0).done());
+            sound
+        };
+        let first = episode(4_137, &both, 40_000, 11);
+        let second = episode(32_909, &both, 40_000, 29);
+
+        let found = what_they_have_in_common(&Listened::of(&first), &Listened::of(&second))
+            .expect("the two do share something");
+        assert!(
+            found.length().as_seconds_f64() < 5.0,
+            "one of the two shared moments, not both and the quiet between \
+             them: {:?}",
+            found.length()
         );
     }
 
