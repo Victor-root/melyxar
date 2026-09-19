@@ -251,7 +251,7 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
     // Picking a track other than the default means the client would have to
     // switch inside the container, which browsers cannot do.
     let track_choice_forces_rebuild = !request.profile.can_switch_tracks_in_container
-        && chose_a_non_default_track(source, request);
+        && chose_a_non_default_track(source, audio, request);
 
     let method = if video_action == StreamAction::Transcode {
         PlaybackMethod::FullTranscode
@@ -403,22 +403,34 @@ fn chosen_subtitle(requested: Option<&Track>) -> Option<(&Track, &SubtitleDetail
     }
 }
 
-/// Whether the viewer picked something other than what the file would play on
-/// its own.
-fn chose_a_non_default_track(source: &MediaSource, request: &PlaybackRequest<'_>) -> bool {
+/// Whether the chosen track is one a browser left to itself would not show.
+///
+/// "Left to itself" turned out to mean something narrower than the file's own
+/// idea of a default. A real file marked its French track the one to default
+/// to, and a real browser, handed the file whole with nothing telling it
+/// otherwise, played its English track regardless: whatever a browser shows
+/// unhelped is the first stream in the file, disposition or no disposition,
+/// because nothing here has ever asked one to read that flag and nothing
+/// proves it does. So what counts as "what the file would play on its own"
+/// here is the first track, and reaching for anything else, automatically or
+/// by hand, costs a rebuild that hands over exactly the one track wanted and
+/// leaves a browser nothing to guess at.
+fn chose_a_non_default_track(
+    source: &MediaSource,
+    audio: Option<(&Track, &AudioDetails)>,
+    request: &PlaybackRequest<'_>,
+) -> bool {
     if request.subtitle_track.is_some() {
         return true;
     }
-    let Some(chosen) = request.audio_track else {
+    let Some((chosen, _)) = audio else {
         return false;
     };
-    // Picking the track the file already defaults to changes nothing.
-    let default_index = source
+    let first_index = source
         .audio_tracks()
-        .find(|(track, _)| track.is_default)
-        .or_else(|| source.audio_tracks().next())
+        .next()
         .map(|(track, _)| track.stream_index);
-    Some(chosen.stream_index) != default_index
+    Some(chosen.stream_index) != first_index
 }
 
 /// Whether this stream's wide gamut colour must be converted before a client
@@ -1047,6 +1059,71 @@ mod tests {
             },
         );
         assert_eq!(decision.method, PlaybackMethod::DirectPlay);
+    }
+
+    #[test]
+    fn a_file_whose_default_track_is_not_its_first_still_needs_a_rebuild_to_show_it() {
+        // The defect this exists for: a real file flagged its French track
+        // the one to default to, sitting second in the file, and a real
+        // browser handed that file whole played its English track anyway, the
+        // one sitting first. Picking French therefore has to force a rebuild
+        // exactly as picking any other non-first track would, whatever the
+        // file itself says its default is: nothing here has ever proved a
+        // browser reads that flag, and the one browser tested here does not.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        let tracks = vec![
+            video_track(0, "h264", 1080, None),
+            audio_track(1, "aac", 2, false),
+            audio_track(2, "aac", 2, true),
+        ];
+        let source = source("matroska,webm", tracks);
+        let flagged_as_default = source.tracks[2].clone();
+
+        let decision = decide(
+            &source,
+            &PlaybackRequest {
+                audio_track: Some(&flagged_as_default),
+                ..request(&profile)
+            },
+        );
+
+        assert_eq!(decision.method, PlaybackMethod::Remux);
+        assert_eq!(decision.audio_stream_index, Some(2));
+        assert!(decision
+            .reasons
+            .iter()
+            .any(|reason| matches!(reason, Reason::NonDefaultTrackSelected)));
+    }
+
+    #[test]
+    fn automatically_reaching_for_a_track_that_is_not_first_still_forces_a_rebuild() {
+        // The same defect, without anybody picking anything: nobody asked for
+        // a track, so the file's own default is what gets recommended, and
+        // that recommendation is worth nothing if a plain hand-over would show
+        // something else. A viewer who never touched the menu is entitled to
+        // hear the same track the page says is playing.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        let tracks = vec![
+            video_track(0, "h264", 1080, None),
+            audio_track(1, "aac", 2, false),
+            audio_track(2, "aac", 2, true),
+        ];
+        let source = source("matroska,webm", tracks);
+
+        let decision = decide(&source, &request(&profile));
+
+        assert_eq!(
+            decision.audio_stream_index,
+            Some(2),
+            "the file's own default is still what is recommended"
+        );
+        assert_eq!(
+            decision.method,
+            PlaybackMethod::Remux,
+            "and a rebuild is what actually delivers it"
+        );
     }
 
     #[test]
