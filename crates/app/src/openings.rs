@@ -79,10 +79,22 @@ const AGAINST_THE_EDGE: Millis = Millis::new(1_000);
 
 /// How short a shared stretch may be and still deserve a button.
 ///
-/// Under ten seconds, pressing a button is more work than waiting, and a
-/// stretch that short is as likely to be two episodes happening to agree as
-/// anything anybody wrote.
-const SHORTEST_WORTH_A_BUTTON: Millis = Millis::new(10_000);
+/// Ten seconds at first, on the reasoning that under ten seconds pressing a
+/// button is more work than waiting. That reasoning was sound and the number
+/// was measured against the wrong thing: what the comparison answers is not
+/// how long the opening is but how much of it two readings could be held to
+/// agree on, which is deliberately a touch inside the truth at both ends and
+/// loses more again on real sound than on made up sound. A title sequence
+/// somebody timed at ten seconds on their own screen came back measured at
+/// seven and a half, and was refused a button for being too short to be the
+/// thing it plainly was.
+///
+/// Five seconds, then, against what a coincidence really measures: unrelated
+/// episodes built to share nothing agree for eight tenths of a second, and
+/// unrelated real files for under one and a half. Three times the longest
+/// coincidence ever measured here, and short enough that a real opening is
+/// not refused for the shortfall of the very measurement refusing it.
+const SHORTEST_WORTH_A_BUTTON: Millis = Millis::new(5_000);
 
 /// How much two episodes must share before their agreement is worth a word.
 ///
@@ -578,11 +590,13 @@ fn say_what_was_found(one: &Found, kept: &[MediaSegment]) {
             continue;
         }
         let Some(why) = what.why_not() else { continue };
-        match what.how_long() {
-            Some(length) => tracing::debug!(
+        match what.where_it_was() {
+            Some(stretch) => tracing::debug!(
                 file = one.file_name,
                 what = kind.as_str(),
-                shared_seconds = length.as_seconds_f64(),
+                shared_seconds = stretch.length().as_seconds_f64(),
+                from = stretch.start.as_seconds_f64(),
+                to = stretch.end.as_seconds_f64(),
                 "{why}"
             ),
             None => tracing::debug!(file = one.file_name, what = kind.as_str(), "{why}"),
@@ -969,9 +983,9 @@ enum WhatWasShared {
     AStretch(Stretch),
     /// They agree on something, but it is too short to be worth a button. A
     /// title card of three seconds is not an opening.
-    TooShort(Millis),
+    TooShort(Stretch),
     /// They agree on something so long it cannot be an opening.
-    TooLong(Millis),
+    TooLong(Stretch),
     /// One pair saw something and no other pair backed it up, which is what
     /// the second opinion exists to refuse.
     OnlyOnePairSawIt,
@@ -1017,10 +1031,16 @@ impl WhatWasShared {
         }
     }
 
-    /// How long the refused stretch was, for the line that says so.
-    fn how_long(self) -> Option<Millis> {
+    /// Where the refused stretch was, for the line that says so.
+    ///
+    /// Not only how long it ran. A refusal is read by somebody asking why a
+    /// series they know has an opening came away without a button, and the
+    /// first thing they need is whether what was heard sits where the opening
+    /// really is: the same length at the wrong moment is a different problem
+    /// altogether.
+    fn where_it_was(self) -> Option<Stretch> {
         match self {
-            Self::TooShort(length) | Self::TooLong(length) => Some(length),
+            Self::TooShort(stretch) | Self::TooLong(stretch) => Some(stretch),
             _ => None,
         }
     }
@@ -1133,7 +1153,7 @@ fn what_they_share(
     enough: usize,
 ) -> Vec<WhatWasShared> {
     let mut proposed: Vec<Vec<Stretch>> = vec![Vec::new(); heard.len()];
-    let mut refused: Vec<Vec<Millis>> = vec![Vec::new(); heard.len()];
+    let mut refused: Vec<Vec<Stretch>> = vec![Vec::new(); heard.len()];
 
     for one in 0..heard.len() {
         for step in 1..=PARTNERS {
@@ -1157,8 +1177,8 @@ fn what_they_share(
             // season that shares nothing at all, and only the journal can
             // tell those two apart afterwards.
             if !worth_a_button(shared.length()) {
-                refused[one].push(shared.length());
-                refused[other].push(shared.length());
+                refused[one].push(moved(shared.in_the_first(), where_each_begins[one]));
+                refused[other].push(moved(shared.in_the_second(), where_each_begins[other]));
                 continue;
             }
             proposed[one].push(moved(shared.in_the_first(), where_each_begins[one]));
@@ -1174,13 +1194,17 @@ fn what_they_share(
                 Some(stretch) if worth_a_button(stretch.length()) => {
                     WhatWasShared::AStretch(stretch)
                 }
-                Some(stretch) => why_not_that_one(stretch.length()),
+                Some(stretch) => why_not_that_one(stretch),
                 // Proposals that nobody else backed up are the second opinion
                 // doing its work, and are worth saying so rather than passing for
                 // silence.
                 None if !proposed.is_empty() => WhatWasShared::OnlyOnePairSawIt,
-                None => match refused.iter().copied().max_by_key(|length| length.get()) {
-                    Some(length) => why_not_that_one(length),
+                None => match refused
+                    .iter()
+                    .copied()
+                    .max_by_key(|stretch| stretch.length().get())
+                {
+                    Some(stretch) => why_not_that_one(stretch),
                     None => WhatWasShared::Nothing,
                 },
             },
@@ -1192,13 +1216,14 @@ fn what_they_share(
 ///
 /// What is too brief even to be a title card is not a refusal at all, it is
 /// two episodes happening to agree, and it is reported as the nothing it is.
-fn why_not_that_one(length: Millis) -> WhatWasShared {
+fn why_not_that_one(stretch: Stretch) -> WhatWasShared {
+    let length = stretch.length();
     if length < TOO_BRIEF_TO_MENTION {
         WhatWasShared::Nothing
     } else if length < SHORTEST_WORTH_A_BUTTON {
-        WhatWasShared::TooShort(length)
+        WhatWasShared::TooShort(stretch)
     } else {
-        WhatWasShared::TooLong(length)
+        WhatWasShared::TooLong(stretch)
     }
 }
 
@@ -1506,12 +1531,18 @@ mod tests {
 
     #[test]
     fn an_episode_too_short_to_have_two_ends_is_only_read_from_the_front() {
-        let (beginning, ending) = the_two_ends_of(Some(Millis::new(15_000)));
-        assert_eq!(beginning, Millis::new(7_500));
+        // Written against the floor rather than against a number, so that it
+        // still says what it means the next time the floor moves.
+        let barely_too_short = Millis::new(SHORTEST_WORTH_A_BUTTON.get() * 2 - 2);
+        let (beginning, ending) = the_two_ends_of(Some(barely_too_short));
+        assert_eq!(beginning, Millis::new(barely_too_short.get() / 2));
         assert_eq!(
             ending, None,
             "half of it is shorter than anything worth a button"
         );
+
+        let (_, ending) = the_two_ends_of(Some(Millis::new(SHORTEST_WORTH_A_BUTTON.get() * 2)));
+        assert!(ending.is_some(), "and one hair longer has an end to read");
     }
 
     fn stretch(from: f64, to: f64) -> Stretch {
@@ -1561,8 +1592,15 @@ mod tests {
 
     #[test]
     fn a_stretch_too_short_or_too_long_is_never_offered_a_button() {
-        assert!(!worth_a_button(Millis::new(9_999)));
+        assert!(!worth_a_button(Millis::new(
+            SHORTEST_WORTH_A_BUTTON.get() - 1
+        )));
         assert!(worth_a_button(SHORTEST_WORTH_A_BUTTON));
+        // A title sequence somebody timed at ten seconds on their own screen
+        // came back measured at seven and a half, because what is answered is
+        // how much of it two readings agree on and not how long it ran. A
+        // floor that refused that is a floor set against the wrong quantity.
+        assert!(worth_a_button(Millis::new(7_648)));
         assert!(worth_a_button(LONGEST_WORTH_A_BUTTON));
         assert!(
             !worth_a_button(Millis::new(LONGEST_WORTH_A_BUTTON.get() + 1)),
@@ -1683,7 +1721,11 @@ mod tests {
         assert!(!ending_at(200).a_longer_look_might_help());
         // Every kind of nothing is worth looking further for.
         assert!(WhatWasShared::Nothing.a_longer_look_might_help());
-        assert!(WhatWasShared::TooShort(Millis::new(3_000)).a_longer_look_might_help());
+        assert!(WhatWasShared::TooShort(Stretch {
+            start: Millis::new(1_000),
+            end: Millis::new(4_000),
+        })
+        .a_longer_look_might_help());
     }
 
     #[test]
@@ -1693,8 +1735,8 @@ mod tests {
         // when in truth they shared a title card of a few seconds that was
         // thrown away without a word. The two are not the same thing, and the
         // only way to tell them apart was to ask the person who owns the
-        // files. Now the line says which it was, and how long.
-        let card = a_tune(5.0, 7);
+        // files. Now the line says which it was, how long, and where.
+        let card = a_tune(3.5, 7);
         let episodes: Vec<ListenedTo> = [(1.4f32, 11u32), (4.9, 22), (3.1, 33)]
             .into_iter()
             .map(|(before, seed)| an_episode(WorkId::new(), before, &card, seed))
@@ -1703,15 +1745,20 @@ mod tests {
         for one in what_a_season_shares(&episodes) {
             assert!(
                 one.segments.is_empty(),
-                "five seconds is not a button: {one:?}"
+                "three and a half seconds is not a button: {one:?}"
             );
             let how = how_the_opening_went(&one);
-            let WhatWasShared::TooShort(length) = how else {
+            let WhatWasShared::TooShort(stretch) = how else {
                 panic!("what they share is too short, and the line has to say so: {how:?}");
             };
             assert!(
-                (length.as_seconds_f64() - 5.0).abs() < 1.5,
+                (stretch.length().as_seconds_f64() - 3.5).abs() < 1.2,
                 "and how long it was: {how:?}"
+            );
+            assert!(
+                stretch.end > stretch.start,
+                "and where it sat, so that the same length at the wrong moment \
+                 is not read as the same problem: {how:?}"
             );
         }
     }
