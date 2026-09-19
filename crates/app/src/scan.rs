@@ -495,19 +495,23 @@ async fn record_changes(
     Ok(())
 }
 
-/// Reads the file names of the works nobody has named, and keeps what changed.
+/// Reads the names of the works nobody has named, and keeps what changed.
 ///
-/// A work waiting to be identified has never been given anything but the name
-/// of its file, and the rules that read those names get better. Without this,
-/// a collection scanned before an improvement keeps for ever the mangled
+/// A work waiting to be identified has never been given anything but a name
+/// read off the disk, and the rules that read those names get better. Without
+/// this, a collection scanned before an improvement keeps for ever the mangled
 /// titles that are exactly why a provider recognised none of it, and the only
 /// way out would be to throw the database away.
 ///
+/// Both kinds are read again, each the way it was named in the first place: a
+/// film from its own file, a series from the folder above its episodes. The
+/// two readings are different ones and neither stands in for the other.
+///
 /// A title a provider gave, or a person chose by hand, is never touched.
 ///
-/// A name that now reads as a film already in the library is not a second
-/// film: its file joins that one. Two copies whose names differed only by
-/// something a tool stuck on the front are one film with two copies, and
+/// A name that now reads as a work already in the library is not a second
+/// one: what it holds joins that one. Two copies whose names differed only by
+/// something a tool stuck on the front are one work with two copies, and
 /// leaving them apart puts the same title twice in a grid.
 pub(crate) async fn reread_names_of_nameless_works(
     state: &AppState,
@@ -555,7 +559,72 @@ pub(crate) async fn reread_names_of_nameless_works(
         done.renamed += 1;
     }
 
+    reread_names_of_nameless_series(state, library, year, &signs, &mut done).await?;
     Ok(done)
+}
+
+/// Reads again the folder that names each series nobody has named.
+///
+/// Read the way the scan reads it, through the same function: the folder
+/// holding the season folders names the series, and the file only answers
+/// where no folder did. Reading an episode's file name as if it were a film
+/// would not do at all, which is why the films above leave series alone.
+async fn reread_names_of_nameless_series(
+    state: &AppState,
+    library: &Library,
+    year: i32,
+    signs: &naming::LibrarySigns,
+    done: &mut Reread,
+) -> Result<()> {
+    let database = state.database();
+
+    for series in database.series_named_after_their_folder(library.id).await? {
+        let file_name = series
+            .relative_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        // Nothing to read the name from the way it was read the first time, so
+        // nothing is written: a name changed by a different reading would be a
+        // guess, and a guess here renames a series nobody asked about.
+        let Some(read) = episode::parse_episode(file_name, year, signs) else {
+            continue;
+        };
+        let folders = folders_above(&series.relative_path);
+        let Some(named) = the_series(&read, &folders, year, signs) else {
+            continue;
+        };
+        if named.title == series.title && named.year == series.release_year {
+            continue;
+        }
+        let sort_title = naming::sort_title(&named.title);
+
+        if let Some(twin) = database
+            .series_by_name(library.id, &sort_title, named.year)
+            .await?
+            .filter(|twin| twin.id != series.id)
+        {
+            join_work_into(state, series.id, twin.id).await?;
+            tracing::info!(
+                work = %named.title,
+                "two folders read as one series now, season by season"
+            );
+            done.merged += 1;
+            continue;
+        }
+
+        database
+            .rename_work(series.id, &named.title, &sort_title, named.year)
+            .await?;
+        tracing::info!(
+            was = %series.title,
+            now = %named.title,
+            "a series still waiting to be named reads differently now"
+        );
+        done.renamed += 1;
+    }
+
+    Ok(())
 }
 
 /// Joins one work to another, and clears what the one that went had cached.
@@ -2633,6 +2702,56 @@ mod tests {
                 .title,
             "Quiet Harbour",
             "the film keeps its identifier, its file and its history, and gains a name"
+        );
+
+        let settled = scan(&state, &library).await;
+        assert_eq!(
+            settled.renamed, 0,
+            "a name that already reads correctly is not written again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_series_still_waiting_to_be_named_has_its_folder_read_again() {
+        // The same thing one level up, and the shape it was found in: a folder
+        // saying it holds the whole series, with the word saying so left on the
+        // end of the name because yesterday's rules did not know that spelling
+        // of it. Nothing re-reads a folder, so the series stayed unnamed and
+        // the provider was asked the same wrong question every night.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Distant Signal/Saison 1/Distant.S01E01.mkv", b"x");
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+
+        let series = of_kind(&arrangement(&state, &library).await, WorkKind::Series)
+            .pop()
+            .expect("one series");
+        state
+            .database()
+            .rename_work(
+                series.id,
+                "Distant Signal Int\u{e9}grale",
+                "distant signal integrale",
+                None,
+            )
+            .await
+            .expect("renamed to what the old rules read");
+
+        let report = scan(&state, &library).await;
+        assert_eq!(report.renamed, 1);
+        assert_eq!(
+            state
+                .database()
+                .work(series.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .title,
+            "Distant Signal",
+            "the series keeps its identifier, its seasons and its files, and gains a name"
         );
 
         let settled = scan(&state, &library).await;

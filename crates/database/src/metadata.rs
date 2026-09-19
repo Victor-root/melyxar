@@ -15,14 +15,38 @@ use sqlx::{AssertSqlSafe, Row, Sqlite, Transaction};
 use crate::convert::{int_to_bool, timestamp_to_text};
 use crate::{Database, DatabaseError, Result};
 
-/// A work that still carries the name of the file it was found in.
+/// A work that still carries the name read off where it sits on disk.
+///
+/// A film is named after its own file, a series after one of the folders above
+/// its episodes. What both have in common is a path, and for a series any one
+/// of its files gives that path: every episode leads back through the same
+/// folders, which is the very thing that put them all under one series.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkNamedAfterItsFile {
+pub struct WorkNamedAfterItsPath {
     pub id: WorkId,
     pub title: String,
     pub release_year: Option<i32>,
-    /// The file the title was read from, relative to its root.
+    /// A path the title was read from, relative to its root.
     pub relative_path: PathBuf,
+}
+
+/// Reads the rows both of the questions asking for such works answer with.
+fn works_named_after_a_path(
+    rows: &[sqlx::sqlite::SqliteRow],
+) -> Result<Vec<WorkNamedAfterItsPath>> {
+    rows.iter()
+        .map(|row| {
+            Ok(WorkNamedAfterItsPath {
+                id: row
+                    .try_get::<String, _>("id")?
+                    .parse()
+                    .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?,
+                title: row.try_get("title")?,
+                release_year: row.try_get("release_year")?,
+                relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
+            })
+        })
+        .collect()
 }
 
 /// A work nobody has been able to name, and the name on disk behind it.
@@ -536,7 +560,7 @@ impl Database {
     pub async fn works_named_after_their_file(
         &self,
         library_id: LibraryId,
-    ) -> Result<Vec<WorkNamedAfterItsFile>> {
+    ) -> Result<Vec<WorkNamedAfterItsPath>> {
         let rows = sqlx::query(
             "SELECT w.id, w.title, w.release_year, min(s.relative_path) AS relative_path
              FROM works w
@@ -550,19 +574,41 @@ impl Database {
         .fetch_all(self.reader())
         .await?;
 
-        rows.iter()
-            .map(|row| {
-                Ok(WorkNamedAfterItsFile {
-                    id: row
-                        .try_get::<String, _>("id")?
-                        .parse()
-                        .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?,
-                    title: row.try_get("title")?,
-                    release_year: row.try_get("release_year")?,
-                    relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
-                })
-            })
-            .collect()
+        works_named_after_a_path(&rows)
+    }
+
+    /// Series nobody has named yet, with one of the files that lead to them.
+    ///
+    /// The counterpart of the list above, and needed for the same reason: a
+    /// series waiting to be named was given the name of a folder, the rules
+    /// that read folder names improve too, and nothing else ever reads that
+    /// name again. Without this, a series whose folder was misread stays
+    /// misread for as long as the library exists, and asking the provider
+    /// again asks it the same wrong question every time.
+    ///
+    /// One file is enough, and any of them will do: every episode of a series
+    /// reaches it through the same folders, which is the very thing that put
+    /// them all under one series.
+    pub async fn series_named_after_their_folder(
+        &self,
+        library_id: LibraryId,
+    ) -> Result<Vec<WorkNamedAfterItsPath>> {
+        let rows = sqlx::query(
+            "SELECT w.id, w.title, w.release_year, min(s.relative_path) AS relative_path
+             FROM works w
+             JOIN works season ON season.parent_id = w.id
+             JOIN works episode ON episode.parent_id = season.id
+             JOIN media_sources s ON s.work_id = episode.id
+             WHERE w.library_id = ? AND w.identification IN ('pending', 'unidentified')
+               AND w.kind = 'series'
+             GROUP BY w.id
+             ORDER BY w.added_at",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        works_named_after_a_path(&rows)
     }
 
     /// Gives a work the title its file name now reads as.
@@ -2118,6 +2164,93 @@ mod tests {
             .expect("identification applied");
         assert!(database
             .works_named_after_their_file(library.id)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_series_still_named_after_its_folder_is_listed_with_one_of_its_files() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "S\u{e9}ries",
+                LibraryKind::Series,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Series"))],
+            )
+            .await
+            .expect("library created");
+        let series = database
+            .create_work(
+                library.id,
+                WorkKind::Series,
+                "Distant Signal Int\u{e9}grale",
+                "distant signal int\u{e9}grale",
+                None,
+            )
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(library.id, series.id, 1, WorkKind::Season, "Saison 1", "1")
+            .await
+            .expect("season created");
+        // Two episodes, because the question has to answer one row per series
+        // and not one row per file: a series of two hundred episodes read two
+        // hundred times would be renamed two hundred times over.
+        for episode in 1..=2 {
+            let work = database
+                .create_child_work(
+                    library.id,
+                    season.id,
+                    episode,
+                    WorkKind::Episode,
+                    "Pilot",
+                    "pilot",
+                )
+                .await
+                .expect("episode created");
+            database
+                .insert_source(
+                    work.id,
+                    library.roots[0].id,
+                    &PathBuf::from("Distant Signal Int\u{e9}grale 1080p/Saison 1")
+                        .join(format!("Distant Signal - 1x0{episode}.mkv")),
+                    1_000,
+                    melyxar_core::time::now(),
+                )
+                .await
+                .expect("source recorded");
+        }
+
+        let listed = database
+            .series_named_after_their_folder(library.id)
+            .await
+            .expect("read");
+        assert_eq!(listed.len(), 1, "one row for the series, not one per file");
+        assert_eq!(listed[0].id, series.id);
+        assert_eq!(listed[0].title, "Distant Signal Int\u{e9}grale");
+        assert_eq!(
+            listed[0].relative_path,
+            PathBuf::from("Distant Signal Int\u{e9}grale 1080p/Saison 1/Distant Signal - 1x01.mkv"),
+            "a path that still leads through the folder the name was read from"
+        );
+
+        // The film question and the series question never answer each other's
+        // works: an episode read as a film swallows its own series.
+        assert!(database
+            .works_named_after_their_file(library.id)
+            .await
+            .expect("read")
+            .is_empty());
+
+        // And a series a provider named is no longer described by a folder.
+        database
+            .apply_identification(series.id, &found(), false)
+            .await
+            .expect("identification applied");
+        assert!(database
+            .series_named_after_their_folder(library.id)
             .await
             .expect("read")
             .is_empty());
