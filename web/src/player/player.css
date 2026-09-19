@@ -457,15 +457,26 @@
   left: 0;
   z-index: 0;
   height: var(--player-rail);
-  /* Fully round rather than slightly softened: it is what makes a bar of this
-     thickness read as one object instead of a block. */
-  border-radius: 100px;
   transition: height var(--quick) var(--ease);
 }
 
 .player-rail-track {
   width: 100%;
+  /* Fully round rather than slightly softened: it is what makes a bar of this
+     thickness read as one object instead of a block. */
+  border-radius: 100px;
   background: hsla(0, 0%, 100%, 0.2);
+}
+
+/* Rounded on the leading edge alone, the one that actually moves. The
+   trailing edge always sits flush against the track's own already-rounded
+   start, so rounding it a second time gave it a curve of its own to render,
+   and right at the beginning, where its true width is nothing at all, that
+   curve showed as a stray red sliver poking past the track's edge instead of
+   disappearing with it. */
+.player-rail-held,
+.player-rail-played {
+  border-radius: 0 100px 100px 0;
 }
 
 /* What the browser is holding, which is what says whether a jump forward will
