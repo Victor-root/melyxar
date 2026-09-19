@@ -28,6 +28,7 @@ use melyxar_core::job::{JobKind, JobPriority, JobStep};
 use melyxar_core::library::Library;
 use melyxar_core::media_log::file_name_of as name_of_file;
 use melyxar_database::Database;
+use melyxar_ffmpeg::AskedToStop;
 use melyxar_jobs::JobHandle;
 
 use crate::{AppState, Result};
@@ -461,6 +462,11 @@ pub(crate) async fn read_the_key_frames_of(
         if handle.is_cancelled() {
             break;
         }
+        // Carried all the way down to the analyser. Looking between two films
+        // stops work counted in films; a film read from end to end has to be
+        // told during the reading, or a stop asked for is only honoured once
+        // the film nobody wants read any more has been read to its end.
+        let asked_to_stop = AskedToStop::when(handle.cancelled_when());
         let batch = database
             .sources_without_key_frames(library.id, IN_ONE_BATCH)
             .await?;
@@ -480,6 +486,7 @@ pub(crate) async fn read_the_key_frames_of(
                 let analyser = analyser.clone();
                 let database = owned_database.clone();
                 let handle = owned_handle.clone();
+                let asked_to_stop = asked_to_stop.clone();
                 async move {
                     if handle.is_cancelled() {
                         return HowItWasRead::NotAtAll;
@@ -487,8 +494,13 @@ pub(crate) async fn read_the_key_frames_of(
                     if let Some(name) = file_name_of(&database, source_id).await {
                         handle.now_working_on(Some(&name)).await;
                     }
-                    let how =
-                        read_one_film_for_its_key_frames(&database, &analyser, source_id).await;
+                    let how = read_one_film_for_its_key_frames(
+                        &database,
+                        &analyser,
+                        source_id,
+                        asked_to_stop,
+                    )
+                    .await;
                     handle.advance(1).await;
                     how
                 }
@@ -598,6 +610,7 @@ pub(crate) async fn pull_the_subtitles_out_of(
 
         let owned_state = state.clone();
         let owned_handle = handle.clone();
+        let asked_to_stop = AskedToStop::when(handle.cancelled_when());
         // Bounded like the other two: this is the disk from end to end, and
         // the upkeep must leave the film somebody is watching alone.
         let done = melyxar_jobs::for_each_bounded(
@@ -606,6 +619,7 @@ pub(crate) async fn pull_the_subtitles_out_of(
             move |source_id| {
                 let state = owned_state.clone();
                 let handle = owned_handle.clone();
+                let asked_to_stop = asked_to_stop.clone();
                 async move {
                     if handle.is_cancelled() {
                         return None;
@@ -616,10 +630,12 @@ pub(crate) async fn pull_the_subtitles_out_of(
                     // Every way this fails has already said so with the film
                     // it was about, and the film is left waiting rather than
                     // written down: a reading that could not happen is not an
-                    // answer about the file.
-                    let pulled = crate::subtitles::pull_them_all_out(&state, source_id)
-                        .await
-                        .ok();
+                    // answer about the file. A reading stopped on purpose is
+                    // the same thing, and says so more quietly.
+                    let pulled =
+                        crate::subtitles::pull_them_all_out(&state, source_id, asked_to_stop)
+                            .await
+                            .ok();
                     handle.advance(1).await;
                     pulled
                 }
@@ -723,12 +739,14 @@ pub(crate) async fn make_the_thumbnails_of(
 
         let owned_state = state.clone();
         let owned_handle = handle.clone();
+        let asked_to_stop = AskedToStop::when(handle.cancelled_when());
         let done = melyxar_jobs::for_each_bounded(
             batch,
             state.config().limits.concurrent_probes,
             move |source_id| {
                 let state = owned_state.clone();
                 let handle = owned_handle.clone();
+                let asked_to_stop = asked_to_stop.clone();
                 async move {
                     if handle.is_cancelled() {
                         return false;
@@ -738,8 +756,9 @@ pub(crate) async fn make_the_thumbnails_of(
                     }
                     // Every way this fails has already said so with the file it
                     // was about, which is what a refusal has to carry to be
-                    // read.
-                    let done = crate::thumbnails::make_for(&state, source_id)
+                    // read. This is the longest of the three readings, so it is
+                    // the one a stop has to reach into rather than wait out.
+                    let done = crate::thumbnails::make_for(&state, source_id, asked_to_stop)
                         .await
                         .is_ok_and(|made| made.counted > 0);
                     handle.advance(1).await;
@@ -812,6 +831,7 @@ async fn read_one_film_for_its_key_frames(
     database: &Database,
     analyser: &std::path::Path,
     source_id: MediaSourceId,
+    asked_to_stop: AskedToStop,
 ) -> HowItWasRead {
     let Ok(Some(source)) = database.playable_source(source_id).await else {
         return HowItWasRead::NotAtAll;
@@ -823,7 +843,7 @@ async fn read_one_film_for_its_key_frames(
     let (read, how) = match melyxar_container::key_frames(&source.path).await {
         Some(found) => (Ok(found), HowItWasRead::FromItsOwnIndex),
         None => (
-            melyxar_ffmpeg::probe::key_frames(analyser, &source.path).await,
+            melyxar_ffmpeg::probe::key_frames(analyser, &source.path, asked_to_stop).await,
             HowItWasRead::ByReadingItThrough,
         ),
     };
@@ -864,6 +884,15 @@ async fn read_one_film_for_its_key_frames(
                     HowItWasRead::NotAtAll
                 }
             }
+        }
+        // A reading somebody called off says nothing about the film. Nothing
+        // is written down, so the next run finds it waiting exactly as it was.
+        Err(melyxar_ffmpeg::FfmpegError::GivenUp) => {
+            tracing::debug!(
+                file = %name_of_file(&source.path),
+                "this film was left where it was, its reading having been stopped"
+            );
+            HowItWasRead::NotAtAll
         }
         Err(error) => {
             tracing::warn!(

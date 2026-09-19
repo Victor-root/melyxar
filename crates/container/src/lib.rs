@@ -131,9 +131,13 @@ mod tests {
     async fn by_reading_it_through(path: &Path) -> Vec<Millis> {
         let tools =
             melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are installed here");
-        melyxar_ffmpeg::probe::key_frames(&tools.ffprobe, path)
-            .await
-            .expect("the film is read")
+        melyxar_ffmpeg::probe::key_frames(
+            &tools.ffprobe,
+            path,
+            melyxar_ffmpeg::AskedToStop::never(),
+        )
+        .await
+        .expect("the film is read")
     }
 
     #[tokio::test]
