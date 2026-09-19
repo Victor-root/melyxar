@@ -110,12 +110,8 @@ pub fn current_year() -> i32 {
 /// nothing that shows a time is ever left with nothing to show.
 pub fn at_utc_minutes_on(when: Timestamp, minutes: i64) -> Timestamp {
     let inside_the_day = minutes.rem_euclid(24 * 60);
-    let at = time::Time::from_hms(
-        (inside_the_day / 60) as u8,
-        (inside_the_day % 60) as u8,
-        0,
-    )
-    .expect("minutes inside a day are a time of day");
+    let at = time::Time::from_hms((inside_the_day / 60) as u8, (inside_the_day % 60) as u8, 0)
+        .expect("minutes inside a day are a time of day");
     when.replace_time(at)
 }
 
