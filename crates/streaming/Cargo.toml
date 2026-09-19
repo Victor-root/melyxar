@@ -10,6 +10,7 @@ description = "Playback sessions: the playlist the server owns, and the segments
 [dependencies]
 melyxar-core = { workspace = true }
 melyxar-ffmpeg = { workspace = true }
+melyxar-media-probe = { workspace = true }
 melyxar-playback = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
