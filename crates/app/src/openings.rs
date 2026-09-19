@@ -65,6 +65,17 @@ const THE_END: Millis = Millis::new(4 * 60 * 1_000);
 /// anything anybody wrote.
 const SHORTEST_WORTH_A_BUTTON: Millis = Millis::new(10_000);
 
+/// How much two episodes must share before their agreement is worth a word.
+///
+/// Two episodes with nothing whatever to do with each other still agree about
+/// something: a breath, a door closing, a beat of silence. Measured on made up
+/// seasons built to share nothing, that came to eight tenths of a second. Say
+/// that in the journal and every season that really shares nothing reads as
+/// though a button had been taken from it, which buries the one line that
+/// matters under a hundred that do not. A title card runs longer than this. A
+/// coincidence does not.
+const TOO_BRIEF_TO_MENTION: Millis = Millis::new(2_000);
+
 /// And how long. Above this, something has gone wrong rather than right: two
 /// copies of one episode filed as two episodes share everything, and a button
 /// offering to skip five minutes of the film would do real damage.
@@ -277,7 +288,7 @@ async fn listen_to_one_season(
         let kept = only_what_nobody_has_already_said(state, one).await?;
         with_an_opening += usize::from(kept.iter().any(|it| it.kind == SegmentKind::Intro));
         with_a_closing += usize::from(kept.iter().any(|it| it.kind == SegmentKind::Outro));
-        say_what_was_found(&one.file_name, &kept);
+        say_what_was_found(one, &kept);
         database.store_openings(one.source_id, &kept).await?;
     }
 
@@ -297,22 +308,37 @@ async fn listen_to_one_season(
 /// The line somebody sends over when a button turns up in the wrong place: it
 /// names the file and the two moments, which between them are the whole of
 /// what was decided about it.
-fn say_what_was_found(file: &str, found: &[MediaSegment]) {
-    if found.is_empty() {
+fn say_what_was_found(one: &Found, kept: &[MediaSegment]) {
+    for segment in kept {
         tracing::debug!(
-            file,
-            "nothing of this episode is shared with its neighbours"
-        );
-        return;
-    }
-    for segment in found {
-        tracing::debug!(
-            file,
+            file = one.file_name,
             what = segment.kind.as_str(),
             from = segment.start.as_seconds_f64(),
             to = segment.end.as_seconds_f64(),
             "a button will offer to skip this"
         );
+    }
+
+    for (kind, what) in &one.ends {
+        // A button is there, so there is nothing to explain.
+        if kept.iter().any(|segment| segment.kind == *kind) {
+            continue;
+        }
+        // Something was heard and the file or a person overruled it, which the
+        // line above has already said. Saying it a second way would be wrong.
+        if what.stretch().is_some() {
+            continue;
+        }
+        let Some(why) = what.why_not() else { continue };
+        match what.how_long() {
+            Some(length) => tracing::debug!(
+                file = one.file_name,
+                what = kind.as_str(),
+                shared_seconds = length.as_seconds_f64(),
+                "{why}"
+            ),
+            None => tracing::debug!(file = one.file_name, what = kind.as_str(), "{why}"),
+        }
     }
 }
 
@@ -609,12 +635,72 @@ fn naming(season: &SeasonToListenTo) -> String {
     }
 }
 
+/// What comparing one end of one episode with its neighbours came to.
+///
+/// Not a bare `Option`, because the four ways of coming away with nothing call
+/// for four different answers and the person reading the journal is entitled
+/// to know which one it was. The evening this was written, a season of a
+/// cartoon came away empty and the only way to find out whether its opening
+/// was three seconds long or simply absent was to ask the person who owns it.
+#[derive(Debug, Clone, Copy)]
+enum WhatWasShared {
+    /// A stretch the neighbours agree on, long enough and short enough.
+    AStretch(Stretch),
+    /// They agree on something, but it is too short to be worth a button. A
+    /// title card of three seconds is not an opening.
+    TooShort(Millis),
+    /// They agree on something so long it cannot be an opening.
+    TooLong(Millis),
+    /// One pair saw something and no other pair backed it up, which is what
+    /// the second opinion exists to refuse.
+    OnlyOnePairSawIt,
+    /// The neighbours have nothing whatever in common with this episode here.
+    Nothing,
+}
+
+impl WhatWasShared {
+    /// The stretch, when there is one.
+    fn stretch(self) -> Option<Stretch> {
+        match self {
+            Self::AStretch(stretch) => Some(stretch),
+            _ => None,
+        }
+    }
+
+    /// Why there is no button, in the words the journal uses.
+    ///
+    /// Nothing when there is a button, since a line saying why there is none
+    /// would then be a lie.
+    fn why_not(self) -> Option<&'static str> {
+        match self {
+            Self::AStretch(_) => None,
+            Self::TooShort(_) => Some("what the neighbours share here is too short for a button"),
+            Self::TooLong(_) => Some("what the neighbours share here is too long to be an opening"),
+            Self::OnlyOnePairSawIt => {
+                Some("one pair heard something here and no other pair heard it too")
+            }
+            Self::Nothing => Some("nothing of this end is shared with its neighbours"),
+        }
+    }
+
+    /// How long the refused stretch was, for the line that says so.
+    fn how_long(self) -> Option<Millis> {
+        match self {
+            Self::TooShort(length) | Self::TooLong(length) => Some(length),
+            _ => None,
+        }
+    }
+}
+
 /// What listening to one file decided about it.
 #[derive(Debug)]
 struct Found {
     source_id: MediaSourceId,
     file_name: String,
     segments: Vec<MediaSegment>,
+    /// What came of each end, so that an episode with no button can say which
+    /// of the four kinds of nothing it came away with.
+    ends: Vec<(SegmentKind, WhatWasShared)>,
 }
 
 /// What the episodes of one season turned out to share, file by file.
@@ -659,24 +745,26 @@ fn what_a_season_shares(episodes: &[ListenedTo]) -> Vec<Found> {
         .iter()
         .enumerate()
         .map(|(at, episode)| {
-            let mut segments = Vec::new();
-            for (kind, found) in [
+            let ends = vec![
                 (SegmentKind::Intro, opening[at]),
                 (SegmentKind::Outro, closing[at]),
-            ] {
-                if let Some(stretch) = found {
-                    segments.push(MediaSegment {
-                        kind,
+            ];
+            let segments = ends
+                .iter()
+                .filter_map(|(kind, what)| {
+                    what.stretch().map(|stretch| MediaSegment {
+                        kind: *kind,
                         start: stretch.start,
                         end: stretch.end,
                         origin: SegmentOrigin::Detected,
-                    });
-                }
-            }
+                    })
+                })
+                .collect();
             Found {
                 source_id: episode.source_id,
                 file_name: episode.file_name.clone(),
                 segments,
+                ends,
             }
         })
         .collect()
@@ -688,8 +776,9 @@ fn what_they_share(
     where_each_begins: &[Millis],
     works: &[WorkId],
     enough: usize,
-) -> Vec<Option<Stretch>> {
+) -> Vec<WhatWasShared> {
     let mut proposed: Vec<Vec<Stretch>> = vec![Vec::new(); heard.len()];
+    let mut refused: Vec<Vec<Millis>> = vec![Vec::new(); heard.len()];
 
     for one in 0..heard.len() {
         for step in 1..=PARTNERS {
@@ -708,7 +797,13 @@ fn what_they_share(
             let Some(shared) = what_they_have_in_common(first, second) else {
                 continue;
             };
+            // A stretch no button could sit on is still worth remembering:
+            // it is the difference between a three second title card and a
+            // season that shares nothing at all, and only the journal can
+            // tell those two apart afterwards.
             if !worth_a_button(shared.length()) {
+                refused[one].push(shared.length());
+                refused[other].push(shared.length());
                 continue;
             }
             proposed[one].push(moved(shared.in_the_first(), where_each_begins[one]));
@@ -718,10 +813,38 @@ fn what_they_share(
 
     proposed
         .iter()
-        .map(|proposed| {
-            what_they_agree_on(proposed, enough).filter(|stretch| worth_a_button(stretch.length()))
-        })
+        .zip(&refused)
+        .map(
+            |(proposed, refused)| match what_they_agree_on(proposed, enough) {
+                Some(stretch) if worth_a_button(stretch.length()) => {
+                    WhatWasShared::AStretch(stretch)
+                }
+                Some(stretch) => why_not_that_one(stretch.length()),
+                // Proposals that nobody else backed up are the second opinion
+                // doing its work, and are worth saying so rather than passing for
+                // silence.
+                None if !proposed.is_empty() => WhatWasShared::OnlyOnePairSawIt,
+                None => match refused.iter().copied().max_by_key(|length| length.get()) {
+                    Some(length) => why_not_that_one(length),
+                    None => WhatWasShared::Nothing,
+                },
+            },
+        )
         .collect()
+}
+
+/// Which side of the two limits a refused stretch fell on.
+///
+/// What is too brief even to be a title card is not a refusal at all, it is
+/// two episodes happening to agree, and it is reported as the nothing it is.
+fn why_not_that_one(length: Millis) -> WhatWasShared {
+    if length < TOO_BRIEF_TO_MENTION {
+        WhatWasShared::Nothing
+    } else if length < SHORTEST_WORTH_A_BUTTON {
+        WhatWasShared::TooShort(length)
+    } else {
+        WhatWasShared::TooLong(length)
+    }
 }
 
 /// Whether a shared stretch is worth putting a button over.
@@ -1105,6 +1228,46 @@ mod tests {
         }
     }
 
+    /// What the comparison came to about the opening of one episode.
+    fn how_the_opening_went(found: &Found) -> WhatWasShared {
+        found
+            .ends
+            .iter()
+            .find(|(kind, _)| *kind == SegmentKind::Intro)
+            .map(|(_, what)| *what)
+            .expect("every episode answers about its opening")
+    }
+
+    #[test]
+    fn a_season_sharing_a_stretch_too_short_for_a_button_says_so_rather_than_saying_nothing() {
+        // The defect this exists for: a season came away with no buttons and
+        // the journal said its episodes shared nothing with their neighbours,
+        // when in truth they shared a title card of a few seconds that was
+        // thrown away without a word. The two are not the same thing, and the
+        // only way to tell them apart was to ask the person who owns the
+        // files. Now the line says which it was, and how long.
+        let card = a_tune(5.0, 7);
+        let episodes: Vec<ListenedTo> = [(1.4f32, 11u32), (4.9, 22), (3.1, 33)]
+            .into_iter()
+            .map(|(before, seed)| an_episode(WorkId::new(), before, &card, seed))
+            .collect();
+
+        for one in what_a_season_shares(&episodes) {
+            assert!(
+                one.segments.is_empty(),
+                "five seconds is not a button: {one:?}"
+            );
+            let how = how_the_opening_went(&one);
+            let WhatWasShared::TooShort(length) = how else {
+                panic!("what they share is too short, and the line has to say so: {how:?}");
+            };
+            assert!(
+                (length.as_seconds_f64() - 5.0).abs() < 1.5,
+                "and how long it was: {how:?}"
+            );
+        }
+    }
+
     #[test]
     fn a_season_whose_episodes_share_nothing_is_told_nothing() {
         let episodes: Vec<ListenedTo> = [11u32, 22, 33]
@@ -1121,6 +1284,15 @@ mod tests {
 
         for one in what_a_season_shares(&episodes) {
             assert!(one.segments.is_empty(), "{one:?}");
+            // And nothing is what it is told. These episodes do in fact agree
+            // about eight tenths of a second somewhere, as any two stretches
+            // of sound will, and calling that a refused title card would put
+            // a misleading line under every season that shares nothing.
+            let how = how_the_opening_went(&one);
+            assert!(
+                matches!(how, WhatWasShared::Nothing),
+                "a coincidence is reported as the nothing it is: {how:?}"
+            );
         }
     }
 
