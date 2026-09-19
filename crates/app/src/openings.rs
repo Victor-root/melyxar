@@ -390,6 +390,8 @@ async fn listen_to_one_season(
         episodes = distinct,
         files = episodes.len(),
         language = which_language(&tracks, &chosen).unwrap_or("none stated"),
+        track = which_track(&tracks, &chosen).unwrap_or("unnamed"),
+        audio_descriptions = how_many_are_audio_descriptions(&tracks),
         "listening to this season"
     );
 
@@ -898,6 +900,39 @@ fn the_track_to_listen_to(of_each_file: &[Vec<Track>]) -> Vec<Option<i32>> {
         .collect()
 }
 
+/// The name the file gives the track being listened to, for the journal.
+///
+/// A language on its own does not say enough. A season that comes away with
+/// nothing is nearly always a season listened to on the wrong track, and the
+/// only way to tell the right English from an audio description called English
+/// is what the file calls it. Written down so that the answer is in the
+/// journal rather than in somebody running the probe by hand afterwards.
+fn which_track<'a>(of_each_file: &'a [Vec<Track>], chosen: &[Option<i32>]) -> Option<&'a str> {
+    of_each_file
+        .iter()
+        .zip(chosen)
+        .find_map(|(tracks, chosen)| {
+            let chosen = (*chosen)?;
+            tracks
+                .iter()
+                .find(|track| track.stream_index == chosen)?
+                .title
+                .as_deref()
+        })
+}
+
+/// How many audio descriptions the season holds, across all its files.
+///
+/// Nought on a season that came away with nothing says the wrong track is not
+/// the reason, which is worth as much as the other answer.
+fn how_many_are_audio_descriptions(of_each_file: &[Vec<Track>]) -> usize {
+    of_each_file
+        .iter()
+        .flatten()
+        .filter(|track| track.is_audio_description())
+        .count()
+}
+
 /// The language the season is being listened to in, for the journal to say so.
 fn which_language<'a>(of_each_file: &'a [Vec<Track>], chosen: &[Option<i32>]) -> Option<&'a str> {
     of_each_file
@@ -1403,6 +1438,31 @@ mod tests {
         let chosen = the_track_to_listen_to(&files);
         assert_eq!(chosen, vec![Some(2), Some(2)]);
         assert_eq!(which_language(&files, &chosen), Some("fra"));
+        assert_eq!(
+            how_many_are_audio_descriptions(&files),
+            2,
+            "the journal says how many were set aside, so nought means the \
+             wrong track is not the reason a season came away empty"
+        );
+    }
+
+    #[test]
+    fn the_journal_names_the_track_a_season_is_being_listened_to_on() {
+        let named = |stream_index: i32, title: &str| {
+            let mut track = a_sound_track(stream_index, Some("eng"), true);
+            track.title = Some(title.into());
+            track
+        };
+        let files = vec![vec![a_picture(0), named(1, "English 5.1")]];
+        let chosen = the_track_to_listen_to(&files);
+        assert_eq!(which_track(&files, &chosen), Some("English 5.1"));
+        assert_eq!(how_many_are_audio_descriptions(&files), 0);
+
+        // A file that names none of its tracks has nothing to say here, and
+        // the line says as much rather than pretending otherwise.
+        let unnamed = vec![vec![a_picture(0), a_sound_track(1, Some("eng"), true)]];
+        let chosen = the_track_to_listen_to(&unnamed);
+        assert_eq!(which_track(&unnamed, &chosen), None);
     }
 
     #[test]
