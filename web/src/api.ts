@@ -117,14 +117,18 @@ export const REFRESH_MODES: RefreshMode[] = [
   "everything",
 ];
 
-/** One of the two readings the upkeep is made of, on one library. */
+/** One of the readings the upkeep is made of, on one library. */
 export interface UpkeepTask {
-  task: "key_frames" | "thumbnails";
+  task: "key_frames" | "subtitles" | "thumbnails" | "openings";
   library: string;
   library_name: string;
-  /** Films still waiting. Nought means there is nothing to start. */
+  /** Films still waiting, or seasons when this one counts seasons. Nought
+      means there is nothing to start. */
   waiting: number;
   done: number;
+  /** Whether the two numbers above count seasons rather than files. Listening
+      for the titles a season shares is done season by season. */
+  counts_seasons: boolean;
   /** Whether the scan of that library does this reading itself. */
   during_the_scan: boolean;
   /** Whether it is running right now. */

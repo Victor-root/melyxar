@@ -167,6 +167,10 @@ pub struct EpisodeToListenTo {
     pub work_id: WorkId,
     pub number: Option<i32>,
     pub source_id: MediaSourceId,
+    /// Where the file is, root included. The sound is read straight from it,
+    /// so asking for it separately would be one question per episode for
+    /// something this one already knows.
+    pub path: PathBuf,
     pub duration: Option<Millis>,
 }
 
@@ -1813,9 +1817,11 @@ impl Database {
     /// or not at all.
     pub async fn episodes_to_listen_to(&self, season_id: WorkId) -> Result<Vec<EpisodeToListenTo>> {
         let rows = sqlx::query(
-            "SELECT episode.id AS work_id, episode.ordinal, s.id AS source_id, s.duration_ms
+            "SELECT episode.id AS work_id, episode.ordinal, s.id AS source_id,
+                    s.relative_path, s.duration_ms, library_roots.path AS root_path
              FROM works episode
              JOIN media_sources s ON s.work_id = episode.id
+             JOIN library_roots ON library_roots.id = s.root_id
              WHERE episode.parent_id = ?
                AND s.analysed_at IS NOT NULL AND s.missing_since IS NULL
              ORDER BY episode.ordinal, s.added_at",
@@ -1826,10 +1832,13 @@ impl Database {
 
         rows.iter()
             .map(|row| {
+                let root: String = row.try_get("root_path")?;
+                let relative: String = row.try_get("relative_path")?;
                 Ok(EpisodeToListenTo {
                     work_id: parse_id(&row.try_get::<String, _>("work_id")?)?,
                     number: row.try_get("ordinal")?,
                     source_id: parse_id(&row.try_get::<String, _>("source_id")?)?,
+                    path: PathBuf::from(root).join(relative),
                     duration: row
                         .try_get::<Option<i64>, _>("duration_ms")?
                         .map(Millis::new),
@@ -5858,6 +5867,11 @@ mod tests {
         assert!(episodes
             .iter()
             .all(|episode| episode.duration == Some(Millis::new(2_400_000))));
+        assert_eq!(
+            episodes[0].path,
+            PathBuf::from("/mnt/one/Films/Distant Signal/1/1.mkv"),
+            "the file is named in full, so listening to it asks nothing further"
+        );
 
         let second_copy = database
             .insert_source(

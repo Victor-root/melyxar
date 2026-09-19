@@ -121,13 +121,20 @@ const ALIKE_ENOUGH: u32 = 11;
 
 /// What a frame that disagrees costs the stretch it sits in the middle of.
 ///
-/// A stretch is not ended by the first frame that disagrees. Two episodes
-/// really do differ inside their own opening, where the name of this week's
-/// episode is spoken or written, and a rule that stopped dead there would
-/// report half an opening and call it the whole. Costing two keeps a stretch
-/// growing while two frames in three agree, and stops it growing on into the
-/// episode, where almost none do.
-const DISAGREEMENT_COSTS: i32 = 2;
+/// A stretch is not ended by the first frame that disagrees, because the two
+/// grids of windows never line up and that alone loses a frame here and there.
+/// What it must never do is carry on past the end of what is really shared: a
+/// button that skips a few seconds into the episode is a button nobody presses
+/// twice.
+///
+/// Costing four keeps a stretch growing while four frames in five agree.
+/// Measured, two readings of one sound disagree on well under one frame in ten
+/// even at the worst offset the grids can fall on, so four in five leaves room
+/// to spare; two unrelated sounds agree on about one frame in twenty, so it is
+/// nowhere near enough to grow on. Costing two would let a stretch grow
+/// through a third of its frames disagreeing, and a third disagreeing is not
+/// the same sound.
+const DISAGREEMENT_COSTS: i32 = 4;
 
 /// One thirtieth of a second of sound, written down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

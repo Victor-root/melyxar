@@ -1118,6 +1118,7 @@ dependencies = [
  "melyxar-media-probe",
  "melyxar-metadata",
  "melyxar-playback",
+ "melyxar-sound",
  "melyxar-streaming",
  "serde",
  "serde_json",

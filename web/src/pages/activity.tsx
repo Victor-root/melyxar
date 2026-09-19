@@ -130,11 +130,19 @@ export function ActivityPage({ libraries }: { libraries: Library[] }) {
                 <span className="upkeep-name">{t(`upkeep.${task.task}`)}</span>
                 <span className="upkeep-library">{task.library_name}</span>
               </span>
+              {/* Counted in whatever the reading is really done in. Listening
+                  for the titles a season shares is done season by season, so a
+                  number of files there would be a number nobody can act on. */}
               <span className="upkeep-count">
                 {task.waiting > 0
-                  ? t("upkeep.waiting", { count: task.waiting })
+                  ? t(task.counts_seasons ? "upkeep.waiting_seasons" : "upkeep.waiting", {
+                      count: task.waiting,
+                    })
                   : t("upkeep.nothing_waiting")}
-                {task.done > 0 && ` · ${t("upkeep.done_count", { count: task.done })}`}
+                {task.done > 0 &&
+                  ` · ${t(task.counts_seasons ? "upkeep.done_seasons" : "upkeep.done_count", {
+                    count: task.done,
+                  })}`}
               </span>
               {/* When it last ran, beside how much is left. A reading that has
                   never run and one that ran last night and found nothing look

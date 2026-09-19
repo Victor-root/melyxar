@@ -169,6 +169,7 @@ const en: Dictionary = {
   "jobs.read_key_frames": "Where films can be started",
   "jobs.generate_thumbnails": "Thumbnails",
   "jobs.pull_out_subtitles": "Subtitles of the films",
+  "jobs.listen_for_openings": "Opening titles of the series",
   "jobs.purge_activity": "Tidying",
   "jobs.backup": "Backup",
   "jobs.state.queued": "Waiting",
@@ -193,6 +194,7 @@ const en: Dictionary = {
   "jobs.step.reading_key_frames": "Reading where each film can be started",
   "jobs.step.making_thumbnails": "Making the pictures of the playback bar",
   "jobs.step.pulling_out_subtitles": "Pulling the subtitles out of each film",
+  "jobs.step.listening_for_openings": "Listening to each season for the titles its episodes share",
   "jobs.step.asking_the_provider": "Asking about the films",
   "jobs.step.filling_in_what_is_missing": "Filling in what is missing",
 
@@ -209,7 +211,7 @@ const en: Dictionary = {
 
   "upkeep.title": "Upkeep",
   "upkeep.why":
-    "Three things have to be read out of every film: where a jump can land, the subtitles it carries, and the little pictures of the playback bar. They are not part of a scan, which has to be over quickly. They run of a night, or now if you press the button.",
+    "Four things have to be read out of your films: where a jump can land, the subtitles they carry, the little pictures of the playback bar, and, for a series, the opening titles its episodes share. They are not part of a scan, which has to be over quickly. They run of a night, or now if you press the button.",
   "upkeep.key_frames": "Where films can be started",
   "upkeep.key_frames_why":
     "Without this, a jump lands a few seconds before where you asked. Quick on each film, and worth doing first.",
@@ -218,9 +220,14 @@ const en: Dictionary = {
     "The subtitles made of words live mixed into the film, so getting them out means reading it from end to end. Done here, nobody waits for it when they open the film. Only films that carry some are counted.",
   "upkeep.thumbnails": "Pictures of the playback bar",
   "upkeep.thumbnails_why":
-    "The little pictures that scroll past while you drag along the bar. The longest of the three.",
+    "The little pictures that scroll past while you drag along the bar. The longest of the four.",
+  "upkeep.openings": "Opening titles of the series",
+  "upkeep.openings_why":
+    "The opening is the one part of an episode that is the same in every episode of its season, so the episodes are listened to and asked what they share. That is what puts a skip button over the opening and the closing titles on a file that names no chapter, which is almost all of them. Counted in seasons, because a season is listened to whole or not at all. It never finds the reminder of last week: that is different every week, so there is nothing to recognise.",
   "upkeep.waiting": "{count} waiting",
+  "upkeep.waiting_seasons": "{count} seasons waiting",
   "upkeep.done_count": "{count} done",
+  "upkeep.done_seasons": "{count} seasons done",
   "upkeep.nothing_waiting": "Nothing waiting",
   "upkeep.during_the_scan": "Done after each scan of this library",
   "upkeep.run": "Run now",
@@ -691,6 +698,7 @@ const fr: Dictionary = {
   "jobs.read_key_frames": "Points de départ des films",
   "jobs.generate_thumbnails": "Vignettes",
   "jobs.pull_out_subtitles": "Sous-titres des films",
+  "jobs.listen_for_openings": "Génériques des séries",
   "jobs.purge_activity": "Rangement",
   "jobs.backup": "Sauvegarde",
   "jobs.state.queued": "En attente",
@@ -715,6 +723,7 @@ const fr: Dictionary = {
   "jobs.step.reading_key_frames": "Repérage des points de départ des films",
   "jobs.step.making_thumbnails": "Fabrication des miniatures de la barre",
   "jobs.step.pulling_out_subtitles": "Extraction des sous-titres de chaque film",
+  "jobs.step.listening_for_openings": "Écoute de chaque saison pour trouver ce que ses épisodes ont en commun",
   "jobs.step.asking_the_provider": "Recherche des fiches",
   "jobs.step.filling_in_what_is_missing": "Complément des fiches",
 
@@ -731,7 +740,7 @@ const fr: Dictionary = {
 
   "upkeep.title": "Entretien",
   "upkeep.why":
-    "Trois choses doivent être lues dans chaque film : les endroits où un saut peut atterrir, les sous-titres qu'il contient, et les vignettes de la barre de lecture. Elles ne font pas partie du scan, qui doit être vite fini. Elles tournent la nuit, ou maintenant si vous appuyez sur le bouton.",
+    "Quatre choses doivent être lues dans vos films : les endroits où un saut peut atterrir, les sous-titres qu'ils contiennent, les vignettes de la barre de lecture, et, pour une série, le générique que ses épisodes ont en commun. Elles ne font pas partie du scan, qui doit être vite fini. Elles tournent la nuit, ou maintenant si vous appuyez sur le bouton.",
   "upkeep.key_frames": "Points de départ des films",
   "upkeep.key_frames_why":
     "Sans ça, un saut atterrit quelques secondes avant l'endroit demandé. Rapide sur chaque film, et à faire en premier.",
@@ -740,9 +749,14 @@ const fr: Dictionary = {
     "Les sous-titres faits de mots sont mêlés au film, donc les sortir demande de le lire d'un bout à l'autre. Fait ici, personne ne l'attend en ouvrant le film. Seuls les films qui en portent sont comptés.",
   "upkeep.thumbnails": "Vignettes de la barre de lecture",
   "upkeep.thumbnails_why":
-    "Les petites images qui défilent quand on glisse le long de la barre. La plus longue des trois.",
+    "Les petites images qui défilent quand on glisse le long de la barre. La plus longue des quatre.",
+  "upkeep.openings": "Génériques des séries",
+  "upkeep.openings_why":
+    "Le générique est la seule partie d'un épisode qui soit identique dans tous les épisodes de sa saison : on écoute donc les épisodes et on leur demande ce qu'ils ont en commun. C'est ce qui met un bouton « passer le générique » sur un fichier qui ne nomme aucun chapitre, c'est-à-dire presque tous. Compté en saisons, parce qu'une saison s'écoute entière ou pas du tout. Ne trouve jamais le résumé de l'épisode précédent : il est différent chaque semaine, donc il n'y a rien à reconnaître.",
   "upkeep.waiting": "{count} en attente",
+  "upkeep.waiting_seasons": "{count} saisons en attente",
   "upkeep.done_count": "{count} faits",
+  "upkeep.done_seasons": "{count} saisons faites",
   "upkeep.nothing_waiting": "Rien en attente",
   "upkeep.during_the_scan": "Fait après chaque scan de cette bibliothèque",
   "upkeep.run": "Lancer maintenant",

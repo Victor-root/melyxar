@@ -16,6 +16,7 @@ pub mod episodes;
 pub mod identify;
 pub mod images;
 pub mod libraries;
+pub mod openings;
 pub mod playback;
 pub mod preferences;
 pub mod scan;

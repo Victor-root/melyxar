@@ -2460,6 +2460,17 @@ mod tests {
         );
     }
 
+    /// The readings of the upkeep a library of films really has.
+    ///
+    /// Three of the four. Listening to a season for the titles its episodes
+    /// share is the odd one out: a film has no season and no neighbours.
+    fn readings_that_apply_to_films() -> Vec<crate::upkeep::UpkeepTask> {
+        crate::upkeep::UpkeepTask::ALL
+            .into_iter()
+            .filter(|task| *task != crate::upkeep::UpkeepTask::Openings)
+            .collect()
+    }
+
     #[tokio::test]
     async fn a_scan_leaves_the_heavy_readings_to_the_upkeep_unless_it_is_told_not_to() {
         // The defect this exists for: the readings went through every film of
@@ -2469,8 +2480,10 @@ mod tests {
         // going from a button, and a library that wants them in one sitting
         // says so.
         //
-        // The film carries words inside it, so that all three readings have
-        // something to do rather than two of them.
+        // The film carries words inside it, so that all three readings that
+        // apply to a film have something to do rather than two of them. The
+        // fourth, listening a season for the titles its episodes share, has
+        // nothing to say about a library of films and does not appear at all.
         let directory = tempfile::tempdir().expect("temporary directory");
         let media = directory.path().join("films");
         std::fs::create_dir_all(&media).expect("the media folder");
@@ -2486,11 +2499,18 @@ mod tests {
         // And what it left is counted, which is what the upkeep screen shows
         // and what the button acts on.
         let left = crate::upkeep::what_is_left(&state).await.expect("counted");
-        for task in crate::upkeep::UpkeepTask::ALL {
+        assert!(
+            !left
+                .iter()
+                .any(|entry| entry.task == crate::upkeep::UpkeepTask::Openings),
+            "a film has no season and no neighbours, so a row that would read \
+             nought of nought for ever is not offered at all: {left:?}"
+        );
+        for task in readings_that_apply_to_films() {
             let entry = left
                 .iter()
                 .find(|entry| entry.task == task && entry.library == library.id)
-                .expect("every library answers for every reading");
+                .expect("every library answers for every reading that applies to it");
             assert_eq!(entry.waiting, 1, "{}", task.as_str());
             assert!(!entry.during_the_scan);
             assert!(!entry.under_way);
@@ -2503,11 +2523,11 @@ mod tests {
         );
 
         let done = crate::upkeep::what_is_left(&state).await.expect("counted");
-        for task in crate::upkeep::UpkeepTask::ALL {
+        for task in readings_that_apply_to_films() {
             let entry = done
                 .iter()
                 .find(|entry| entry.task == task && entry.library == library.id)
-                .expect("every library answers for every reading");
+                .expect("every library answers for every reading that applies to it");
             assert_eq!(entry.waiting, 0, "{}", task.as_str());
             assert_eq!(entry.done, 1, "{}", task.as_str());
         }
