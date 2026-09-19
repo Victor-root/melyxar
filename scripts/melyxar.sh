@@ -196,8 +196,8 @@ en|section_build|Building
 fr|section_build|Compilation
 en|build_notice|This takes 5 to 10 minutes the first time and 1 to 2 minutes afterwards.
 fr|build_notice|Cela prend 5 à 10 minutes la première fois, puis 1 à 2 minutes ensuite.
-en|build_nice|The build runs at low priority, so a film playing now will not stutter.
-fr|build_nice|La compilation tourne en priorité basse, une lecture en cours ne saccadera pas.
+en|build_nice|The build runs at the highest priority, for the fastest rebuild while this is still being developed.
+fr|build_nice|La compilation tourne à la priorité la plus haute, pour aller le plus vite possible tant que c'est en plein développement.
 en|step_build|Building the server
 fr|step_build|Compilation du serveur
 en|step_install_binary|Installing the binary
@@ -710,9 +710,10 @@ build_and_install() {
   info "$(tr_msg build_nice)"
 
   export PATH="/root/.cargo/bin:${PATH}"
-  # Low priority on both processor and disk, so a film playing right now keeps
-  # its share of the machine.
-  step "$(tr_msg step_build)" nice -n 15 cargo build --release --locked \
+  # Highest priority the processor allows: this is still in active
+  # development, and waiting on a rebuild costs more right now than a film
+  # playing at the same moment would.
+  step "$(tr_msg step_build)" nice -n -20 cargo build --release --locked \
     --manifest-path "${SOURCE_DIR}/Cargo.toml"
 
   step "$(tr_msg step_install_binary)" bash -c "
@@ -1151,7 +1152,7 @@ menu() {
   echo
 
   local choice
-  choice="$(prompt_default "$(tr_msg prompt_choice)" "1")"
+  choice="$(prompt_default "$(tr_msg prompt_choice)" "2")"
 
   case "$choice" in
     1) action_install ;;
