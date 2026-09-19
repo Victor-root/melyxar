@@ -306,6 +306,8 @@ struct AtWork {
     /// so did the run before it, so the numbers alone say nothing about who
     /// wrote what. The only mark a file carries is when it was written.
     began_at: SystemTime,
+    /// Whether what this run produced has already been read back and said.
+    was_read_back: bool,
     /// How far into the film the tool says it has written, in milliseconds.
     ///
     /// The tool's own account of itself rather than anything read off the
@@ -770,6 +772,7 @@ impl Session {
                 at_second = self.playlist.start_of(index).as_seconds_f64(),
                 "a segment was handed over from what is already there"
             );
+            self.say_how_the_streams_came_out(index).await;
             return Ok(path);
         }
 
@@ -784,13 +787,11 @@ impl Session {
         };
 
         self.say_what_it_took(index, started, waited).await;
-        if started.is_some() {
-            self.say_how_the_streams_came_out(index).await;
-        }
+        self.say_how_the_streams_came_out(index).await;
         Ok(path)
     }
 
-    /// Reads back where the picture and the sound of a fresh run really begin.
+    /// Reads back where the picture and the sound of a run really begin.
     ///
     /// The file says where each of its streams starts, and so does what comes
     /// out of the tool, and the two are not obliged to agree: a film whose
@@ -799,15 +800,17 @@ impl Session {
     /// the three looks completely different to somebody watching. Nothing
     /// anywhere said which of them happened.
     ///
-    /// Only when a run has just begun, and only for somebody reading the
-    /// journal closely: it costs one reading of the playlist the tool writes
-    /// for itself, which names the pieces produced so far.
+    /// Read off the first piece the run produced, once per run, and only for
+    /// somebody reading the journal closely. A piece of a fragmented film says
+    /// nothing on its own: it carries the sound and the picture but not what
+    /// they are, so it is read behind the header that does, which is the same
+    /// pair a player is given.
     async fn say_how_the_streams_came_out(&self, index: u32) {
-        if !tracing::enabled!(tracing::Level::DEBUG) {
+        if !tracing::enabled!(tracing::Level::DEBUG) || !self.is_the_first_of_its_run(index).await {
             return;
         }
-        let playlist = self.folder.join("tool.m3u8");
-        let report = match melyxar_ffmpeg::probe::probe(&self.tools.ffprobe, &playlist).await {
+
+        let read = match self.read_back(index).await {
             Ok(report) => report,
             Err(error) => {
                 tracing::debug!(
@@ -820,7 +823,7 @@ impl Session {
             }
         };
 
-        let lining_up = melyxar_media_probe::HowTheStreamsLineUp::of(&report);
+        let lining_up = melyxar_media_probe::HowTheStreamsLineUp::of(&read);
         tracing::debug!(
             session = %self.id,
             index,
@@ -830,6 +833,36 @@ impl Session {
             sound_after_picture_ms = lining_up.offset(),
             "where the picture and the sound of what the tool produced begin"
         );
+    }
+
+    /// Whether this is the piece the run at work was set going on, asked once.
+    ///
+    /// Marked as it answers, so a piece handed over again says nothing a
+    /// second time.
+    async fn is_the_first_of_its_run(&self, index: u32) -> bool {
+        let mut running = self.running.lock().await;
+        match running.as_mut() {
+            Some(at_work) if at_work.from == index && !at_work.was_read_back => {
+                at_work.was_read_back = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Reads one piece of the film back, behind the header that describes it.
+    async fn read_back(&self, index: u32) -> Result<melyxar_ffmpeg::probe::ProbeReport> {
+        let whole = self.folder.join(format!("read-back-{index}.mp4"));
+        let header = tokio::fs::read(self.folder.join("init.mp4")).await?;
+        let piece = tokio::fs::read(self.path_of(index)).await?;
+        tokio::fs::write(&whole, [header, piece].concat()).await?;
+
+        let read = melyxar_ffmpeg::probe::probe(&self.tools.ffprobe, &whole).await;
+        // Removed whatever the reading said: it exists for one line of the
+        // journal, and a folder of these would be a cache filling up for
+        // nobody.
+        tokio::fs::remove_file(&whole).await.ok();
+        Ok(read?)
     }
 
     /// Writes down where the wait for one segment actually went.
@@ -1014,6 +1047,7 @@ impl Session {
             from: begin_at,
             steps_back,
             began_at,
+            was_read_back: false,
             reached,
             speed,
             pictures,
