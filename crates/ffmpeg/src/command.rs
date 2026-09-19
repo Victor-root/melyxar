@@ -615,7 +615,7 @@ impl Command {
                 push!("copy");
             }
             AudioOutput::Encode(encode) => {
-                if let Some(filter) = audio_filter_chain(encode) {
+                if let Some(filter) = self.sound_filters(encode) {
                     push!("-af");
                     push!(&filter);
                 }
@@ -690,7 +690,50 @@ impl Command {
 
         args
     }
+
+    /// Everything applied to the sound, the silence filling a hole at the
+    /// front included.
+    fn sound_filters(&self, encode: &AudioEncode) -> Option<String> {
+        let mut stages: Vec<String> = Vec::new();
+        if self.fills_the_hole_before_the_sound() {
+            stages.push(SILENCE_UP_TO_THE_PICTURE.to_string());
+        }
+        stages.extend(audio_filter_chain(encode));
+        (!stages.is_empty()).then(|| stages.join(","))
+    }
+
+    /// Whether the sound is to be padded up to where the picture begins.
+    ///
+    /// A film whose sound begins seconds after its picture has a hole at the
+    /// front, and a browser handed a stream with a hole in it does not wait
+    /// through it: it plays the sound it was given as soon as it has it, and
+    /// the film then runs with the sound ahead of the picture from end to end.
+    /// Measured on the maintainer's collection: a film whose French track
+    /// begins three seconds in played three seconds ahead of itself, while a
+    /// desktop player reading the same file over the network was perfectly in
+    /// step. The tool was right all along; what it produced was a stream no
+    /// browser could place.
+    ///
+    /// Only a run that begins at the beginning of the film, because that is
+    /// the only place such a hole exists: a run set going part way through
+    /// lands in the middle of a sound that has been playing for an hour, and
+    /// asking for the front to be filled there would ask for that hour to be
+    /// filled with silence.
+    ///
+    /// Only a sound being rebuilt, too. A sound carried over untouched cannot
+    /// be filtered at all, and a film served that way keeps its hole.
+    fn fills_the_hole_before_the_sound(&self) -> bool {
+        matches!(self.output, Output::Segments { .. }) && self.input.start_at.is_none()
+    }
 }
+
+/// Fills the front of the sound with silence so that it begins with the
+/// picture.
+///
+/// The sound keeps its own moment: what was at three seconds is still at
+/// three seconds, and the three seconds before it are silence rather than
+/// nothing at all.
+const SILENCE_UP_TO_THE_PICTURE: &str = "aresample=first_pts=0";
 
 /// Filter that maps a wide gamut picture into standard range.
 ///
@@ -1295,6 +1338,77 @@ mod tests {
         let args = arguments(&command);
         let index = position(&args, "-start_number").expect("a start number is present");
         assert_eq!(args[index + 1], "312");
+    }
+
+    /// A stream to a browser, the shape every test below is about.
+    fn segments_of(input: Input) -> Command {
+        Command::new(
+            input,
+            Output::Segments {
+                pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
+                initialisation: PathBuf::from("/tmp/session/init.mp4"),
+                tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
+                cut: WhereToCut::Every(Millis::new(4000)),
+                start_number: 0,
+            },
+        )
+        .with_audio(AudioOutput::Encode(AudioEncode::browser_stereo("aac")))
+    }
+
+    /// What was asked of the sound, as one string.
+    fn sound_filters(command: &Command) -> Option<String> {
+        let args = arguments(command);
+        let at = args.iter().position(|value| value == "-af")?;
+        args.get(at + 1).cloned()
+    }
+
+    #[test]
+    fn a_film_served_from_its_beginning_has_its_sound_filled_up_to_its_picture() {
+        // A film whose sound begins after its picture leaves a hole at the
+        // front, and a browser plays across it rather than waiting through it.
+        let filters = sound_filters(&segments_of(Input::new("/media/film.mkv")))
+            .expect("the sound is filtered");
+        assert!(
+            filters.starts_with("aresample=first_pts=0"),
+            "the filling comes first, so everything after it works on a sound \
+             that already begins with the picture: {filters}"
+        );
+    }
+
+    #[test]
+    fn a_run_set_going_part_way_through_never_fills_anything() {
+        // There is no hole in the middle of a film, and asking for one to be
+        // filled there asks for everything up to that point to be silence.
+        let filters = sound_filters(&segments_of(
+            Input::new("/media/film.mkv").starting_at(Millis::new(1_340_000)),
+        ));
+        assert!(
+            !filters.unwrap_or_default().contains("first_pts"),
+            "nothing was skipped over at the front, so nothing is missing"
+        );
+    }
+
+    #[test]
+    fn a_file_written_out_is_never_filled_either() {
+        // A file is opened by whatever opens it, and every such player places
+        // a sound by what the file says rather than by what it was handed.
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_audio(AudioOutput::Encode(AudioEncode::browser_stereo("aac")));
+        assert!(!sound_filters(&command)
+            .unwrap_or_default()
+            .contains("first_pts"));
+    }
+
+    #[test]
+    fn a_sound_carried_over_untouched_is_never_filtered() {
+        let command = segments_of(Input::new("/media/film.mkv")).with_audio(AudioOutput::Copy);
+        assert!(
+            sound_filters(&command).is_none(),
+            "a sound nobody rebuilds cannot be filtered at all"
+        );
     }
 
     #[test]
