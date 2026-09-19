@@ -970,19 +970,28 @@ impl Database {
         Ok(())
     }
 
-    /// Moves every file of one work onto another and drops the empty one.
+    /// Moves everything one work holds onto another and drops the empty one.
     ///
-    /// Two works turn out to be one film whenever the rules that read file
-    /// names improve: several copies whose names differed only by something a
-    /// tool stuck on the front now read as the same title. Left alone they are
-    /// the same film several times over in a grid, which is the very thing a
-    /// version chooser exists to avoid.
+    /// Two works turn out to be one whenever the rules that read file names
+    /// improve, or whenever the provider answers one identifier for two names
+    /// nothing could ever have matched: several copies of one film, or one
+    /// series written two ways because it arrived on two disks. Left apart
+    /// they are the same title, the same poster and the same synopsis twice in
+    /// a grid, which is the very thing a version chooser exists to avoid.
     ///
-    /// Only the files and the clips attached to them are carried over. The one
-    /// that goes describes the same film as the one that stays, by name, by
-    /// picture and by cast, so there is nothing there worth keeping twice.
+    /// A series is not one row, so joining one is not one move: each season
+    /// meets the season of the same number, each episode the episode of the
+    /// same number, and only there do the files change hands. A season or an
+    /// episode the other side does not have changes parent instead. Nothing is
+    /// dropped until every level has been walked, because dropping a series
+    /// still holding its seasons would take its episodes and their files down
+    /// with it.
     ///
-    /// The paths of the pictures it had come back, so their files can be
+    /// What the ones that go described is not carried over: they name the same
+    /// work as the ones that stay, by title, by picture and by cast, so there
+    /// is nothing there worth keeping twice.
+    ///
+    /// The paths of the pictures they had come back, so their files can be
     /// removed from the cache by the caller that put them there. Nothing else
     /// points at those rows, so without this they would sit there for ever.
     pub async fn merge_work_into(&self, from: WorkId, into: WorkId) -> Result<Vec<String>> {
@@ -990,53 +999,96 @@ impl Database {
             return Ok(Vec::new());
         }
         let mut transaction = self.begin().await?;
-        sqlx::query("UPDATE media_sources SET work_id = ? WHERE work_id = ?")
-            .bind(into.to_db_string())
-            .bind(from.to_db_string())
-            .execute(&mut *transaction)
-            .await?;
-        sqlx::query("UPDATE extra_videos SET work_id = ? WHERE work_id = ?")
-            .bind(into.to_db_string())
-            .bind(from.to_db_string())
-            .execute(&mut *transaction)
-            .await?;
+        let mut no_longer_used = Vec::new();
+        let mut going = Vec::new();
+        let mut receiving = Vec::new();
+        let mut pairs = vec![(from, into)];
 
-        let no_longer_used: Vec<String> = sqlx::query(
-            "SELECT relative_path FROM images WHERE owner_kind = 'work' AND owner_id = ?",
-        )
-        .bind(from.to_db_string())
-        .fetch_all(&mut *transaction)
-        .await?
-        .iter()
-        .map(|row| row.try_get::<String, _>("relative_path"))
-        .collect::<std::result::Result<_, _>>()?;
-        // Pictures are found by owner rather than by a key the engine knows
-        // about, so dropping the work does not drop them.
-        sqlx::query("DELETE FROM images WHERE owner_kind = 'work' AND owner_id = ?")
-            .bind(from.to_db_string())
-            .execute(&mut *transaction)
-            .await?;
+        while let Some((from, into)) = pairs.pop() {
+            for (child, ordinal) in children_with_their_ordinal(&mut *transaction, from).await? {
+                let met = match ordinal {
+                    Some(ordinal) => child_at(&mut *transaction, into, ordinal).await?,
+                    None => None,
+                };
+                match met {
+                    Some(met) => pairs.push((child, met)),
+                    None => {
+                        sqlx::query("UPDATE works SET parent_id = ? WHERE id = ?")
+                            .bind(into.to_db_string())
+                            .bind(child.to_db_string())
+                            .execute(&mut *transaction)
+                            .await?;
+                    }
+                }
+            }
 
-        sqlx::query("DELETE FROM works WHERE id = ?")
+            sqlx::query("UPDATE media_sources SET work_id = ? WHERE work_id = ?")
+                .bind(into.to_db_string())
+                .bind(from.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+            sqlx::query("UPDATE extra_videos SET work_id = ? WHERE work_id = ?")
+                .bind(into.to_db_string())
+                .bind(from.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+
+            let pictures: Vec<String> = sqlx::query(
+                "SELECT relative_path FROM images WHERE owner_kind = 'work' AND owner_id = ?",
+            )
             .bind(from.to_db_string())
+            .fetch_all(&mut *transaction)
+            .await?
+            .iter()
+            .map(|row| row.try_get::<String, _>("relative_path"))
+            .collect::<std::result::Result<_, _>>()?;
+            no_longer_used.extend(pictures);
+            // Pictures are found by owner rather than by a key the engine
+            // knows about, so dropping the work does not drop them.
+            sqlx::query("DELETE FROM images WHERE owner_kind = 'work' AND owner_id = ?")
+                .bind(from.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+
+            going.push(from);
+            receiving.push(into);
+        }
+
+        for work in going {
+            sqlx::query("DELETE FROM works WHERE id = ?")
+                .bind(work.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+        }
+        for work in receiving {
+            sqlx::query(
+                "UPDATE works
+                    SET child_count = (SELECT count(*) FROM works AS child WHERE child.parent_id = works.id)
+                  WHERE id = ?",
+            )
+            .bind(work.to_db_string())
             .execute(&mut *transaction)
             .await?;
+        }
+
         transaction.commit().await?;
         Ok(no_longer_used)
     }
 
-    /// Works of one library the provider says are one and the same film.
+    /// Works of one library the provider says are one and the same work.
     ///
-    /// Only works met on their own. Joining is about two files of one film,
-    /// and a season is never a copy of anything. It also has to be that way:
-    /// a provider numbers its films, its series, its seasons and its episodes
-    /// on separate counters, so the twelfth season and the twelfth film carry
-    /// the same number, and a library holding both would see one work with two
-    /// files where there are two works with one each.
+    /// Only works met on their own: a season and an episode are placed by the
+    /// series that holds them, never by what a provider numbers them. It also
+    /// has to be that way, because a provider numbers its films, its series,
+    /// its seasons and its episodes on separate counters, so the twelfth
+    /// season and the twelfth film carry the same number. For the same reason
+    /// a film never meets a series here, whatever number they share: a group
+    /// is an identifier and a kind together.
     ///
-    /// Two copies can carry names nothing could ever match, and be the same
-    /// film: only the provider can say so, and it says so by answering the
-    /// same identifier for both. Left apart they are the same title, the same
+    /// Two copies of one film can carry names nothing could ever match, and a
+    /// series arriving on a second disk can be written another way there. Only
+    /// the provider can say they are one, and it says so by answering the same
+    /// identifier for both. Left apart they are the same title, the same
     /// poster and the same synopsis twice in a grid.
     ///
     /// One provider is asked about at a time, and a work carries one
@@ -1047,12 +1099,12 @@ impl Database {
         provider: &str,
     ) -> Result<Vec<SharedIdentity>> {
         let rows = sqlx::query(
-            "SELECT e.external_id, e.work_id
+            "SELECT e.external_id, w.kind, e.work_id
              FROM work_external_ids e
              JOIN works w ON w.id = e.work_id
              WHERE w.library_id = ? AND e.provider = ?
                AND w.parent_id IS NULL
-             ORDER BY e.external_id, w.added_at",
+             ORDER BY e.external_id, w.kind, w.added_at",
         )
         .bind(library_id.to_db_string())
         .bind(provider)
@@ -1060,9 +1112,9 @@ impl Database {
         .await?;
 
         let mut groups: Vec<SharedIdentity> = Vec::new();
-        let mut current: Option<String> = None;
+        let mut current: Option<(String, String)> = None;
         for row in &rows {
-            let external_id: String = row.try_get("external_id")?;
+            let named = (row.try_get("external_id")?, row.try_get("kind")?);
             let work_id: WorkId = row
                 .try_get::<String, _>("work_id")?
                 .parse()
@@ -1070,8 +1122,8 @@ impl Database {
 
             // The first of each group is the one that has been here longest,
             // which is the one the others join.
-            match current.as_deref() {
-                Some(seen) if seen == external_id => {
+            match &current {
+                Some(seen) if seen == &named => {
                     groups
                         .last_mut()
                         .expect("a group was started with this identifier")
@@ -1079,7 +1131,7 @@ impl Database {
                         .push(work_id);
                 }
                 _ => {
-                    current = Some(external_id);
+                    current = Some(named);
                     groups.push(SharedIdentity {
                         keep: work_id,
                         others: Vec::new(),
@@ -2088,6 +2140,48 @@ impl Placed {
     }
 }
 
+/// What hangs under a work, each with the number it is ranked at.
+async fn children_with_their_ordinal<'e, E>(
+    executor: E,
+    parent_id: WorkId,
+) -> Result<Vec<(WorkId, Option<i32>)>>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
+    sqlx::query("SELECT id, ordinal FROM works WHERE parent_id = ?")
+        .bind(parent_id.to_db_string())
+        .fetch_all(executor)
+        .await?
+        .iter()
+        .map(|row| {
+            let id: WorkId = row
+                .try_get::<String, _>("id")?
+                .parse()
+                .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))?;
+            Ok((id, row.try_get("ordinal")?))
+        })
+        .collect()
+}
+
+/// The work hanging under another at that number, if there is one.
+async fn child_at<'e, E>(executor: E, parent_id: WorkId, ordinal: i32) -> Result<Option<WorkId>>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
+    let row = sqlx::query("SELECT id FROM works WHERE parent_id = ? AND ordinal = ? LIMIT 1")
+        .bind(parent_id.to_db_string())
+        .bind(ordinal)
+        .fetch_optional(executor)
+        .await?;
+
+    row.map(|row| {
+        row.try_get::<String, _>("id")?
+            .parse()
+            .map_err(|_| DatabaseError::Corrupt("work identifier".to_string()))
+    })
+    .transpose()
+}
+
 async fn insert_work<'e, E>(
     executor: E,
     placed: Placed,
@@ -2421,6 +2515,59 @@ mod tests {
             seasons.push(written.id);
         }
         (series.id, seasons, episodes)
+    }
+
+    /// A series whose every episode holds a file, seasons and their episodes
+    /// given by number, built the way a scan builds one.
+    async fn a_series_on_disk(
+        database: &Database,
+        library_id: LibraryId,
+        root_id: LibraryRootId,
+        title: &str,
+        seasons: &[(i32, &[i32])],
+    ) -> WorkId {
+        let series = database
+            .create_work(
+                library_id,
+                WorkKind::Series,
+                title,
+                &title.to_lowercase(),
+                Some(2019),
+            )
+            .await
+            .expect("series written");
+        for (season, episodes) in seasons {
+            let written = database
+                .create_child_work(
+                    library_id,
+                    series.id,
+                    *season,
+                    WorkKind::Season,
+                    &format!("Season {season}"),
+                    &format!("season {season}"),
+                )
+                .await
+                .expect("season written");
+            for number in *episodes {
+                let episode = database
+                    .create_child_work(
+                        library_id,
+                        written.id,
+                        *number,
+                        WorkKind::Episode,
+                        &format!("Episode {number}"),
+                        &format!("episode {number}"),
+                    )
+                    .await
+                    .expect("episode written");
+                let path = format!("{title}/{season}/{number}.mkv");
+                database
+                    .insert_source(episode.id, root_id, Path::new(&path), 1_000, now())
+                    .await
+                    .expect("file recorded");
+            }
+        }
+        series.id
     }
 
     #[tokio::test]
@@ -4665,6 +4812,167 @@ mod tests {
                 .is_empty(),
             "a row pointing at a work that no longer exists is a row nobody will ever clear"
         );
+    }
+
+    #[tokio::test]
+    async fn a_series_joining_another_brings_its_seasons_its_episodes_and_their_files() {
+        // The same series on two disks, its folder written one way on one and
+        // another way on the other. Dropping the one that goes while it still
+        // held its seasons would take every episode and every file under it
+        // down with it, and the library would quietly lose a whole run.
+        let (database, library_id, root_id) = library().await;
+        let kept = a_series_on_disk(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1, 2])],
+        )
+        .await;
+        let gone = a_series_on_disk(
+            &database,
+            library_id,
+            root_id,
+            "Signal Lointain",
+            &[(1, &[2, 3]), (2, &[1])],
+        )
+        .await;
+
+        database
+            .merge_work_into(gone, kept)
+            .await
+            .expect("the two are one series");
+
+        assert!(
+            database.work(gone).await.expect("read").is_none(),
+            "the same series twice in a grid is the defect this exists to avoid"
+        );
+        assert_eq!(
+            database.sources_of_root(root_id).await.expect("read").len(),
+            5,
+            "no episode loses its file when its series joins another"
+        );
+
+        let viewer = a_viewer(&database).await;
+        let seasons = database.children_of(viewer, kept).await.expect("read");
+        assert_eq!(
+            seasons
+                .iter()
+                .map(|season| (season.ordinal, season.child_count))
+                .collect::<Vec<_>>(),
+            vec![(Some(1), 3), (Some(2), 1)],
+            "the episodes joined the season they share, and the season nobody had changed parent"
+        );
+
+        let first = database
+            .child_by_ordinal(kept, 1)
+            .await
+            .expect("read")
+            .expect("season one stayed");
+        let held_twice = database
+            .child_by_ordinal(first.id, 2)
+            .await
+            .expect("read")
+            .expect("the episode both sides had");
+        assert_eq!(
+            database
+                .sources_of_work(held_twice.id)
+                .await
+                .expect("read")
+                .len(),
+            2,
+            "one episode on two disks is one episode with two files"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_pictures_of_an_episode_that_goes_are_named_so_their_files_can_go_too() {
+        let (database, library_id, root_id) = library().await;
+        let kept = a_series_on_disk(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1])],
+        )
+        .await;
+        let gone = a_series_on_disk(
+            &database,
+            library_id,
+            root_id,
+            "Signal Lointain",
+            &[(1, &[1])],
+        )
+        .await;
+        let season = database
+            .child_by_ordinal(gone, 1)
+            .await
+            .expect("read")
+            .expect("season one");
+        let episode = database
+            .child_by_ordinal(season.id, 1)
+            .await
+            .expect("read")
+            .expect("episode one");
+        database
+            .replace_images(
+                "work",
+                &episode.id.to_db_string(),
+                "thumb",
+                &[crate::images::StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: episode.id.to_db_string(),
+                    image_kind: "thumb".to_string(),
+                    relative_path: format!("works/{}/thumb-abc-200.webp", episode.id),
+                    width: Some(200),
+                    height: Some(300),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("picture stored");
+
+        let no_longer_used = database
+            .merge_work_into(gone, kept)
+            .await
+            .expect("the two are one series");
+
+        assert_eq!(
+            no_longer_used.len(),
+            1,
+            "a picture two levels down is still a file nobody else will ever clear"
+        );
+        assert!(no_longer_used[0].contains("thumb-abc-200"));
+    }
+
+    #[tokio::test]
+    async fn a_film_and_a_series_the_provider_numbers_alike_are_not_put_together() {
+        // A provider numbers its films and its series on separate counters, so
+        // the same number names one of each.
+        let (database, library_id, root_id) = library().await;
+        let (film, _) =
+            work_with_source(&database, library_id, root_id, "Quiet Harbour 1080p.mkv").await;
+        let series = a_series_on_disk(
+            &database,
+            library_id,
+            root_id,
+            "Quiet Harbour",
+            &[(1, &[1])],
+        )
+        .await;
+        for work_id in [film, series] {
+            database
+                .set_work_external_id(work_id, "tmdb", "111")
+                .await
+                .expect("identifier written");
+        }
+
+        assert!(database
+            .works_sharing_an_identity(library_id, "tmdb")
+            .await
+            .expect("read")
+            .is_empty());
     }
 
     #[tokio::test]
