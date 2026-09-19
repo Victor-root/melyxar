@@ -14,13 +14,13 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use melyxar_core::id::JobId;
 use melyxar_core::job::{Job, JobKind, JobPriority, JobState, JobStep};
 use melyxar_database::Database;
+use tokio::sync::watch;
 use tokio::task::{JoinHandle, JoinSet};
 
 #[derive(Debug, thiserror::Error)]
@@ -52,7 +52,7 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(500);
 pub struct JobHandle {
     id: JobId,
     database: Database,
-    cancelled: Arc<AtomicBool>,
+    cancelled: watch::Receiver<bool>,
     progress: Arc<Mutex<Progress>>,
 }
 
@@ -72,7 +72,19 @@ impl JobHandle {
     /// A job is expected to look at this between steps. Stopping between two
     /// files is what makes cancellation leave the library in a sound state.
     pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Relaxed)
+        *self.cancelled.borrow()
+    }
+
+    /// The same answer, in a form something else can wait on.
+    ///
+    /// Looking between two files is enough for work counted in files. It is
+    /// not enough for one file that takes a quarter of an hour: a reading that
+    /// takes a whole film past has to be told during the reading, or the stop
+    /// is only honoured once the film nobody wants read any more has been read
+    /// to its end. What is handed over is the plainest thing that can carry
+    /// the news, so that nothing below this crate has to know what a job is.
+    pub fn cancelled_when(&self) -> watch::Receiver<bool> {
+        self.cancelled.clone()
     }
 
     /// Says what the job is on at this very moment: the name of one file.
@@ -179,7 +191,7 @@ impl JobHandle {
 #[derive(Clone)]
 pub struct JobRunner {
     database: Database,
-    running: Arc<Mutex<HashMap<JobId, Arc<AtomicBool>>>>,
+    running: Arc<Mutex<HashMap<JobId, watch::Sender<bool>>>>,
 }
 
 impl JobRunner {
@@ -236,16 +248,16 @@ impl JobRunner {
             .database
             .create_job(kind, priority, target_id.as_deref())
             .await?;
-        let cancelled = Arc::new(AtomicBool::new(false));
+        let (asked_to_stop, cancelled) = watch::channel(false);
         self.running
             .lock()
             .expect("the running lock is never held across an await")
-            .insert(job.id, Arc::clone(&cancelled));
+            .insert(job.id, asked_to_stop);
 
         let handle = JobHandle {
             id: job.id,
             database: self.database.clone(),
-            cancelled: Arc::clone(&cancelled),
+            cancelled: cancelled.clone(),
             progress: Arc::new(Mutex::new(Progress {
                 done: 0,
                 total: None,
@@ -269,7 +281,7 @@ impl JobRunner {
             let (state, reason) = match outcome {
                 // A job that was asked to stop reports a stop, whatever it
                 // returned: it did not fail, it was told to stop.
-                _ if cancelled.load(Ordering::Relaxed) => (JobState::Cancelled, None),
+                _ if *cancelled.borrow() => (JobState::Cancelled, None),
                 Ok(()) => (JobState::Succeeded, None),
                 Err(reason) => (JobState::Failed, Some(reason)),
             };
@@ -306,8 +318,8 @@ impl JobRunner {
             .lock()
             .expect("the running lock is never held across an await");
         match running.get(&id) {
-            Some(flag) => {
-                flag.store(true, Ordering::Relaxed);
+            Some(asked_to_stop) => {
+                asked_to_stop.send_replace(true);
                 tracing::info!(job = %id, "a job was asked to stop");
                 true
             }
@@ -368,7 +380,7 @@ where
 mod tests {
     use super::*;
     use melyxar_core::job::JobKind;
-    use std::sync::atomic::AtomicI64;
+    use std::sync::atomic::{AtomicI64, Ordering};
 
     async fn runner() -> JobRunner {
         JobRunner::new(Database::open_in_memory().await.expect("database opens"))
@@ -597,6 +609,49 @@ mod tests {
         assert!(
             steps.load(Ordering::Relaxed) < 1_000,
             "stopping has to stop the work, not just the answer"
+        );
+    }
+
+    /// Looking between two files is enough for work counted in files. One file
+    /// that takes a quarter of an hour has to be told during the reading, so
+    /// the same answer is also handed out in a form something can wait on.
+    #[tokio::test]
+    async fn a_job_told_to_stop_wakes_whatever_is_waiting_on_its_long_reading() {
+        let runner = runner().await;
+        let (told, was_told) = tokio::sync::oneshot::channel();
+
+        let started = runner
+            .start(
+                JobKind::GenerateThumbnails,
+                JobPriority::BACKGROUND,
+                None,
+                move |handle| async move {
+                    let mut asked_to_stop = handle.cancelled_when();
+                    // What a reading of one whole film does: it waits here
+                    // rather than between two films.
+                    while !*asked_to_stop.borrow_and_update() {
+                        asked_to_stop.changed().await.expect("the runner is alive");
+                    }
+                    let _ = told.send(());
+                    Ok(())
+                },
+            )
+            .await
+            .expect("job started");
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert!(runner.cancel(started.id), "the job was running");
+
+        // Answered without the reading having to look for itself, which is the
+        // whole point: nothing here polls.
+        tokio::time::timeout(Duration::from_secs(5), was_told)
+            .await
+            .expect("the news reached the reading")
+            .expect("the reading was still there to hear it");
+
+        assert_eq!(
+            started.completion.await.expect("the task ran"),
+            JobState::Cancelled
         );
     }
 

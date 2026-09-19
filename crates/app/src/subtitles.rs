@@ -15,6 +15,7 @@ use std::sync::{Arc, OnceLock};
 
 use melyxar_core::id::{MediaSourceId, TrackId};
 use melyxar_core::media::{SubtitleDetails, SubtitleLayout, Track, TrackKind};
+use melyxar_ffmpeg::AskedToStop;
 
 use crate::{AppError, AppState, Result};
 
@@ -64,8 +65,9 @@ pub async fn as_web_vtt(
 
     // Asking for one pulls out every one of them, because the reading is the
     // whole cost and it is the same reading. Whoever picks the second track
-    // then waits for nothing at all.
-    let _ = pull_them_all_out(state, source_id).await;
+    // then waits for nothing at all. Nobody can call this one off: somebody is
+    // waiting on it right now.
+    let _ = pull_them_all_out(state, source_id, AskedToStop::never()).await;
 
     // One conversion of a given film at a time, the cache looked at once more
     // under it. Two viewers turning the same subtitle on at the same moment
@@ -215,7 +217,11 @@ fn one_reading_at_a_time(source_id: MediaSourceId) -> Arc<tokio::sync::Mutex<()>
 /// Only what is not already there, and only tracks inside the film: one in a
 /// file of its own is a file of its own to read, and there is nothing to share.
 /// Answers how many were pulled out.
-pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Result<usize> {
+pub async fn pull_them_all_out(
+    state: &AppState,
+    source_id: MediaSourceId,
+    asked_to_stop: AskedToStop,
+) -> Result<usize> {
     // Held for the whole reading, and taken before anything is looked at: what
     // is missing is decided under it, or two readings both decide that the
     // same seven are missing.
@@ -277,18 +283,34 @@ pub async fn pull_them_all_out(state: &AppState, source_id: MediaSourceId) -> Re
         .zip(&being_written)
         .map(|((index, _), aside)| (*index, aside.as_path()))
         .collect();
-    if let Err(error) =
-        melyxar_ffmpeg::subtitles::all_to_web_vtt(&tools.ffmpeg, &source.path, &asked).await
+    if let Err(error) = melyxar_ffmpeg::subtitles::all_to_web_vtt(
+        &tools.ffmpeg,
+        &source.path,
+        &asked,
+        asked_to_stop,
+    )
+    .await
     {
         for aside in &being_written {
             let _ = tokio::fs::remove_file(aside).await;
         }
-        tracing::warn!(
-            %error,
-            subtitles = wanted.len(),
-            "these subtitles could not be pulled out together; each will be tried on its own \
-             when somebody asks for it"
-        );
+        // A reading somebody called off says nothing about the film: nothing
+        // is written down, and the next run finds it waiting exactly as it
+        // was. Only a real failure is worth a warning, and worth saying that
+        // each track will be tried on its own afterwards.
+        if matches!(error, melyxar_ffmpeg::FfmpegError::GivenUp) {
+            tracing::debug!(
+                subtitles = wanted.len(),
+                "these subtitles were left where they were, their reading having been stopped"
+            );
+        } else {
+            tracing::warn!(
+                %error,
+                subtitles = wanted.len(),
+                "these subtitles could not be pulled out together; each will be tried on its own \
+                 when somebody asks for it"
+            );
+        }
         return Err(error.into());
     }
 
@@ -770,7 +792,7 @@ mod tests {
         a_film_carrying(&tool, &film, &said).await;
 
         assert_eq!(
-            pull_them_all_out(&state, source_id)
+            pull_them_all_out(&state, source_id, AskedToStop::never())
                 .await
                 .expect("both come out"),
             2

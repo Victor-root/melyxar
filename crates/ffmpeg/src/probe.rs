@@ -13,6 +13,7 @@ use melyxar_core::time::Millis;
 use serde::Deserialize;
 use tokio::process::Command as TokioCommand;
 
+use crate::process::AskedToStop;
 use crate::{FfmpegError, Result};
 
 /// Everything the analyser says about one file.
@@ -333,8 +334,13 @@ pub async fn probe(analyser: &Path, media: &Path) -> Result<ProbeReport> {
 /// This is the answer of last resort, asked for only when a film carries no
 /// index of its own that `melyxar_container` can read. It is also the only one
 /// that is always available, which is why it is what everything falls back to.
-pub async fn key_frames(analyser: &Path, media: &Path) -> Result<Vec<Millis>> {
-    let output = TokioCommand::new(analyser)
+pub async fn key_frames(
+    analyser: &Path,
+    media: &Path,
+    asked_to_stop: AskedToStop,
+) -> Result<Vec<Millis>> {
+    let mut builder = TokioCommand::new(analyser);
+    builder
         .args([
             "-hide_banner",
             "-loglevel",
@@ -346,10 +352,8 @@ pub async fn key_frames(analyser: &Path, media: &Path) -> Result<Vec<Millis>> {
             "-of",
             "csv=p=0",
         ])
-        .arg(media)
-        .stdin(Stdio::null())
-        .output()
-        .await?;
+        .arg(media);
+    let output = crate::process::output_of(builder, asked_to_stop).await?;
 
     if !output.status.success() {
         return Err(FfmpegError::from_output("analyser", &output));
@@ -617,7 +621,7 @@ mod tests {
         assert!(made.status.success());
 
         let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
-        let found = key_frames(&tools.ffprobe, &source)
+        let found = key_frames(&tools.ffprobe, &source, AskedToStop::never())
             .await
             .expect("a film says where it can be started");
 

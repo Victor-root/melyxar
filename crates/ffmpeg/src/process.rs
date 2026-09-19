@@ -33,6 +33,93 @@ use crate::{FfmpegError, Result};
 /// jumped elsewhere is not left waiting.
 const GRACE_PERIOD: Duration = Duration::from_secs(5);
 
+/// Whether the caller still wants the answer a tool is working on.
+///
+/// The readings of the upkeep each take a whole film past, which on a 4K film
+/// is a quarter of an hour. Looking between two films is enough to stop work
+/// counted in films; it is not enough to stop one film, and a stop that is
+/// only honoured at the end of the current reading is a stop nobody can tell
+/// from a stop that did not work.
+///
+/// Carried as the plainest thing that can say it, so that this crate knows
+/// nothing of jobs or of what else might want to call a reading off.
+#[derive(Debug, Clone)]
+pub struct AskedToStop(Option<tokio::sync::watch::Receiver<bool>>);
+
+impl AskedToStop {
+    /// For a reading nobody can call off: the lectures of a scan, and
+    /// everything the playback engine asks for while somebody is watching.
+    pub fn never() -> Self {
+        Self(None)
+    }
+
+    /// For a reading that is called off when this says so.
+    pub fn when(asked: tokio::sync::watch::Receiver<bool>) -> Self {
+        Self(Some(asked))
+    }
+
+    /// Whether it has been asked for already, which is worth knowing before
+    /// a tool is started rather than after.
+    pub fn already(&self) -> bool {
+        self.0.as_ref().is_some_and(|asked| *asked.borrow())
+    }
+
+    /// Waits until it is asked for, and never returns otherwise.
+    async fn happens(&mut self) {
+        let Some(asked) = self.0.as_mut() else {
+            std::future::pending::<()>().await;
+            return;
+        };
+        loop {
+            if *asked.borrow_and_update() {
+                return;
+            }
+            if asked.changed().await.is_err() {
+                // Nobody is left to ask: the job this belonged to is over, and
+                // this reading is no longer anybody's to call off.
+                std::future::pending::<()>().await;
+                return;
+            }
+        }
+    }
+}
+
+/// Runs a tool to its end and answers with everything it wrote.
+///
+/// The one thing this does that asking the builder for its output does not is
+/// give up: the tool is killed where it stands the moment the reading is
+/// called off, rather than at the end of a film nobody wants read.
+///
+/// Killed outright rather than asked politely, unlike a playback session: what
+/// these readings write is written aside and moved into place in one step at
+/// the end, so there is nothing half written that closing properly would save.
+pub(crate) async fn output_of(
+    mut builder: TokioCommand,
+    mut asked_to_stop: AskedToStop,
+) -> Result<std::process::Output> {
+    if asked_to_stop.already() {
+        return Err(FfmpegError::GivenUp);
+    }
+
+    builder
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        // What actually kills the tool: the child is owned by the future
+        // waiting on it, so dropping that future drops the child.
+        .kill_on_drop(true);
+
+    let child = builder.spawn()?;
+    tokio::select! {
+        // The stop is looked at first, so that one asked for while the tool
+        // was finishing anyway is still answered as a stop rather than as a
+        // reading that happened to make it.
+        biased;
+        () = asked_to_stop.happens() => Err(FfmpegError::GivenUp),
+        output = child.wait_with_output() => Ok(output?),
+    }
+}
+
 /// How far along the tool reports being.
 ///
 /// Read from the machine-facing progress stream rather than from the status
@@ -460,6 +547,64 @@ mod tests {
             .expect("the check runs")
             .success();
         assert!(!still_alive, "no process may survive being stopped");
+    }
+
+    #[tokio::test]
+    async fn a_reading_nobody_can_call_off_runs_to_its_end() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        make_clip(&source, 1).await;
+
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let mut builder = TokioCommand::new(&tools.ffprobe);
+        builder
+            .args(["-hide_banner", "-loglevel", "error"])
+            .arg(&source);
+
+        let output = output_of(builder, AskedToStop::never())
+            .await
+            .expect("the tool ran");
+        assert!(output.status.success());
+    }
+
+    #[tokio::test]
+    async fn a_reading_already_called_off_never_starts_the_tool_at_all() {
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let (asked_to_stop, listening) = tokio::sync::watch::channel(true);
+
+        let mut builder = TokioCommand::new(&tools.ffprobe);
+        builder.arg("/nowhere/missing.mkv");
+        let outcome = output_of(builder, AskedToStop::when(listening)).await;
+
+        assert!(
+            matches!(outcome, Err(FfmpegError::GivenUp)),
+            "a reading nobody wants is not started: {outcome:?}"
+        );
+        drop(asked_to_stop);
+    }
+
+    #[tokio::test]
+    async fn a_sender_that_is_gone_never_calls_a_reading_off() {
+        // The job this belonged to is over and nobody is left to ask. A
+        // reading that read this as a stop would give up on every film the
+        // moment its job ended.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("source.mp4");
+        make_clip(&source, 1).await;
+
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let (asked_to_stop, listening) = tokio::sync::watch::channel(false);
+        drop(asked_to_stop);
+
+        let mut builder = TokioCommand::new(&tools.ffprobe);
+        builder
+            .args(["-hide_banner", "-loglevel", "error"])
+            .arg(&source);
+
+        let output = output_of(builder, AskedToStop::when(listening))
+            .await
+            .expect("the tool ran");
+        assert!(output.status.success());
     }
 
     #[tokio::test]

@@ -18,11 +18,11 @@
 
 use std::ffi::OsString;
 use std::path::Path;
-use std::process::Stdio;
 
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use tokio::process::Command as TokioCommand;
 
+use crate::process::AskedToStop;
 use crate::{FfmpegError, Result, ToolPaths};
 
 /// Quality of the sheets, on the scale the tool uses: one is best, thirty one
@@ -145,18 +145,17 @@ pub async fn make(
     layout: Layout,
     tone_map: bool,
     standing_pictures_only: bool,
+    asked_to_stop: AskedToStop,
 ) -> Result<Thumbnails> {
-    let output = TokioCommand::new(&tools.ffmpeg)
-        .args(arguments(
-            source,
-            into,
-            layout,
-            tone_map,
-            standing_pictures_only,
-        ))
-        .stdin(Stdio::null())
-        .output()
-        .await?;
+    let mut builder = TokioCommand::new(&tools.ffmpeg);
+    builder.args(arguments(
+        source,
+        into,
+        layout,
+        tone_map,
+        standing_pictures_only,
+    ));
+    let output = crate::process::output_of(builder, asked_to_stop).await?;
 
     if !output.status.success() {
         return Err(FfmpegError::from_output("ffmpeg", &output));
@@ -389,6 +388,7 @@ mod tests {
             },
             false,
             false,
+            AskedToStop::never(),
         )
         .await
         .expect("the tool accepted the command");
@@ -400,6 +400,99 @@ mod tests {
         assert!(
             sheet_at(&into, 0).exists(),
             "the sheets are numbered from nought"
+        );
+    }
+
+    /// The defect this exists for: the reading of one film takes a quarter of
+    /// an hour on a 4K film, and a stop that waits for it is a stop nobody can
+    /// tell from a stop that did not work.
+    #[tokio::test]
+    async fn a_reading_given_up_on_ends_the_tool_rather_than_running_it_to_the_end() {
+        let Ok(tools) = crate::ToolPaths::discover(None, None) else {
+            eprintln!("no media tool here, the reading was not exercised");
+            return;
+        };
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let film = directory.path().join("Long.Crossing.2019.mkv");
+        // Long enough that reading it through takes far more than the moment
+        // this test waits before giving up on it.
+        let made = TokioCommand::new(&tools.ffmpeg)
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=1280x720:rate=30:duration=600",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-g",
+                "60",
+            ])
+            .arg(&film)
+            .output()
+            .await
+            .expect("the tool runs");
+        assert!(made.status.success(), "a film to read");
+
+        let into = directory.path().join("thumbnails");
+        std::fs::create_dir_all(&into).expect("a folder to write in");
+
+        let (asked_to_stop, listening) = tokio::sync::watch::channel(false);
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+            asked_to_stop.send_replace(true);
+        });
+
+        let began = std::time::Instant::now();
+        let outcome = make(
+            &tools,
+            &film,
+            &into,
+            Layout {
+                every: Millis::new(1_000),
+                height: 90,
+                columns: 2,
+                rows: 2,
+            },
+            false,
+            // Read in full, which is the slow rung and the one that bit.
+            false,
+            AskedToStop::when(listening),
+        )
+        .await;
+        let waited = began.elapsed();
+
+        assert!(
+            matches!(outcome, Err(FfmpegError::GivenUp)),
+            "a reading given up on says so rather than answering about the film: {outcome:?}"
+        );
+        // The promise is that the caller gets the answer back at once. Ten
+        // seconds is far below what reading this film through costs and far
+        // above the moment the stop needs to travel.
+        assert!(
+            waited < std::time::Duration::from_secs(10),
+            "the reading held on for {waited:?}"
+        );
+
+        // And the tool is really gone rather than still writing sheets into a
+        // folder nobody is waiting for any more. Counted twice, because a
+        // process that is still running is one that writes more.
+        let counted = || {
+            std::fs::read_dir(&into)
+                .expect("the folder is readable")
+                .count()
+        };
+        let just_after = counted();
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        assert_eq!(
+            counted(),
+            just_after,
+            "the tool went on writing after the reading was given up on"
         );
     }
 }

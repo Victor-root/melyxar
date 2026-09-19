@@ -29,7 +29,7 @@ pub use capabilities::{Capabilities, HardwareAcceleration};
 pub use command::{AudioOutput, Command, Input, Output, StreamSelection, VideoOutput};
 pub use hardware::{Card, CardSearch};
 pub use probe::{ProbeReport, ProbeStream};
-pub use process::{Progress, RunningProcess};
+pub use process::{AskedToStop, Progress, RunningProcess};
 
 #[derive(Debug, thiserror::Error)]
 pub enum FfmpegError {
@@ -45,6 +45,8 @@ pub enum FfmpegError {
     },
     #[error("the analyser returned something unreadable: {0}")]
     MalformedReport(String),
+    #[error("the reading was given up on before the tool had finished")]
+    GivenUp,
 }
 
 impl FfmpegError {

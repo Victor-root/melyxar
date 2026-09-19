@@ -20,6 +20,7 @@ use std::process::Stdio;
 
 use tokio::process::Command as TokioCommand;
 
+use crate::process::AskedToStop;
 use crate::{FfmpegError, Result};
 
 /// Builds the conversion of one subtitle track to WebVTT.
@@ -95,15 +96,18 @@ pub fn all_to_web_vtt_arguments(source: &Path, wanted: &[(i32, &Path)]) -> Vec<O
 }
 
 /// Writes several subtitle tracks of one film out as WebVTT, in one reading.
-pub async fn all_to_web_vtt(tool: &Path, source: &Path, wanted: &[(i32, &Path)]) -> Result<()> {
+pub async fn all_to_web_vtt(
+    tool: &Path,
+    source: &Path,
+    wanted: &[(i32, &Path)],
+    asked_to_stop: AskedToStop,
+) -> Result<()> {
     if wanted.is_empty() {
         return Ok(());
     }
-    let output = TokioCommand::new(tool)
-        .args(all_to_web_vtt_arguments(source, wanted))
-        .stdin(Stdio::null())
-        .output()
-        .await?;
+    let mut builder = TokioCommand::new(tool);
+    builder.args(all_to_web_vtt_arguments(source, wanted));
+    let output = crate::process::output_of(builder, asked_to_stop).await?;
 
     if !output.status.success() {
         return Err(FfmpegError::from_output("ffmpeg", &output));
@@ -303,7 +307,7 @@ mod tests {
             .map(|(which, path)| (which as i32 + 1, path.as_path()))
             .collect();
 
-        all_to_web_vtt(&tools.ffmpeg, &film, &asked)
+        all_to_web_vtt(&tools.ffmpeg, &film, &asked, AskedToStop::never())
             .await
             .expect("every track comes out");
 

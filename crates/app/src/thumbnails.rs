@@ -15,6 +15,7 @@ use melyxar_core::media::TrackKind;
 use melyxar_core::media_log::file_name_of;
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::Millis;
+use melyxar_ffmpeg::AskedToStop;
 
 use serde::{Deserialize, Serialize};
 
@@ -150,7 +151,11 @@ async fn already_on_disk(folder: &Path, layout: Layout) -> Option<Thumbnails> {
 /// Answers what came out. Nothing counted is an answer too: there are files in
 /// a film folder that hold no picture, and it is written down so the file is
 /// never read through again for the same nothing.
-pub async fn make_for(state: &AppState, source_id: MediaSourceId) -> Result<Thumbnails> {
+pub async fn make_for(
+    state: &AppState,
+    source_id: MediaSourceId,
+    asked_to_stop: AskedToStop,
+) -> Result<Thumbnails> {
     let Some(layout) = wanted(state).await else {
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
             "this server is not making thumbnails for the playback bar",
@@ -196,20 +201,46 @@ pub async fn make_for(state: &AppState, source_id: MediaSourceId) -> Result<Thum
     // and invisible at this size. A film whose pictures cannot be read that
     // way gives nothing at all, and is read again in full rather than written
     // down as having none: one rung down the ladder, once.
-    let mut made =
-        melyxar_ffmpeg::thumbnails::make(tools, &source.path, &aside, layout, tone_map, true).await;
+    let mut made = melyxar_ffmpeg::thumbnails::make(
+        tools,
+        &source.path,
+        &aside,
+        layout,
+        tone_map,
+        true,
+        asked_to_stop.clone(),
+    )
+    .await;
     if made.as_ref().is_ok_and(|made| made.counted == 0) {
         tracing::debug!(
             file = %name,
             "no picture of this film stands on its own, so it is read again in full"
         );
-        made =
-            melyxar_ffmpeg::thumbnails::make(tools, &source.path, &aside, layout, tone_map, false)
-                .await;
+        made = melyxar_ffmpeg::thumbnails::make(
+            tools,
+            &source.path,
+            &aside,
+            layout,
+            tone_map,
+            false,
+            asked_to_stop,
+        )
+        .await;
     }
 
     let made = match made {
         Ok(made) => made,
+        // A reading somebody called off is not a film that could not be read:
+        // nothing is written down about it, and it is waiting again as soon as
+        // the next run asks what is left.
+        Err(error @ melyxar_ffmpeg::FfmpegError::GivenUp) => {
+            let _ = tokio::fs::remove_dir_all(&aside).await;
+            tracing::debug!(
+                file = %name,
+                "this film was left where it was, its reading having been stopped"
+            );
+            return Err(error.into());
+        }
         Err(error) => {
             let _ = tokio::fs::remove_dir_all(&aside).await;
             tracing::warn!(

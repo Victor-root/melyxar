@@ -504,7 +504,15 @@ fn prepare_the_subtitles(state: &AppState, plan: &PlayPlan) {
     let state = state.clone();
     let source_id = plan.source_id;
     tokio::spawn(async move {
-        let _ = crate::subtitles::pull_them_all_out(&state, source_id).await;
+        // Nobody can call this one off: it is a head start for somebody who
+        // has just opened the film, and the upkeep is the only thing anybody
+        // ever asks to stop.
+        let _ = crate::subtitles::pull_them_all_out(
+            &state,
+            source_id,
+            melyxar_ffmpeg::AskedToStop::never(),
+        )
+        .await;
     });
 }
 

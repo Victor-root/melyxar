@@ -2811,9 +2811,13 @@ mod tests {
         clip_with_key_frames_every(&source, 60, 240).await;
 
         let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
-        let found = melyxar_ffmpeg::probe::key_frames(&tools.ffprobe, &source)
-            .await
-            .expect("the film says where it can be started");
+        let found = melyxar_ffmpeg::probe::key_frames(
+            &tools.ffprobe,
+            &source,
+            melyxar_ffmpeg::AskedToStop::never(),
+        )
+        .await
+        .expect("the film says where it can be started");
         let boundaries = melyxar_ffmpeg::probe::where_the_film_can_be_cut(&found);
 
         let session = Session::open(
@@ -2896,9 +2900,13 @@ mod tests {
         clip_with_key_frames_at(&source, 90, &close_together).await;
 
         let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
-        let found = melyxar_ffmpeg::probe::key_frames(&tools.ffprobe, &source)
-            .await
-            .expect("the film says where it can be started");
+        let found = melyxar_ffmpeg::probe::key_frames(
+            &tools.ffprobe,
+            &source,
+            melyxar_ffmpeg::AskedToStop::never(),
+        )
+        .await
+        .expect("the film says where it can be started");
         let session = Session::open(
             SessionId::new(),
             Recipe {
