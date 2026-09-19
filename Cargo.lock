@@ -1270,6 +1270,7 @@ version = "0.1.0"
 dependencies = [
  "melyxar-core",
  "melyxar-ffmpeg",
+ "melyxar-media-probe",
  "melyxar-playback",
  "serde",
  "tempfile",

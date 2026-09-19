@@ -784,7 +784,52 @@ impl Session {
         };
 
         self.say_what_it_took(index, started, waited).await;
+        if started.is_some() {
+            self.say_how_the_streams_came_out(index).await;
+        }
         Ok(path)
+    }
+
+    /// Reads back where the picture and the sound of a fresh run really begin.
+    ///
+    /// The file says where each of its streams starts, and so does what comes
+    /// out of the tool, and the two are not obliged to agree: a film whose
+    /// sound begins seconds after its picture can be served with the gap
+    /// preserved, with the gap closed, or with the sound moved, and each of
+    /// the three looks completely different to somebody watching. Nothing
+    /// anywhere said which of them happened.
+    ///
+    /// Only when a run has just begun, and only for somebody reading the
+    /// journal closely: it costs one reading of the playlist the tool writes
+    /// for itself, which names the pieces produced so far.
+    async fn say_how_the_streams_came_out(&self, index: u32) {
+        if !tracing::enabled!(tracing::Level::DEBUG) {
+            return;
+        }
+        let playlist = self.folder.join("tool.m3u8");
+        let report = match melyxar_ffmpeg::probe::probe(&self.tools.ffprobe, &playlist).await {
+            Ok(report) => report,
+            Err(error) => {
+                tracing::debug!(
+                    session = %self.id,
+                    index,
+                    error = %error,
+                    "what the run produced could not be read back"
+                );
+                return;
+            }
+        };
+
+        let lining_up = melyxar_media_probe::HowTheStreamsLineUp::of(&report);
+        tracing::debug!(
+            session = %self.id,
+            index,
+            at_second = self.playlist.start_of(index).as_seconds_f64(),
+            video_starts_at_ms = lining_up.video_starts_at,
+            audio_starts_at_ms = lining_up.audio_starts_at,
+            sound_after_picture_ms = lining_up.offset(),
+            "where the picture and the sound of what the tool produced begin"
+        );
     }
 
     /// Writes down where the wait for one segment actually went.
@@ -938,6 +983,16 @@ impl Session {
         // Read before the tool exists, so that every file it goes on to write
         // is at or after it and none of the ones already there can be.
         let began_at = SystemTime::now();
+        // Every argument, said once per run. What a film is served as is
+        // decided in a dozen places, and a film that plays wrong is a question
+        // about the one command that produced it: without it, the answer has
+        // to be guessed from the settings that were in force an hour ago.
+        tracing::debug!(
+            session = %self.id,
+            index,
+            arguments = ?command.to_arguments(),
+            "the tool is being set going with these arguments"
+        );
         let process = RunningProcess::start(&self.tools.ffmpeg, &command, Some(reports))?;
         tracing::debug!(
             session = %self.id,
