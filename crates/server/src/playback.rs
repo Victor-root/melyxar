@@ -636,6 +636,19 @@ async fn open_session(
     let source_id = parse_source(&id)?;
     let body = body.map(|Json(body)| body).unwrap_or_default();
 
+    // A track chosen wrong is a defect nobody can see from the decision
+    // alone: the decision only ever hears what the browser said, and the
+    // question that matters when the two disagree is what the browser really
+    // said. Kept until this is understood, not meant to stay for ever.
+    tracing::debug!(
+        source = %source_id,
+        asked_audio_track = body.wanted.audio_track_id.as_deref(),
+        asked_subtitle_track = body.wanted.subtitle_track_id.as_deref(),
+        containers = ?body.wanted.profile.as_ref().map(|profile| &profile.containers),
+        audio_codecs = ?body.wanted.profile.as_ref().map(|profile| &profile.audio_codecs),
+        "a session was asked for with this, from the browser itself"
+    );
+
     let plan = melyxar_app::playback::plan(
         &state,
         viewer(&state).await?,
