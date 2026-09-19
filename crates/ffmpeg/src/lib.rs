@@ -20,6 +20,7 @@ pub mod hardware;
 pub mod images;
 pub mod probe;
 pub mod process;
+pub mod sound;
 pub mod subtitles;
 pub mod thumbnails;
 
