@@ -622,6 +622,34 @@ mod tests {
     }
 
     #[test]
+    fn an_opening_holding_the_very_first_sample_is_found_from_its_first_moment() {
+        // Where a real series puts its titles more often than anywhere else:
+        // straight at the start of the file, nothing before them. Nothing here
+        // can look behind the first sample, so the answer begins one look back
+        // in, and that is the whole of what is lost.
+        let opening = {
+            let mut sound = MadeUpSound::new(7).tune(5.0, 1.0).silence(1.0).done();
+            sound.extend(MadeUpSound::new(13).tune(5.0, 1.0).done());
+            sound
+        };
+        let first = episode(0, &opening, 40_000, 11);
+        let second = episode(0, &opening, 40_000, 29);
+
+        let found = what_they_have_in_common(&Listened::of(&first), &Listened::of(&second))
+            .expect("two episodes opening on the same titles share them");
+        assert!(
+            about(found.length(), 11.0),
+            "the whole of it: {:?}",
+            found.length()
+        );
+        assert!(
+            found.in_the_first().start.get() <= A_FRAME.get() * (LOOK_BACK as i64 + 1),
+            "from the first moment there is one: {:?}",
+            found.in_the_first()
+        );
+    }
+
+    #[test]
     fn a_long_silence_never_welds_two_shared_moments_into_one() {
         // The other half of carrying a pause. Silence matches silence
         // everywhere, so a hole allowed to grow without bound would let a
