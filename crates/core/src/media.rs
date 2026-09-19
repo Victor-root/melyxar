@@ -103,6 +103,45 @@ pub enum TrackKind {
     Subtitle(SubtitleDetails),
 }
 
+impl Track {
+    /// Whether this track is an audio description rather than the sound of
+    /// the film.
+    ///
+    /// An audio description carries a narrator describing what is on screen,
+    /// over the top of everything else. It is a track for somebody who cannot
+    /// see the picture, and for everybody else it is the wrong one: nobody who
+    /// can see the film wants a voice explaining it, so it is never what the
+    /// server should reach for on its own. A viewer who wants it can still ask
+    /// for it by name.
+    ///
+    /// It also cannot be compared with anything. The episodes of a season
+    /// carry the same opening under the same music, but the narrator says
+    /// something different over each of them, so two of these tracks share
+    /// nothing at the moment they are most alike. A whole series came away
+    /// with no skip button for exactly that reason, its only English track
+    /// being this one.
+    ///
+    /// Recognised by the name the file gives it, which is all a container is
+    /// obliged to carry and all that has been read off one so far. The flag
+    /// some files set beside it would be steadier and is not stored yet.
+    pub fn is_audio_description(&self) -> bool {
+        let Some(title) = &self.title else {
+            return false;
+        };
+        let title = title.to_lowercase();
+        [
+            "audio description",
+            "audiodescription",
+            "audio-description",
+            "audio vision",
+            "descriptive audio",
+            "described",
+        ]
+        .iter()
+        .any(|mark| title.contains(mark))
+    }
+}
+
 impl TrackKind {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -425,6 +464,55 @@ mod tests {
             color: ColorInfo::default(),
             hdr,
         }
+    }
+
+    /// A sound track carrying nothing but the name the file gave it.
+    fn named(title: Option<&str>) -> Track {
+        Track {
+            id: TrackId::new(),
+            source_id: MediaSourceId::new(),
+            stream_index: 1,
+            language: Some("eng".to_string()),
+            title: title.map(str::to_string),
+            is_default: false,
+            is_forced: false,
+            kind: TrackKind::Audio(AudioDetails {
+                codec: "eac3".to_string(),
+                profile: None,
+                channels: 2,
+                channel_layout: None,
+                sample_rate: None,
+                bit_depth: None,
+                bitrate: None,
+                loudness: Loudness::default(),
+            }),
+        }
+    }
+
+    #[test]
+    fn a_track_naming_itself_an_audio_description_is_known_for_one() {
+        // The defect this exists for: a series whose only English track was an
+        // audio description came away with no skip button on any of its
+        // seasons. The narrator says something different over each episode, so
+        // the one moment the episodes are most alike is the one moment these
+        // tracks share nothing at all. It is also nobody's idea of the sound
+        // of the film, so it is never what to reach for on one's own.
+        assert!(named(Some("Audio Description")).is_audio_description());
+        assert!(named(Some("audiodescription")).is_audio_description());
+        assert!(named(Some("English Audio-Description")).is_audio_description());
+        assert!(named(Some("Descriptive Audio")).is_audio_description());
+        assert!(named(Some("Described for the Visually Impaired")).is_audio_description());
+    }
+
+    #[test]
+    fn an_ordinary_sound_track_is_not_mistaken_for_one() {
+        assert!(!named(None).is_audio_description());
+        assert!(!named(Some("English")).is_audio_description());
+        assert!(!named(Some("VFF 5.1")).is_audio_description());
+        // The two letters on their own are a release tag, a codec and half the
+        // words in the language, and are never enough to go on.
+        assert!(!named(Some("AD")).is_audio_description());
+        assert!(!named(Some("Commentary")).is_audio_description());
     }
 
     #[test]

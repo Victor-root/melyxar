@@ -702,6 +702,13 @@ fn the_two_ends_of(duration: Option<Millis>) -> (Millis, Option<(Millis, Millis)
 /// its own, and then to its first: a season where one episode is missing a
 /// language is better served by one comparison that may fail than by one file
 /// silently dropped.
+///
+/// Audio descriptions are set aside before any of that, including from the
+/// count deciding the language. A narrator speaking over the picture says
+/// something different in every episode, so the one moment the episodes are
+/// most alike becomes the one moment these tracks share nothing: a season
+/// whose English is an audio description is listened to in whatever other
+/// language it carries rather than in one that cannot answer.
 fn the_track_to_listen_to(of_each_file: &[Vec<Track>]) -> Vec<Option<i32>> {
     let sound: Vec<Vec<&Track>> = of_each_file
         .iter()
@@ -709,6 +716,7 @@ fn the_track_to_listen_to(of_each_file: &[Vec<Track>]) -> Vec<Option<i32>> {
             tracks
                 .iter()
                 .filter(|track| matches!(track.kind, TrackKind::Audio(_)))
+                .filter(|track| !track.is_audio_description())
                 .collect()
         })
         .collect();
@@ -1221,6 +1229,35 @@ mod tests {
             vec![a_picture(0), a_sound_track(1, None, false)],
         ];
         assert_eq!(the_track_to_listen_to(&files), vec![Some(1), Some(1)]);
+    }
+
+    #[test]
+    fn a_season_whose_english_is_an_audio_description_is_listened_to_elsewhere() {
+        // The defect this guards: a series carrying French and an English
+        // audio description came away with no button on any of its seasons.
+        // English is carried by every file and wins the count, but a narrator
+        // saying something different over each episode makes the opening the
+        // one moment the season shares nothing. French answers.
+        let described = |stream_index: i32| {
+            let mut track = a_sound_track(stream_index, Some("eng"), true);
+            track.title = Some("Audio Description".into());
+            track
+        };
+        let files = vec![
+            vec![
+                a_picture(0),
+                described(1),
+                a_sound_track(2, Some("fra"), false),
+            ],
+            vec![
+                a_picture(0),
+                described(1),
+                a_sound_track(2, Some("fra"), false),
+            ],
+        ];
+        let chosen = the_track_to_listen_to(&files);
+        assert_eq!(chosen, vec![Some(2), Some(2)]);
+        assert_eq!(which_language(&files, &chosen), Some("fra"));
     }
 
     #[test]

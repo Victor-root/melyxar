@@ -369,6 +369,11 @@ pub fn effective_container(source: &MediaSource) -> Option<String> {
 
 /// The audio track that will be used: the chosen one, else the default, else
 /// the first present.
+///
+/// An audio description is never reached for on its own, even when the file
+/// marks it as its default: it is a narrator talking over the film, wanted by
+/// the few who ask for it and by nobody who did not. Asked for by hand it is
+/// played like any other track.
 fn chosen_audio<'a>(
     source: &'a MediaSource,
     requested: Option<&'a Track>,
@@ -378,9 +383,15 @@ fn chosen_audio<'a>(
             return Some((track, details));
         }
     }
-    source
-        .audio_tracks()
+    let on_its_own = || {
+        source
+            .audio_tracks()
+            .filter(|(track, _)| !track.is_audio_description())
+    };
+    on_its_own()
         .find(|(track, _)| track.is_default)
+        .or_else(|| on_its_own().next())
+        .or_else(|| source.audio_tracks().find(|(track, _)| track.is_default))
         .or_else(|| source.audio_tracks().next())
 }
 
@@ -1499,6 +1510,35 @@ mod tests {
         assert_eq!(decision.audio, StreamAction::Drop);
         assert_eq!(decision.audio_stream_index, None);
         assert_eq!(decision.method, PlaybackMethod::DirectPlay);
+    }
+
+    #[test]
+    fn an_audio_description_is_passed_over_even_when_the_file_calls_it_its_default() {
+        let profile = ClientProfile::conservative_browser();
+        let mut described = audio_track(1, "eac3", 2, true);
+        described.title = Some("Audio Description".into());
+        let ordinary = audio_track(2, "aac", 2, false);
+        let source = source(
+            "matroska,webm",
+            vec![video_track(0, "h264", 1080, None), described, ordinary],
+        );
+
+        let decision = decide(&source, &request(&profile));
+        assert_eq!(decision.audio_stream_index, Some(2));
+    }
+
+    #[test]
+    fn an_audio_description_still_plays_when_it_is_the_only_sound_there_is() {
+        let profile = ClientProfile::conservative_browser();
+        let mut described = audio_track(1, "aac", 2, true);
+        described.title = Some("Audio Description".into());
+        let source = source(
+            "matroska,webm",
+            vec![video_track(0, "h264", 1080, None), described],
+        );
+
+        let decision = decide(&source, &request(&profile));
+        assert_eq!(decision.audio_stream_index, Some(1));
     }
 
     #[test]
