@@ -524,11 +524,7 @@ pub(crate) async fn read_the_key_frames_of(
         // round again would only fail again in the same way.
         let left = database.count_awaiting_key_frames(library.id).await?;
         if left >= still_waiting {
-            tracing::warn!(
-                library = library.name,
-                waiting = left,
-                "nothing of this batch could be written down, so the reading stops here"
-            );
+            say_that_the_reading_is_stuck(&library.name, left, handle.is_cancelled());
             break;
         }
         still_waiting = left;
@@ -655,11 +651,7 @@ pub(crate) async fn pull_the_subtitles_out_of(
             .count_awaiting_pulled_out_subtitles(library.id)
             .await?;
         if left >= still_waiting {
-            tracing::warn!(
-                library = library.name,
-                waiting = left,
-                "nothing of this batch could be written down, so the reading stops here"
-            );
+            say_that_the_reading_is_stuck(&library.name, left, handle.is_cancelled());
             break;
         }
         still_waiting = left;
@@ -778,11 +770,7 @@ pub(crate) async fn make_the_thumbnails_of(
             .count_awaiting_thumbnails(library.id, layout)
             .await?;
         if left >= still_waiting {
-            tracing::warn!(
-                library = library.name,
-                waiting = left,
-                "nothing of this batch could be written down, so the reading stops here"
-            );
+            say_that_the_reading_is_stuck(&library.name, left, handle.is_cancelled());
             break;
         }
         still_waiting = left;
@@ -798,6 +786,27 @@ pub(crate) async fn make_the_thumbnails_of(
         );
     }
     Ok(made)
+}
+
+/// Says that a reading is stuck, when being stuck is what it is.
+///
+/// A batch that left the number of waiting films where it was ends the run: the
+/// same batch would come back for ever, failing the same way. That is worth an
+/// alarm, and the three readings raise the same one.
+///
+/// Except when the run was stopped. Then nothing was written down because
+/// somebody pressed the button, each film left where it was has said so
+/// quietly, and an alarm on top of that would read as a fault where there is
+/// none.
+fn say_that_the_reading_is_stuck(library: &str, left: i64, cancelled: bool) {
+    if cancelled {
+        return;
+    }
+    tracing::warn!(
+        library,
+        waiting = left,
+        "nothing of this batch could be written down, so the reading stops here"
+    );
 }
 
 /// The name of one file, for the screen that says what a job is on.
