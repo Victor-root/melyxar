@@ -144,6 +144,56 @@ pub struct NamedSeries {
     pub year: Option<i32>,
 }
 
+/// How many digits a number standing on its own may carry to still be an
+/// episode.
+///
+/// Three, one fewer than a marker allows, because a number of four digits at
+/// the head of a name is a year and never an episode.
+const LONGEST_NUMBER_ALONE: usize = 3;
+
+/// Reads a file name that says nothing but a number, as the episode that
+/// number stands for.
+///
+/// Only ever asked once a season folder above the file has said which season
+/// this is, and so which series: a name opening on a number has one meaning
+/// left by then, and a whole run of episodes taken off a disc is usually named
+/// no other way. Asked anywhere else, the same name means nothing in
+/// particular, which is why this is a question of its own rather than another
+/// shape inside the marker.
+pub fn episode_of_a_leading_number(
+    file_name: &str,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<ParsedEpisode> {
+    naming::with_the_words_of(file_name, current_year, signs, |words| {
+        let (number, after) = naming::trim_leading_separators(words).split_first()?;
+        let number = a_number_alone(&plain(number))?;
+
+        let after = naming::trim_leading_separators(after);
+        let boundary = naming::first_technical_tag(after, 0).unwrap_or(after.len());
+        let title = naming::title_of(&after[..boundary], signs.marks());
+
+        Some(ParsedEpisode {
+            // Both left to the folders above, which is the only reason this
+            // name could be read at all.
+            series: String::new(),
+            season: None,
+            first: number,
+            last: number,
+            year: None,
+            title: (!title.is_empty()).then_some(title),
+            tags: naming::tags_from(&after[boundary..]),
+        })
+    })
+}
+
+/// A word that is a number short enough to stand for an episode on its own.
+fn a_number_alone(word: &str) -> Option<i32> {
+    (word.len() <= LONGEST_NUMBER_ALONE)
+        .then(|| number_of(word))
+        .flatten()
+}
+
 /// Reads a folder name as the name of a series, or says it names none.
 ///
 /// Read exactly as a file name is read, because a folder is named the way a
@@ -845,6 +895,59 @@ mod tests {
             "",
         ] {
             assert_eq!(season_of_folder(folder), None, "{folder}");
+        }
+    }
+
+    /// Reads a name that carries nothing but a number, as a season folder
+    /// above it lets the scan do.
+    fn numbered(name: &str) -> Option<(i32, i32, Option<String>)> {
+        episode_of_a_leading_number(name, THIS_YEAR, &LibrarySigns::default())
+            .map(|read| (read.first, read.last, read.title))
+    }
+
+    #[test]
+    fn a_number_in_front_is_the_episode_and_the_rest_is_its_title() {
+        for (name, title) in [
+            ("01 - The Amber Field.mkv", "The Amber Field"),
+            ("01. The Amber Field.mkv", "The Amber Field"),
+            ("01 The Amber Field.mkv", "The Amber Field"),
+            // The technical words are taken off the title here as everywhere.
+            ("01 - The Amber Field 1080p.mkv", "The Amber Field"),
+        ] {
+            assert_eq!(
+                numbered(name),
+                Some((1, 1, Some(title.to_string()))),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_number_alone_is_an_episode_with_no_title_of_its_own() {
+        assert_eq!(numbered("07.mkv"), Some((7, 7, None)));
+        assert_eq!(numbered("052.mkv"), Some((52, 52, None)));
+    }
+
+    #[test]
+    fn a_number_too_long_to_be_an_episode_is_not_read_as_one() {
+        // Four digits are a year, which is the one number that turns up in
+        // front of a name and means something else entirely.
+        assert_eq!(numbered("2019 Lost Footage.mkv"), None);
+        assert_eq!(numbered("2019.mkv"), None);
+    }
+
+    #[test]
+    fn a_name_that_does_not_open_on_a_number_says_nothing_here() {
+        for name in [
+            "The Amber Field.mkv",
+            "Distant Signal S01E01.mkv",
+            "Part 1 The Amber Field.mkv",
+            // A number welded to the word after it is one word and not a
+            // number, here as everywhere else in this module.
+            "1-The.Amber.Field.mkv",
+            "",
+        ] {
+            assert_eq!(numbered(name), None, "{name}");
         }
     }
 
