@@ -511,6 +511,8 @@ export type PageSaw =
       held_to_second: number | null;
       stretches: number;
       ready_state: number;
+      /** Whether the page went out of sight while this lasted. */
+      page_was_hidden: boolean;
     }
   | {
       session: string;
