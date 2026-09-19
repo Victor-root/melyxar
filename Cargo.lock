@@ -1265,6 +1265,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "melyxar-sound"
+version = "0.1.0"
+dependencies = [
+ "melyxar-core",
+]
+
+[[package]]
 name = "melyxar-streaming"
 version = "0.1.0"
 dependencies = [
