@@ -83,18 +83,24 @@ pub async fn store_provider_images(
     work_id: WorkId,
     details: &Details,
 ) -> usize {
-    store(
-        state,
-        provider,
-        work_id,
-        details,
-        &[
-            (Kind::Poster, details.poster_path.as_deref()),
-            (Kind::Backdrop, details.backdrop_path.as_deref()),
-            (Kind::Logo, details.logo_path.as_deref()),
-        ],
-    )
-    .await
+    let wanted = [
+        (Kind::Poster, details.poster_path.as_deref()),
+        (Kind::Backdrop, details.backdrop_path.as_deref()),
+        (Kind::Logo, details.logo_path.as_deref()),
+    ];
+    // Said out loud rather than passed over: a work with no picture is
+    // indistinguishable from one whose picture failed to arrive, and the two
+    // want opposite answers. One work is one card, so this is a handful of
+    // lines per scan, which is why it is said here and not for a season or an
+    // episode, where it would be one line per file of the collection.
+    for (kind, _) in wanted.iter().filter(|(_, path)| path.is_none()) {
+        tracing::info!(
+            work = %details.title,
+            kind = kind.as_str(),
+            "the provider named no picture of this kind for this work"
+        );
+    }
+    store(state, provider, work_id, &wanted).await
 }
 
 /// Fetches the one picture a season or an episode has.
@@ -104,6 +110,10 @@ pub async fn store_provider_images(
 /// for the three would not fetch anything more; it would only say, of every
 /// season and every episode of the collection, that two pictures which cannot
 /// exist did not arrive.
+///
+/// Says nothing when the provider has no picture either, for the same reason:
+/// a long run whose episodes it never illustrated is one line per episode, and
+/// the series says it once for all of them.
 pub async fn store_provider_poster(
     state: &AppState,
     provider: &impl MetadataProvider,
@@ -114,7 +124,6 @@ pub async fn store_provider_poster(
         state,
         provider,
         work_id,
-        details,
         &[(Kind::Poster, details.poster_path.as_deref())],
     )
     .await
@@ -124,7 +133,6 @@ async fn store(
     state: &AppState,
     provider: &impl MetadataProvider,
     work_id: WorkId,
-    details: &Details,
     wanted: &[(Kind, Option<&str>)],
 ) -> usize {
     let Some(tools) = state.tools() else {
@@ -134,15 +142,7 @@ async fn store(
     let owner_id = work_id.to_db_string();
     let mut prepared = 0;
     for (kind, path) in wanted.iter().copied() {
-        // Said out loud rather than passed over: a film with no picture is
-        // indistinguishable from one whose picture failed to arrive, and the
-        // two want opposite answers.
         let Some(path) = path else {
-            tracing::info!(
-                work = %details.title,
-                kind = kind.as_str(),
-                "the provider named no picture of this kind for this work"
-            );
             continue;
         };
         match store_one(state, provider, &tools.ffmpeg, kind, &owner_id, path).await {

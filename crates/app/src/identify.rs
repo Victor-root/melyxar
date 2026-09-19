@@ -127,11 +127,10 @@ where
         handle.advance(1).await;
     }
 
-    // Two copies can carry names nothing could ever match, and the provider
-    // then answers the same film for both. That only becomes visible once both
-    // have been asked about, which is here.
-    report.merged +=
-        join_what_the_provider_says_is_one_film(state, library, provider.name()).await?;
+    // Two works can carry names nothing could ever match, and the provider
+    // then answers the same thing for both. That only becomes visible once
+    // both have been asked about, which is here.
+    report.merged += join_what_the_provider_says_is_one(state, library, provider.name()).await?;
 
     // A picture is fetched when a film is named and never again, so one that
     // did not arrive that day would never arrive: the film keeps its title and
@@ -172,17 +171,18 @@ where
     Ok(report)
 }
 
-/// Joins the copies the provider says are one and the same film.
+/// Joins what the provider says is one and the same work.
 ///
 /// Two files can carry names no rule could ever bring together, and hold the
 /// same film: one named after its original title and one after the title it
-/// was released under here, one carrying a mark the other does not. Only the
-/// provider can say they are one film, and it says so by answering the same
-/// identifier for both.
+/// was released under here, one carrying a mark the other does not. A series
+/// does the same across two disks, where its folder was written one way on
+/// one and another way on the other. Only the provider can say they are one,
+/// and it says so by answering the same identifier for both.
 ///
 /// Left apart they are the same title, the same poster and the same synopsis
 /// twice in a grid, which is exactly what a version chooser exists to avoid.
-async fn join_what_the_provider_says_is_one_film(
+async fn join_what_the_provider_says_is_one(
     state: &AppState,
     library: &Library,
     provider: &str,
@@ -193,16 +193,16 @@ async fn join_what_the_provider_says_is_one_film(
         .await?;
 
     let mut joined = 0;
-    for film in shared {
-        for other in film.others {
-            crate::scan::join_work_into(state, other, film.keep).await?;
+    for group in shared {
+        for other in group.others {
+            crate::scan::join_work_into(state, other, group.keep).await?;
             joined += 1;
         }
     }
     if joined > 0 {
         tracing::info!(
-            copies = joined,
-            "copies the provider calls one film were put together"
+            joined,
+            "works the provider calls one and the same were put together"
         );
     }
     Ok(joined)
@@ -491,6 +491,11 @@ where
     P: MetadataProvider + 'static,
 {
     let database = state.database();
+    // A provider illustrates the parts of a series unevenly, and a long run it
+    // never illustrated at all is one line per episode. Counted here and said
+    // once, which is what somebody wondering why a season page is grey needs.
+    let mut parts = 0;
+    let mut without_a_picture = 0;
     for season in database.children_ranked(series_id).await? {
         let Some(number) = season.ordinal else {
             continue;
@@ -506,6 +511,8 @@ where
             }
         };
 
+        parts += 1;
+        without_a_picture += usize::from(described.poster_path.is_none());
         write_down(
             state,
             provider,
@@ -535,6 +542,8 @@ where
                 continue;
             };
 
+            parts += 1;
+            without_a_picture += usize::from(found.still_path.is_none());
             write_down(
                 state,
                 provider,
@@ -556,6 +565,16 @@ where
             )
             .await?;
         }
+    }
+
+    if without_a_picture > 0 {
+        let series = database.work(series_id).await?;
+        tracing::info!(
+            series = series.map(|series| series.title).unwrap_or_default(),
+            without_a_picture,
+            parts,
+            "the provider had no picture for some parts of this series"
+        );
     }
     Ok(())
 }
