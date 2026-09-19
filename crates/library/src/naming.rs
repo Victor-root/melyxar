@@ -478,7 +478,7 @@ fn marks_in<S: AsRef<str>>(file_names: &[S]) -> BTreeSet<String> {
 /// to describe the file is handled elsewhere. What is left is a word, and a
 /// word that ends many names is a signature.
 fn could_be_a_mark(word: &str) -> bool {
-    let lowered = word.to_lowercase();
+    let lowered = marker_form(word);
     word.chars().count() >= 2
         && word.chars().any(|c| c.is_alphabetic())
         && !word.chars().all(|c| "IVXLCDMivxlcdm".contains(c))
@@ -588,7 +588,7 @@ fn trim_edition_words<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
         if rest.is_empty() {
             break;
         }
-        let lowered = bare(last).to_lowercase();
+        let lowered = marker_form(bare(last));
 
         if EDITION_WORDS.contains(&lowered.as_str()) {
             kept = rest;
@@ -626,6 +626,17 @@ pub(crate) fn tags_from(words: &[&str]) -> BTreeSet<String> {
 /// A word without the brackets a release may have wrapped it in.
 pub(crate) fn bare(word: &str) -> &str {
     word.trim_matches(|c| matches!(c, '(' | ')' | '[' | ']' | '{' | '}'))
+}
+
+/// A word in the form the lists below are written in.
+///
+/// Capitals go and accents are folded, because a word that describes the file
+/// rather than naming it is written however the person naming the file felt
+/// like writing it. `Intégrale` and `Integrale` are one word, and a list
+/// holding one spelling of it leaves the other stuck to the end of a title,
+/// where it is handed to a provider that then finds nothing at all.
+fn marker_form(word: &str) -> String {
+    fold_accents(word).to_lowercase()
 }
 
 /// Finds the word holding the release year.
@@ -742,11 +753,11 @@ pub(crate) fn first_technical_tag(words: &[&str], from: usize) -> Option<usize> 
         .enumerate()
         .skip(from)
         .find_map(|(index, word)| {
-            let lowered = bare(word).to_lowercase();
+            let lowered = marker_form(bare(word));
             let is_a_tag = TECHNICAL_TAGS.contains(&lowered.as_str())
                 || words
                     .get(index + 1)
-                    .map(|next| format!("{lowered}{}", bare(next).to_lowercase()))
+                    .map(|next| format!("{lowered}{}", marker_form(bare(next))))
                     .is_some_and(|joined| TECHNICAL_TAGS.contains(&joined.as_str()));
             is_a_tag.then_some(index)
         })
@@ -1325,6 +1336,13 @@ mod tests {
 
         let stacked = parsed("Quiet Harbour Remastered Uncut (2019) 1080p.mkv");
         assert_eq!(stacked.title, "Quiet Harbour", "however many are piled up");
+
+        // The same word reaches us accented as often as not, and written both
+        // ways an accent is written. All of them are the one word.
+        for spelling in ["Integrale", "Int\u{e9}grale", "INTE\u{301}GRALE"] {
+            let name = format!("Quiet Harbour {spelling} (2019) 1080p.mkv");
+            assert_eq!(parsed(&name).title, "Quiet Harbour", "{name}");
+        }
     }
 
     #[test]
