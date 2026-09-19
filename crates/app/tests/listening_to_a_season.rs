@@ -74,6 +74,11 @@ async fn an_episode(tool: &Path, folder: &Path, number: u32, sound: &[i16]) {
     )
     .expect("the made up sound is written down");
 
+    // The picture runs exactly as long as the sound it is given. Written any
+    // other way the episode lies about its own length, `-shortest` cuts the
+    // sound to the picture, and an opening put four minutes in is simply not
+    // in the file.
+    let seconds = sound.len() as f32 / MADE_AT as f32;
     let episode = folder.join(format!("Distant.Signal.S01E{number:02}.mkv"));
     let mut making = tokio::process::Command::new(tool);
     making.args(["-hide_banner", "-loglevel", "error", "-y"]);
@@ -81,7 +86,7 @@ async fn an_episode(tool: &Path, folder: &Path, number: u32, sound: &[i16]) {
         "-f",
         "lavfi",
         "-i",
-        &format!("testsrc2=size=128x72:rate=5:duration={AN_EPISODE}"),
+        &format!("testsrc2=size=128x72:rate=5:duration={seconds}"),
     ]);
     making.args(["-f", "s16le", "-ar", &MADE_AT.to_string(), "-ac", "1", "-i"]);
     making.arg(&raw);
@@ -132,6 +137,46 @@ async fn a_season_on_disk(tool: &Path, root: &Path, sharing: bool) {
         } else {
             sound.extend(a_tune(THE_TITLES, 400 + number));
         }
+        an_episode(tool, &folder, number, &sound).await;
+    }
+}
+
+/// How long an episode that opens late runs for.
+///
+/// Long enough that a quarter of it reaches past the four minutes the first
+/// listening reads, which is what buys it a second, longer look. Shorter than
+/// sixteen minutes and there is nothing deeper to look at, because the first
+/// listening already read half of it.
+const A_LONG_EPISODE: f32 = 20.0 * 60.0;
+
+/// How far into a long episode its titles sit.
+///
+/// Past the four minutes read the first time, and inside the five that a
+/// quarter of twenty minutes comes to. This is the first episode of a season
+/// on a real disk: a cold scene setting the year up, and only then the titles.
+const LATE_TITLES_AT: f32 = 4.0 * 60.0 + 18.0;
+
+/// And how long they run for once they arrive.
+const LATE_TITLES: f32 = 20.0;
+
+/// A season of three long episodes whose titles all sit past four minutes.
+///
+/// Each one opens on a cold scene of its own length, so the titles sit
+/// somewhere different in each of the three and cannot be found by their
+/// position.
+async fn a_season_that_opens_late_on_disk(tool: &Path, root: &Path) {
+    let folder = root.join("Distant Signal").join("Season 01");
+    std::fs::create_dir_all(&folder).expect("the season folder");
+
+    let opening = a_tune(LATE_TITLES, 21);
+    for (number, before) in [
+        (1u32, LATE_TITLES_AT),
+        (2, LATE_TITLES_AT + 9.0),
+        (3, LATE_TITLES_AT + 4.0),
+    ] {
+        let mut sound = a_tune(before, 500 + number);
+        sound.extend_from_slice(&opening);
+        sound.extend(a_tune(A_LONG_EPISODE - before - LATE_TITLES, 600 + number));
         an_episode(tool, &folder, number, &sound).await;
     }
 }
@@ -322,4 +367,60 @@ async fn a_season_whose_episodes_share_nothing_gets_no_button_at_all() {
         0,
         "nothing found is an answer, and it settles the season"
     );
+}
+
+#[tokio::test]
+async fn a_season_whose_titles_sit_past_the_first_four_minutes_is_listened_to_further_in() {
+    // The defect this exists for: some thirty files of a real collection came
+    // away with an opening that stopped dead at three minutes fifty nine,
+    // which is not where any of those openings ended but exactly where the
+    // listening stopped. They were mostly first episodes of a season, which
+    // open on a long cold scene before their titles. Four minutes is right
+    // for almost every episode ever made and wrong for those, so the ones
+    // that come away with nothing, or with an opening hard against that edge,
+    // are listened to a second time and further in.
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = directory.path().join("media");
+    let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here");
+    a_season_that_opens_late_on_disk(&tools.ffmpeg, &root).await;
+
+    let (state, library) = a_server(directory.path(), root).await;
+    scan_then_listen(&state, &library).await;
+
+    let found = what_each_file_came_away_with(&state).await;
+    assert_eq!(found.len(), 3, "three episodes were scanned: {found:?}");
+
+    for (file, opens_at) in
+        found
+            .iter()
+            .zip([LATE_TITLES_AT, LATE_TITLES_AT + 9.0, LATE_TITLES_AT + 4.0])
+    {
+        let opening = file
+            .1
+            .iter()
+            .find(|segment| segment.kind == SegmentKind::Intro)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{} opens at {opens_at} s, which only a second look reaches: {:?}",
+                    file.0, file.1
+                )
+            });
+        assert!(
+            opening.start.as_seconds_f64() > 4.0 * 60.0,
+            "{} really does open past the first four minutes: {opening:?}",
+            file.0
+        );
+        assert!(
+            (opening.start.as_seconds_f64() - f64::from(opens_at)).abs() < 2.0,
+            "{} opens where it really opens: {opening:?}",
+            file.0
+        );
+        assert!(
+            (opening.end.saturating_sub(opening.start).as_seconds_f64() - f64::from(LATE_TITLES))
+                .abs()
+                < 3.0,
+            "{} opens for as long as it really opens: {opening:?}",
+            file.0
+        );
+    }
 }

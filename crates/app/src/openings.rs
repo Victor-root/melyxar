@@ -58,6 +58,25 @@ const THE_BEGINNING: Millis = Millis::new(4 * 60 * 1_000);
 /// And how much of the end, for the closing titles.
 const THE_END: Millis = Millis::new(4 * 60 * 1_000);
 
+/// How far in a second look at the beginning reaches.
+///
+/// Four minutes is right for almost every episode ever made, and wrong for the
+/// ones that open on a long cold scene before their titles. Those are mostly
+/// the first episode of a season, which is given room to set its year up: a
+/// real collection had some thirty files whose opening stopped dead at three
+/// minutes fifty nine, which is not where any of those openings really ended
+/// but exactly where the listening stopped.
+///
+/// Ten minutes at the most, and never more than a quarter of the episode. A
+/// sitcom of twenty two minutes does not hide its titles at its ninth minute,
+/// and reading half of one to prove it would cost more than every opening it
+/// could ever find.
+const THE_BEGINNING_AGAIN: Millis = Millis::new(10 * 60 * 1_000);
+
+/// How close to the edge of what was read an opening has to end before the
+/// edge, rather than the opening itself, is the likelier reason it stopped.
+const AGAINST_THE_EDGE: Millis = Millis::new(1_000);
+
 /// How short a shared stretch may be and still deserve a button.
 ///
 /// Under ten seconds, pressing a button is more work than waiting, and a
@@ -278,9 +297,91 @@ async fn listen_to_one_season(
 
     // The comparison is seconds of arithmetic on a whole season, which is far
     // too much to do on a thread that is meant to be waiting on something.
-    let found = tokio::task::spawn_blocking(move || what_a_season_shares(&heard))
-        .await
-        .unwrap_or_default();
+    let (mut heard, found) = tokio::task::spawn_blocking(move || {
+        let found = what_a_season_shares(&heard);
+        (heard, found)
+    })
+    .await
+    .unwrap_or_default();
+
+    // A file with nothing to hear never reached the comparison, so what was
+    // heard is a shorter list than the season's files and the two cannot be
+    // walked side by side.
+    let which_file: std::collections::HashMap<_, _> = episodes
+        .iter()
+        .cloned()
+        .zip(chosen.iter().copied())
+        .map(|(episode, track)| (episode.source_id, (episode, track)))
+        .collect();
+
+    // Only the episodes whose opening was not found, or was found running
+    // hard against the edge of what was read, are listened to further in. On
+    // a season that gave up its opening at once this is nobody, and the pass
+    // costs exactly what it did before.
+    let again: Vec<(usize, Millis, EpisodeToListenTo, Option<i32>)> = found
+        .iter()
+        .enumerate()
+        .filter(|(_, one)| one.how_the_opening_went().a_longer_look_might_help())
+        .filter_map(|(at, one)| {
+            let (episode, track) = which_file.get(&one.source_id)?;
+            let how_far = how_far_in_to_look_again(episode.duration)?;
+            Some((at, how_far, episode.clone(), *track))
+        })
+        .collect();
+
+    let found = if again.is_empty() {
+        found
+    } else {
+        tracing::debug!(
+            series = season.series,
+            season = season.number,
+            episodes = again.len(),
+            "these episodes are listened to further in, their openings having been \
+             either missing or cut off by the edge of what was read"
+        );
+        let asked_to_stop = AskedToStop::when(handle.cancelled_when());
+        let owned_tool = tool.to_path_buf();
+        let deeper = melyxar_jobs::for_each_bounded(
+            again,
+            state.config().limits.concurrent_probes,
+            move |(at, how_far, episode, track)| {
+                let tool = owned_tool.clone();
+                let asked_to_stop = asked_to_stop.clone();
+                async move {
+                    let heard = listen_further_into_the_beginning_of(
+                        &tool,
+                        &episode,
+                        track,
+                        how_far,
+                        asked_to_stop,
+                    )
+                    .await;
+                    (at, heard)
+                }
+            },
+        )
+        .await;
+
+        if handle.is_cancelled() {
+            tracing::debug!(
+                series = season.series,
+                season = season.number,
+                "this season was left where it was, its listening having been stopped"
+            );
+            return Ok(false);
+        }
+
+        for (at, heard_again) in deeper {
+            // A beginning that would not come back a second time leaves the
+            // first answer standing, which is the worst this can do.
+            if let Some(heard_again) = heard_again {
+                heard[at].beginning = heard_again;
+            }
+        }
+        tokio::task::spawn_blocking(move || what_a_season_shares(&heard))
+            .await
+            .unwrap_or_default()
+    };
 
     let mut with_an_opening = 0;
     let mut with_a_closing = 0;
@@ -496,6 +597,38 @@ async fn listen_to_one_file(
     })
 }
 
+/// Listens to the beginning of one episode again, further in than the first
+/// time, and writes down what it heard.
+///
+/// Only the beginning: the closing titles were found at the other end of the
+/// episode and are not in question, and reading them twice would double the
+/// cost of a pass for nothing.
+async fn listen_further_into_the_beginning_of(
+    tool: &std::path::Path,
+    episode: &EpisodeToListenTo,
+    track: Option<i32>,
+    how_far: Millis,
+    asked_to_stop: AskedToStop,
+) -> Option<Listened> {
+    let track = track?;
+    let Read::Some(samples) = samples(
+        tool,
+        &episode.path,
+        track,
+        Millis::ZERO,
+        how_far,
+        &asked_to_stop,
+    )
+    .await
+    else {
+        return None;
+    };
+    tokio::task::spawn_blocking(move || Listened::of(&samples))
+        .await
+        .ok()
+        .filter(|heard| !heard.is_empty())
+}
+
 /// What came back from asking the tool for a stretch of sound.
 enum Read {
     Some(Vec<i16>),
@@ -659,6 +792,19 @@ enum WhatWasShared {
 }
 
 impl WhatWasShared {
+    /// Whether looking further into the episode might turn up more than this.
+    ///
+    /// Nothing found is the plain case. A stretch that ends hard against the
+    /// edge of what was read is the other one, and the less obvious: an
+    /// opening does not usually end at the exact moment the listening did, so
+    /// what stopped it was almost certainly the edge.
+    fn a_longer_look_might_help(self) -> bool {
+        match self.stretch() {
+            Some(stretch) => stretch.end.get() + AGAINST_THE_EDGE.get() >= THE_BEGINNING.get(),
+            None => true,
+        }
+    }
+
     /// The stretch, when there is one.
     fn stretch(self) -> Option<Stretch> {
         match self {
@@ -692,6 +838,17 @@ impl WhatWasShared {
     }
 }
 
+/// How far in a second look at this episode would reach, or nothing when it
+/// would see no more than the first look already did.
+///
+/// A quarter of the episode never runs into the four minutes read at its other
+/// end, whatever its length, so the two never meet however long it is.
+fn how_far_in_to_look_again(duration: Option<Millis>) -> Option<Millis> {
+    let duration = duration.filter(|duration| duration.get() > 0)?;
+    let how_far = Millis::new(THE_BEGINNING_AGAIN.get().min(duration.get() / 4));
+    (how_far.get() > THE_BEGINNING.get()).then_some(how_far)
+}
+
 /// What listening to one file decided about it.
 #[derive(Debug)]
 struct Found {
@@ -701,6 +858,16 @@ struct Found {
     /// What came of each end, so that an episode with no button can say which
     /// of the four kinds of nothing it came away with.
     ends: Vec<(SegmentKind, WhatWasShared)>,
+}
+
+impl Found {
+    /// What the comparison came to about this episode's opening.
+    fn how_the_opening_went(&self) -> WhatWasShared {
+        self.ends
+            .iter()
+            .find(|(kind, _)| *kind == SegmentKind::Intro)
+            .map_or(WhatWasShared::Nothing, |(_, what)| *what)
+    }
 }
 
 /// What the episodes of one season turned out to share, file by file.
@@ -1236,6 +1403,45 @@ mod tests {
             .find(|(kind, _)| *kind == SegmentKind::Intro)
             .map(|(_, what)| *what)
             .expect("every episode answers about its opening")
+    }
+
+    #[test]
+    fn how_far_a_second_look_reaches_is_a_quarter_of_the_episode_and_ten_minutes_at_most() {
+        // A sitcom: a quarter of it reaches past the four minutes read first.
+        assert_eq!(
+            how_far_in_to_look_again(Some(Millis::new(22 * 60 * 1_000))),
+            Some(Millis::new(5 * 60 * 1_000 + 30_000))
+        );
+        // A long drama, where the ten minutes is what binds.
+        assert_eq!(
+            how_far_in_to_look_again(Some(Millis::new(60 * 60 * 1_000))),
+            Some(THE_BEGINNING_AGAIN)
+        );
+        // Under sixteen minutes a quarter reaches no further than the four
+        // minutes already read, so there is nothing deeper to look at.
+        assert_eq!(
+            how_far_in_to_look_again(Some(Millis::new(15 * 60 * 1_000))),
+            None
+        );
+        assert_eq!(how_far_in_to_look_again(None), None);
+    }
+
+    #[test]
+    fn an_opening_ending_hard_against_the_edge_of_what_was_read_asks_for_a_second_look() {
+        let ending_at = |seconds: i64| {
+            WhatWasShared::AStretch(Stretch {
+                start: Millis::new(seconds * 1_000 - 20_000),
+                end: Millis::new(seconds * 1_000),
+            })
+        };
+        // Three minutes fifty nine, which is where some thirty files of a real
+        // collection stopped: the edge, not the opening, is what ended it.
+        assert!(ending_at(239).a_longer_look_might_help());
+        // And one that ends well before the edge is the opening really ending.
+        assert!(!ending_at(200).a_longer_look_might_help());
+        // Every kind of nothing is worth looking further for.
+        assert!(WhatWasShared::Nothing.a_longer_look_might_help());
+        assert!(WhatWasShared::TooShort(Millis::new(3_000)).a_longer_look_might_help());
     }
 
     #[test]
