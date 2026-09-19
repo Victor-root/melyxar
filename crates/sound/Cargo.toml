@@ -1,0 +1,11 @@
+[package]
+name = "melyxar-sound"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Writing a stretch of sound down small enough to compare it with another."
+
+[dependencies]
+melyxar-core = { workspace = true }
