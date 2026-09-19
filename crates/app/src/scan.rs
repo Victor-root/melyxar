@@ -775,11 +775,27 @@ async fn episode_work_for(
         .and_then(|name| name.to_str())
         .unwrap_or_default();
     let year = melyxar_core::time::current_year();
-    let Some(read) = episode::parse_episode(file_name, year, signs) else {
+    let folders = folders_above(relative_path);
+    let from_a_season_folder = folders
+        .iter()
+        .find_map(|folder| episode::season_of_folder(folder));
+
+    let read = match episode::parse_episode(file_name, year, signs) {
+        Some(read) => Some(read),
+        // Nothing in the name says which episode this is. Under a season
+        // folder, where the season and the series are already settled, a name
+        // opening on a number is that number: it is how a whole run taken off
+        // a disc is usually named, and reading it nowhere else keeps a film
+        // called by a number out of it.
+        None if from_a_season_folder.is_some() => {
+            episode::episode_of_a_leading_number(file_name, year, signs)
+        }
+        None => None,
+    };
+    let Some(read) = read else {
         return Ok(None);
     };
 
-    let folders = folders_above(relative_path);
     let Some(named) = the_series(&read, &folders, year, signs) else {
         return Ok(None);
     };
@@ -789,11 +805,7 @@ async fn episode_work_for(
     // is what it means.
     let season = read
         .season
-        .or_else(|| {
-            folders
-                .iter()
-                .find_map(|folder| episode::season_of_folder(folder))
-        })
+        .or(from_a_season_folder)
         .unwrap_or(THE_ONLY_SEASON);
 
     let database = state.database();
@@ -1741,6 +1753,72 @@ mod tests {
         );
         assert!(seasons.iter().all(|s| s.parent_id == Some(series[0].id)));
         assert_eq!(of_kind(&works, WorkKind::Episode).len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_season_folder_numbers_the_files_that_say_nothing_but_a_number() {
+        // Seen on a real collection: a series of fifty two episodes, filed
+        // under a folder of its own and a folder per season, whose file names
+        // carry the number of the episode and its title and nothing else.
+        // Read from the names alone, every one of them was a work standing by
+        // itself and the series existed nowhere.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Saison 1/01 - The Amber Field.mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Distant Signal/Saison 1/02 - Silent Harbour.mkv",
+            b"xx",
+        );
+        // Four digits are a year and never an episode, so this one is still
+        // filed under nothing rather than read as the two thousand and
+        // nineteenth episode.
+        write(
+            &media,
+            "Distant Signal/Saison 1/2019 Lost Footage.mkv",
+            b"xxx",
+        );
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        let series = of_kind(&works, WorkKind::Series);
+        assert_eq!(
+            series.iter().map(|s| s.title.clone()).collect::<Vec<_>>(),
+            vec!["Distant Signal"]
+        );
+        let seasons = of_kind(&works, WorkKind::Season);
+        assert_eq!(
+            seasons.iter().map(|s| s.ordinal).collect::<Vec<_>>(),
+            vec![Some(1)]
+        );
+
+        let episodes = of_kind(&works, WorkKind::Episode);
+        let numbered: Vec<_> = episodes
+            .iter()
+            .filter(|episode| episode.parent_id == Some(seasons[0].id))
+            .map(|episode| (episode.ordinal, episode.title.clone()))
+            .collect();
+        assert_eq!(
+            numbered,
+            vec![
+                (Some(1), "The Amber Field".to_string()),
+                (Some(2), "Silent Harbour".to_string()),
+            ],
+            "the number in front is the episode and the rest of the name is its title"
+        );
+        assert!(
+            episodes
+                .iter()
+                .any(|episode| episode.parent_id.is_none() && episode.ordinal.is_none()),
+            "a name opening on a year belongs to no season and stays visible on its own"
+        );
     }
 
     #[tokio::test]

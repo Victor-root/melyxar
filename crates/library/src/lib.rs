@@ -19,7 +19,10 @@ pub mod scan;
 pub mod sidecar;
 
 pub use access::check as check_root_access;
-pub use episode::{parse_episode, season_of_folder, series_of_folder, NamedSeries, ParsedEpisode};
+pub use episode::{
+    episode_of_a_leading_number, parse_episode, season_of_folder, series_of_folder, NamedSeries,
+    ParsedEpisode,
+};
 pub use folders::{folders_in, Folder, FolderError, Listing};
 pub use naming::{parse as parse_file_name, sort_title, ParsedName};
 pub use scan::{diff, walk, FoundFile, KnownFile, ScanDiff, ScanError, ScanOutcome};
