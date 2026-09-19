@@ -104,7 +104,7 @@ struct MeasuredAgainst {
     /// Whether the card can read this film for itself, as it would on a real
     /// playback of it.
     card_reads_it: bool,
-    /// How it is named in the journal, already redacted.
+    /// How it is named in the journal.
     named: String,
 }
 
@@ -127,7 +127,7 @@ async fn what_to_measure_against(
         let named = film
             .path
             .file_name()
-            .map(|name| melyxar_core::privacy::MediaName::new(&name.to_string_lossy()).to_string())
+            .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         return Ok(MeasuredAgainst {
             // Its middle rather than its opening: a film opens on logos, on

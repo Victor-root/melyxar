@@ -13,7 +13,7 @@ pub mod job;
 pub mod journal;
 pub mod library;
 pub mod media;
-pub mod privacy;
+pub mod media_log;
 pub mod refresh;
 pub mod segments;
 pub mod text;

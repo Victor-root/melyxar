@@ -18,7 +18,7 @@ use melyxar_core::id::{JobId, LibraryRootId, MediaSourceId, TrackId, WorkId};
 use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
 use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::media::{SubtitleDetails, Track, TrackKind};
-use melyxar_core::privacy::{MediaName, MediaPath};
+use melyxar_core::media_log::{file_name_of, MediaPath};
 use melyxar_core::refresh::RefreshMode;
 use melyxar_core::work::WorkKind;
 use melyxar_database::catalogue::{LocalExtraVideo, SourceAnalysis, StoredSource};
@@ -537,7 +537,7 @@ pub(crate) async fn reread_names_of_nameless_works(
         {
             join_work_into(state, work.id, twin.id).await?;
             tracing::info!(
-                work = %MediaName::new(&parsed.title),
+                work = %parsed.title,
                 "two copies of one film read as one film now"
             );
             done.merged += 1;
@@ -548,8 +548,8 @@ pub(crate) async fn reread_names_of_nameless_works(
             .rename_work(work.id, &parsed.title, &sort_title, parsed.year)
             .await?;
         tracing::info!(
-            was = %MediaName::new(&work.title),
-            now = %MediaName::new(&parsed.title),
+            was = %work.title,
+            now = %parsed.title,
             "a film still waiting to be named reads differently now"
         );
         done.renamed += 1;
@@ -738,7 +738,7 @@ async fn work_for(
         .await?
     {
         tracing::debug!(
-            work = %MediaName::new(&existing.title),
+            work = %existing.title,
             "another copy of a film already known"
         );
         return Ok(existing.id);
@@ -968,7 +968,7 @@ async fn attach_companions(
         }
         let Some(owner) = film_of(companion, media) else {
             tracing::debug!(
-                file = %MediaName::of_file(&companion.relative_path),
+                file = %file_name_of(&companion.relative_path),
                 "a companion clip matches no film next to it and was left alone"
             );
             continue;
@@ -1314,12 +1314,12 @@ async fn analyse_one(database: &Database, analyser: &Path, file: &PendingFile) -
     // Said out loud for every file that has anything to say, because nothing
     // else ever will: the container declares where each stream starts and how
     // long it runs, and until now nobody read either. The complaint that
-    // follows is always about one film in particular, so the name travels with
-    // it, censored like every other name in a log.
+    // follows is always about one film in particular, so its name travels
+    // with it.
     let lining_up = melyxar_media_probe::HowTheStreamsLineUp::of(&report);
     if lining_up.is_worth_saying() {
         tracing::info!(
-            file = %MediaName::of_file(&file.relative_path),
+            file = %file_name_of(&file.relative_path),
             video_starts_at_ms = lining_up.video_starts_at,
             audio_starts_at_ms = lining_up.audio_starts_at,
             sound_after_picture_ms = lining_up.offset(),

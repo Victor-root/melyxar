@@ -139,7 +139,7 @@ async fn store(
         // two want opposite answers.
         let Some(path) = path else {
             tracing::info!(
-                work = %melyxar_core::privacy::MediaName::new(&details.title),
+                work = %details.title,
                 kind = kind.as_str(),
                 "the provider named no picture of this kind for this work"
             );
