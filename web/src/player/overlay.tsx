@@ -787,9 +787,11 @@ function Seek({
             <span className="player-preview-time">{asClock(previewed)}</span>
           </div>
         )}
-        <span className="player-rail-track" />
-        <span className="player-rail-held" style={{ width: `${held * 100}%` }} />
-        <span className="player-rail-played" style={{ width: `${played * 100}%` }} />
+        <span className="player-rail-fill">
+          <span className="player-rail-track" />
+          <span className="player-rail-held" style={{ width: `${held * 100}%` }} />
+          <span className="player-rail-played" style={{ width: `${played * 100}%` }} />
+        </span>
         <span className="player-rail-handle" style={{ left: `${played * 100}%` }} />
       </div>
 

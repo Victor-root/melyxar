@@ -446,37 +446,41 @@
 }
 
 /* What is drawn over what, said outright rather than left to the order things
-   happen to be written in. Three layers: the track and what is filled on it,
-   then the marks where the film changes scene, then the handle over both. The
-   handle is the one that must never be covered: it is where the film is, and a
-   red bar drawn across it is a bar with no handle at all. */
+   happen to be written in. The track and what is filled on it sit inside one
+   clipped frame, then the marks where the film changes scene, then the handle
+   over all of it. The handle is the one that must never be covered: it is
+   where the film is, and a red bar drawn across it is a bar with no handle at
+   all. */
+.player-rail-fill {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  z-index: 0;
+  height: var(--player-rail);
+  /* Fully round rather than slightly softened: it is what makes a bar of this
+     thickness read as one object instead of a block. Clipped here rather than
+     left to whatever is drawn inside it, so a fill with real width and one
+     with none both end at exactly the same curve: what a fill drawn with its
+     own rounding on every side used to show, right at the very start where
+     its true width is nothing at all, was a stray sliver of that curve
+     poking past the frame rather than disappearing inside it. */
+  border-radius: 100px;
+  overflow: hidden;
+  transition: height var(--quick) var(--ease);
+}
+
 .player-rail-track,
 .player-rail-held,
 .player-rail-played {
   position: absolute;
   left: 0;
-  z-index: 0;
-  height: var(--player-rail);
-  transition: height var(--quick) var(--ease);
+  top: 0;
+  height: 100%;
 }
 
 .player-rail-track {
   width: 100%;
-  /* Fully round rather than slightly softened: it is what makes a bar of this
-     thickness read as one object instead of a block. */
-  border-radius: 100px;
   background: hsla(0, 0%, 100%, 0.2);
-}
-
-/* Rounded on the leading edge alone, the one that actually moves. The
-   trailing edge always sits flush against the track's own already-rounded
-   start, so rounding it a second time gave it a curve of its own to render,
-   and right at the beginning, where its true width is nothing at all, that
-   curve showed as a stray red sliver poking past the track's edge instead of
-   disappearing with it. */
-.player-rail-held,
-.player-rail-played {
-  border-radius: 0 100px 100px 0;
 }
 
 /* What the browser is holding, which is what says whether a jump forward will
@@ -516,12 +520,8 @@
 }
 
 /* The bar swells under a hand, which is what says it can be grabbed. */
-.player-rail:hover .player-rail-track,
-.player-rail:hover .player-rail-held,
-.player-rail:hover .player-rail-played,
-.player-rail:focus-visible .player-rail-track,
-.player-rail:focus-visible .player-rail-held,
-.player-rail:focus-visible .player-rail-played {
+.player-rail:hover .player-rail-fill,
+.player-rail:focus-visible .player-rail-fill {
   height: var(--player-rail-hovered);
 }
 
