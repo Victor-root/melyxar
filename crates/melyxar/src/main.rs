@@ -77,6 +77,31 @@ enum Command {
         #[arg(long)]
         mode: Option<String>,
     },
+    /// Listen to one series again for the titles its episodes share.
+    ///
+    /// The upkeep does this on its own, once, and never again: a season
+    /// written down as done is a season never read again, which is what stops
+    /// a collection being read through every night for the same answer. So
+    /// when the rules about what an opening is change, this is how one series
+    /// is put through the new ones without a whole collection being read
+    /// again for hours.
+    ///
+    /// What was found before is forgotten first. What the file says itself and
+    /// what somebody set by hand both stay.
+    Listen {
+        /// The series, by name or by part of one. Case does not matter.
+        #[arg(required_unless_present = "everything")]
+        series: Option<String>,
+        /// One season of it, by number. Every season by default.
+        #[arg(long)]
+        season: Option<i32>,
+        /// Every season of every series instead of one, which takes hours.
+        ///
+        /// What to reach for once a rule has been tried on one series and is
+        /// worth putting a whole collection through.
+        #[arg(long, conflicts_with_all = ["series", "season"])]
+        everything: bool,
+    },
     /// Print a starting configuration, for the installer.
     PrintDefaultConfig,
 }
@@ -96,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::load(&config_path)
         .with_context(|| format!("reading the configuration at {}", config_path.display()))?;
 
-    install_logging(&config);
+    install_logging(&config, matches!(cli.command, Some(Command::Listen { .. })));
 
     match cli.command.unwrap_or(Command::Serve) {
         Command::Serve => serve(config).await,
@@ -113,6 +138,13 @@ async fn main() -> anyhow::Result<()> {
             let mode = chosen_mode(mode.as_deref())?;
             identify(config, library, mode).await
         }
+        // The flag does its whole work before this: it is what allows the
+        // series to be left out, and no name is already every series there is.
+        Command::Listen {
+            series,
+            season,
+            everything: _,
+        } => listen(config, series.as_deref(), season).await,
         Command::PrintDefaultConfig => unreachable!("handled above"),
     }
 }
@@ -139,11 +171,18 @@ fn chosen_mode(asked: Option<&str>) -> anyhow::Result<melyxar_core::refresh::Ref
 
 /// Sets up logging from the configuration.
 ///
-/// The redaction switch is applied here rather than later, so that a media
-/// name cannot slip into the log during start-up.
-fn install_logging(config: &Config) {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(config.logging.level.clone()));
+/// A command run to find something out asks for the detail on its own. What
+/// the listening decided about each file is written down as it goes, and a
+/// server set to say only what matters keeps none of it: somebody at a
+/// terminal asking one series why it has no button would be answered with a
+/// single line saying that it does not. `RUST_LOG` still wins where it is set,
+/// since somebody who named a level meant that level.
+fn install_logging(config: &Config, wants_the_detail: bool) {
+    let asked_for = match wants_the_detail {
+        true => format!("{},melyxar_app=debug", config.logging.level),
+        false => config.logging.level.clone(),
+    };
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(asked_for));
 
     tracing_subscriber::registry()
         .with(
@@ -330,6 +369,68 @@ async fn identify(
     // A run that did not finish has to be visible to whatever started this,
     // not only readable in the lines above.
     anyhow::ensure!(all_ran, "an identification run did not finish");
+    Ok(())
+}
+
+async fn listen(config: Config, series: Option<&str>, season: Option<i32>) -> anyhow::Result<()> {
+    let state = melyxar_app::startup::bring_up(config)
+        .await
+        .context("bringing the server up for the listening")?;
+
+    let seasons = state
+        .database()
+        .seasons_of_series(series, season)
+        .await
+        .context("looking for what to listen to")?;
+    if seasons.is_empty() {
+        state.database().close().await;
+        match series {
+            Some(series) => anyhow::bail!(
+                "no season of a series whose name holds '{series}' is here to be listened to; \
+                 the name is matched on part of it, and a season whose files have not been \
+                 analysed yet has nothing to listen to"
+            ),
+            None => anyhow::bail!("there is no season here to listen to"),
+        }
+    }
+
+    let files: i64 = seasons.iter().map(|season| season.waiting).sum();
+    println!(
+        "listening again to {} season(s) of {}, {files} file(s) in all",
+        seasons.len(),
+        match series {
+            Some(_) => seasons[0].series.clone(),
+            None => "every series here".to_string(),
+        }
+    );
+
+    let job = melyxar_app::openings::start_listening_again(&state, series, seasons)
+        .await
+        .context("starting the listening")?;
+    let (job_state, went) = job.wait().await;
+
+    for one in &went {
+        let name = match one.number {
+            Some(number) => format!("{} S{number:02}", one.series),
+            None => one.series.clone(),
+        };
+        println!(
+            "{name}: {} episode(s), {} with an opening, {} with closing titles",
+            one.episodes, one.with_an_opening, one.with_a_closing
+        );
+    }
+    if went.is_empty() {
+        println!("nothing was listened to; the log above says why");
+    }
+
+    state.database().close().await;
+    // A run that did not reach its end has to be visible to whatever started
+    // it, not only readable in the lines above.
+    anyhow::ensure!(
+        job_state == melyxar_core::job::JobState::Succeeded,
+        "the listening ended as {}",
+        job_state.as_str()
+    );
     Ok(())
 }
 

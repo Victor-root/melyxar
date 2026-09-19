@@ -169,7 +169,10 @@ pub(crate) async fn listen_to_the_seasons_of(
                 break;
             }
             handle.now_working_on(Some(&naming(season))).await;
-            if listen_to_one_season(state, &tool, season, handle).await? {
+            if listen_to_one_season(state, &tool, season, handle)
+                .await?
+                .is_some()
+            {
                 listened += 1;
             } else {
                 stopped = true;
@@ -209,13 +212,143 @@ pub(crate) async fn listen_to_the_seasons_of(
     Ok(listened)
 }
 
-/// Listens to one season right through. Answers false if somebody stopped it.
+/// A listening started from a terminal, which somebody is waiting on.
+pub struct ListeningJob {
+    started: melyxar_jobs::StartedJob,
+    outcome: std::sync::Arc<std::sync::Mutex<Vec<HowASeasonWent>>>,
+}
+
+impl ListeningJob {
+    /// Waits for the listening to end, and says what each season came to.
+    ///
+    /// A run somebody stopped says what it had got through before it was
+    /// stopped, which is what was really written down.
+    pub async fn wait(self) -> (melyxar_core::job::JobState, Vec<HowASeasonWent>) {
+        let state = self.started.completion.await.unwrap_or_else(|error| {
+            tracing::error!(error = %error, "the listening task ended unexpectedly");
+            melyxar_core::job::JobState::Failed
+        });
+        let went = self
+            .outcome
+            .lock()
+            .expect("the report lock is never held across an await")
+            .clone();
+        (state, went)
+    }
+}
+
+/// Starts a listening of named seasons as a job of its own.
+///
+/// A job rather than a bare call, for the same reasons a scan asked for from a
+/// terminal is one: it shows up in the list of what is running, it can be
+/// stopped, and a second one on the same series is refused rather than run
+/// alongside the first.
+pub async fn start_listening_again(
+    state: &AppState,
+    series: Option<&str>,
+    seasons: Vec<SeasonToListenTo>,
+) -> std::result::Result<ListeningJob, melyxar_jobs::JobError> {
+    let outcome = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = std::sync::Arc::clone(&outcome);
+    let owned = state.clone();
+    // What the second run of the same thing is refused against. Every series
+    // at once is its own subject, and not one whose name anybody typed.
+    let target = series.map_or_else(|| "every series".to_string(), str::to_lowercase);
+
+    let started = state
+        .jobs()
+        .clone()
+        .start(
+            melyxar_core::job::JobKind::ListenForOpenings,
+            melyxar_core::job::JobPriority::REQUESTED,
+            Some(target),
+            move |handle| async move {
+                match listen_again_to(&owned, &seasons, &handle).await {
+                    Ok(went) => {
+                        *recorded
+                            .lock()
+                            .expect("the report lock is never held across an await") = went;
+                        Ok(())
+                    }
+                    Err(error) => Err(error.to_string()),
+                }
+            },
+        )
+        .await?;
+
+    Ok(ListeningJob { started, outcome })
+}
+
+/// Listens again to seasons that have already had their answer, forgetting it
+/// first.
+///
+/// What the upkeep does every night, pointed at a handful of seasons instead
+/// of at a whole library. A season written down as done is a season never read
+/// again, so the old answer has to go before the new rules can reach it.
+///
+/// This exists for the terminal. A rule about what an opening is takes hours
+/// to try on a whole collection and a minute to try on one series, and a rule
+/// nobody can try is a rule nobody changes.
+pub async fn listen_again_to(
+    state: &AppState,
+    seasons: &[SeasonToListenTo],
+    handle: &JobHandle,
+) -> Result<Vec<HowASeasonWent>> {
+    let Some(tools) = state.tools() else {
+        tracing::warn!("no media tool here, so nothing can be listened to");
+        return Ok(Vec::new());
+    };
+    let database = state.database();
+
+    handle.at_step(JobStep::ListeningForOpenings).await;
+    handle.set_total(seasons.len() as i64).await;
+
+    let tool = tools.ffmpeg.clone();
+    let mut went = Vec::with_capacity(seasons.len());
+    for season in seasons {
+        if handle.is_cancelled() {
+            break;
+        }
+        handle.now_working_on(Some(&naming(season))).await;
+        let forgotten = database.forget_the_listening_of(season.id).await?;
+        tracing::debug!(
+            series = season.series,
+            season = season.number,
+            files = forgotten,
+            "what was known about this season is forgotten, so it is read again"
+        );
+
+        let Some(how) = listen_to_one_season(state, &tool, season, handle).await? else {
+            break;
+        };
+        went.push(how);
+        handle.advance(1).await;
+    }
+    Ok(went)
+}
+
+/// What listening to one season came to.
+///
+/// The journal says all of this and more as it goes, one line per file. This
+/// is the same thing at the size of a season, for a terminal where somebody is
+/// waiting on the answer for one series and wants it in a line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HowASeasonWent {
+    pub series: String,
+    pub number: Option<i32>,
+    /// Episodes, not files: two copies of one episode are one episode.
+    pub episodes: usize,
+    pub with_an_opening: usize,
+    pub with_a_closing: usize,
+}
+
+/// Listens to one season right through. Answers nothing if somebody stopped it.
 async fn listen_to_one_season(
     state: &AppState,
     tool: &std::path::Path,
     season: &SeasonToListenTo,
     handle: &JobHandle,
-) -> Result<bool> {
+) -> Result<Option<HowASeasonWent>> {
     let database = state.database();
     let episodes = database.episodes_to_listen_to(season.id).await?;
 
@@ -237,7 +370,13 @@ async fn listen_to_one_season(
         for episode in &episodes {
             database.store_openings(episode.source_id, &[]).await?;
         }
-        return Ok(true);
+        return Ok(Some(HowASeasonWent {
+            series: season.series.clone(),
+            number: season.number,
+            episodes: distinct,
+            with_an_opening: 0,
+            with_a_closing: 0,
+        }));
     }
 
     let mut tracks = Vec::with_capacity(episodes.len());
@@ -281,7 +420,7 @@ async fn listen_to_one_season(
             season = season.number,
             "this season was left where it was, its listening having been stopped"
         );
-        return Ok(false);
+        return Ok(None);
     }
 
     let mut heard = Vec::with_capacity(read.len());
@@ -368,7 +507,7 @@ async fn listen_to_one_season(
                 season = season.number,
                 "this season was left where it was, its listening having been stopped"
             );
-            return Ok(false);
+            return Ok(None);
         }
 
         for (at, heard_again) in deeper {
@@ -401,7 +540,13 @@ async fn listen_to_one_season(
         with_a_closing,
         "this season was listened to right through"
     );
-    Ok(true)
+    Ok(Some(HowASeasonWent {
+        series: season.series.clone(),
+        number: season.number,
+        episodes: distinct,
+        with_an_opening,
+        with_a_closing,
+    }))
 }
 
 /// Writes down, file by file, where the buttons will be.
