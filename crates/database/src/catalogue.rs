@@ -88,6 +88,10 @@ pub struct ChildWork {
     pub identification: IdentificationState,
     pub dominant_color: Option<String>,
     pub added_at: Timestamp,
+    /// The biggest copy on disk, ready for a button that plays this one
+    /// straight from a row of them rather than sending a viewer to a page
+    /// that asks the same question over again. Absent along with `playable`.
+    pub source_id: Option<MediaSourceId>,
 }
 
 /// Works one provider says are the same film.
@@ -413,6 +417,12 @@ impl Database {
                       WHERE s.work_id = w.id AND s.missing_since IS NULL) AS playable,
                     (SELECT max(s.duration_ms) FROM media_sources s WHERE s.work_id = w.id)
                         AS longest_ms,
+                    -- The one a play button starting from this row alone
+                    -- would mean, the same copy `next_episode_after` would
+                    -- offer: the biggest still on disk.
+                    (SELECT s.id FROM media_sources s
+                      WHERE s.work_id = w.id AND s.missing_since IS NULL
+                      ORDER BY s.size_bytes DESC LIMIT 1) AS source_id,
                     -- What is left to watch under this one. A season answers
                     -- for its episodes; an episode has nothing under it and
                     -- answers nothing.
@@ -465,6 +475,10 @@ impl Database {
                     )?,
                     dominant_color: row.try_get("dominant_color")?,
                     added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
+                    source_id: row
+                        .try_get::<Option<String>, _>("source_id")?
+                        .map(|id| parse_id(&id))
+                        .transpose()?,
                 })
             })
             .collect()
@@ -3016,6 +3030,47 @@ mod tests {
             first.iter().map(|child| child.ordinal).collect::<Vec<_>>(),
             vec![Some(1), Some(2)]
         );
+    }
+
+    #[tokio::test]
+    async fn a_childs_row_names_the_biggest_copy_of_it_on_disk() {
+        // The "up next" row of a player wants to start any episode it shows
+        // straight from its own row, exactly the copy `next_episode_after`
+        // would offer for the same episode.
+        let (database, library_id, root_id) = library().await;
+        let (_, seasons, episodes) = a_series(&database, library_id).await;
+        let viewer = a_viewer(&database).await;
+
+        // One episode with no file at all.
+        let untouched = database
+            .children_of(viewer, seasons[0])
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|child| child.id == episodes[0])
+            .expect("the episode is among the children");
+        assert_eq!(untouched.source_id, None, "nothing to play means nothing to name");
+        assert!(!untouched.playable);
+
+        // The other with two copies, one heavier than the other.
+        let smaller = database
+            .insert_source(episodes[1], root_id, Path::new("small.mkv"), 1_000, now())
+            .await
+            .expect("file recorded");
+        let biggest = database
+            .insert_source(episodes[1], root_id, Path::new("biggest.mkv"), 9_000, now())
+            .await
+            .expect("file recorded");
+
+        let named = database
+            .children_of(viewer, seasons[0])
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|child| child.id == episodes[1])
+            .expect("the episode is among the children");
+        assert_eq!(named.source_id, Some(biggest));
+        assert_ne!(named.source_id, Some(smaller));
     }
 
     #[tokio::test]

@@ -304,6 +304,9 @@ export interface Child {
   identification: Card["identification"];
   color: string | null;
   poster: Picture[];
+  /** The biggest copy on disk, so a row of these can start one playing on its
+   *  own. Absent along with `playable`. */
+  source_id: string | null;
 }
 
 /** The episode a page offers to play next. */

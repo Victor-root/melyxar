@@ -14,15 +14,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Credit, PlaybackChapter, PlaybackPlan, Work } from "../api";
-import { pictureSet } from "../api";
+import { api, pictureSet } from "../api";
+import { useAsked } from "../asking";
 import { asClock } from "./clock";
 import type { Playback } from "./engine";
 import { PlayIcon } from "./icons";
 import { languageName } from "../languages";
+import { nameOfOne } from "../readable";
 import { heightAt, Thumbnail } from "./thumbnail";
 
-/** The three sheets, in the order their tabs stand. */
-export const SHEETS = ["info", "chapters", "cast"] as const;
+/** The sheets, in the order their tabs stand. Episodes only ever draws for a
+ *  series, which is the one tab that says so itself when it opens. */
+export const SHEETS = ["info", "chapters", "cast", "episodes"] as const;
 export type SheetName = (typeof SHEETS)[number];
 
 /** How far one press of the arrow carries the row along, in cards. */
@@ -86,6 +89,10 @@ interface Props {
   /** Which language the interface is speaking, for naming the soundtrack. */
   language: string;
   t: (key: string, values?: Record<string, string | number>) => string;
+  /** Steps straight to another episode, chosen from the "up next" sheet.
+   *  Absent for anything that is not an episode, which is when that sheet is
+   *  never shown at all. */
+  onSelectEpisode?: (episode: { id: string; source_id: string | null }) => void;
 }
 
 /** How long a film runs, the way a poster says it rather than in minutes. */
@@ -140,7 +147,16 @@ function whatIsPlaying(plan: PlaybackPlan, language: string, t: Props["t"]): str
  * and vanish: an element taken out of the page cannot be animated on its way
  * out, because by the time it would move it is gone.
  */
-export function Drawer({ work, plan, playback, showing, open, language, t }: Props) {
+export function Drawer({
+  work,
+  plan,
+  playback,
+  showing,
+  open,
+  language,
+  t,
+  onSelectEpisode,
+}: Props) {
   const self = useRef<HTMLDivElement>(null);
   const sizes = useSizes(self);
   return (
@@ -162,6 +178,14 @@ export function Drawer({ work, plan, playback, showing, open, language, t }: Pro
             <Chapters plan={plan} playback={playback} across={sizes.card} t={t} />
           )}
           {showing === "cast" && <Cast work={work} across={sizes.face} t={t} />}
+          {showing === "episodes" && (
+            <Episodes
+              work={work}
+              across={sizes.card}
+              onSelectEpisode={onSelectEpisode}
+              t={t}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -332,6 +356,92 @@ function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number 
               {credit.character ?? t(`credit.${credit.role}`)}
             </span>
           </div>
+        );
+      })}
+    </Strip>
+  );
+}
+
+/**
+ * Every episode of the season this one belongs to, in order, with the one
+ * playing now told apart from the rest.
+ *
+ * The one sheet here that asks the server something on its own: an episode's
+ * own description carries its season and its series, nearest first, but
+ * never the episodes sitting beside it. Asked for once, when this sheet is
+ * first opened, and not before: a viewer who never opens it never costs it.
+ */
+function Episodes({
+  work,
+  across,
+  onSelectEpisode,
+  t,
+}: Pick<Props, "work" | "t" | "onSelectEpisode"> & { across: number }) {
+  const season = work.ancestry.find((up) => up.kind === "season") ?? null;
+  const asked = useAsked(
+    (signal) => (season ? api.work(season.id, signal) : Promise.resolve(null)),
+    [season?.id],
+  );
+  const episodes = asked.answer?.children ?? [];
+
+  if (!season) {
+    return null;
+  }
+  if (asked.waiting) {
+    return null;
+  }
+  if (episodes.length === 0) {
+    return <p className="player-drawer-nothing">{t("player.no_episodes")}</p>;
+  }
+
+  const down = Math.round(across * A_PICTURE_IS);
+  return (
+    <Strip along={across} picture={down}>
+      {episodes.map((episode) => {
+        const poster = pictureSet(episode.poster);
+        const now = episode.id === work.id;
+        const canPlay = !now && episode.playable && episode.source_id !== null;
+        return (
+          <button
+            key={episode.id}
+            className={`player-drawer-episode${now ? " player-drawer-episode-now" : ""}`}
+            disabled={!canPlay}
+            onClick={
+              canPlay
+                ? () => onSelectEpisode?.({ id: episode.id, source_id: episode.source_id })
+                : undefined
+            }
+          >
+            <span className="player-drawer-frame" style={{ height: `${down}px` }}>
+              {poster ? (
+                <img src={poster.src} srcSet={poster.srcSet} alt="" loading="lazy" />
+              ) : (
+                <span className="player-drawer-initial" aria-hidden="true">
+                  {episode.number ?? ""}
+                </span>
+              )}
+              {now && <span className="player-drawer-card-now">{t("player.playing_now")}</span>}
+              {episode.watched && (
+                <span
+                  className="player-drawer-card-watched"
+                  title={t("work.watched")}
+                  aria-label={t("work.watched")}
+                >
+                  ✓
+                </span>
+              )}
+            </span>
+            <span className="player-drawer-card-name">
+              {nameOfOne("episode", episode.number, episode.title, t)}
+            </span>
+            <span className="player-drawer-card-under">
+              {!episode.playable
+                ? t("work.not_on_disk")
+                : episode.runtime_minutes
+                  ? t("work.minutes", { count: episode.runtime_minutes })
+                  : ""}
+            </span>
+          </button>
         );
       })}
     </Strip>

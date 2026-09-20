@@ -57,6 +57,7 @@ import {
   StepBackIcon,
   StepOnIcon,
   SubtitlesIcon,
+  UpNextIcon,
   VolumeIcon,
 } from "./icons";
 import type { Mark } from "./logo";
@@ -130,6 +131,9 @@ interface Props {
    *  none, which is when the button that asks for it draws nothing. */
   onNextEpisode?: () => void;
   onPreviousEpisode?: () => void;
+  /** Steps straight to any episode of the series, chosen by hand from the
+   *  "up next" sheet. Absent for anything that is not an episode. */
+  onSelectEpisode?: (episode: { id: string; source_id: string | null }) => void;
   /** What a track is called on screen, which the player works out. */
   naming: (track: PlaybackTrack) => string;
   /** Which language the interface is speaking, for the clock on the wall. */
@@ -364,6 +368,7 @@ export function Overlay(props: Props) {
             open={isASheet(props.panel)}
             language={props.language}
             t={props.t}
+            onSelectEpisode={props.onSelectEpisode}
           />
         )}
         <Seek surroundings={surroundings} thumbnails={thumbnails} />
@@ -626,13 +631,24 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
         </button>
       );
 
-    /* The three sheets, each its own button in the row rather than a strip of
+    /* The sheets, each its own button in the row rather than a strip of
        words under it: a row of its own is a band of film given up whether or
-       not anything is open. Pressing the open one again folds it away. */
+       not anything is open. Pressing the open one again folds it away. Only
+       a series has another episode to list, so that one sheet's tab draws
+       nothing on a film. */
     case "info":
     case "chapters":
-    case "cast": {
-      const Drawn = { info: AboutIcon, chapters: ChaptersIcon, cast: CastIcon }[control];
+    case "cast":
+    case "episodes": {
+      if (control === "episodes" && surroundings.work.kind !== "episode") {
+        return null;
+      }
+      const Drawn = {
+        info: AboutIcon,
+        chapters: ChaptersIcon,
+        cast: CastIcon,
+        episodes: UpNextIcon,
+      }[control];
       return (
         <button
           className={`player-button${panel === control ? " player-button-open" : ""}`}

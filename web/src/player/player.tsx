@@ -67,6 +67,7 @@ export function Player({
   onEnded,
   onNextEpisode,
   onPreviousEpisode,
+  onSelectEpisode,
 }: {
   sourceId: string;
   /** The film as the library describes it, handed down by the screen that
@@ -84,6 +85,10 @@ export function Player({
    *  asks for one is drawn only when there is somewhere to go. */
   onNextEpisode?: () => void;
   onPreviousEpisode?: () => void;
+  /** Steps straight to any episode of the series, chosen by hand from the
+   *  "up next" sheet rather than by ending or by the buttons beside play.
+   *  Absent for anything that is not an episode. */
+  onSelectEpisode?: (episode: { id: string; source_id: string | null }) => void;
 }) {
   const { t, language } = useSettings();
   const title = work.title;
@@ -261,6 +266,7 @@ export function Player({
           onClose={onClose}
           onNextEpisode={onNextEpisode}
           onPreviousEpisode={onPreviousEpisode}
+          onSelectEpisode={onSelectEpisode}
           naming={naming}
           language={language}
           t={t}
