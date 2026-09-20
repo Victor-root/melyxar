@@ -448,6 +448,10 @@
   display: flex;
   align-items: center;
   gap: var(--gap);
+  /* A hand dragging the bar all the way to one end drags straight across the
+     clock sitting there, which a browser reads as a hand trying to select
+     that clock's own words rather than move the bar under it. */
+  user-select: none;
 }
 
 /* The two ends of the bar. Each is exactly as wide as what it holds, which is
