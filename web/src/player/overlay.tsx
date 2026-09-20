@@ -74,6 +74,11 @@ import { Thumbnail } from "./thumbnail";
  */
 export type Panel =
   | "subtitles"
+  | "subtitles.size"
+  | "subtitles.colour"
+  | "subtitles.edge"
+  | "subtitles.background"
+  | "subtitles.height"
   | "audio"
   | "settings"
   | "settings.speed"
@@ -879,42 +884,6 @@ function Line({
 }
 
 /**
- * One picker among a short list of named choices.
- *
- * Five of these sit in a column beside the subtitle track list, and writing
- * each of them out would be the same twenty lines five times over.
- */
-function Choice<T extends string>({
-  label,
-  value,
-  among,
-  naming,
-  onPick,
-  t,
-}: {
-  label: string;
-  value: T;
-  among: readonly T[];
-  /** What the wording of each choice is keyed on. */
-  naming: string;
-  onPick: (value: T) => void;
-  t: (key: string) => string;
-}) {
-  return (
-    <label className="player-choice">
-      <span className="player-choice-label">{label}</span>
-      <select value={value} onChange={(event) => onPick(event.target.value as T)}>
-        {among.map((one) => (
-          <option key={one} value={one}>
-            {t(`player.${naming}.${one}`)}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-/**
  * On or off, as a switch rather than a tick.
  *
  * A tick down the left of a list means "this is the one picked out of these";
@@ -983,6 +952,25 @@ function sheetFor(
 ): Sheet | null {
   const { playback, t, panel, onPanel, naming, appearance, onAppearance } = surroundings;
 
+  /** One of the five lists behind how the words look: the same shape five
+   *  times over, told apart only by which values it offers and what wording
+   *  they answer to. */
+  function subtitleLookPanel<T extends string>(
+    title: string,
+    among: readonly T[],
+    value: T,
+    wording: string,
+    onPick: (value: T) => void,
+  ): Sheet {
+    return {
+      title,
+      from: "subtitles",
+      lines: among.map((one) => (
+        <Line key={one} label={t(`player.${wording}.${one}`)} chosen={value === one} onPick={() => onPick(one)} />
+      )),
+    };
+  }
+
   switch (panel) {
     case "subtitles": {
       // Left open on a pick rather than shut: a viewer choosing a language is
@@ -1011,48 +999,40 @@ function sheetFor(
             </div>
             {/* Only while a subtitle is actually chosen: offering to restyle
                 words that are not on screen is a column of pickers that do
-                nothing. */}
+                nothing. Each opens the same kind of list every other choice
+                in the player opens, rather than the browser's own dropdown,
+                which nothing here can make look like the rest of it. */}
             {dressed && (
               <div className="player-subtitle-panel-dressing">
-                <Choice
+                <Line
                   label={t("player.subtitle_size")}
-                  value={appearance.size}
-                  among={SIZES}
-                  naming="subtitle_size"
-                  onPick={(size) => onAppearance({ size })}
-                  t={t}
+                  value={t(`player.subtitle_size.${appearance.size}`)}
+                  into
+                  onPick={() => onPanel("subtitles.size")}
                 />
-                <Choice
+                <Line
                   label={t("player.subtitle_colour")}
-                  value={appearance.colour}
-                  among={COLOURS}
-                  naming="subtitle_colour"
-                  onPick={(colour) => onAppearance({ colour })}
-                  t={t}
+                  value={t(`player.subtitle_colour.${appearance.colour}`)}
+                  into
+                  onPick={() => onPanel("subtitles.colour")}
                 />
-                <Choice
+                <Line
                   label={t("player.subtitle_edge")}
-                  value={appearance.edge}
-                  among={EDGES}
-                  naming="subtitle_edge"
-                  onPick={(edge) => onAppearance({ edge })}
-                  t={t}
+                  value={t(`player.subtitle_edge.${appearance.edge}`)}
+                  into
+                  onPick={() => onPanel("subtitles.edge")}
                 />
-                <Choice
+                <Line
                   label={t("player.subtitle_background")}
-                  value={appearance.background}
-                  among={BACKGROUNDS}
-                  naming="subtitle_background"
-                  onPick={(background) => onAppearance({ background })}
-                  t={t}
+                  value={t(`player.subtitle_background.${appearance.background}`)}
+                  into
+                  onPick={() => onPanel("subtitles.background")}
                 />
-                <Choice
+                <Line
                   label={t("player.subtitle_height")}
-                  value={appearance.height}
-                  among={HEIGHTS}
-                  naming="subtitle_height"
-                  onPick={(height) => onAppearance({ height })}
-                  t={t}
+                  value={t(`player.subtitle_height.${appearance.height}`)}
+                  into
+                  onPick={() => onPanel("subtitles.height")}
                 />
               </div>
             )}
@@ -1060,6 +1040,39 @@ function sheetFor(
         ),
       };
     }
+
+    case "subtitles.size":
+      return subtitleLookPanel(t("player.subtitle_size"), SIZES, appearance.size, "subtitle_size", (size) =>
+        onAppearance({ size }),
+      );
+    case "subtitles.colour":
+      return subtitleLookPanel(
+        t("player.subtitle_colour"),
+        COLOURS,
+        appearance.colour,
+        "subtitle_colour",
+        (colour) => onAppearance({ colour }),
+      );
+    case "subtitles.edge":
+      return subtitleLookPanel(t("player.subtitle_edge"), EDGES, appearance.edge, "subtitle_edge", (edge) =>
+        onAppearance({ edge }),
+      );
+    case "subtitles.background":
+      return subtitleLookPanel(
+        t("player.subtitle_background"),
+        BACKGROUNDS,
+        appearance.background,
+        "subtitle_background",
+        (background) => onAppearance({ background }),
+      );
+    case "subtitles.height":
+      return subtitleLookPanel(
+        t("player.subtitle_height"),
+        HEIGHTS,
+        appearance.height,
+        "subtitle_height",
+        (height) => onAppearance({ height }),
+      );
 
     case "audio":
       return {
