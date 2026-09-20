@@ -209,10 +209,19 @@ Reste à faire :
 
 ## Jalon 7 : réactivité mesurée et tableau de bord
 
-État : à faire.
+État : la mesure est faite, le tableau de bord reste à faire.
 
-- Générateur de bibliothèque synthétique (10 000, 50 000, 100 000 œuvres).
-- Script de charge et comparaison aux budgets du document 02, avec et sans scan.
+Fait :
+
+- **Générateur de bibliothèque synthétique.** `melyxar bench fill --works 100000` écrit une bibliothèque inventée à côté des vraies, dans la forme qu'une vraie a : titres répartis sur tout l'alphabet, soixante ans de sorties, genres et studios partagés comme un catalogue les partage, quelques milliers d'acteurs crédités sur l'ensemble, et un sixième des œuvres en séries avec leurs saisons et leurs épisodes. Cent mille œuvres en quarante secondes. Aucun fichier n'est écrit sur un disque : les affiches existent en lignes, parce que ce qu'un fichier coûte à servir ne change pas avec la taille de la collection. `melyxar bench empty` la retire et rend la place au disque.
+- **Banc d'essai intégré**, `melyxar bench run`, plutôt qu'un outil de charge extérieur : il joue les pages qu'un spectateur ouvrirait contre le serveur en marche, deux cents fois chacune, et met ses centiles en face des budgets écrits. Sort en erreur quand un budget est dépassé. Entrée de menu dans le script d'installation, qui remplit, mesure et retire d'un coup.
+- **Chronomètre par requête** : chaque réponse porte son temps dans l'en-tête `Server-Timing`, visible dans l'onglet Réseau du navigateur, et tout ce qui dépasse quelques millisecondes écrit une ligne de journal sous l'étiquette `timing`.
+- **Budgets tenus à cent mille œuvres, chiffres à l'appui** : grille 5,5 ms (budget 30), fiche 3,3 ms (budget 20), recherche 5,5 ms (budget 30), menus 0,4 ms, accueil 3,2 ms. Deux d'entre eux ne l'étaient pas avant d'être mesurés, et ont été corrigés : les menus d'une médiathèque prenaient 690 ms et la page d'accueil 156 ms, toutes deux à compter la collection entière à chaque visite.
+
+Reste à faire :
+
+- Mesure pendant un scan et pendant deux transcodages. Rien à coder pour la première : il suffit de lancer un scan et de lancer le banc pendant qu'il tourne. Demande une vraie collection, puisqu'une bibliothèque inventée n'a aucun fichier à lire.
+- Test automatisé de l'interface (Playwright) pour les temps côté client. Attend l'interface définitive.
 - Tableau de bord d'administration en temps réel : sessions de lecture et leurs décisions, charge processeur et mémoire, carte graphique, tâches de fond, file d'écriture, espace disque, dernières erreurs. Flux d'événements arrêté quand personne ne regarde.
 - Détail d'une session en cours : utilisateur, appareil, œuvre, position, décision et raisons, débit, vitesse d'encodage et matériel utilisé.
 - Journal d'activité consultable, avec purge automatique.
