@@ -12,9 +12,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import type { Version, Work } from "../api";
+import type { NextEpisode, Version, Work } from "../api";
 import { useAsked } from "../asking";
 
 /**
@@ -134,15 +134,18 @@ export interface WorkScreen {
   trailer: string | null;
   watchTrailer: (url: string) => void;
   stopTrailer: () => void;
-  /** Where to go when this one ends, so an episode is followed by the next.
-      Absent for anything with nothing after it. */
-  andThen: string | null;
-  /** Where to go to step back into the episode before this one. Absent for
-      anything that is not an episode, and for the first one of a series. */
-  goBack: string | null;
+  /** Steps straight to the episode after this one, playing it at once: what
+      an episode ending on its own asks for, and what the button beside play
+      asks for by hand. Absent for anything that is not an episode, and for
+      the last one of a series. */
+  nextEpisode: (() => void) | null;
+  /** The same, a step back into the episode before this one. Absent for the
+      first one of a series. */
+  previousEpisode: (() => void) | null;
 }
 
 export function useWorkScreen(id: string | undefined): WorkScreen {
+  const navigate = useNavigate();
   const [address, setAddress] = useSearchParams();
   const [chosen, setChosen] = useState(0);
   const [playing, setPlaying] = useState<Watching | null>(null);
@@ -191,17 +194,29 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     setAddress(rest, { replace: true });
   }, [address, setAddress, version]);
 
+  /* Set the moment a step to another episode asks for it, and read back only
+     once, right below: it says the id is about to change on purpose, with
+     the file to play already chosen, rather than by a back button or a link
+     that knows nothing about what was playing here. */
+  const stepping = useRef(false);
+
   /* A different work is a different film to start, so the one press the
      address carried is spent and a new one may be honoured.
 
-     What is playing is cleared with it. Without this, a step from one
+     What is playing is cleared with it, unless a step to this id already
+     said what to play: without that exception, the file chosen a moment ago
+     by `stepTo` would be wiped out the instant this runs, since both answer
+     to the same change of id. Left to a fetch instead, a step from one
      episode to the next would render this screen once with the new work's
-     title and the old work's file still playing: the new work arrives before
-     the address is acted on, and until then `playing` still names the file
-     that belongs to the episode just left. */
+     title and the old work's file still playing, the new work having
+     arrived before the address was ever acted on. */
   useEffect(() => {
     started.current = false;
-    setPlaying(null);
+    if (stepping.current) {
+      stepping.current = false;
+    } else {
+      setPlaying(null);
+    }
   }, [id]);
 
   const readAgain = useCallback(() => setAgain((count) => count + 1), []);
@@ -212,6 +227,28 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
   const stopPlaying = useCallback(() => setPlaying(null), []);
   const watchTrailer = useCallback((url: string) => setTrailer(url), []);
   const stopTrailer = useCallback(() => setTrailer(null), []);
+
+  /* Goes straight to another episode's own page, playing the file already
+     named for it rather than waiting for that page to answer for itself:
+     what it would answer is the very thing already in hand, and waiting for
+     it back is what let the file just left keep playing under the title of
+     the one just reached. */
+  const stepTo = useCallback(
+    (next: NextEpisode) => {
+      stepping.current = true;
+      navigate(`/work/${next.id}`);
+      if (next.source_id) {
+        setPlaying({ source: next.source_id, fromTheStart: false });
+      }
+    },
+    [navigate],
+  );
+
+  /* Named once so the closures below narrow to `NextEpisode` rather than to
+     `NextEpisode | null`: an episode is the only kind either one is ever set
+     for, a season and a series have nothing to step to or back from. */
+  const nextUp = work?.kind === "episode" ? work.carry_on_with : null;
+  const previousUp = work?.kind === "episode" ? work.previous_episode : null;
 
   return {
     work,
@@ -232,13 +269,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     stopTrailer,
     /* Only after an episode: a film that ends is a film that ended, and a
        season has nothing playing to follow. */
-    andThen:
-      work?.kind === "episode" && work.carry_on_with
-        ? `/work/${work.carry_on_with.id}?${START_AT_ONCE}=1`
-        : null,
-    goBack:
-      work?.kind === "episode" && work.previous_episode
-        ? `/work/${work.previous_episode.id}?${START_AT_ONCE}=1`
-        : null,
+    nextEpisode: nextUp ? () => stepTo(nextUp) : null,
+    previousEpisode: previousUp ? () => stepTo(previousUp) : null,
   };
 }
