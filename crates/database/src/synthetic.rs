@@ -209,56 +209,27 @@ impl Database {
     /// they are for a real collection: a hundred thousand films credit a few
     /// thousand actors between them, and writing a person per film would
     /// measure a shape no library has.
+    ///
+    /// Exist once for the whole server, not once for the invented library: a
+    /// collection that has been identified already holds 'Drame', and the
+    /// unique index on the name is what says a second one cannot be written.
+    /// So whatever is already there is borrowed, which is what a scan does
+    /// when a second film turns out to be a drama too. Nothing of anybody's is
+    /// disturbed by the borrowing, since taking the invented library away
+    /// sweeps up the names nothing points at any more and leaves the names
+    /// their own films still point at.
     pub async fn invent_the_shared_names(
         &self,
         genres: &[String],
         studios: &[String],
         people: &[String],
     ) -> Result<SharedNames> {
-        let genre_ids: Vec<NameId> = genres.iter().map(|_| NameId::new()).collect();
-        let studio_ids: Vec<NameId> = studios.iter().map(|_| NameId::new()).collect();
-        let person_ids: Vec<PersonId> = people.iter().map(|_| PersonId::new()).collect();
         let moment = timestamp_to_text(now());
-
         let mut transaction = self.begin().await?;
 
-        let named: Vec<(NameId, String)> = genre_ids.iter().copied().zip(genres.to_vec()).collect();
-        write_rows(
-            &mut transaction,
-            "genres",
-            &["id", "name"],
-            &named,
-            |statement, (id, name)| statement.bind(id.to_db_string()).bind(name.clone()),
-        )
-        .await?;
-
-        let named: Vec<(NameId, String)> =
-            studio_ids.iter().copied().zip(studios.to_vec()).collect();
-        write_rows(
-            &mut transaction,
-            "studios",
-            &["id", "name"],
-            &named,
-            |statement, (id, name)| statement.bind(id.to_db_string()).bind(name.clone()),
-        )
-        .await?;
-
-        let named: Vec<(PersonId, String)> =
-            person_ids.iter().copied().zip(people.to_vec()).collect();
-        write_rows(
-            &mut transaction,
-            "people",
-            &["id", "name", "sort_name", "created_at"],
-            &named,
-            |statement, (id, name)| {
-                statement
-                    .bind(id.to_db_string())
-                    .bind(name.clone())
-                    .bind(name.to_lowercase())
-                    .bind(moment.clone())
-            },
-        )
-        .await?;
+        let genre_ids = kept_or_written(&mut transaction, &GENRE_NAMES, genres, &moment).await?;
+        let studio_ids = kept_or_written(&mut transaction, &STUDIO_NAMES, studios, &moment).await?;
+        let person_ids = kept_or_written(&mut transaction, &PERSON_NAMES, people, &moment).await?;
 
         transaction.commit().await?;
         Ok(SharedNames {
@@ -714,6 +685,88 @@ fn questions(columns: usize, rows: usize) -> String {
 /// One statement per few thousand values rather than one per row: the cost of
 /// writing a hundred thousand works is almost entirely the number of times the
 /// engine is spoken to, and this is what turns an hour into a minute.
+/// One pool of names that works point at rather than carry.
+///
+/// Written out rather than built, so no statement here is ever assembled from
+/// anything that came from outside.
+struct NamePool {
+    select: &'static str,
+    insert: &'static str,
+    /// What the insert takes, in the order it takes it.
+    binds: fn(id: &str, name: &str, moment: &str) -> Vec<String>,
+}
+
+fn a_name(id: &str, name: &str, _moment: &str) -> Vec<String> {
+    vec![id.to_string(), name.to_string()]
+}
+
+fn a_person(id: &str, name: &str, moment: &str) -> Vec<String> {
+    vec![
+        id.to_string(),
+        name.to_string(),
+        name.to_lowercase(),
+        moment.to_string(),
+    ]
+}
+
+const GENRE_NAMES: NamePool = NamePool {
+    select: "SELECT id FROM genres WHERE name = ? COLLATE NOCASE",
+    insert: "INSERT INTO genres (id, name) VALUES (?, ?)",
+    binds: a_name,
+};
+
+const STUDIO_NAMES: NamePool = NamePool {
+    select: "SELECT id FROM studios WHERE name = ? COLLATE NOCASE",
+    insert: "INSERT INTO studios (id, name) VALUES (?, ?)",
+    binds: a_name,
+};
+
+const PERSON_NAMES: NamePool = NamePool {
+    select: "SELECT id FROM people WHERE name = ? COLLATE NOCASE",
+    insert: "INSERT INTO people (id, name, sort_name, created_at) VALUES (?, ?, ?, ?)",
+    binds: a_person,
+};
+
+/// The identifier each name already has, or the one it is given here.
+///
+/// One statement per name rather than one for the lot, which is the same way
+/// a scan writes them: these are a few hundred rows written once, against the
+/// hundred thousand works that follow.
+async fn kept_or_written<Id>(
+    transaction: &mut Transaction<'_, Sqlite>,
+    pool: &NamePool,
+    names: &[String],
+    moment: &str,
+) -> Result<Vec<Id>>
+where
+    Id: Default + std::fmt::Display + std::str::FromStr,
+{
+    let mut ids = Vec::with_capacity(names.len());
+    for name in names {
+        let kept: Option<(String,)> = sqlx::query_as(pool.select)
+            .bind(name)
+            .fetch_optional(&mut **transaction)
+            .await?;
+
+        let id = match kept {
+            Some((id,)) => id
+                .parse()
+                .map_err(|_| crate::DatabaseError::Corrupt("a shared name".to_string()))?,
+            None => {
+                let id = Id::default();
+                let mut statement = sqlx::query(pool.insert);
+                for value in (pool.binds)(&id.to_string(), name, moment) {
+                    statement = statement.bind(value);
+                }
+                statement.execute(&mut **transaction).await?;
+                id
+            }
+        };
+        ids.push(id);
+    }
+    Ok(ids)
+}
+
 async fn write_rows<T>(
     transaction: &mut Transaction<'_, Sqlite>,
     into: &str,
@@ -816,6 +869,73 @@ mod tests {
             .expect("library settled");
 
         (database, library_id, viewer)
+    }
+
+    #[tokio::test]
+    async fn a_name_a_real_collection_already_has_is_borrowed_rather_than_rewritten() {
+        // What this is: an installation whose own films have been identified
+        // holds 'Drame' already, and only one row may ever carry that name.
+        // Writing a second one is what stopped the bench dead on the only
+        // machine it was meant for.
+        let database = Database::open_in_memory().await.expect("database opens");
+        let genre_already_there = NameId::new();
+        sqlx::query("INSERT INTO genres (id, name) VALUES (?, ?)")
+            .bind(genre_already_there.to_db_string())
+            .bind("Drame")
+            .execute(database.writer())
+            .await
+            .expect("genre written");
+        let person_already_there = PersonId::new();
+        sqlx::query("INSERT INTO people (id, name, sort_name, created_at) VALUES (?, ?, ?, ?)")
+            .bind(person_already_there.to_db_string())
+            .bind("Adele Alvarez")
+            .bind("alvarez, adele")
+            .bind(timestamp_to_text(now()))
+            .execute(database.writer())
+            .await
+            .expect("person written");
+
+        let names = database
+            .invent_the_shared_names(
+                // Asked for in another case, since the name is what a row is
+                // known by whoever wrote it.
+                &["drame".to_string(), "Policier".to_string()],
+                &["Atelier Nord".to_string()],
+                &["Adele Alvarez".to_string(), "Bruno Baumann".to_string()],
+            )
+            .await
+            .expect("shared names written");
+
+        assert_eq!(
+            names.genres[0], genre_already_there,
+            "the genre that was already there is the one pointed at"
+        );
+        assert_eq!(
+            names.people[0], person_already_there,
+            "and so is the person, whatever their own films sort them under"
+        );
+        assert_ne!(names.genres[1], genre_already_there);
+
+        let genres: i64 = sqlx::query_scalar("SELECT count(*) FROM genres")
+            .fetch_one(database.reader())
+            .await
+            .expect("counted");
+        let people: i64 = sqlx::query_scalar("SELECT count(*) FROM people")
+            .fetch_one(database.reader())
+            .await
+            .expect("counted");
+        assert_eq!(genres, 2, "one borrowed and one written, never a second row");
+        assert_eq!(people, 2);
+
+        let sorted: String = sqlx::query_scalar("SELECT sort_name FROM people WHERE id = ?")
+            .bind(person_already_there.to_db_string())
+            .fetch_one(database.reader())
+            .await
+            .expect("read");
+        assert_eq!(
+            sorted, "alvarez, adele",
+            "borrowing a row must never rewrite what it says"
+        );
     }
 
     fn a_film(title: &str, sort_title: &str, year: i32, names: &SharedNames) -> InventedWork {
