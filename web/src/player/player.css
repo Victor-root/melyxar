@@ -1551,6 +1551,15 @@
      film. */
   scrollbar-width: none;
   scroll-behavior: smooth;
+  /* A hand can run it sideways too, the way it already can on a touchscreen
+     or a trackpad: an open hand where it could take hold, a closed one while
+     it does. */
+  cursor: grab;
+  user-select: none;
+}
+
+.player-drawer-row:active {
+  cursor: grabbing;
 }
 
 .player-drawer-row::-webkit-scrollbar {
@@ -1568,21 +1577,28 @@
   padding: 0;
   border: none;
   border-radius: 50%;
-  /* A light disc rather than a panel-coloured one: it floats over the row
-     rather than sitting in it, and a dark disc on a dark panel is a hole. */
-  background: rgba(255, 255, 255, 0.92);
-  color: #111;
-  font-size: 26px;
+  /* The same frosted disc every other panel in the player is made of, rather
+     than a plain light one: this is what floating over the row and still
+     reading as part of the same player looks like. */
+  background: var(--player-panel);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  /* Most of the circle rather than a mark sitting in the middle of it: the
+     circle itself already says how big a target this is, and does not grow
+     along with the mark inside it. */
+  font-size: 34px;
   line-height: 1;
   cursor: pointer;
   transform: translateY(-50%);
   box-shadow: var(--shadow-raised);
-  transition: background var(--quick) var(--ease);
+  transition:
+    background var(--quick) var(--ease),
+    color var(--quick) var(--ease);
 }
 
 .player-drawer-along:hover {
-  background: #fff;
-  color: var(--accent);
+  background: color-mix(in srgb, var(--player-panel) 70%, black 15%);
+  color: var(--accent-bright);
 }
 
 .player-drawer-along-back {
@@ -1666,6 +1682,16 @@
 .player-drawer-card-name {
   font-size: 14px;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* An episode's own name, between its number above and its length below. */
+.player-drawer-card-title {
+  font-size: 13px;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

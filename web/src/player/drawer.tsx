@@ -20,7 +20,7 @@ import { asClock } from "./clock";
 import type { Playback } from "./engine";
 import { PlayIcon } from "./icons";
 import { languageName } from "../languages";
-import { nameOfOne } from "../readable";
+import { numberOfOne } from "../readable";
 import { heightAt, Thumbnail } from "./thumbnail";
 
 /** The sheets, in the order their tabs stand. Episodes only ever draws for a
@@ -432,8 +432,11 @@ function Episodes({
               )}
             </span>
             <span className="player-drawer-card-name">
-              {nameOfOne("episode", episode.number, episode.title, t)}
+              {numberOfOne("episode", episode.number, t)}
             </span>
+            {episode.title && (
+              <span className="player-drawer-card-title">{episode.title}</span>
+            )}
             <span className="player-drawer-card-under">
               {!episode.playable
                 ? t("work.not_on_disk")
@@ -498,12 +501,72 @@ function Strip({
   const along = (by: number) =>
     row.current?.scrollBy({ left: by * CARDS_AT_A_TIME * card, behavior: "smooth" });
 
+  /* Held down and dragged sideways, a mouse runs the row the way a finger
+     already does on a touchscreen and two fingers already do on a trackpad:
+     neither is a mouse, and a mouse is the one hand left with nothing but the
+     arrows. Left to touch and the pen alike, which already scroll this row
+     natively and would only fight a second hand doing the same thing. */
+  const dragging = useRef<{ x: number; scrollLeft: number } | null>(null);
+  const dragged = useRef(false);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const element = row.current;
+    if (event.pointerType !== "mouse" || event.button !== 0 || !element) {
+      return;
+    }
+    dragging.current = { x: event.clientX, scrollLeft: element.scrollLeft };
+    element.setPointerCapture(event.pointerId);
+  };
+
+  const holdDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragging.current;
+    const element = row.current;
+    if (!drag || !element) {
+      return;
+    }
+    const moved = event.clientX - drag.x;
+    // A press that never really moved is a click that happened to land on
+    // this row, not a drag: nothing here should swallow it.
+    if (Math.abs(moved) > 4) {
+      dragged.current = true;
+    }
+    element.scrollLeft = drag.scrollLeft - moved;
+  };
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging.current) {
+      return;
+    }
+    dragging.current = null;
+    row.current?.releasePointerCapture(event.pointerId);
+  };
+
+  /* A drag that really moved the row still ends in a click, on whatever card
+     the hand happens to be over: caught here, in the one place above every
+     card, rather than taught to each kind of card the row might ever hold. */
+  const stopClickAfterADrag = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (dragged.current) {
+      dragged.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
   return (
     <div
       className="player-drawer-strip"
       style={{ ["--player-drawer-picture" as string]: `${picture}px` }}
     >
-      <div className="player-drawer-row" ref={row} onScroll={look}>
+      <div
+        className="player-drawer-row"
+        ref={row}
+        onScroll={look}
+        onPointerDown={startDrag}
+        onPointerMove={holdDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onClickCapture={stopClickAfterADrag}
+      >
         {children}
       </div>
       {more.back && (
