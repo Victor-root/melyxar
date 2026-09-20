@@ -1547,16 +1547,15 @@ mod tests {
     /// The one account rather than a new one each time: a server has one until
     /// signing in arrives, and asking twice for a second would be asking for
     /// somebody who cannot exist.
-    async fn a_viewer(state: &AppState) -> melyxar_core::id::UserId {
+    async fn a_viewer(state: &AppState) -> melyxar_core::user::User {
         let database = state.database();
         if let Some((already, _)) = database.user_by_name("Viewer").await.expect("read") {
-            return already.id;
+            return already;
         }
         database
             .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
             .await
             .expect("account created")
-            .id
     }
 
     /// Runs a scan the way the server does, and gives back what it did.
@@ -2054,7 +2053,7 @@ mod tests {
         let works = arrangement(&state, &library).await;
         let series = of_kind(&works, WorkKind::Series)[0].clone();
 
-        let page = crate::detail::work_detail(&state, a_viewer(&state).await, series.id)
+        let page = crate::detail::work_detail(&state, &a_viewer(&state).await, series.id)
             .await
             .expect("read")
             .expect("the series has a page");
@@ -2071,7 +2070,7 @@ mod tests {
         );
 
         let first_season = page.children[0].work.id;
-        let season_page = crate::detail::work_detail(&state, a_viewer(&state).await, first_season)
+        let season_page = crate::detail::work_detail(&state, &a_viewer(&state).await, first_season)
             .await
             .expect("read")
             .expect("the season has a page");
@@ -2101,7 +2100,7 @@ mod tests {
         );
 
         let episode = season_page.children[0].work.id;
-        let episode_page = crate::detail::work_detail(&state, a_viewer(&state).await, episode)
+        let episode_page = crate::detail::work_detail(&state, &a_viewer(&state).await, episode)
             .await
             .expect("read")
             .expect("the episode has a page");
@@ -2146,7 +2145,7 @@ mod tests {
         let works = arrangement(&state, &library).await;
         let series = of_kind(&works, WorkKind::Series)[0].clone();
 
-        let page = crate::detail::work_detail(&state, viewer, series.id)
+        let page = crate::detail::work_detail(&state, &viewer, series.id)
             .await
             .expect("read")
             .expect("the series has a page");
@@ -2166,7 +2165,7 @@ mod tests {
             state
                 .database()
                 .record_playback_progress(
-                    viewer,
+                    viewer.id,
                     of_that_number.id,
                     melyxar_core::time::Millis::new(0),
                     melyxar_core::work::PlaybackState::Watched,
@@ -2176,7 +2175,7 @@ mod tests {
                 .expect("marked");
         }
 
-        let page = crate::detail::work_detail(&state, viewer, series.id)
+        let page = crate::detail::work_detail(&state, &viewer, series.id)
             .await
             .expect("read")
             .expect("still there");
@@ -2201,7 +2200,7 @@ mod tests {
             .find(|work| work.ordinal == Some(2))
             .expect("there");
         assert_eq!(
-            crate::detail::work_detail(&state, viewer, second.id)
+            crate::detail::work_detail(&state, &viewer, second.id)
                 .await
                 .expect("read")
                 .expect("there")

@@ -124,6 +124,15 @@ struct OrderStatements {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrowseRequest {
     pub library_id: Option<LibraryId>,
+    /// The libraries this may be read from at all, for an account granted only
+    /// some of them. Absent for an account that sees every library, which is
+    /// the ordinary one and the one this costs nothing for.
+    ///
+    /// Present and empty is an account granted nothing, which reads nothing:
+    /// it is not the same as absent, and telling the two apart is the whole
+    /// point of the right being written down rather than guessed at from a
+    /// list that happens to be empty.
+    pub within: Option<Vec<LibraryId>>,
     /// The letter a grid was asked to start at.
     pub initial: Option<Initial>,
     pub order: WorkOrder,
@@ -202,6 +211,7 @@ impl Default for BrowseRequest {
     fn default() -> Self {
         Self {
             library_id: None,
+            within: None,
             initial: None,
             order: WorkOrder::Title,
             descending: false,
@@ -277,6 +287,22 @@ impl Database {
         if request.library_id.is_some() {
             sql.push_str(" AND w.library_id = ?");
         }
+        // An account granted nothing reads nothing, and says so here rather
+        // than by way of a list of no question marks, which is not a
+        // statement anything would run.
+        if let Some(within) = &request.within {
+            if within.is_empty() {
+                return Ok(WorkPage {
+                    cards: Vec::new(),
+                    next: None,
+                });
+            }
+            // The only thing assembled is a row of question marks, one per
+            // library this account was granted.
+            sql.push_str(" AND w.library_id IN (");
+            sql.push_str(&vec!["?"; within.len()].join(", "));
+            sql.push(')');
+        }
         if request.genre.is_some() {
             sql.push_str(" AND g.name = ? COLLATE NOCASE");
         }
@@ -335,6 +361,9 @@ impl Database {
         let mut query = sqlx::query(AssertSqlSafe(sql));
         if let Some(library_id) = request.library_id {
             query = query.bind(library_id.to_db_string());
+        }
+        for granted in request.within.iter().flatten() {
+            query = query.bind(granted.to_db_string());
         }
         if let Some(genre) = &request.genre {
             query = query.bind(genre.clone());
@@ -657,6 +686,71 @@ mod tests {
             .expect("film completed");
         }
         (database, library.id)
+    }
+
+    #[tokio::test]
+    async fn a_grid_reads_only_the_libraries_an_account_was_granted() {
+        let (database, films) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let other = database
+            .create_library(
+                "Series",
+                LibraryKind::Series,
+                "fr",
+                &[("disk-two".to_string(), PathBuf::from("/mnt/two/Series"))],
+            )
+            .await
+            .expect("library created");
+        database
+            .create_work(
+                other.id,
+                WorkKind::Series,
+                "Amber Field",
+                "amber field",
+                Some(2021),
+            )
+            .await
+            .expect("work created");
+
+        let titles = |page: WorkPage| -> Vec<String> {
+            page.cards.into_iter().map(|card| card.title).collect()
+        };
+
+        // Nothing granted in particular: every library, which is the ordinary
+        // account and what every other test here reads as.
+        let everything = database
+            .browse_works(&BrowseRequest::default())
+            .await
+            .expect("read");
+        assert_eq!(titles(everything), vec!["Amber Field", "Quiet Harbour"]);
+
+        let only_films = database
+            .browse_works(&BrowseRequest {
+                within: Some(vec![films]),
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert_eq!(titles(only_films), vec!["Quiet Harbour"]);
+
+        let both = database
+            .browse_works(&BrowseRequest {
+                within: Some(vec![films, other.id]),
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert_eq!(titles(both), vec!["Amber Field", "Quiet Harbour"]);
+
+        // Granted nothing reads nothing, which is not the same answer as
+        // having been granted nothing in particular.
+        let nothing = database
+            .browse_works(&BrowseRequest {
+                within: Some(Vec::new()),
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert!(titles(nothing).is_empty());
     }
 
     #[tokio::test]

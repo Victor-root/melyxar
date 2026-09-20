@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
+use melyxar_core::id::{MediaSourceId, TrackId, WorkId};
 use melyxar_core::media::{Chapter, Track, TrackKind};
 use melyxar_core::media_log::file_name_of;
 use melyxar_core::segments::MediaSegment;
@@ -157,10 +157,18 @@ impl PictureRebuild {
 }
 
 /// Works out how one file reaches one client.
-pub async fn plan(state: &AppState, user_id: UserId, request: &PlayRequest) -> Result<PlayPlan> {
+pub async fn plan(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    request: &PlayRequest,
+) -> Result<PlayPlan> {
     let database = state.database();
 
     let source = crate::playable_file(database, request.source_id).await?;
+    // Before anything is decided or produced: a film of a library this
+    // account was not granted is a film it cannot start.
+    crate::reach::may_read_the_work(state, who, source.work_id).await?;
+    let user_id = who.id;
 
     // Nothing ever managed to describe this file: no container, no streams.
     // There is nothing to decide with, and a conversion started anyway would
@@ -400,11 +408,13 @@ fn chosen_track<'a>(
 /// even though its tracks are numbered differently.
 pub async fn remember_chosen_tracks(
     state: &AppState,
-    user_id: UserId,
+    who: &melyxar_core::user::User,
     work_id: WorkId,
     audio: Option<&Track>,
     subtitle: Option<&Track>,
 ) -> Result<()> {
+    crate::reach::may_read_the_work(state, who, work_id).await?;
+    let user_id = who.id;
     let database = state.database();
     database
         .record_chosen_tracks(
@@ -1032,13 +1042,37 @@ pub async fn close_every_session(state: &AppState) {
 /// Answers whether the report was kept: one arriving after a fresher one is
 /// refused, so a client that reconnects cannot make the resume point go
 /// backwards.
+/// Marks a film as one this viewer likes, or takes the mark off.
+///
+/// Answers the state it is in now rather than what was asked for, so a button
+/// pressed twice in a second cannot end up saying one thing while the server
+/// says another.
+///
+/// Here rather than in the layer above, which used to reach past these use
+/// cases straight into the storage: a rule about who may touch which film
+/// belongs where every other one is.
+pub async fn set_favourite(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    work_id: WorkId,
+    favourite: bool,
+) -> Result<bool> {
+    crate::reach::may_read_the_work(state, who, work_id).await?;
+    Ok(state
+        .database()
+        .set_favourite(who.id, work_id, favourite)
+        .await?)
+}
+
 pub async fn record_position(
     state: &AppState,
-    user_id: UserId,
+    who: &melyxar_core::user::User,
     work_id: WorkId,
     position: Millis,
     reported_at: Timestamp,
 ) -> Result<bool> {
+    crate::reach::may_read_the_work(state, who, work_id).await?;
+    let user_id = who.id;
     let database = state.database();
     let duration = longest_version(state, work_id).await?;
 
@@ -1081,6 +1115,7 @@ async fn longest_version(state: &AppState, work_id: WorkId) -> Result<Option<Mil
 #[cfg(test)]
 mod tests {
     use super::*;
+    use melyxar_core::id::UserId;
     use melyxar_core::id::MediaSourceId;
     use melyxar_core::media::{
         AudioDetails, ColorInfo, Loudness, SubtitleDetails, SubtitleLayout, TrackKind, VideoDetails,
@@ -1265,7 +1300,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -1316,7 +1351,7 @@ mod tests {
             preferred_video_codec: None,
         };
 
-        let before = plan(&state, user_id, &request).await.expect("a plan");
+        let before = plan(&state, &crate::an_ordinary_account(user_id), &request).await.expect("a plan");
         assert_eq!(before.decision.method, PlaybackMethod::FullTranscode);
         assert!(before.decision.tone_map, "converted by default");
 
@@ -1326,7 +1361,7 @@ mod tests {
             .await
             .expect("switched");
 
-        let after = plan(&state, user_id, &request).await.expect("a plan");
+        let after = plan(&state, &crate::an_ordinary_account(user_id), &request).await.expect("a plan");
         assert_ne!(
             after.decision.method,
             PlaybackMethod::FullTranscode,
@@ -1345,7 +1380,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -1394,7 +1429,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -1429,7 +1464,7 @@ mod tests {
     ) -> Option<String> {
         let plan = plan(
             state,
-            user,
+            &crate::an_ordinary_account(user),
             &PlayRequest {
                 source_id: source,
                 profile: None,
@@ -1480,7 +1515,7 @@ mod tests {
             .expect("present")
             .work_id;
 
-        remember_chosen_tracks(&state, user_id, work_id, Some(french), None)
+        remember_chosen_tracks(&state, &crate::an_ordinary_account(user_id), work_id, Some(french), None)
             .await
             .expect("choice remembered");
 
@@ -1580,7 +1615,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -1620,7 +1655,7 @@ mod tests {
         // rather than leaving it to the browser, whose fold buries the
         // dialogue under the effects. That costs a rebuild of the sound, and
         // the answer says as much.
-        let out_of_the_box = plan(&state, user_id, &request).await.expect("a plan");
+        let out_of_the_box = plan(&state, &crate::an_ordinary_account(user_id), &request).await.expect("a plan");
         assert_eq!(
             out_of_the_box.decision.method,
             PlaybackMethod::TranscodeAudio
@@ -1640,7 +1675,7 @@ mod tests {
             .await
             .expect("preferences saved");
         assert_eq!(
-            plan(&state, user_id, &request)
+            plan(&state, &crate::an_ordinary_account(user_id), &request)
                 .await
                 .expect("a plan")
                 .decision
@@ -1656,7 +1691,7 @@ mod tests {
             .await
             .expect("preferences saved");
 
-        let folded = plan(&state, user_id, &request).await.expect("a plan");
+        let folded = plan(&state, &crate::an_ordinary_account(user_id), &request).await.expect("a plan");
         assert_eq!(
             folded.decision.method,
             PlaybackMethod::TranscodeAudio,
@@ -1698,7 +1733,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -1738,7 +1773,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -1791,7 +1826,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -1844,7 +1879,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -1893,7 +1928,7 @@ mod tests {
 
         let mut plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -1926,7 +1961,7 @@ mod tests {
 
         let mut plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -2082,7 +2117,7 @@ mod tests {
 
         let outcome = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -2476,7 +2511,7 @@ mod tests {
             .await;
         let mut plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -2566,7 +2601,7 @@ mod tests {
             .await;
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -2633,7 +2668,7 @@ mod tests {
 
         let outcome = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -2671,7 +2706,7 @@ mod tests {
 
         assert!(record_position(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             work_id,
             Millis::new(1_800_000),
             datetime!(2026-01-01 12:00 UTC),
@@ -2681,7 +2716,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -2713,7 +2748,7 @@ mod tests {
         // Two hours in, of a two hour film.
         record_position(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             work_id,
             Millis::new(7_100_000),
             datetime!(2026-01-01 12:00 UTC),
@@ -2734,7 +2769,7 @@ mod tests {
 
         let plan = plan(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             &PlayRequest {
                 source_id,
                 profile: None,
@@ -2770,7 +2805,7 @@ mod tests {
 
         record_position(
             &state,
-            user_id,
+            &crate::an_ordinary_account(user_id),
             work_id,
             Millis::new(60_000),
             datetime!(2026-01-01 12:00 UTC),

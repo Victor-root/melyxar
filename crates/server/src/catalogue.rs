@@ -55,7 +55,7 @@ async fn trailer(
     Path((id, rank)): Path<(String, usize)>,
     request: Request<Body>,
 ) -> Response {
-    match serve_trailer(&state, who.id, &id, rank, request).await {
+    match serve_trailer(&state, &who, &id, rank, request).await {
         Ok(response) => response,
         Err(error) => error.into_response(),
     }
@@ -63,13 +63,13 @@ async fn trailer(
 
 async fn serve_trailer(
     state: &AppState,
-    viewer: melyxar_core::id::UserId,
+    who: &melyxar_core::user::User,
     id: &str,
     rank: usize,
     request: Request<Body>,
 ) -> Result<Response> {
     let work_id = parse_work(id)?;
-    let detail = melyxar_app::detail::work_detail(state, viewer, work_id)
+    let detail = melyxar_app::detail::work_detail(state, who, work_id)
         .await?
         .ok_or_else(|| ServerError::not_found("no work with that identifier"))?;
 
@@ -123,8 +123,11 @@ struct RootView {
     explanation_code: &'static str,
 }
 
-async fn libraries(State(state): State<AppState>) -> Result<Json<Vec<LibraryView>>> {
-    let summaries = melyxar_app::catalogue::libraries(&state).await?;
+async fn libraries(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+) -> Result<Json<Vec<LibraryView>>> {
+    let summaries = melyxar_app::catalogue::libraries(&state, &who).await?;
     Ok(Json(
         summaries
             .into_iter()
@@ -178,9 +181,11 @@ struct CountedDecade {
 
 async fn filters(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Path(id): Path<String>,
 ) -> Result<Json<FiltersView>> {
-    let found = melyxar_app::catalogue::filters(&state, Some(parse_library(&id)?)).await?;
+    let found =
+        melyxar_app::catalogue::filters(&state, Some(parse_library(&id)?), &who).await?;
     Ok(Json(FiltersView {
         genres: found
             .genres
@@ -259,10 +264,14 @@ struct ImageView {
 
 async fn works(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Query(params): Query<BrowseParams>,
 ) -> Result<Json<PageView>> {
     let request = BrowseRequest {
         library_id: params.library.as_deref().map(parse_library).transpose()?,
+        // What this account may read is not the client's to send: it is put
+        // on by the use case, which is the one place that knows it.
+        within: None,
         order: params.order.unwrap_or(WorkOrder::Title),
         descending: params.descending,
         after: params.after.as_deref().map(parse_work).transpose()?,
@@ -284,7 +293,7 @@ async fn works(
             .transpose()?,
     };
 
-    let page = melyxar_app::catalogue::browse(&state, &request).await?;
+    let page = melyxar_app::catalogue::browse(&state, &request, &who).await?;
     Ok(Json(PageView {
         cards: page.cards.iter().map(card_view).collect(),
         next: page.next.map(|id| id.to_string()),
@@ -409,7 +418,7 @@ async fn home(
     Query(params): Query<HomeParams>,
 ) -> Result<Json<HomeView>> {
     let library_id = params.library.as_deref().map(parse_library).transpose()?;
-    let page = melyxar_app::catalogue::home(&state, library_id, who.id).await?;
+    let page = melyxar_app::catalogue::home(&state, library_id, &who).await?;
 
     Ok(Json(HomeView {
         carry_on: page
@@ -653,7 +662,7 @@ async fn work(
     Path(id): Path<String>,
 ) -> Result<Json<WorkView>> {
     let work_id = parse_work(&id)?;
-    let detail = melyxar_app::detail::work_detail(&state, who.id, work_id)
+    let detail = melyxar_app::detail::work_detail(&state, &who, work_id)
         .await?
         .ok_or_else(|| ServerError::not_found("no work with that identifier"))?;
 
@@ -684,11 +693,8 @@ async fn set_favourite(
     Json(body): Json<FavouriteBody>,
 ) -> Result<Json<FavouriteView>> {
     let work_id = parse_work(&id)?;
-    let favourite = state
-        .database()
-        .set_favourite(who.id, work_id, body.favourite)
-        .await
-        .map_err(|error| ServerError::internal(error.to_string()))?;
+    let favourite =
+        melyxar_app::playback::set_favourite(&state, &who, work_id, body.favourite).await?;
     Ok(Json(FavouriteView { favourite }))
 }
 

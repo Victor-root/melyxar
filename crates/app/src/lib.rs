@@ -21,6 +21,7 @@ pub mod images;
 pub mod libraries;
 pub mod openings;
 pub mod playback;
+pub mod reach;
 pub mod preferences;
 pub mod scan;
 pub mod startup;
@@ -61,6 +62,25 @@ pub mod settings {
 /// crate for a provider and never reaches past it for the trait it satisfies.
 pub mod metadata {
     pub use melyxar_metadata::{Candidate, MetadataProvider};
+}
+
+/// An ordinary account, for the tests that are about something else.
+///
+/// Every use case that reads the library now takes the account asking rather
+/// than only its identifier, because what that account may see is part of the
+/// question. A test about a scan or about a playback decision is not about
+/// that, so it hands over the account this server mostly answers: the one
+/// nothing has been kept from.
+#[cfg(test)]
+pub(crate) fn an_ordinary_account(id: melyxar_core::id::UserId) -> melyxar_core::user::User {
+    melyxar_core::user::User {
+        id,
+        name: "somebody".to_string(),
+        avatar_path: None,
+        permissions: melyxar_core::user::Permissions::viewer(),
+        preferences: melyxar_core::user::Preferences::default(),
+        created_at: melyxar_core::time::now(),
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

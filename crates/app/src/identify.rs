@@ -2131,16 +2131,15 @@ mod tests {
     /// The one account rather than a new one each time: a server has one until
     /// signing in arrives, and asking twice for a second would be asking for
     /// somebody who cannot exist.
-    async fn a_viewer(state: &AppState) -> melyxar_core::id::UserId {
+    async fn a_viewer(state: &AppState) -> melyxar_core::user::User {
         let database = state.database();
         if let Some((already, _)) = database.user_by_name("Viewer").await.expect("read") {
-            return already.id;
+            return already;
         }
         database
             .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
             .await
             .expect("account created")
-            .id
     }
 
     async fn run(state: &AppState, provider: &Arc<StandIn>, library: &Library) -> IdentifyReport {
@@ -3387,7 +3386,7 @@ mod tests {
 
         run(&state, &provider, &library).await;
 
-        let detail = crate::detail::work_detail(&state, a_viewer(&state).await, work.id)
+        let detail = crate::detail::work_detail(&state, &a_viewer(&state).await, work.id)
             .await
             .expect("read")
             .expect("present");
@@ -3592,7 +3591,7 @@ mod tests {
 
         assert_eq!(run(&state, &provider, &library).await.identified, 1);
 
-        let detail = crate::detail::work_detail(&state, a_viewer(&state).await, work.id)
+        let detail = crate::detail::work_detail(&state, &a_viewer(&state).await, work.id)
             .await
             .expect("read")
             .expect("present");
@@ -3665,7 +3664,7 @@ mod tests {
         ));
         assert_eq!(run(&state, &silent, &library).await.identified, 1);
         assert!(
-            crate::detail::work_detail(&state, a_viewer(&state).await, work.id)
+            crate::detail::work_detail(&state, &a_viewer(&state).await, work.id)
                 .await
                 .expect("read")
                 .expect("present")
@@ -3682,7 +3681,7 @@ mod tests {
         assert_eq!(report.identified, 0);
         assert_eq!(report.synopses_filled, 1);
 
-        let detail = crate::detail::work_detail(&state, a_viewer(&state).await, work.id)
+        let detail = crate::detail::work_detail(&state, &a_viewer(&state).await, work.id)
             .await
             .expect("read")
             .expect("present");
