@@ -483,6 +483,16 @@
   background: hsla(0, 0%, 100%, 0.2);
 }
 
+/* Rounded on the leading edge alone, the edge that actually moves as the film
+   plays or loads. The trailing edge stays square: it always sits exactly
+   where the frame's own clip already cuts, which draws it for both of them,
+   and rounding it a second time was what let a fill of no width show a
+   stray sliver of that curve poking past the frame. */
+.player-rail-held,
+.player-rail-played {
+  border-radius: 0 100px 100px 0;
+}
+
 /* What the browser is holding, which is what says whether a jump forward will
    be instant. */
 .player-rail-held {
