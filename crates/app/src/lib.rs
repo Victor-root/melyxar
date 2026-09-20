@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod bench;
 pub mod calibration;
 pub mod catalogue;
 pub mod detail;
