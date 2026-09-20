@@ -281,7 +281,11 @@ impl Database {
             sql.push_str(" AND g.name = ? COLLATE NOCASE");
         }
         if request.decade.is_some() {
-            sql.push_str(" AND w.release_year >= ? AND w.release_year < ?");
+            // The decade itself rather than the stretch of years it stands
+            // for: one value is what an index can be walked into, and walked
+            // into already in title order. A stretch would be read whole and
+            // sorted before the first card could go out.
+            sql.push_str(" AND w.decade = ?");
         }
         if request.search.is_some() {
             sql.push_str(" AND w.sort_title LIKE ? ESCAPE '\\'");
@@ -336,7 +340,7 @@ impl Database {
             query = query.bind(genre.clone());
         }
         if let Some(decade) = request.decade {
-            query = query.bind(decade).bind(decade + 10);
+            query = query.bind(decade);
         }
         if let Some(search) = &request.search {
             query = query.bind(format!("%{}%", escape_for_like(search)));
@@ -547,8 +551,8 @@ impl Database {
         let rows = match library_id {
             Some(id) => {
                 sqlx::query(AssertSqlSafe(format!(
-                    "SELECT (release_year / 10) * 10 AS decade, count(*) AS total FROM works
-                 WHERE release_year IS NOT NULL AND library_id = ? AND {}
+                    "SELECT decade, count(*) AS total FROM works
+                 WHERE decade IS NOT NULL AND library_id = ? AND {}
                  GROUP BY decade ORDER BY decade DESC",
                     met_on_its_own("")
                 )))
@@ -558,8 +562,8 @@ impl Database {
             }
             None => {
                 sqlx::query(AssertSqlSafe(format!(
-                    "SELECT (release_year / 10) * 10 AS decade, count(*) AS total FROM works
-                 WHERE release_year IS NOT NULL AND {}
+                    "SELECT decade, count(*) AS total FROM works
+                 WHERE decade IS NOT NULL AND {}
                  GROUP BY decade ORDER BY decade DESC",
                     met_on_its_own("")
                 )))
@@ -1158,6 +1162,53 @@ mod tests {
             .await
             .expect("read");
         assert_eq!(titles(&page), vec!["Quiet Harbour"]);
+    }
+
+    #[tokio::test]
+    async fn the_decade_a_grid_is_narrowed_by_follows_the_year_it_comes_from() {
+        // The decade is worked out by the database and written by nobody,
+        // which is the whole reason it can be trusted: a film wrongly dated
+        // and corrected later moves to the decade it belongs to, with nothing
+        // anywhere having to remember to move it.
+        let (database, library_id) = library_of(&[("Winter Signal", 1998, 6.2)]).await;
+        let narrowed_to = |decade: i32| BrowseRequest {
+            library_id: Some(library_id),
+            decade: Some(decade),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            titles(&database.browse_works(&narrowed_to(1990)).await.expect("read")),
+            vec!["Winter Signal"]
+        );
+
+        sqlx::query("UPDATE works SET release_year = 2003 WHERE title = 'Winter Signal'")
+            .execute(database.writer())
+            .await
+            .expect("year corrected");
+
+        assert!(
+            titles(&database.browse_works(&narrowed_to(1990)).await.expect("read")).is_empty(),
+            "it has left the decade it was wrongly in"
+        );
+        assert_eq!(
+            titles(&database.browse_works(&narrowed_to(2000)).await.expect("read")),
+            vec!["Winter Signal"],
+            "and arrived in the one it belongs to"
+        );
+
+        sqlx::query("UPDATE works SET release_year = NULL WHERE title = 'Winter Signal'")
+            .execute(database.writer())
+            .await
+            .expect("year cleared");
+        assert!(
+            database
+                .decades_in_use(Some(library_id))
+                .await
+                .expect("read")
+                .is_empty(),
+            "a film with no year belongs to no decade and offers none"
+        );
     }
 
     #[tokio::test]
