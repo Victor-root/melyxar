@@ -185,10 +185,21 @@ export function Player({
       ? plan?.subtitles.find((track) => track.id === plan.chosen_subtitle_id && track.url)
       : undefined;
 
+  /* Whether the strip of controls is covering the bottom of the picture right
+     now, which is where subtitles sit too: shown under the bar, they are shown
+     nowhere a viewer can read them. */
+  const [controlsCovering, setControlsCovering] = useState(false);
+
   /* How high the words sit belongs to each cue rather than to a stylesheet, so
      it is applied to them as they are read, and again whenever the viewer
-     moves them. Counted from the bottom, which keeps them in the same place
-     whatever the size of the picture.
+     moves them or the controls cover the picture. Counted from the bottom,
+     which keeps them in the same place whatever the size of the picture.
+
+     While the controls cover the bottom of the picture, the words are lifted
+     to at least the highest of the three positions offered for taste, so that
+     a viewer who never touched that setting still sees them; a viewer who
+     already chose one higher than that keeps exactly what they chose. They
+     settle back to that choice the moment the controls fade.
 
      The one place looking reaches into the element, and it has to: where a cue
      sits is written on the cue and nowhere a stylesheet can get at it. */
@@ -197,13 +208,14 @@ export function Player({
     if (!tracks) {
       return;
     }
-    const line = lineFor(appearance.height);
+    const chosen = lineFor(appearance.height);
+    const line = controlsCovering ? Math.min(chosen, lineFor("high")) : chosen;
     for (const track of Array.from(tracks)) {
       for (const cue of Array.from(track.cues ?? [])) {
         (cue as VTTCue).line = line;
       }
     }
-  }, [appearance.height, video]);
+  }, [appearance.height, controlsCovering, video]);
 
   /* Placed again whenever the viewer moves them, and handed to the engine so
      that it can place them the instant the words are read. Waiting for a
@@ -323,6 +335,7 @@ export function Player({
           naming={naming}
           language={language}
           t={t}
+          onControlsCovering={setControlsCovering}
         />
 
         {panel === "facts" && plan && (

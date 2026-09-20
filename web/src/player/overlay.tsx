@@ -120,6 +120,11 @@ interface Props {
   /** Which language the interface is speaking, for the clock on the wall. */
   language: string;
   t: (key: string, values?: Record<string, string | number>) => string;
+  /** Told whenever the strip of controls starts or stops covering the bottom
+   *  of the picture, which is also where subtitles are hung: a viewer reading
+   *  words the bar has just been drawn over is not being shown subtitles at
+   *  all. */
+  onControlsCovering: (covering: boolean) => void;
 }
 
 /** Whether what is open is one of the drawer's three sheets. */
@@ -195,6 +200,10 @@ export function Overlay(props: Props) {
       surface.removeEventListener("pointerdown", wake);
     };
   }, [stage, held, playback.pictureKey]);
+
+  useEffect(() => {
+    props.onControlsCovering(!away);
+  }, [away, props.onControlsCovering]);
 
   /* The keyboard, which is the other half of every control below. Held here
      rather than on the page so that one place says what a key does, and so
