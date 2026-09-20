@@ -340,6 +340,80 @@ pub async fn create_the_first_account(
     Ok(user)
 }
 
+/// Makes an account, with the rights it is to have.
+///
+/// Reachable only from a terminal on the machine itself for now: the screen
+/// that offers it belongs to the administration, which does not exist yet.
+/// Nothing about it is terminal-shaped though, so the screen will call this
+/// and not something written again beside it.
+pub async fn create_account(
+    state: &AppState,
+    name: &str,
+    password: &str,
+    permissions: &Permissions,
+) -> std::result::Result<User, Trouble> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(Trouble::Refused(Refused::NameNeeded));
+    }
+    let hashed = stored_form_of(password)?;
+    let user = state
+        .database()
+        .create_user(name, Some(&hashed), permissions)
+        .await?;
+    tracing::info!(
+        account = %user.name,
+        administrator = permissions.is_administrator,
+        "made an account"
+    );
+    Ok(user)
+}
+
+/// Takes an account away, with everything of theirs.
+///
+/// Refuses the last administrator. A server with nobody who may manage it
+/// cannot be put right from any screen it serves, and nothing in it would
+/// ever say why.
+pub async fn remove_account(state: &AppState, name: &str) -> Result<bool> {
+    let Some((user, _)) = state.database().user_by_name(name).await? else {
+        return Ok(false);
+    };
+    if user.permissions.is_administrator
+        && state.database().administrator_count().await? <= 1
+    {
+        return Err(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::Conflict,
+            "this is the last administrator of this server",
+        )));
+    }
+    state.database().delete_user(user.id).await?;
+    tracing::warn!(account = %user.name, "took an account away");
+    Ok(true)
+}
+
+/// Says which libraries an account may see, replacing whatever it had.
+pub async fn set_what_an_account_may_see(
+    state: &AppState,
+    name: &str,
+    sees_every_library: bool,
+    granted: &[melyxar_core::id::LibraryId],
+) -> Result<bool> {
+    let Some((user, _)) = state.database().user_by_name(name).await? else {
+        return Ok(false);
+    };
+    state
+        .database()
+        .set_library_access(user.id, sees_every_library, granted)
+        .await?;
+    tracing::info!(
+        account = %user.name,
+        every = sees_every_library,
+        granted = granted.len(),
+        "said which libraries an account may see"
+    );
+    Ok(true)
+}
+
 /// Puts a password on an account from outside, and signs every device out.
 ///
 /// The way back in for somebody who has locked themselves out of their own
