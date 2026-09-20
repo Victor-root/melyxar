@@ -201,6 +201,16 @@
   bottom: max(var(--subtitle-height, 8%), calc(var(--controls-height, 0px) + var(--gap-wide)));
 }
 
+/* Held down on the slider itself, rather than merely open on the panel it
+   sits in: this is the one moment a viewer is asking what a position looks
+   like on its own, and showing it lifted to clear a panel that happens to be
+   open right now would answer a different question. Let go, and the rule
+   above takes it straight back: the strip is still open, and this never
+   answered to whether it was. */
+.player-stage:has(.player-menu-slider input:active) .player-subtitle-words {
+  bottom: var(--subtitle-height, 8%);
+}
+
 /* Both ends are dark enough for white to read over any picture, and the two
    gradients meet nothing in the middle so the film is untouched where it is
    actually being watched. */
