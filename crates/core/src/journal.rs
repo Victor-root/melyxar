@@ -67,6 +67,10 @@ pub fn tag_of(module: &str) -> &'static str {
         // What the browser itself saw, kept apart from everything the server
         // saw: the two disagreeing is the whole reason the page says anything.
         ("melyxar_server::page", "page"),
+        // How long each answer took. Apart from `http` so that somebody
+        // chasing a slow page can ask for these lines alone, and so that
+        // somebody chasing anything else can leave them out.
+        ("melyxar_server::timing", "timing"),
         ("melyxar_server", "http"),
         ("melyxar_streaming", "streaming"),
         ("melyxar_ffmpeg::hardware", "card"),
