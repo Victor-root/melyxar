@@ -126,9 +126,9 @@ pub async fn take_up_again_what_a_restart_cut_short(state: &AppState, cut_short:
                 .map(|_| ()),
                 None => continue,
             },
-            // The two readings of the upkeep are taken up again the same way,
-            // and for the same reason: each batch asks what is left, so one
-            // cut short by a restart carries on exactly where it was.
+            // Every reading of the upkeep is taken up again the same way, and
+            // for the same reason: each batch asks what is left, so one cut
+            // short by a restart carries on exactly where it was.
             JobKind::ReadKeyFrames => crate::upkeep::start(
                 state,
                 crate::upkeep::UpkeepTask::KeyFrames,
@@ -140,6 +140,22 @@ pub async fn take_up_again_what_a_restart_cut_short(state: &AppState, cut_short:
             JobKind::GenerateThumbnails => crate::upkeep::start(
                 state,
                 crate::upkeep::UpkeepTask::Thumbnails,
+                library.clone(),
+                JobPriority::BACKGROUND,
+            )
+            .await
+            .map(|_| ()),
+            JobKind::PullOutSubtitles => crate::upkeep::start(
+                state,
+                crate::upkeep::UpkeepTask::Subtitles,
+                library.clone(),
+                JobPriority::BACKGROUND,
+            )
+            .await
+            .map(|_| ()),
+            JobKind::ListenForOpenings => crate::upkeep::start(
+                state,
+                crate::upkeep::UpkeepTask::Openings,
                 library.clone(),
                 JobPriority::BACKGROUND,
             )
@@ -577,6 +593,66 @@ mod tests {
             taken_up.target_id.as_deref(),
             Some(&*library.id.to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn every_upkeep_reading_a_restart_cut_short_is_taken_up_again() {
+        // A whole-library reading is exactly as long as a scan, and a restart
+        // in the middle of one must carry on the same way a scan does. All
+        // four readings of the upkeep are tried here together, because the
+        // resume match that dispatches them is one list a new reading is
+        // easy to add to and just as easy to forget to add to: PullOutSubtitles
+        // and ListenForOpenings were both missing from it for a release before
+        // anybody noticed, since the report they left behind read exactly
+        // like nothing had been running at all.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let (state, _) = server_with_a_library(directory.path()).await;
+        let library = state
+            .database()
+            .library_by_name("Films")
+            .await
+            .expect("read")
+            .expect("the library was declared");
+
+        let kinds = [
+            JobKind::ReadKeyFrames,
+            JobKind::GenerateThumbnails,
+            JobKind::PullOutSubtitles,
+            JobKind::ListenForOpenings,
+        ];
+        for kind in kinds {
+            state
+                .database()
+                .create_job(kind, JobPriority::REQUESTED, Some(&library.id.to_string()))
+                .await
+                .expect("a reading was under way when the server went away");
+        }
+
+        let cut_short = state
+            .jobs()
+            .close_interrupted()
+            .await
+            .expect("the restart closed them");
+        assert_eq!(cut_short.len(), kinds.len());
+        // A reading on a library with no files behind it finishes almost as
+        // soon as it starts, so what is checked is that every one of the four
+        // was actually started rather than silently skipped, not that it is
+        // still under way by the time this asks.
+        assert_eq!(
+            take_up_again_what_a_restart_cut_short(&state, &cut_short).await,
+            kinds.len(),
+            "PullOutSubtitles and ListenForOpenings were both missing from the resume \
+             match for a release before anybody noticed, since the report they left \
+             behind read exactly like nothing had been running at all"
+        );
+
+        let recent = state.database().recent_jobs(10).await.expect("read");
+        for kind in kinds {
+            assert!(
+                recent.iter().any(|job| job.kind == kind),
+                "{kind:?} was not started again"
+            );
+        }
     }
 
     #[tokio::test]
