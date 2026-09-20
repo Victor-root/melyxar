@@ -206,6 +206,7 @@ fn video_encode_for(
 /// the other side. A client measures against what it really watched.
 pub async fn open_calibration_session(
     state: &AppState,
+    who: &melyxar_core::user::User,
     codec: &str,
     height: i32,
 ) -> Result<(Arc<Session>, i32, f64)> {
@@ -241,6 +242,7 @@ pub async fn open_calibration_session(
 
     let session = sessions
         .open(
+            who.id,
             Recipe {
                 source: against.source,
                 duration: against.duration,
@@ -373,7 +375,8 @@ mod tests {
     #[tokio::test]
     async fn a_server_with_no_media_tools_cannot_calibrate_anything() {
         let (_directory, state) = state_without_media_tools().await;
-        let outcome = open_calibration_session(&state, "h264", 1080).await;
+        let watching = crate::an_ordinary_account(melyxar_core::id::UserId::new());
+        let outcome = open_calibration_session(&state, &watching, "h264", 1080).await;
         assert!(
             outcome.is_err(),
             "nothing can be produced without the tools"
@@ -383,7 +386,8 @@ mod tests {
     #[tokio::test]
     async fn a_codec_a_calibration_never_asks_about_is_refused_by_name() {
         let (_directory, state) = state_without_media_tools().await;
-        let outcome = open_calibration_session(&state, "vp9", 1080).await;
+        let watching = crate::an_ordinary_account(melyxar_core::id::UserId::new());
+        let outcome = open_calibration_session(&state, &watching, "vp9", 1080).await;
         assert!(matches!(outcome, Err(AppError::Domain(_))));
     }
 

@@ -399,6 +399,13 @@ struct WhatItTook {
 /// One film being watched.
 pub struct Session {
     pub id: SessionId,
+    /// Whose session this is.
+    ///
+    /// A session is reached by its name alone, and its name is enough to be
+    /// handed every segment of what is being watched. Written down here so
+    /// that being signed in is not the same thing as being signed in as the
+    /// person who opened it.
+    pub watcher: melyxar_core::id::UserId,
     recipe: Recipe,
     playlist: Playlist,
     folder: PathBuf,
@@ -418,11 +425,21 @@ pub struct Session {
 /// What a session is called, which also names its folder.
 pub type SessionId = melyxar_core::id::SessionId;
 
+/// A watcher for the tests here and next door, which are about what a session
+/// produces and how the registry holds it rather than about whose it is.
+///
+/// Drawn once and the same afterwards, so that a session opened for it is
+/// found again by it.
+#[cfg(test)]
+pub(crate) static NOBODY_IN_PARTICULAR: std::sync::LazyLock<melyxar_core::id::UserId> =
+    std::sync::LazyLock::new(melyxar_core::id::UserId::new);
+
 impl Session {
     /// Opens a session and prepares its folder. Nothing is produced yet: the
     /// first segment asked for is what starts the tool.
     pub async fn open(
         id: SessionId,
+        watcher: melyxar_core::id::UserId,
         recipe: Recipe,
         folder: PathBuf,
         tools: ToolPaths,
@@ -430,6 +447,7 @@ impl Session {
         tokio::fs::create_dir_all(&folder).await?;
         Ok(Self {
             id,
+            watcher,
             playlist: match recipe.where_it_can_be_started.is_empty() {
                 true => Playlist::on_a_fixed_grid(recipe.duration),
                 false => {
@@ -1367,6 +1385,7 @@ mod tests {
 
         Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(i64::from(seconds) * 1000),
@@ -1499,6 +1518,7 @@ mod tests {
         let folder = directory.path().join("session");
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(60_000),
@@ -1542,6 +1562,7 @@ mod tests {
 
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(40_000),
@@ -1599,6 +1620,7 @@ mod tests {
         };
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(12_000),
@@ -1641,6 +1663,7 @@ mod tests {
 
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(12_000),
@@ -1691,6 +1714,7 @@ mod tests {
 
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(60_000),
@@ -1772,6 +1796,7 @@ mod tests {
         for attempt in 0..3 {
             let session = Session::open(
                 SessionId::new(),
+                *NOBODY_IN_PARTICULAR,
                 Recipe {
                     source: source.clone(),
                     duration: Millis::new(60_000),
@@ -2123,6 +2148,7 @@ mod tests {
         clip(&source, 40).await;
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(40_000),
@@ -2168,6 +2194,7 @@ mod tests {
         let session = Arc::new(
             Session::open(
                 SessionId::new(),
+                *NOBODY_IN_PARTICULAR,
                 Recipe {
                     source,
                     duration: Millis::new(60_000),
@@ -2234,6 +2261,7 @@ mod tests {
         let session = Arc::new(
             Session::open(
                 SessionId::new(),
+                *NOBODY_IN_PARTICULAR,
                 Recipe {
                     source,
                     duration: Millis::new(60_000),
@@ -2373,6 +2401,7 @@ mod tests {
         clip(&source, 240).await;
         Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(240_000),
@@ -2719,6 +2748,7 @@ mod tests {
         encode.keyframe_interval = Some(crate::playlist::SEGMENT_DURATION);
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(60_000),
@@ -2770,6 +2800,7 @@ mod tests {
 
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(60_000),
@@ -2822,6 +2853,7 @@ mod tests {
 
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(60_000),
@@ -2909,6 +2941,7 @@ mod tests {
         .expect("the film says where it can be started");
         let session = Session::open(
             SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
             Recipe {
                 source,
                 duration: Millis::new(90_000),

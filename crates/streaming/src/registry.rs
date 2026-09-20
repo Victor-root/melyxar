@@ -54,7 +54,12 @@ impl Sessions {
     ///
     /// `expensive` is what the playback decision said: a stream being rebuilt
     /// counts against the limit, one being copied does not.
-    pub async fn open(&self, recipe: Recipe, expensive: bool) -> Result<Arc<Session>> {
+    pub async fn open(
+        &self,
+        watcher: melyxar_core::id::UserId,
+        recipe: Recipe,
+        expensive: bool,
+    ) -> Result<Arc<Session>> {
         let mut live = self.live.lock().await;
 
         if expensive && live.len() >= self.most_at_once {
@@ -67,6 +72,7 @@ impl Sessions {
         let session = Arc::new(
             Session::open(
                 id,
+                watcher,
                 recipe,
                 self.folder.join(id.to_string()),
                 self.tools.clone(),
@@ -78,20 +84,41 @@ impl Sessions {
         Ok(session)
     }
 
-    /// The session with this name, while it is still live.
-    pub async fn get(&self, id: SessionId) -> Result<Arc<Session>> {
+    /// The session with this name, while it is still live and if it is theirs.
+    ///
+    /// Somebody else's reads as a session that is not there. A name is all it
+    /// takes to be handed every segment of what is being watched, so being
+    /// signed in cannot be the same thing as being signed in as whoever
+    /// opened it. Asked for here rather than by each caller: a caller can
+    /// forget.
+    pub async fn get(
+        &self,
+        id: SessionId,
+        watcher: melyxar_core::id::UserId,
+    ) -> Result<Arc<Session>> {
         self.live
             .lock()
             .await
             .get(&id)
+            .filter(|session| session.watcher == watcher)
             .cloned()
             .ok_or(StreamingError::NoSuchSession)
     }
 
-    /// Closes one session and forgets it.
-    pub async fn close(&self, id: SessionId) {
-        let session = self.live.lock().await.remove(&id);
+    /// Closes one session of theirs and forgets it.
+    ///
+    /// Somebody else's is left alone: a name is all it would take to stop a
+    /// film somebody else is in the middle of.
+    pub async fn close(&self, id: SessionId, watcher: melyxar_core::id::UserId) {
+        let session = self
+            .live
+            .lock()
+            .await
+            .get(&id)
+            .filter(|session| session.watcher == watcher)
+            .cloned();
         if let Some(session) = session {
+            self.live.lock().await.remove(&id);
             session.close().await;
             tracing::info!(session = %id, "playback session closed");
         }
@@ -160,9 +187,19 @@ impl Sessions {
 
 #[cfg(test)]
 mod tests {
+    use crate::session::NOBODY_IN_PARTICULAR;
+
     use super::*;
     use melyxar_core::time::Millis;
     use melyxar_ffmpeg::command::{AudioOutput, StreamSelection, VideoOutput};
+
+    /// Whoever is watching, for the tests that are not about who.
+    ///
+    /// The same one every time, since what they are about is the registry
+    /// rather than whose session it is.
+    fn a_watcher() -> melyxar_core::id::UserId {
+        *NOBODY_IN_PARTICULAR
+    }
 
     fn recipe(source: PathBuf) -> Recipe {
         Recipe {
@@ -175,6 +212,38 @@ mod tests {
             where_it_can_be_started: Vec::new(),
             if_the_card_refuses: Vec::new(),
         }
+    }
+
+    #[tokio::test]
+    async fn a_session_of_somebody_else_reads_as_one_that_is_not_there() {
+        // Its name is all it takes to be handed every segment of what is
+        // being watched, so being signed in cannot be the same thing as being
+        // signed in as whoever opened it.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let sessions = sessions(directory.path().to_path_buf(), 2);
+        let mine = sessions
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
+            .await
+            .expect("session opened");
+
+        let somebody_else = melyxar_core::id::UserId::new();
+        assert!(
+            matches!(
+                sessions.get(mine.id, somebody_else).await,
+                Err(StreamingError::NoSuchSession)
+            ),
+            "a name is not a right to what it names"
+        );
+
+        // Nor is it a right to stop a film somebody else is in the middle of.
+        sessions.close(mine.id, somebody_else).await;
+        assert!(
+            sessions.get(mine.id, a_watcher()).await.is_ok(),
+            "it is still theirs and still live"
+        );
+
+        sessions.close(mine.id, a_watcher()).await;
+        assert!(sessions.get(mine.id, a_watcher()).await.is_err());
     }
 
     fn sessions(folder: PathBuf, most_at_once: usize) -> Sessions {
@@ -191,19 +260,19 @@ mod tests {
         let sessions = sessions(directory.path().join("sessions"), 2);
 
         let session = sessions
-            .open(recipe(directory.path().join("film.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
             .await
             .expect("a session");
         assert_eq!(sessions.live_count().await, 1);
         assert_eq!(
-            sessions.get(session.id).await.expect("found again").id,
+            sessions.get(session.id, a_watcher()).await.expect("found again").id,
             session.id
         );
 
-        sessions.close(session.id).await;
+        sessions.close(session.id, a_watcher()).await;
         assert_eq!(sessions.live_count().await, 0);
         assert!(matches!(
-            sessions.get(session.id).await,
+            sessions.get(session.id, a_watcher()).await,
             Err(StreamingError::NoSuchSession)
         ));
     }
@@ -214,13 +283,13 @@ mod tests {
         let sessions = sessions(directory.path().join("sessions"), 1);
 
         sessions
-            .open(recipe(directory.path().join("one.mkv")), true)
+            .open(a_watcher(), recipe(directory.path().join("one.mkv")), true)
             .await
             .expect("the first fits");
         assert!(
             matches!(
                 sessions
-                    .open(recipe(directory.path().join("two.mkv")), true)
+                    .open(a_watcher(), recipe(directory.path().join("two.mkv")), true)
                     .await,
                 Err(StreamingError::TooManyAtOnce)
             ),
@@ -236,11 +305,11 @@ mod tests {
         let sessions = sessions(directory.path().join("sessions"), 1);
 
         sessions
-            .open(recipe(directory.path().join("one.mkv")), true)
+            .open(a_watcher(), recipe(directory.path().join("one.mkv")), true)
             .await
             .expect("the expensive one fits");
         sessions
-            .open(recipe(directory.path().join("two.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("two.mkv")), false)
             .await
             .expect("a copy is welcome all the same");
         assert_eq!(sessions.live_count().await, 2);
@@ -252,7 +321,7 @@ mod tests {
         let sessions = sessions(directory.path().join("sessions"), 4);
 
         let session = sessions
-            .open(recipe(directory.path().join("film.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
             .await
             .expect("a session");
         let folder = session.folder().to_path_buf();
@@ -275,7 +344,7 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let sessions = sessions(directory.path().join("sessions"), 4);
         let session = sessions
-            .open(recipe(directory.path().join("film.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
             .await
             .expect("a session");
 
@@ -301,7 +370,7 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let sessions = sessions(directory.path().join("sessions"), 4);
         let session = sessions
-            .open(recipe(directory.path().join("film.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
             .await
             .expect("a session");
 
@@ -336,11 +405,11 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let sessions = sessions(directory.path().join("sessions"), 4);
         sessions
-            .open(recipe(directory.path().join("one.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("one.mkv")), false)
             .await
             .expect("a session");
         sessions
-            .open(recipe(directory.path().join("two.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("two.mkv")), false)
             .await
             .expect("another");
 

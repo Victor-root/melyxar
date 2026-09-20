@@ -448,6 +448,7 @@ pub async fn remember_chosen_tracks(
 /// nothing at all.
 pub async fn open_session(
     state: &AppState,
+    who: &melyxar_core::user::User,
     plan: &PlayPlan,
     starting_at: Option<Millis>,
 ) -> Result<Arc<Session>> {
@@ -487,7 +488,7 @@ pub async fn open_session(
     }
 
     let expensive = plan.decision.method.is_expensive();
-    let session = sessions.open(recipe, expensive).await?;
+    let session = sessions.open(who.id, recipe, expensive).await?;
     say_how_the_film_was_cut(&session);
 
     // The upkeep normally pulled these out of the film long before anybody
@@ -2024,6 +2025,7 @@ mod tests {
         let sessions = state.sessions().expect("this server converts").clone();
         sessions
             .open(
+                melyxar_core::id::UserId::new(),
                 Recipe {
                     source: std::path::PathBuf::from("Quiet.Harbour.2019.mkv"),
                     duration: Millis::new(20_000),
@@ -2057,6 +2059,7 @@ mod tests {
         let sessions = state.sessions().expect("this server converts").clone();
         sessions
             .open(
+                melyxar_core::id::UserId::new(),
                 Recipe {
                     source: std::path::PathBuf::from("Quiet.Harbour.2019.mkv"),
                     duration: Millis::new(20_000),
