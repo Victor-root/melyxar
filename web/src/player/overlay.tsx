@@ -79,6 +79,7 @@ export type Panel =
   | "subtitles.edge"
   | "subtitles.background"
   | "subtitles.height"
+  | "subtitles.offset"
   | "audio"
   | "settings"
   | "settings.speed"
@@ -935,6 +936,54 @@ function Switch({ on }: { on: boolean }) {
   );
 }
 
+/**
+ * The bar for shifting the words against the picture.
+ *
+ * Held in a draft of its own while a hand is on it, and only carried over to
+ * the film's own words on release: applying it walks every cue on the
+ * track, which a drag would otherwise ask for many times a second for no
+ * reason, since only the place a hand lets go of the bar was ever going to
+ * be watched from.
+ */
+function SubtitleOffsetSlider({
+  playback,
+  t,
+}: {
+  playback: Playback;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  const [draft, setDraft] = useState(playback.wordsOffset);
+  useEffect(() => setDraft(playback.wordsOffset), [playback.wordsOffset]);
+  const commit = () => playback.setWordsOffset(draft);
+  return (
+    <>
+      <Line
+        label={t("player.words_offset")}
+        value={`${draft > 0 ? "+" : ""}${draft.toFixed(1)} s`}
+        changed={draft !== 0}
+      />
+      <div
+        className="player-menu-slider"
+        role="presentation"
+        style={{ ["--share" as string]: `${((draft + OFFSET_FURTHEST) / (2 * OFFSET_FURTHEST)) * 100}` }}
+      >
+        <input
+          type="range"
+          min={-OFFSET_FURTHEST}
+          max={OFFSET_FURTHEST}
+          step={OFFSET_STEP}
+          value={draft}
+          aria-label={t("player.words_offset")}
+          onChange={(event) => setDraft(Number(event.target.value))}
+          onPointerUp={commit}
+          onKeyUp={commit}
+          onBlur={commit}
+        />
+      </div>
+    </>
+  );
+}
+
 /** What one open panel is: a heading, what it leads back to, and its lines. */
 interface Sheet {
   title: string;
@@ -1074,34 +1123,13 @@ function sheetFor(
                   into
                   onPick={() => onPanel("subtitles.height")}
                 />
-                {/* Not one more place to open, since there is nothing to
-                    choose between: the bar beside it is the whole of this
-                    one, the same way the bar under "Personnalisé" above is
-                    the whole of that choice. */}
                 <Line
                   label={t("player.words_offset")}
                   value={`${playback.wordsOffset > 0 ? "+" : ""}${playback.wordsOffset.toFixed(1)} s`}
                   changed={playback.wordsOffset !== 0}
+                  into
+                  onPick={() => onPanel("subtitles.offset")}
                 />
-                <div
-                  className="player-menu-slider"
-                  role="presentation"
-                  style={{
-                    ["--share" as string]: `${
-                      ((playback.wordsOffset + OFFSET_FURTHEST) / (2 * OFFSET_FURTHEST)) * 100
-                    }`,
-                  }}
-                >
-                  <input
-                    type="range"
-                    min={-OFFSET_FURTHEST}
-                    max={OFFSET_FURTHEST}
-                    step={OFFSET_STEP}
-                    value={playback.wordsOffset}
-                    aria-label={t("player.words_offset")}
-                    onChange={(event) => playback.setWordsOffset(Number(event.target.value))}
-                  />
-                </div>
               </div>
             )}
           </div>
@@ -1179,6 +1207,22 @@ function sheetFor(
         ),
       };
     }
+
+    case "subtitles.offset":
+      return {
+        title: t("player.words_offset"),
+        from: "subtitles",
+        lines: (
+          <>
+            <SubtitleOffsetSlider playback={playback} t={t} />
+            <p className="player-menu-why">{t("player.words_offset.why")}</p>
+            <Line
+              label={t("player.words_offset.reset")}
+              onPick={() => playback.setWordsOffset(0)}
+            />
+          </>
+        ),
+      };
 
     case "audio":
       return {
