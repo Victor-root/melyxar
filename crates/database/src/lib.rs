@@ -21,6 +21,7 @@ pub mod jobs;
 pub mod libraries;
 pub mod metadata;
 pub mod playback;
+pub mod sessions;
 pub mod settings;
 pub mod synthetic;
 pub mod users;

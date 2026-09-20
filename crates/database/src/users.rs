@@ -33,7 +33,11 @@ const WHAT_AN_ACCOUNT_IS: &str =
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
-fn reading_accounts(also: &str, ending: &str) -> String {
+///
+/// Shared with the sessions next door, which loads the very same account from
+/// the token somebody presented: one reading of an account, wherever the row
+/// is picked from.
+pub(crate) fn reading_accounts(also: &str, ending: &str) -> String {
     format!(
         "SELECT {WHAT_AN_ACCOUNT_IS}{also}
          FROM users u
@@ -44,7 +48,7 @@ fn reading_accounts(also: &str, ending: &str) -> String {
 
 impl Database {
     /// The libraries one account has been granted.
-    async fn libraries_allowed_to(&self, id: UserId) -> Result<Vec<(String,)>> {
+    pub(crate) async fn libraries_allowed_to(&self, id: UserId) -> Result<Vec<(String,)>> {
         Ok(
             sqlx::query_as("SELECT library_id FROM user_library_access WHERE user_id = ?")
                 .bind(id.to_db_string())
@@ -240,7 +244,7 @@ impl Database {
 /// A stored value that no longer maps to a known variant falls back to the
 /// default rather than failing the whole read: an account that cannot load
 /// locks its owner out, which is a far worse outcome than a reset preference.
-fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -> Result<User> {
+pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -> Result<User> {
     let mut allowed_libraries = Vec::with_capacity(allowed.len());
     for (value,) in allowed {
         allowed_libraries.push(parse_id::<LibraryId>(value)?);
