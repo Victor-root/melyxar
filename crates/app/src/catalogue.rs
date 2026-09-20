@@ -86,7 +86,7 @@ pub async fn libraries(state: &AppState) -> Result<Vec<LibrarySummary>> {
     let mut summaries = Vec::new();
     for library in database.list_libraries().await? {
         summaries.push(LibrarySummary {
-            works: database.count_browsable(Some(library.id)).await?,
+            works: crate::counted::counted(state, Some(library.id)).await?.browsable,
             version: database.library_version(library.id).await?,
             roots: library
                 .roots
@@ -115,13 +115,15 @@ pub async fn libraries(state: &AppState) -> Result<Vec<LibrarySummary>> {
 }
 
 /// What can be filtered on in one library.
+///
+/// Every one of these is a walk through the whole library, so none of them is
+/// walked on the way to a page: they are counted once per change and read
+/// back. See [`crate::counted`] for why.
 pub async fn filters(state: &AppState, library_id: Option<LibraryId>) -> Result<Filters> {
-    let database = state.database();
-    Ok(Filters {
-        genres: database.genres_in_use(library_id).await?,
-        decades: database.decades_in_use(library_id).await?,
-        initials: database.initials_in_use(library_id).await?,
-    })
+    Ok(crate::counted::counted(state, library_id)
+        .await?
+        .filters
+        .clone())
 }
 
 /// One page of a grid.
@@ -142,11 +144,16 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, viewer: UserI
         })
         .await?;
 
+    // Counted once per change rather than on the way here: both of these walk
+    // the whole collection, and a home page that counts a hundred thousand
+    // works to print two numbers is a home page nobody waits for.
+    let counted = crate::counted::counted(state, library_id).await?;
+
     Ok(Home {
         carry_on: database.works_to_carry_on(viewer, CARRY_ON).await?,
         recently_added,
-        works: database.count_browsable(library_id).await?,
-        awaiting_identification: database.catalogue_summary().await?.awaiting_identification,
+        works: counted.browsable,
+        awaiting_identification: counted.awaiting_identification,
     })
 }
 

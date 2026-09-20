@@ -179,6 +179,8 @@ Avec SQLite sur NVMe et des index bien posés, le cache du système tient la bas
 |---|---|---|
 | Page de grille (100 cartes), côté serveur | moins de 30 ms | Journal du serveur, en-tête Server-Timing |
 | Fiche complète, côté serveur | moins de 20 ms | Idem |
+| Menus d'une médiathèque (genres, décennies, lettres), côté serveur | moins de 30 ms | Idem |
+| Page d'accueil, côté serveur | moins de 30 ms | Idem |
 | Image en cache, temps avant premier octet | moins de 5 ms | Onglet Réseau de Brave |
 | Recherche par préfixe, côté serveur | moins de 30 ms | Journal du serveur |
 | Grille visible, retour sur page connue | moins de 100 ms | Mesure dans le client |

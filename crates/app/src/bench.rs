@@ -226,6 +226,7 @@ fn a_film(index: u64, names: &SharedNames) -> InventedWork {
         age_rating_label: age_rating(&mut numbers),
         dominant_color: colour(&mut numbers),
         child_count: 0,
+        added_seconds_ago: added_seconds_ago(index),
         tagline: tagline(&mut numbers),
         overview: overview(&title, year, &mut numbers),
         external_id: format!("bench-{index}"),
@@ -280,6 +281,7 @@ fn a_series(index: u64, names: &SharedNames) -> Vec<InventedWork> {
                 age_rating_label: None,
                 dominant_color: colour(&mut numbers),
                 child_count: 0,
+                added_seconds_ago: added_seconds_ago(index) + episode_number,
                 tagline: String::new(),
                 overview: overview(&name, year, &mut numbers),
                 external_id: format!("bench-{index}-{season_number}-{episode_number}"),
@@ -309,6 +311,7 @@ fn a_series(index: u64, names: &SharedNames) -> Vec<InventedWork> {
             age_rating_label: None,
             dominant_color: colour(&mut numbers),
             child_count: episodes,
+            added_seconds_ago: added_seconds_ago(index),
             tagline: String::new(),
             overview: String::new(),
             external_id: format!("bench-{index}-{season_number}"),
@@ -336,6 +339,7 @@ fn a_series(index: u64, names: &SharedNames) -> Vec<InventedWork> {
         age_rating_label: age_rating(&mut numbers),
         dominant_color: colour(&mut numbers),
         child_count: seasons,
+        added_seconds_ago: added_seconds_ago(index),
         tagline: tagline(&mut numbers),
         overview: overview(&title, year, &mut numbers),
         external_id: format!("bench-{index}"),
@@ -511,17 +515,53 @@ fn cast(numbers: &mut Numbers, names: &SharedNames) -> Vec<InventedCredit> {
 /// A home page is made of what is half watched, so a library where nothing
 /// ever was measures a page nobody has.
 fn how_far(numbers: &mut Numbers, runtime_ms: i64) -> Option<InventedProgress> {
-    match numbers.below(100) {
-        0..=7 => Some(InventedProgress {
+    // Spread over the last two years, and never two at the same instant: the
+    // row of what to carry on with is ordered by when each was last played,
+    // and works sharing one instant make the server read every one of them
+    // before it can show twenty.
+    let seconds_since_played = numbers.between(60, 2 * 365 * 24 * 60 * 60);
+    let drawn = numbers.below(IN_A_THOUSAND);
+    if drawn < LEFT_HALFWAY {
+        return Some(InventedProgress {
             position_ms: runtime_ms * numbers.between(10, 80) / 100,
             state: "in_progress",
-        }),
-        8..=19 => Some(InventedProgress {
+            seconds_since_played,
+        });
+    }
+    if drawn < LEFT_HALFWAY + WATCHED_THROUGH {
+        return Some(InventedProgress {
             position_ms: runtime_ms,
             state: "watched",
-        }),
-        _ => None,
+            seconds_since_played,
+        });
     }
+    None
+}
+
+/// What the shares below are drawn out of.
+const IN_A_THOUSAND: u64 = 1_000;
+
+/// How many works in a thousand somebody has left halfway.
+///
+/// Deliberately small, because a person is. Left at a share of the collection
+/// it would mean thousands of unfinished films on a large one, which is not a
+/// collection anybody has: it would measure a row of what to carry on with
+/// against a number no real library reaches, and call the result reactivity.
+const LEFT_HALFWAY: u64 = 1;
+
+/// How many works in a thousand somebody has watched right through.
+///
+/// A share of the collection, this one, because that is what watching a
+/// collection over years looks like.
+const WATCHED_THROUGH: u64 = 200;
+
+/// How long ago a work was added, in seconds.
+///
+/// A minute apart, oldest first, so a collection built in one run still reads
+/// as one built over years: an ordering by date has something to order, and
+/// the newest of a hundred thousand is one work rather than all of them.
+fn added_seconds_ago(index: u64) -> i64 {
+    (index as i64).saturating_mul(60)
 }
 
 fn rating(numbers: &mut Numbers) -> f64 {

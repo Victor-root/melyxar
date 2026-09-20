@@ -591,6 +591,19 @@ impl Database {
         })
     }
 
+    /// How far along every library taken together is.
+    ///
+    /// A sum rather than a list, for whoever is asking a question about the
+    /// whole catalogue: a sum that has moved is a library that has moved, and
+    /// a sum that has not cannot hide two changes cancelling out, since each
+    /// of these counters only ever goes up.
+    pub async fn every_library_version(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT coalesce(sum(version), 0) FROM libraries")
+            .fetch_one(self.reader())
+            .await?;
+        Ok(row.0)
+    }
+
     /// Current version counter of a library.
     ///
     /// Bumped on every write that changes what a listing would return. Backs

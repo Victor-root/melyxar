@@ -195,12 +195,12 @@ fn scenarios(base: &Url, ground: &Ground) -> anyhow::Result<Vec<Scenario>> {
         Scenario {
             what: "the menus that narrow a grid",
             url: base.join(&format!("api/v1/libraries/{library}/filters"))?,
-            budget_ms: None,
+            budget_ms: Some(30.0),
         },
         Scenario {
             what: "home page",
             url: base.join("api/v1/home")?,
-            budget_ms: None,
+            budget_ms: Some(30.0),
         },
     ];
 

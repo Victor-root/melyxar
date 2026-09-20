@@ -433,6 +433,33 @@ impl Database {
         Ok(row.0)
     }
 
+    /// How many works are still waiting for a name.
+    ///
+    /// Counted over everything a library holds rather than over what a grid
+    /// shows: an episode nobody could name is a film nobody could name, and
+    /// the list that answers for it reaches both.
+    pub async fn count_awaiting_identification(
+        &self,
+        library_id: Option<LibraryId>,
+    ) -> Result<i64> {
+        let row: (i64,) = match library_id {
+            Some(id) => sqlx::query_as(
+                "SELECT count(*) FROM works
+                  WHERE library_id = ? AND identification IN ('pending', 'unidentified')",
+            )
+            .bind(id.to_db_string())
+            .fetch_one(self.reader())
+            .await?,
+            None => sqlx::query_as(
+                "SELECT count(*) FROM works
+                  WHERE identification IN ('pending', 'unidentified')",
+            )
+            .fetch_one(self.reader())
+            .await?,
+        };
+        Ok(row.0)
+    }
+
     /// Every genre that is actually in use, with how many works carry it.
     ///
     /// What a filter menu is built from: offering a genre nobody has leads to
