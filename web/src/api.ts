@@ -876,6 +876,13 @@ export interface PlaybackSession {
 
 /** What the viewer has decided, and what they can decide between. */
 export interface ViewerPreferences {
+  /** The language the interface speaks to this person, as two letters. Theirs
+      rather than the browser's, so signing in on another machine carries it. */
+  interface_language: string;
+  /** light, dark or system. */
+  theme_mode: string;
+  /** The colour everything active is drawn in, as a hash and six digits. */
+  accent_color: string;
   /** Three letter code, or null for no preference: the file then decides. */
   preferred_audio_language: string | null;
   preferred_subtitle_language: string | null;

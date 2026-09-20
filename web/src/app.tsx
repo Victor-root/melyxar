@@ -7,7 +7,9 @@
  * one.
  */
 
+import { useEffect } from "react";
 import { Route, Routes } from "react-router-dom";
+import { api } from "./api";
 import { Header } from "./components/header";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
@@ -52,7 +54,22 @@ export function App() {
  * component that is not drawn is a component that watches nothing.
  */
 function TheLibrary() {
-  const { t } = useSettings();
+  const { t, adopt } = useSettings();
+  // What this account chose, once there is an account to ask about. The
+  // browser's own copy drew the door a moment ago; this is what carries a
+  // choice from one machine to the next.
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .preferences(controller.signal)
+      .then(adopt)
+      .catch(() => {
+        // A preference that did not arrive leaves the browser's own copy in
+        // place, which is what was already on the screen.
+      });
+    return () => controller.abort();
+  }, [adopt]);
+
   // Watched here, where the bar that starts the work and the pages that show
   // what it produced can both read it.
   const running = useWatchedWork();
