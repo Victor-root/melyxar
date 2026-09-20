@@ -221,8 +221,13 @@ export function Overlay(props: Props) {
     if (!bar || !surface) {
       return;
     }
-    const measure = new ResizeObserver(([entry]) => {
-      surface.style.setProperty("--controls-height", `${entry.contentRect.height}px`);
+    const measure = new ResizeObserver(() => {
+      // The content box alone, which a `ResizeObserver` entry reports by
+      // default, leaves out the strip's own padding: real space the strip
+      // still occupies, and on the very padding a viewer's eye is measuring
+      // the gap against. Read off the element itself instead, which is the
+      // space it actually takes on the picture.
+      surface.style.setProperty("--controls-height", `${bar.offsetHeight}px`);
     });
     measure.observe(bar);
     return () => measure.disconnect();

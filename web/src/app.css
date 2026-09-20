@@ -1759,11 +1759,14 @@
   max-width: 90%;
   text-align: center;
   pointer-events: none;
-  /* The same clock and curve the drawer folds open with, so that a viewer
-     watching the two move together never sees one settle before the other:
-     the picture's own copy chosen at random earlier answered to neither and
-     visibly trailed behind it. */
-  transition: bottom var(--calm) var(--ease);
+  /* No transition of its own on `bottom`. While the drawer is growing, the
+     measurement behind it changes on every frame of that same animation, and
+     a transition here does not track a moving number so much as chase it:
+     each frame restarts its own short animation towards a target that has
+     already moved again, which is why the drawer visibly finished opening
+     before the words caught up with it. Read straight instead, it moves
+     exactly as fast as the strip it is answering to, because it is measuring
+     the same frame. */
 }
 
 .player-subtitle-line {
