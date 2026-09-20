@@ -953,6 +953,12 @@ action_update() {
   # A backup before any change, so a failed update is never a lost library.
   action_backup quiet
 
+  # A dependency added after somebody's own install is a dependency their
+  # machine has never had a reason to fetch: checking again here, the same
+  # way a fresh install does, is what lets an update reach it too instead of
+  # failing partway into a build with nothing rolled back.
+  install_packages
+
   local before
   before="$(git -C "$SOURCE_DIR" rev-parse HEAD 2>/dev/null || echo "")"
   fetch_source
