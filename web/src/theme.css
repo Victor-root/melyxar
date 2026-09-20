@@ -79,6 +79,29 @@
   color-scheme: dark;
 }
 
+/*
+ * An accent somebody chose for themselves, and the shades that go with it.
+ *
+ * Only when there is one. The four above are the ones the identity was
+ * measured on, and deriving them from the red would move them by a few
+ * degrees for no reason at all; here they are worked out because nobody can
+ * write down four shades of a colour that has not been picked yet.
+ *
+ * The colour itself and the one legible on it are put on the document by the
+ * interface, which is also where the second of the two is worked out: white
+ * cannot be read on a pale accent, and a button nobody can read is worse than
+ * a button of the wrong colour.
+ */
+:root[data-accent="chosen"] {
+  --accent-bright: color-mix(in srgb, var(--accent) 82%, white);
+  --accent-dim: color-mix(in srgb, var(--accent) 78%, black);
+  --accent-glow: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+:root[data-accent="chosen"][data-theme="light"] {
+  --accent-glow: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 /* Dark is the default: a film library is looked at in the evening. */
 :root,
 :root[data-theme="dark"] {

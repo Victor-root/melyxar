@@ -7,7 +7,7 @@
 use axum::extract::State;
 use axum::{Json, Router};
 use melyxar_app::AppState;
-use melyxar_core::user::{DownmixMethod, Preferences};
+use melyxar_core::user::{DownmixMethod, Preferences, ThemeMode};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
@@ -20,6 +20,16 @@ pub fn router() -> Router<AppState> {
 /// What a viewer has chosen, and what they can choose between.
 #[derive(Debug, Serialize)]
 struct PreferencesView {
+    /// The language the interface speaks to this person, as two letters.
+    ///
+    /// Theirs rather than the browser's: somebody signing in on a machine
+    /// that is not their own should not have to say it again, and two people
+    /// sharing one machine should not have to argue about it.
+    interface_language: String,
+    /// light, dark or system.
+    theme_mode: &'static str,
+    /// The colour that carries everything active, as a hash and six digits.
+    accent_color: String,
     /// Preferred soundtrack language, as a three letter code. Absent means no
     /// preference, and the file decides.
     preferred_audio_language: Option<String>,
@@ -45,6 +55,12 @@ struct PreferencesView {
 #[derive(Debug, Default, Deserialize)]
 struct PreferencesBody {
     #[serde(default)]
+    interface_language: Option<String>,
+    #[serde(default)]
+    theme_mode: Option<String>,
+    #[serde(default)]
+    accent_color: Option<String>,
+    #[serde(default)]
     preferred_audio_language: Option<String>,
     #[serde(default)]
     preferred_subtitle_language: Option<String>,
@@ -68,6 +84,30 @@ async fn write(
     Json(body): Json<PreferencesBody>,
 ) -> Result<Json<PreferencesView>> {
     let mut chosen = melyxar_app::preferences::of(&state, who.id).await?;
+
+    if let Some(language) = body.interface_language {
+        if !melyxar_core::user::is_a_language(&language) {
+            return Err(ServerError::invalid_input(
+                "a language is two letters, such as fr or en",
+            ));
+        }
+        chosen.interface_language = language;
+    }
+    if let Some(mode) = body.theme_mode {
+        chosen.theme_mode = ThemeMode::parse(&mode)
+            .ok_or_else(|| ServerError::invalid_input("no theme goes by that name"))?;
+    }
+    if let Some(colour) = body.accent_color {
+        // Refused rather than quietly put right: this one ends up inside a
+        // stylesheet, and a client sending something else is a client to
+        // answer rather than to humour.
+        if !melyxar_core::user::is_an_accent_colour(&colour) {
+            return Err(ServerError::invalid_input(
+                "a colour is a hash and six hexadecimal digits",
+            ));
+        }
+        chosen.accent_color = colour;
+    }
 
     // An empty answer means no preference, which is a choice of its own and
     // not the same as leaving the field out.
@@ -97,6 +137,9 @@ fn some_language(value: String) -> Option<String> {
 async fn view(state: &AppState, chosen: Preferences) -> Result<Json<PreferencesView>> {
     let available = melyxar_app::preferences::languages_available(state).await?;
     Ok(Json(PreferencesView {
+        interface_language: chosen.interface_language,
+        theme_mode: chosen.theme_mode.as_str(),
+        accent_color: chosen.accent_color,
         preferred_audio_language: chosen.preferred_audio_language,
         preferred_subtitle_language: chosen.preferred_subtitle_language,
         downmix_method: chosen.downmix_method.as_str(),

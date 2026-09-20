@@ -206,6 +206,29 @@ impl ThemeMode {
 /// derived for links and small coloured text on a dark background.
 pub const DEFAULT_ACCENT_COLOR: &str = "#c81e1e";
 
+/// Whether this is a colour this server will keep.
+///
+/// A hash and six hexadecimal digits, and nothing else at all. It is the one
+/// value a person chooses that ends up inside a stylesheet, so anything
+/// looser would be a way of writing whatever into one: it is checked here
+/// rather than wherever it is drawn, because it is drawn in more than one
+/// place and the loosest of them would be the one that counts.
+pub fn is_an_accent_colour(value: &str) -> bool {
+    let Some(digits) = value.strip_prefix('#') else {
+        return false;
+    };
+    digits.len() == 6 && digits.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+/// Whether this is a language an interface can be asked for.
+///
+/// Two letters, as every language is written in this server. An interface
+/// that has no words in it falls back to the ones it has, which is its own to
+/// decide; what is kept here is only that the answer is a language at all.
+pub fn is_a_language(value: &str) -> bool {
+    value.len() == 2 && value.bytes().all(|byte| byte.is_ascii_alphabetic())
+}
+
 /// Per person settings.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Preferences {
@@ -241,9 +264,19 @@ impl Default for Preferences {
 
 impl Preferences {
     /// Clamps values that came from a client into their accepted range.
+    ///
+    /// A colour or a language that is neither falls back to the one everybody
+    /// starts with rather than failing the whole read: an account that cannot
+    /// load locks its owner out, which is far worse than a preference reset.
     pub fn normalised(mut self) -> Self {
         self.volume = self.volume.clamp(0.0, 1.0);
         self.downmix_gain = self.downmix_gain.clamp(MIN_DOWNMIX_GAIN, MAX_DOWNMIX_GAIN);
+        if !is_an_accent_colour(&self.accent_color) {
+            self.accent_color = DEFAULT_ACCENT_COLOR.to_string();
+        }
+        if !is_a_language(&self.interface_language) {
+            self.interface_language = "en".to_string();
+        }
         self
     }
 }
@@ -425,6 +458,40 @@ mod tests {
         .normalised();
         assert_eq!(negative.volume, 0.0);
         assert_eq!(negative.downmix_gain, MIN_DOWNMIX_GAIN);
+    }
+
+    #[test]
+    fn a_colour_is_a_hash_and_six_digits_and_nothing_else() {
+        assert!(is_an_accent_colour(DEFAULT_ACCENT_COLOR));
+        assert!(is_an_accent_colour("#FFFFFF"));
+        assert!(is_an_accent_colour("#00ff88"));
+
+        // It ends up inside a stylesheet, so anything looser would be a way
+        // of writing whatever into one.
+        for nonsense in [
+            "",
+            "red",
+            "c81e1e",
+            "#c81e1",
+            "#c81e1ee",
+            "#ggghhh",
+            "#c81e1e; content: url(https://elsewhere)",
+            "var(--anything)",
+        ] {
+            assert!(!is_an_accent_colour(nonsense), "{nonsense} must be refused");
+        }
+    }
+
+    #[test]
+    fn a_preference_that_is_nonsense_falls_back_instead_of_reaching_a_stylesheet() {
+        let wild = Preferences {
+            accent_color: "#c81e1e; content: url(https://elsewhere)".to_string(),
+            interface_language: "not a language".to_string(),
+            ..Preferences::default()
+        }
+        .normalised();
+        assert_eq!(wild.accent_color, DEFAULT_ACCENT_COLOR);
+        assert_eq!(wild.interface_language, "en");
     }
 
     #[test]
