@@ -342,7 +342,13 @@ function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number 
           <div className="player-drawer-person" key={`${credit.name}-${credit.role}-${index}`}>
             <span className="player-drawer-face">
               {photo ? (
-                <img src={photo.src} srcSet={photo.srcSet} alt="" loading="lazy" />
+                <img
+                  src={photo.src}
+                  srcSet={photo.srcSet}
+                  alt=""
+                  loading="lazy"
+                  draggable={false}
+                />
               ) : (
                 /* An initial rather than an empty frame: a row of grey boxes
                    reads as a page that failed to load. */
@@ -414,7 +420,13 @@ function Episodes({
           >
             <span className="player-drawer-frame" style={{ height: `${down}px` }}>
               {poster ? (
-                <img src={poster.src} srcSet={poster.srcSet} alt="" loading="lazy" />
+                <img
+                  src={poster.src}
+                  srcSet={poster.srcSet}
+                  alt=""
+                  loading="lazy"
+                  draggable={false}
+                />
               ) : (
                 <span className="player-drawer-initial" aria-hidden="true">
                   {episode.number ?? ""}

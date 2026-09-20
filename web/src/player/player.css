@@ -1550,10 +1550,11 @@
      picture is right there and a scrollbar across it is a scrollbar across a
      film. */
   scrollbar-width: none;
-  scroll-behavior: smooth;
-  /* A hand can run it sideways too, the way it already can on a touchscreen
-     or a trackpad: an open hand where it could take hold, a closed one while
-     it does. */
+  /* No scroll-behavior here on purpose: the arrow already asks for smooth by
+     name on the one scroll it triggers, and a hand dragging the row sets its
+     scrollLeft dozens of times a second. Smooth by default would turn every
+     one of those into its own animation racing the one before it, which is a
+     hand that no longer feels like it is holding anything. */
   cursor: grab;
   user-select: none;
 }
