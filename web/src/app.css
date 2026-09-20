@@ -1690,17 +1690,30 @@
   padding: 2px 8px;
 }
 
-.subtitles-height-bottom .subtitle-sample-words,
-.subtitles-height-bottom .player-subtitle-words {
+.subtitles-height-bottom .subtitle-sample-words {
   bottom: 8%;
 }
-.subtitles-height-raised .subtitle-sample-words,
-.subtitles-height-raised .player-subtitle-words {
+.subtitles-height-raised .subtitle-sample-words {
   bottom: 24%;
 }
-.subtitles-height-high .subtitle-sample-words,
-.subtitles-height-high .player-subtitle-words {
+.subtitles-height-high .subtitle-sample-words {
   bottom: 44%;
+}
+
+/* Carried as a custom property rather than set on `bottom` directly, so that
+   the picture's own copy can be compared against how far the controls
+   actually need it lifted and the higher of the two wins: a viewer who chose
+   the highest position is otherwise unable to tell it apart from the one
+   below it while a menu forces the words to clear the controls anyway,
+   which is exactly the moment a viewer trying that setting is looking at. */
+.subtitles-height-bottom .player-subtitle-words {
+  --subtitle-height: 8%;
+}
+.subtitles-height-raised .player-subtitle-words {
+  --subtitle-height: 24%;
+}
+.subtitles-height-high .player-subtitle-words {
+  --subtitle-height: 44%;
 }
 
 /* The words as they actually sit on the picture: a column of lines, each one
@@ -1711,6 +1724,7 @@
 .player-subtitle-words {
   position: absolute;
   left: 50%;
+  bottom: var(--subtitle-height, 8%);
   transform: translateX(-50%);
   /* Above the picture, which has none, and nothing else: a menu, the drawer,
      a hover preview all stand over their own part of the picture on purpose,
@@ -1724,9 +1738,11 @@
   max-width: 90%;
   text-align: center;
   pointer-events: none;
-  /* Answers to the controls the instant they cover or uncover the picture,
-     never to when the next line of words happens to start. */
-  transition: bottom 200ms ease;
+  /* The same clock and curve the drawer folds open with, so that a viewer
+     watching the two move together never sees one settle before the other:
+     the picture's own copy chosen at random earlier answered to neither and
+     visibly trailed behind it. */
+  transition: bottom var(--calm) var(--ease);
 }
 
 .player-subtitle-line {

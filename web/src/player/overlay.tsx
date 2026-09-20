@@ -27,7 +27,7 @@ import type {
   PlaybackTrack,
   Work,
 } from "../api";
-import { BACKGROUNDS, COLOURS, EDGES, HEIGHTS, SIZES } from "./appearance";
+import { BACKGROUNDS, COLOURS, DEFAULT_APPEARANCE, EDGES, HEIGHTS, SIZES } from "./appearance";
 import type { Appearance } from "./appearance";
 import type { Arrangement, Control, Zone } from "./arrangement";
 import { asClock } from "./clock";
@@ -849,6 +849,7 @@ function ZoneOnTheBar({ zone, surroundings }: { zone: Zone; surroundings: Surrou
 function Line({
   label,
   value,
+  changed,
   chosen,
   switched,
   into,
@@ -856,6 +857,10 @@ function Line({
 }: {
   label: string;
   value?: string;
+  /** Whether the value shown is something other than what a viewer who never
+   *  touched this gets: coloured, so a glance at the row it opens from says
+   *  whether there is anything on it worth going back to the default for. */
+  changed?: boolean;
   /** One of a list, of which exactly one is picked: a tick down the left. */
   chosen?: boolean;
   /** A setting that is on or off on its own: a switch on the right. The two
@@ -876,7 +881,11 @@ function Line({
           every line in a panel starts its wording in the same place. */}
       <span className="player-menu-tick">{chosen && <ChosenIcon size={18} />}</span>
       <span className="player-menu-label">{label}</span>
-      {value !== undefined && <span className="player-menu-value">{value}</span>}
+      {value !== undefined && (
+        <span className={`player-menu-value${changed ? " player-menu-value-changed" : ""}`}>
+          {value}
+        </span>
+      )}
       {aSwitch && <Switch on={switched} />}
       {into && <IntoIcon size={16} />}
     </button>
@@ -1007,30 +1016,35 @@ function sheetFor(
                 <Line
                   label={t("player.subtitle_size")}
                   value={t(`player.subtitle_size.${appearance.size}`)}
+                  changed={appearance.size !== DEFAULT_APPEARANCE.size}
                   into
                   onPick={() => onPanel("subtitles.size")}
                 />
                 <Line
                   label={t("player.subtitle_colour")}
                   value={t(`player.subtitle_colour.${appearance.colour}`)}
+                  changed={appearance.colour !== DEFAULT_APPEARANCE.colour}
                   into
                   onPick={() => onPanel("subtitles.colour")}
                 />
                 <Line
                   label={t("player.subtitle_edge")}
                   value={t(`player.subtitle_edge.${appearance.edge}`)}
+                  changed={appearance.edge !== DEFAULT_APPEARANCE.edge}
                   into
                   onPick={() => onPanel("subtitles.edge")}
                 />
                 <Line
                   label={t("player.subtitle_background")}
                   value={t(`player.subtitle_background.${appearance.background}`)}
+                  changed={appearance.background !== DEFAULT_APPEARANCE.background}
                   into
                   onPick={() => onPanel("subtitles.background")}
                 />
                 <Line
                   label={t("player.subtitle_height")}
                   value={t(`player.subtitle_height.${appearance.height}`)}
+                  changed={appearance.height !== DEFAULT_APPEARANCE.height}
                   into
                   onPick={() => onPanel("subtitles.height")}
                 />

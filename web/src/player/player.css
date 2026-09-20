@@ -185,15 +185,20 @@
   cursor: none;
 }
 
-/* Lifted to sit just clear of the bottom strip while it is actually covering
-   the picture, by the strip's own real height rather than by any fixed
-   position: a drawer opening under it, a narrower window, a longer row of
-   buttons wrapping onto its own line all change that height, and a guess
-   written here would be wrong the moment any of them did. Settles back to
-   whatever height the viewer chose the moment the strip fades, which is what
-   the rule above already governs untouched. */
+/* Lifted to clear the bottom strip while it is actually covering the
+   picture, by the strip's own real height rather than by any fixed position:
+   a drawer opening under it, a narrower window, a longer row of buttons
+   wrapping onto its own line all change that height, and a guess written
+   here would be wrong the moment any of them did.
+
+   Never lower than that, but the position the viewer actually chose still
+   wins when it asks for more: the highest of the three settings would
+   otherwise look identical to the one below it the whole time a menu is
+   open, which is the one moment a viewer trying that setting is looking at
+   it. Settles back to exactly that choice the moment the strip fades,
+   which is what the rule above already governs untouched. */
 .player-stage:has(.player-overlay[data-away="no"]) .player-subtitle-words {
-  bottom: calc(var(--controls-height, 0px) + 12px);
+  bottom: max(var(--subtitle-height, 8%), calc(var(--controls-height, 0px) + var(--gap-wide)));
 }
 
 /* Both ends are dark enough for white to read over any picture, and the two
@@ -890,6 +895,13 @@
 .player-menu-value {
   color: var(--text-faint);
   font-size: 13px;
+}
+
+/* Says, before the row is even opened, that there is something behind it
+   worth going back to the default for. */
+.player-menu-value-changed {
+  color: var(--accent-bright);
+  font-weight: 650;
 }
 
 .player-menu-why {
