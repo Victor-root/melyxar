@@ -323,6 +323,9 @@ export interface Ancestor {
   kind: string;
   number: number | null;
   title: string;
+  /** The series' own mark, drawn as it draws its title. Empty for anything
+   *  that is not a series. */
+  logo: Picture[];
 }
 
 export interface Work {
