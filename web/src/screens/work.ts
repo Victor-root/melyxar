@@ -192,9 +192,16 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
   }, [address, setAddress, version]);
 
   /* A different work is a different film to start, so the one press the
-     address carried is spent and a new one may be honoured. */
+     address carried is spent and a new one may be honoured.
+
+     What is playing is cleared with it. Without this, a step from one
+     episode to the next would render this screen once with the new work's
+     title and the old work's file still playing: the new work arrives before
+     the address is acted on, and until then `playing` still names the file
+     that belongs to the episode just left. */
   useEffect(() => {
     started.current = false;
+    setPlaying(null);
   }, [id]);
 
   const readAgain = useCallback(() => setAgain((count) => count + 1), []);
