@@ -1729,13 +1729,17 @@
 }
 
 /* The opposite corner from "playing now", so an episode carrying both never
-   sets one over the other. */
+   sets one over the other. Left square rather than rounded to match, the
+   frame's own corner right there is already curved by the frame's own
+   border-radius, and the frame clips to it: a second, slightly different
+   curve drawn on top of that one is what left a sliver of the frame's
+   background showing between the two. */
 .player-drawer-card-watched {
   position: absolute;
   top: 0;
   right: 0;
   padding: 3px 6px;
-  border-radius: 0 var(--radius-control) 0 var(--radius-control);
+  border-radius: 0 0 0 var(--radius-control);
   background: var(--accent);
   color: var(--accent-contrast);
   font-size: 12px;
