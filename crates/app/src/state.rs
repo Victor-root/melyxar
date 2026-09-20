@@ -39,6 +39,9 @@ struct Inner {
     /// the same reason: without them nothing can be converted, and a session
     /// that could never produce a segment is worse than none.
     sessions: Option<Arc<Sessions>>,
+    /// What each library has been counted for, so a page never counts a
+    /// hundred thousand works to draw a menu.
+    counts: crate::counted::Counts,
 }
 
 impl AppState {
@@ -75,6 +78,7 @@ impl AppState {
                 database,
                 tools,
                 capabilities,
+                counts: crate::counted::Counts::default(),
             }),
         }
     }
@@ -89,6 +93,11 @@ impl AppState {
 
     pub fn jobs(&self) -> &JobRunner {
         &self.inner.jobs
+    }
+
+    /// What each library has been counted for.
+    pub(crate) fn counts(&self) -> &crate::counted::Counts {
+        &self.inner.counts
     }
 
     /// The metadata provider, when there is one to use.

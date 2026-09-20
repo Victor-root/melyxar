@@ -21,10 +21,11 @@ use melyxar_core::id::{
     WorkId,
 };
 use melyxar_core::library::{Library, LibraryKind};
-use melyxar_core::time::now;
+use melyxar_core::time::{now, Timestamp};
 use melyxar_core::work::WorkKind;
 use sqlx::sqlite::SqliteArguments;
 use sqlx::{AssertSqlSafe, Sqlite, Transaction};
+use time::Duration;
 
 use crate::convert::timestamp_to_text;
 use crate::{Database, Result};
@@ -65,6 +66,11 @@ pub struct InventedWork {
     pub age_rating_label: Option<String>,
     pub dominant_color: String,
     pub child_count: i64,
+    /// How long ago this was added, in seconds. Spread out rather than all at
+    /// one instant: a collection where every work arrived at the same moment
+    /// is a collection an ordering by date cannot order, and the page that
+    /// leads with the newest then sorts a hundred thousand ties.
+    pub added_seconds_ago: i64,
     pub tagline: String,
     pub overview: String,
     pub external_id: String,
@@ -147,6 +153,11 @@ pub struct InventedProgress {
     pub position_ms: i64,
     /// in_progress or watched.
     pub state: &'static str,
+    /// How long ago it was last played, in seconds. Spread out for the same
+    /// reason: the row of what to carry on with is ordered by this, and a
+    /// thousand works sharing one instant make it read every one of them
+    /// before it can show twenty.
+    pub seconds_since_played: i64,
 }
 
 /// Names shared by many works, once they have been written down.
@@ -279,7 +290,8 @@ impl Database {
         if batch.is_empty() {
             return Ok(());
         }
-        let moment = timestamp_to_text(now());
+        let at = now();
+        let moment = timestamp_to_text(at);
         let library = library_id.to_db_string();
         let mut transaction = self.begin().await?;
 
@@ -321,7 +333,7 @@ impl Database {
                     .bind("identified")
                     .bind(work.dominant_color.clone())
                     .bind(work.child_count)
-                    .bind(moment.clone())
+                    .bind(a_moment_ago(at, work.added_seconds_ago))
                     .bind(moment.clone())
             },
         )
@@ -569,15 +581,17 @@ impl Database {
                 let progress = work.watched.unwrap_or(InventedProgress {
                     position_ms: 0,
                     state: "not_started",
+                    seconds_since_played: 0,
                 });
+                let played = a_moment_ago(at, progress.seconds_since_played);
                 statement
                     .bind(viewer_id.clone())
                     .bind(work.id.to_db_string())
                     .bind(progress.position_ms)
                     .bind(progress.state)
                     .bind(1_i64)
-                    .bind(moment.clone())
-                    .bind(moment.clone())
+                    .bind(played.clone())
+                    .bind(played)
             },
         )
         .await?;
@@ -650,6 +664,11 @@ impl Database {
             files: row.1,
         })
     }
+}
+
+/// An instant that many seconds before another, written the way one is stored.
+fn a_moment_ago(moment: Timestamp, seconds_ago: i64) -> String {
+    timestamp_to_text(moment - Duration::seconds(seconds_ago.max(0)))
 }
 
 /// Where a picture of an invented work would live, if it had one.
@@ -813,6 +832,7 @@ mod tests {
             age_rating_label: Some("-12".to_string()),
             dominant_color: "#3a5f7d".to_string(),
             child_count: 0,
+            added_seconds_ago: 3_600,
             tagline: "Une nuit suffit.".to_string(),
             overview: "Ce qui a été laissé derrière finit par revenir.".to_string(),
             external_id: format!("bench-{sort_title}"),
@@ -871,6 +891,7 @@ mod tests {
             watched: Some(InventedProgress {
                 position_ms: 1_200_000,
                 state: "in_progress",
+                seconds_since_played: 7_200,
             }),
             unwatched: None,
         }
