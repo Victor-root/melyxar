@@ -882,16 +882,14 @@ function Line({
    *  are not the same question and must not look the same. */
   switched?: boolean;
   into?: boolean;
-  onPick: () => void;
+  /** Left out for a line that only ever says what a value is, with the
+   *  control that actually changes it drawn beside it rather than reached
+   *  by opening anything: a row rather than a button, with nothing to press. */
+  onPick?: () => void;
 }) {
   const aSwitch = switched !== undefined;
-  return (
-    <button
-      className="player-menu-line"
-      onClick={onPick}
-      role={aSwitch ? "menuitemcheckbox" : "menuitem"}
-      aria-checked={aSwitch ? switched : undefined}
-    >
+  const words = (
+    <>
       {/* The column is there whether or not this line has a tick in it, so
           every line in a panel starts its wording in the same place. */}
       <span className="player-menu-tick">{chosen && <ChosenIcon size={18} />}</span>
@@ -903,6 +901,19 @@ function Line({
       )}
       {aSwitch && <Switch on={switched} />}
       {into && <IntoIcon size={16} />}
+    </>
+  );
+  if (!onPick) {
+    return <div className="player-menu-line player-menu-line-static">{words}</div>;
+  }
+  return (
+    <button
+      className="player-menu-line"
+      onClick={onPick}
+      role={aSwitch ? "menuitemcheckbox" : "menuitem"}
+      aria-checked={aSwitch ? switched : undefined}
+    >
+      {words}
     </button>
   );
 }
@@ -1063,6 +1074,34 @@ function sheetFor(
                   into
                   onPick={() => onPanel("subtitles.height")}
                 />
+                {/* Not one more place to open, since there is nothing to
+                    choose between: the bar beside it is the whole of this
+                    one, the same way the bar under "Personnalisé" above is
+                    the whole of that choice. */}
+                <Line
+                  label={t("player.words_offset")}
+                  value={`${playback.wordsOffset > 0 ? "+" : ""}${playback.wordsOffset.toFixed(1)} s`}
+                  changed={playback.wordsOffset !== 0}
+                />
+                <div
+                  className="player-menu-slider"
+                  role="presentation"
+                  style={{
+                    ["--share" as string]: `${
+                      ((playback.wordsOffset + OFFSET_FURTHEST) / (2 * OFFSET_FURTHEST)) * 100
+                    }`,
+                  }}
+                >
+                  <input
+                    type="range"
+                    min={-OFFSET_FURTHEST}
+                    max={OFFSET_FURTHEST}
+                    step={OFFSET_STEP}
+                    value={playback.wordsOffset}
+                    aria-label={t("player.words_offset")}
+                    onChange={(event) => playback.setWordsOffset(Number(event.target.value))}
+                  />
+                </div>
               </div>
             )}
           </div>
