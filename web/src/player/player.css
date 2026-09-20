@@ -245,9 +245,25 @@
    was made see-through for. The runway above goes with it, since the sheet
    starts where it used to start. */
 .player-bottom:has(.player-drawer-hold[data-open="yes"]) {
+  position: relative;
   padding-top: 0;
   background: var(--player-panel);
   backdrop-filter: blur(18px);
+}
+
+/* A little more of the same panel above the row it is drawn on, as backdrop
+   only: nothing inside the row moves, its own top edge is still exactly
+   where it always was. */
+.player-bottom:has(.player-drawer-hold[data-open="yes"])::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 24px;
+  background: inherit;
+  backdrop-filter: inherit;
+  pointer-events: none;
 }
 
 .player-zone {
