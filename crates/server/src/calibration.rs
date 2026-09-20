@@ -57,10 +57,11 @@ struct SessionView {
 /// nothing about a client is known until the verdict comes back.
 async fn open_session(
     State(state): State<AppState>,
+    crate::account::Viewer(who): crate::account::Viewer,
     Json(body): Json<OpenBody>,
 ) -> Result<Json<SessionView>> {
     let (session, height, frame_rate) =
-        melyxar_app::calibration::open_calibration_session(&state, &body.codec, body.height)
+        melyxar_app::calibration::open_calibration_session(&state, &who, &body.codec, body.height)
             .await?;
     Ok(Json(SessionView {
         id: session.id.to_string(),

@@ -647,6 +647,7 @@ async fn open_session(
 
     let session = melyxar_app::playback::open_session(
         &state,
+        &who,
         &plan,
         body.start_at_seconds
             .filter(|seconds| seconds.is_finite())
@@ -694,14 +695,15 @@ fn wanted_from(name: &str) -> Option<Wanted> {
 
 async fn session_file(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     RoutePath((id, name)): RoutePath<(String, String)>,
     request: Request<Body>,
 ) -> Response {
     match wanted_from(&name) {
-        Some(Wanted::Playlist) => playlist(&state, &id).await,
-        Some(Wanted::Header) => header_file(&state, &id, request).await,
-        Some(Wanted::Segment(index)) => segment(&state, &id, index, request).await,
-        Some(Wanted::Preparation) => preparation(&state, &id).await,
+        Some(Wanted::Playlist) => playlist(&state, &who, &id).await,
+        Some(Wanted::Header) => header_file(&state, &who, &id, request).await,
+        Some(Wanted::Segment(index)) => segment(&state, &who, &id, index, request).await,
+        Some(Wanted::Preparation) => preparation(&state, &who, &id).await,
         None => ServerError::not_found("a session hands out nothing by that name").into_response(),
     }
 }
@@ -740,8 +742,12 @@ struct ProducingView {
     speed: f64,
 }
 
-async fn preparation(state: &AppState, id: &str) -> Response {
-    match live_session(state, id).await {
+async fn preparation(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    id: &str
+) -> Response {
+    match live_session(state, who, id).await {
         Ok(session) => Json(preparation_view(&session.preparation().await)).into_response(),
         Err(error) => error.into_response(),
     }
@@ -761,8 +767,12 @@ fn preparation_view(seen: &Preparation) -> PreparationView {
 }
 
 /// The playlist, which the server writes and the tool never sees.
-async fn playlist(state: &AppState, id: &str) -> Response {
-    match live_session(state, id).await {
+async fn playlist(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    id: &str
+) -> Response {
+    match live_session(state, who, id).await {
         Ok(session) => {
             let text = session.playlist_text();
             // The one step of opening a film that left no trace at all, which
@@ -797,8 +807,12 @@ async fn playlist(state: &AppState, id: &str) -> Response {
 }
 
 /// The header every segment needs.
-async fn header_file(state: &AppState, id: &str, request: Request<Body>) -> Response {
-    match live_session(state, id).await {
+async fn header_file(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    id: &str, request: Request<Body>
+) -> Response {
+    match live_session(state, who, id).await {
         Ok(session) => match session.initialisation().await {
             Ok(path) => serve(path, request, "video/mp4").await,
             Err(error) => ServerError::from(error).into_response(),
@@ -808,8 +822,12 @@ async fn header_file(state: &AppState, id: &str, request: Request<Body>) -> Resp
 }
 
 /// One segment of the film, produced now if it is not there yet.
-async fn segment(state: &AppState, id: &str, index: u32, request: Request<Body>) -> Response {
-    match live_session(state, id).await {
+async fn segment(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    id: &str, index: u32, request: Request<Body>
+) -> Response {
+    match live_session(state, who, id).await {
         Ok(session) => match session.segment(index).await {
             Ok(path) => serve(path, request, "video/iso.segment").await,
             Err(error) => ServerError::from(error).into_response(),
@@ -826,33 +844,49 @@ async fn segment(state: &AppState, id: &str, index: u32, request: Request<Body>)
 /// stands rather than waiting for them to press play and find the film gone.
 async fn still_watching(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     RoutePath(id): RoutePath<String>,
 ) -> Result<Json<serde_json::Value>> {
-    live_session(&state, &id).await?.still_watching().await;
+    live_session(&state, &who, &id)
+        .await?
+        .still_watching()
+        .await;
     Ok(Json(serde_json::json!({ "still_there": true })))
 }
 
 async fn close_session(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     RoutePath(id): RoutePath<String>,
 ) -> Result<Json<serde_json::Value>> {
     let session_id = id
         .parse()
         .map_err(|_| ServerError::invalid_input("the session identifier is malformed"))?;
     if let Some(sessions) = state.sessions() {
-        sessions.close(session_id).await;
+        sessions.close(session_id, who.id).await;
     }
     Ok(Json(serde_json::json!({ "closed": true })))
 }
 
-async fn live_session(state: &AppState, id: &str) -> Result<std::sync::Arc<Session>> {
+/// The session with this name, if this is whoever opened it.
+///
+/// Somebody else's reads as a session that is not there. A name is all it
+/// takes to be handed every segment of what somebody is watching.
+async fn live_session(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    id: &str,
+) -> Result<std::sync::Arc<Session>> {
     let session_id = id
         .parse()
         .map_err(|_| ServerError::invalid_input("the session identifier is malformed"))?;
     let sessions = state
         .sessions()
         .ok_or_else(|| ServerError::not_found("this server converts nothing"))?;
-    sessions.get(session_id).await.map_err(ServerError::from)
+    sessions
+        .get(session_id, who.id)
+        .await
+        .map_err(ServerError::from)
 }
 
 /// Hands over a file the session produced.
