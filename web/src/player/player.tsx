@@ -113,9 +113,14 @@ export function Player({
   const branding = useBranding();
 
   /* The film's own title drawn as the film draws it, falling through to the
-     server's mark and then to the title written out. The whole description is
-     already in hand, so this costs nothing to ask for. */
-  const mark = markFor(title, work.logo, branding);
+     series' mark for an episode (which draws none of its own), then to the
+     server's mark, and then to the title written out. The whole description
+     is already in hand, so this costs nothing to ask for. */
+  const series = work.ancestry.find((up) => up.kind === "series") ?? null;
+  const mark =
+    work.logo.length > 0
+      ? markFor(title, work.logo, branding)
+      : markFor(series?.title ?? title, series?.logo ?? [], branding);
 
   const setAppearance = (change: Partial<Appearance>) => {
     const next = { ...appearance, ...change };

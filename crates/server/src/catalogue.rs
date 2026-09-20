@@ -510,6 +510,9 @@ struct AncestorView {
     number: Option<i32>,
     /// Absent for the same reason as above.
     title: Option<String>,
+    /// The series' own mark, drawn as it draws its title. Empty for anything
+    /// that is not a series.
+    logo: Vec<ImageView>,
 }
 
 #[derive(Debug, Serialize)]
@@ -724,6 +727,7 @@ fn work_view(detail: &WorkDetail) -> WorkView {
                 kind: up.kind.as_str(),
                 number: up.ordinal,
                 title: its_own_name(up.kind, up.ordinal, &up.title),
+                logo: pictures_of(&up.logo, "logo"),
             })
             .collect(),
         versions: detail.versions.iter().map(version_view).collect(),

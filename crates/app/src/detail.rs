@@ -79,6 +79,10 @@ pub struct Ancestor {
     pub kind: melyxar_core::work::WorkKind,
     pub ordinal: Option<i32>,
     pub title: String,
+    /// The series' own mark, drawn as it draws its title. Empty for anything
+    /// that is not a series: a season and an episode are never asked to
+    /// illustrate their own title, only their series is.
+    pub logo: Vec<StoredImage>,
 }
 
 /// One line of the credits, with the face shown next to it.
@@ -342,17 +346,25 @@ pub async fn work_detail(
         })
         .collect();
 
-    let ancestry = database
-        .ancestry_of(work_id)
-        .await?
-        .into_iter()
-        .map(|work| Ancestor {
-            id: work.id,
-            kind: work.kind,
-            ordinal: work.ordinal,
-            title: work.title,
-        })
-        .collect();
+    // Only a series is ever given a mark of its own: a season and an episode
+    // are described by it rather than illustrated on their own, so asking for
+    // their pictures would only ever come back with a poster nobody wants
+    // here.
+    let mut ancestry = Vec::new();
+    for up in database.ancestry_of(work_id).await? {
+        let logo = if up.kind == melyxar_core::work::WorkKind::Series {
+            database.images_of("work", &up.id.to_db_string()).await?
+        } else {
+            Vec::new()
+        };
+        ancestry.push(Ancestor {
+            id: up.id,
+            kind: up.kind,
+            ordinal: up.ordinal,
+            title: up.title,
+            logo,
+        });
+    }
 
     // What a page offers to play next, from what it already knows. A series
     // and a season both answer for the whole series: somebody who opens season
@@ -611,6 +623,108 @@ mod tests {
             detail.overview.as_deref(),
             Some("A harbour, one night."),
             "the film is in the library that speaks English, not in the other one"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_episode_climbs_up_to_its_series_mark() {
+        use melyxar_core::work::WorkKind;
+        use melyxar_database::images::StoredImage;
+        use std::path::PathBuf;
+
+        let database = melyxar_database::Database::open_in_memory()
+            .await
+            .expect("database opens");
+        let library = database
+            .create_library(
+                "Shows",
+                melyxar_core::library::LibraryKind::Shows,
+                "en",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Shows"))],
+            )
+            .await
+            .expect("library created");
+
+        let series = database
+            .create_work(
+                library.id,
+                WorkKind::Series,
+                "Distant Signal",
+                "distant signal",
+                Some(2019),
+            )
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(
+                library.id,
+                series.id,
+                1,
+                WorkKind::Season,
+                "Season 1",
+                "season 1",
+            )
+            .await
+            .expect("season created");
+        let episode = database
+            .create_child_work(
+                library.id,
+                season.id,
+                1,
+                WorkKind::Episode,
+                "The Long Night",
+                "the long night",
+            )
+            .await
+            .expect("episode created");
+
+        // The series has its own mark; a season is never asked to draw one.
+        database
+            .replace_images(
+                "work",
+                &series.id.to_db_string(),
+                "logo",
+                &[StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: series.id.to_db_string(),
+                    image_kind: "logo".to_string(),
+                    relative_path: "works/distant-signal/logo-340.webp".to_string(),
+                    width: Some(340),
+                    height: Some(120),
+                    fingerprint: "abc123".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("logo stored");
+
+        let viewer = database
+            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
+        let state = AppState::new(melyxar_config::Config::default(), database, None, None);
+
+        let detail = work_detail(&state, viewer, episode.id)
+            .await
+            .expect("read")
+            .expect("present");
+
+        let up_series = detail
+            .ancestry
+            .iter()
+            .find(|up| up.kind == WorkKind::Series)
+            .expect("the series is among the ancestors");
+        assert_eq!(up_series.logo.len(), 1, "the series carries its own mark");
+
+        let up_season = detail
+            .ancestry
+            .iter()
+            .find(|up| up.kind == WorkKind::Season)
+            .expect("the season is among the ancestors");
+        assert!(
+            up_season.logo.is_empty(),
+            "a season draws no mark of its own"
         );
     }
 }
