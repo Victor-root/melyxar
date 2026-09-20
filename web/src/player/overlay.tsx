@@ -1079,14 +1079,52 @@ function sheetFor(
         "subtitle_background",
         (background) => onAppearance({ background }),
       );
-    case "subtitles.height":
-      return subtitleLookPanel(
-        t("player.subtitle_height"),
-        HEIGHTS,
-        appearance.height,
-        "subtitle_height",
-        (height) => onAppearance({ height }),
-      );
+    case "subtitles.height": {
+      // The fourth is not one more place beside the other three: it is a
+      // hand on a slider, and moving it is choosing it, whatever was chosen
+      // before. The other three stay exactly what they always were.
+      const custom = appearance.height === "custom";
+      return {
+        title: t("player.subtitle_height"),
+        from: "subtitles",
+        lines: (
+          <>
+            {HEIGHTS.filter((one) => one !== "custom").map((one) => (
+              <Line
+                key={one}
+                label={t(`player.subtitle_height.${one}`)}
+                chosen={appearance.height === one}
+                onPick={() => onAppearance({ height: one })}
+              />
+            ))}
+            <Line
+              label={t("player.subtitle_height.custom")}
+              value={custom ? `${Math.round(appearance.heightCustom)}%` : undefined}
+              changed={custom}
+              chosen={custom}
+              onPick={() => onAppearance({ height: "custom" })}
+            />
+            <div
+              className="player-menu-slider"
+              role="presentation"
+              style={{ ["--share" as string]: `${appearance.heightCustom}` }}
+            >
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={appearance.heightCustom}
+                aria-label={t("player.subtitle_height.custom")}
+                onChange={(event) =>
+                  onAppearance({ height: "custom", heightCustom: Number(event.target.value) })
+                }
+              />
+            </div>
+          </>
+        ),
+      };
+    }
 
     case "audio":
       return {

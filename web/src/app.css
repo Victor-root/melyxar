@@ -1699,6 +1699,12 @@
 .subtitles-height-high .subtitle-sample-words {
   bottom: 85%;
 }
+/* The slider that actually sets this is only offered in the player, so a
+   viewer who set it there and later opens this page still gets a picture
+   that means something rather than one with nothing to say where it goes. */
+.subtitles-height-custom .subtitle-sample-words {
+  bottom: 50%;
+}
 
 /* Carried as a custom property rather than set on `bottom` directly, so that
    the picture's own copy can be compared against how far the controls
@@ -1717,6 +1723,12 @@
 }
 .subtitles-height-high .player-subtitle-words {
   --subtitle-height: 85%;
+}
+/* Overridden the instant the slider is actually drawn, by a value written on
+   the element itself rather than by a class: this only covers the moment
+   before that, such as the first frame after a viewer switches to it. */
+.subtitles-height-custom .player-subtitle-words {
+  --subtitle-height: 50%;
 }
 
 /* The words as they actually sit on the picture: a column of lines, each one

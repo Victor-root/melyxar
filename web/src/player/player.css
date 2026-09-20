@@ -926,6 +926,82 @@
   text-align: center;
 }
 
+/* A slider inside a list of lines rather than out on the bar, drawn the same
+   way as the one for the sound: a track, a fill in the accent, and a plain
+   handle, none of them the five different sliders a browser would otherwise
+   draw on five machines. */
+.player-menu-slider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  margin: 4px 14px 10px;
+}
+
+.player-menu-slider::before,
+.player-menu-slider::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  height: var(--player-rail);
+  border-radius: 100px;
+  pointer-events: none;
+}
+
+.player-menu-slider::before {
+  width: 100%;
+  background: hsla(0, 0%, 100%, 0.2);
+}
+
+.player-menu-slider::after {
+  width: calc(
+    var(--player-handle-across) / 2 +
+      (var(--share, 0) / 100) * (100% - var(--player-handle-across))
+  );
+  background: var(--accent);
+}
+
+.player-menu-slider input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.player-menu-slider input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: var(--player-handle-across);
+  height: var(--player-handle-down);
+  border: none;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
+}
+
+.player-menu-slider input::-moz-range-thumb {
+  width: var(--player-handle-across);
+  height: var(--player-handle-down);
+  border: none;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
+}
+
+.player-menu-slider input:focus-visible {
+  outline: none;
+}
+
+.player-menu-slider input:focus-visible::-webkit-slider-thumb,
+.player-menu-slider input:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--accent-bright);
+}
+
 /* ---------------------------------------------------------------------------
  * Notices, and dressing the words
  * ------------------------------------------------------------------------ */
