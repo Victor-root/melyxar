@@ -137,6 +137,9 @@ export interface WorkScreen {
   /** Where to go when this one ends, so an episode is followed by the next.
       Absent for anything with nothing after it. */
   andThen: string | null;
+  /** Where to go to step back into the episode before this one. Absent for
+      anything that is not an episode, and for the first one of a series. */
+  goBack: string | null;
 }
 
 export function useWorkScreen(id: string | undefined): WorkScreen {
@@ -225,6 +228,10 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     andThen:
       work?.kind === "episode" && work.carry_on_with
         ? `/work/${work.carry_on_with.id}?${START_AT_ONCE}=1`
+        : null,
+    goBack:
+      work?.kind === "episode" && work.previous_episode
+        ? `/work/${work.previous_episode.id}?${START_AT_ONCE}=1`
         : null,
   };
 }

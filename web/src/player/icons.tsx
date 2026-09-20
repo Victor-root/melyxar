@@ -133,6 +133,45 @@ export function NextChapterIcon(props: IconProps) {
   );
 }
 
+/* The same shape as a chapter's, doubled: two points instead of one is what
+   tells a step between episodes apart from a step between chapters at a
+   glance, the way it does on every remote control that has both. */
+export function PreviousEpisodeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.9" y="5.9" width="1.1" height="12.2" rx="0.55" fill="currentColor" stroke="none" />
+      <path
+        d="M 13 12 L 19.39 6.74 A 0.7 0.7 0 0 1 20 7.1 L 20 16.9 A 0.7 0.7 0 0 1 19.39 17.26 Z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path
+        d="M 6 12 L 12.39 6.74 A 0.7 0.7 0 0 1 13 7.1 L 13 16.9 A 0.7 0.7 0 0 1 12.39 17.26 Z"
+        fill="currentColor"
+        stroke="none"
+      />
+    </Icon>
+  );
+}
+
+export function NextEpisodeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path
+        d="M 11 12 L 4.61 6.74 A 0.7 0.7 0 0 0 4 7.1 L 4 16.9 A 0.7 0.7 0 0 0 4.61 17.26 Z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path
+        d="M 18 12 L 11.61 6.74 A 0.7 0.7 0 0 0 11 7.1 L 11 16.9 A 0.7 0.7 0 0 0 11.61 17.26 Z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <rect x="19" y="5.9" width="1.1" height="12.2" rx="0.55" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
 export function BackIcon(props: IconProps) {
   return (
     <Icon {...props}>

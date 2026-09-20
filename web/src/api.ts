@@ -369,6 +369,10 @@ export interface Work {
   /** The episode to watch next: the first one left on a series or a season,
    *  the one after this on an episode. Absent when there is none. */
   carry_on_with: NextEpisode | null;
+  /** The episode before this one, so the player can offer to step back into
+   *  it. Absent for anything that is not an episode, and for the first
+   *  episode of a series. */
+  previous_episode: NextEpisode | null;
 }
 
 export interface Job {

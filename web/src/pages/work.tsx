@@ -46,6 +46,7 @@ export function WorkPage() {
     watchTrailer,
     stopTrailer,
     andThen,
+    goBack,
   } = useWorkScreen(id);
 
   /* Escape goes back, which is what a remote control and a keyboard both
@@ -117,6 +118,11 @@ export function WorkPage() {
            next one is opened on its own page, which is what writes its own
            progress down and shows its own title. */
         onEnded={andThen ? () => navigate(andThen) : undefined}
+        /* Stepping between episodes by hand goes through the same pages, for
+           the same reason: each episode writes its own progress and shows
+           its own title, which only its own page does. */
+        onNextEpisode={andThen ? () => navigate(andThen) : undefined}
+        onPreviousEpisode={goBack ? () => navigate(goBack) : undefined}
       />
     );
   }
