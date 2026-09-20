@@ -47,6 +47,10 @@ pub struct WorkDetail {
     /// a season. Absent when there is none left to watch, and for anything met
     /// on its own.
     pub carry_on_with: Option<CarryOn>,
+    /// The episode before this one, so the player can offer to step back into
+    /// it. Absent for anything that is not an episode, and for the first
+    /// episode of a series.
+    pub previous_episode: Option<CarryOn>,
 }
 
 /// The episode a page offers to play next, and where in it.
@@ -390,10 +394,23 @@ pub async fn work_detail(
         _ => None,
     };
 
+    // Only an episode is ever stepped back from: a series and a season have
+    // nothing playing to step back out of.
+    let previous_episode = match work.kind {
+        melyxar_core::work::WorkKind::Episode => {
+            match database.previous_episode_before(work.id).await? {
+                Some(previous) => Some(as_carry_on(state, previous).await?),
+                None => None,
+            }
+        }
+        _ => None,
+    };
+
     Ok(Some(WorkDetail {
         children,
         ancestry,
         carry_on_with,
+        previous_episode,
         tagline: texts.as_ref().and_then(|(_, tagline, _)| tagline.clone()),
         overview: texts.as_ref().and_then(|(_, _, overview)| overview.clone()),
         genres: database.work_genres(work_id).await?,

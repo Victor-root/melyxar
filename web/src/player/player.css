@@ -226,6 +226,10 @@
   gap: var(--gap);
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
   padding-bottom: 72px;
+  /* Right at the player's own inset, the back arrow read as pinned to the
+     corner: a little more room here, on the one row that opens with a lone
+     button rather than a pair. */
+  padding-left: calc(var(--player-inset) + 10px);
 }
 
 .player-bottom {
@@ -254,7 +258,10 @@
 }
 
 .player-zone-top-left {
-  gap: var(--gap);
+  /* Wider than the zones below: this is the one row where the first thing
+     after the button is a mark or a title rather than another button, and
+     the shared gap read as the two sitting on top of each other. */
+  gap: 20px;
 }
 
 /* Empty today and laid out correctly all the same, so that what goes here

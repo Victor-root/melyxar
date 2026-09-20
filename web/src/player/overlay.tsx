@@ -48,9 +48,11 @@ import {
   HeartIcon,
   IntoIcon,
   NextChapterIcon,
+  NextEpisodeIcon,
   PauseIcon,
   PlayIcon,
   PreviousChapterIcon,
+  PreviousEpisodeIcon,
   SettingsIcon,
   StepBackIcon,
   StepOnIcon,
@@ -124,6 +126,10 @@ interface Props {
   panel: Panel | null;
   onPanel: (panel: Panel | null) => void;
   onClose: () => void;
+  /** Steps to the episode after or before this one. Absent where there is
+   *  none, which is when the button that asks for it draws nothing. */
+  onNextEpisode?: () => void;
+  onPreviousEpisode?: () => void;
   /** What a track is called on screen, which the player works out. */
   naming: (track: PlaybackTrack) => string;
   /** Which language the interface is speaking, for the clock on the wall. */
@@ -515,6 +521,28 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
         </button>
       );
     }
+
+    case "previous_episode":
+      return surroundings.onPreviousEpisode ? (
+        <button
+          className="player-button"
+          onClick={surroundings.onPreviousEpisode}
+          aria-label={t("player.previous_episode")}
+        >
+          <PreviousEpisodeIcon size={ICON} />
+        </button>
+      ) : null;
+
+    case "next_episode":
+      return surroundings.onNextEpisode ? (
+        <button
+          className="player-button"
+          onClick={surroundings.onNextEpisode}
+          aria-label={t("player.next_episode")}
+        >
+          <NextEpisodeIcon size={ICON} />
+        </button>
+      ) : null;
 
     case "elapsed":
       return <span className="player-clock">{asClock(surroundings.at)}</span>;

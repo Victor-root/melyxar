@@ -35,6 +35,8 @@ export const CONTROLS = [
   "step_on",
   "previous_chapter",
   "next_chapter",
+  "previous_episode",
+  "next_episode",
   "elapsed",
   "remaining",
   "ends_at",
@@ -90,7 +92,16 @@ export const DEFAULT_ARRANGEMENT: Arrangement = {
   top_right: [],
   before_bar: ["elapsed"],
   after_bar: ["remaining"],
-  bottom_left: ["previous_chapter", "step_back", "play", "step_on", "next_chapter", "ends_at"],
+  bottom_left: [
+    "previous_episode",
+    "previous_chapter",
+    "step_back",
+    "play",
+    "step_on",
+    "next_chapter",
+    "next_episode",
+    "ends_at",
+  ],
   bottom_right: [
     // What the film is, in front of what is being done with it, with a line
     // between so the two read as two groups rather than one long row.

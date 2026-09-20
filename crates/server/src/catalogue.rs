@@ -12,7 +12,7 @@ use axum::http::Request;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::browse::{BrowseRequest, Initial, WorkCard, WorkOrder, DEFAULT_PAGE};
-use melyxar_app::detail::{Credit, Version, WorkDetail};
+use melyxar_app::detail::{CarryOn, Credit, Version, WorkDetail};
 use melyxar_app::picture::StoredImage;
 use melyxar_app::AppState;
 use melyxar_core::media::TrackKind;
@@ -336,6 +336,16 @@ fn child_view(child: &melyxar_app::detail::Child) -> ChildView {
     }
 }
 
+fn next_episode_view(carry: &CarryOn) -> NextEpisodeView {
+    NextEpisodeView {
+        id: carry.id.to_string(),
+        season: carry.season,
+        episode: carry.episode,
+        title: carry.has_own_name.then(|| carry.title.clone()),
+        source_id: carry.source_id.map(|id| id.to_string()),
+    }
+}
+
 fn pictures_of(images: &[StoredImage], kind: &str) -> Vec<ImageView> {
     images
         .iter()
@@ -458,6 +468,10 @@ struct WorkView {
     /// The episode this viewer would watch next, on the page of a series or a
     /// season. Absent when there is none left to watch.
     carry_on_with: Option<NextEpisodeView>,
+    /// The episode before this one, so the player can offer to step back into
+    /// it. Absent for anything that is not an episode, and for the first
+    /// episode of a series.
+    previous_episode: Option<NextEpisodeView>,
 }
 
 /// The episode a page offers to play next.
@@ -711,13 +725,8 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         poster: images_of("poster"),
         backdrop: images_of("backdrop"),
         logo: images_of("logo"),
-        carry_on_with: detail.carry_on_with.as_ref().map(|next| NextEpisodeView {
-            id: next.id.to_string(),
-            season: next.season,
-            episode: next.episode,
-            title: next.has_own_name.then(|| next.title.clone()),
-            source_id: next.source_id.map(|id| id.to_string()),
-        }),
+        carry_on_with: detail.carry_on_with.as_ref().map(next_episode_view),
+        previous_episode: detail.previous_episode.as_ref().map(next_episode_view),
         children: detail.children.iter().map(child_view).collect(),
         ancestry: detail
             .ancestry

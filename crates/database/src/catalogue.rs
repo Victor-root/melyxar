@@ -510,6 +510,37 @@ impl Database {
         self.an_episode_of(viewer, series_id, Some(at), false).await
     }
 
+    /// The episode before this one, in the order they are watched.
+    ///
+    /// The one before it in its own season, and failing that the last of the
+    /// season before: the same order `next_episode_after` reads, walked the
+    /// other way. Nobody's progress is asked about, because stepping back
+    /// means the one before this one, watched or not, same as stepping on.
+    pub async fn previous_episode_before(&self, episode_id: WorkId) -> Result<Option<Work>> {
+        let Some((series_id, (season, episode))) = self.where_an_episode_sits(episode_id).await?
+        else {
+            return Ok(None);
+        };
+        let row = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM works e
+             JOIN works s ON s.id = e.parent_id
+             WHERE s.parent_id = ? AND e.kind = 'episode'
+               AND EXISTS (SELECT 1 FROM media_sources m
+                            WHERE m.work_id = e.id AND m.missing_since IS NULL)
+               AND (s.ordinal, e.ordinal) < (?, ?)
+             ORDER BY s.ordinal DESC, e.ordinal DESC
+             LIMIT 1",
+            what_a_work_is("e.")
+        )))
+        .bind(series_id.to_db_string())
+        .bind(season)
+        .bind(episode)
+        .fetch_optional(self.reader())
+        .await?;
+
+        row.map(|row| work_from_row(&row)).transpose()
+    }
+
     /// Where a viewer would pick a series back up: the first episode of it they
     /// have not watched.
     ///
@@ -3104,6 +3135,41 @@ mod tests {
                 .expect("read"),
             None,
             "and nothing at all after the last one of the last season"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_previous_episode_is_the_one_before_it_across_the_series() {
+        // Symmetric to the one above: the episode before the first of a
+        // season is the last of the season before it, not nothing.
+        let (database, library_id, root_id) = library().await;
+        let (_, seasons, episodes) = a_series(&database, library_id).await;
+        for (rank, episode) in episodes.iter().enumerate() {
+            a_file_behind(&database, root_id, *episode, &format!("{rank}.mkv")).await;
+        }
+
+        let before_last = database
+            .previous_episode_before(episodes[2])
+            .await
+            .expect("read")
+            .expect("the last of the season before it");
+        assert_eq!(before_last.id, episodes[1]);
+        assert_eq!(before_last.parent_id, Some(seasons[0]));
+
+        let before_second = database
+            .previous_episode_before(episodes[1])
+            .await
+            .expect("read")
+            .expect("there is one before it");
+        assert_eq!(before_second.id, episodes[0]);
+
+        assert_eq!(
+            database
+                .previous_episode_before(episodes[0])
+                .await
+                .expect("read"),
+            None,
+            "and nothing at all before the first one of the first season"
         );
     }
 
