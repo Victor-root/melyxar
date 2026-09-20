@@ -1740,7 +1740,13 @@
   position: absolute;
   left: 50%;
   bottom: var(--subtitle-height, 8%);
-  transform: translateX(-50%);
+  /* Shifted down by that same share of its own height, which a percentage in
+     a transform is measured against rather than the picture: without it, a
+     hundred percent put the box's bottom edge where its top should have
+     been, and the words themselves stood above it, off the picture
+     entirely. At either end this keeps the whole block on the picture, and
+     in between it slides smoothly from one to the other. */
+  transform: translateX(-50%) translateY(var(--subtitle-height, 8%));
   /* Above the picture, which has none, and nothing else: a menu, the drawer,
      a hover preview all stand over their own part of the picture on purpose,
      and words a viewer opened one of those to get past ought to give way to
