@@ -1712,7 +1712,11 @@
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 60;
+  /* Above the picture, which has none, and nothing else: a menu, the drawer,
+     a hover preview all stand over their own part of the picture on purpose,
+     and words a viewer opened one of those to get past ought to give way to
+     it rather than print through it. */
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
