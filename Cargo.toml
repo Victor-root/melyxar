@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/core",
     "crates/config",
+    "crates/auth",
     "crates/database",
     "crates/ffmpeg",
     "crates/container",
@@ -28,6 +29,7 @@ repository = "https://github.com/Victor-root/melyxar"
 [workspace.dependencies]
 melyxar-core = { path = "crates/core" }
 melyxar-config = { path = "crates/config" }
+melyxar-auth = { path = "crates/auth" }
 melyxar-database = { path = "crates/database" }
 melyxar-ffmpeg = { path = "crates/ffmpeg" }
 melyxar-container = { path = "crates/container" }
@@ -59,6 +61,13 @@ clap = { version = "4", features = ["derive"] }
 tempfile = "3"
 rust-embed = { version = "8", features = ["interpolate-folder-path"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
+# Password hashing, the memory hard kind: a stolen database must stay useless.
+argon2 = "0.6"
+# For the fingerprint of a session token. Deliberately not Argon2: a token is
+# already random enough to have nothing to guess, and it is checked on every
+# single request, segment of video included.
+sha2 = "0.11"
+getrandom = "0.4"
 
 [profile.release]
 opt-level = 3
