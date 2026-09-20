@@ -527,7 +527,10 @@ function Strip({
       return;
     }
     dragging.current = { x: event.clientX, scrollLeft: element.scrollLeft };
-    element.setPointerCapture(event.pointerId);
+    // Not captured yet: a plain press that never moves is a press on
+    // whatever card is under it, and capturing the pointer here would carry
+    // the click that ends it away to this row instead of to that card,
+    // whether or not a drag ever happened.
   };
 
   const holdDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -538,9 +541,13 @@ function Strip({
     }
     const moved = event.clientX - drag.x;
     // A press that never really moved is a click that happened to land on
-    // this row, not a drag: nothing here should swallow it.
-    if (Math.abs(moved) > 4) {
+    // this row, not a drag: nothing here should swallow it. Capturing only
+    // now, the moment that stops being true, is what leaves an ordinary
+    // click alone while still following the hand wherever it goes once a
+    // drag is under way.
+    if (!dragged.current && Math.abs(moved) > 4) {
       dragged.current = true;
+      element.setPointerCapture(event.pointerId);
     }
     element.scrollLeft = drag.scrollLeft - moved;
   };
@@ -550,7 +557,9 @@ function Strip({
       return;
     }
     dragging.current = null;
-    row.current?.releasePointerCapture(event.pointerId);
+    if (row.current?.hasPointerCapture(event.pointerId)) {
+      row.current.releasePointerCapture(event.pointerId);
+    }
   };
 
   /* A drag that really moved the row still ends in a click, on whatever card
