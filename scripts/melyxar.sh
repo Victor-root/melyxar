@@ -154,6 +154,10 @@ en|step_apt_install|Installing build tools and media tools
 fr|step_apt_install|Installation des outils de compilation et des outils média
 en|step_rust|Installing the Rust toolchain
 fr|step_rust|Installation de la chaîne d'outils Rust
+en|step_npm_install|Installing the interface's own dependencies
+fr|step_npm_install|Installation des dépendances propres à l'interface
+en|step_npm_build|Building the web interface
+fr|step_npm_build|Compilation de l'interface web
 en|rust_present|Rust toolchain already present: %s
 fr|rust_present|Chaîne d'outils Rust déjà présente : %s
 en|section_account|Preparing the system account and folders
@@ -190,8 +194,8 @@ en|lines_same|%s and %s are the same length
 fr|lines_same|%s et %s font la même longueur
 en|lines_changed|%s lines added, %s removed across %s files
 fr|lines_changed|%s lignes ajoutées, %s supprimées sur %s fichiers
-en|lines_counted|Counted without the built interface, the lock files and the images.
-fr|lines_counted|Compté sans l'interface compilée, les fichiers de verrouillage et les images.
+en|lines_counted|Counted without the lock files and the images.
+fr|lines_counted|Compté sans les fichiers de verrouillage et les images.
 en|section_build|Building
 fr|section_build|Compilation
 en|build_notice|This takes 5 to 10 minutes the first time and 1 to 2 minutes afterwards.
@@ -653,7 +657,7 @@ install_packages() {
   step "$(tr_msg step_apt_update)" apt-get update -qq
 
   step "$(tr_msg step_apt_install)" apt-get install -y --no-install-recommends \
-    build-essential pkg-config git curl ca-certificates ffmpeg sqlite3
+    build-essential pkg-config git curl ca-certificates ffmpeg sqlite3 nodejs npm
 
   if command -v cargo >/dev/null 2>&1; then
     success "$(tr_fmt rust_present "$(cargo --version)")"
@@ -710,6 +714,12 @@ build_and_install() {
   info "$(tr_msg build_nice)"
 
   export PATH="/root/.cargo/bin:${PATH}"
+
+  # The server embeds the interface at compile time, straight out of
+  # web/dist: it has to exist and be current before cargo ever runs.
+  step "$(tr_msg step_npm_install)" npm --prefix "${SOURCE_DIR}/web" ci
+  step "$(tr_msg step_npm_build)" npm --prefix "${SOURCE_DIR}/web" run build
+
   # Highest priority the processor allows: this is still in active
   # development, and waiting on a rebuild costs more right now than a film
   # playing at the same moment would.
@@ -964,11 +974,10 @@ action_status() {
 # What the branch being deployed is measured against.
 COUNTED_AGAINST="main"
 
-# What is written by hand rather than produced. The built interface, the lock
-# files and the pictures are large enough to drown everything else, and a count
-# they take part in says nothing about the work.
+# What is written by hand rather than produced. The lock files and the
+# pictures are large enough to drown everything else, and a count they take
+# part in says nothing about the work.
 LINES_LEFT_OUT=(
-  ':!web/dist'
   ':!*.lock'
   ':!*.png'
   ':!*.webp'
