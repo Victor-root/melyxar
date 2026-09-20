@@ -96,7 +96,7 @@ struct JobsView {
 /// How many finished jobs a screen is shown.
 const RECENT: i64 = 20;
 
-async fn jobs(State(state): State<AppState>) -> Result<Json<JobsView>> {
+async fn jobs(_: crate::account::Administrator, State(state): State<AppState>) -> Result<Json<JobsView>> {
     let database = state.database();
     let running = database
         .unfinished_jobs()
@@ -143,6 +143,7 @@ struct StartedView {
 /// a request that waits for it is a request that times out. The job is then
 /// followed, and stopped, like any other.
 async fn start_scan(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Path(id): Path<String>,
     Query(asked): Query<HowMuch>,
@@ -187,6 +188,7 @@ impl HowMuch {
 
 /// Asks for the works still waiting to be looked up.
 async fn start_identification(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Path(id): Path<String>,
     Query(asked): Query<HowMuch>,
@@ -223,6 +225,7 @@ struct CandidateView {
 
 /// Films a person could mean, for a work nobody recognised.
 async fn candidates(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Path(id): Path<String>,
     Query(asked): Query<Asked>,
@@ -269,6 +272,7 @@ struct Chosen {
 
 /// Records the film a person picked, which no later run undoes.
 async fn choose(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(chosen): Json<Chosen>,
@@ -304,6 +308,7 @@ struct ChosenView {
 /// Copies are put together without anybody asking, so somebody has to be able
 /// to say it was wrong from the page that shows it.
 async fn detach_copy(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<DetachedView>> {
@@ -328,6 +333,7 @@ async fn detach_copy(
 /// only what changed on disk and would walk straight past this file. What a
 /// person wants here is one file read again, now.
 async fn read_copy_again(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<StartedView>> {
@@ -408,6 +414,7 @@ fn language_of(asked: &str) -> Result<String> {
 /// sending half of it would leave the other half to be guessed at, and the
 /// guess would be wrong every other time.
 async fn set_library_options(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(asked): Json<OptionsAsked>,
@@ -494,7 +501,7 @@ struct UpkeepView {
 }
 
 /// What the upkeep has left to do, and when it will next do it on its own.
-async fn upkeep(State(state): State<AppState>) -> Result<Json<UpkeepView>> {
+async fn upkeep(_: crate::account::Administrator, State(state): State<AppState>) -> Result<Json<UpkeepView>> {
     let work = state.database().library_work().await.map_err(internal)?;
     let left = melyxar_app::upkeep::what_is_left(&state).await?;
 
@@ -570,7 +577,7 @@ fn work_view(work: melyxar_app::settings::LibraryWork) -> WorkView {
 /// Its own route rather than a corner of the upkeep's: a screen of settings
 /// wants one row of the settings, and asking the upkeep would count every
 /// film of every library to answer it.
-async fn library_work(State(state): State<AppState>) -> Result<Json<WorkView>> {
+async fn library_work(_: crate::account::Administrator, State(state): State<AppState>) -> Result<Json<WorkView>> {
     Ok(Json(work_view(
         state.database().library_work().await.map_err(internal)?,
     )))
@@ -588,6 +595,7 @@ async fn library_work(State(state): State<AppState>) -> Result<Json<WorkView>> {
 /// screen says so before the change; nothing is thrown away, and a shape
 /// somebody changes back is found again as it stands.
 async fn set_library_work(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Json(asked): Json<WorkView>,
 ) -> Result<Json<WorkView>> {
@@ -631,7 +639,7 @@ struct StartedManyView {
 ///
 /// At the priority of something asked for: whoever pressed this is not waiting
 /// for the night, which is the whole reason the button exists.
-async fn run_the_upkeep(State(state): State<AppState>) -> Result<Json<StartedManyView>> {
+async fn run_the_upkeep(_: crate::account::Administrator, State(state): State<AppState>) -> Result<Json<StartedManyView>> {
     let started = melyxar_app::upkeep::start_what_is_waiting(
         &state,
         melyxar_core::job::JobPriority::REQUESTED,
@@ -646,6 +654,7 @@ async fn run_the_upkeep(State(state): State<AppState>) -> Result<Json<StartedMan
 
 /// Starts one of the two readings on one library, now.
 async fn run_one_upkeep_task(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Path((id, task)): Path<(String, String)>,
 ) -> Result<Json<StartedView>> {
@@ -669,6 +678,7 @@ async fn run_one_upkeep_task(
 
 /// Asks a job to stop.
 async fn cancel(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<StoppedView>> {
@@ -693,7 +703,7 @@ struct StoppedView {
 /// A history that cannot be cleared stops being read: the run that matters is
 /// the last one, not the four hundred before it. What is still running stays,
 /// because it is not history yet.
-async fn forget(State(state): State<AppState>) -> Result<Json<ForgottenView>> {
+async fn forget(_: crate::account::Administrator, State(state): State<AppState>) -> Result<Json<ForgottenView>> {
     Ok(Json(ForgottenView {
         forgotten: state
             .database()

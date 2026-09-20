@@ -5,6 +5,7 @@
 //! draws and nothing else, because a page of sixty cards carrying a synopsis
 //! each is ten times the weight for text nobody reads there.
 
+use crate::account::Viewer;
 use crate::identifiers::{parse_library, parse_work};
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
@@ -50,10 +51,11 @@ pub fn router() -> Router<AppState> {
 /// go and fetch someone else's video.
 async fn trailer(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Path((id, rank)): Path<(String, usize)>,
     request: Request<Body>,
 ) -> Response {
-    match serve_trailer(&state, &id, rank, request).await {
+    match serve_trailer(&state, who.id, &id, rank, request).await {
         Ok(response) => response,
         Err(error) => error.into_response(),
     }
@@ -61,12 +63,13 @@ async fn trailer(
 
 async fn serve_trailer(
     state: &AppState,
+    viewer: melyxar_core::id::UserId,
     id: &str,
     rank: usize,
     request: Request<Body>,
 ) -> Result<Response> {
     let work_id = parse_work(id)?;
-    let detail = melyxar_app::detail::work_detail(state, crate::viewer(state).await?, work_id)
+    let detail = melyxar_app::detail::work_detail(state, viewer, work_id)
         .await?
         .ok_or_else(|| ServerError::not_found("no work with that identifier"))?;
 
@@ -402,11 +405,11 @@ struct CarryOnView {
 
 async fn home(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Query(params): Query<HomeParams>,
 ) -> Result<Json<HomeView>> {
     let library_id = params.library.as_deref().map(parse_library).transpose()?;
-    let page =
-        melyxar_app::catalogue::home(&state, library_id, crate::viewer(&state).await?).await?;
+    let page = melyxar_app::catalogue::home(&state, library_id, who.id).await?;
 
     Ok(Json(HomeView {
         carry_on: page
@@ -644,10 +647,13 @@ struct ExternalIdView {
     id: String,
 }
 
-async fn work(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<WorkView>> {
+async fn work(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Json<WorkView>> {
     let work_id = parse_work(&id)?;
-    let viewer = crate::viewer(&state).await?;
-    let detail = melyxar_app::detail::work_detail(&state, viewer, work_id)
+    let detail = melyxar_app::detail::work_detail(&state, who.id, work_id)
         .await?
         .ok_or_else(|| ServerError::not_found("no work with that identifier"))?;
 
@@ -673,14 +679,14 @@ struct FavouriteView {
 /// up with a button saying one thing and the server another.
 async fn set_favourite(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Path(id): Path<String>,
     Json(body): Json<FavouriteBody>,
 ) -> Result<Json<FavouriteView>> {
     let work_id = parse_work(&id)?;
-    let viewer = crate::viewer(&state).await?;
     let favourite = state
         .database()
-        .set_favourite(viewer, work_id, body.favourite)
+        .set_favourite(who.id, work_id, body.favourite)
         .await
         .map_err(|error| ServerError::internal(error.to_string()))?;
     Ok(Json(FavouriteView { favourite }))

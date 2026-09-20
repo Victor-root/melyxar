@@ -80,10 +80,9 @@ struct ListingView {
 ///
 /// Never a file name, here or anywhere below.
 async fn folders(
-    State(state): State<AppState>,
+    _: crate::account::Administrator,
     Query(asked): Query<Where>,
 ) -> Result<Json<ListingView>> {
-    crate::administrator(&state).await?;
     let listing = melyxar_app::libraries::folders_in(std::path::Path::new(
         asked.path.as_deref().unwrap_or_default(),
     ))?;
@@ -130,9 +129,9 @@ struct DeclaredView {
 /// Declares a library, and sets a scan of it going.
 async fn create(
     State(state): State<AppState>,
+    _: crate::account::Administrator,
     Json(asked): Json<NewLibrary>,
 ) -> Result<Json<DeclaredView>> {
-    crate::administrator(&state).await?;
     let kind = LibraryKind::parse(&asked.kind).ok_or(melyxar_app::libraries::Trouble::Refused(
         melyxar_app::libraries::Refused::UnknownKind,
     ))?;
@@ -168,10 +167,10 @@ struct NamedView {
 /// Calls a library something else. Nothing but the name moves.
 async fn rename(
     State(state): State<AppState>,
+    _: crate::account::Administrator,
     UrlPath(id): UrlPath<String>,
     Json(asked): Json<NewName>,
 ) -> Result<Json<NamedView>> {
-    crate::administrator(&state).await?;
     let library = melyxar_app::libraries::rename(&state, library_id(&id)?, &asked.name).await?;
     Ok(Json(NamedView { name: library.name }))
 }
@@ -197,10 +196,10 @@ struct RootView {
 /// Gives a library another folder to look in, and scans it.
 async fn add_root(
     State(state): State<AppState>,
+    _: crate::account::Administrator,
     UrlPath(id): UrlPath<String>,
     Json(asked): Json<NewRoot>,
 ) -> Result<Json<RootView>> {
-    crate::administrator(&state).await?;
     let root = melyxar_app::libraries::add_root(
         &state,
         library_id(&id)?,
@@ -226,10 +225,10 @@ struct NewLabel {
 /// path, so one that reads badly is worth being able to put right.
 async fn rename_root(
     State(state): State<AppState>,
+    _: crate::account::Administrator,
     UrlPath((id, root)): UrlPath<(String, String)>,
     Json(asked): Json<NewLabel>,
 ) -> Result<Json<RootView>> {
-    crate::administrator(&state).await?;
     let root = melyxar_app::libraries::root_of(&state, library_id(&id)?, root_id(&root)?).await?;
 
     let label = asked.label.trim();
@@ -288,9 +287,9 @@ impl From<melyxar_app::libraries::Removed> for WouldGoView {
 /// How much a library holds, asked just before the question is put.
 async fn what_removing_takes(
     State(state): State<AppState>,
+    _: crate::account::Administrator,
     UrlPath(id): UrlPath<String>,
 ) -> Result<Json<WouldGoView>> {
-    crate::administrator(&state).await?;
     Ok(Json(
         melyxar_app::libraries::what_removing_takes(&state, library_id(&id)?)
             .await?
@@ -301,9 +300,9 @@ async fn what_removing_takes(
 /// The same for one folder of a library.
 async fn what_removing_a_folder_takes(
     State(state): State<AppState>,
+    _: crate::account::Administrator,
     UrlPath((id, root)): UrlPath<(String, String)>,
 ) -> Result<Json<WouldGoView>> {
-    crate::administrator(&state).await?;
     Ok(Json(
         melyxar_app::libraries::what_removing_a_folder_takes(
             &state,
@@ -318,9 +317,9 @@ async fn what_removing_a_folder_takes(
 /// Takes a library away. No file on the disk is touched.
 async fn remove(
     State(state): State<AppState>,
+    _: crate::account::Administrator,
     UrlPath(id): UrlPath<String>,
 ) -> Result<Json<WouldGoView>> {
-    crate::administrator(&state).await?;
     Ok(Json(
         melyxar_app::libraries::remove(&state, library_id(&id)?)
             .await?
@@ -331,9 +330,9 @@ async fn remove(
 /// Takes one folder away from a library. No file on the disk is touched.
 async fn remove_root(
     State(state): State<AppState>,
+    _: crate::account::Administrator,
     UrlPath((id, root)): UrlPath<(String, String)>,
 ) -> Result<Json<WouldGoView>> {
-    crate::administrator(&state).await?;
     Ok(Json(
         melyxar_app::libraries::remove_root(&state, library_id(&id)?, root_id(&root)?)
             .await?

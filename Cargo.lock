@@ -1136,6 +1136,7 @@ dependencies = [
 name = "melyxar-app"
 version = "0.1.0"
 dependencies = [
+ "melyxar-auth",
  "melyxar-config",
  "melyxar-container",
  "melyxar-core",

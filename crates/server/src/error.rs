@@ -82,6 +82,21 @@ impl ServerError {
         Self::new(StatusCode::SERVICE_UNAVAILABLE, ErrorCode::Conflict, detail)
     }
 
+    /// A refusal carrying the values its wording needs, such as how long to
+    /// wait before asking again.
+    pub fn with_details(
+        status: StatusCode,
+        code: ErrorCode,
+        details: serde_json::Value,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            status,
+            body: ApiError::with_details(code, details),
+            detail: detail.into(),
+        }
+    }
+
     pub fn unauthenticated(detail: impl Into<String>) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, ErrorCode::Unauthenticated, detail)
     }
@@ -158,6 +173,7 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::InvalidInput => StatusCode::BAD_REQUEST,
         ErrorCode::Unauthenticated => StatusCode::UNAUTHORIZED,
         ErrorCode::Forbidden | ErrorCode::PathNotAllowed => StatusCode::FORBIDDEN,
+        ErrorCode::TooManyAttempts => StatusCode::TOO_MANY_REQUESTS,
         // Both will work again once a disk is plugged back in or a tool is
         // installed, which is what tells a client to say so rather than to
         // announce a failure of the server itself.

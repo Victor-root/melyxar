@@ -11,15 +11,11 @@ use melyxar_config::Config;
 use melyxar_core::job::{Job, JobKind, JobPriority};
 use melyxar_core::library::{LibraryKind, RootAccess};
 use melyxar_core::refresh::RefreshMode;
-use melyxar_core::user::Permissions;
 use melyxar_database::synthetic::BENCH_ROOT;
 use melyxar_database::Database;
 use melyxar_ffmpeg::{Capabilities, ToolPaths};
 
 use crate::{AppError, AppState, Result};
-
-/// Name given to the account created on a brand new server.
-pub const DEFAULT_ACCOUNT_NAME: &str = "admin";
 
 /// Opens everything and returns the assembled server.
 pub async fn bring_up(config: Config) -> Result<AppState> {
@@ -29,7 +25,6 @@ pub async fn bring_up(config: Config) -> Result<AppState> {
 
     let (tools, capabilities) = detect_media_tools(&config).await;
 
-    ensure_default_account(&database).await?;
     reconcile_libraries(&database, &config).await?;
     refresh_root_access(&database).await?;
 
@@ -306,25 +301,6 @@ fn report_the_card(capabilities: &Capabilities) {
              processor rebuilds every picture"
         ),
     }
-}
-
-/// Creates the first account when the server has none.
-///
-/// Created without a password: the setup wizard sets one. An account exists
-/// from the very first start because every progress row, favourite and
-/// preference hangs off one.
-pub async fn ensure_default_account(database: &Database) -> Result<()> {
-    if database.user_count().await? > 0 {
-        return Ok(());
-    }
-    let user = database
-        .create_user(DEFAULT_ACCOUNT_NAME, None, &Permissions::administrator())
-        .await?;
-    tracing::info!(
-        user = %user.id,
-        "created the first account; the setup wizard will set its password"
-    );
-    Ok(())
 }
 
 /// Brings the stored libraries in line with the configuration file.
@@ -725,31 +701,6 @@ mod tests {
             take_up_again_what_a_restart_cut_short(&state, &cut_short).await,
             0
         );
-    }
-
-    #[tokio::test]
-    async fn the_first_start_creates_exactly_one_administrator() {
-        let database = Database::open_in_memory().await.expect("database opens");
-        ensure_default_account(&database)
-            .await
-            .expect("account created");
-
-        let users = database.list_users().await.expect("listed");
-        assert_eq!(users.len(), 1);
-        assert_eq!(users[0].name, DEFAULT_ACCOUNT_NAME);
-        assert!(users[0].permissions.is_administrator);
-    }
-
-    #[tokio::test]
-    async fn starting_again_does_not_create_a_second_account() {
-        let database = Database::open_in_memory().await.expect("database opens");
-        ensure_default_account(&database)
-            .await
-            .expect("first start");
-        ensure_default_account(&database)
-            .await
-            .expect("second start");
-        assert_eq!(database.user_count().await.expect("counted"), 1);
     }
 
     #[tokio::test]

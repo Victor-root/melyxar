@@ -42,6 +42,11 @@ struct Inner {
     /// What each library has been counted for, so a page never counts a
     /// hundred thousand works to draw a menu.
     counts: crate::counted::Counts,
+    /// Wrong passwords, so that guessing one costs time rather than a
+    /// processor. Held in memory: a server that has just restarted has
+    /// forgotten them, which is the right way round for somebody who locked
+    /// themselves out and rebooted it.
+    wrong_answers: crate::accounts::WrongAnswers,
 }
 
 impl AppState {
@@ -79,6 +84,7 @@ impl AppState {
                 tools,
                 capabilities,
                 counts: crate::counted::Counts::default(),
+                wrong_answers: crate::accounts::WrongAnswers::default(),
             }),
         }
     }
@@ -96,6 +102,10 @@ impl AppState {
     }
 
     /// What each library has been counted for.
+    pub(crate) fn wrong_answers(&self) -> &crate::accounts::WrongAnswers {
+        &self.inner.wrong_answers
+    }
+
     pub(crate) fn counts(&self) -> &crate::counted::Counts {
         &self.inner.counts
     }

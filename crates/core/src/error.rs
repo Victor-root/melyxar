@@ -19,6 +19,8 @@ pub enum ErrorCode {
     InvalidInput,
     Unauthenticated,
     Forbidden,
+    /// Asked too often to be answered right now, and told when to come back.
+    TooManyAttempts,
     Conflict,
     PathNotAllowed,
     RootUnavailable,
@@ -39,6 +41,7 @@ impl ErrorCode {
             Self::InvalidInput => "invalid_input",
             Self::Unauthenticated => "unauthenticated",
             Self::Forbidden => "forbidden",
+            Self::TooManyAttempts => "too_many_attempts",
             Self::Conflict => "conflict",
             Self::PathNotAllowed => "path_not_allowed",
             Self::RootUnavailable => "root_unavailable",

@@ -10,6 +10,7 @@ description = "Use cases: where the modules are assembled."
 [dependencies]
 melyxar-core = { workspace = true }
 melyxar-config = { workspace = true }
+melyxar-auth = { workspace = true }
 melyxar-database = { workspace = true }
 melyxar-ffmpeg = { workspace = true }
 melyxar-jobs = { workspace = true }
@@ -20,6 +21,7 @@ melyxar-metadata = { workspace = true }
 melyxar-playback = { workspace = true }
 melyxar-sound = { workspace = true }
 melyxar-streaming = { workspace = true }
+time = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
@@ -28,5 +30,4 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 sqlx = { workspace = true }
-time = { workspace = true }
 tempfile = { workspace = true }

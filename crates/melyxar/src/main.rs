@@ -113,8 +113,32 @@ enum Command {
         #[command(subcommand)]
         what: Bench,
     },
+    /// The accounts on this server, from the machine it runs on.
+    ///
+    /// The way back in for somebody locked out of their own server. It asks
+    /// for no password of its own, so it is reachable only here: whoever has a
+    /// terminal on this machine can read the database anyway.
+    Account {
+        #[command(subcommand)]
+        what: Account,
+    },
     /// Print a starting configuration, for the installer.
     PrintDefaultConfig,
+}
+
+#[derive(Subcommand)]
+enum Account {
+    /// Name every account, and say which of them are administrators.
+    List,
+    /// Put a password on an account, and sign every device of it out.
+    ///
+    /// The password is read from the standard input rather than taken as an
+    /// argument, so that it never lands in a shell's history or in the list of
+    /// what is running on this machine.
+    Password {
+        /// Whose. Run `account list` if you are not sure how it is spelt.
+        name: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -194,8 +218,65 @@ async fn main() -> anyhow::Result<()> {
             everything: _,
         } => listen(config, series.as_deref(), season).await,
         Command::Bench { what } => bench(config, what).await,
+        Command::Account { what } => account(config, what).await,
         Command::PrintDefaultConfig => unreachable!("handled above"),
     }
+}
+
+/// The accounts on this server, from a terminal on the machine itself.
+async fn account(config: Config, what: Account) -> anyhow::Result<()> {
+    let state = melyxar_app::startup::bring_up(config).await?;
+
+    match what {
+        Account::List => {
+            let accounts = state.database().list_users().await?;
+            if accounts.is_empty() {
+                println!(
+                    "no account yet: open this server in a browser to set it up"
+                );
+                return Ok(());
+            }
+            for account in accounts {
+                match account.permissions.is_administrator {
+                    true => println!("{} (administrator)", account.name),
+                    false => println!("{}", account.name),
+                }
+            }
+        }
+        Account::Password { name } => {
+            let password = read_a_password()?;
+            match melyxar_app::accounts::set_a_password(&state, &name, &password).await? {
+                true => println!(
+                    "the password of {name} was changed, and every device of it signed out"
+                ),
+                false => anyhow::bail!(
+                    "no account is called {name}: run `account list` to see the names"
+                ),
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A password off the standard input, typed or piped in.
+///
+/// Read here rather than taken as an argument, so it never lands in a shell's
+/// history or in the list of what is running on this machine. What is typed is
+/// shown as it is typed: hiding it would mean speaking to the terminal itself,
+/// and this is a command run by one person on their own machine.
+fn read_a_password() -> anyhow::Result<String> {
+    use std::io::{BufRead, Write};
+
+    print!("New password: ");
+    std::io::stdout().flush()?;
+
+    let mut typed = String::new();
+    std::io::stdin().lock().read_line(&mut typed)?;
+    let typed = typed.trim_end_matches(['\r', '\n']).to_string();
+    if typed.is_empty() {
+        anyhow::bail!("nothing was typed, so nothing was changed");
+    }
+    Ok(typed)
 }
 
 /// Reads the mode a command was given, or the usual one when it was given

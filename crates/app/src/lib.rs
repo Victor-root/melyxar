@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod accounts;
 pub mod bench;
 pub mod calibration;
 pub mod catalogue;
@@ -66,6 +67,8 @@ pub mod metadata {
 pub enum AppError {
     #[error(transparent)]
     Streaming(#[from] melyxar_streaming::StreamingError),
+    #[error(transparent)]
+    Auth(#[from] melyxar_auth::AuthError),
     #[error(transparent)]
     Database(#[from] melyxar_database::DatabaseError),
     #[error(transparent)]

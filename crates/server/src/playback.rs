@@ -27,7 +27,7 @@ use melyxar_core::time::{Millis, Timestamp};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
-use crate::viewer;
+use crate::account::Viewer;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -304,6 +304,7 @@ struct TrackView {
 
 async fn plan(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     RoutePath(id): RoutePath<String>,
     body: Option<Json<PlanBody>>,
 ) -> Result<Json<PlanView>> {
@@ -312,7 +313,7 @@ async fn plan(
 
     let request = body.asked_for(source_id)?;
 
-    let plan = melyxar_app::playback::plan(&state, viewer(&state).await?, &request).await?;
+    let plan = melyxar_app::playback::plan(&state, who.id, &request).await?;
     Ok(Json(plan_view(&plan)))
 }
 
@@ -630,6 +631,7 @@ struct SessionView {
 /// Opens a session for a film this client cannot play as it is.
 async fn open_session(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     RoutePath(id): RoutePath<String>,
     body: Option<Json<OpenBody>>,
 ) -> Result<Json<SessionView>> {
@@ -638,7 +640,7 @@ async fn open_session(
 
     let plan = melyxar_app::playback::plan(
         &state,
-        viewer(&state).await?,
+        who.id,
         &body.wanted.clone().asked_for(source_id)?,
     )
     .await?;
@@ -892,13 +894,14 @@ struct ProgressView {
 
 async fn record_progress(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Json(body): Json<ProgressBody>,
 ) -> Result<Json<ProgressView>> {
     let work_id = parse_work(&body.work_id)?;
 
     let kept = melyxar_app::playback::record_position(
         &state,
-        viewer(&state).await?,
+        who.id,
         work_id,
         Millis::from_seconds_f64(body.position_seconds),
         body.reported_at.unwrap_or_else(melyxar_core::time::now),
@@ -921,6 +924,7 @@ struct TracksBody {
 /// Remembers what a viewer chose, so the next time starts the same way.
 async fn remember_tracks(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Json(body): Json<TracksBody>,
 ) -> Result<Json<serde_json::Value>> {
     let work_id = parse_work(&body.work_id)?;
@@ -945,7 +949,7 @@ async fn remember_tracks(
 
     melyxar_app::playback::remember_chosen_tracks(
         &state,
-        viewer(&state).await?,
+        who.id,
         work_id,
         find(body.audio_track_id)?,
         find(body.subtitle_track_id)?,

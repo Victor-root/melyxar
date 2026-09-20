@@ -215,10 +215,10 @@ mod tests {
         }
 
         // A home page shows what somebody left halfway, so there has to be a
-        // somebody. The server makes this account for itself at first start.
+        // somebody.
         let viewer = database
             .create_user(
-                crate::startup::DEFAULT_ACCOUNT_NAME,
+                "victor",
                 None,
                 &melyxar_core::user::Permissions::administrator(),
             )

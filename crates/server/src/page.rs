@@ -20,13 +20,11 @@
 //! the server cannot see at all: it knows what it produced and when it handed
 //! it over, never whether any of it reached a screen.
 
-use axum::extract::State;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
-use crate::viewer;
 
 pub fn router() -> Router<AppState> {
     Router::new().route(
@@ -348,14 +346,12 @@ fn cut_short(words: &str) -> &str {
 }
 
 async fn what_the_page_saw(
-    State(state): State<AppState>,
-    Json(said): Json<FromThePage>,
-) -> Result<Json<Written>> {
     // A viewer of this server, like every other route. Nothing here is worth
     // reading, but a journal anybody passing by can write into is a journal
     // that stops being worth reading too.
-    viewer(&state).await?;
-
+    _: crate::account::Viewer,
+    Json(said): Json<FromThePage>,
+) -> Result<Json<Written>> {
     // The identifier is a name from outside: read as one, never used as one.
     // Written down as the page sent it only once it parses.
     let session = said
