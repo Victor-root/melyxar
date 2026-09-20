@@ -281,10 +281,16 @@ export function SettingsPage() {
             options={worded(BACKGROUNDS, "subtitle_background", t)}
             onPick={(background) => look({ background })}
           />
+          {/* The fourth is a hand on a slider, which this page has none of;
+              only the player itself offers a way to move it. */}
           <Choice
             label={t("player.subtitle_height")}
             value={appearance.height}
-            options={worded(HEIGHTS, "subtitle_height", t)}
+            options={worded(
+              HEIGHTS.filter((one) => one !== "custom"),
+              "subtitle_height",
+              t,
+            )}
             onPick={(height) => look({ height })}
           />
         </div>

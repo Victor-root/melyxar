@@ -21,8 +21,10 @@ export const COLOURS = ["white", "yellow", "cyan"] as const;
 /** What keeps the words legible against the picture behind them. */
 export const EDGES = ["outline", "shadow", "none"] as const;
 export const BACKGROUNDS = ["none", "dim", "solid"] as const;
-/** How far above the bottom of the picture the words sit. */
-export const HEIGHTS = ["bottom", "raised", "high"] as const;
+/** How far above the bottom of the picture the words sit. The last of the
+ *  four is not a place of its own but a hand on a slider, which only the
+ *  player itself offers a way to move. */
+export const HEIGHTS = ["bottom", "raised", "high", "custom"] as const;
 
 export type Size = (typeof SIZES)[number];
 export type Colour = (typeof COLOURS)[number];
@@ -36,6 +38,11 @@ export interface Appearance {
   edge: Edge;
   background: Background;
   height: Height;
+  /** Where the words sit when height is "custom": a share of the picture's
+   *  own height counted up from the bottom, the same measure the three
+   *  places above already answer to. Kept even while one of those three is
+   *  chosen, so a hand back on the slider picks up where it left off. */
+  heightCustom: number;
 }
 
 /**
@@ -50,6 +57,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   edge: "outline",
   background: "none",
   height: "bottom",
+  heightCustom: 50,
 };
 
 const STORED = "melyxar.subtitles";
@@ -85,7 +93,14 @@ export function storedAppearance(): Appearance {
     edge: one(EDGES, values.edge, DEFAULT_APPEARANCE.edge),
     background: one(BACKGROUNDS, values.background, DEFAULT_APPEARANCE.background),
     height: one(HEIGHTS, values.height, DEFAULT_APPEARANCE.height),
+    heightCustom: withinAShare(values.heightCustom) ? values.heightCustom : DEFAULT_APPEARANCE.heightCustom,
   };
+}
+
+/** Whether something read back is a share of the picture's height worth
+ *  trusting: a number, finite, and not off the picture at either end. */
+function withinAShare(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
 }
 
 export function rememberAppearance(appearance: Appearance): void {

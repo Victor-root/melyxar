@@ -512,6 +512,7 @@ const en: Dictionary = {
   "player.subtitle_height.bottom": "Bottom",
   "player.subtitle_height.raised": "Middle",
   "player.subtitle_height.high": "Top",
+  "player.subtitle_height.custom": "Custom",
 
   "player.missing": "The file is not on the disk at the moment.",
   "player.cannot_play": "This browser could not play the film.",
@@ -1042,6 +1043,7 @@ const fr: Dictionary = {
   "player.subtitle_height.bottom": "En bas",
   "player.subtitle_height.raised": "Au milieu",
   "player.subtitle_height.high": "En haut",
+  "player.subtitle_height.custom": "Personnalisé",
 
   "player.missing": "Le fichier n'est pas sur le disque en ce moment.",
   "player.cannot_play": "Ce navigateur n'a pas réussi à lire le film.",

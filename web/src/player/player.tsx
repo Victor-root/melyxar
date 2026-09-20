@@ -258,7 +258,19 @@ export function Player({
             answer to the strip of controls above, and a stylesheet reaches a
             cue nowhere near as far as it reaches an element of its own. */}
         {shownWords.length > 0 && (
-          <div className="player-subtitle-words" aria-live="polite">
+          <div
+            className="player-subtitle-words"
+            // Set only for the slider, and only here: the three named places
+            // already answer to a class the stylesheet reads, and a value
+            // written on the element itself would outrank that class the
+            // moment a viewer went back to one of them.
+            style={
+              appearance.height === "custom"
+                ? { ["--subtitle-height" as string]: `${appearance.heightCustom}%` }
+                : undefined
+            }
+            aria-live="polite"
+          >
             {shownWords.map((line, index) => (
               <span key={index} className="player-subtitle-line">
                 {line}
