@@ -22,6 +22,7 @@ pub mod libraries;
 pub mod metadata;
 pub mod playback;
 pub mod settings;
+pub mod synthetic;
 pub mod users;
 
 mod connection;

@@ -102,8 +102,37 @@ enum Command {
         #[arg(long, conflicts_with_all = ["series", "season"])]
         everything: bool,
     },
+    /// Measure this server against the budgets, on a library large enough to
+    /// mean something.
+    ///
+    /// Fifty films say nothing about a hundred thousand. This invents the
+    /// hundred thousand, plays the pages somebody browsing would ask for, and
+    /// puts what it measured next to what was promised.
+    Bench {
+        #[command(subcommand)]
+        what: Bench,
+    },
     /// Print a starting configuration, for the installer.
     PrintDefaultConfig,
+}
+
+#[derive(Subcommand)]
+enum Bench {
+    /// Invent a library of this many works, in a library of its own.
+    ///
+    /// Writes no file and touches no disk: the works have no pictures and
+    /// their files exist as rows. Nothing of a real library is touched, and
+    /// the invented one is the only thing `empty` ever removes.
+    Fill {
+        /// How many works to invent. A series arrives whole, so the count
+        /// lands near this rather than on it.
+        #[arg(long, default_value_t = 100_000)]
+        works: i64,
+    },
+    /// Take the invented library away, and nothing else.
+    Empty,
+    /// Say what the invented library holds right now.
+    Show,
 }
 
 #[tokio::main]
@@ -145,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
             season,
             everything: _,
         } => listen(config, series.as_deref(), season).await,
+        Command::Bench { what } => bench(config, what).await,
         Command::PrintDefaultConfig => unreachable!("handled above"),
     }
 }
@@ -430,6 +460,70 @@ async fn listen(config: Config, series: Option<&str>, season: Option<i32>) -> an
         job_state == melyxar_core::job::JobState::Succeeded,
         "the listening ended as {}",
         job_state.as_str()
+    );
+    Ok(())
+}
+
+async fn bench(config: Config, what: Bench) -> anyhow::Result<()> {
+    let state = melyxar_app::startup::bring_up(config)
+        .await
+        .context("bringing the server up for the bench")?;
+
+    let outcome = match what {
+        Bench::Fill { works } => fill_the_bench(&state, works).await,
+        Bench::Empty => {
+            let emptied = melyxar_app::bench::empty(&state)
+                .await
+                .context("emptying the invented library")?;
+            match emptied.works {
+                0 => println!("there was no invented library to empty"),
+                works => println!(
+                    "the invented library is gone: {works} work(s), {} file(s) as rows",
+                    emptied.files
+                ),
+            }
+            Ok(())
+        }
+        Bench::Show => {
+            match melyxar_app::bench::what_is_there(&state)
+                .await
+                .context("reading the invented library")?
+            {
+                Some(held) => println!(
+                    "the invented library holds {} work(s) and {} file(s) as rows",
+                    held.works, held.files
+                ),
+                None => println!("there is no invented library here"),
+            }
+            Ok(())
+        }
+    };
+
+    state.database().close().await;
+    outcome
+}
+
+/// Fills the invented library, saying how far along it is as it goes.
+///
+/// Said out loud because it runs for minutes: a command that prints nothing
+/// for four minutes is indistinguishable from a command that has hung, and
+/// somebody watching it presses the keys that stop it.
+async fn fill_the_bench(state: &melyxar_app::AppState, works: i64) -> anyhow::Result<()> {
+    anyhow::ensure!(works > 0, "a library of no works measures nothing");
+    println!("inventing about {works} works; this takes a few minutes");
+
+    let filled = melyxar_app::bench::fill(state, works, |written, wanted| {
+        println!("  {written} / {wanted}");
+    })
+    .await
+    .context("inventing the library")?;
+
+    println!(
+        "invented {} work(s) and {} file(s) as rows in {:.1} s, under the library '{}'",
+        filled.works,
+        filled.files,
+        filled.took.as_secs_f64(),
+        melyxar_app::bench::LIBRARY_NAME
     );
     Ok(())
 }
