@@ -208,6 +208,8 @@ en|err_bench_works|That is not a number of works: %s
 fr|err_bench_works|Ce n'est pas un nombre d'œuvres : %s
 en|bench_needs_server|The server has to be running to be measured. Start it first.
 fr|bench_needs_server|Le serveur doit tourner pour être mesuré. Démarrez-le d'abord.
+en|step_bench_clear|Taking away what an earlier run may have left
+fr|step_bench_clear|Retrait de ce qu'un essai précédent aurait laissé
 en|step_bench_fill|Inventing the library
 fr|step_bench_fill|Invention de la bibliothèque
 en|bench_measuring|Measuring. The table below says what each page took and what it was allowed.
@@ -1045,6 +1047,11 @@ action_bench() {
   works="$(prompt_default "$(tr_msg prompt_bench_works)" "100000")"
   [[ "$works" =~ ^[1-9][0-9]*$ ]] || die "$(tr_fmt err_bench_works "$works")"
 
+  # A run somebody stopped halfway leaves the invented library behind, and
+  # filling refuses while one is there. Taking away whatever is left first is
+  # what makes this work the second time as well as the first; with nothing to
+  # take away it costs a moment and says so.
+  step "$(tr_msg step_bench_clear)" run_bench empty
   step "$(tr_msg step_bench_fill)" run_bench fill --works "$works"
 
   # Not wrapped in a step: what the measuring prints is the whole point of

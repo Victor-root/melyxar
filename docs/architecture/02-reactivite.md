@@ -196,10 +196,25 @@ Avec SQLite sur NVMe et des index bien posés, le cache du système tient la bas
 
 ### Banc d'essai synthétique
 
-Un générateur crée en quelques minutes une base de 10 000, 50 000 ou 100 000 œuvres fictives avec affiches générées (aplats de couleur numérotés) et métadonnées plausibles. Sur cette base :
-1. Un script de charge (`oha` ou `k6`) joue les scénarios de navigation et rapporte les centiles.
-2. Le même script tourne pendant un scan simulé et deux transcodages, pour vérifier l'isolation.
-3. Un test automatisé de l'interface (Playwright) mesure les temps côté client.
+Fait, et intégré au serveur plutôt que confié à un outil de charge extérieur : le banc doit tourner chez le mainteneur, sur sa machine, sans rien à installer.
+
+- `melyxar bench fill --works 100000` écrit une bibliothèque inventée à côté des vraies, dans la forme qu'une vraie a : titres répartis sur tout l'alphabet, soixante ans de sorties, genres et studios partagés comme un catalogue les partage, quelques milliers d'acteurs crédités sur l'ensemble, un sixième des œuvres en séries avec leurs saisons et leurs épisodes. Les noms partagés qui existent déjà sont réutilisés, jamais réécrits.
+- Aucun fichier n'est écrit sur un disque. Les affiches existent en lignes et rien de plus : ce qu'un fichier coûte à servir ne change pas avec la taille de la collection, donc en écrire cent mille ne mesurerait rien de neuf.
+- `melyxar bench run` joue les pages qu'un spectateur ouvrirait, deux cents fois chacune, et met ses centiles en face des budgets ci-dessus. Il sort en erreur quand un budget est dépassé.
+- `melyxar bench empty` retire la bibliothèque inventée et rend la place au disque.
+- Entrée de menu dans le script d'installation, qui enchaîne les trois.
+
+Reste à faire : la mesure pendant un scan et deux transcodages, qui demande une vraie collection, et le test automatisé de l'interface (Playwright), qui attend l'interface définitive.
+
+### Ce que le banc a trouvé
+
+Trois défauts qu'une collection de cinquante films ne pouvait pas montrer, tous corrigés le jour où ils ont été mesurés :
+
+1. **Les menus d'une médiathèque** prenaient 690 ms et **la page d'accueil** 156 ms, parce que toutes deux comptaient la collection entière à chaque visite. Ces comptes sont maintenant faits une fois par changement et relus ensuite.
+2. **Le dernier arrivé, toutes médiathèques confondues** n'était couvert par aucun index : tous ceux qui ordonnent les œuvres commencent par la médiathèque.
+3. **Retirer une grosse médiathèque prenait trois minutes**, pendant lesquelles rien d'autre ne pouvait être écrit. La base suit la suppression dans chaque table qui pointe vers ce qui s'en va, et une colonne qui pointe sans index se lit en entier, une fois par ligne retirée. Vingt-deux secondes une fois les index posés.
+
+Le troisième donne une règle générale, tenue par un test qui parcourt le schéma : **toute colonne qui pointe vers une autre table a un index**. C'est la règle de SQLite elle-même, et c'est celle qu'on oublie, parce que rien ne s'en plaint tant que les tables sont petites.
 
 ### Détection des régressions
 
