@@ -1541,10 +1541,13 @@
 .player-drawer-row {
   display: flex;
   gap: var(--gap);
-  /* Room above and below for a card to swell under a hand. A box that scrolls
-     one way clips the other way whatever it was told, so without this the
-     card grows into a wall and comes back with its top edge shaved off. */
-  padding: var(--player-drawer-swell) 0;
+  /* Room all round for a card to swell under a hand. A box that scrolls one
+     way clips the other way whatever it was told, so without the top and
+     bottom of this the card grows into a wall and comes back with its top
+     edge shaved off; without the left and right of it, the first and last
+     card do that against the row's own two ends, which nothing ever scrolls
+     clear of. */
+  padding: var(--player-drawer-swell);
   overflow-x: auto;
   /* Scrolled by the hand or by the arrows, never by a bar drawn under it: the
      picture is right there and a scrollbar across it is a scrollbar across a
@@ -1594,12 +1597,14 @@
   box-shadow: var(--shadow-raised);
   transition:
     background var(--quick) var(--ease),
-    color var(--quick) var(--ease);
+    color var(--quick) var(--ease),
+    transform var(--quick) var(--ease);
 }
 
 .player-drawer-along:hover {
   background: color-mix(in srgb, var(--player-panel) 70%, black 15%);
   color: var(--accent-bright);
+  transform: translateY(-50%) scale(1.1);
 }
 
 .player-drawer-along-back {
