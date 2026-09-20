@@ -12,6 +12,7 @@ use melyxar_core::job::{Job, JobKind, JobPriority};
 use melyxar_core::library::{LibraryKind, RootAccess};
 use melyxar_core::refresh::RefreshMode;
 use melyxar_core::user::Permissions;
+use melyxar_database::synthetic::BENCH_ROOT;
 use melyxar_database::Database;
 use melyxar_ffmpeg::{Capabilities, ToolPaths};
 
@@ -414,6 +415,15 @@ pub async fn refresh_root_access(database: &Database) -> Result<()> {
     for entry in database.roots_with_access().await? {
         let state = melyxar_library::check_root_access(&entry.root.path);
         database.set_root_access(entry.root.id, state).await?;
+
+        // Written down like any other and never complained about: the folder
+        // the invented library names does not exist on purpose, which is what
+        // makes every scan step over it. Warning about it would be warning
+        // about something working as intended, in the middle of a run that is
+        // meant to read clean.
+        if entry.root.path == std::path::Path::new(BENCH_ROOT) {
+            continue;
+        }
 
         match state {
             RootAccess::Missing => tracing::warn!(

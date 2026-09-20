@@ -263,6 +263,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn every_foreign_key_has_an_index_behind_it() {
+        // Written as a rule rather than as a list, so that a table added in a
+        // year's time is held to it too. What it prevents: a removal walks
+        // every table that points at what went, and a pointing column nothing
+        // indexes turns that walk into the whole table, once per row removed.
+        // Three minutes to take away a large library, against twenty seconds,
+        // and the single writer waits for every one of them.
+        let database = Database::open_in_memory().await.expect("database opens");
+        let tables: Vec<String> = sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+        )
+        .fetch_all(database.reader())
+        .await
+        .expect("tables read");
+
+        let mut unfollowed = Vec::new();
+        for table in &tables {
+            let pointing: Vec<String> =
+                sqlx::query_scalar("SELECT \"from\" FROM pragma_foreign_key_list(?)")
+                    .bind(table)
+                    .fetch_all(database.reader())
+                    .await
+                    .expect("keys read");
+            // The first column of each index is the only one an index can be
+            // looked into by on its own.
+            let first: Vec<String> = sqlx::query_scalar(
+                "SELECT info.name FROM pragma_index_list(?) AS list
+                   JOIN pragma_index_info(list.name) AS info
+                  WHERE info.seqno = 0",
+            )
+            .bind(table)
+            .fetch_all(database.reader())
+            .await
+            .expect("indexes read");
+
+            for column in pointing {
+                if !first.contains(&column) {
+                    unfollowed.push(format!("{table}.{column}"));
+                }
+            }
+        }
+
+        assert!(
+            unfollowed.is_empty(),
+            "these point at a row that can go without an index to find them \
+             by, which is a table walk for every row a removal takes away: \
+             {unfollowed:?}"
+        );
+    }
+
+    #[tokio::test]
     async fn the_room_a_removal_left_is_given_back_to_the_disk() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("melyxar.db");
