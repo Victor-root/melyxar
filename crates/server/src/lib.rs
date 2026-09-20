@@ -20,6 +20,7 @@ pub mod page;
 pub mod playback;
 pub mod preferences;
 pub mod routes;
+pub mod timing;
 
 use std::net::SocketAddr;
 
@@ -99,6 +100,9 @@ pub fn build(state: AppState) -> axum::Router {
         // Card listings are mostly text and compress very well, which is what
         // keeps a page of a hundred cards small on the wire.
         .layer(CompressionLayer::new())
+        // Outside the compression, so the time reported is the time the client
+        // waited and not the time before the answer was packed.
+        .layer(axum::middleware::from_fn(timing::measured))
         .layer(TraceLayer::new_for_http())
 }
 
