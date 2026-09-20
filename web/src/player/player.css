@@ -800,6 +800,21 @@
   animation: player-menu-in var(--quick) var(--ease);
 }
 
+/* Wider than the usual list, for the one panel that carries a second column
+   beside its lines: the same clamp as above, worked out again for how far the
+   wider box actually reaches. */
+.player-menu-wide {
+  width: min(560px, calc(100% - var(--player-inset) * 2));
+}
+
+.player-menu-wide:not(.player-menu-at-the-end) {
+  left: clamp(
+    var(--player-inset),
+    calc(var(--anchor, 50%) - min(280px, (100% - var(--player-inset) * 2) / 2)),
+    calc(100% - var(--player-inset) - min(560px, 100% - var(--player-inset) * 2))
+  );
+}
+
 /* Nothing said where it came from, so it keeps to the end it always had. */
 .player-menu-at-the-end {
   left: auto;
@@ -1029,25 +1044,31 @@
   font-size: 13px;
 }
 
-/* Beside the subtitle panel while it is open, because that is the only moment
-   changing how the words look means anything. */
-.player-dressing {
-  position: absolute;
-  right: var(--player-inset);
-  bottom: 124px;
-  z-index: 2;
+/* The subtitle panel's own body: the track list on the left and, once one is
+   actually chosen, how it looks on the right of a line between the two. Two
+   panels side by side read as two separate questions; a viewer picking a
+   language is very often about to reach for how it looks, and this is the
+   one place both belong. */
+.player-subtitle-panel {
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.player-subtitle-panel-tracks {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-subtitle-panel-dressing {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: var(--gap-tight);
-  padding: var(--gap);
-  border-radius: var(--radius-card);
-  border: 1px solid var(--border);
-  background: var(--player-panel);
-  color: var(--text);
-  backdrop-filter: blur(18px);
-  box-shadow: var(--shadow-raised);
-  /* Clear of the panel it belongs beside. */
-  margin-right: calc(min(320px, 100vw - 52px) + var(--gap));
+  flex: 1;
+  min-width: 0;
+  padding: var(--gap) var(--gap) var(--gap) calc(var(--gap) + 1px);
+  border-left: 1px solid var(--border);
 }
 
 .player-choice {
@@ -1171,15 +1192,25 @@
   }
 
   .player-menu,
-  .player-dressing,
   .facts {
     right: 14px;
     bottom: 96px;
   }
 
-  .player-dressing {
-    margin-right: 0;
-    bottom: 50vh;
+  /* No room beside the track list for a second column here, so the one panel
+     stacks instead of splitting sideways, and stays the usual narrow width. */
+  .player-menu-wide {
+    width: min(320px, calc(100% - var(--player-inset) * 2));
+  }
+
+  .player-subtitle-panel {
+    flex-direction: column;
+  }
+
+  .player-subtitle-panel-dressing {
+    padding: var(--gap);
+    border-left: none;
+    border-top: 1px solid var(--border);
   }
 
   /* The sound keeps its button and loses its slider: there is no room, and a

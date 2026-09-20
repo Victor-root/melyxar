@@ -27,6 +27,8 @@ import type {
   PlaybackTrack,
   Work,
 } from "../api";
+import { BACKGROUNDS, COLOURS, EDGES, HEIGHTS, SIZES } from "./appearance";
+import type { Appearance } from "./appearance";
 import type { Arrangement, Control, Zone } from "./arrangement";
 import { asClock } from "./clock";
 import { Drawer, SHEETS } from "./drawer";
@@ -120,6 +122,11 @@ interface Props {
   /** Which language the interface is speaking, for the clock on the wall. */
   language: string;
   t: (key: string, values?: Record<string, string | number>) => string;
+  /** How the words look, and how a viewer changes that. Read here rather than
+   *  kept beside the panel that shows it, because it is also what draws the
+   *  film's own title bar in the theme it belongs to. */
+  appearance: Appearance;
+  onAppearance: (change: Partial<Appearance>) => void;
 }
 
 /** Whether what is open is one of the drawer's three sheets. */
@@ -872,6 +879,42 @@ function Line({
 }
 
 /**
+ * One picker among a short list of named choices.
+ *
+ * Five of these sit in a column beside the subtitle track list, and writing
+ * each of them out would be the same twenty lines five times over.
+ */
+function Choice<T extends string>({
+  label,
+  value,
+  among,
+  naming,
+  onPick,
+  t,
+}: {
+  label: string;
+  value: T;
+  among: readonly T[];
+  /** What the wording of each choice is keyed on. */
+  naming: string;
+  onPick: (value: T) => void;
+  t: (key: string) => string;
+}) {
+  return (
+    <label className="player-choice">
+      <span className="player-choice-label">{label}</span>
+      <select value={value} onChange={(event) => onPick(event.target.value as T)}>
+        {among.map((one) => (
+          <option key={one} value={one}>
+            {t(`player.${naming}.${one}`)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/**
  * On or off, as a switch rather than a tick.
  *
  * A tick down the left of a list means "this is the one picked out of these";
@@ -894,6 +937,9 @@ interface Sheet {
   /** The panel this one was reached from, for the arrow in its heading. */
   from?: Panel;
   lines: React.ReactNode;
+  /** Wider than the usual list, for the one panel that carries a second
+   *  column beside its lines. */
+  wide?: boolean;
 }
 
 /**
@@ -921,6 +967,7 @@ function Panels({ surroundings }: { surroundings: Surroundings }) {
       title={sheet.title}
       onBack={sheet.from && (() => onPanel(sheet.from ?? null))}
       anchor={surroundings.anchor}
+      wide={sheet.wide}
     >
       {sheet.lines}
     </Menu>
@@ -934,36 +981,85 @@ function sheetFor(
   plan: NonNullable<Playback["plan"]>,
   shut: () => void,
 ): Sheet | null {
-  const { playback, t, panel, onPanel, naming } = surroundings;
+  const { playback, t, panel, onPanel, naming, appearance, onAppearance } = surroundings;
 
   switch (panel) {
-    case "subtitles":
+    case "subtitles": {
+      // Left open on a pick rather than shut: a viewer choosing a language is
+      // very often about to reach for how it looks, and closing the one panel
+      // that shows both would send them back to the button that opened it.
+      const dressed = plan.chosen_subtitle_id !== null;
       return {
         title: t("work.subtitles"),
+        wide: dressed,
         lines: (
-          <>
-            <Line
-              label={t("player.no_subtitle")}
-              chosen={!plan.chosen_subtitle_id}
-              onPick={() => {
-                playback.choose(playback.audioId, null);
-                shut();
-              }}
-            />
-            {plan.subtitles.map((track) => (
+          <div className="player-subtitle-panel">
+            <div className="player-subtitle-panel-tracks">
               <Line
-                key={track.id}
-                label={naming(track)}
-                chosen={plan.chosen_subtitle_id === track.id}
-                onPick={() => {
-                  playback.choose(playback.audioId, track.id);
-                  shut();
-                }}
+                label={t("player.no_subtitle")}
+                chosen={!plan.chosen_subtitle_id}
+                onPick={() => playback.choose(playback.audioId, null)}
               />
-            ))}
-          </>
+              {plan.subtitles.map((track) => (
+                <Line
+                  key={track.id}
+                  label={naming(track)}
+                  chosen={plan.chosen_subtitle_id === track.id}
+                  onPick={() => playback.choose(playback.audioId, track.id)}
+                />
+              ))}
+            </div>
+            {/* Only while a subtitle is actually chosen: offering to restyle
+                words that are not on screen is a column of pickers that do
+                nothing. */}
+            {dressed && (
+              <div className="player-subtitle-panel-dressing">
+                <Choice
+                  label={t("player.subtitle_size")}
+                  value={appearance.size}
+                  among={SIZES}
+                  naming="subtitle_size"
+                  onPick={(size) => onAppearance({ size })}
+                  t={t}
+                />
+                <Choice
+                  label={t("player.subtitle_colour")}
+                  value={appearance.colour}
+                  among={COLOURS}
+                  naming="subtitle_colour"
+                  onPick={(colour) => onAppearance({ colour })}
+                  t={t}
+                />
+                <Choice
+                  label={t("player.subtitle_edge")}
+                  value={appearance.edge}
+                  among={EDGES}
+                  naming="subtitle_edge"
+                  onPick={(edge) => onAppearance({ edge })}
+                  t={t}
+                />
+                <Choice
+                  label={t("player.subtitle_background")}
+                  value={appearance.background}
+                  among={BACKGROUNDS}
+                  naming="subtitle_background"
+                  onPick={(background) => onAppearance({ background })}
+                  t={t}
+                />
+                <Choice
+                  label={t("player.subtitle_height")}
+                  value={appearance.height}
+                  among={HEIGHTS}
+                  naming="subtitle_height"
+                  onPick={(height) => onAppearance({ height })}
+                  t={t}
+                />
+              </div>
+            )}
+          </div>
         ),
       };
+    }
 
     case "audio":
       return {
@@ -1161,17 +1257,21 @@ function Menu({
   title,
   onBack,
   anchor,
+  wide,
   children,
 }: {
   title: string;
   onBack?: () => void;
   /** Where the button that opened it stands, when one did. */
   anchor?: number | null;
+  /** Wider than the usual list, for the one panel that carries a second
+   *  column beside its lines. */
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div
-      className={`player-menu${anchor == null ? " player-menu-at-the-end" : ""}`}
+      className={`player-menu${anchor == null ? " player-menu-at-the-end" : ""}${wide ? " player-menu-wide" : ""}`}
       role="menu"
       aria-label={title}
       /* Standing over the button that opened it. Held inside the picture at
