@@ -120,11 +120,6 @@ interface Props {
   /** Which language the interface is speaking, for the clock on the wall. */
   language: string;
   t: (key: string, values?: Record<string, string | number>) => string;
-  /** Told whenever the strip of controls starts or stops covering the bottom
-   *  of the picture, which is also where subtitles are hung: a viewer reading
-   *  words the bar has just been drawn over is not being shown subtitles at
-   *  all. */
-  onControlsCovering: (covering: boolean) => void;
 }
 
 /** Whether what is open is one of the drawer's three sheets. */
@@ -201,9 +196,25 @@ export function Overlay(props: Props) {
     };
   }, [stage, held, playback.pictureKey]);
 
+  /* How tall the bottom strip actually is right now, carried onto the stage as
+     a custom property so that subtitles, which stand outside this overlay
+     entirely, can be lifted to sit just above it. Measured rather than
+     guessed: the strip's height changes with the drawer, the screen's width,
+     and the row of controls itself, and a number written down here would be
+     wrong the moment any of those changed. */
+  const bottomBar = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    props.onControlsCovering(!away);
-  }, [away, props.onControlsCovering]);
+    const bar = bottomBar.current;
+    const surface = stage.current;
+    if (!bar || !surface) {
+      return;
+    }
+    const measure = new ResizeObserver(([entry]) => {
+      surface.style.setProperty("--controls-height", `${entry.contentRect.height}px`);
+    });
+    measure.observe(bar);
+    return () => measure.disconnect();
+  }, [stage]);
 
   /* The keyboard, which is the other half of every control below. Held here
      rather than on the page so that one place says what a key does, and so
@@ -308,7 +319,7 @@ export function Overlay(props: Props) {
           the very bottom of the window, which on a wide film is the black
           band the picture does not reach: a sheet you can see through, with
           nothing behind it to see. */}
-      <div className="player-bottom">
+      <div className="player-bottom" ref={bottomBar}>
         {playback.plan && (
           <Drawer
             work={props.work}

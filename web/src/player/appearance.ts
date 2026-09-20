@@ -105,28 +105,6 @@ export function appearanceClasses(appearance: Appearance): string {
     `subtitles-colour-${appearance.colour}`,
     `subtitles-edge-${appearance.edge}`,
     `subtitles-background-${appearance.background}`,
-    // How high the words sit is set on each cue rather than by a stylesheet,
-    // so nothing in the player reads this one. The sample on the settings page
-    // does: without it, a viewer moves the words and sees nothing move.
     `subtitles-height-${appearance.height}`,
   ].join(" ");
-}
-
-/**
- * Which line the words sit on, counted from the bottom of the picture.
- *
- * How high a cue sits cannot be set from a stylesheet: it belongs to the cue
- * itself, so it is applied to each one as the track is read. Negative numbers
- * count up from the bottom, which is what keeps the words in the same place
- * whatever the size of the picture.
- */
-export function lineFor(height: Height): number {
-  switch (height) {
-    case "raised":
-      return -4;
-    case "high":
-      return -7;
-    default:
-      return -2;
-  }
 }
