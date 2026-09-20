@@ -242,31 +242,23 @@
 /* While a sheet is open the whole strip becomes the panel: the sheet, the bar
    and the row are one pane of glass with the film showing through all of it,
    rather than a sheet sitting on a black gradient that hides what the sheet
-   was made see-through for. The runway above goes with it, since the sheet
-   starts where it used to start. */
-.player-bottom:has(.player-drawer-hold[data-open="yes"]) {
-  position: relative;
-  padding-top: 0;
-  background: var(--player-panel);
-  backdrop-filter: blur(18px);
-}
+   was made see-through for.
 
-/* A little more of the same panel above the row it is drawn on, as backdrop
-   only: nothing inside the row moves, its own top edge is still exactly
-   where it always was. */
-.player-bottom:has(.player-drawer-hold[data-open="yes"])::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  height: 24px;
-  /* Written out rather than `inherit`, which left this strip a flat dark
-     rectangle: a pseudo-element's own backdrop-filter did not take up the
-     value inherited from its parent, only one written here directly. */
+   Grown a little past its own usual top edge, by the same amount its own top
+   padding now pushes the row back down: the box is taller so its blurred
+   background reaches higher, and the row inside it lands exactly where it
+   always has, not a pixel lower.
+
+   Tried first as a pseudo-element sitting above this box instead of growing
+   the box itself. It only ever came out a flat dark rectangle: an element
+   with its own backdrop-filter is a new backdrop root, and a descendant's
+   backdrop-filter cannot see past that root to the film behind it, only to
+   what this box had already painted of its own. */
+.player-bottom:has(.player-drawer-hold[data-open="yes"]) {
+  margin-top: -24px;
+  padding-top: 24px;
   background: var(--player-panel);
   backdrop-filter: blur(18px);
-  pointer-events: none;
 }
 
 .player-zone {
