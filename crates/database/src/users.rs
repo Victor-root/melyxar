@@ -25,7 +25,8 @@ pub struct AvailableLanguages {
 /// of them and forgotten in the others is a field that silently goes missing
 /// depending on which screen asked.
 const WHAT_AN_ACCOUNT_IS: &str =
-    "u.id, u.name, u.avatar_path, u.is_administrator, u.max_age_rating,
+    "u.id, u.name, u.avatar_path, u.is_administrator, u.sees_every_library,
+     u.max_age_rating,
      u.may_download, u.may_delete, u.may_delete_from_disk, u.max_sessions, u.created_at,
      p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
      p.theme_mode, p.accent_color, p.custom_css, p.volume,
@@ -71,14 +72,16 @@ impl Database {
         let mut transaction = self.begin().await?;
 
         sqlx::query(
-            "INSERT INTO users (id, name, password_hash, is_administrator, max_age_rating,
+            "INSERT INTO users (id, name, password_hash, is_administrator, sees_every_library,
+                                max_age_rating,
                                 may_download, may_delete, may_delete_from_disk, max_sessions, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id.to_db_string())
         .bind(name)
         .bind(password_hash)
         .bind(bool_to_int(permissions.is_administrator))
+        .bind(bool_to_int(permissions.sees_every_library))
         .bind(permissions.max_age_rating)
         .bind(bool_to_int(permissions.may_download))
         .bind(bool_to_int(permissions.may_delete))
@@ -258,6 +261,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
         avatar_path: row.try_get("avatar_path")?,
         permissions: Permissions {
             is_administrator: int_to_bool(row.try_get("is_administrator")?),
+            sees_every_library: int_to_bool(row.try_get("sees_every_library")?),
             allowed_libraries,
             max_age_rating: row.try_get("max_age_rating")?,
             may_download: int_to_bool(row.try_get("may_download")?),
@@ -384,6 +388,7 @@ mod tests {
                 "limited",
                 None,
                 &Permissions {
+                    sees_every_library: false,
                     allowed_libraries: vec![library],
                     ..Permissions::viewer()
                 },

@@ -26,6 +26,15 @@ use reqwest::Url;
 pub struct Asked {
     /// Where the server is answering.
     pub address: String,
+    /// The account to ask as, and its password.
+    ///
+    /// This server answers nothing to somebody who is not signed in, so a run
+    /// signs in the way a browser does rather than reaching into the database
+    /// for a session of its own. It also means what is measured is the whole
+    /// of what a browser pays, the reading of the session on every request
+    /// included.
+    pub account: String,
+    pub password: String,
     /// How many times each page is asked for, once the warm up is done.
     pub rounds: u32,
     /// How many are asked for at the same time.
@@ -83,13 +92,21 @@ pub async fn run(asked: Asked) -> anyhow::Result<bool> {
 
     // Never through a proxy: the server is on this machine, and a proxy in
     // between would be the thing being measured.
-    let client = reqwest::Client::builder()
+    let plain = reqwest::Client::builder()
         .no_proxy()
         .timeout(Duration::from_secs(30))
         .build()
         .context("preparing the client")?;
     let base = Url::parse(&asked.address)
         .with_context(|| format!("reading the address {}", asked.address))?;
+
+    let session = sign_in(&plain, &base, &asked).await?;
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(30))
+        .default_headers(carrying(&session)?)
+        .build()
+        .context("preparing the client")?;
 
     let ground = look_around(&client, &base)
         .await
@@ -105,7 +122,53 @@ pub async fn run(asked: Asked) -> anyhow::Result<bool> {
     }
 
     report(&every);
+
+    // The session goes with the run that opened it, rather than sitting in the
+    // list of devices until it runs out on its own.
+    let _ = client.delete(base.join("api/v1/session")?).send().await;
+
     Ok(every.iter().all(Measured::held))
+}
+
+/// Signs in the way a browser does, and keeps what came back.
+async fn sign_in(client: &reqwest::Client, base: &Url, asked: &Asked) -> anyhow::Result<String> {
+    let response = client
+        .post(base.join("api/v1/session")?)
+        .json(&serde_json::json!({
+            "name": asked.account,
+            "password": asked.password,
+        }))
+        .send()
+        .await
+        .context("asking this server to sign the bench in")?;
+
+    anyhow::ensure!(
+        response.status().is_success(),
+        "this server would not sign '{}' in: {}",
+        asked.account,
+        response.status()
+    );
+
+    // What the browser would keep out of the answer, which is the name of the
+    // session and its value and nothing else of what came with it.
+    response
+        .headers()
+        .get(reqwest::header::SET_COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .map(str::to_string)
+        .context("this server signed the bench in without giving it a session")
+}
+
+/// The session, on every question a run asks.
+fn carrying(session: &str) -> anyhow::Result<reqwest::header::HeaderMap> {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::COOKIE,
+        reqwest::header::HeaderValue::from_str(session)
+            .context("the session this server gave back cannot travel in a header")?,
+    );
+    Ok(headers)
 }
 
 /// What this server holds, read once so the scenarios can point at real works.

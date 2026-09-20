@@ -313,7 +313,7 @@ async fn plan(
 
     let request = body.asked_for(source_id)?;
 
-    let plan = melyxar_app::playback::plan(&state, who.id, &request).await?;
+    let plan = melyxar_app::playback::plan(&state, &who, &request).await?;
     Ok(Json(plan_view(&plan)))
 }
 
@@ -640,7 +640,7 @@ async fn open_session(
 
     let plan = melyxar_app::playback::plan(
         &state,
-        who.id,
+        &who,
         &body.wanted.clone().asked_for(source_id)?,
     )
     .await?;
@@ -901,7 +901,7 @@ async fn record_progress(
 
     let kept = melyxar_app::playback::record_position(
         &state,
-        who.id,
+        &who,
         work_id,
         Millis::from_seconds_f64(body.position_seconds),
         body.reported_at.unwrap_or_else(melyxar_core::time::now),
@@ -949,7 +949,7 @@ async fn remember_tracks(
 
     melyxar_app::playback::remember_chosen_tracks(
         &state,
-        who.id,
+        &who,
         work_id,
         find(body.audio_track_id)?,
         find(body.subtitle_track_id)?,

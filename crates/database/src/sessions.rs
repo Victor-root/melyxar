@@ -243,6 +243,7 @@ mod tests {
                 "limited",
                 Some("a stored form"),
                 &Permissions {
+                    sees_every_library: false,
                     allowed_libraries: vec![library],
                     ..Permissions::viewer()
                 },

@@ -14,7 +14,16 @@ use crate::time::Timestamp;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Permissions {
     pub is_administrator: bool,
-    /// Libraries this person may see. Empty means every library.
+    /// Whether this person sees every library there is, including the ones
+    /// added after today.
+    ///
+    /// Said out loud rather than read from an empty list of grants. Read that
+    /// way, an account granted one library whose library was later taken away
+    /// would quietly come to see every library on the server, since the grant
+    /// goes with the library it names.
+    pub sees_every_library: bool,
+    /// The libraries this person was granted, read only when they do not see
+    /// every one.
     pub allowed_libraries: Vec<LibraryId>,
     /// Highest age rating this person may watch, when one is set.
     pub max_age_rating: Option<i32>,
@@ -33,6 +42,7 @@ impl Permissions {
     pub fn administrator() -> Self {
         Self {
             is_administrator: true,
+            sees_every_library: true,
             allowed_libraries: Vec::new(),
             max_age_rating: None,
             may_download: true,
@@ -46,6 +56,7 @@ impl Permissions {
     pub fn viewer() -> Self {
         Self {
             is_administrator: false,
+            sees_every_library: true,
             allowed_libraries: Vec::new(),
             max_age_rating: None,
             may_download: false,
@@ -57,7 +68,16 @@ impl Permissions {
 
     /// Whether this person may see the given library.
     pub fn may_access_library(&self, library: LibraryId) -> bool {
-        self.allowed_libraries.is_empty() || self.allowed_libraries.contains(&library)
+        self.sees_every_library || self.allowed_libraries.contains(&library)
+    }
+
+    /// Whether anything at all was kept from this person.
+    ///
+    /// What lets every query that reads the library skip the narrowing
+    /// entirely for the ordinary account, which is the one this server mostly
+    /// answers.
+    pub fn sees_the_whole_server(&self) -> bool {
+        self.sees_every_library
     }
 
     /// Whether this person may see a work carrying the given age rating.
@@ -293,9 +313,24 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_library_list_means_every_library() {
+    fn an_ordinary_account_sees_every_library_there_is() {
         let permissions = Permissions::viewer();
+        assert!(permissions.sees_the_whole_server());
         assert!(permissions.may_access_library(LibraryId::new()));
+    }
+
+    #[test]
+    fn an_account_granted_nothing_at_all_sees_nothing_at_all() {
+        // The case this is written for: an account granted one library, whose
+        // library was later taken away. Read from an empty list of grants it
+        // would see everything, and nobody would ever have been told.
+        let permissions = Permissions {
+            sees_every_library: false,
+            allowed_libraries: Vec::new(),
+            ..Permissions::viewer()
+        };
+        assert!(!permissions.sees_the_whole_server());
+        assert!(!permissions.may_access_library(LibraryId::new()));
     }
 
     #[test]
@@ -303,6 +338,7 @@ mod tests {
         let allowed = LibraryId::new();
         let other = LibraryId::new();
         let permissions = Permissions {
+            sees_every_library: false,
             allowed_libraries: vec![allowed],
             ..Permissions::viewer()
         };

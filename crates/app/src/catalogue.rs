@@ -5,7 +5,8 @@
 //! a second entry point, a command line or a television client, behave exactly
 //! like the browser without any rule being written twice.
 
-use melyxar_core::id::{LibraryId, UserId};
+use melyxar_core::id::LibraryId;
+use melyxar_core::user::User;
 use melyxar_core::library::{LibraryKind, LibraryOptions, RootAccess};
 
 use crate::browse::{BrowseRequest, WorkOrder, WorkPage};
@@ -78,13 +79,20 @@ const RECENTLY_ADDED: i64 = 24;
 /// abandoned rather than films they mean to come back to.
 const CARRY_ON: i64 = 20;
 
-/// Every library, with what it holds and what the server can reach.
-pub async fn libraries(state: &AppState) -> Result<Vec<LibrarySummary>> {
+/// Every library this viewer may see, with what it holds and what the server
+/// can reach.
+pub async fn libraries(state: &AppState, who: &User) -> Result<Vec<LibrarySummary>> {
     let database = state.database();
     let access = database.roots_with_access().await?;
 
     let mut summaries = Vec::new();
     for library in database.list_libraries().await? {
+        // A library somebody was not granted is one they are never told
+        // about: it is the list this narrowing has to happen in, since every
+        // screen of the interface is built from it.
+        if !who.permissions.may_access_library(library.id) {
+            continue;
+        }
         summaries.push(LibrarySummary {
             works: crate::counted::counted(state, Some(library.id)).await?.browsable,
             version: database.library_version(library.id).await?,
@@ -119,38 +127,56 @@ pub async fn libraries(state: &AppState) -> Result<Vec<LibrarySummary>> {
 /// Every one of these is a walk through the whole library, so none of them is
 /// walked on the way to a page: they are counted once per change and read
 /// back. See [`crate::counted`] for why.
-pub async fn filters(state: &AppState, library_id: Option<LibraryId>) -> Result<Filters> {
-    Ok(crate::counted::counted(state, library_id)
+pub async fn filters(
+    state: &AppState,
+    library_id: Option<LibraryId>,
+    who: &User,
+) -> Result<Filters> {
+    Ok(crate::reach::counted_for(state, who, library_id)
         .await?
         .filters
         .clone())
 }
 
-/// One page of a grid.
-pub async fn browse(state: &AppState, request: &BrowseRequest) -> Result<WorkPage> {
-    Ok(state.database().browse_works(request).await?)
+/// One page of a grid, read only from what this viewer may see.
+pub async fn browse(
+    state: &AppState,
+    request: &BrowseRequest,
+    who: &User,
+) -> Result<WorkPage> {
+    if let Some(library_id) = request.library_id {
+        crate::reach::may_read(who, library_id)?;
+    }
+    let request = BrowseRequest {
+        within: crate::reach::within(who),
+        ..request.clone()
+    };
+    Ok(state.database().browse_works(&request).await?)
 }
 
 /// What a home page opens on.
-pub async fn home(state: &AppState, library_id: Option<LibraryId>, viewer: UserId) -> Result<Home> {
+pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -> Result<Home> {
     let database = state.database();
-    let recently_added = database
-        .browse_works(&BrowseRequest {
+    let recently_added = browse(
+        state,
+        &BrowseRequest {
             library_id,
             order: WorkOrder::AddedAt,
             descending: true,
             limit: RECENTLY_ADDED,
             ..Default::default()
-        })
-        .await?;
+        },
+        who,
+    )
+    .await?;
 
     // Counted once per change rather than on the way here: both of these walk
     // the whole collection, and a home page that counts a hundred thousand
     // works to print two numbers is a home page nobody waits for.
-    let counted = crate::counted::counted(state, library_id).await?;
+    let counted = crate::reach::counted_for(state, who, library_id).await?;
 
     Ok(Home {
-        carry_on: database.works_to_carry_on(viewer, CARRY_ON).await?,
+        carry_on: database.works_to_carry_on(who.id, CARRY_ON).await?,
         recently_added,
         works: counted.browsable,
         awaiting_identification: counted.awaiting_identification,
@@ -161,10 +187,13 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, viewer: UserI
 mod tests {
     use super::*;
     use melyxar_config::{Config, Directories, LibraryConfig, RootConfig};
+    use melyxar_core::user::User;
     use melyxar_core::work::WorkKind;
     use melyxar_database::Database;
 
-    async fn state_with_films(titles: &[&str]) -> (tempfile::TempDir, AppState, LibraryId, UserId) {
+    async fn state_with_films(
+        titles: &[&str],
+    ) -> (tempfile::TempDir, AppState, LibraryId, User) {
         let directory = tempfile::tempdir().expect("temporary directory");
         let media = directory.path().join("films");
         std::fs::create_dir_all(&media).expect("media folder");
@@ -226,15 +255,15 @@ mod tests {
             .expect("account created");
 
         let state = AppState::new(config, database, None, None);
-        (directory, state, library.id, viewer.id)
+        (directory, state, library.id, viewer)
     }
 
     #[tokio::test]
     async fn a_menu_is_told_what_each_library_holds_and_what_it_can_reach() {
-        let (_directory, state, library_id, _viewer) =
+        let (_directory, state, library_id, viewer) =
             state_with_films(&["Quiet Harbour", "Amber Field"]).await;
 
-        let summaries = libraries(&state).await.expect("read");
+        let summaries = libraries(&state, &viewer).await.expect("read");
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, library_id);
         assert_eq!(summaries[0].works, 2);
@@ -279,7 +308,8 @@ mod tests {
             .expect("access refreshed");
 
         let state = AppState::new(config, database, None, None);
-        let summaries = libraries(&state).await.expect("read");
+        let viewer = crate::an_ordinary_account(melyxar_core::id::UserId::new());
+        let summaries = libraries(&state, &viewer).await.expect("read");
         assert_eq!(summaries[0].roots[0].access, RootAccess::Missing);
         assert_eq!(
             summaries[0].roots[0].access.explanation_code(),
@@ -300,7 +330,7 @@ mod tests {
             .expect("a film");
 
         assert!(
-            home(&state, Some(library_id), viewer)
+            home(&state, Some(library_id), &viewer)
                 .await
                 .expect("read")
                 .carry_on
@@ -311,7 +341,7 @@ mod tests {
         state
             .database()
             .record_playback_progress(
-                viewer,
+                viewer.id,
                 started.id,
                 melyxar_core::time::Millis::new(1_800_000),
                 melyxar_core::work::PlaybackState::InProgress,
@@ -320,7 +350,7 @@ mod tests {
             .await
             .expect("recorded");
 
-        let page = home(&state, Some(library_id), viewer).await.expect("read");
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
         assert_eq!(page.carry_on.len(), 1);
         assert_eq!(page.carry_on[0].card.id, started.id);
         assert_eq!(
@@ -335,7 +365,7 @@ mod tests {
         let (_directory, state, library_id, viewer) =
             state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
 
-        let page = home(&state, Some(library_id), viewer).await.expect("read");
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
         assert_eq!(page.works, 3);
         assert_eq!(page.recently_added.cards.len(), 3);
         assert_eq!(
@@ -350,7 +380,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_grid_reads_one_page_at_a_time() {
-        let (_directory, state, library_id, _viewer) =
+        let (_directory, state, library_id, viewer) =
             state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
 
         let page = browse(
@@ -360,6 +390,7 @@ mod tests {
                 limit: 2,
                 ..Default::default()
             },
+            &viewer,
         )
         .await
         .expect("read");
@@ -369,16 +400,16 @@ mod tests {
 
     #[tokio::test]
     async fn a_filter_menu_of_an_empty_library_offers_nothing_rather_than_failing() {
-        let (_directory, state, library_id, _viewer) = state_with_films(&[]).await;
+        let (_directory, state, library_id, viewer) = state_with_films(&[]).await;
         assert_eq!(
-            filters(&state, Some(library_id)).await.expect("read"),
+            filters(&state, Some(library_id), &viewer).await.expect("read"),
             Filters::default()
         );
     }
 
     #[tokio::test]
     async fn a_filter_menu_offers_what_the_library_actually_holds() {
-        let (_directory, state, library_id, _viewer) = state_with_films(&["Quiet Harbour"]).await;
+        let (_directory, state, library_id, viewer) = state_with_films(&["Quiet Harbour"]).await;
         let work = state
             .database()
             .browse_works(&BrowseRequest {
@@ -418,7 +449,7 @@ mod tests {
             .await
             .expect("identification applied");
 
-        let offered = filters(&state, Some(library_id)).await.expect("read");
+        let offered = filters(&state, Some(library_id), &viewer).await.expect("read");
         assert_eq!(
             offered
                 .genres
@@ -460,12 +491,12 @@ mod tests {
             .await
             .expect("work created");
 
-        let page = home(&state, Some(library_id), viewer).await.expect("read");
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
         assert_eq!(page.works, 1);
         assert_eq!(page.recently_added.cards.len(), 1);
         assert_eq!(page.recently_added.cards[0].title, "Quiet Harbour");
 
-        let everything = home(&state, None, viewer).await.expect("read");
+        let everything = home(&state, None, &viewer).await.expect("read");
         assert_eq!(
             everything.works, 2,
             "without a library named, a home page covers the whole server"
@@ -482,7 +513,7 @@ mod tests {
         let borrowed: Vec<&str> = titles.iter().map(String::as_str).collect();
         let (_directory, state, library_id, viewer) = state_with_films(&borrowed).await;
 
-        let page = home(&state, Some(library_id), viewer).await.expect("read");
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
         assert_eq!(page.works, 30, "the count covers everything");
         assert_eq!(
             page.recently_added.cards.len(),

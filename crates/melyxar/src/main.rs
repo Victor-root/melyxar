@@ -164,6 +164,13 @@ enum Bench {
     /// of an answer. Ends in failure when a budget is missed, so a script can
     /// tell without reading the table.
     Run {
+        /// Which account to ask as.
+        ///
+        /// This server answers nothing to somebody who is not signed in, so a
+        /// run signs in the way a browser does. Its password is read from the
+        /// standard input, never taken as an argument.
+        #[arg(long = "as", value_name = "NAME")]
+        account: String,
         /// Where the server is answering. The port from the configuration on
         /// this machine, by default.
         #[arg(long)]
@@ -267,7 +274,7 @@ async fn account(config: Config, what: Account) -> anyhow::Result<()> {
 fn read_a_password() -> anyhow::Result<String> {
     use std::io::{BufRead, Write};
 
-    print!("New password: ");
+    print!("Password: ");
     std::io::stdout().flush()?;
 
     let mut typed = String::new();
@@ -569,15 +576,19 @@ async fn bench(config: Config, what: Bench) -> anyhow::Result<()> {
     // one that holds it, and a second reader of the same file is one more
     // thing between the question and the answer.
     if let Bench::Run {
+        account,
         address,
         rounds,
         at_once,
     } = what
     {
+        let password = read_a_password()?;
         let address =
             address.unwrap_or_else(|| format!("http://127.0.0.1:{}", config.port));
         let held = bench::run(bench::Asked {
             address,
+            account,
+            password,
             rounds,
             at_once,
         })

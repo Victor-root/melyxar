@@ -204,6 +204,14 @@ en|bench_takes|Counting on about five minutes in all, and about a gigabyte in th
 fr|bench_takes|Comptez environ cinq minutes en tout, et à peu près un gigaoctet dans la base le temps que ça dure.
 en|prompt_bench_works|How many works to invent
 fr|prompt_bench_works|Combien d'œuvres inventer
+en|prompt_bench_account|Which account to measure as
+fr|prompt_bench_account|Avec quel compte mesurer
+en|prompt_bench_password|Its password
+fr|prompt_bench_password|Son mot de passe
+en|bench_signs_in|This server answers nothing to somebody who is not signed in, so the measuring signs in the way a browser does.
+fr|bench_signs_in|Ce serveur ne répond rien à qui n'est pas connecté, donc la mesure se connecte comme le ferait un navigateur.
+en|err_bench_account|An account is needed to measure as.
+fr|err_bench_account|Il faut un compte pour mesurer.
 en|err_bench_works|That is not a number of works: %s
 fr|err_bench_works|Ce n'est pas un nombre d'œuvres : %s
 en|bench_needs_server|The server has to be running to be measured. Start it first.
@@ -553,6 +561,23 @@ read_answer() {
     exec 3<&-
   fi
 
+  printf "%s" "$value"
+}
+
+# The same, without showing what is typed. Read the same two ways, because
+# this script is as often piped in from the network as it is run from a file,
+# and in that case the answers come from the terminal rather than the pipe.
+read_secret() {
+  local value=""
+
+  if [[ -t 0 ]]; then
+    IFS= read -rs value || value=""
+  elif { exec 3</dev/tty; } 2>/dev/null; then
+    IFS= read -rs value <&3 || value=""
+    exec 3<&-
+  fi
+
+  echo >&2
   printf "%s" "$value"
 }
 
@@ -1047,6 +1072,15 @@ action_bench() {
   works="$(prompt_default "$(tr_msg prompt_bench_works)" "100000")"
   [[ "$works" =~ ^[1-9][0-9]*$ ]] || die "$(tr_fmt err_bench_works "$works")"
 
+  # The measuring asks this server the pages a browser asks for, and this
+  # server answers nothing to somebody who is not signed in.
+  info "$(tr_msg bench_signs_in)"
+  local account password
+  account="$(prompt_free "$(tr_msg prompt_bench_account)")"
+  [[ -n "$account" ]] || die "$(tr_msg err_bench_account)"
+  prompt_label "${RED_SOFT}" "$(tr_msg prompt_bench_password)"
+  password="$(read_secret)"
+
   # A run somebody stopped halfway leaves the invented library behind, and
   # filling refuses while one is there. Taking away whatever is left first is
   # what makes this work the second time as well as the first; with nothing to
@@ -1060,7 +1094,9 @@ action_bench() {
   info "$(tr_msg bench_measuring)"
   echo
   local held=0
-  run_bench run || held=1
+  # Through the standard input, so it never lands in this shell's history nor
+  # in the list of what is running on this machine.
+  printf '%s\n' "$password" | run_bench run --as "$account" || held=1
   echo
 
   # Removed whatever the measuring said, including when it was interrupted:

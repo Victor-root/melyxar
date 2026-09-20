@@ -230,13 +230,20 @@ async fn as_carry_on(state: &AppState, episode: melyxar_core::work::Work) -> Res
 /// Reads everything one page shows about one work.
 pub async fn work_detail(
     state: &AppState,
-    viewer: melyxar_core::id::UserId,
+    who: &melyxar_core::user::User,
     work_id: WorkId,
 ) -> Result<Option<WorkDetail>> {
     let database = state.database();
     let Some(work) = database.work(work_id).await? else {
         return Ok(None);
     };
+    // A work in a library this account was not granted is a work that is not
+    // there, which is the same answer as a work nobody has: told apart, one
+    // identifier after another would say what this server holds.
+    if !who.permissions.may_access_library(work.library_id) {
+        return Ok(None);
+    }
+    let viewer = who.id;
 
     let language = database
         .list_libraries()
@@ -632,7 +639,7 @@ mod tests {
             .id;
         let state = AppState::new(melyxar_config::Config::default(), database, None, None);
 
-        let detail = work_detail(&state, viewer, work_id)
+        let detail = work_detail(&state, &crate::an_ordinary_account(viewer), work_id)
             .await
             .expect("read")
             .expect("present");
@@ -722,7 +729,7 @@ mod tests {
             .id;
         let state = AppState::new(melyxar_config::Config::default(), database, None, None);
 
-        let detail = work_detail(&state, viewer, episode.id)
+        let detail = work_detail(&state, &crate::an_ordinary_account(viewer), episode.id)
             .await
             .expect("read")
             .expect("present");
