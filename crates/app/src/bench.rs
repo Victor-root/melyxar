@@ -30,6 +30,15 @@ use melyxar_database::synthetic::{
 
 use crate::{AppState, Result};
 
+/// How many works met on their own there are for every work inside a series.
+///
+/// A collection is not made of series alone, and the budgets are written about
+/// a grid: a library where nine works in ten are an episode is a library whose
+/// grid holds a tenth of what was asked for, and the number that was measured
+/// is then not the number that was promised. Five to one leaves both near
+/// enough to the same figure that neither has to be explained.
+const WORKS_PER_SERIES_WORK: i64 = 5;
+
 /// How many works are written in one transaction.
 ///
 /// Large enough that the cost of a transaction disappears against what it
@@ -113,16 +122,23 @@ async fn write_them_all(
         .await?;
 
     let mut written = 0_i64;
+    let mut in_series = 0_i64;
     let mut batch: Vec<InventedWork> = Vec::with_capacity(BATCH * 2);
     let mut index = 0_u64;
 
     while written < works {
-        // One in seven of what is left is a series, which arrives with its
-        // seasons and its episodes in one go.
-        let mut invented = match index % 7 == 6 {
+        // A series arrives whole, sixty works at a time, so emitting one every
+        // so many rounds would drown the library in episodes: at one round in
+        // seven, nine works in ten are an episode and the grid holds a tenth
+        // of what was asked for. Counted as it goes instead, so the share
+        // lands where it is wanted whatever size a series turns out to be.
+        let mut invented = match in_series * (1 + WORKS_PER_SERIES_WORK) <= written {
             true => a_series(index, &names),
             false => vec![a_film(index, &names)],
         };
+        if invented.len() > 1 {
+            in_series += invented.len() as i64;
+        }
         written += invented.len() as i64;
         batch.append(&mut invented);
         index += 1;

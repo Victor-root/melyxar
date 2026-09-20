@@ -15,6 +15,7 @@ use melyxar_config::Config;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
+mod bench;
 mod journal;
 
 #[derive(Parser)]
@@ -133,6 +134,24 @@ enum Bench {
     Empty,
     /// Say what the invented library holds right now.
     Show,
+    /// Play the pages somebody browsing would ask for, and time them.
+    ///
+    /// Asks a server that is already running, so what is measured is the whole
+    /// of an answer. Ends in failure when a budget is missed, so a script can
+    /// tell without reading the table.
+    Run {
+        /// Where the server is answering. The port from the configuration on
+        /// this machine, by default.
+        #[arg(long)]
+        address: Option<String>,
+        /// How many times each page is asked for.
+        #[arg(long, default_value_t = 200)]
+        rounds: u32,
+        /// How many are asked for at the same time. One person browsing is
+        /// one, which is what the budgets are written about.
+        #[arg(long, default_value_t = 1)]
+        at_once: u32,
+    },
 }
 
 #[tokio::main]
@@ -465,6 +484,27 @@ async fn listen(config: Config, series: Option<&str>, season: Option<i32>) -> an
 }
 
 async fn bench(config: Config, what: Bench) -> anyhow::Result<()> {
+    // Measuring never opens the database: the server under measurement is the
+    // one that holds it, and a second reader of the same file is one more
+    // thing between the question and the answer.
+    if let Bench::Run {
+        address,
+        rounds,
+        at_once,
+    } = what
+    {
+        let address =
+            address.unwrap_or_else(|| format!("http://127.0.0.1:{}", config.port));
+        let held = bench::run(bench::Asked {
+            address,
+            rounds,
+            at_once,
+        })
+        .await?;
+        anyhow::ensure!(held, "a budget was missed; the table above names which");
+        return Ok(());
+    }
+
     let state = melyxar_app::startup::bring_up(config)
         .await
         .context("bringing the server up for the bench")?;
@@ -497,6 +537,7 @@ async fn bench(config: Config, what: Bench) -> anyhow::Result<()> {
             }
             Ok(())
         }
+        Bench::Run { .. } => unreachable!("handled above"),
     };
 
     state.database().close().await;
