@@ -819,6 +819,11 @@ function Seek({
     };
     const letGo = () => {
       setDragging(false);
+      // The hand let go somewhere on the window, not necessarily back over
+      // the bar: nothing else is left to tell the preview to go, since the
+      // one thing that usually does, leaving the bar, may already have
+      // happened once mid-drag and answered to nothing while it was one.
+      setHovered(null);
       playback.viewerMoved(wasDragged.current ? "a_drag" : "a_click");
     };
     window.addEventListener("pointermove", moved);
