@@ -302,6 +302,9 @@ export interface Playback {
   loudness: number;
   /** Whether the words are on their way, and whether they never came. */
   words: "coming" | "refused" | null;
+  /** The words on screen at this instant, one entry per line, stripped of any
+   *  tag a subtitle file carried and no browser here is drawing. */
+  shownWords: string[];
   /** Whether this viewer has marked the film as one they like. */
   favourite: boolean;
   setFavourite: (liked: boolean) => void;
@@ -313,12 +316,6 @@ export interface Playback {
   setWordsOffset: (seconds: number) => void;
   /** Put on the element carrying the words, whenever there is one. */
   holdTheWords: (element: HTMLTrackElement | null) => void;
-  /** Says what to do to the words the instant they are read.
-   *
-   * Where they sit on the picture is the look of the thing and none of this
-   * file's business. That it has to happen the moment they are read, before
-   * the browser has drawn one of them anywhere, is playing. */
-  onWordsRead: (place: () => void) => void;
   /** Puts the picture in a corner of the screen, where the browser allows it. */
   intoTheCorner: () => void;
 }
@@ -389,11 +386,12 @@ export function usePlayback({
   /* The element carrying the words, so the moment they finish being read can
      be waited for. */
   const subtitleTrack = useRef<HTMLTrackElement | null>(null);
-  /* What to do to the words the instant they are read, set by whoever dresses
-     them. Held in a hand rather than taken as an argument, because the
-     listener below is attached once per element and must not have to be
-     replaced every time a viewer changes how the words look. */
-  const placeTheWords = useRef<() => void>(() => {});
+  /* The words on screen at this instant, one entry per cue active at once,
+     which is almost always none or one. Read from the track rather than drawn
+     by the browser, because where they are drawn is not the browser's to
+     decide here: the strip of controls stands over the same part of the
+     picture, and only this page knows when that is true. */
+  const [shownWords, setShownWords] = useState<string[]>([]);
   /* Whether this viewer likes the film, and whether the film starts itself
      again when it ends. Both begin as the server's answer and are then this
      page's to change. */
@@ -1138,38 +1136,56 @@ export function usePlayback({
     wordsShiftedBy.current = 0;
     shiftTheWords(wordsOffset);
     wordsShiftedBy.current = wordsOffset;
-    placeTheWords.current();
     setWords(null);
   }, [shiftTheWords, wordsOffset]);
   const neverCame = useCallback(() => setWords("refused"), []);
 
-  /* Waited for on the element carrying the words, and attached again whenever
-     that is a different one: a film being rebuilt gets a fresh picture
-     whenever the soundtrack changes, and the words come with it. Before the
-     words are read there are no cues to place, and the browser goes on
-     putting them wherever it likes. */
-  const holdTheWords = useCallback((element: HTMLTrackElement | null) => {
-    const held = subtitleTrack.current;
-    held?.removeEventListener("load", wereRead);
-    held?.removeEventListener("error", neverCame);
-    subtitleTrack.current = element;
-    if (!element) {
-      setWords(null);
-      return;
-    }
-    setWords("coming");
-    element.addEventListener("load", wereRead);
-    element.addEventListener("error", neverCame);
-    // Said outright rather than left to the default mark: that mark is read
-    // when the picture itself is first read, and words added to a picture
-    // already playing would simply stay switched off.
-    element.track.mode = "showing";
-  }, [wereRead, neverCame]);
+  /* Fired by the track itself the instant the words on screen change, which is
+     the one moment this can be read: nothing elsewhere is told when a cue
+     starts or ends.
 
-  const onWordsRead = useCallback((place: () => void) => {
-    placeTheWords.current = place;
+     Split into one entry per line and stripped of the handful of tags a
+     subtitle file can carry, such as an italic aside: drawn by hand rather
+     than by the browser, nothing here knows what to do with a tag, and a
+     viewer seeing one written out in full would think the file was broken
+     rather than this page. */
+  const cueChanged = useCallback(() => {
+    const cues = subtitleTrack.current?.track.activeCues;
+    const lines = cues
+      ? Array.from(cues).flatMap((cue) => (cue as VTTCue).text.replace(/<\/?[^>]*>/g, "").split("\n"))
+      : [];
+    setShownWords(lines);
   }, []);
 
+  /* Waited for on the element carrying the words, and attached again whenever
+     that is a different one: a film being rebuilt gets a fresh picture
+     whenever the soundtrack changes, and the words come with it. Hidden
+     rather than shown, because where they are drawn is decided here, not by
+     the browser: the browser only knows the picture, not the strip of
+     controls standing over the bottom of it. */
+  const holdTheWords = useCallback(
+    (element: HTMLTrackElement | null) => {
+      const held = subtitleTrack.current;
+      held?.removeEventListener("load", wereRead);
+      held?.removeEventListener("error", neverCame);
+      held?.track.removeEventListener("cuechange", cueChanged);
+      subtitleTrack.current = element;
+      if (!element) {
+        setWords(null);
+        setShownWords([]);
+        return;
+      }
+      setWords("coming");
+      element.addEventListener("load", wereRead);
+      element.addEventListener("error", neverCame);
+      element.track.addEventListener("cuechange", cueChanged);
+      // Said outright rather than left to the default mark: that mark is read
+      // when the picture itself is first read, and words added to a picture
+      // already playing would simply stay switched off.
+      element.track.mode = "hidden";
+    },
+    [wereRead, neverCame, cueChanged],
+  );
 
   const report = useCallback(() => {
     const seconds = lastPosition.current;
@@ -1424,8 +1440,8 @@ export function usePlayback({
     muted,
     loudness,
     words,
+    shownWords,
     holdTheWords,
-    onWordsRead,
     favourite,
     setFavourite,
     repeat,

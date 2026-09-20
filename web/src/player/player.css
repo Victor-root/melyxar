@@ -185,6 +185,17 @@
   cursor: none;
 }
 
+/* Lifted to sit just clear of the bottom strip while it is actually covering
+   the picture, by the strip's own real height rather than by any fixed
+   position: a drawer opening under it, a narrower window, a longer row of
+   buttons wrapping onto its own line all change that height, and a guess
+   written here would be wrong the moment any of them did. Settles back to
+   whatever height the viewer chose the moment the strip fades, which is what
+   the rule above already governs untouched. */
+.player-stage:has(.player-overlay[data-away="no"]) .player-subtitle-words {
+  bottom: calc(var(--controls-height, 0px) + 12px);
+}
+
 /* Both ends are dark enough for white to read over any picture, and the two
    gradients meet nothing in the middle so the film is untouched where it is
    actually being watched. */

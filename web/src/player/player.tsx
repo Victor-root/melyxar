@@ -12,11 +12,13 @@
  *
  * Nothing here touches the film. Not the bar, not the sound, not the button
  * that starts it: every one of those asks the engine, which is the only thing
- * holding the element. The one exception is where a subtitle line sits on the
- * picture, which is written on the cue itself and reachable from nowhere else.
+ * holding the element. Subtitles are the one exception in the other
+ * direction: read from the element by the engine, but drawn here rather than
+ * by the browser, because where they sit answers to the strip of controls
+ * standing over the same part of the picture.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { PlaybackTrack, Work } from "../api";
 import { useSettings } from "../settings";
 import {
@@ -25,7 +27,6 @@ import {
   COLOURS,
   EDGES,
   HEIGHTS,
-  lineFor,
   rememberAppearance,
   SIZES,
   storedAppearance,
@@ -136,8 +137,8 @@ export function Player({
     pictureKey,
     readyPicture,
     words,
+    shownWords,
     holdTheWords,
-    onWordsRead,
   } = playback;
 
   /* What is sent fullscreen: the picture and everything drawn over it. */
@@ -184,47 +185,6 @@ export function Player({
     readyPicture !== null && readyPicture === pictureKey
       ? plan?.subtitles.find((track) => track.id === plan.chosen_subtitle_id && track.url)
       : undefined;
-
-  /* Whether the strip of controls is covering the bottom of the picture right
-     now, which is where subtitles sit too: shown under the bar, they are shown
-     nowhere a viewer can read them. */
-  const [controlsCovering, setControlsCovering] = useState(false);
-
-  /* How high the words sit belongs to each cue rather than to a stylesheet, so
-     it is applied to them as they are read, and again whenever the viewer
-     moves them or the controls cover the picture. Counted from the bottom,
-     which keeps them in the same place whatever the size of the picture.
-
-     While the controls cover the bottom of the picture, the words are lifted
-     to at least the highest of the three positions offered for taste, so that
-     a viewer who never touched that setting still sees them; a viewer who
-     already chose one higher than that keeps exactly what they chose. They
-     settle back to that choice the moment the controls fade.
-
-     The one place looking reaches into the element, and it has to: where a cue
-     sits is written on the cue and nowhere a stylesheet can get at it. */
-  const placeCues = useCallback(() => {
-    const tracks = video.current?.textTracks;
-    if (!tracks) {
-      return;
-    }
-    const chosen = lineFor(appearance.height);
-    const line = controlsCovering ? Math.min(chosen, lineFor("high")) : chosen;
-    for (const track of Array.from(tracks)) {
-      for (const cue of Array.from(track.cues ?? [])) {
-        (cue as VTTCue).line = line;
-      }
-    }
-  }, [appearance.height, controlsCovering, video]);
-
-  /* Placed again whenever the viewer moves them, and handed to the engine so
-     that it can place them the instant the words are read. Waiting for a
-     render instead would show one frame of words wherever the browser felt
-     like putting them. */
-  useEffect(() => {
-    onWordsRead(placeCues);
-    placeCues();
-  }, [placeCues, onWordsRead]);
 
   const naming = useCallback(
     (track: PlaybackTrack) => trackName(track, t, language),
@@ -335,8 +295,20 @@ export function Player({
           naming={naming}
           language={language}
           t={t}
-          onControlsCovering={setControlsCovering}
         />
+
+        {/* Drawn here rather than left to the browser: where these sit has to
+            answer to the strip of controls above, and a stylesheet reaches a
+            cue nowhere near as far as it reaches an element of its own. */}
+        {shownWords.length > 0 && (
+          <div className="player-subtitle-words" aria-live="polite">
+            {shownWords.map((line, index) => (
+              <span key={index} className="player-subtitle-line">
+                {line}
+              </span>
+            ))}
+          </div>
+        )}
 
         {panel === "facts" && plan && (
           <PlaybackFacts

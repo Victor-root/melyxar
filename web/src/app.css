@@ -1572,9 +1572,12 @@
    against: a size named "very large" means nothing until it is seen.
    Proportions of the box rather than fixed heights, so the words sit where
    they would on a picture of any size. */
-/* How a subtitle looks, shared by the player that shows them and the
-   setting that previews them: one design, described once. */
-.player-video::cue,
+/* How a subtitle looks, shared by the player that shows them, the setting
+   that previews them, and the picture itself, which is a browser's cue box
+   nowhere any more: drawing them by hand is what lets them answer to the
+   controls, so one design is described once across the two elements that
+   are actually on screen. */
+.player-subtitle-line,
 .subtitle-sample-words {
   background: transparent;
   color: #fff;
@@ -1587,39 +1590,39 @@
     1px 1px 0 #000;
 }
 
-.subtitles-size-small .player-video::cue,
+.subtitles-size-small .player-subtitle-line,
 .subtitles-size-small .subtitle-sample-words {
   font-size: 80%;
 }
-.subtitles-size-normal .player-video::cue,
+.subtitles-size-normal .player-subtitle-line,
 .subtitles-size-normal .subtitle-sample-words {
   font-size: 100%;
 }
-.subtitles-size-large .player-video::cue,
+.subtitles-size-large .player-subtitle-line,
 .subtitles-size-large .subtitle-sample-words {
   font-size: 135%;
 }
-.subtitles-size-huge .player-video::cue,
+.subtitles-size-huge .player-subtitle-line,
 .subtitles-size-huge .subtitle-sample-words {
   font-size: 175%;
 }
 
-.subtitles-colour-white .player-video::cue,
+.subtitles-colour-white .player-subtitle-line,
 .subtitles-colour-white .subtitle-sample-words {
   color: #fff;
 }
 /* The colour of a cinema subtitle, and the one that stands out best against a
    picture that is mostly white or mostly grey. */
-.subtitles-colour-yellow .player-video::cue,
+.subtitles-colour-yellow .player-subtitle-line,
 .subtitles-colour-yellow .subtitle-sample-words {
   color: #f5e050;
 }
-.subtitles-colour-cyan .player-video::cue,
+.subtitles-colour-cyan .player-subtitle-line,
 .subtitles-colour-cyan .subtitle-sample-words {
   color: #7fe8f0;
 }
 
-.subtitles-edge-outline .player-video::cue,
+.subtitles-edge-outline .player-subtitle-line,
 .subtitles-edge-outline .subtitle-sample-words {
   text-shadow:
     -1px -1px 0 #000,
@@ -1627,24 +1630,24 @@
     -1px 1px 0 #000,
     1px 1px 0 #000;
 }
-.subtitles-edge-shadow .player-video::cue,
+.subtitles-edge-shadow .player-subtitle-line,
 .subtitles-edge-shadow .subtitle-sample-words {
   text-shadow: 2px 2px 3px #000;
 }
-.subtitles-edge-none .player-video::cue,
+.subtitles-edge-none .player-subtitle-line,
 .subtitles-edge-none .subtitle-sample-words {
   text-shadow: none;
 }
 
-.subtitles-background-none .player-video::cue,
+.subtitles-background-none .player-subtitle-line,
 .subtitles-background-none .subtitle-sample-words {
   background: transparent;
 }
-.subtitles-background-dim .player-video::cue,
+.subtitles-background-dim .player-subtitle-line,
 .subtitles-background-dim .subtitle-sample-words {
   background: rgba(0, 0, 0, 0.55);
 }
-.subtitles-background-solid .player-video::cue,
+.subtitles-background-solid .player-subtitle-line,
 .subtitles-background-solid .subtitle-sample-words {
   background: #000;
 }
@@ -1670,14 +1673,44 @@
   padding: 2px 8px;
 }
 
-.subtitles-height-bottom .subtitle-sample-words {
+.subtitles-height-bottom .subtitle-sample-words,
+.subtitles-height-bottom .player-subtitle-words {
   bottom: 8%;
 }
-.subtitles-height-raised .subtitle-sample-words {
+.subtitles-height-raised .subtitle-sample-words,
+.subtitles-height-raised .player-subtitle-words {
   bottom: 24%;
 }
-.subtitles-height-high .subtitle-sample-words {
+.subtitles-height-high .subtitle-sample-words,
+.subtitles-height-high .player-subtitle-words {
   bottom: 44%;
+}
+
+/* The words as they actually sit on the picture: a column of lines, each one
+   its own bubble, centred over the middle of the film. Placed and sized here
+   rather than beside the sample above, because the sample is one line with a
+   fixed height standing for a setting, and this is the real thing wherever it
+   actually ends up. */
+.player-subtitle-words {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-width: 90%;
+  text-align: center;
+  pointer-events: none;
+  /* Answers to the controls the instant they cover or uncover the picture,
+     never to when the next line of words happens to start. */
+  transition: bottom 200ms ease;
+}
+
+.player-subtitle-line {
+  padding: 2px 8px;
+  white-space: pre-wrap;
 }
 
 /* A native slider takes the colour of the browser unless it is told the one
