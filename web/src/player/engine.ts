@@ -408,6 +408,12 @@ export function usePlayback({
      step rather than setting them to a total. */
   const [wordsOffset, setWordsOffsetState] = useState(0);
   const wordsShiftedBy = useRef(0);
+  /* The same number as the state above, read from a hand that does not
+     change: closing over the state itself would remake every callback that
+     reads it each time a viewer moved it, and one of those is the ref that
+     hangs the words on the picture, which a viewer moving them at all was
+     then pulling off and hanging again for no reason a viewer could see. */
+  const wordsOffsetNow = useRef(wordsOffset);
   /* How many times the session has been opened again from nothing. Counted
      rather than flagged because it is what makes the film reopen at all: the
      session is opened by an effect, and an effect only runs again when
@@ -1133,6 +1139,7 @@ export function usePlayback({
     (seconds: number) => {
       shiftTheWords(seconds - wordsShiftedBy.current);
       wordsShiftedBy.current = seconds;
+      wordsOffsetNow.current = seconds;
       setWordsOffsetState(seconds);
     },
     [shiftTheWords],
@@ -1144,13 +1151,17 @@ export function usePlayback({
      one frame of words in the wrong place or at the wrong moment.
 
      A fresh set of cues arrives unshifted however far the last set was moved,
-     so the shift is applied from nothing rather than carried over. */
+     so the shift is applied from nothing rather than carried over.
+
+     Read off the hand above rather than closed over the state itself, so
+     that moving the offset never has to remake this. */
   const wereRead = useCallback(() => {
+    const offset = wordsOffsetNow.current;
     wordsShiftedBy.current = 0;
-    shiftTheWords(wordsOffset);
-    wordsShiftedBy.current = wordsOffset;
+    shiftTheWords(offset);
+    wordsShiftedBy.current = offset;
     setWords(null);
-  }, [shiftTheWords, wordsOffset]);
+  }, [shiftTheWords]);
   const neverCame = useCallback(() => setWords("refused"), []);
 
   /* Fired by the track itself the instant the words on screen change, which is
