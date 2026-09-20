@@ -22,7 +22,7 @@ interface Probe {
 
 const CONTAINERS: Probe[] = [
   { type: 'video/mp4; codecs="avc1.640028"', name: "mp4" },
-  { type: 'video/webm; codecs="vp9"', name: "webm" },
+  { type: 'video/webm; codecs="vp09.00.10.08"', name: "webm" },
   { type: 'video/quicktime; codecs="avc1.640028"', name: "mov" },
   { type: 'video/x-matroska; codecs="avc1.640028"', name: "matroska" },
 ];
@@ -30,7 +30,7 @@ const CONTAINERS: Probe[] = [
 const VIDEO: Probe[] = [
   { type: 'video/mp4; codecs="avc1.640028"', name: "h264" },
   { type: 'video/mp4; codecs="hvc1.1.6.L93.B0"', name: "hevc" },
-  { type: 'video/webm; codecs="vp9"', name: "vp9" },
+  { type: 'video/webm; codecs="vp09.00.10.08"', name: "vp9" },
   { type: 'video/mp4; codecs="av01.0.08M.08"', name: "av1" },
 ];
 
