@@ -9,12 +9,12 @@
 
 import { Link } from "react-router-dom";
 import type { Card as CardData } from "../api";
-import { pictureSet } from "../api";
 import { useSettings } from "../settings";
+import { useShownPicture } from "./picture";
 
 export function Card({ card, watched }: { card: CardData; watched?: number }) {
   const { t } = useSettings();
-  const poster = pictureSet(card.poster);
+  const { picture: poster, itDidNotLoad } = useShownPicture(card.poster);
   const unknown = card.identification === "unidentified" || card.identification === "pending";
 
   return (
@@ -36,6 +36,7 @@ export function Card({ card, watched }: { card: CardData; watched?: number }) {
             decoding="async"
             width={2}
             height={3}
+            onError={itDidNotLoad}
           />
         ) : (
           <span className="card-initial" aria-hidden="true">

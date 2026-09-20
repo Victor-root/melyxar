@@ -171,6 +171,19 @@ pub async fn empty(state: &AppState) -> Result<Emptied> {
         return Ok(Emptied { works: 0, files: 0 });
     };
     let removed = database.delete_library(library.id).await?;
+
+    // A hundred thousand works leave half a gigabyte of room in the file,
+    // which nothing here will ever write into again. Asked for rather than
+    // insisted on: the library is already gone, and saying so failed because
+    // somebody was reading a page at that moment would be a lie.
+    if let Err(error) = database.reclaim_space().await {
+        tracing::warn!(
+            error = %error,
+            "the room the invented library took could not be given back to the \
+             disk; it stays in the database file, ready to be written into again"
+        );
+    }
+
     tracing::info!(
         works = removed.works,
         files = removed.files,

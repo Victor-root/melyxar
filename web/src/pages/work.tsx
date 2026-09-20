@@ -9,7 +9,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, pictureSet } from "../api";
+import { api } from "../api";
 import type { Child, Credit, Version, Work } from "../api";
 import { useTold } from "../asking";
 import { IdentifyByHand } from "../components/byhand";
@@ -24,6 +24,7 @@ import {
 } from "../readable";
 import { elsewhere, groupCrew, useWorkScreen } from "../screens/work";
 import { useSettings } from "../settings";
+import { useShownPicture } from "../components/picture";
 import { Player } from "../player/player";
 import { TrailerPlayer } from "../player/trailer";
 
@@ -81,8 +82,8 @@ export function WorkPage() {
   }
 
   const { here, away } = onOffer;
-  const backdrop = pictureSet(work.backdrop);
-  const poster = pictureSet(work.poster);
+  const { picture: backdrop, itDidNotLoad: backdropFailed } = useShownPicture(work.backdrop);
+  const { picture: poster, itDidNotLoad: posterFailed } = useShownPicture(work.poster);
   const version = work.versions[chosen];
   /* A season is announced by its number in the language being read, and by
      the name it was given only when that name says something the number does
@@ -137,7 +138,13 @@ export function WorkPage() {
     <main className="work" style={{ ["--work-color" as string]: work.color ?? "var(--surface)" }}>
       {backdrop && (
         <div className="work-backdrop" aria-hidden="true">
-          <img src={backdrop.src} srcSet={backdrop.srcSet} sizes="100vw" alt="" />
+          <img
+            src={backdrop.src}
+            srcSet={backdrop.srcSet}
+            sizes="100vw"
+            alt=""
+            onError={backdropFailed}
+          />
           <div className="work-scrim" />
         </div>
       )}
@@ -150,6 +157,7 @@ export function WorkPage() {
               srcSet={poster.srcSet}
               sizes="(max-width: 800px) 40vw, 300px"
               alt=""
+              onError={posterFailed}
             />
           ) : (
             <div className="work-poster-empty" aria-hidden="true">
@@ -433,7 +441,7 @@ function ReadCopyAgain({ copy, onRead }: { copy: string; onRead: () => void }) {
  * missing keeps its line rather than shifting everything after it.
  */
 function Face({ credit }: { credit: Credit }) {
-  const photo = pictureSet(credit.photo);
+  const { picture: photo, itDidNotLoad } = useShownPicture(credit.photo);
   if (!photo) {
     return (
       <div className="cast-face" aria-hidden="true">
@@ -444,7 +452,14 @@ function Face({ credit }: { credit: Credit }) {
 
   return (
     <div className="cast-face">
-      <img src={photo.src} srcSet={photo.srcSet} sizes="96px" alt="" loading="lazy" />
+      <img
+        src={photo.src}
+        srcSet={photo.srcSet}
+        sizes="96px"
+        alt=""
+        loading="lazy"
+        onError={itDidNotLoad}
+      />
     </div>
   );
 }
@@ -680,7 +695,7 @@ function WhatHangsUnder({ work }: { work: Work }) {
 
 function SeasonCard({ child }: { child: Child }) {
   const { t } = useSettings();
-  const poster = pictureSet(child.poster);
+  const { picture: poster, itDidNotLoad } = useShownPicture(child.poster);
 
   return (
     <Link
@@ -690,7 +705,13 @@ function SeasonCard({ child }: { child: Child }) {
     >
       <div className="season-poster">
         {poster ? (
-          <img src={poster.src} srcSet={poster.srcSet} sizes="200px" alt="" />
+          <img
+            src={poster.src}
+            srcSet={poster.srcSet}
+            sizes="200px"
+            alt=""
+            onError={itDidNotLoad}
+          />
         ) : (
           <div className="season-poster-empty" aria-hidden="true">
             {child.number ?? ""}

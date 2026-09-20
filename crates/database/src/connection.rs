@@ -173,6 +173,30 @@ impl Database {
         Ok(row.0 * row.1)
     }
 
+    /// Gives the disk back the room a large removal left behind.
+    ///
+    /// The file never shrinks on its own: the pages of what was removed stay
+    /// in it, ready to be written into again. That is the right behaviour for
+    /// a library losing a film and the wrong one after an invented library of
+    /// a hundred thousand works, which leaves half a gigabyte behind for a
+    /// collection of fifty.
+    ///
+    /// Wants the file to itself for a moment, so it is asked for rather than
+    /// insisted on: whoever calls this has already done what it was asked to
+    /// do, and a removal reported as a failure because a page was being read
+    /// at that moment would be a lie.
+    pub async fn reclaim_space(&self) -> Result<()> {
+        sqlx::query("VACUUM").execute(self.writer()).await?;
+        // The rebuilt database lands in the journal, and the file itself is
+        // only cut back when the journal is folded into it. Without this the
+        // room is given back at the next restart and, until then, the server
+        // holds both the old file and a journal the size of it.
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// Closes both pools, waiting for in-flight statements.
     pub async fn close(&self) {
         self.writer.close().await;

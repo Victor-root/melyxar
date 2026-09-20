@@ -94,6 +94,8 @@ en|menu_restore|Restore from a backup
 fr|menu_restore|Restaurer depuis une sauvegarde
 en|menu_uninstall|Uninstall
 fr|menu_uninstall|Désinstaller
+en|menu_bench|Measure the speed on a large library
+fr|menu_bench|Mesurer la vitesse sur une grosse bibliothèque
 en|menu_lines|Count the lines of code
 fr|menu_lines|Compter les lignes de code
 en|menu_quit|Quit
@@ -194,6 +196,28 @@ en|lines_same|%s and %s are the same length
 fr|lines_same|%s et %s font la même longueur
 en|lines_changed|%s lines added, %s removed across %s files
 fr|lines_changed|%s lignes ajoutées, %s supprimées sur %s fichiers
+en|section_bench|Bench
+fr|section_bench|Banc d'essai
+en|bench_notice|A library of invented works is written beside your own, the pages somebody browsing would ask for are timed on it, and it is removed again. Your own films are never touched and no file is written to a disk.
+fr|bench_notice|Une bibliothèque d'œuvres inventées est écrite à côté de la vôtre, les pages qu'un spectateur ouvrirait sont chronométrées dessus, puis elle est retirée. Vos propres films ne sont jamais touchés et aucun fichier n'est écrit sur un disque.
+en|bench_takes|Counting on about five minutes in all, and about a gigabyte in the database while it lasts.
+fr|bench_takes|Comptez environ cinq minutes en tout, et à peu près un gigaoctet dans la base le temps que ça dure.
+en|prompt_bench_works|How many works to invent
+fr|prompt_bench_works|Combien d'œuvres inventer
+en|err_bench_works|That is not a number of works: %s
+fr|err_bench_works|Ce n'est pas un nombre d'œuvres : %s
+en|bench_needs_server|The server has to be running to be measured. Start it first.
+fr|bench_needs_server|Le serveur doit tourner pour être mesuré. Démarrez-le d'abord.
+en|step_bench_fill|Inventing the library
+fr|step_bench_fill|Invention de la bibliothèque
+en|bench_measuring|Measuring. The table below says what each page took and what it was allowed.
+fr|bench_measuring|Mesure en cours. Le tableau ci-dessous dit ce qu'a pris chaque page et ce à quoi elle avait droit.
+en|step_bench_empty|Removing the invented library
+fr|step_bench_empty|Retrait de la bibliothèque inventée
+en|bench_held|Every budget is held at this size.
+fr|bench_held|Tous les budgets sont tenus à cette taille.
+en|bench_missed|A budget was missed. The table above names which page, and by how much.
+fr|bench_missed|Un budget est dépassé. Le tableau ci-dessus dit quelle page, et de combien.
 en|lines_counted|Counted without the lock files and the images.
 fr|lines_counted|Compté sans les fichiers de verrouillage et les images.
 en|section_build|Building
@@ -1000,6 +1024,50 @@ lines_written_on() {
     awk -F: '{ total += $NF } END { print total + 0 }'
 }
 
+# Everything the bench does, in the order somebody would do it by hand.
+#
+# Run as the account the server runs as, so the files the database leaves
+# behind belong to it: the same commands run as root would leave a journal the
+# service can no longer write to, and a server that no longer starts.
+run_bench() {
+  runuser -u "$APP_USER" -- "$BINARY_PATH" --config "$CONFIG_FILE" bench "$@"
+}
+
+action_bench() {
+  is_installed || die "$(tr_msg err_not_installed)"
+  systemctl is-active --quiet "$SERVICE" || die "$(tr_msg bench_needs_server)"
+
+  section "$(tr_msg section_bench)"
+  info "$(tr_msg bench_notice)"
+  info "$(tr_msg bench_takes)"
+
+  local works
+  works="$(prompt_default "$(tr_msg prompt_bench_works)" "100000")"
+  [[ "$works" =~ ^[1-9][0-9]*$ ]] || die "$(tr_fmt err_bench_works "$works")"
+
+  step "$(tr_msg step_bench_fill)" run_bench fill --works "$works"
+
+  # Not wrapped in a step: what the measuring prints is the whole point of
+  # running it, and a spinner would hide the table behind one line.
+  echo
+  info "$(tr_msg bench_measuring)"
+  echo
+  local held=0
+  run_bench run || held=1
+  echo
+
+  # Removed whatever the measuring said, including when it was interrupted:
+  # an invented library left behind is half a gigabyte nobody asked for, and
+  # the next run would refuse because of it.
+  step "$(tr_msg step_bench_empty)" run_bench empty
+
+  if ((held == 0)); then
+    success "$(tr_msg bench_held)"
+  else
+    warn "$(tr_msg bench_missed)"
+  fi
+}
+
 action_lines() {
   fetch_source
 
@@ -1162,7 +1230,8 @@ menu() {
   printf "   %b4%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_backup)"
   printf "   %b5%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_restore)"
   printf "   %b6%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_uninstall)"
-  printf "   %b7%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_lines)"
+  printf "   %b7%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_bench)"
+  printf "   %b8%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_lines)"
   printf "   %b0%b) %s\n" "${BOLD}${GRAY}" "${RESET}" "$(tr_msg menu_quit)"
   echo
 
@@ -1176,7 +1245,8 @@ menu() {
     4) action_backup ;;
     5) action_restore ;;
     6) action_uninstall ;;
-    7) action_lines ;;
+    7) action_bench ;;
+    8) action_lines ;;
     0) exit 0 ;;
     *) die "$(tr_fmt err_bad_choice "$choice")" ;;
   esac
@@ -1212,6 +1282,7 @@ main() {
     backup)    action_backup ;;
     restore)   action_restore ;;
     uninstall) action_uninstall ;;
+    bench)     action_bench ;;
     lines)     action_lines ;;
     # Without a terminal there is nobody to answer the menu, and an install is
     # far too heavy a thing to start on a default nobody chose.
