@@ -305,6 +305,18 @@ export function ChaptersIcon(props: IconProps) {
   );
 }
 
+/** What plays after this: a screen playing now, a queue waiting behind it. */
+export function UpNextIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="2.8" y="7.2" width="12.4" height="9.6" rx="1.6" />
+      <path d="M7.4 9.8v4.4l4-2.2Z" fill="currentColor" stroke="none" />
+      <path d="M18.2 9v6" />
+      <path d="M21.2 9v6" />
+    </Icon>
+  );
+}
+
 /** Who is in it: two people, the nearer one whole. */
 export function CastIcon(props: IconProps) {
   return (

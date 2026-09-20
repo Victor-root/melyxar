@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import type { NextEpisode, Version, Work } from "../api";
+import type { Version, Work } from "../api";
 import { useAsked } from "../asking";
 
 /**
@@ -109,6 +109,13 @@ export interface Watching {
   fromTheStart: boolean;
 }
 
+/** Enough of an episode to step straight to it: a `NextEpisode` and a `Child`
+ *  both carry this much, and stepping to one asks for nothing more. */
+export interface Playable {
+  id: string;
+  source_id: string | null;
+}
+
 /** Everything the screen of one film is handed to draw itself and be driven by. */
 export interface WorkScreen {
   /** The film, or nothing until the server has said. */
@@ -142,6 +149,10 @@ export interface WorkScreen {
   /** The same, a step back into the episode before this one. Absent for the
       first one of a series. */
   previousEpisode: (() => void) | null;
+  /** Steps straight to any other episode, the way `nextEpisode` and
+      `previousEpisode` do: what the "up next" row asks for when a hand
+      chooses one out of order rather than the one right after or before. */
+  playEpisode: (episode: Playable) => void;
 }
 
 export function useWorkScreen(id: string | undefined): WorkScreen {
@@ -234,7 +245,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
      it back is what let the file just left keep playing under the title of
      the one just reached. */
   const stepTo = useCallback(
-    (next: NextEpisode) => {
+    (next: Playable) => {
       stepping.current = true;
       navigate(`/work/${next.id}`);
       if (next.source_id) {
@@ -271,5 +282,6 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
        season has nothing playing to follow. */
     nextEpisode: nextUp ? () => stepTo(nextUp) : null,
     previousEpisode: previousUp ? () => stepTo(previousUp) : null,
+    playEpisode: stepTo,
   };
 }

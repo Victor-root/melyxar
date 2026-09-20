@@ -47,6 +47,7 @@ export function WorkPage() {
     stopTrailer,
     nextEpisode,
     previousEpisode,
+    playEpisode,
   } = useWorkScreen(id);
 
   /* Escape goes back, which is what a remote control and a keyboard both
@@ -121,6 +122,7 @@ export function WorkPage() {
         onEnded={nextEpisode ?? undefined}
         onNextEpisode={nextEpisode ?? undefined}
         onPreviousEpisode={previousEpisode ?? undefined}
+        onSelectEpisode={playEpisode}
       />
     );
   }

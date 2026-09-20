@@ -333,6 +333,7 @@ fn child_view(child: &melyxar_app::detail::Child) -> ChildView {
         identification: child.work.identification.as_str(),
         color: child.work.dominant_color.clone(),
         poster: pictures_of(&child.poster, "poster"),
+        source_id: child.work.source_id.map(|id| id.to_string()),
     }
 }
 
@@ -514,6 +515,10 @@ struct ChildView {
     identification: &'static str,
     color: Option<String>,
     poster: Vec<ImageView>,
+    /// The biggest copy on disk, so a row of these can start one playing on
+    /// its own rather than sending a viewer to its page to ask again. Absent
+    /// along with `playable`.
+    source_id: Option<String>,
 }
 
 /// One work this one hangs under, as a way back to it.

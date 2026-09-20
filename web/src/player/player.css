@@ -1596,6 +1596,7 @@
 /* Where the film changes scene ------------------------------------------- */
 
 .player-drawer-chapter,
+.player-drawer-episode,
 .player-drawer-person {
   flex: none;
   width: var(--player-drawer-card);
@@ -1611,8 +1612,15 @@
   text-align: center;
 }
 
-.player-drawer-chapter {
+.player-drawer-chapter,
+.player-drawer-episode:not(:disabled) {
   cursor: pointer;
+}
+
+/* An episode nobody has the file for, or the one already playing: a card
+   nothing happens for reads as one still worth pressing otherwise. */
+.player-drawer-episode:disabled {
+  opacity: 0.55;
 }
 
 /* As tall as the thumbnails really are, which the drawing works out and sets:
@@ -1632,7 +1640,8 @@
     transform var(--quick) var(--ease);
 }
 
-.player-drawer-chapter:hover .player-drawer-frame {
+.player-drawer-chapter:hover .player-drawer-frame,
+.player-drawer-episode:not(:disabled):hover .player-drawer-frame {
   border-color: var(--accent);
   transform: scale(1.03);
 }
@@ -1642,7 +1651,15 @@
   background-repeat: no-repeat;
 }
 
-.player-drawer-chapter-now .player-drawer-frame {
+.player-drawer-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.player-drawer-chapter-now .player-drawer-frame,
+.player-drawer-episode-now .player-drawer-frame {
   border-color: var(--accent);
 }
 
@@ -1677,6 +1694,21 @@
   color: var(--accent-contrast);
   font-size: 11px;
   font-weight: 600;
+}
+
+/* The opposite corner from "playing now", so an episode carrying both never
+   sets one over the other. */
+.player-drawer-card-watched {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 3px 6px;
+  border-radius: 0 var(--radius-control) 0 var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 /* Who is in it ----------------------------------------------------------- */
