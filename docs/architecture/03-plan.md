@@ -81,7 +81,7 @@ Vérifié dans l'environnement de travail : une affiche réelle est préparée e
 
 Fait : les routes de navigation (cartes paginées par curseur, fiche, images, filtres), le tri par titre, date d'ajout, année, note et durée, les filtres par genre, décennie et « à identifier », la recherche, la page d'accueil avec les derniers ajouts, la fiche complète avec sélecteur de version, distribution en visages, équipe, saga et bandes annonces, la page des tâches, les deux langues, les deux thèmes, et l'interface embarquée dans le binaire.
 
-Reste : la liste « à voir plus tard » et les favoris (il faut d'abord un compte connecté), les films similaires, la correction manuelle depuis l'interface, la spécification OpenAPI et le canal temps réel.
+Reste : la liste « à voir plus tard » et les favoris (le compte connecté qu'ils attendaient existe désormais), les films similaires, la correction manuelle depuis l'interface, la spécification OpenAPI et le canal temps réel.
 
 Vérifié dans l'environnement de travail, sur de vrais films : la grille et la fiche s'affichent sans une seule erreur de console, le défilement continu passe de soixante à cent quarante-cinq cartes sans doublon puis annonce la fin, les flèches du clavier se déplacent d'une carte et d'une rangée, le contour de sélection est visible, et rien ne déborde de l'écran à quatre cents pixels de large.
 
@@ -230,20 +230,30 @@ Reste à faire :
 
 ## Jalon 8 : personnalisation et administration
 
-État : à faire.
+État : en cours. Les comptes existent pour de vrai ; il reste l'écran d'administration et le reste de la personnalisation.
+
+### Comptes, connexion et droits
+
+Fait : la crate `auth` (mots de passe hachés par une fonction lente et gourmande en mémoire, jetons de session tirés au hasard) ; les sessions rangées dans la table des appareils, sans date de fin, vivantes tant qu'elles servent, trente jours sans usage et périmées, avec leur dernier usage réécrit au plus une fois par heure ; un portier unique par lequel tout passe, fermé sauf pour quatre adresses ; le cookie fermé aux scripts, limité au site, exigeant le chiffrement seulement quand le serveur en sert ; les gestionnaires qui déclarent ce dont ils ont besoin, compte ou administrateur, le compilateur refusant qu'ils lisent un compte non demandé ; le journal, le diagnostic, l'explorateur de dossiers, les travaux et la gestion des médiathèques passés en administrateur ; le frein après dix mots de passe erronés d'affilée ; la page de connexion et l'assistant de premier démarrage, où la personne choisit son nom ; les médiathèques autorisées appliquées partout, avec la règle dite à voix haute plutôt que lue dans une absence de lignes ; la langue, le thème et la couleur d'accentuation rattachés au compte ; les commandes de terminal pour lister, créer, limiter, retirer un compte et y remettre un mot de passe, plus l'entrée de menu qui va avec.
+
+Reste : l'écran de gestion des comptes, qui appartient à l'interface d'administration ; la liste des appareils connectés avec révocation individuelle ; le code à quatre chiffres pour les télévisions déjà autorisées ; l'écran de choix d'utilisateur avec avatars ; la limite de lectures simultanées, qui demande de compter les sessions en cours ; et la limite d'âge, reportée exprès (voir le README des décisions).
+
+Vérifié dans un vrai navigateur contre un serveur qui tourne : la porte sur un serveur neuf et sur un serveur configuré, le mauvais mot de passe refusé, les deux mots de passe attrapés quand ils diffèrent, la bibliothèque rendue avec le bon nom dans la barre, une machine réglée en thème clair qui adopte le thème sombre, le français et une couleur de son compte. Et contre le serveur directement : une adresse fermée refusée sans cookie, un jeton inventé qui ne nomme personne, les images et les segments de film fermés eux aussi, la porte du premier compte qui se referme, dix mauvais mots de passe répondus avec le temps à attendre. Trois comptes sur un serveur, l'un voyant tout, l'un n'ayant reçu que les films, l'un n'ayant rien reçu, passés par chaque chemin de lecture et d'écriture. Et le banc d'essai repassé en release sur cent mille œuvres inventées : tous les budgets tenus, la lecture de session sur chaque requête coûtant moins d'une milliseconde.
+
+### Le reste du jalon
 
 Fait depuis, en avance sur ce jalon : la moitié serveur du refus de la conversion des couleurs, réglage général sous « Image » dans les paramètres, décoché par défaut. Demandé pour un processeur trop lent pour reconstruire l'image des films HDR d'une collection, plutôt que pour un écran réellement HDR. Le Dolby Vision sans couche de base compatible reste converti dans tous les cas, pour ne jamais laisser une image cassée à l'écran. L'interrupteur pendant la lecture et le réglage par spectateur, pensés pour l'écran plutôt que pour le processeur, restent à faire avec le reste de ce jalon.
 
 - Écran d'administration : nom du serveur, logo, écran de démarrage, fond et apparence de la page de connexion.
-- Couleur d'accentuation choisie par l'utilisateur, avec palette dérivée et vérification automatique du contraste.
-- Modes clair, sombre et automatique, stockés dans les préférences.
+- Couleur d'accentuation choisie par l'utilisateur, avec palette dérivée et vérification automatique du contraste. **À moitié fait** : le compte la porte, elle est refusée si ce n'est pas un dièse et six chiffres, ses nuances sont dérivées et la couleur lisible dessus est calculée. Il manque l'écran qui la choisit.
+- Modes clair, sombre et automatique, stockés dans les préférences. **Fait** : le compte les porte, le navigateur en garde une copie pour dessiner la porte avant de connaître qui que ce soit.
 - CSS personnalisé, au niveau du serveur pour l'administrateur et au niveau de chaque utilisateur, avec possibilité de le désactiver et adresse de secours sans CSS.
 - Lecteur avec ses propres commandes à la place de celles du navigateur : barre de progression, volume, plein écran, titre du film et retour, le tout cohérent en fenêtre comme en plein écran, et rejoignant le choix des pistes, la vitesse et l'image dans un coin qui existent déjà autour. Les commandes du navigateur conviennent à une vidéo regardée vite fait : elles ne portent ni le nom de ce qu'on regarde, ni ce qui l'entoure, et elles changent d'un navigateur à l'autre. Prévu ici parce que c'est le jalon où l'interface cesse de ressembler à une installation par défaut.
 - Mode maintenance : message, durée estimée, page dédiée avec le code d'état approprié, accès conservé pour l'administrateur, avertissement des lectures en cours, exemple de configuration nginx.
-- Gestion des utilisateurs et de leurs droits : accès par bibliothèque, limite d'âge, téléchargement, suppression, sessions simultanées. Code à quatre chiffres pour les appareils de télévision déjà autorisés.
+- Gestion des utilisateurs et de leurs droits : accès par bibliothèque, limite d'âge, téléchargement, suppression, sessions simultanées. Code à quatre chiffres pour les appareils de télévision déjà autorisés. **Voir la section « Comptes, connexion et droits » plus haut** : l'accès par bibliothèque est fait et appliqué partout, le reste attend son écran.
 - Téléchargement d'un fichier, soumis au droit correspondant.
 - Suppression d'une œuvre, avec case décochée par défaut pour effacer aussi le fichier du disque, réservée à l'administrateur, chemin résolu côté serveur et vérifié sous une racine déclarée, entrée au journal d'activité.
-- Assistant de première configuration : langue, compte administrateur, mode d'accès. S'ouvre tant que la configuration initiale n'est pas terminée et saute ce que le script d'installation a déjà réglé. La partie médiathèques est faite et se réutilise telle quelle : l'explorateur de dossiers, le formulaire et le premier scan existent déjà dans les réglages.
+- Assistant de première configuration : langue, compte administrateur, mode d'accès. **Fait pour le compte et la langue** : un serveur neuf n'a aucun compte et la première chose qu'il propose est d'en créer un, avec le nom que la personne choisit, et cette porte se referme derrière elle. Reste à y joindre les médiathèques, dont l'explorateur de dossiers, le formulaire et le premier scan existent déjà dans les réglages, et le mode d'accès.
 - Écran de choix d'utilisateur avec avatars, désactivable.
 - Liste des appareils connectés avec leur dernière activité et révocation individuelle.
 - Page des bibliothèques affichant l'état d'accès de chaque racine. Les fonctions exigeant l'écriture (suppression sur disque, écriture des fichiers d'accompagnement) sont désactivées avec leur raison quand la racine est en lecture seule.
@@ -287,7 +297,6 @@ Vérifié dans un vrai navigateur contre un serveur qui tourne : les quatre rang
 - Plusieurs fournisseurs de métadonnées : un second catalogue interrogé quand le premier ne connaît pas un film, des règles claires pour départager deux réponses, et la provenance restant visible champ par champ. Constaté en conditions réelles : un téléfilm rattaché à une série existe chez le fournisseur actuel du côté des séries et pas du côté des films, donc aucune recherche de film ne le trouvera jamais, alors qu'un catalogue construit sur les données IMDb le classe comme film. Les autres serveurs y arrivent parce qu'ils ont un second catalogue sous la main, pas parce que leur lecture des noms est meilleure.
 - Bibliothèque musicale : modèle artiste, album, morceau, fournisseur MusicBrainz, navigation dédiée, listes de lecture.
 - Normalisation audio : c'est la vraie réponse au niveau sonore, et le gain de repliage appliqué aujourd'hui à toutes les pistes tient la place en attendant. Mesure de sonie au scan, application au gain à la lecture, modes morceau et album, compression de plage dynamique pour les films.
-- Plusieurs utilisateurs avec écran de connexion complet et gestion des droits.
 - Clients natifs : un projet Android, base commune (API, session, cache, lecteur), interface télévision d'abord, interface téléphone ensuite.
 - Émissions : type de bibliothèque à part entière (documentaires et programmes de télévision), réutilisant le modèle série, saison, épisode.
 - Import ponctuel de l'historique de visionnage et des favoris depuis une installation Jellyfin existante.
