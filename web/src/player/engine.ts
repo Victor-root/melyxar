@@ -421,6 +421,14 @@ export function usePlayback({
   const [refusal, setRefusal] = useState<string | null>(null);
   const [audioId, setAudioId] = useState<string | null>(null);
   const [subtitleId, setSubtitleId] = useState<string | null>(null);
+  /* Counts how many times a choice has actually been made, so that asking
+     again for what this already holds still asks the server again.
+     Both begin at nothing, which is also what "no subtitle" is asked with:
+     a viewer's very first choice can be turning subtitles off on a track the
+     server picked for itself without ever being told to, and asking for
+     nothing when nothing is already held is a choice React sees no change
+     in and, left to it, silently drops. */
+  const [choiceSerial, setChoiceSerial] = useState(0);
   const [speed, setSpeedState] = useState(1);
   /* What the viewer asked the picture to be held to. Kept across films rather
      than per film: somebody watching on a thin connection is on a thin
@@ -544,7 +552,7 @@ export function usePlayback({
         }
       });
     return () => controller.abort();
-  }, [sourceId, audioId, subtitleId, fromTheStart, quality, codec]);
+  }, [sourceId, audioId, subtitleId, fromTheStart, quality, codec, choiceSerial]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
   /* The codec the picture is really being rebuilt into, and how fast the film
@@ -971,6 +979,11 @@ export function usePlayback({
     (audio: string | null, subtitle: string | null) => {
       setAudioId(audio);
       setSubtitleId(subtitle);
+      // Counted rather than read back off the two above: a choice that
+      // repeats what they already hold, such as turning off a subtitle the
+      // server had picked on its own, is still a choice this made and the
+      // server has not yet heard.
+      setChoiceSerial((serial) => serial + 1);
       api
         .rememberTracks({
           work_id: workId,
