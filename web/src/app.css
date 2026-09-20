@@ -1694,10 +1694,10 @@
   bottom: 8%;
 }
 .subtitles-height-raised .subtitle-sample-words {
-  bottom: 24%;
+  bottom: 50%;
 }
 .subtitles-height-high .subtitle-sample-words {
-  bottom: 44%;
+  bottom: 85%;
 }
 
 /* Carried as a custom property rather than set on `bottom` directly, so that
@@ -1705,15 +1705,18 @@
    actually need it lifted and the higher of the two wins: a viewer who chose
    the highest position is otherwise unable to tell it apart from the one
    below it while a menu forces the words to clear the controls anyway,
-   which is exactly the moment a viewer trying that setting is looking at. */
+   which is exactly the moment a viewer trying that setting is looking at.
+
+   A genuine bottom, middle and top of the picture: the two higher ones
+   never reached past a quarter of the way up before. */
 .subtitles-height-bottom .player-subtitle-words {
   --subtitle-height: 8%;
 }
 .subtitles-height-raised .player-subtitle-words {
-  --subtitle-height: 24%;
+  --subtitle-height: 50%;
 }
 .subtitles-height-high .player-subtitle-words {
-  --subtitle-height: 44%;
+  --subtitle-height: 85%;
 }
 
 /* The words as they actually sit on the picture: a column of lines, each one
