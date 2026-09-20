@@ -45,8 +45,8 @@ export function WorkPage() {
     trailer,
     watchTrailer,
     stopTrailer,
-    andThen,
-    goBack,
+    nextEpisode,
+    previousEpisode,
   } = useWorkScreen(id);
 
   /* Escape goes back, which is what a remote control and a keyboard both
@@ -114,15 +114,13 @@ export function WorkPage() {
         work={work}
         fromTheStart={playing.fromTheStart}
         onClose={stopPlaying}
-        /* One episode after another without anybody pressing anything. The
-           next one is opened on its own page, which is what writes its own
+        /* One episode after another without anybody pressing anything, and
+           stepping between them by hand, go through the same step: each
+           episode is opened on its own page, which is what writes its own
            progress down and shows its own title. */
-        onEnded={andThen ? () => navigate(andThen) : undefined}
-        /* Stepping between episodes by hand goes through the same pages, for
-           the same reason: each episode writes its own progress and shows
-           its own title, which only its own page does. */
-        onNextEpisode={andThen ? () => navigate(andThen) : undefined}
-        onPreviousEpisode={goBack ? () => navigate(goBack) : undefined}
+        onEnded={nextEpisode ?? undefined}
+        onNextEpisode={nextEpisode ?? undefined}
+        onPreviousEpisode={previousEpisode ?? undefined}
       />
     );
   }
