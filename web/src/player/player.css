@@ -1064,33 +1064,10 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: var(--gap-tight);
   flex: 1;
   min-width: 0;
-  padding: var(--gap) var(--gap) var(--gap) calc(var(--gap) + 1px);
+  padding-left: var(--gap-tight);
   border-left: 1px solid var(--border);
-}
-
-.player-choice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gap);
-  font-size: 13px;
-}
-
-.player-choice-label {
-  color: var(--text-soft);
-}
-
-.player-choice select {
-  padding: 5px 8px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border-strong);
-  background: var(--surface-hover);
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
 }
 
 /* ---------------------------------------------------------------------------
