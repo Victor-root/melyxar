@@ -213,8 +213,13 @@ Trois défauts qu'une collection de cinquante films ne pouvait pas montrer, tous
 1. **Les menus d'une médiathèque** prenaient 690 ms et **la page d'accueil** 156 ms, parce que toutes deux comptaient la collection entière à chaque visite. Ces comptes sont maintenant faits une fois par changement et relus ensuite.
 2. **Le dernier arrivé, toutes médiathèques confondues** n'était couvert par aucun index : tous ceux qui ordonnent les œuvres commencent par la médiathèque.
 3. **Retirer une grosse médiathèque prenait trois minutes**, pendant lesquelles rien d'autre ne pouvait être écrit. La base suit la suppression dans chaque table qui pointe vers ce qui s'en va, et une colonne qui pointe sans index se lit en entier, une fois par ligne retirée. Vingt-deux secondes une fois les index posés.
+4. **Filtrer par décennie** demandait une tranche d'années, et une tranche ne se lit pas dans l'ordre des titres : toute la décennie était lue et triée avant d'envoyer cent cartes. Tenu à 100 000 (17 ms), dépassé à 500 000 (82 ms pour 30 de budget). La décennie est maintenant une valeur que la base calcule elle-même à partir de l'année, et l'index la porte devant le titre : 5 ms, et le même chiffre aux deux tailles.
 
 Le troisième donne une règle générale, tenue par un test qui parcourt le schéma : **toute colonne qui pointe vers une autre table a un index**. C'est la règle de SQLite elle-même, et c'est celle qu'on oublie, parce que rien ne s'en plaint tant que les tables sont petites.
+
+Le quatrième en donne une autre : **ce qui restreint une grille doit être une valeur, pas une tranche**, sinon l'index ne peut pas servir à la fois à choisir et à ordonner, et le temps se met à suivre la taille de la collection.
+
+Mesuré à 100 000 œuvres, la cible, et vérifié à 500 000, cinq fois la cible : tous les budgets tenus, et les mêmes chiffres aux deux tailles.
 
 ### Détection des régressions
 
