@@ -656,6 +656,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_works_still_waiting_for_a_name_are_counted_where_they_are() {
+        // Over everything a library holds rather than over what a grid shows:
+        // an episode nobody could name is a film nobody could name.
+        let (database, library_id) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        assert_eq!(
+            database
+                .count_awaiting_identification(Some(library_id))
+                .await
+                .expect("counted"),
+            0,
+            "the films of this library all have names"
+        );
+
+        let nameless = database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "Untitled 1994",
+                "untitled 1994",
+                None,
+            )
+            .await
+            .expect("work created");
+        assert_eq!(
+            database
+                .count_awaiting_identification(Some(library_id))
+                .await
+                .expect("counted"),
+            1
+        );
+        assert_eq!(
+            database
+                .count_awaiting_identification(None)
+                .await
+                .expect("counted"),
+            1,
+            "asked of the whole catalogue it answers the same here"
+        );
+
+        database
+            .mark_work_unidentified(nameless.id)
+            .await
+            .expect("marked");
+        assert_eq!(
+            database
+                .count_awaiting_identification(Some(library_id))
+                .await
+                .expect("counted"),
+            1,
+            "a film nothing could name is still a film waiting for one"
+        );
+    }
+
+    #[tokio::test]
     async fn every_way_of_counting_a_library_counts_the_same_works() {
         // A season is opened from its series and an episode from its season:
         // neither is ever met on its own in a grid. Five places answer "what

@@ -263,6 +263,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_room_a_removal_left_is_given_back_to_the_disk() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("melyxar.db");
+        let database = Database::open(&path).await.expect("database opens");
+
+        // Enough rows that the file has to grow well past a migrated one, so
+        // that giving the room back is something that can be seen.
+        sqlx::query("CREATE TABLE plenty (id INTEGER PRIMARY KEY, filling TEXT)")
+            .execute(database.writer())
+            .await
+            .expect("table created");
+        sqlx::query(
+            "INSERT INTO plenty (filling)
+             WITH RECURSIVE counted(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM counted LIMIT 20000)
+             SELECT hex(randomblob(200)) FROM counted",
+        )
+        .execute(database.writer())
+        .await
+        .expect("rows written");
+
+        let full = database.size_bytes().await.expect("size readable");
+        sqlx::query("DROP TABLE plenty")
+            .execute(database.writer())
+            .await
+            .expect("table dropped");
+        assert_eq!(
+            database.size_bytes().await.expect("size readable"),
+            full,
+            "a database never shrinks on its own"
+        );
+
+        database.reclaim_space().await.expect("room given back");
+        assert!(
+            database.size_bytes().await.expect("size readable") < full / 2,
+            "the room a removal left has to come back to the disk"
+        );
+
+        database.close().await;
+    }
+
+    #[tokio::test]
     async fn opening_creates_the_missing_parent_directory() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let nested = directory

@@ -664,6 +664,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn how_far_along_every_library_is_moves_whatever_moved() {
+        // What a question about the whole catalogue is read by. It has to move
+        // when a library grows and when one goes away altogether, or an answer
+        // counted once would stand for ever.
+        let database = database().await;
+        assert_eq!(
+            database.every_library_version().await.expect("read"),
+            0,
+            "no library at all is a sum of nothing"
+        );
+
+        let first = database
+            .create_library("Films", LibraryKind::Movies, "fr", &roots())
+            .await
+            .expect("library created");
+        let second = database
+            .create_library("Séries", LibraryKind::Series, "fr", &roots_under("series"))
+            .await
+            .expect("library created");
+        let both = database.every_library_version().await.expect("read");
+        assert_eq!(both, 2, "each library starts at one");
+
+        database
+            .bump_library_version(first.id)
+            .await
+            .expect("bumped");
+        assert_eq!(database.every_library_version().await.expect("read"), 3);
+
+        database.delete_library(second.id).await.expect("removed");
+        assert!(
+            database.every_library_version().await.expect("read") < 3,
+            "a library taken away has to move the sum too"
+        );
+    }
+
+    #[tokio::test]
     async fn the_language_of_a_library_can_be_changed_afterwards() {
         // Read once at creation and never again is what left an installation
         // describing its films in a language nobody there speaks, with no way
