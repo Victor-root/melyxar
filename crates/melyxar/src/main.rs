@@ -130,6 +130,35 @@ enum Command {
 enum Account {
     /// Name every account, and say which of them are administrators.
     List,
+    /// Make an account.
+    ///
+    /// Here rather than on a screen for now: the administration where it
+    /// belongs does not exist yet.
+    Add {
+        /// What to call it.
+        name: String,
+        /// Let it manage this server: its libraries, its journal, its report.
+        #[arg(long)]
+        administrator: bool,
+    },
+    /// Take an account away, with everything of theirs.
+    ///
+    /// Where they were in every film, what they marked as liked, what they
+    /// meant to watch, their preferences and every device they were signed in
+    /// on. None of it can be had back.
+    Remove {
+        name: String,
+    },
+    /// Say which libraries an account may see.
+    ///
+    /// Without a library named, it sees every one there is, including the
+    /// ones added later. With one or more, it sees those and nothing else.
+    Libraries {
+        name: String,
+        /// A library by its name, as many times as there are to grant.
+        #[arg(long = "library", value_name = "NAME")]
+        libraries: Vec<String>,
+    },
     /// Put a password on an account, and sign every device of it out.
     ///
     /// The password is read from the standard input rather than taken as an
@@ -250,6 +279,66 @@ async fn account(config: Config, what: Account) -> anyhow::Result<()> {
                 }
             }
         }
+        Account::Add {
+            name,
+            administrator,
+        } => {
+            let password = read_a_password()?;
+            let permissions = match administrator {
+                true => melyxar_core::user::Permissions::administrator(),
+                false => melyxar_core::user::Permissions::viewer(),
+            };
+            let made = melyxar_app::accounts::create_account(
+                &state,
+                &name,
+                &password,
+                &permissions,
+            )
+            .await?;
+            match administrator {
+                true => println!("{} was made, as an administrator", made.name),
+                false => println!("{} was made", made.name),
+            }
+        }
+        Account::Remove { name } => {
+            anyhow::ensure!(
+                confirmed(&name)?,
+                "nothing was taken away: what was typed is not {name}"
+            );
+            match melyxar_app::accounts::remove_account(&state, &name).await? {
+                true => println!("{name} is gone, with everything of theirs"),
+                false => anyhow::bail!(
+                    "no account is called {name}: run `account list` to see the names"
+                ),
+            }
+        }
+        Account::Libraries { name, libraries } => {
+            let mut granted = Vec::with_capacity(libraries.len());
+            for wanted in &libraries {
+                let library = state
+                    .database()
+                    .library_by_name(wanted)
+                    .await?
+                    .with_context(|| format!("no library is called {wanted}"))?;
+                granted.push(library.id);
+            }
+
+            let found = melyxar_app::accounts::set_what_an_account_may_see(
+                &state,
+                &name,
+                granted.is_empty(),
+                &granted,
+            )
+            .await?;
+            anyhow::ensure!(
+                found,
+                "no account is called {name}: run `account list` to see the names"
+            );
+            match libraries.is_empty() {
+                true => println!("{name} sees every library, including the ones added later"),
+                false => println!("{name} sees only: {}", libraries.join(", ")),
+            }
+        }
         Account::Password { name } => {
             let password = read_a_password()?;
             match melyxar_app::accounts::set_a_password(&state, &name, &password).await? {
@@ -263,6 +352,21 @@ async fn account(config: Config, what: Account) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Asks for a name to be typed again before something cannot be had back.
+///
+/// Read the same way a password is, so it works whether somebody is at the
+/// terminal or a script is feeding it.
+fn confirmed(name: &str) -> anyhow::Result<bool> {
+    use std::io::{BufRead, Write};
+
+    print!("Type {name} again to take it away, with everything of theirs: ");
+    std::io::stdout().flush()?;
+
+    let mut typed = String::new();
+    std::io::stdin().lock().read_line(&mut typed)?;
+    Ok(typed.trim() == name)
 }
 
 /// A password off the standard input, typed or piped in.

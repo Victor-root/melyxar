@@ -98,6 +98,20 @@ en|menu_bench|Measure the speed on a large library
 fr|menu_bench|Mesurer la vitesse sur une grosse bibliothèque
 en|menu_lines|Count the lines of code
 fr|menu_lines|Compter les lignes de code
+en|menu_accounts|Accounts: see them, or put a password back
+fr|menu_accounts|Comptes : les voir, ou remettre un mot de passe
+en|section_accounts|Accounts
+fr|section_accounts|Comptes
+en|accounts_notice|The way back in for somebody locked out of their own server. It asks for no password of its own, because whoever has a terminal here can read the database anyway.
+fr|accounts_notice|Le moyen de rentrer pour quelqu'un enfermé dehors de son propre serveur. Il ne demande aucun mot de passe, parce que qui a un terminal ici peut de toute façon lire la base.
+en|accounts_none|No account yet: open this server in a browser to set it up.
+fr|accounts_none|Aucun compte pour l'instant : ouvrez ce serveur dans un navigateur pour le configurer.
+en|prompt_accounts_which|Whose password to put back, or nothing to leave them alone
+fr|prompt_accounts_which|De qui remettre le mot de passe, ou rien pour n'y pas toucher
+en|prompt_accounts_password|The new password
+fr|prompt_accounts_password|Le nouveau mot de passe
+en|accounts_changed|The password was changed, and every device of that account was signed out.
+fr|accounts_changed|Le mot de passe a été changé, et tous les appareils de ce compte ont été déconnectés.
 en|menu_quit|Quit
 fr|menu_quit|Quitter
 en|prompt_choice|Your choice
@@ -1111,6 +1125,38 @@ action_bench() {
   fi
 }
 
+action_accounts() {
+  is_installed || die "$(tr_msg err_not_installed)"
+
+  section "$(tr_msg section_accounts)"
+  info "$(tr_msg accounts_notice)"
+  echo
+
+  local named
+  named="$(runuser -u "$APP_USER" -- "$BINARY_PATH" --config "$CONFIG_FILE" account list 2>/dev/null)"
+  if [[ -z "$named" ]]; then
+    warn "$(tr_msg accounts_none)"
+    return 0
+  fi
+  printf '%s\n' "$named" | sed 's/^/  /'
+  echo
+
+  local name password
+  name="$(prompt_free "$(tr_msg prompt_accounts_which)")"
+  [[ -n "$name" ]] || { info "$(tr_msg cancelled)"; return 0; }
+
+  prompt_label "${RED_SOFT}" "$(tr_msg prompt_accounts_password)"
+  password="$(read_secret)"
+  [[ -n "$password" ]] || { info "$(tr_msg cancelled)"; return 0; }
+
+  # Through the standard input, so it never lands in this shell's history nor
+  # in the list of what is running on this machine.
+  printf '%s\n' "$password" |
+    runuser -u "$APP_USER" -- "$BINARY_PATH" --config "$CONFIG_FILE" account password "$name" ||
+    die "$(tr_msg accounts_none)"
+  success "$(tr_msg accounts_changed)"
+}
+
 action_lines() {
   fetch_source
 
@@ -1274,7 +1320,8 @@ menu() {
   printf "   %b5%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_restore)"
   printf "   %b6%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_uninstall)"
   printf "   %b7%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_bench)"
-  printf "   %b8%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_lines)"
+  printf "   %b8%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_accounts)"
+  printf "   %b9%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_lines)"
   printf "   %b0%b) %s\n" "${BOLD}${GRAY}" "${RESET}" "$(tr_msg menu_quit)"
   echo
 
@@ -1289,7 +1336,8 @@ menu() {
     5) action_restore ;;
     6) action_uninstall ;;
     7) action_bench ;;
-    8) action_lines ;;
+    8) action_accounts ;;
+    9) action_lines ;;
     0) exit 0 ;;
     *) die "$(tr_fmt err_bad_choice "$choice")" ;;
   esac
@@ -1326,6 +1374,7 @@ main() {
     restore)   action_restore ;;
     uninstall) action_uninstall ;;
     bench)     action_bench ;;
+    accounts)  action_accounts ;;
     lines)     action_lines ;;
     # Without a terminal there is nobody to answer the menu, and an install is
     # far too heavy a thing to start on a default nobody chose.

@@ -215,6 +215,69 @@ impl Database {
         Ok(available)
     }
 
+    /// Takes an account away, and says whether there was one to take.
+    ///
+    /// Everything of theirs goes with it: where they were in every film, what
+    /// they marked as liked, what they were still meaning to watch, their
+    /// preferences and every device they were signed in on. That is the
+    /// schema's own doing rather than this statement's, and it is what
+    /// removing an account means.
+    pub async fn delete_user(&self, id: UserId) -> Result<bool> {
+        let done = sqlx::query("DELETE FROM users WHERE id = ?")
+            .bind(id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(done.rows_affected() > 0)
+    }
+
+    /// Says which libraries an account may see, replacing whatever it had.
+    ///
+    /// Whole rather than one at a time: what is being set is the answer to
+    /// one question, and a grant added while another is being taken away
+    /// would leave an account seeing a set nobody asked for.
+    pub async fn set_library_access(
+        &self,
+        id: UserId,
+        sees_every_library: bool,
+        granted: &[LibraryId],
+    ) -> Result<()> {
+        let mut transaction = self.begin().await?;
+
+        sqlx::query("UPDATE users SET sees_every_library = ? WHERE id = ?")
+            .bind(bool_to_int(sees_every_library))
+            .bind(id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+
+        sqlx::query("DELETE FROM user_library_access WHERE user_id = ?")
+            .bind(id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+
+        for library in granted {
+            sqlx::query("INSERT INTO user_library_access (user_id, library_id) VALUES (?, ?)")
+                .bind(id.to_db_string())
+                .bind(library.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+        }
+
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// How many administrators this server has.
+    ///
+    /// What stops the last one being taken away: a server with nobody who may
+    /// manage it is a server that has to be opened from a terminal to be put
+    /// right, and nothing in the interface would ever say so.
+    pub async fn administrator_count(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT count(*) FROM users WHERE is_administrator = 1")
+            .fetch_one(self.reader())
+            .await?;
+        Ok(row.0)
+    }
+
     /// Saves the preferences of one account, after clamping the values a
     /// client may have sent out of range.
     pub async fn save_preferences(&self, id: UserId, preferences: &Preferences) -> Result<()> {
@@ -404,6 +467,118 @@ mod tests {
         assert_eq!(loaded.permissions.allowed_libraries, vec![library]);
         assert!(loaded.permissions.may_access_library(library));
         assert!(!loaded.permissions.may_access_library(LibraryId::new()));
+    }
+
+    #[tokio::test]
+    async fn an_account_taken_away_takes_everything_of_its_own_with_it() {
+        let database = database().await;
+        let created = database
+            .create_user("victor", Some("a stored form"), &Permissions::administrator())
+            .await
+            .expect("account created");
+        database
+            .open_session(created.id, "a browser", "a fingerprint", now())
+            .await
+            .expect("session opened");
+
+        assert!(database.delete_user(created.id).await.expect("removed"));
+        assert!(database.user(created.id).await.expect("read").is_none());
+        assert!(
+            database
+                .session_holder("a fingerprint", now())
+                .await
+                .expect("read")
+                .is_none(),
+            "a device of an account that is gone is a device nobody holds"
+        );
+        assert!(
+            !database.delete_user(created.id).await.expect("asked"),
+            "taking away what is already gone says so rather than failing"
+        );
+    }
+
+    #[tokio::test]
+    async fn what_an_account_may_see_is_replaced_whole() {
+        let database = database().await;
+        let mut libraries = Vec::new();
+        for name in ["Films", "Series", "Anime"] {
+            let id = LibraryId::new();
+            sqlx::query(
+                "INSERT INTO libraries (id, name, kind, created_at, updated_at)
+                 VALUES (?, ?, 'movies', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+            )
+            .bind(id.to_db_string())
+            .bind(name)
+            .execute(database.writer())
+            .await
+            .expect("library inserted");
+            libraries.push(id);
+        }
+
+        let created = database
+            .create_user("limited", None, &Permissions::viewer())
+            .await
+            .expect("account created");
+        assert!(created.permissions.sees_the_whole_server());
+
+        database
+            .set_library_access(created.id, false, &libraries[..2])
+            .await
+            .expect("granted");
+        let loaded = database
+            .user(created.id)
+            .await
+            .expect("read")
+            .expect("exists");
+        assert!(!loaded.permissions.sees_the_whole_server());
+        assert_eq!(loaded.permissions.allowed_libraries, libraries[..2].to_vec());
+
+        // Replaced rather than added to: what is set is the answer to one
+        // question, whole.
+        database
+            .set_library_access(created.id, false, &libraries[2..])
+            .await
+            .expect("granted");
+        let loaded = database
+            .user(created.id)
+            .await
+            .expect("read")
+            .expect("exists");
+        assert_eq!(loaded.permissions.allowed_libraries, libraries[2..].to_vec());
+
+        database
+            .set_library_access(created.id, true, &[])
+            .await
+            .expect("granted");
+        let loaded = database
+            .user(created.id)
+            .await
+            .expect("read")
+            .expect("exists");
+        assert!(loaded.permissions.sees_the_whole_server());
+        assert!(loaded.permissions.allowed_libraries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_administrators_are_counted_so_the_last_one_can_be_kept() {
+        let database = database().await;
+        assert_eq!(database.administrator_count().await.expect("counted"), 0);
+
+        database
+            .create_user("victor", None, &Permissions::administrator())
+            .await
+            .expect("account created");
+        database
+            .create_user("someone", None, &Permissions::viewer())
+            .await
+            .expect("account created");
+        assert_eq!(database.administrator_count().await.expect("counted"), 1);
+
+        database
+            .create_user("another", None, &Permissions::administrator())
+            .await
+            .expect("account created");
+        assert_eq!(database.administrator_count().await.expect("counted"), 2);
     }
 
     #[tokio::test]
