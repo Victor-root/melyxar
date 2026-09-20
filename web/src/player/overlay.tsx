@@ -227,7 +227,17 @@ export function Overlay(props: Props) {
       // still occupies, and on the very padding a viewer's eye is measuring
       // the gap against. Read off the element itself instead, which is the
       // space it actually takes on the picture.
-      surface.style.setProperty("--controls-height", `${bar.offsetHeight}px`);
+      //
+      // Except the padding above it, which answers to the drawer rather than
+      // to the strip: the gradient that darkens the picture behind the row
+      // reaches ninety-two pixels higher than the row itself while the
+      // drawer is shut, mostly nothing underneath it, and dropping to none
+      // at all once the drawer is open. Counted in with the rest, it stood
+      // clear of a strip nearly twice its own real height whenever the
+      // drawer was shut. Read off the style rather than written down again
+      // here, so the two numbers cannot drift apart.
+      const paddingTop = Number.parseFloat(getComputedStyle(bar).paddingTop) || 0;
+      surface.style.setProperty("--controls-height", `${bar.offsetHeight - paddingTop}px`);
     });
     measure.observe(bar);
     return () => measure.disconnect();
