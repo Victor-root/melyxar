@@ -1590,21 +1590,38 @@
     1px 1px 0 #000;
 }
 
-.subtitles-size-small .player-subtitle-line,
 .subtitles-size-small .subtitle-sample-words {
   font-size: 80%;
 }
-.subtitles-size-normal .player-subtitle-line,
 .subtitles-size-normal .subtitle-sample-words {
   font-size: 100%;
 }
-.subtitles-size-large .player-subtitle-line,
 .subtitles-size-large .subtitle-sample-words {
   font-size: 135%;
 }
-.subtitles-size-huge .player-subtitle-line,
 .subtitles-size-huge .subtitle-sample-words {
   font-size: 175%;
+}
+
+/* Sized against the picture itself rather than against the page: the sample
+   above sits in a box of its own with nothing to be proportionate to, so it
+   still takes its size as a share of that box. The real thing has a real
+   picture behind it, and a subtitle drawn as a share of the page's own text
+   size stayed the same few pixels on a phone and on a wall, which is not what
+   a subtitle drawn by the browser itself ever did. Four hundredths of the
+   picture's height is that same size back, judged by eye against what the
+   browser drew before this page took the drawing over. */
+.subtitles-size-small .player-subtitle-line {
+  font-size: 3.2vh;
+}
+.subtitles-size-normal .player-subtitle-line {
+  font-size: 4vh;
+}
+.subtitles-size-large .player-subtitle-line {
+  font-size: 5.4vh;
+}
+.subtitles-size-huge .player-subtitle-line {
+  font-size: 7vh;
 }
 
 .subtitles-colour-white .player-subtitle-line,
