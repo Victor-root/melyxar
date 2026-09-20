@@ -210,6 +210,8 @@ Reste à faire : la mesure pendant un scan et deux transcodages, qui demande une
 
 Trois défauts qu'une collection de cinquante films ne pouvait pas montrer, tous corrigés le jour où ils ont été mesurés :
 
+0. **Une requête sait désormais qui la pose.** Chaque réponse commence par retrouver le compte derrière le cookie : une lecture par empreinte, indexée, plus la liste des médiathèques accordées. Mesuré en release sur cent mille œuvres inventées, cela coûte moins d'une milliseconde, et le dernier usage d'une session n'est réécrit qu'une fois périmé, au plus une fois par heure et par appareil. Sans ce délai, un film regardé demanderait une écriture par segment derrière chaque scan, sur l'unique connexion d'écriture. Le filtrage par médiathèque autorisée ne coûte rien au compte qui les voit toutes, qui est celui auquel ce serveur répond presque toujours : la question est tranchée avant toute lecture.
+
 1. **Les menus d'une médiathèque** prenaient 690 ms et **la page d'accueil** 156 ms, parce que toutes deux comptaient la collection entière à chaque visite. Ces comptes sont maintenant faits une fois par changement et relus ensuite.
 2. **Le dernier arrivé, toutes médiathèques confondues** n'était couvert par aucun index : tous ceux qui ordonnent les œuvres commencent par la médiathèque.
 3. **Retirer une grosse médiathèque prenait trois minutes**, pendant lesquelles rien d'autre ne pouvait être écrit. La base suit la suppression dans chaque table qui pointe vers ce qui s'en va, et une colonne qui pointe sans index se lit en entier, une fois par ligne retirée. Vingt-deux secondes une fois les index posés.
