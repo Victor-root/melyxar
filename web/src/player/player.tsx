@@ -21,16 +21,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { PlaybackTrack, Work } from "../api";
 import { useSettings } from "../settings";
-import {
-  appearanceClasses,
-  BACKGROUNDS,
-  COLOURS,
-  EDGES,
-  HEIGHTS,
-  rememberAppearance,
-  SIZES,
-  storedAppearance,
-} from "./appearance";
+import { appearanceClasses, rememberAppearance, storedAppearance } from "./appearance";
 import type { Appearance } from "./appearance";
 import { storedArrangement } from "./arrangement";
 import { canBePlayedAsItIs, usePlayback } from "./engine";
@@ -66,42 +57,6 @@ function trackName(track: PlaybackTrack, t: (key: string) => string, speaking: s
     parts.push(t("player.burns_in_short"));
   }
   return parts.join(" · ");
-}
-
-/**
- * One picker among a short list of named choices.
- *
- * Five of these sit side by side for the subtitles alone, and writing each of
- * them out would be the same twenty lines five times over.
- */
-function Choice<T extends string>({
-  label,
-  value,
-  among,
-  naming,
-  onPick,
-  t,
-}: {
-  label: string;
-  value: T;
-  among: readonly T[];
-  /** What the wording of each choice is keyed on. */
-  naming: string;
-  onPick: (value: T) => void;
-  t: (key: string) => string;
-}) {
-  return (
-    <label className="player-choice">
-      <span className="player-choice-label">{label}</span>
-      <select value={value} onChange={(event) => onPick(event.target.value as T)}>
-        {among.map((one) => (
-          <option key={one} value={one}>
-            {t(`player.${naming}.${one}`)}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
 }
 
 export function Player({
@@ -295,6 +250,8 @@ export function Player({
           naming={naming}
           language={language}
           t={t}
+          appearance={appearance}
+          onAppearance={setAppearance}
         />
 
         {/* Drawn here rather than left to the browser: where these sit has to
@@ -318,53 +275,6 @@ export function Player({
             t={t}
             onClose={() => setPanel(null)}
           />
-        )}
-
-        {/* Only while subtitles are actually showing: offering to restyle
-            words that are not on screen is a row of pickers that do nothing. */}
-        {panel === "subtitles" && shownSubtitle && (
-          <div className="player-dressing">
-            <Choice
-              label={t("player.subtitle_size")}
-              value={appearance.size}
-              among={SIZES}
-              naming="subtitle_size"
-              onPick={(size) => setAppearance({ size })}
-              t={t}
-            />
-            <Choice
-              label={t("player.subtitle_colour")}
-              value={appearance.colour}
-              among={COLOURS}
-              naming="subtitle_colour"
-              onPick={(colour) => setAppearance({ colour })}
-              t={t}
-            />
-            <Choice
-              label={t("player.subtitle_edge")}
-              value={appearance.edge}
-              among={EDGES}
-              naming="subtitle_edge"
-              onPick={(edge) => setAppearance({ edge })}
-              t={t}
-            />
-            <Choice
-              label={t("player.subtitle_background")}
-              value={appearance.background}
-              among={BACKGROUNDS}
-              naming="subtitle_background"
-              onPick={(background) => setAppearance({ background })}
-              t={t}
-            />
-            <Choice
-              label={t("player.subtitle_height")}
-              value={appearance.height}
-              among={HEIGHTS}
-              naming="subtitle_height"
-              onPick={(height) => setAppearance({ height })}
-              t={t}
-            />
-          </div>
         )}
       </div>
     </div>
