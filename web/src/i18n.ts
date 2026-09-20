@@ -23,6 +23,28 @@ const en: Dictionary = {
   "theme.light": "Light",
   "theme.system": "Follow the system",
 
+  /* The door: what anybody meets before this server knows them. */
+  "door.invitation": "Sign in to carry on watching.",
+  "door.first.invitation":
+    "Nobody has set this server up yet. Choose the name and the password of the first account, which is yours and is an administrator.",
+  "door.name": "Name",
+  "door.password": "Password",
+  "door.password_again": "Password again",
+  "door.rule":
+    "Pick something long. A phrase you will remember beats a short word nobody can guess.",
+  "door.go": "Sign in",
+  "door.first.go": "Create this account",
+  "door.asking": "One moment",
+  "door.refused.wrong": "Wrong name or password.",
+  "door.refused.held_back":
+    "Too many wrong passwords. This account is left alone for {seconds} seconds.",
+  "door.refused.not_the_same": "The two passwords are not the same.",
+  "door.refused.generic": "Something went wrong at this end.",
+  "refused.account.name_needed": "An account needs a name.",
+  "refused.account.password_too_short":
+    "A password is at least {shortest} characters long.",
+  "nav.sign_out": "Sign out",
+
   "home.recently_added": "Recently added",
   "home.empty.title": "Nothing here yet",
   "home.empty.body": "Point a library at a folder and run a scan to fill this page.",
@@ -566,6 +588,28 @@ const fr: Dictionary = {
   "theme.dark": "Sombre",
   "theme.light": "Clair",
   "theme.system": "Suivre le système",
+
+  /* La porte : ce que rencontre quelqu'un avant que ce serveur le connaisse. */
+  "door.invitation": "Connectez-vous pour reprendre vos films.",
+  "door.first.invitation":
+    "Personne n'a encore configuré ce serveur. Choisissez le nom et le mot de passe du premier compte, qui est le vôtre et qui est administrateur.",
+  "door.name": "Nom",
+  "door.password": "Mot de passe",
+  "door.password_again": "Mot de passe à nouveau",
+  "door.rule":
+    "Prenez quelque chose de long. Une phrase dont vous vous souviendrez vaut mieux qu'un mot court que personne ne devine.",
+  "door.go": "Se connecter",
+  "door.first.go": "Créer ce compte",
+  "door.asking": "Un instant",
+  "door.refused.wrong": "Nom ou mot de passe incorrect.",
+  "door.refused.held_back":
+    "Trop de mots de passe erronés. Ce compte est laissé tranquille pendant {seconds} secondes.",
+  "door.refused.not_the_same": "Les deux mots de passe ne sont pas les mêmes.",
+  "door.refused.generic": "Quelque chose n'a pas fonctionné de ce côté.",
+  "refused.account.name_needed": "Un compte a besoin d'un nom.",
+  "refused.account.password_too_short":
+    "Un mot de passe fait au moins {shortest} caractères.",
+  "nav.sign_out": "Se déconnecter",
 
   "home.recently_added": "Récemment ajoutés",
   "home.empty.title": "Rien pour l'instant",

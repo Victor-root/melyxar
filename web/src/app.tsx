@@ -1,5 +1,10 @@
 /*
- * The shell: what is loaded once, and where each address leads.
+ * The shell: who is there, and where each address leads.
+ *
+ * Nothing of the library is drawn before the server has said who is asking.
+ * Everything behind this point belongs to somebody, so the account comes
+ * first rather than beside it, and no screen has to wonder whether there is
+ * one.
  */
 
 import { Route, Routes } from "react-router-dom";
@@ -11,11 +16,42 @@ import { WorkPage } from "./pages/work";
 import { ActivityPage } from "./pages/activity";
 import { JournalPage } from "./pages/journal";
 import { SettingsPage } from "./pages/settings";
+import { Door } from "./pages/door";
 import { LibrariesContext, useWatchedLibraries } from "./libraries";
 import { RunningContext, useWatchedWork } from "./running";
+import { useWhoIsThere, WhoProvider } from "./account";
 import { useSettings } from "./settings";
 
 export function App() {
+  const who = useWhoIsThere();
+
+  // A door that flashes up for a moment in front of somebody who is signed in
+  // is worse than a moment of nothing, so nothing is drawn until the server
+  // has answered.
+  if (who.stillAsking || (!who.account && !who.branding)) {
+    return <main className="page" aria-busy="true" />;
+  }
+
+  if (!who.account) {
+    return <Door branding={who.branding!} cameIn={who.cameIn} />;
+  }
+
+  return (
+    <WhoProvider who={who}>
+      <TheLibrary />
+    </WhoProvider>
+  );
+}
+
+/**
+ * Everything behind the door.
+ *
+ * Its own component because what it holds is watched for as long as it is on
+ * screen: a scan followed twice a second, the libraries read again when one
+ * changes. None of that should be running while nobody is signed in, and a
+ * component that is not drawn is a component that watches nothing.
+ */
+function TheLibrary() {
   const { t } = useSettings();
   // Watched here, where the bar that starts the work and the pages that show
   // what it produced can both read it.

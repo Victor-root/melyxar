@@ -10,6 +10,7 @@ import { Choice } from "./choice";
 import { outOfAHundred } from "../readable";
 import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
+import { useAccount } from "../account";
 import { useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
 
@@ -20,6 +21,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
   const [query, setQuery] = useState(parameters.get("search") ?? "");
   const field = useRef<HTMLInputElement>(null);
   const { jobs } = useRunning();
+  const { account, leave } = useAccount();
   /* A scan is the one thing somebody needs from wherever they happen to be:
      films were added, a name was corrected, a disk came back. It lives here so
      that nobody has to find the page it belongs to. */
@@ -113,6 +115,13 @@ export function Header({ libraries }: { libraries: Library[] }) {
         )}
 
         <div className="header-choices">
+          {/* Who is here, and the way out. The bar this sits in is due to be
+              drawn again; a way of leaving is not, so it is here rather than
+              nowhere. */}
+          <button className="header-account" onClick={() => void leave()}>
+            <span className="header-account-name">{account?.name}</span>
+            <span className="header-account-out">{t("nav.sign_out")}</span>
+          </button>
           <Choice
             label={t("nav.theme")}
             value={theme}

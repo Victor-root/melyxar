@@ -1,0 +1,224 @@
+/*
+ * The door.
+ *
+ * Its own stylesheet because it shares nothing with the interface behind it:
+ * no bar, no grid, no card. It is one thing on an empty screen, and it is what
+ * anybody sees first.
+ *
+ * Every colour, spacing and radius comes from a token, the accent included, so
+ * a server given another accent keeps this screen with it.
+ */
+
+.door {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-wide);
+  padding: var(--gap-wide);
+  position: relative;
+  overflow: hidden;
+  /* Its own background rather than the page's: this screen is the only one
+     with nothing else on it, so the surface it sits on is part of it. */
+  background: var(--surface-deep);
+}
+
+/*
+ * The accent, once, behind everything and very faint.
+ *
+ * It is what stops the screen being a grey rectangle with a form on it, and it
+ * is the only place on this screen where the accent is not on something you
+ * can press. It moves slowly enough that it reads as light rather than as an
+ * animation, and it stops entirely for anybody who asked their system for less
+ * movement.
+ */
+.door-glow {
+  position: absolute;
+  inset: -30%;
+  background:
+    radial-gradient(
+      38% 38% at 50% 40%,
+      color-mix(in srgb, var(--accent) 30%, transparent),
+      transparent 72%
+    );
+  filter: blur(50px);
+  animation: door-breathe 14s var(--ease) infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes door-breathe {
+  from {
+    transform: scale(1) translateY(0);
+    opacity: 0.75;
+  }
+  to {
+    transform: scale(1.12) translateY(-2%);
+    opacity: 1;
+  }
+}
+
+.door-card {
+  position: relative;
+  width: min(100%, 380px);
+  display: flex;
+  flex-direction: column;
+  padding: 36px 32px 32px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  /* Solid rather than translucent. Over a background of nearly its own
+     colour, translucency buys nothing and costs the edge that tells the card
+     from what it sits on. */
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  animation: door-arrive var(--calm) var(--ease) both;
+}
+
+@keyframes door-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.door-mark {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  border-radius: 14px;
+}
+
+.door-name {
+  margin: 0;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.door-invitation {
+  margin: 6px 0 26px;
+  text-align: center;
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.door-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.door-field {
+  width: 100%;
+  padding: 11px 14px;
+  margin-bottom: var(--gap);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-deep);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  transition:
+    border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+.door-field:hover {
+  border-color: var(--border-strong);
+}
+
+/* The ring is drawn on the box itself rather than around it: on a field that
+   fills its row, an outline sitting outside is cut off by the card's edge. */
+.door-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.door-rule {
+  margin: -4px 0 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/*
+ * The refusal keeps its room whether or not there is one.
+ *
+ * A message that appears between the fields and the button pushes the button
+ * down as it arrives, and somebody already reaching for it clicks whatever
+ * lands under their hand.
+ */
+.door-answer {
+  /* One line of it, which is what every refusal but one takes. The one that
+     runs to two grows the card rather than moving the button, which is the
+     thing this is for. */
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 4px 0 6px;
+}
+
+.door-refused {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--accent-bright);
+  animation: door-refused var(--calm) var(--ease) both;
+}
+
+@keyframes door-refused {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.door-go {
+  justify-content: center;
+  width: 100%;
+}
+
+.door-languages {
+  position: relative;
+  display: flex;
+  gap: var(--gap-tight);
+}
+
+.door-language {
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  color: var(--text-faint);
+  transition:
+    color var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+.door-language:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.door-language-on {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+/* Nothing on this screen depends on a wide one, so it needs no rearranging:
+   the card is already as wide as it ever gets, and it shrinks on its own. */

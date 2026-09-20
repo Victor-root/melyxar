@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use melyxar_auth::{fingerprint_of, hash_password, password_matches};
+use melyxar_auth::{fingerprint_of, hash_password, password_matches, AuthError};
 use melyxar_core::id::UserId;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::user::{Permissions, User};
@@ -33,6 +33,53 @@ pub use melyxar_auth::SHORTEST_PASSWORD;
 /// is what keeps the dependencies pointing one way.
 pub use melyxar_auth::SessionToken;
 pub use melyxar_database::sessions::{SignedIn, A_SESSION_LASTS};
+
+/// What somebody filling in the door can be told to put right.
+///
+/// A word rather than a sentence, like every refusal this server sends: the
+/// wording is the client's, in its own language, and the field it belongs
+/// beside is the client's to know.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refused {
+    NameNeeded,
+    PasswordTooShort,
+}
+
+impl Refused {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NameNeeded => "name_needed",
+            Self::PasswordTooShort => "password_too_short",
+        }
+    }
+}
+
+/// What can go wrong here: something somebody typed, or the server itself.
+///
+/// Kept apart on purpose, as everywhere else a form is filled in. The first is
+/// shown beside what was typed; the second is a failure and is shown as one.
+#[derive(Debug, thiserror::Error)]
+pub enum Trouble {
+    #[error("refused: {}", .0.as_str())]
+    Refused(Refused),
+    #[error(transparent)]
+    Failed(#[from] AppError),
+}
+
+impl From<melyxar_database::DatabaseError> for Trouble {
+    fn from(error: melyxar_database::DatabaseError) -> Self {
+        Self::Failed(AppError::from(error))
+    }
+}
+
+/// Hashes a password, telling a rule it breaks apart from a failure.
+fn stored_form_of(password: &str) -> std::result::Result<String, Trouble> {
+    match hash_password(password) {
+        Ok(hashed) => Ok(hashed),
+        Err(AuthError::PasswordTooShort) => Err(Trouble::Refused(Refused::PasswordTooShort)),
+        Err(other) => Err(Trouble::Failed(AppError::Auth(other))),
+    }
+}
 
 /// How many wrong answers in a row an account takes before it is held back.
 ///
@@ -218,7 +265,7 @@ pub async fn change_password(
     current: &str,
     wanted: &str,
     device_name: &str,
-) -> Result<PasswordChange> {
+) -> std::result::Result<PasswordChange, Trouble> {
     let stored = state
         .database()
         .user_by_name(&who.name)
@@ -236,12 +283,12 @@ pub async fn change_password(
     // Hashed before anything is taken away, so a password the rule refuses
     // leaves the account exactly as it was rather than signed out of
     // everywhere with its old password still on it.
-    let hashed = hash_password(wanted)?;
+    let hashed = stored_form_of(wanted)?;
     state.database().set_password(who.id, Some(&hashed)).await?;
     let closed = state.database().close_every_session_of(who.id).await?;
     tracing::info!(account = %who.name, closed, "changed a password and signed every device out");
 
-    let token = SessionToken::new()?;
+    let token = SessionToken::new().map_err(|error| Trouble::Failed(AppError::Auth(error)))?;
     state
         .database()
         .open_session(who.id, device_name, &token.fingerprint(), now())
@@ -272,21 +319,19 @@ pub async fn create_the_first_account(
     state: &AppState,
     name: &str,
     password: &str,
-) -> Result<User> {
-    if !still_to_be_set_up(state).await? {
-        return Err(AppError::Domain(melyxar_core::Error::new(
+) -> std::result::Result<User, Trouble> {
+    if !still_to_be_set_up(state).await.map_err(Trouble::Failed)? {
+        return Err(Trouble::Failed(AppError::Domain(melyxar_core::Error::new(
             melyxar_core::error::ErrorCode::Conflict,
             "this server has already been set up",
-        )));
+        ))));
     }
     let name = name.trim();
     if name.is_empty() {
-        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
-            "an account needs a name",
-        )));
+        return Err(Trouble::Refused(Refused::NameNeeded));
     }
 
-    let hashed = hash_password(password)?;
+    let hashed = stored_form_of(password)?;
     let user = state
         .database()
         .create_user(name, Some(&hashed), &Permissions::administrator())
@@ -305,11 +350,15 @@ pub async fn create_the_first_account(
 /// Says whether there was an account by that name, so the command can tell
 /// somebody they have the name wrong rather than claiming to have done
 /// something.
-pub async fn set_a_password(state: &AppState, name: &str, password: &str) -> Result<bool> {
+pub async fn set_a_password(
+    state: &AppState,
+    name: &str,
+    password: &str,
+) -> std::result::Result<bool, Trouble> {
     let Some((user, _)) = state.database().user_by_name(name).await? else {
         return Ok(false);
     };
-    let hashed = hash_password(password)?;
+    let hashed = stored_form_of(password)?;
     state.database().set_password(user.id, Some(&hashed)).await?;
     let closed = state.database().close_every_session_of(user.id).await?;
     tracing::warn!(

@@ -5,6 +5,7 @@ import { App } from "./app";
 import { SettingsProvider } from "./settings";
 import "./theme.css";
 import "./app.css";
+import "./door.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
