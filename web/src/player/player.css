@@ -883,6 +883,16 @@
   background: var(--surface-hover);
 }
 
+/* A row that only ever says what a value is, with nothing to press: the
+   pointer and the highlight both promise a click that would do nothing. */
+.player-menu-line-static {
+  cursor: default;
+}
+
+.player-menu-line-static:hover {
+  background: transparent;
+}
+
 .player-menu-line:focus-visible {
   outline: 2px solid var(--accent-bright);
   outline-offset: -2px;
