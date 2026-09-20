@@ -1098,6 +1098,7 @@ dependencies = [
  "melyxar-config",
  "melyxar-core",
  "melyxar-server",
+ "reqwest",
  "serde_json",
  "tokio",
  "tracing",
