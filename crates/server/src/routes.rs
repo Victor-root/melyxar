@@ -38,6 +38,7 @@ pub fn router(state: AppState) -> Router {
             axum::routing::delete(forget_converted_subtitles),
         )
         .route("/api/v1/public/branding", get(public_branding))
+        .merge(crate::account::router())
         .merge(crate::calibration::router())
         .merge(crate::catalogue::router())
         .merge(crate::general::router())
@@ -90,14 +91,9 @@ async fn system_info(State(state): State<AppState>) -> Result<Json<SystemInfo>> 
         server_name: settings.server_name,
         version: melyxar_core::BUILD,
         api_version: API_VERSION,
-        // A server whose only account still has no password has not been set
-        // up, which is what the wizard keys on.
-        setup_complete: state
-            .database()
-            .user_by_name(melyxar_app::startup::DEFAULT_ACCOUNT_NAME)
-            .await
-            .map_err(|error| crate::error::ServerError::internal(error.to_string()))?
-            .is_none_or(|(_, password)| password.is_some()),
+        // One account is what tells a server that has been set up from one
+        // that has not, and it is what the wizard keys on.
+        setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,
         playback_available: state.can_play_media(),
         maintenance: settings.maintenance_enabled,
         features: Features {
@@ -113,6 +109,7 @@ async fn health() -> &'static str {
 }
 
 async fn diagnostics(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
 ) -> Result<Json<melyxar_app::diagnostics::Diagnostics>> {
     Ok(Json(melyxar_app::diagnostics::collect(&state).await?))
@@ -125,6 +122,7 @@ async fn diagnostics(
 /// command line, because two renderings of one report drift apart and the
 /// second one is always the one nobody checked.
 async fn diagnostics_text(
+    _: crate::account::Administrator,
     State(state): State<AppState>,
 ) -> Result<([(&'static str, &'static str); 1], String)> {
     let report = melyxar_app::diagnostics::collect(&state).await?;
@@ -186,7 +184,7 @@ struct TagView {
     lines: usize,
 }
 
-async fn journal(Query(wanted): Query<WhatIsWanted>) -> Json<JournalView> {
+async fn journal(_: crate::account::Administrator, Query(wanted): Query<WhatIsWanted>) -> Json<JournalView> {
     Json(JournalView {
         tags: melyxar_core::journal::tags()
             .into_iter()
@@ -198,6 +196,7 @@ async fn journal(Query(wanted): Query<WhatIsWanted>) -> Json<JournalView> {
 
 /// The same, as one block of text ready to paste.
 async fn journal_text(
+    _: crate::account::Administrator,
     Query(wanted): Query<WhatIsWanted>,
 ) -> ([(&'static str, &'static str); 1], String) {
     let lines = melyxar_core::journal::lines(&wanted.asked());
@@ -228,7 +227,7 @@ struct ForgottenView {
     forgotten: usize,
 }
 
-async fn forget_journal() -> Json<ForgottenView> {
+async fn forget_journal(_: crate::account::Administrator) -> Json<ForgottenView> {
     Json(ForgottenView {
         forgotten: melyxar_core::journal::forget(),
     })
@@ -237,22 +236,33 @@ async fn forget_journal() -> Json<ForgottenView> {
 /// Throws away the subtitles already converted, so the slow path can be tried
 /// again. A converted track is served in a millisecond and proves nothing
 /// about the minute it took to get there.
-async fn forget_converted_subtitles(State(state): State<AppState>) -> Result<Json<ForgottenView>> {
+async fn forget_converted_subtitles(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+) -> Result<Json<ForgottenView>> {
     Ok(Json(ForgottenView {
         forgotten: melyxar_app::subtitles::forget_what_was_converted(&state).await?,
     }))
 }
 
-/// The visual identity, before anyone has signed in.
+/// What the door needs to draw itself, before anyone has signed in.
 ///
-/// The sign-in page needs the name and the logo before an account exists, so
-/// this one route answers without authentication. It therefore says nothing
-/// else: no account list, no library names, no version.
+/// The sign in page needs the name and the mark of the server before an
+/// account exists, so this one route answers without authentication. It
+/// therefore says nothing else: no account list, no library names, no version,
+/// nothing about the machine.
+///
+/// Whether this server has been set up is part of it, and is the one thing
+/// besides the name and the mark that the page has to know: a brand new server
+/// shows somebody the screen that makes the first account, and a server that
+/// has been set up shows them the one that asks for a password. Saying so
+/// gives nothing away, since whoever asks can find out by trying either door.
 #[derive(Debug, Serialize)]
 struct PublicBranding {
     server_name: String,
     logo_path: Option<String>,
     login_background_path: Option<String>,
+    setup_complete: bool,
 }
 
 async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBranding>> {
@@ -266,5 +276,6 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
         server_name: settings.server_name,
         logo_path: settings.logo_path,
         login_background_path: settings.login_background_path,
+        setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,
     }))
 }

@@ -1283,7 +1283,12 @@ mod tests {
         crate::startup::prepare_directories(&config).expect("directories prepared");
 
         let database = Database::open_in_memory().await.expect("database opens");
-        crate::startup::ensure_default_account(&database)
+        database
+            .create_user(
+                "victor",
+                None,
+                &melyxar_core::user::Permissions::administrator(),
+            )
             .await
             .expect("account created");
         crate::startup::reconcile_libraries(&database, &config)

@@ -209,13 +209,23 @@ pub async fn what_is_there(state: &AppState) -> Result<Option<Invented>> {
 }
 
 /// Whose progress the invented library carries.
+///
+/// Any account on this server: what it carries is invented progress on an
+/// invented library, so it belongs to nobody in particular. A server with no
+/// account at all has not been set up yet, and then there is nobody for an
+/// invented film to have half watched.
 async fn viewer(state: &AppState) -> Result<UserId> {
     state
         .database()
-        .user_by_name(crate::startup::DEFAULT_ACCOUNT_NAME)
+        .list_users()
         .await?
-        .map(|(user, _)| user.id)
-        .ok_or_else(|| melyxar_core::Error::invalid_input("this server has no account at all"))
+        .first()
+        .map(|user| user.id)
+        .ok_or_else(|| {
+            melyxar_core::Error::invalid_input(
+                "this server has no account yet: open it in a browser and set it up first",
+            )
+        })
         .map_err(Into::into)
 }
 

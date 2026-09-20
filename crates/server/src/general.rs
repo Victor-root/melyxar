@@ -31,8 +31,10 @@ struct PlaybackSettingsView {
 
 /// What the server is set to do about wide gamut colour it cannot show a
 /// client, and every film like it.
-async fn playback_settings(State(state): State<AppState>) -> Result<Json<PlaybackSettingsView>> {
-    crate::administrator(&state).await?;
+async fn playback_settings(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+) -> Result<Json<PlaybackSettingsView>> {
     Ok(Json(PlaybackSettingsView {
         tone_mapping_disabled: state
             .database()
@@ -45,9 +47,9 @@ async fn playback_settings(State(state): State<AppState>) -> Result<Json<Playbac
 /// Turns the conversion of wide gamut colour on or off for the whole server.
 async fn set_playback_settings(
     State(state): State<AppState>,
+    _: crate::account::Administrator,
     Json(asked): Json<PlaybackSettingsView>,
 ) -> Result<Json<PlaybackSettingsView>> {
-    crate::administrator(&state).await?;
     state
         .database()
         .set_tone_mapping_disabled(asked.tone_mapping_disabled)

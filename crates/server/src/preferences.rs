@@ -11,7 +11,7 @@ use melyxar_core::user::{DownmixMethod, Preferences};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
-use crate::viewer;
+use crate::account::Viewer;
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/api/v1/preferences", axum::routing::get(read).put(write))
@@ -54,18 +54,20 @@ struct PreferencesBody {
     downmix_gain: Option<f64>,
 }
 
-async fn read(State(state): State<AppState>) -> Result<Json<PreferencesView>> {
-    let viewer = viewer(&state).await?;
-    let chosen = melyxar_app::preferences::of(&state, viewer).await?;
+async fn read(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+) -> Result<Json<PreferencesView>> {
+    let chosen = melyxar_app::preferences::of(&state, who.id).await?;
     view(&state, chosen).await
 }
 
 async fn write(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Json(body): Json<PreferencesBody>,
 ) -> Result<Json<PreferencesView>> {
-    let viewer = viewer(&state).await?;
-    let mut chosen = melyxar_app::preferences::of(&state, viewer).await?;
+    let mut chosen = melyxar_app::preferences::of(&state, who.id).await?;
 
     // An empty answer means no preference, which is a choice of its own and
     // not the same as leaving the field out.
@@ -83,7 +85,7 @@ async fn write(
         chosen.downmix_gain = gain;
     }
 
-    let kept = melyxar_app::preferences::save(&state, viewer, chosen).await?;
+    let kept = melyxar_app::preferences::save(&state, who.id, chosen).await?;
     view(&state, kept).await
 }
 
