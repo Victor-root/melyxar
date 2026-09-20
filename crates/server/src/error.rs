@@ -149,6 +149,32 @@ impl From<melyxar_app::libraries::Trouble> for ServerError {
     }
 }
 
+impl From<melyxar_app::accounts::Trouble> for ServerError {
+    /// A refusal carries the word saying which thing to put right, and the
+    /// rule it broke where there is one: the shortest a password may be lives
+    /// on this server, so the interface says it rather than deciding it.
+    fn from(trouble: melyxar_app::accounts::Trouble) -> Self {
+        use melyxar_app::accounts::Refused;
+
+        match trouble {
+            melyxar_app::accounts::Trouble::Refused(refused) => {
+                let mut details = serde_json::json!({ "reason": refused.as_str() });
+                if refused == Refused::PasswordTooShort {
+                    details["shortest"] =
+                        serde_json::json!(melyxar_app::accounts::SHORTEST_PASSWORD);
+                }
+                Self::with_details(
+                    StatusCode::BAD_REQUEST,
+                    ErrorCode::InvalidInput,
+                    details,
+                    format!("refused: {}", refused.as_str()),
+                )
+            }
+            melyxar_app::accounts::Trouble::Failed(error) => Self::from(error),
+        }
+    }
+}
+
 impl From<melyxar_app::AppError> for ServerError {
     fn from(error: melyxar_app::AppError) -> Self {
         match error {

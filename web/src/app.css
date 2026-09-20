@@ -2097,3 +2097,39 @@
   font-size: 14px;
 }
 
+
+/* --------------------------------------------------------------------------
+ * Who is signed in, in the bar
+ * ----------------------------------------------------------------------- */
+
+/* One control saying who is here and offering the way out. Two lines rather
+   than two controls: the name is what tells somebody they are looking at
+   their own library, and it has no other job. */
+.header-account {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 4px 12px;
+  border-radius: var(--radius-control);
+  line-height: 1.25;
+  transition: background var(--quick) var(--ease);
+}
+
+.header-account:hover {
+  background: var(--surface-raised);
+}
+
+.header-account-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.header-account-out {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.header-account:hover .header-account-out {
+  color: var(--accent-bright);
+}

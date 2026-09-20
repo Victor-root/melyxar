@@ -5,6 +5,34 @@
  * fails at compilation rather than at three in the morning on a screen.
  */
 
+/** An account, as the interface is told about it. */
+export interface Account {
+  id: string;
+  name: string;
+  /** What the interface hides things by. The server refuses them too: this is
+      what somebody is shown, never what they are allowed. */
+  is_administrator: boolean;
+  may_download: boolean;
+  may_delete: boolean;
+  may_delete_from_disk: boolean;
+}
+
+/**
+ * What the door needs to draw itself, before anybody has signed in.
+ *
+ * The one thing this server says to somebody it does not know: its name, its
+ * mark, and whether it has been set up at all. No account list, no library
+ * name, no version.
+ */
+export interface Branding {
+  server_name: string;
+  logo_path: string | null;
+  login_background_path: string | null;
+  /** False on a brand new server, which asks for a first account instead of a
+      password. */
+  setup_complete: boolean;
+}
+
 export interface Picture {
   url: string;
   width: number | null;
@@ -584,9 +612,38 @@ export class ApiError extends Error {
         A refusal somebody meets while filling a form in has to say which
         field, and `invalid_input` alone says nothing anybody can act on. */
     readonly reason?: string,
+    /** Everything else the refusal carried, such as how long to wait before
+        asking again. Values, never a sentence: the wording is this side's. */
+    readonly details?: Record<string, unknown>,
   ) {
     super(code);
   }
+}
+
+/**
+ * The addresses where a refusal is a wrong password rather than a session that
+ * has ended.
+ *
+ * Everywhere else, being told that nobody is signed in means the session is
+ * over and the interface has to say so and show the door again. At these
+ * three it means what was typed is wrong, and throwing somebody back to a
+ * fresh door would lose what they typed and tell them nothing.
+ */
+const THE_DOOR = ["/api/v1/session", "/api/v1/setup", "/api/v1/me/password"];
+
+/** Told when the server says nobody is signed in any more. */
+let noticeOfTheDoorClosing: (() => void) | null = null;
+
+/**
+ * Asks to be told when a session ends, wherever it ends.
+ *
+ * A session can end between two clicks: it was signed out on another machine,
+ * the server was restarted and swept it, or it simply ran out. Without this,
+ * an interface carries on drawing a library it can no longer read and every
+ * click fails in silence.
+ */
+export function whenTheDoorCloses(listener: () => void) {
+  noticeOfTheDoorClosing = listener;
 }
 
 /**
@@ -628,7 +685,15 @@ async function exchange(
 
   if (!response.ok) {
     const said = await response.json().catch(() => null);
-    throw new ApiError(said?.code ?? "generic", response.status, said?.details?.reason);
+    if (response.status === 401 && !THE_DOOR.includes(path.split("?")[0])) {
+      noticeOfTheDoorClosing?.();
+    }
+    throw new ApiError(
+      said?.code ?? "generic",
+      response.status,
+      said?.details?.reason,
+      said?.details,
+    );
   }
   return response;
 }
@@ -1022,9 +1087,22 @@ export const api = {
    * another.
    */
   /** What the server calls itself and the mark it was given. Answered without
-   *  an account, which is what lets a sign-in page carry them. */
-  branding: () =>
-    get<{ server_name: string; logo_path: string | null }>("/api/v1/public/branding"),
+   *  an account, which is what lets the door carry them. */
+  branding: (signal?: AbortSignal) => get<Branding>("/api/v1/public/branding", signal),
+  /* The door. Signing in answers the account, which is what the interface is
+     drawn from; the session itself travels in a cookie the browser keeps and
+     this interface never sees. */
+  signIn: (name: string, password: string) =>
+    post<Account>("/api/v1/session", { name, password }),
+  signOut: () => remove<{ signed_out: boolean }>("/api/v1/session"),
+  me: (signal?: AbortSignal) => get<Account>("/api/v1/me", signal),
+  /* The first account of a brand new server, which is an administrator and is
+     signed in straight away. Refused once there is one. */
+  setUp: (name: string, password: string) =>
+    post<Account>("/api/v1/setup", { name, password }),
+  /* Changing it signs every other device out and keeps this one going. */
+  changePassword: (current: string, wanted: string) =>
+    put<Account>("/api/v1/me/password", { current, wanted }),
   setFavourite: (work: string, favourite: boolean) =>
     put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
   openSession: (source: string, body: unknown, signal?: AbortSignal) =>
