@@ -30,6 +30,10 @@ export function Door({
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [again, setAgain] = useState("");
+  /* Ticked to begin with: a media server is mostly met on somebody's own
+     machine, and asking a household to sign in every morning to protect them
+     from a case that is not theirs is the wrong way round. */
+  const [remember, setRemember] = useState(true);
   /* Said here rather than by the server: the two boxes never leave this
      screen, so there is nothing to ask about. */
   const [twiceDiffers, setTwiceDiffers] = useState(false);
@@ -50,7 +54,7 @@ export function Door({
       return;
     }
     setTwiceDiffers(false);
-    void door.knock(name.trim(), password);
+    void door.knock(name.trim(), password, remember);
   };
 
   // Typing again is somebody answering the refusal, so it goes.
@@ -125,6 +129,19 @@ export function Door({
             <p className="door-rule">{t("door.rule")}</p>
           </>
         )}
+
+        {/* Whether the browser holds on to the session once it is closed.
+            Nothing else about it changes: a session lasts exactly as long
+            either way, and what this asks is whether the machine is one to be
+            left signed in. */}
+        <label className="door-remember">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(event) => setRemember(event.target.checked)}
+          />
+          {t("door.remember")}
+        </label>
 
         {/* The refusal takes the place under the fields rather than appearing
             between them: a message that pushes the button down as it arrives

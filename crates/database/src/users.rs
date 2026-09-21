@@ -414,6 +414,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sessions::Remembered;
 
     async fn database() -> Database {
         Database::open_in_memory().await.expect("database opens")
@@ -562,7 +563,7 @@ mod tests {
             .await
             .expect("account created");
         database
-            .open_session(created.id, "a browser", "a fingerprint", now())
+            .open_session(created.id, "a browser", "a fingerprint", Remembered::Yes, now())
             .await
             .expect("session opened");
 

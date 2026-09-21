@@ -8,7 +8,9 @@
 //!
 //! Nothing here knows what a cookie is. It is handed a token and gives one
 //! back; where that token travels and how long a browser keeps it belongs to
-//! the layer that speaks HTTP.
+//! the layer that speaks HTTP. What is kept here is only the wish somebody
+//! expressed about it, written down beside the device, so that a token handed
+//! to the same browser again is kept for exactly as long as the one before.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -32,7 +34,7 @@ pub use melyxar_auth::SHORTEST_PASSWORD;
 /// above asks the use cases and never reaches past them to the storage, which
 /// is what keeps the dependencies pointing one way.
 pub use melyxar_auth::SessionToken;
-pub use melyxar_database::sessions::{SignedIn, A_SESSION_LASTS};
+pub use melyxar_database::sessions::{Remembered, SignedIn, A_SESSION_LASTS};
 
 /// What somebody filling in the door can be told to put right.
 ///
@@ -197,6 +199,7 @@ pub async fn sign_in(
     name: &str,
     password: &str,
     device_name: &str,
+    remembered: Remembered,
 ) -> Result<SignedInOrNot> {
     let Some((user, stored)) = state.database().user_by_name(name).await? else {
         return Ok(SignedInOrNot::NotAPair);
@@ -227,7 +230,7 @@ pub async fn sign_in(
     let token = SessionToken::new()?;
     state
         .database()
-        .open_session(user.id, device_name, &token.fingerprint(), now())
+        .open_session(user.id, device_name, &token.fingerprint(), remembered, now())
         .await?;
     tracing::info!(account = %user.name, device = device_name, "signed in");
 
@@ -259,12 +262,17 @@ pub async fn sign_out(state: &AppState, token: &str) -> Result<bool> {
 /// person knows it, and a change that leaves that person signed in has changed
 /// nothing. Asking the one who changed it to sign in again would be a way of
 /// saying the same thing, more rudely.
+///
+/// The fresh session is kept exactly as the one it replaces was: somebody who
+/// signed in on a machine that is not theirs did not ask to be remembered on
+/// it, and changing a password is not a place to quietly decide otherwise.
 pub async fn change_password(
     state: &AppState,
     who: &User,
     current: &str,
     wanted: &str,
     device_name: &str,
+    remembered: Remembered,
 ) -> std::result::Result<PasswordChange, Trouble> {
     let stored = state
         .database()
@@ -291,7 +299,7 @@ pub async fn change_password(
     let token = SessionToken::new().map_err(|error| Trouble::Failed(AppError::Auth(error)))?;
     state
         .database()
-        .open_session(who.id, device_name, &token.fingerprint(), now())
+        .open_session(who.id, device_name, &token.fingerprint(), remembered, now())
         .await?;
     Ok(PasswordChange::Changed(token))
 }
@@ -474,7 +482,7 @@ mod tests {
         password: &str,
         device: &str,
     ) -> Option<OpenedSession> {
-        match sign_in(state, name, password, device).await.expect("asked") {
+        match sign_in(state, name, password, device, Remembered::Yes).await.expect("asked") {
             SignedInOrNot::Opened(opened) => Some(*opened),
             SignedInOrNot::NotAPair => None,
             SignedInOrNot::HeldBack { seconds } => panic!("held back for {seconds} seconds"),
@@ -589,7 +597,7 @@ mod tests {
 
         for _ in 0..ALLOWED_TRIES {
             assert!(matches!(
-                sign_in(&state, "victor", "not the password", "a browser")
+                sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes)
                     .await
                     .expect("asked"),
                 SignedInOrNot::NotAPair
@@ -600,7 +608,7 @@ mod tests {
         // which is the point of holding it back: checking one is made
         // expensive on purpose, so a thousand guesses a second would be asking
         // this server to grind itself to a halt.
-        let held = sign_in(&state, "victor", "quiet harbour", "a browser")
+        let held = sign_in(&state, "victor", "quiet harbour", "a browser", Remembered::Yes)
             .await
             .expect("asked");
         let SignedInOrNot::HeldBack { seconds } = held else {
@@ -614,7 +622,7 @@ mod tests {
         let (_directory, state) = a_server_with_an_account().await;
 
         for _ in 0..ALLOWED_TRIES - 1 {
-            sign_in(&state, "victor", "not the password", "a browser")
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes)
                 .await
                 .expect("asked");
         }
@@ -626,7 +634,7 @@ mod tests {
         // somebody who mistypes their password now and then is never locked
         // out by a week of them.
         for _ in 0..ALLOWED_TRIES - 1 {
-            sign_in(&state, "victor", "not the password", "a browser")
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes)
                 .await
                 .expect("asked");
         }
@@ -648,7 +656,7 @@ mod tests {
             .expect("password set");
 
         for _ in 0..ALLOWED_TRIES {
-            sign_in(&state, "victor", "not the password", "a browser")
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes)
                 .await
                 .expect("asked");
         }
@@ -718,6 +726,7 @@ mod tests {
             "quiet harbour",
             "amber field road",
             "a browser",
+            Remembered::Yes,
         )
         .await
         .expect("asked");
@@ -768,6 +777,7 @@ mod tests {
             "not the current one",
             "amber field road",
             "a browser",
+            Remembered::Yes,
         )
         .await
         .expect("asked");
@@ -793,7 +803,14 @@ mod tests {
             .expect("signed in");
 
         assert!(
-            change_password(&state, &here.user, "quiet harbour", "short", "a browser")
+            change_password(
+                &state,
+                &here.user,
+                "quiet harbour",
+                "short",
+                "a browser",
+                Remembered::Yes,
+            )
                 .await
                 .is_err()
         );

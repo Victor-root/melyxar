@@ -28,8 +28,11 @@ export interface DoorScreen {
   brandNew: boolean;
   /** What this server calls itself. */
   serverName: string;
-  /** Sends what was typed. Never throws: what came of it is below. */
-  knock: (name: string, password: string) => Promise<void>;
+  /** Sends what was typed. Never throws: what came of it is below.
+   *
+   *  Remembering says whether the browser is to hold on to the session once
+   *  it is closed, which is the one thing about it somebody chooses. */
+  knock: (name: string, password: string, remember: boolean) => Promise<void>;
   /** Whether the server is being asked right now. */
   asking: boolean;
   /** Why it said no, or nothing. */
@@ -44,13 +47,13 @@ export function useDoorScreen(branding: Branding, cameIn: (who: Account) => void
   const brandNew = !branding.setup_complete;
 
   const knock = useCallback(
-    async (name: string, password: string) => {
+    async (name: string, password: string, remember: boolean) => {
       setAsking(true);
       setRefused(null);
       try {
         const who = brandNew
-          ? await api.setUp(name, password)
-          : await api.signIn(name, password);
+          ? await api.setUp(name, password, remember)
+          : await api.signIn(name, password, remember);
         cameIn(who);
       } catch (error) {
         setRefused(whatTheServerSaid(error));

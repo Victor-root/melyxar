@@ -1,0 +1,11 @@
+-- Whether a browser was asked to keep its session once it is closed.
+--
+-- This says nothing about how long a session lives: that has always been
+-- thirty days of not being used, and it still is. It says only whether the
+-- browser holds on to the token after it is closed. Somebody signing in on a
+-- machine that is not theirs leaves it off, and closing the browser is the end
+-- of it for them, whatever the server would still have honoured.
+--
+-- Kept by default, which is what every device signed in before this column
+-- existed was, and what the box on the sign in screen is ticked to.
+ALTER TABLE devices ADD COLUMN remembered INTEGER NOT NULL DEFAULT 1;
