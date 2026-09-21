@@ -331,13 +331,18 @@
 }
 
 /* The slogan: what this server is for, said in words under the row that
-   changes how it is said. Replaced one day by whatever an administrator
-   writes in its place, which is why it is drawn as plainly as this. */
+   changes how it is said. Set apart in its own pill rather than sitting
+   plainly on the background, so it reads as something said on purpose
+   rather than as a caption nobody wrote. Replaced one day by whatever an
+   administrator writes in its place. */
 .door-slogan {
   position: relative;
   margin: var(--gap) 0 0;
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
   font-size: 12.5px;
-  color: var(--text-faint);
+  color: var(--text-soft);
   text-align: center;
 }
 
