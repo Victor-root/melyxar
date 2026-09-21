@@ -1,0 +1,24 @@
+-- What one account played lately, in the order it played it.
+--
+-- The row that says which episode each started series is waiting on has to
+-- start somewhere, and where it started was every progress row the account
+-- owns. That is the honest shape, since what it costs then follows what
+-- somebody has watched rather than how large the collection is. Measured on
+-- an account with twenty thousand of them, it was fifty eight milliseconds
+-- against a budget of thirty, because reaching the series meant joining the
+-- works table twice for every one of those rows before anything could be
+-- grouped.
+--
+-- The row shows a handful of series, and the series it shows are the ones
+-- touched most recently. So the reading is bounded to what was played lately
+-- rather than to everything ever played, and this index is what makes that
+-- bound cheap: the most recent rows of one account, straight off the index,
+-- without reading the rest. Measured again on the same account: four
+-- milliseconds.
+--
+-- What it costs in exactness is written down in the decisions: a series
+-- nobody has touched in a very long while stops being offered as the next
+-- thing to watch. It is still in its library, in its grid, and on its own
+-- page.
+CREATE INDEX playback_progress_lately
+    ON playback_progress (user_id, last_played_at DESC);
