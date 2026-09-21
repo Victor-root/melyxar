@@ -18,7 +18,7 @@ use melyxar_app::picture::StoredImage;
 use melyxar_app::AppState;
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::Millis;
-use melyxar_core::work::IdentificationNote;
+use melyxar_core::work::{IdentificationNote, PlaybackState};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
@@ -253,6 +253,23 @@ struct CardView {
     /// first moment rather than grey holes.
     color: Option<String>,
     poster: Vec<ImageView>,
+    /// movie, series, season or episode. What a card offers depends on it: a
+    /// film plays, a series is opened.
+    kind: &'static str,
+    /// Which library it came from, so a card can say where it lives without
+    /// the page asking a second time.
+    library: String,
+    /// not_started, in_progress or watched, for the account asking.
+    seen: &'static str,
+    /// Where they stopped, in seconds, only where they stopped partway.
+    resume_from_seconds: Option<i64>,
+    favourite: bool,
+    /// Episodes below, and how many of those are left to watch. Both nothing
+    /// for a film, which holds none.
+    episodes: i64,
+    unwatched: i64,
+    /// The copy a play button on the card would start, when one is on disk.
+    source: Option<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -313,6 +330,29 @@ fn card_view(card: &WorkCard) -> CardView {
         identification_note: card.identification_note.map(IdentificationNote::as_str),
         color: card.dominant_color.clone(),
         poster: card.poster.iter().map(image_view).collect(),
+        kind: card.kind.as_str(),
+        library: card.library_id.to_string(),
+        // A read nobody was named for carries nobody's marks, and answers as
+        // a work nobody has touched rather than by leaving the fields out:
+        // one shape of card is easier to draw than two.
+        seen: card
+            .state
+            .as_ref()
+            .map_or(PlaybackState::NotStarted, |state| state.seen)
+            .as_str(),
+        resume_from_seconds: card
+            .state
+            .as_ref()
+            .and_then(|state| state.resume_from)
+            .map(|position| position.get() / 1_000),
+        favourite: card.state.as_ref().is_some_and(|state| state.favourite),
+        episodes: card.state.as_ref().map_or(0, |state| state.episodes),
+        unwatched: card.state.as_ref().map_or(0, |state| state.unwatched),
+        source: card
+            .state
+            .as_ref()
+            .and_then(|state| state.source_id)
+            .map(|id| id.to_string()),
     }
 }
 
