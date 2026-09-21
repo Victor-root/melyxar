@@ -21,24 +21,28 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* The header floats over this rather than sitting above it, so this is
+     where its room is kept: at rest the scroll starts here, exactly under
+     the bar, and nothing is behind it yet. The first pixel scrolled moves
+     this padding out of the way and starts drawing the page under the bar
+     instead, which is the moment it begins showing through the glass. */
+  padding-top: var(--header-band);
 }
 
-/* A band of its own at the top, above everything that scrolls.
- *
- * It was drawn over the page for a while, see through and blurred, so that it
- * carried the banner at rest and the rows once they moved under it. Put back
- * on the maintainer's word: what he wanted is a bar, read at a glance and the
- * same whatever is on the page, not a pane whose legibility depends on the
- * film behind it. Nothing passes under it now, so nothing is read through it.
- *
- * It carried a blur of its own back then as well, which is not restored: with
- * its own band there is nothing behind it to blur, and a blur over nothing
- * costs a layer to compose and changes not one pixel. The wash stays as it
- * was, so what this draws is what it drew before. */
+/* Standing over the page rather than in its own row, so what scrolls passes
+ * behind it and is read faintly through the glass, the same wash and blur as
+ * a panel in the player. The page itself keeps a padding the exact height of
+ * this bar, so at rest nothing is behind it yet: the banner meets the bar
+ * edge to edge rather than starting underneath it, and only once scrolling
+ * begins does the page reach up behind the glass. */
 .header {
-  flex: 0 0 auto;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 20;
-  background: color-mix(in srgb, var(--surface-deep) 88%, transparent);
+  background: var(--header-glass);
+  backdrop-filter: blur(18px);
   border-bottom: var(--header-line) solid var(--border);
 }
 
