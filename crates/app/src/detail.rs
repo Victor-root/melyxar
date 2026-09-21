@@ -77,7 +77,7 @@ pub struct Child {
 }
 
 /// One work this one hangs under, as a way back to it.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ancestor {
     pub id: WorkId,
     pub kind: melyxar_core::work::WorkKind,
@@ -90,7 +90,7 @@ pub struct Ancestor {
 }
 
 /// One line of the credits, with the face shown next to it.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Credit {
     pub person_id: PersonId,
     pub name: String,
@@ -717,7 +717,6 @@ mod tests {
                     height: Some(120),
                     fingerprint: "abc123".to_string(),
                     dominant_color: None,
-                    framing: None,
                 }],
             )
             .await

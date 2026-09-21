@@ -68,9 +68,7 @@ export function WorkPage() {
      hook this page renders a different number of times, and React stops the
      whole page over it: this one had every fiche of the library answering
      with a blank screen. */
-  const { picture: backdrop, framing: backdropFraming, itDidNotLoad: backdropFailed } = useShownPicture(
-    work?.backdrop ?? [],
-  );
+  const { picture: backdrop, itDidNotLoad: backdropFailed } = useShownPicture(work?.backdrop ?? []);
   const { picture: poster, itDidNotLoad: posterFailed } = useShownPicture(work?.poster ?? []);
 
   useEffect(() => {
@@ -159,7 +157,6 @@ export function WorkPage() {
             src={backdrop.src}
             srcSet={backdrop.srcSet}
             sizes="100vw"
-            style={{ objectPosition: backdropFraming }}
             alt=""
             onError={backdropFailed}
           />

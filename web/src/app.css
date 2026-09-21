@@ -1433,7 +1433,7 @@ button.seen-mark:not(.seen-mark-on):hover {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 38%;
+  object-position: center var(--where-a-band-is-cut);
 }
 
 .work-scrim {
@@ -3053,17 +3053,11 @@ button.seen-mark:not(.seen-mark-on):hover {
   opacity: 1;
 }
 
-/* Where the band is taken from is read off each picture when it is prepared
-   and written on the element itself, since it is a different place for every
-   picture: a still framed with its subject high wants the band high, one
-   framed with a sky above wants it low, and one number was wrong on half of
-   them whichever number it was. What is here is what to do when nobody could
-   read it. */
 .hero-backdrop img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 38%;
+  object-position: center var(--where-a-band-is-cut);
 }
 
 /* The words have to be readable over whatever picture is behind them, and a

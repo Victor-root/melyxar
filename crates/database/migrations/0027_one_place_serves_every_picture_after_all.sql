@@ -1,0 +1,17 @@
+-- Takes back where a band of a picture is taken from.
+--
+-- It was read off each picture because one fixed place was wrong on half of
+-- them. That was true, and the cause was not the place: the banner was a
+-- shade under half the height of the picture behind it, so more than half of
+-- every picture went, and no reading of what was left could save a cast of
+-- six, a face and a landscape at the same time.
+--
+-- The banner is now tall enough to keep about two thirds of its picture, and
+-- measured over a shelf of real ones, a single place a quarter of the way
+-- down is right on all of them. It beat both readings that were tried,
+-- including on the very pictures they were written for.
+--
+-- So the column goes, and with it a run of the tool for every picture
+-- prepared. The pictures themselves are untouched: nothing here changes a
+-- file, so nothing has to be made again.
+ALTER TABLE images DROP COLUMN framing;

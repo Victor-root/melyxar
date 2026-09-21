@@ -73,12 +73,6 @@ impl Kind {
         matches!(self, Self::Poster)
     }
 
-    /// Whether a band is ever cut out of this kind, which is what makes
-    /// reading where to cut it worth a run of the tool.
-    fn is_ever_cut_into_a_band(self) -> bool {
-        matches!(self, Self::Poster | Self::Backdrop)
-    }
-
     fn widths(self) -> &'static [u32] {
         match self {
             Self::Poster => &melyxar_ffmpeg::images::POSTER_WIDTHS,
@@ -478,25 +472,6 @@ async fn store_one(
     };
     let source_size = source_dimensions(state, &original).await;
 
-    // Where a band of it is taken from, read off the picture itself. Only for
-    // the kinds a band is ever cut out of: a banner is a wide picture in a
-    // strip, and a row of lying cards falls back to a poster in the same
-    // strip when there is nothing wide to show. A drawn title and a face are
-    // never cut, so neither pays for a reading.
-    let framing = match kind.is_ever_cut_into_a_band() {
-        true => melyxar_ffmpeg::images::framing_copy(tool, &original)
-            .await
-            .map(|small| {
-                melyxar_core::framing::Framing::of_picture(
-                    &small,
-                    melyxar_ffmpeg::images::FRAMING_ACROSS as usize,
-                    melyxar_ffmpeg::images::FRAMING_DOWN as usize,
-                )
-                .share()
-            }),
-        false => None,
-    };
-
     let names: Vec<(u32, String)> = widths_worth_writing(kind.widths(), source_size.map(|(w, _)| w))
         .iter()
         .map(|width| {
@@ -528,7 +503,6 @@ async fn store_one(
                     height: source_size.map(|(w, h)| scaled_height(*width, w, h)),
                     fingerprint: fingerprint.clone(),
                     dominant_color: colour.clone(),
-                    framing,
                 });
             }
         }
