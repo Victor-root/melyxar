@@ -37,6 +37,10 @@ const en: Dictionary = {
   "settings.banner_cut_why":
     "Towards the left keeps the top of the picture, towards the right keeps its foot.",
   "settings.banner_kept": "{percent}% of the picture kept",
+  "settings.banner_whole": "Take the whole window",
+  "settings.banner_whole_why":
+    "The home page then opens on one work, whole, with nothing of its picture thrown away on a screen shaped like it. The rows begin below the fold, so getting to them means scrolling.",
+  "settings.banner_whole_window": "the whole window",
   "settings.banner_at_random": "A different handful every time",
   "settings.banner_at_random_why":
     "The banner is drawn from the whole library each time the page is opened, in place of what you left halfway and what has just arrived. Anything put in front by hand still comes first.",
@@ -701,6 +705,10 @@ const fr: Dictionary = {
   "settings.banner_cut_why":
     "Vers la gauche garde le haut de l'image, vers la droite garde son bas.",
   "settings.banner_kept": "{percent} % de l'image gardée",
+  "settings.banner_whole": "Prendre toute la fenêtre",
+  "settings.banner_whole_why":
+    "L'accueil s'ouvre alors sur une seule œuvre, entière, sans rien jeter de son image sur un écran de la même forme qu'elle. Les rangées commencent sous le pli, donc il faut faire défiler pour y arriver.",
+  "settings.banner_whole_window": "toute la fenêtre",
   "settings.banner_at_random": "Une poignée différente à chaque fois",
   "settings.banner_at_random_why":
     "La bannière est tirée dans toute la médiathèque à chaque ouverture de la page, à la place de ce que vous avez laissé en cours et de ce qui vient d'arriver. Ce qui est mis en avant à la main passe toujours devant.",

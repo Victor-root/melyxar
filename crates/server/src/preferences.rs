@@ -51,6 +51,8 @@ struct PreferencesView {
     banner_cut: f64,
     /// Whether the banner draws a fresh handful every time the page opens.
     banner_at_random: bool,
+    /// Whether it takes the whole window, the height then deciding nothing.
+    banner_fills_the_screen: bool,
     /// Every fold this server knows how to perform.
     downmix_methods: Vec<&'static str>,
     /// The languages the library actually holds, which is what a picker
@@ -84,6 +86,8 @@ struct PreferencesBody {
     banner_cut: Option<f64>,
     #[serde(default)]
     banner_at_random: Option<bool>,
+    #[serde(default)]
+    banner_fills_the_screen: Option<bool>,
 }
 
 async fn read(
@@ -152,6 +156,9 @@ async fn write(
     if let Some(at_random) = body.banner_at_random {
         chosen.banner_at_random = at_random;
     }
+    if let Some(fills) = body.banner_fills_the_screen {
+        chosen.banner_fills_the_screen = fills;
+    }
 
     let kept = melyxar_app::preferences::save(&state, who.id, chosen).await?;
     view(&state, kept).await
@@ -183,6 +190,7 @@ async fn view(state: &AppState, chosen: Preferences) -> Result<Json<PreferencesV
         ],
         banner_cut: chosen.banner_cut,
         banner_at_random: chosen.banner_at_random,
+        banner_fills_the_screen: chosen.banner_fills_the_screen,
         downmix_methods: DownmixMethod::every()
             .iter()
             .map(|one| one.as_str())

@@ -1,0 +1,11 @@
+-- Whether the banner of the home page takes the whole window.
+--
+-- The height beside it is a share of the screen's width, which is what keeps
+-- the same amount of every picture whatever the screen. This asks a different
+-- question: fill what there is, whatever shape it is, and let the rows begin
+-- under the fold. Nothing of the picture is then thrown away on a screen
+-- shaped like it, and the page opens on one work rather than on a library.
+--
+-- Its own column rather than a height nobody can reach with the slider,
+-- because it is a different intention and it reads as one in the settings.
+ALTER TABLE user_preferences ADD COLUMN banner_fills_the_screen INTEGER NOT NULL DEFAULT 0;
