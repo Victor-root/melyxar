@@ -36,7 +36,10 @@ Toute nouvelle décision d'architecture est ajoutée au README des décisions av
 - **L'interface web est toujours à jour toute seule.** Personne ne doit jamais recharger la page pour voir l'état réel : position de reprise dès qu'on quitte un film, fiche corrigée dès qu'elle est identifiée, réglage enregistré, travail en cours qui avance, bibliothèque qui grossit pendant un scan. Une action met à jour tous les écrans qui la montrent, y compris celui d'où elle est partie et ceux qu'on retrouve en revenant en arrière.
 - Pas de code mort, pas de contournement temporaire, pas de commentaire inutile. Nettoyer entièrement toute tentative abandonnée.
 - Vérifier les usages réels avant de supprimer, déplacer ou remplacer du code.
-- Avant chaque commit : compiler, lancer `cargo clippy` et les tests dans l'environnement de travail. Relire le diff complet.
+- Avant chaque commit : **toujours** compiler et relire le diff complet. Les tests, eux, se dosent selon ce qui bouge, parce qu'une suite complète prend plusieurs minutes et qu'on ne la paie que quand elle peut trouver quelque chose :
+  - **Apparence seule** (CSS, mise en page, espacement, couleurs, formulations) : pas de tests. Le typecheck et le build de l'interface suffisent. Un test n'attrape rien là-dessus, c'est l'œil du mainteneur qui juge, et le lui faire attendre ne sert personne.
+  - **Un calcul, où qu'il vive, l'interface comprise** : le test de cette unité. Une formule fausse a l'air juste à l'écran, donc l'œil ne l'attrape pas. Constaté : l'étiquette « % de l'image gardée » comptait la barre du haut dans la bannière bien après que ça ait cessé d'être vrai, et le mainteneur a réglé un curseur sur un chiffre faux.
+  - **Le moteur** (logique Rust, requête SQL, migration, quoi que ce soit qui traverse plusieurs crates) : `cargo clippy` et la suite complète, sans exception. C'est là que les fautes sont invisibles à la lecture et coûteuses. Constaté deux fois le même jour : un paramètre manquant dans une requête d'insertion, que seule la suite a attrapé.
 
 ## Git
 
