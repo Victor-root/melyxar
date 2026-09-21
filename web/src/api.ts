@@ -243,9 +243,21 @@ export interface Filters {
 /** Why a work opens the page, which is what its button says. */
 export type Because = "started" | "pinned" | "new" | "suggested";
 
+/** One work the page opens on, shown large rather than as a card. */
+export type HeroItem = Card & {
+  because: Because;
+  /** The wide picture behind it, and its title as its own designers drew it.
+      Both empty for a work nobody has looked up, which the banner answers by
+      writing the title out instead. */
+  backdrop: Picture[];
+  logo: Picture[];
+  tagline: string | null;
+  overview: string | null;
+};
+
 export interface Home {
   /** The few works the page opens on, largest of all. */
-  hero: (Card & { because: Because })[];
+  hero: HeroItem[];
   /** Films started and not finished, the latest first. */
   carry_on: (Card & { position_seconds: number })[];
   /** The episode each started series is waiting on, with the series it

@@ -327,9 +327,19 @@
 .section-head h2,
 .section h2 {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
   font-size: 21px;
   font-weight: 650;
   letter-spacing: -0.01em;
+}
+
+/* The mark beside a heading says what the row is at a glance, and says it in
+   the accent because that is what the accent is for: what is active, what is
+   in progress, what is worth reaching for first. */
+.section-head h2 > svg {
+  color: var(--accent-bright);
 }
 
 .section h2 {
@@ -909,9 +919,19 @@
   scroll-snap-align: start;
 }
 
+/* A still is a wide picture: a row of them at a poster's width would be a row
+   of cropped middles. */
+.row-track > .card-lying {
+  flex-basis: calc(var(--card-width) * 1.62);
+}
+
 @media (min-width: 1400px) {
   .row-track > * {
     flex-basis: var(--card-width-wide);
+  }
+
+  .row-track > .card-lying {
+    flex-basis: calc(var(--card-width-wide) * 1.62);
   }
 }
 
@@ -2459,3 +2479,281 @@
   font-size: 14px;
 }
 
+
+/* --------------------------------------------------------------------------
+ * What the page opens on
+ * ----------------------------------------------------------------------- */
+
+/* Full width of the page and a shade under half its height: large enough to
+   be the thing somebody meets, short enough that the first row under it is on
+   the screen at the same time. A banner that fills the window is a banner
+   that hides the library behind it. */
+.hero {
+  position: relative;
+  margin: calc(var(--gap-wide) * -1) calc(var(--gap-wide) * -1) var(--gap-section);
+  height: min(46vw, 460px);
+  min-height: 320px;
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--surface);
+}
+
+.hero-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: var(--card-color);
+  transition: opacity 700ms var(--ease);
+}
+
+.hero-backdrop-shown {
+  opacity: 1;
+}
+
+.hero-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The words have to be readable over whatever picture is behind them, and a
+   picture is never twice the same. Two washes rather than one: sideways for
+   the words, upwards so the row under the banner is not cut off by a hard
+   edge. */
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, var(--surface-deep) 6%, transparent 62%),
+    linear-gradient(to top, var(--surface-deep) 2%, transparent 42%);
+  pointer-events: none;
+}
+
+.hero-words {
+  position: relative;
+  z-index: 1;
+  max-width: min(560px, 52%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: var(--gap-wide) var(--gap-wide) var(--gap-wide) calc(var(--gap-wide) * 2);
+}
+
+.hero-tagline {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.hero-title {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 52px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+/* A drawn title is an image, so it is given a height rather than a font size
+   and never blown up past what was fetched. */
+.hero-title-drawn img {
+  max-height: min(9vw, 96px);
+  max-width: 100%;
+  width: auto;
+  object-fit: contain;
+}
+
+.hero-facts {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-soft);
+}
+
+.hero-overview {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hero-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  margin-top: 4px;
+}
+
+.hero-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+.hero-progress-bar {
+  width: 220px;
+  max-width: 48%;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+  overflow: hidden;
+}
+
+.hero-progress-done {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* The two arrows, on the picture and out of the way of the words. */
+.hero-step {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-deep) 60%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+  color: var(--text);
+  opacity: 0;
+  transition: opacity var(--calm) var(--ease), background var(--quick) var(--ease);
+}
+
+.hero:hover .hero-step,
+.hero:focus-within .hero-step {
+  opacity: 1;
+}
+
+.hero-step:hover {
+  background: var(--surface-raised);
+}
+
+.hero-step-back {
+  left: var(--gap);
+}
+
+.hero-step-on {
+  right: var(--gap);
+}
+
+/* Where it is in the five, and a way to go straight to one. */
+.hero-dots {
+  position: absolute;
+  right: var(--gap-wide);
+  bottom: var(--gap-wide);
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+
+.hero-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 35%, transparent);
+  transition: background var(--quick) var(--ease), width var(--calm) var(--ease);
+}
+
+.hero-dot-on {
+  width: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+/* A picture that slides in under somebody reading it is a picture that reads
+   its own words out from under them. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-backdrop {
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero-words {
+    max-width: 100%;
+    padding-left: var(--gap-wide);
+  }
+
+  .hero::after {
+    background: linear-gradient(to top, var(--surface-deep) 12%, rgba(0, 0, 0, 0.45) 70%);
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * The shape of a page, before the page
+ * ----------------------------------------------------------------------- */
+
+/* A spinner says something is happening. This says what is about to be there,
+   which is what stops everything jumping into place when it arrives. */
+.skeleton {
+  border-radius: var(--radius-card);
+  background: linear-gradient(
+    100deg,
+    var(--surface) 30%,
+    var(--surface-hover) 50%,
+    var(--surface) 70%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-sweep 1.4s linear infinite;
+}
+
+@keyframes skeleton-sweep {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+.skeleton-hero {
+  height: min(46vw, 460px);
+  min-height: 320px;
+  margin: calc(var(--gap-wide) * -1) calc(var(--gap-wide) * -1) var(--gap-section);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+
+.skeleton-heading {
+  width: 210px;
+  height: 22px;
+  margin-bottom: var(--gap);
+  border-radius: var(--radius-control);
+}
+
+.skeleton-card {
+  flex: 0 0 var(--card-width);
+  aspect-ratio: 2 / 3;
+}
+
+@media (min-width: 1400px) {
+  .skeleton-card {
+    flex-basis: var(--card-width-wide);
+  }
+}
+
+/* Standing still rather than sweeping, for anybody who asked for less
+   movement: the shape is the point, the sweep is only a hint that it is not
+   the page yet. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

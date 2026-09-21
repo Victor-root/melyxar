@@ -7,10 +7,13 @@
 
 use melyxar_core::id::{LibraryId, UserId, WorkId};
 use melyxar_core::time::now;
-use sqlx::AssertSqlSafe;
+use sqlx::{AssertSqlSafe, Row};
+
+use std::collections::HashMap;
 
 use crate::browse::{kept_inside, met_on_its_own, WorkCard, WHAT_A_CARD_IS};
-use crate::convert::timestamp_to_text;
+use crate::convert::{parse_id, timestamp_to_text};
+use crate::images::StoredImage;
 use crate::{Database, Result};
 
 /// How many genres of somebody's own count as what they watch.
@@ -20,7 +23,90 @@ use crate::{Database, Result};
 /// same as weighing none of them.
 const GENRES_THAT_COUNT: i64 = 5;
 
+/// What a work needs to be shown large rather than as a card.
+///
+/// A card is a poster, a title and a year, which is everything a grid needs
+/// and nothing the one place that shows a work full width does. This is the
+/// rest: the wide picture behind it, the title as the film's own designers
+/// drew it, and enough words to say what it is.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Dressed {
+    pub backdrop: Vec<StoredImage>,
+    pub logo: Vec<StoredImage>,
+    pub tagline: Option<String>,
+    pub overview: Option<String>,
+}
+
 impl Database {
+    /// Dresses a handful of works for the one place that shows them large.
+    ///
+    /// Two questions for the lot rather than a detail page each: a detail page
+    /// reads versions, tracks, credits and collections, which is a great deal
+    /// of work to print a sentence and hang one picture.
+    ///
+    /// The words are taken in the language asked for and fall back to whatever
+    /// the work has, which is the same rule the detail page follows: a page
+    /// half empty is worse than a page with a paragraph somebody can read.
+    pub async fn dressed_large(
+        &self,
+        works: &[WorkId],
+        language: &str,
+    ) -> Result<HashMap<WorkId, Dressed>> {
+        let mut dressed: HashMap<WorkId, Dressed> = HashMap::new();
+        if works.is_empty() {
+            return Ok(dressed);
+        }
+        let owners: Vec<String> = works.iter().map(|id| id.to_db_string()).collect();
+        // A row of question marks, one per identifier the caller just read
+        // back out of this crate's own tables.
+        let places = vec!["?"; owners.len()].join(", ");
+
+        let mut pictures = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM images
+              WHERE owner_kind = 'work'
+                AND image_kind IN ('backdrop', 'logo')
+                AND owner_id IN ({places})
+              ORDER BY width DESC",
+            crate::images::WHAT_A_PICTURE_IS
+        )));
+        for owner in &owners {
+            pictures = pictures.bind(owner);
+        }
+        for row in pictures.fetch_all(self.reader()).await? {
+            let owner: WorkId = parse_id(&row.try_get::<String, _>("owner_id")?)?;
+            let kind: String = row.try_get("image_kind")?;
+            let image = crate::images::image_from_row(&row)?;
+            let entry = dressed.entry(owner).or_default();
+            match kind.as_str() {
+                "logo" => entry.logo.push(image),
+                _ => entry.backdrop.push(image),
+            }
+        }
+
+        // The language asked for first, then anything the work has: ordered
+        // here so the first row read for a work is the one that wins.
+        let mut words = sqlx::query(AssertSqlSafe(format!(
+            "SELECT work_id, tagline, overview
+               FROM work_translations
+              WHERE work_id IN ({places})
+              ORDER BY (language = ?) DESC"
+        )));
+        for owner in &owners {
+            words = words.bind(owner);
+        }
+        for row in words.bind(language).fetch_all(self.reader()).await? {
+            let owner: WorkId = parse_id(&row.try_get::<String, _>("work_id")?)?;
+            let entry = dressed.entry(owner).or_default();
+            if entry.overview.is_none() {
+                entry.overview = row.try_get("overview")?;
+            }
+            if entry.tagline.is_none() {
+                entry.tagline = row.try_get("tagline")?;
+            }
+        }
+        Ok(dressed)
+    }
+
     /// What an administrator put in front of everybody, in the order they
     /// chose.
     pub async fn pinned_works(
