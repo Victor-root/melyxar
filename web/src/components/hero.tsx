@@ -260,6 +260,11 @@ function HeroTitle({ item }: { item: HeroItem }) {
       <img
         src={picture.src}
         srcSet={picture.srcSet}
+        /* The room a drawn title really has: a box a few hundred points
+           across, never the width of the window, which is what is assumed of
+           a picture offered in several sizes and asked for without this. A
+           fine screen still takes the larger of the two by itself. */
+        sizes="340px"
         alt={name}
         decoding="async"
         onError={itDidNotLoad}

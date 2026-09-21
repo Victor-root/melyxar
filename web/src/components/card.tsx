@@ -31,6 +31,30 @@ import { HeartIcon, MoreIcon, PlayIcon } from "../icons";
 /** How a card is laid out: standing like a poster, or lying like a still. */
 export type CardShape = "standing" | "lying";
 
+/**
+ * How much room the picture of a card really has, for the browser to pick a
+ * size with.
+ *
+ * Written out in plain lengths, and it has to be: this attribute is read
+ * before the page has a stylesheet, so it knows nothing of the widths the
+ * interface keeps as tokens. A `var()` in here is not a length the browser
+ * can use, the whole thing is thrown away, and what is assumed instead is the
+ * full width of the window. Every card then asked for the largest poster held,
+ * eight hundred points across, to draw it at a hundred and sixty eight. That
+ * is what left half a page as coloured rectangles until the pointer went
+ * looking for them.
+ *
+ * The lengths here are the ones the stylesheet draws: a card is 168 points
+ * wide, 186 past a wide screen, and a lying card is a little over one and a
+ * half times that. The screen's own fineness is the browser's business and it
+ * takes it into account by itself, which is how a fine screen still gets the
+ * larger picture without anybody asking for it here.
+ */
+const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
+  standing: "(max-width: 700px) 40vw, (min-width: 1400px) 186px, 168px",
+  lying: "(max-width: 700px) 70vw, (min-width: 1400px) 301px, 272px",
+};
+
 export function Card({
   card,
   shape = "standing",
@@ -101,7 +125,7 @@ export function Card({
           <img
             src={poster.src}
             srcSet={poster.srcSet}
-            sizes="(max-width: 700px) 40vw, var(--card-width)"
+            sizes={ROOM_FOR_A_PICTURE[shape]}
             alt=""
             loading="lazy"
             decoding="async"
