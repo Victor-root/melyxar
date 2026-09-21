@@ -477,6 +477,13 @@ struct HeroView {
     /// it, so the interface never has to work out again what the server
     /// already decided when it filled the row.
     because: &'static str,
+    /// The wide picture behind it, and its title as its own designers drew
+    /// it. Both empty for a work nobody has looked up, which the banner
+    /// answers by writing the title out instead.
+    backdrop: Vec<ImageView>,
+    logo: Vec<ImageView>,
+    tagline: Option<String>,
+    overview: Option<String>,
 }
 
 /// One episode a started series is waiting on.
@@ -525,6 +532,10 @@ async fn home(
             .map(|entry| HeroView {
                 card: card_view(&entry.card),
                 because: entry.because.as_str(),
+                backdrop: entry.dressed.backdrop.iter().map(image_view).collect(),
+                logo: entry.dressed.logo.iter().map(image_view).collect(),
+                tagline: entry.dressed.tagline.clone(),
+                overview: entry.dressed.overview.clone(),
             })
             .collect(),
         carry_on: page

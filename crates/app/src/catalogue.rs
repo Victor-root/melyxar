@@ -11,6 +11,7 @@ use melyxar_core::library::{LibraryKind, LibraryOptions, RootAccess};
 
 use crate::browse::{BrowseRequest, WorkCard, WorkOrder, WorkPage};
 use crate::{AppState, Result};
+use melyxar_database::home::Dressed;
 use melyxar_database::playback::{UpNext, WorkToCarryOn};
 
 /// A library as a menu shows it.
@@ -88,10 +89,15 @@ pub struct Shelf {
 }
 
 /// One of the few works the page opens on, and why it is there.
+///
+/// Dressed rather than carded: this is the one place a work is shown full
+/// width, so it carries the wide picture behind it, its title as its own
+/// designers drew it, and enough words to say what it is.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeroItem {
     pub card: WorkCard,
     pub because: Because,
+    pub dressed: Dressed,
 }
 
 /// Why a work is in the hero, which decides what its button says.
@@ -322,6 +328,7 @@ async fn the_hero(
             hero.push(HeroItem {
                 card: card.clone(),
                 because,
+                dressed: Dressed::default(),
             });
         }
     };
@@ -349,6 +356,17 @@ async fn the_hero(
         {
             take(&card, Because::Suggested, &mut hero);
         }
+    }
+
+    // Dressed once the five are known, in two questions for the lot: asking
+    // per work would be five more round trips to draw one banner.
+    let named: Vec<WorkId> = hero.iter().map(|entry| entry.card.id).collect();
+    let mut dressed = state
+        .database()
+        .dressed_large(&named, &who.preferences.interface_language)
+        .await?;
+    for entry in &mut hero {
+        entry.dressed = dressed.remove(&entry.card.id).unwrap_or_default();
     }
     Ok(hero)
 }
