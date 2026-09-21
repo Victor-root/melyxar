@@ -91,6 +91,23 @@ export interface Candidate {
   poster: string | null;
 }
 
+/**
+ * What somebody typed to find the right work.
+ *
+ * All of it as written, strings included for the numbers: a field half typed
+ * is a field somebody is still typing in, and turning it into a number on
+ * every keystroke is how a year being corrected becomes a search nobody
+ * asked for.
+ */
+export interface SearchCriteria {
+  name?: string;
+  year?: string;
+  imdbId?: string;
+  /** The identifier at the site the server asks, which names the work
+      outright. */
+  providerId?: string;
+}
+
 export type IdentificationNote =
   | "no_match"
   | "provider_unreachable"
@@ -1120,15 +1137,23 @@ export const api = {
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
   forgetFinishedJobs: () => remove<{ forgotten: number }>("/api/v1/jobs/finished"),
   /* For the films the rules could not name: what a person could have meant,
-     and the one they say it is. */
-  candidates: (work: string, query: string, signal?: AbortSignal) =>
-    get<Candidate[]>(
-      `/api/v1/works/${work}/candidates?query=${encodeURIComponent(query)}`,
-      signal,
-    ),
-  identifyByHand: (work: string, externalId: string) =>
+     and the one they say it is.
+
+     Every criterion narrows, and an identifier settles it outright: given
+     one, the work it names is the only answer. An empty name is the film's
+     own, which is what the field is filled with to begin with. */
+  candidates: (work: string, asked: SearchCriteria, signal?: AbortSignal) => {
+    const said = new URLSearchParams();
+    if (asked.name) said.set("query", asked.name);
+    if (asked.year) said.set("year", asked.year);
+    if (asked.imdbId) said.set("imdb_id", asked.imdbId);
+    if (asked.providerId) said.set("provider_id", asked.providerId);
+    return get<Candidate[]>(`/api/v1/works/${work}/candidates?${said}`, signal);
+  },
+  identifyByHand: (work: string, externalId: string, replacePictures = true) =>
     post<{ identified: boolean }>(`/api/v1/works/${work}/identify`, {
       external_id: externalId,
+      replace_pictures: replacePictures,
     }),
   /* When two copies on one film turn out not to be the same film at all. */
   detachCopy: (copy: string) =>
