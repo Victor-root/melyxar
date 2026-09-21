@@ -579,10 +579,7 @@ const EDITION_ENDINGS: &[(&str, Option<&str>)] = &[
 /// Drops the words naming the cut, however many of them are stacked up.
 fn trim_edition_words<'a>(words: &'a [&'a str]) -> &'a [&'a str] {
     let mut kept = words;
-    loop {
-        let Some((last, rest)) = kept.split_last() else {
-            break;
-        };
+    while let Some((last, rest)) = kept.split_last() {
         // Never the whole title: a name made only of these says nothing, and
         // an empty title is a film nobody finds again.
         if rest.is_empty() {

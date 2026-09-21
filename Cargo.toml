@@ -47,7 +47,7 @@ anyhow = "1"
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
+toml = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "sync", "time", "io-util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
@@ -56,11 +56,15 @@ time = { version = "0.3", features = ["formatting", "parsing", "serde", "macros"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "uuid", "time"] }
 axum = "0.8"
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["fs", "trace", "compression-gzip"] }
+tower-http = { version = "0.7", features = ["fs", "trace", "compression-gzip"] }
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
 rust-embed = { version = "8", features = ["interpolate-folder-path"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
+# Its TLS options were renamed at 0.13: what was "rustls-tls" is now "rustls",
+# and the roots are no longer chosen by a feature at all, the platform's own
+# store being verified against by default. "query" and "form" became features
+# of their own in the same release, and the provider's key travels as a query.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "gzip", "query"] }
 # Password hashing, the memory hard kind: a stolen database must stay useless.
 argon2 = "0.6"
 # For the fingerprint of a session token. Deliberately not Argon2: a token is
