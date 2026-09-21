@@ -47,6 +47,105 @@
   pointer-events: none;
 }
 
+/*
+ * Posters drifting behind it all.
+ *
+ * What this server is for, said without a word, on the one screen that has
+ * nothing of the library on it yet.
+ *
+ * Two things this is built around, and both are why it costs nothing while it
+ * runs. The movement is a turn and a rise and nothing else, so what changes
+ * every frame is a transform, which the part of the browser that puts the
+ * page together does on its own without drawing anything again. And not one
+ * of them is blurred: a blurred thing that moves makes everything behind it
+ * be blurred again sixty times a second, which is how a screen with nothing
+ * happening on it comes to hold a graphics card at full tilt.
+ */
+.door-posters {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Arriving a moment after the card, so the screen settles rather than
+     appearing all at once. */
+  opacity: 0;
+  animation: door-posters-arrive 900ms var(--ease) 250ms forwards;
+}
+
+@keyframes door-posters-arrive {
+  to {
+    opacity: 1;
+  }
+}
+
+.door-poster {
+  position: absolute;
+  left: var(--at-x);
+  top: var(--at-y);
+  width: var(--wide);
+  /* The shape of a poster, which is what makes them read as films rather than
+     as rectangles. */
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--surface-raised) 88%, var(--accent)),
+      var(--surface)
+    );
+  /* Fainter the smaller it is, which is the whole of the depth here. */
+  opacity: 0.42;
+  transform: rotate(var(--turn));
+  animation: door-drift var(--over) ease-in-out var(--from) infinite;
+  will-change: transform;
+}
+
+/* The strip along the bottom where a title would be. Enough of one to tell
+   the shape from a plain box, and nothing anybody could try to read. */
+.door-poster::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 10%;
+  height: 5%;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text-faint) 45%, transparent);
+}
+
+@keyframes door-drift {
+  from {
+    transform: translateY(0) rotate(var(--turn));
+  }
+  50% {
+    transform: translateY(-20px) rotate(var(--turn));
+  }
+  to {
+    transform: translateY(0) rotate(var(--turn));
+  }
+}
+
+/* The ones that fill the gap on a wide screen. On a narrow one they would sit
+   under the card, and a poster behind the box somebody is typing into is a
+   poster in the way. */
+.door-poster-roomy {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .door-poster-roomy {
+    display: block;
+  }
+}
+
+/* A screen with no room to spare shows the card and the light behind it, and
+   nothing else: half a poster cut off by the edge is not a background. */
+@media (max-width: 700px) {
+  .door-posters {
+    display: none;
+  }
+}
+
 @keyframes door-breathe {
   from {
     transform: scale(1) translateY(0);

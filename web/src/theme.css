@@ -215,12 +215,23 @@ img {
   max-width: 100%;
 }
 
-/* Anyone who asked their system for less movement gets less movement. */
+/*
+ * Anyone who asked their system for less movement gets less movement.
+ *
+ * The count matters as much as the length, and leaving it out is the mistake
+ * this had in it. An animation that never ends, given a length of nothing,
+ * does not stop: it runs its whole course a hundred thousand times a second,
+ * and the screen catches it somewhere different every frame. What was a slow
+ * drift becomes a flicker, for exactly the people who asked for the opposite.
+ * Run once, it goes to where it ends and stays there.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

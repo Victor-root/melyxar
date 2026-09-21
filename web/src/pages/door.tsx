@@ -62,6 +62,7 @@ export function Door({
   return (
     <main className="door">
       <div className="door-glow" aria-hidden="true" />
+      <DriftingPosters />
 
       <form className="door-card" onSubmit={send}>
         {/* The mark this server wears. A server given one of its own shows
@@ -166,5 +167,92 @@ export function Door({
         ))}
       </div>
     </main>
+  );
+}
+
+/**
+ * One poster, as the background drifts it.
+ *
+ * Nothing but where it sits, how big it is, how far round it is turned, and
+ * how long it takes to rise and fall. The drawing itself is in the
+ * stylesheet, because every one of them is drawn the same way.
+ */
+interface Drifting {
+  /** Across and down, as a share of the screen. */
+  x: string;
+  y: string;
+  /** How wide, which is also how near it reads as being. */
+  wide: number;
+  turn: string;
+  /** How long one rise and fall takes. */
+  over: string;
+  /** Where in that it starts, so no two of them move together. Negative, so
+   *  none of them is waiting to begin when the screen arrives. */
+  from: string;
+  /** Left out on a narrow screen, where they would sit under the card. */
+  onlyWide?: boolean;
+}
+
+/**
+ * Where each one sits.
+ *
+ * Down both sides and never in the middle, which is where the card is: a
+ * poster behind the box somebody is typing into is a poster in the way. The
+ * four marked as wide only are the ones that fill the gap on a big screen and
+ * would land on the card on a small one.
+ *
+ * Nearer ones are bigger and are drawn a little stronger, further ones smaller
+ * and fainter, which is the whole of the depth here and costs nothing.
+ */
+const POSTERS: Drifting[] = [
+  { x: "7%", y: "12%", wide: 104, turn: "-9deg", over: "13s", from: "-1s" },
+  { x: "4%", y: "52%", wide: 132, turn: "6deg", over: "17s", from: "-6s" },
+  { x: "11%", y: "78%", wide: 88, turn: "-4deg", over: "15s", from: "-3s" },
+  { x: "83%", y: "9%", wide: 96, turn: "8deg", over: "16s", from: "-9s" },
+  { x: "88%", y: "46%", wide: 124, turn: "-7deg", over: "14s", from: "-4s" },
+  { x: "79%", y: "80%", wide: 80, turn: "11deg", over: "18s", from: "-12s" },
+  { x: "22%", y: "24%", wide: 72, turn: "5deg", over: "19s", from: "-7s", onlyWide: true },
+  { x: "19%", y: "68%", wide: 92, turn: "-12deg", over: "12s", from: "-2s", onlyWide: true },
+  { x: "70%", y: "22%", wide: 84, turn: "-6deg", over: "20s", from: "-15s", onlyWide: true },
+  { x: "73%", y: "66%", wide: 68, turn: "9deg", over: "16s", from: "-10s", onlyWide: true },
+];
+
+/**
+ * Posters drifting behind the door.
+ *
+ * What this server is for, said without a word, on the one screen that has
+ * nothing of the library on it yet.
+ *
+ * Two things learnt from doing this before and worth not learning again. The
+ * movement is a turn and a rise and nothing else: a transform is handed to the
+ * card that composes the page and costs nothing per frame, where a shadow or a
+ * colour that moves is drawn again every frame. And none of them is given a
+ * blur: a blurred thing that moves makes the screen behind it be blurred again
+ * sixty times a second, which is how an idle page comes to hold a graphics
+ * card at full tilt.
+ *
+ * They stand still for anybody who asked their system for less movement, which
+ * the theme sees to for every animation at once.
+ */
+function DriftingPosters() {
+  return (
+    <div className="door-posters" aria-hidden="true">
+      {POSTERS.map((poster) => (
+        <span
+          key={`${poster.x} ${poster.y}`}
+          className={`door-poster${poster.onlyWide ? " door-poster-roomy" : ""}`}
+          style={
+            {
+              "--at-x": poster.x,
+              "--at-y": poster.y,
+              "--wide": `${poster.wide}px`,
+              "--turn": poster.turn,
+              "--over": poster.over,
+              "--from": poster.from,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
   );
 }
