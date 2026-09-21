@@ -39,7 +39,7 @@ export function Band({ shelves, libraries }: { shelves: Shelf[]; libraries: Libr
 
 function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
   const { t, language } = useSettings();
-  const { picture, itDidNotLoad } = useShownPicture(shelf.picture);
+  const { picture, framing, itDidNotLoad } = useShownPicture(shelf.picture);
   const works = worksOfKind(shelf.kind, libraries);
 
   return (
@@ -56,6 +56,7 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
           src={picture.src}
           srcSet={picture.srcSet}
           sizes="(max-width: 900px) 50vw, 20vw"
+          style={{ objectPosition: framing }}
           alt=""
           loading="lazy"
           decoding="async"

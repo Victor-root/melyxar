@@ -5293,6 +5293,7 @@ mod tests {
                     height: Some(300),
                     fingerprint: "abc".to_string(),
                     dominant_color: None,
+                    framing: None,
                 }],
             )
             .await
@@ -5467,6 +5468,7 @@ mod tests {
                     height: Some(300),
                     fingerprint: "abc".to_string(),
                     dominant_color: None,
+                    framing: None,
                 }],
             )
             .await

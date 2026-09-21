@@ -1207,7 +1207,7 @@ mod tests {
     /// How pictures are prepared today, as the crate that prepares them writes
     /// it. Any word does here: what matters is that a picture stamped with
     /// another one is asked for again.
-    const RECIPE_NOW: &str = "b3";
+    const RECIPE_NOW: &str = "b4";
 
     async fn work_in_library() -> (Database, melyxar_core::work::Work) {
         let database = Database::open_in_memory().await.expect("database opens");
@@ -1838,6 +1838,7 @@ mod tests {
                     height: Some(300),
                     fingerprint: "abc".to_string(),
                     dominant_color: None,
+                    framing: None,
                 }],
             )
             .await
@@ -2034,6 +2035,7 @@ mod tests {
                     height: Some(300),
                     fingerprint: fingerprint.to_string(),
                     dominant_color: None,
+                    framing: None,
                 }],
             )
             .await
