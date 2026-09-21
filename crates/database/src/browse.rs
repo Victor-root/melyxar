@@ -12,9 +12,9 @@
 //! which an offset does not: with an offset, one insertion shifts every page
 //! and a card appears twice or not at all.
 
-use melyxar_core::id::{LibraryId, WorkId};
+use melyxar_core::id::{LibraryId, MediaSourceId, UserId, WorkId};
 use melyxar_core::time::{Millis, Timestamp};
-use melyxar_core::work::{IdentificationNote, IdentificationState, WorkKind};
+use melyxar_core::work::{IdentificationNote, IdentificationState, PlaybackState, WorkKind};
 use sqlx::{AssertSqlSafe, Row};
 
 use crate::convert::{parse_id, parse_timestamp};
@@ -147,6 +147,11 @@ pub struct BrowseRequest {
     pub search: Option<String>,
     /// Only the works nobody has managed to identify.
     pub unidentified_only: bool,
+    /// Who is looking, when somebody is. Named, the page comes back with what
+    /// this account has made of each card: where they are in it, whether they
+    /// marked it, what is left of a series. Absent, the cards carry the work's
+    /// own facts and nothing else, which is what the scan reads them for.
+    pub viewer: Option<UserId>,
 }
 
 /// The letter a title begins with, as a grid is asked to jump to it.
@@ -221,6 +226,7 @@ impl Default for BrowseRequest {
             decade: None,
             search: None,
             unidentified_only: false,
+            viewer: None,
         }
     }
 }
@@ -254,6 +260,38 @@ pub struct WorkCard {
     pub added_at: Timestamp,
     /// Every size of the poster, largest first.
     pub poster: Vec<StoredImage>,
+    /// What this card shows beyond the work's own facts. Absent when nobody
+    /// was named as asking, which is what the scan's own reads do: they check
+    /// what is in a library, not what somebody has made of it.
+    pub state: Option<CardState>,
+}
+
+/// Everything a card shows that the work itself does not say.
+///
+/// Every field here answers for one person. Two accounts open the same grid
+/// and meet the same titles with different marks on them, which is the whole
+/// reason this is not part of the work.
+///
+/// Gathered for a whole page at once rather than card by card: a grid of sixty
+/// would otherwise ask sixty times, and the hover that carries this interface's
+/// ergonomics needs all of it before a single card is drawn.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CardState {
+    /// Where this viewer is in it.
+    pub seen: PlaybackState,
+    /// Where they stopped, only where they really stopped partway. A position
+    /// of nothing is where everybody starts, and a button offering to carry on
+    /// from the very beginning says the wrong thing.
+    pub resume_from: Option<Millis>,
+    pub favourite: bool,
+    /// Episodes below this one, for a series or a season. Nothing for a film,
+    /// which holds none.
+    pub episodes: i64,
+    /// How many of those this viewer has left to watch. This is the badge.
+    pub unwatched: i64,
+    /// The biggest copy on disk, so a play button on the card starts the film
+    /// without sending anybody to a page that asks the same question again.
+    pub source_id: Option<MediaSourceId>,
 }
 
 /// A page of cards, and how to ask for the next one.
@@ -395,7 +433,131 @@ impl Database {
         };
 
         self.attach_posters(&mut cards).await?;
+        if let Some(viewer) = request.viewer {
+            self.attach_viewer_state(viewer, &mut cards).await?;
+        }
         Ok(WorkPage { cards, next })
+    }
+
+    /// Puts what one viewer has made of every card in place.
+    ///
+    /// One query for the whole page, like the posters above and for the same
+    /// reason: the hover this interface is built around shows three things at
+    /// once that all belong to the person looking, and asking per card would
+    /// be sixty round trips to draw one screen.
+    ///
+    /// What is left of a series is counted here rather than read from a
+    /// stored counter. The counter exists in the schema and would be the
+    /// faster read, but it has to be right at every moment or the badge lies,
+    /// and keeping it right means writing it from every place that touches
+    /// progress and from every scan that adds or removes an episode. Counted
+    /// here it cannot drift, and the cost is bounded by the page: the count
+    /// only runs for a series or a season, and a grid of films never pays it.
+    /// Measured before it is believed, and the stored counter is the answer if
+    /// the measurement asks for it.
+    pub(crate) async fn attach_viewer_state(
+        &self,
+        viewer: UserId,
+        cards: &mut [WorkCard],
+    ) -> Result<()> {
+        if cards.is_empty() {
+            return Ok(());
+        }
+
+        // Identifiers this crate has just read back, never anything a caller
+        // wrote: what is assembled is a row of numbered question marks.
+        //
+        // Numbered rather than plain, and numbered from two, because the
+        // viewer is named four times in the statement and has to be the same
+        // one each time. Mixed with plain ones, the places after it shift and
+        // the joins quietly match nobody, which reads exactly like an account
+        // that has never watched anything.
+        let places = (2..=cards.len() + 1)
+            .map(|place| format!("?{place}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT w.id,
+                    coalesce(p.state, 'not_started') AS seen,
+                    p.position_ms,
+                    f.work_id IS NOT NULL AS favourite,
+                    -- The copy a play button on the card would start: the
+                    -- biggest one still on the disk, the same one every other
+                    -- play button in this server means.
+                    (SELECT s.id FROM media_sources s
+                      WHERE s.work_id = w.id AND s.missing_since IS NULL
+                      ORDER BY s.size_bytes DESC LIMIT 1) AS source_id,
+                    -- Episodes below this one, at either depth: a season holds
+                    -- them directly, a series holds them under its seasons.
+                    -- Asked only of the two kinds that can hold any, so a grid
+                    -- of films walks nothing at all.
+                    CASE WHEN w.kind IN ('series', 'season') THEN
+                        (SELECT count(*) FROM works e
+                          WHERE e.kind = 'episode'
+                            AND (e.parent_id = w.id
+                                 OR e.parent_id IN (SELECT id FROM works WHERE parent_id = w.id)))
+                    ELSE 0 END AS episodes,
+                    CASE WHEN w.kind IN ('series', 'season') THEN
+                        (SELECT count(*) FROM works e
+                           LEFT JOIN playback_progress q
+                                  ON q.work_id = e.id AND q.user_id = ?1
+                          WHERE e.kind = 'episode'
+                            AND coalesce(q.state, 'not_started') <> 'watched'
+                            AND (e.parent_id = w.id
+                                 OR e.parent_id IN (SELECT id FROM works WHERE parent_id = w.id)))
+                    ELSE 0 END AS unwatched
+             FROM works w
+             LEFT JOIN playback_progress p ON p.work_id = w.id AND p.user_id = ?1
+             LEFT JOIN favorites f ON f.work_id = w.id AND f.user_id = ?1
+             WHERE w.id IN ({places})"
+        )))
+        .bind(viewer.to_db_string());
+
+        let mut query = rows;
+        for card in cards.iter() {
+            query = query.bind(card.id.to_db_string());
+        }
+        let rows = query.fetch_all(self.reader()).await?;
+
+        let mut found = std::collections::HashMap::with_capacity(rows.len());
+        for row in &rows {
+            let id: WorkId = parse_id(&row.try_get::<String, _>("id")?)?;
+            let seen_text: String = row.try_get("seen")?;
+            found.insert(
+                id,
+                CardState {
+                    seen: PlaybackState::parse(&seen_text).ok_or_else(|| {
+                        DatabaseError::Corrupt(format!("playback state '{seen_text}' is unknown"))
+                    })?,
+                    resume_from: row
+                        .try_get::<Option<i64>, _>("position_ms")?
+                        .filter(|position| *position > 0)
+                        .map(Millis::new),
+                    favourite: crate::convert::int_to_bool(row.try_get::<i64, _>("favourite")?),
+                    episodes: row.try_get("episodes")?,
+                    unwatched: row.try_get("unwatched")?,
+                    source_id: row
+                        .try_get::<Option<String>, _>("source_id")?
+                        .map(|id| parse_id(&id))
+                        .transpose()?,
+                },
+            );
+        }
+
+        for card in cards.iter_mut() {
+            // A card whose row did not come back is a work that went away
+            // between the two reads. It keeps the state of a work nobody has
+            // touched rather than none at all, so the page draws.
+            card.state = Some(found.remove(&card.id).unwrap_or(CardState {
+                seen: PlaybackState::NotStarted,
+                resume_from: None,
+                favourite: false,
+                episodes: 0,
+                unwatched: 0,
+                source_id: None,
+            }));
+        }
+        Ok(())
     }
 
     /// Puts the poster of every card in place.
@@ -641,6 +803,7 @@ pub(crate) fn card_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<WorkCard> {
         dominant_color: row.try_get("dominant_color")?,
         added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
         poster: Vec::new(),
+        state: None,
     })
 }
 
@@ -648,7 +811,8 @@ pub(crate) fn card_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<WorkCard> {
 mod tests {
     use super::*;
     use melyxar_core::library::LibraryKind;
-    use std::path::PathBuf;
+    use melyxar_core::time::now;
+    use std::path::{Path, PathBuf};
 
     /// A library holding the given films, as (title, year, rating).
     async fn library_of(films: &[(&str, i32, f64)]) -> (Database, LibraryId) {
@@ -686,6 +850,247 @@ mod tests {
             .expect("film completed");
         }
         (database, library.id)
+    }
+
+    /// Somebody to carry the marks, since every one of them answers for one
+    /// person and a card without a person to answer for carries none.
+    async fn somebody(database: &Database, name: &str) -> UserId {
+        database
+            .create_user(name, None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id
+    }
+
+    /// Asks for the whole library as one account sees it, by title.
+    async fn grid_of(database: &Database, library: LibraryId, who: UserId) -> Vec<WorkCard> {
+        database
+            .browse_works(&BrowseRequest {
+                library_id: Some(library),
+                viewer: Some(who),
+                ..Default::default()
+            })
+            .await
+            .expect("grid read")
+            .cards
+    }
+
+    #[tokio::test]
+    async fn a_card_carries_where_this_viewer_stopped_and_what_they_marked() {
+        let (database, films) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let who = somebody(&database, "vera").await;
+        let film = grid_of(&database, films, who).await[0].id;
+
+        // Nothing said about it yet: a card nobody has touched.
+        let fresh = grid_of(&database, films, who).await[0].state.clone();
+        let fresh = fresh.expect("a named viewer gets a state");
+        assert_eq!(fresh.seen, PlaybackState::NotStarted);
+        assert_eq!(fresh.resume_from, None);
+        assert!(!fresh.favourite);
+
+        database
+            .record_playback_progress(
+                who,
+                film,
+                Millis::new(920_000),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("position recorded");
+        database
+            .set_favourite(who, film, true)
+            .await
+            .expect("favourite set");
+
+        let state = grid_of(&database, films, who).await[0]
+            .state
+            .clone()
+            .expect("a named viewer gets a state");
+        assert_eq!(state.seen, PlaybackState::InProgress);
+        assert_eq!(state.resume_from, Some(Millis::new(920_000)));
+        assert!(state.favourite);
+    }
+
+    #[tokio::test]
+    async fn the_very_beginning_is_not_somewhere_to_carry_on_from() {
+        let (database, films) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let who = somebody(&database, "vera").await;
+        let film = grid_of(&database, films, who).await[0].id;
+
+        database
+            .record_playback_progress(who, film, Millis::new(0), PlaybackState::NotStarted, now())
+            .await
+            .expect("position recorded");
+
+        let state = grid_of(&database, films, who).await[0]
+            .state
+            .clone()
+            .expect("a named viewer gets a state");
+        assert_eq!(state.resume_from, None, "nought is where everybody starts");
+    }
+
+    #[tokio::test]
+    async fn two_accounts_meet_the_same_grid_wearing_their_own_marks() {
+        let (database, films) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let one = somebody(&database, "vera").await;
+        let other = somebody(&database, "mattis").await;
+        let film = grid_of(&database, films, one).await[0].id;
+
+        database
+            .set_favourite(one, film, true)
+            .await
+            .expect("favourite set");
+        database
+            .record_playback_progress(one, film, Millis::new(500), PlaybackState::InProgress, now())
+            .await
+            .expect("position recorded");
+
+        let mine = grid_of(&database, films, one).await[0].state.clone().unwrap();
+        let theirs = grid_of(&database, films, other).await[0]
+            .state
+            .clone()
+            .unwrap();
+        assert!(mine.favourite);
+        assert!(!theirs.favourite, "one account's mark is not the other's");
+        assert_eq!(theirs.seen, PlaybackState::NotStarted);
+        assert_eq!(theirs.resume_from, None);
+    }
+
+    #[tokio::test]
+    async fn nobody_asking_gets_no_marks_at_all() {
+        let (database, films) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let page = database
+            .browse_works(&BrowseRequest {
+                library_id: Some(films),
+                ..Default::default()
+            })
+            .await
+            .expect("grid read");
+        assert_eq!(
+            page.cards[0].state, None,
+            "a read nobody asked for carries nobody's marks"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_card_names_the_biggest_copy_on_the_disk() {
+        let (database, films) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let who = somebody(&database, "vera").await;
+        let film = grid_of(&database, films, who).await[0].id;
+        let root = database
+            .library_roots(films)
+            .await
+            .expect("roots read")
+            .remove(0);
+
+        database
+            .insert_source(film, root.id, Path::new("small.mkv"), 900, now())
+            .await
+            .expect("copy recorded");
+        let biggest = database
+            .insert_source(film, root.id, Path::new("big.mkv"), 9_000, now())
+            .await
+            .expect("copy recorded");
+
+        let state = grid_of(&database, films, who).await[0].state.clone().unwrap();
+        assert_eq!(
+            state.source_id,
+            Some(biggest),
+            "a play button on a card means the biggest copy, like every other"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_series_card_says_how_many_episodes_are_left() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Series",
+                LibraryKind::Series,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Series"))],
+            )
+            .await
+            .expect("library created");
+        let who = somebody(&database, "vera").await;
+
+        let series = database
+            .create_work(
+                library.id,
+                WorkKind::Series,
+                "Amber Field",
+                "amber field",
+                Some(2021),
+            )
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(
+                library.id,
+                series.id,
+                1,
+                WorkKind::Season,
+                "Season 1",
+                "season 1",
+            )
+            .await
+            .expect("season created");
+
+        let mut episodes = Vec::new();
+        for number in 1..=3 {
+            episodes.push(
+                database
+                    .create_child_work(
+                        library.id,
+                        season.id,
+                        number,
+                        WorkKind::Episode,
+                        &format!("Episode {number}"),
+                        &format!("episode {number}"),
+                    )
+                    .await
+                    .expect("episode created")
+                    .id,
+            );
+        }
+
+        // A season and an episode are never met on their own in a grid, so
+        // the series is the only card here to read.
+        async fn what_is_left(database: &Database, library: LibraryId, who: UserId) -> (i64, i64) {
+            let cards = grid_of(database, library, who).await;
+            let series = cards
+                .iter()
+                .find(|card| card.kind == WorkKind::Series)
+                .expect("the series is in its own library")
+                .state
+                .clone()
+                .expect("a named viewer gets a state");
+            (series.episodes, series.unwatched)
+        }
+
+        assert_eq!(
+            what_is_left(&database, library.id, who).await,
+            (3, 3),
+            "nothing watched, everything left"
+        );
+
+        database
+            .record_playback_progress(
+                who,
+                episodes[0],
+                Millis::new(1_000),
+                PlaybackState::Watched,
+                now(),
+            )
+            .await
+            .expect("episode watched");
+
+        assert_eq!(
+            what_is_left(&database, library.id, who).await,
+            (3, 2),
+            "the badge drops as episodes are watched"
+        );
     }
 
     #[tokio::test]
