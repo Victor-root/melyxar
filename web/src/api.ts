@@ -39,6 +39,10 @@ export interface Picture {
   height: number | null;
 }
 
+export type WorkKind = "movie" | "series" | "season" | "episode";
+
+export type Seen = "not_started" | "in_progress" | "watched";
+
 export interface Card {
   id: string;
   title: string;
@@ -51,6 +55,21 @@ export interface Card {
   identification_note: IdentificationNote | null;
   color: string | null;
   poster: Picture[];
+  /** What it is: a film plays from its card, a series is opened. */
+  kind: WorkKind;
+  library: string;
+  /* What the account asking has made of it. Every one of these is what the
+     hover shows, which is why they travel with the card rather than being
+     asked for one card at a time. */
+  seen: Seen;
+  /** Where they stopped, in seconds, only where they stopped partway. */
+  resume_from_seconds: number | null;
+  favourite: boolean;
+  /** Episodes below, and how many are left. Both nothing for a film. */
+  episodes: number;
+  unwatched: number;
+  /** The copy a play button on the card starts, when one is on disk. */
+  source: string | null;
 }
 
 /** A film a person could have meant, as the provider describes it. */
