@@ -11,7 +11,6 @@
    everything under it is one box that scrolls, which is what puts the bar of
    the scroll under the header rather than behind it. */
 .shell {
-  position: relative;
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -24,25 +23,23 @@
   overflow-x: hidden;
 }
 
-/* Over the page rather than above it, and carrying nothing of its own.
+/* A band of its own at the top, above everything that scrolls.
  *
- * It wore a wash of the raised surface and a blur, in the same terms as the
- * panels of the player, so that the two went on agreeing. Taken away on the
- * maintainer's word once the banner behind it grew: with a picture running
- * the full height of the window underneath, a band of another colour laid
- * across its top is a bar drawn on the picture rather than a page opening on
- * one. What is under the bar now is simply what is under it.
+ * It was drawn over the page for a while, see through and blurred, so that it
+ * carried the banner at rest and the rows once they moved under it. Put back
+ * on the maintainer's word: what he wanted is a bar, read at a glance and the
+ * same whatever is on the page, not a pane whose legibility depends on the
+ * film behind it. Nothing passes under it now, so nothing is read through it.
  *
- * Nothing is drawn between the words of the bar and what they sit on now, so
- * what passes under them is what they are read against: a pale sky at the top
- * of a banner, and the rows themselves once the page is scrolled. That is the
- * cost of it and it was accepted knowingly. */
+ * It carried a blur of its own back then as well, which is not restored: with
+ * its own band there is nothing behind it to blur, and a blur over nothing
+ * costs a layer to compose and changes not one pixel. The wash stays as it
+ * was, so what this draws is what it drew before. */
 .header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  flex: 0 0 auto;
   z-index: 20;
+  background: color-mix(in srgb, var(--surface-deep) 88%, transparent);
+  border-bottom: var(--header-line) solid var(--border);
 }
 
 /* Three parts, and the search really in the middle of the bar rather than in
@@ -402,7 +399,7 @@
  * ----------------------------------------------------------------------- */
 
 .page {
-  padding: calc(var(--header-height) + var(--gap-wide)) var(--gutter) var(--gap-section);
+  padding: var(--gap-wide) var(--gutter) var(--gap-section);
 }
 
 /* The band sits almost against the foot of the banner: the two are read as
@@ -1418,10 +1415,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 .work-backdrop {
   position: absolute;
   inset: 0 0 auto 0;
-  /* Taller by the height of the bar drawn over it, like the banner of the
-     home page: what was visible before is visible still, and what the bar
-     covers is picture that was not there before. */
-  height: calc(min(62vh, 620px) + var(--header-height));
+  height: min(62vh, 620px);
   z-index: -1;
   overflow: hidden;
 }
@@ -1443,7 +1437,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 .work-inner {
   display: flex;
   gap: var(--gap-section);
-  padding-top: calc(min(26vh, 240px) + var(--header-height));
+  padding-top: min(26vh, 240px);
 }
 
 .work-poster {
@@ -3099,12 +3093,8 @@ button.seen-mark:not(.seen-mark-on):hover {
   gap: 10px;
   /* Lined up with the rows underneath rather than with the edge of the
      screen: the banner spans the whole width, the words start where the page
-     starts.
-     And clear of the bar at the top. The banner reaches up behind it on
-     purpose, so that the bar has a picture to carry, but only the picture is
-     meant to go up there: the words are centred in what is left below the
-     bar, so a tagline or a drawn title never ends up read through it. */
-  padding: calc(var(--header-height) + var(--gap-wide)) var(--gutter) var(--gap-wide);
+     starts. */
+  padding: var(--gap-wide) var(--gutter);
 }
 
 .hero-tagline {

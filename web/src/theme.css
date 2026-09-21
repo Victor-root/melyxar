@@ -93,6 +93,14 @@
   --gutter: clamp(14px, 2.2vw, 56px);
   --header-height: 60px;
 
+  /* The line drawn under the bar counts towards the band it holds, so the two
+     are written together and the line is taken from here rather than typed
+     where it is drawn. Anything working out the room left under the bar has
+     to subtract the line as well: a sum that forgot it left the page
+     scrolling by one point with nothing under the fold. */
+  --header-line: 1px;
+  --header-band: calc(var(--header-height) + var(--header-line));
+
   /* How tall the banner of the home page is, and with it the grey block drawn
      in its place while the page loads, so the two can never drift apart and
      the page never jumps once the picture arrives.
@@ -119,13 +127,11 @@
      fifths of the width on an ordinary screen. All this stops now is a
      banner taller than the window it is drawn in.
 
-     The height of the bar comes on top, because the bar is drawn over the
-     banner rather than above it: without that the banner would simply lose its
-     first sixty points to something laid over it. */
+     Nothing of the bar comes into it: the bar holds its own band above
+     everything that scrolls, so the banner begins where the bar ends and
+     covers none of it. */
   --banner-share: 33;
-  --hero-height: calc(
-    clamp(320px, calc(var(--banner-share) * 1vw), 88vh) + var(--header-height)
-  );
+  --hero-height: clamp(320px, calc(var(--banner-share) * 1vw), 88vh);
 
   /* Where a band is taken out of a picture taller than the band, from its top.
 
