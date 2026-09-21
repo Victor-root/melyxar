@@ -34,7 +34,7 @@ use crate::{AppState, Result};
 /// next time the work is looked at, and never again after that.
 ///
 /// Raise it when what is written out changes, never for anything else.
-pub const RECIPE: &str = "b2";
+pub const RECIPE: &str = "b3";
 
 /// What a picture is for, which decides its widths and where it is filed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -489,14 +489,14 @@ mod tests {
 
         assert_eq!(
             widths_worth_writing(&wanted, Some(3840)),
-            vec![640, 1280, 1920],
-            "a picture larger than anything served gives every width asked for"
+            wanted.to_vec(),
+            "a picture as large as anything served gives every width asked for"
         );
         assert_eq!(
             widths_worth_writing(&wanted, Some(1280)),
             vec![640, 1280],
-            "and one held at half the largest gives what it really has, not an \
-             enlargement the interface would then ask for"
+            "and one held at a third of the largest gives what it really has, \
+             not an enlargement the interface would then ask for"
         );
         assert_eq!(
             widths_worth_writing(&wanted, Some(1300)),
@@ -510,10 +510,10 @@ mod tests {
         );
         assert_eq!(
             widths_worth_writing(&wanted, None),
-            vec![640, 1280, 1920],
+            wanted.to_vec(),
             "a size nobody could read is not a reason to throw away detail"
         );
-        assert_eq!(widths_worth_writing(&wanted, Some(0)), vec![640, 1280, 1920]);
+        assert_eq!(widths_worth_writing(&wanted, Some(0)), wanted.to_vec());
     }
 
     #[test]
