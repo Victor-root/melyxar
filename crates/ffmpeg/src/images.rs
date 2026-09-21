@@ -149,20 +149,24 @@ pub async fn average_colour(tool: &Path, source: &Path) -> Result<String> {
     })
 }
 
-/// How wide and how tall the small grey copy read for framing is.
+/// How wide and how tall the small copy read for framing is.
 ///
-/// Small on purpose: what is being looked for is where the busy part of a
-/// picture is, not what is in it. Sixty four across is enough for that and
-/// costs a thousandth of what reading the real thing would, and the rows are
-/// what the answer is made of, so there are more of them than a picture this
-/// wide would need.
-pub const FRAMING_ACROSS: u32 = 64;
-pub const FRAMING_DOWN: u32 = 72;
+/// Small on purpose: what is being looked for is where the people in a picture
+/// are, not what they look like, and a face in a wide shot still covers
+/// several pixels at this size. It costs a thousandth of what reading the real
+/// thing would. The rows are what the answer is made of, so there are more of
+/// them than a picture this wide would need.
+pub const FRAMING_ACROSS: u32 = 96;
+pub const FRAMING_DOWN: u32 = 108;
 
-/// Builds the reading of a picture as a small grey copy.
+/// How many bytes a pixel of that copy takes: red, then green, then blue.
+pub const FRAMING_PER_PIXEL: u32 = 3;
+
+/// Builds the reading of a picture as a small colour copy.
 ///
-/// Grey because only how much a pixel differs from its neighbours matters,
-/// and a colour says nothing more about that than its brightness does.
+/// In colour because what is looked for is skin, and skin is a hue rather than
+/// a brightness. The same picture in grey said nothing about where the people
+/// were, which is the whole reason this exists.
 pub fn framing_arguments(source: &Path) -> Vec<OsString> {
     vec![
         OsString::from("-hide_banner"),
@@ -177,16 +181,16 @@ pub fn framing_arguments(source: &Path) -> Vec<OsString> {
         OsString::from("-f"),
         OsString::from("rawvideo"),
         OsString::from("-pix_fmt"),
-        OsString::from("gray"),
+        OsString::from("rgb24"),
         OsString::from("-"),
     ]
 }
 
-/// Reads a picture as a small grey copy, row by row.
+/// Reads a picture as a small colour copy, row by row.
 ///
 /// Answers nothing rather than failing: framing is a comfort, and a picture
-/// whose brightness could not be read is shown the way every picture was
-/// shown before any of this.
+/// that could not be read is shown the way every picture was shown before any
+/// of this.
 pub async fn framing_copy(tool: &Path, source: &Path) -> Option<Vec<u8>> {
     let output = TokioCommand::new(tool)
         .args(framing_arguments(source))
@@ -195,7 +199,7 @@ pub async fn framing_copy(tool: &Path, source: &Path) -> Option<Vec<u8>> {
         .await
         .ok()?;
 
-    let wanted = (FRAMING_ACROSS * FRAMING_DOWN) as usize;
+    let wanted = (FRAMING_ACROSS * FRAMING_DOWN * FRAMING_PER_PIXEL) as usize;
     match output.status.success() && output.stdout.len() >= wanted {
         true => Some(output.stdout),
         false => None,
