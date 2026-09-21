@@ -25,6 +25,7 @@ import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 import { useShownPicture } from "./picture";
 import { CardMenu } from "./cardmenu";
+import { IdentifyDialog } from "./identify";
 import { SeenMark } from "./seen";
 import { HeartIcon, MoreIcon, PlayIcon } from "../icons";
 
@@ -94,6 +95,9 @@ export function Card({
      inside the card, which clips what it holds. */
   const kebab = useRef<HTMLButtonElement>(null);
   const [menuFrom, setMenuFrom] = useState<DOMRect | null>(null);
+  /* Held by the card rather than by the menu, which is taken away the moment
+     one of its lines is pressed. */
+  const [identifying, setIdentifying] = useState(false);
 
   const unknown = card.identification === "unidentified" || card.identification === "pending";
   const seen = marks.seenOf(card);
@@ -241,7 +245,19 @@ export function Card({
           card={card}
           from={menuFrom}
           openedBy={kebab.current}
+          onIdentify={() => setIdentifying(true)}
           onClose={() => setMenuFrom(null)}
+        />
+      )}
+
+      {identifying && (
+        <IdentifyDialog
+          workId={card.id}
+          title={card.title}
+          onClose={() => setIdentifying(false)}
+          /* The card says what it is from the answer the page was drawn
+             from, so the page is read again rather than mended here. */
+          onIdentified={() => marks.rowsHaveMoved()}
         />
       )}
     </article>

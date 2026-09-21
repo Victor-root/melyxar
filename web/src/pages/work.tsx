@@ -12,7 +12,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Child, Credit, Version, Work } from "../api";
 import { useTold } from "../asking";
-import { IdentifyByHand } from "../components/byhand";
+import { IdentifyDialog } from "../components/identify";
 import {
   howMany,
   nameOfOne,
@@ -51,6 +51,10 @@ export function WorkPage() {
     previousEpisode,
     playEpisode,
   } = useWorkScreen(id);
+
+  /* Saying by hand what this film is, which takes the screen while it is
+     being done. */
+  const [identifying, setIdentifying] = useState(false);
 
   /* Escape goes back, which is what a remote control and a keyboard both
      expect after opening something. Not while something is being watched: the
@@ -217,11 +221,20 @@ export function WorkPage() {
               film named wrongly looks exactly like one named rightly, and the
               person looking at it is the only one who can tell. */}
           {id && work.kind === "movie" && (
-            <IdentifyByHand
-              workId={id}
-              title={work.title}
-              onIdentified={() => readAgain()}
-            />
+            <>
+              <button className="button button-small" onClick={() => setIdentifying(true)}>
+                {t("identify.title")}
+              </button>
+              {identifying && (
+                <IdentifyDialog
+                  workId={id}
+                  title={work.title}
+                  path={version?.path}
+                  onClose={() => setIdentifying(false)}
+                  onIdentified={() => readAgain()}
+                />
+              )}
+            </>
           )}
 
           {!holdsOthers && (
