@@ -83,12 +83,20 @@
   --gap-wide: 24px;
   --gap-section: 44px;
 
-  --page-width: 1680px;
+  /* The interface takes the screen it is given. A column of a fixed width
+     centred on a large monitor leaves a band of background down each side,
+     and on a screen bought to watch things on that band is the screen. What
+     grows instead is the gutter: a little air at the edges on a laptop, more
+     of it on a twenty eight inch panel, and the rows fill everything
+     between. */
+  --gutter: clamp(14px, 2.2vw, 56px);
   --header-height: 60px;
 
-  /* Cards are 2:3, the shape of a poster. */
+  /* Cards are 2:3, the shape of a poster. A wide screen holds more of them
+     rather than bigger ones: more of the library at a glance is the whole
+     point of the width. */
   --card-width: 168px;
-  --card-width-wide: 200px;
+  --card-width-wide: 186px;
 
   --shadow-card: 0 6px 18px rgba(0, 0, 0, 0.35);
   --shadow-raised: 0 14px 40px rgba(0, 0, 0, 0.45);

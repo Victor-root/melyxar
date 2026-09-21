@@ -36,10 +36,8 @@
    the account on the other take a share each, so the field stays put whatever
    the name is. */
 .header-inner {
-  max-width: var(--page-width);
-  margin: 0 auto;
   min-height: var(--header-height);
-  padding: 0 var(--gap-wide);
+  padding: 0 var(--gutter);
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -390,9 +388,13 @@
  * ----------------------------------------------------------------------- */
 
 .page {
-  max-width: var(--page-width);
-  margin: 0 auto;
-  padding: var(--gap-wide) var(--gap-wide) var(--gap-section);
+  padding: var(--gap-wide) var(--gutter) var(--gap-section);
+}
+
+/* The band sits almost against the foot of the banner: the two are read as
+   one block, here is what you were watching and here is where to go next. */
+.page-home {
+  padding-top: var(--gap-tight);
 }
 
 .section {
@@ -496,8 +498,10 @@
   align-items: flex-end;
   flex: 1 1 200px;
   /* A server of films alone has one way in, and one tile stretched across a
-     whole page reads as a banner rather than as a way in. */
-  max-width: 280px;
+     whole page reads as a banner rather than as a way in. The bound grows
+     with the screen, so a large monitor gets larger ways in rather than the
+     same small ones with a field of background beside them. */
+  max-width: clamp(220px, 20vw, 340px);
   aspect-ratio: 16 / 9;
   padding: var(--gap);
   border-radius: var(--radius-card);
@@ -1317,9 +1321,7 @@ button.seen-mark-on:hover {
 
 .work {
   position: relative;
-  max-width: var(--page-width);
-  margin: 0 auto;
-  padding: 0 var(--gap-wide) var(--gap-section);
+  padding: 0 var(--gutter) var(--gap-section);
 }
 
 .work-backdrop {
@@ -2150,9 +2152,7 @@ button.seen-mark-on:hover {
  * ----------------------------------------------------------------------- */
 
 .footer {
-  max-width: var(--page-width);
-  margin: 0 auto;
-  padding: var(--gap-wide);
+  padding: var(--gap-wide) var(--gutter);
   border-top: 1px solid var(--border);
   color: var(--text-faint);
   font-size: 12px;
@@ -2455,24 +2455,33 @@ button.seen-mark-on:hover {
     --gap-section: 32px;
   }
 
+  /* Two rows rather than three columns: the name and the account on the
+     first, the search across the whole of the second. Three things side by
+     side on a narrow screen is a search field squeezed to nothing. */
   .header-inner {
-    padding: var(--gap-tight) var(--gap);
-    gap: var(--gap);
+    grid-template-columns: auto 1fr;
+    padding: var(--gap-tight) var(--gutter) var(--gap-tight);
+    gap: var(--gap-tight) var(--gap);
+  }
+
+  .brand {
+    grid-area: 1 / 1;
+  }
+
+  .header-side {
+    grid-area: 1 / 2;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .search {
-    order: 3;
-    margin-left: 0;
-    flex: 1 1 100%;
+    grid-area: 2 / 1 / 2 / -1;
+    justify-self: stretch;
   }
 
   .search input {
     width: 100%;
     max-width: none;
-  }
-
-  .header-choices {
-    order: 4;
   }
 
   .work-inner {
@@ -2777,8 +2786,10 @@ button.seen-mark-on:hover {
 .hero {
   position: relative;
   margin: 0;
-  height: min(46vw, 460px);
-  min-height: 320px;
+  /* Kept in proportion to the screen rather than pinned to one height: at a
+     fixed four hundred and sixty it is a strip across the top of a large
+     monitor and most of a small one. */
+  height: clamp(300px, 24vw, 560px);
   border-radius: 0 0 var(--radius-card) var(--radius-card);
   overflow: hidden;
   isolation: isolate;
@@ -2834,11 +2845,7 @@ button.seen-mark-on:hover {
   /* Lined up with the rows underneath rather than with the edge of the
      screen: the banner spans the whole width, the words start where the page
      starts. */
-  padding: var(--gap-wide);
-  padding-left: max(
-    var(--gap-wide),
-    calc((100% - var(--page-width)) / 2 + var(--gap-wide))
-  );
+  padding: var(--gap-wide) var(--gutter);
 }
 
 .hero-tagline {
@@ -2942,7 +2949,7 @@ button.seen-mark-on:hover {
    and the words they are reading. */
 .hero-steps {
   position: absolute;
-  right: var(--gap-wide);
+  right: var(--gutter);
   bottom: var(--gap-wide);
   z-index: 2;
   display: flex;
