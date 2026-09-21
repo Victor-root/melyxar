@@ -69,6 +69,7 @@ export function useWhoIsThere(): Who {
           server_name: "",
           logo_path: null,
           login_background_path: null,
+          login_background_style: "abstract",
           setup_complete: true,
         });
       });

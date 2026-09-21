@@ -8,13 +8,52 @@ use crate::convert::{
 };
 use crate::{Database, Result};
 
+/// What is drawn behind the sign in screen when no picture was put there.
+///
+/// A picture an administrator uploaded wins over either of these, which is why
+/// this says nothing about one: there is nothing left to choose once somebody
+/// has said what they want behind their own door.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LoginBackground {
+    /// Light and dust in the accent colour, moving slowly. What a server
+    /// wears out of the box.
+    #[default]
+    Abstract,
+    /// The shelf of drawn things a media server holds: a poster, a sleeve, an
+    /// episode, a reel of film, a player bar, a note, a waveform, a
+    /// clapperboard.
+    Library,
+}
+
+impl LoginBackground {
+    /// As the column holds it, and as the sign in screen is told it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Abstract => "abstract",
+            Self::Library => "library",
+        }
+    }
+
+    /// Back from the word. Anything this server does not know is the default:
+    /// a background is not worth refusing to start over.
+    pub fn from_word(stored: &str) -> Self {
+        match stored {
+            "library" => Self::Library,
+            _ => Self::Abstract,
+        }
+    }
+}
+
 /// Everything the administrator can change about this server.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ServerSettings {
     pub server_name: String,
     pub logo_path: Option<String>,
     pub splash_path: Option<String>,
+    /// A picture behind the sign in screen, which wins over the drawn one.
     pub login_background_path: Option<String>,
+    /// Which drawn background is worn when there is no picture.
+    pub login_background: LoginBackground,
     pub global_custom_css: Option<String>,
     /// Shows the account list before a password is typed. A deliberate
     /// disclosure, so it can be turned off.
@@ -102,10 +141,11 @@ impl Database {
     pub async fn server_settings(&self) -> Result<ServerSettings> {
         let row = sqlx::query(
             "SELECT server_name, logo_path, splash_path, login_background_path,
-                    global_custom_css, show_user_picker, maintenance_enabled,
-                    maintenance_message, maintenance_until, read_companion_files,
-                    write_companion_files, watched_threshold, activity_retention_days,
-                    check_for_updates, tone_mapping_disabled, thumbnails_enabled,
+                    login_background_style, global_custom_css, show_user_picker,
+                    maintenance_enabled, maintenance_message, maintenance_until,
+                    read_companion_files, write_companion_files, watched_threshold,
+                    activity_retention_days, check_for_updates, tone_mapping_disabled,
+                    thumbnails_enabled,
                     thumbnails_every_seconds, thumbnails_height, thumbnails_columns,
                     thumbnails_rows, upkeep_nightly, upkeep_at_utc_minutes, updated_at
              FROM server_settings WHERE id = 1",
@@ -118,6 +158,9 @@ impl Database {
             logo_path: row.try_get("logo_path")?,
             splash_path: row.try_get("splash_path")?,
             login_background_path: row.try_get("login_background_path")?,
+            login_background: LoginBackground::from_word(
+                &row.try_get::<String, _>("login_background_style")?,
+            ),
             global_custom_css: row.try_get("global_custom_css")?,
             show_user_picker: int_to_bool(row.try_get("show_user_picker")?),
             maintenance_enabled: int_to_bool(row.try_get("maintenance_enabled")?),
@@ -150,7 +193,8 @@ impl Database {
         sqlx::query(
             "UPDATE server_settings SET
                 server_name = ?, logo_path = ?, splash_path = ?, login_background_path = ?,
-                global_custom_css = ?, show_user_picker = ?, maintenance_enabled = ?,
+                login_background_style = ?, global_custom_css = ?, show_user_picker = ?,
+                maintenance_enabled = ?,
                 maintenance_message = ?, maintenance_until = ?, read_companion_files = ?,
                 write_companion_files = ?, watched_threshold = ?, activity_retention_days = ?,
                 check_for_updates = ?, tone_mapping_disabled = ?, updated_at = ?
@@ -160,6 +204,7 @@ impl Database {
         .bind(&settings.logo_path)
         .bind(&settings.splash_path)
         .bind(&settings.login_background_path)
+        .bind(settings.login_background.as_str())
         .bind(&settings.global_custom_css)
         .bind(bool_to_int(settings.show_user_picker))
         .bind(bool_to_int(settings.maintenance_enabled))
@@ -310,6 +355,12 @@ mod tests {
             "three in the morning, the hour the other servers settle on for the same work"
         );
         assert!(settings.show_user_picker);
+        // Nothing of the branding is set until an administrator sets it: the
+        // screen falls back on what this server ships with, and what it ships
+        // with lives with the screen rather than in a row of the database.
+        assert_eq!(settings.logo_path, None);
+        assert_eq!(settings.login_background_path, None);
+        assert_eq!(settings.login_background, LoginBackground::Abstract);
         assert_eq!(settings.watched_threshold, 0.9);
         assert!(
             !settings.tone_mapping_disabled,
@@ -327,6 +378,7 @@ mod tests {
 
         settings.server_name = "Salon".into();
         settings.logo_path = Some("uploads/logo.png".into());
+        settings.login_background = LoginBackground::Library;
         settings.show_user_picker = false;
         settings.work.read_companion_files = true;
         settings.activity_retention_days = 90;
@@ -340,10 +392,31 @@ mod tests {
         let reloaded = database.server_settings().await.expect("settings readable");
         assert_eq!(reloaded.server_name, "Salon");
         assert_eq!(reloaded.logo_path.as_deref(), Some("uploads/logo.png"));
+        assert_eq!(reloaded.login_background, LoginBackground::Library);
         assert!(!reloaded.show_user_picker);
         assert!(reloaded.work.read_companion_files);
         assert_eq!(reloaded.activity_retention_days, 90);
         assert!(reloaded.tone_mapping_disabled);
+    }
+
+    /// A word nobody here knows is read as the one a fresh server wears.
+    ///
+    /// Reached by a database edited by hand, or by one written by a newer
+    /// version of this server and opened by an older one. Neither is worth
+    /// refusing to start over: what is at stake is which picture moves behind
+    /// a sign in screen.
+    #[test]
+    fn a_background_this_server_does_not_know_is_the_one_it_ships_with() {
+        use LoginBackground::{Abstract, Library};
+        assert_eq!(LoginBackground::from_word("abstract"), Abstract);
+        assert_eq!(LoginBackground::from_word("library"), Library);
+        assert_eq!(LoginBackground::from_word("aurora"), Abstract);
+        assert_eq!(LoginBackground::from_word(""), Abstract);
+
+        // And back out again as the same word, or a screen would be told one
+        // thing and the database would hold another.
+        assert_eq!(LoginBackground::Abstract.as_str(), "abstract");
+        assert_eq!(LoginBackground::Library.as_str(), "library");
     }
 
     #[tokio::test]

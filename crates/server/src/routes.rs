@@ -263,6 +263,10 @@ struct PublicBranding {
     server_name: String,
     logo_path: Option<String>,
     login_background_path: Option<String>,
+    /// Which drawn background the screen wears when no picture was put there.
+    /// A word rather than a number, so that what arrives at the screen says
+    /// what it means and a third one costs nobody a renumbering.
+    login_background_style: &'static str,
     setup_complete: bool,
 }
 
@@ -277,6 +281,7 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
         server_name: settings.server_name,
         logo_path: settings.logo_path,
         login_background_path: settings.login_background_path,
+        login_background_style: settings.login_background.as_str(),
         setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,
     }))
 }
