@@ -1280,8 +1280,17 @@ button.seen-mark-on:hover {
   }
 }
 
-/* In the accent, like every other way through in this interface. A grey
-   chevron over a wall of posters is a chevron nobody finds. */
+/* Beside the row, not on top of it.
+ *
+ * They used to sit over the first and last poster, each under a veil of
+ * background fading out sideways. The veil is what put a seam down both ends
+ * of every row: a fade that reaches nothing after forty pixels still ends
+ * somewhere, and over a dark poster that end reads as a line. The margin at
+ * each side of the page is empty and exactly wide enough, so that is where
+ * they go, with nothing painted over the cards at all.
+ *
+ * In the accent, like every other way through in this interface. A grey
+ * chevron over a wall of posters is a chevron nobody finds. */
 .row-arrow {
   position: absolute;
   top: 0;
@@ -1289,27 +1298,36 @@ button.seen-mark-on:hover {
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 44px;
+  /* What is left of the page's margin once the row has taken the eight
+     pixels it keeps for a card grown under the pointer. */
+  width: calc(var(--gutter) - 8px);
   border: none;
-  border-radius: var(--radius-card);
-  background: linear-gradient(to right, var(--surface-deep), transparent);
+  background: none;
   color: var(--accent-bright);
-  opacity: 0.85;
-  transition: opacity var(--quick) var(--ease), color var(--quick) var(--ease);
+  transition: transform var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+/* The chevron takes the margin it is given rather than a size of its own: the
+   margin narrows with the window, and an icon wider than it would be back
+   over the posters, which is the whole thing this moved away from. */
+.row-arrow > svg {
+  width: min(26px, calc(var(--gutter) - 10px));
+  height: auto;
 }
 
 .row-arrow:hover {
-  opacity: 1;
+  transform: scale(1.15);
   color: var(--accent);
 }
 
+/* Right up against the outside of the row, which is the inside of the
+   page's own margin. */
 .row-arrow-back {
-  left: calc(var(--gap-tight) * -1);
+  right: 100%;
 }
 
 .row-arrow-on {
-  right: calc(var(--gap-tight) * -1);
-  background: linear-gradient(to left, var(--surface-deep), transparent);
+  left: 100%;
 }
 
 /* Nothing to hover on a touch screen, and a finger swipes the row anyway. */
