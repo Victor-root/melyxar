@@ -167,7 +167,18 @@ export function Door({
       </button>
 
       <p className="door-slogan">{t("door.slogan")}</p>
-      <p className="door-footer">{t("door.footer")}</p>
+      <p className="door-footer">
+        {t("door.footer_before")}
+        <a
+          href="https://github.com/Victor-root"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="door-footer-link"
+        >
+          Victor-root
+        </a>
+        {t("door.footer_after")}
+      </p>
     </main>
   );
 }

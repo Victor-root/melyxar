@@ -360,5 +360,15 @@
   text-align: center;
 }
 
+.door-footer-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.door-footer-link:hover {
+  color: var(--text-soft);
+}
+
 /* Nothing on this screen depends on a wide one, so it needs no rearranging:
    the card is already as wide as it ever gets, and it shrinks on its own. */
