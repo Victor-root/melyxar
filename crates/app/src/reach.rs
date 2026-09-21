@@ -130,7 +130,7 @@ fn added_up(parts: &[Arc<Counted>]) -> Counted {
     genres.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
 
     let mut decades: Vec<(i32, i64)> = decades.into_iter().collect();
-    decades.sort_by(|left, right| right.0.cmp(&left.0));
+    decades.sort_by_key(|decade| std::cmp::Reverse(decade.0));
 
     let mut initials: Vec<(String, i64)> = initials
         .into_iter()
