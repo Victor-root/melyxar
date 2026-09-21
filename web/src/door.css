@@ -304,13 +304,13 @@
   width: 100%;
 }
 
-.door-languages {
+/* The one door setting a viewer can still turn: the theme, since automatic
+   does not always land on the one their eyes want. */
+.door-theme {
   position: relative;
   display: flex;
+  align-items: center;
   gap: var(--gap-tight);
-}
-
-.door-language {
   padding: 5px 12px;
   border-radius: var(--radius-pill);
   font-size: 13px;
@@ -320,14 +320,39 @@
     background var(--quick) var(--ease);
 }
 
-.door-language:hover {
+.door-theme:hover {
   color: var(--text);
   background: var(--surface-raised);
 }
 
-.door-language-on {
-  color: var(--text);
-  background: var(--surface-raised);
+.door-theme-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* The slogan: what this server is for, said in words under the row that
+   changes how it is said. Replaced one day by whatever an administrator
+   writes in its place, which is why it is drawn as plainly as this. */
+.door-slogan {
+  position: relative;
+  margin: var(--gap) 0 0;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* What this server is, at the very bottom of the screen and out of the way
+   of everything above it: an accent-free line nobody needs to read. */
+.door-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--gap);
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  opacity: 0.6;
+  text-align: center;
 }
 
 /* Nothing on this screen depends on a wide one, so it needs no rearranging:
