@@ -320,22 +320,23 @@ pub async fn create_the_first_account(
     name: &str,
     password: &str,
 ) -> std::result::Result<User, Trouble> {
-    if !still_to_be_set_up(state).await.map_err(Trouble::Failed)? {
-        return Err(Trouble::Failed(AppError::Domain(melyxar_core::Error::new(
-            melyxar_core::error::ErrorCode::Conflict,
-            "this server has already been set up",
-        ))));
-    }
     let name = name.trim();
     if name.is_empty() {
         return Err(Trouble::Refused(Refused::NameNeeded));
     }
 
+    // Hashed before the door is looked at, because hashing is the slow part
+    // and a password the rule refuses is refused whatever else is true.
     let hashed = stored_form_of(password)?;
-    let user = state
-        .database()
-        .create_user(name, Some(&hashed), &Permissions::administrator())
-        .await?;
+
+    // The looking and the writing happen together down there, so two people
+    // reaching a brand new server in the same breath cannot both come through.
+    let Some(user) = state.database().create_the_first_user(name, &hashed).await? else {
+        return Err(Trouble::Failed(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::Conflict,
+            "this server has already been set up",
+        ))));
+    };
     tracing::info!(account = %user.name, "created the first account");
     Ok(user)
 }
