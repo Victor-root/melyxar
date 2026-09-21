@@ -34,7 +34,7 @@ use crate::{AppState, Result};
 /// next time the work is looked at, and never again after that.
 ///
 /// Raise it when what is written out changes, never for anything else.
-pub const RECIPE: &str = "b4";
+pub const RECIPE: &str = "b5";
 
 /// What a picture is for, which decides its widths and where it is filed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -486,9 +486,9 @@ async fn store_one(
     let framing = match kind.is_ever_cut_into_a_band() {
         true => melyxar_ffmpeg::images::framing_copy(tool, &original)
             .await
-            .map(|grey| {
-                melyxar_core::framing::Framing::of_grey(
-                    &grey,
+            .map(|small| {
+                melyxar_core::framing::Framing::of_picture(
+                    &small,
                     melyxar_ffmpeg::images::FRAMING_ACROSS as usize,
                     melyxar_ffmpeg::images::FRAMING_DOWN as usize,
                 )
