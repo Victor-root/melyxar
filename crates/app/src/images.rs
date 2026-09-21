@@ -21,6 +21,21 @@ use melyxar_metadata::{Details, MetadataProvider};
 
 use crate::{AppState, Result};
 
+/// How the pictures served are made, written in front of every fingerprint.
+///
+/// A fingerprint says "this picture is already prepared, leave it alone". It
+/// was made of what the provider called the picture, which answers whether the
+/// picture changed but not whether the way it is prepared did. So a library
+/// filled before a rule like "never enlarge a picture" kept for ever what that
+/// rule was written to stop.
+///
+/// Standing in front of the fingerprint, this makes every picture prepared by
+/// an older recipe differ from the one wanted now: it is made again, once, the
+/// next time the work is looked at, and never again after that.
+///
+/// Raise it when what is written out changes, never for anything else.
+pub const RECIPE: &str = "b2";
+
 /// What a picture is for, which decides its widths and where it is filed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
@@ -286,7 +301,7 @@ async fn store_one(
     // The provider changes the path when it changes the picture, so the path
     // already says whether anything is new. Hashing the bytes would mean
     // fetching them first, which is the very thing to avoid.
-    let fingerprint = fingerprint::of_text(provider_path);
+    let fingerprint = stamp(provider_path);
 
     if database
         .image_fingerprint(kind.owner_kind(), owner_id, kind.as_str())
@@ -328,8 +343,7 @@ async fn store_one(
     };
     let source_size = source_dimensions(state, &original).await;
 
-    let names: Vec<(u32, String)> = kind
-        .widths()
+    let names: Vec<(u32, String)> = widths_worth_writing(kind.widths(), source_size.map(|(w, _)| w))
         .iter()
         .map(|width| {
             (
@@ -389,6 +403,39 @@ async fn store_one(
     Ok(Some(Prepared { colour }))
 }
 
+/// What stands beside a picture to say it is already prepared: the recipe
+/// that made it, and what the provider called it.
+fn stamp(provider_path: &str) -> String {
+    format!("{RECIPE}-{}", fingerprint::of_text(provider_path))
+}
+
+/// The widths worth writing for a picture that arrived this big.
+///
+/// Never one larger than what arrived. Enlarging a picture invents nothing: it
+/// writes a file four times the size holding the same detail, and, worse, the
+/// interface is then told that a picture that wide exists. Asking in good
+/// faith for the widest it is offered, a browser takes the enlargement and
+/// draws it across the whole banner, where being soft is most visible. The
+/// banner of a film whose picture the provider holds at half that width was
+/// exactly that, and looked it.
+///
+/// So each width wanted is brought down to what the picture really is, and the
+/// duplicates that makes are dropped: a picture of twelve hundred points asked
+/// for at six hundred and forty, twelve hundred and eighty and nineteen twenty
+/// is written twice, at six hundred and forty and at twelve hundred.
+///
+/// A picture whose size could not be read keeps every width wanted: guessing
+/// it small would throw away detail that is really there.
+fn widths_worth_writing(wanted: &[u32], source_width: Option<i32>) -> Vec<u32> {
+    let Some(source) = source_width.filter(|width| *width > 0).map(|width| width as u32) else {
+        return wanted.to_vec();
+    };
+    let mut kept: Vec<u32> = wanted.iter().map(|width| (*width).min(source)).collect();
+    kept.sort_unstable();
+    kept.dedup();
+    kept
+}
+
 /// The size of the picture as it arrived, so a client can leave the right
 /// space for it before it loads.
 async fn source_dimensions(state: &AppState, path: &Path) -> Option<(i32, i32)> {
@@ -434,6 +481,53 @@ mod tests {
         assert_eq!(usable_dimensions(None, Some(900)), None);
         assert_eq!(usable_dimensions(Some(600), None), None);
         assert_eq!(usable_dimensions(Some(-1), Some(900)), None);
+    }
+
+    #[test]
+    fn no_picture_is_ever_written_larger_than_it_arrived() {
+        let wanted = melyxar_ffmpeg::images::BACKDROP_WIDTHS;
+
+        assert_eq!(
+            widths_worth_writing(&wanted, Some(3840)),
+            vec![640, 1280, 1920],
+            "a picture larger than anything served gives every width asked for"
+        );
+        assert_eq!(
+            widths_worth_writing(&wanted, Some(1280)),
+            vec![640, 1280],
+            "and one held at half the largest gives what it really has, not an \
+             enlargement the interface would then ask for"
+        );
+        assert_eq!(
+            widths_worth_writing(&wanted, Some(1300)),
+            vec![640, 1280, 1300],
+            "the last of them follows the picture rather than being thrown away"
+        );
+        assert_eq!(
+            widths_worth_writing(&wanted, Some(400)),
+            vec![400],
+            "a small picture is written once, at its own size"
+        );
+        assert_eq!(
+            widths_worth_writing(&wanted, None),
+            vec![640, 1280, 1920],
+            "a size nobody could read is not a reason to throw away detail"
+        );
+        assert_eq!(widths_worth_writing(&wanted, Some(0)), vec![640, 1280, 1920]);
+    }
+
+    #[test]
+    fn a_picture_prepared_by_an_older_recipe_is_not_the_one_wanted_now() {
+        // What stands beside a picture says both what it was made from and how
+        // it was made, so a rule written after a library was filled reaches it.
+        let now = stamp("/one.jpg");
+        assert!(now.starts_with(&format!("{RECIPE}-")));
+        assert_ne!(now, stamp("/another.jpg"));
+        assert_ne!(
+            now,
+            melyxar_core::fingerprint::of_text("/one.jpg"),
+            "a picture stamped before there was a recipe is made again"
+        );
     }
 
     #[test]

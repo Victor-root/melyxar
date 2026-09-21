@@ -285,7 +285,12 @@ where
     // Every one of them, read once, for the same reason as the look up above.
     let waiting = state
         .database()
-        .works_missing_their_metadata(library.id, provider.name(), language)
+        .works_missing_their_metadata(
+            library.id,
+            provider.name(),
+            language,
+            crate::images::RECIPE,
+        )
         .await?;
     if waiting.is_empty() {
         return Ok(Filled::default());

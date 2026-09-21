@@ -435,22 +435,32 @@ impl Database {
     /// them here is a work nobody can do anything about: it would come back at
     /// every run, and a title image, which no provider draws for a part of a
     /// series, would keep every one of them waiting for ever.
+    ///
+    /// `recipe` is how pictures are prepared today, as it is written beside
+    /// each one. A picture made by an older way of preparing them counts as
+    /// missing, which is what carries a fix to the pictures into a library
+    /// filled before that fix existed. Every picture of a work is made in one
+    /// go, so its poster answers for the lot.
     pub async fn works_missing_their_metadata(
         &self,
         library_id: LibraryId,
         provider: &str,
         language: &str,
+        recipe: &str,
     ) -> Result<Vec<IncompleteNamedWork>> {
+        let made_today = format!("{recipe}-%");
         let rows = sqlx::query(
             "SELECT w.id, w.kind, e.external_id,
                     NOT EXISTS (
                         SELECT 1 FROM images i
                          WHERE i.owner_kind = 'work' AND i.owner_id = w.id
-                           AND i.image_kind = 'poster') AS wants_pictures,
+                           AND i.image_kind = 'poster'
+                           AND i.fingerprint LIKE ?) AS wants_pictures,
                     NOT EXISTS (
                         SELECT 1 FROM images i
                          WHERE i.owner_kind = 'work' AND i.owner_id = w.id
-                           AND i.image_kind = 'logo') AS wants_a_title_image,
+                           AND i.image_kind = 'logo'
+                           AND i.fingerprint LIKE ?) AS wants_a_title_image,
                     NOT EXISTS (
                         SELECT 1 FROM work_translations t
                          WHERE t.work_id = w.id AND t.language = ?
@@ -465,6 +475,8 @@ impl Database {
                     WHERE l.work_id = w.id AND l.field = 'overview')
              ORDER BY w.added_at",
         )
+        .bind(&made_today)
+        .bind(&made_today)
         .bind(language)
         .bind(provider)
         .bind(library_id.to_db_string())
@@ -1192,6 +1204,11 @@ mod tests {
     use melyxar_core::work::WorkKind;
     use std::path::PathBuf;
 
+    /// How pictures are prepared today, as the crate that prepares them writes
+    /// it. Any word does here: what matters is that a picture stamped with
+    /// another one is asked for again.
+    const RECIPE_NOW: &str = "b2";
+
     async fn work_in_library() -> (Database, melyxar_core::work::Work) {
         let database = Database::open_in_memory().await.expect("database opens");
         let library = database
@@ -1842,7 +1859,7 @@ mod tests {
             .expect("identification applied");
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -1863,11 +1880,48 @@ mod tests {
 
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
                 .await
                 .expect("read")
                 .is_empty(),
             "a film with nothing missing is never asked about again"
+        );
+    }
+
+    /// A shelf filled in before a picture was prepared the way it is prepared
+    /// now holds pictures nothing would ever look at again: the film has its
+    /// poster, so it is complete, and the poster stays as it was made for
+    /// ever. What stands beside a picture says how it was made, and that is
+    /// what puts such a film back in the queue, once.
+    #[tokio::test]
+    async fn a_film_whose_pictures_were_prepared_another_way_is_asked_about_again() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identification applied");
+        for kind in ["poster", "logo"] {
+            store_one_picture_made_by(&database, work.id, kind, "made-the-old-way").await;
+        }
+
+        let waiting = database
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+            .await
+            .expect("read");
+        assert_eq!(waiting.len(), 1);
+        assert!(waiting[0].wants_pictures);
+        assert!(waiting[0].wants_a_title_image);
+
+        for kind in ["poster", "logo"] {
+            store_one_picture(&database, work.id, kind).await;
+        }
+        assert!(
+            database
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+                .await
+                .expect("read")
+                .is_empty(),
+            "and made again the once, not at every run afterwards"
         );
     }
 
@@ -1885,7 +1939,7 @@ mod tests {
         store_one_picture(&database, work.id, "poster").await;
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -1898,7 +1952,7 @@ mod tests {
         store_one_picture(&database, work.id, "logo").await;
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
                 .await
                 .expect("read")
                 .is_empty(),
@@ -1943,7 +1997,7 @@ mod tests {
         }
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
             .await
             .expect("read");
         assert_eq!(
@@ -1954,6 +2008,18 @@ mod tests {
     }
 
     async fn store_one_picture(database: &Database, work_id: WorkId, kind: &str) {
+        store_one_picture_made_by(database, work_id, kind, &format!("{RECIPE_NOW}-abc")).await;
+    }
+
+    /// The same, with what stands beside the picture said out loud: it holds
+    /// the way the picture was prepared, and a picture prepared some other way
+    /// is one to make again.
+    async fn store_one_picture_made_by(
+        database: &Database,
+        work_id: WorkId,
+        kind: &str,
+        fingerprint: &str,
+    ) {
         database
             .replace_images(
                 "work",
@@ -1966,7 +2032,7 @@ mod tests {
                     relative_path: format!("works/x/{kind}-200.webp"),
                     width: Some(200),
                     height: Some(300),
-                    fingerprint: "abc".to_string(),
+                    fingerprint: fingerprint.to_string(),
                     dominant_color: None,
                 }],
             )
@@ -1985,7 +2051,7 @@ mod tests {
             .expect("identification applied");
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -2009,7 +2075,7 @@ mod tests {
         );
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
                 .await
                 .expect("read")
                 .iter()
@@ -2034,7 +2100,7 @@ mod tests {
 
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
                 .await
                 .expect("read")
                 .is_empty(),
@@ -2047,7 +2113,7 @@ mod tests {
         // There is nothing to ask with: no provider ever named it.
         let (database, work) = work_in_library().await;
         assert!(database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr")
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
             .await
             .expect("read")
             .is_empty());
