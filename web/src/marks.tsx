@@ -43,17 +43,20 @@ interface Marks {
   setWatched: (card: Card, watched: boolean) => void;
   setFavourite: (card: Card, favourite: boolean) => void;
   setPinned: (card: Card, pinned: boolean) => void;
-  /** Bumped whenever the front shelf changes, for the screens that show it:
-      the banner of the home page is read from the server, so it has to be
-      read again rather than mended here. */
-  frontShelf: number;
+  /** Bumped whenever something said here changes which works a row built by
+      the server holds: a work put on the front page, an episode ticked off
+      the row of what is unfinished. The screens standing on such a row read
+      it again rather than mending it here, since what replaces what left is
+      the server's answer and nobody else's. */
+  rowsMoved: number;
 }
 
 const MarksContext = createContext<Marks | null>(null);
 
 export function MarksProvider({ children }: { children: ReactNode }) {
   const [said, setSaid] = useState<Record<string, Mark>>({});
-  const [frontShelf, setFrontShelf] = useState(0);
+  const [rowsMoved, setRowsMoved] = useState(0);
+  const rowsHaveMoved = useCallback(() => setRowsMoved((count) => count + 1), []);
 
   const say = useCallback((id: string, mark: Mark) => {
     setSaid((before) => ({ ...before, [id]: { ...before[id], ...mark } }));
@@ -63,9 +66,13 @@ export function MarksProvider({ children }: { children: ReactNode }) {
     (card: Card, watched: boolean) => {
       const before: Seen = said[card.id]?.seen ?? card.seen;
       say(card.id, { seen: watched ? "watched" : "not_started" });
+      /* A work ticked off is a work that has left the row of what is
+         unfinished, and the one the series above it is waiting on is not the
+         same episode any more. */
+      rowsHaveMoved();
       api.setWatched(card.id, watched).catch(() => say(card.id, { seen: before }));
     },
-    [said, say],
+    [said, say, rowsHaveMoved],
   );
 
   const setFavourite = useCallback(
@@ -85,10 +92,10 @@ export function MarksProvider({ children }: { children: ReactNode }) {
     (card: Card, pinned: boolean) => {
       const before = said[card.id]?.pinned;
       say(card.id, { pinned });
-      setFrontShelf((count) => count + 1);
+      rowsHaveMoved();
       api.setPinned(card.id, pinned).catch(() => say(card.id, { pinned: before }));
     },
-    [said, say],
+    [said, say, rowsHaveMoved],
   );
 
   const value = useMemo<Marks>(
@@ -99,9 +106,9 @@ export function MarksProvider({ children }: { children: ReactNode }) {
       setWatched,
       setFavourite,
       setPinned,
-      frontShelf,
+      rowsMoved,
     }),
-    [said, setWatched, setFavourite, setPinned, frontShelf],
+    [said, setWatched, setFavourite, setPinned, rowsMoved],
   );
 
   return <MarksContext.Provider value={value}>{children}</MarksContext.Provider>;
