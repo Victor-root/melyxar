@@ -464,11 +464,15 @@ export function RefreshIcon(props: IconProps) {
   );
 }
 
-/** A pin, for what an administrator puts in front of everybody. */
-export function PinIcon(props: IconProps) {
+/** A pin, for what an administrator puts in front of everybody. Filled once
+ *  the work is there, the way the heart is once a work is a favourite. */
+export function PinIcon({ filled = false, ...props }: IconProps & { filled?: boolean }) {
   return (
     <Icon {...props}>
-      <path d="M14.4 3.6 20.4 9.6l-2.4 1.2-1.2 3.6-5.4-5.4 3.6-1.2Z" />
+      <path
+        d="M14.4 3.6 20.4 9.6l-2.4 1.2-1.2 3.6-5.4-5.4 3.6-1.2Z"
+        fill={filled ? "currentColor" : "none"}
+      />
       <path d="M11.4 9 4.6 19.4l10.4-6.8" />
     </Icon>
   );

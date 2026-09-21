@@ -21,7 +21,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api";
 import type { Card } from "../api";
 import { useAccount } from "../account";
 import { useMarks } from "../marks";
@@ -145,6 +144,7 @@ export function CardMenu({
 
   const seen = marks.seenOf(card);
   const favourite = marks.favouriteOf(card);
+  const pinned = marks.pinnedOf(card) === true;
   const playable = card.source !== null && card.kind !== "series";
 
   const entries: Entry[] = [
@@ -218,10 +218,14 @@ export function CardMenu({
       later: true,
     },
     {
-      key: "pin",
-      mark: <PinIcon size={SHAPE} />,
+      /* Says what it will do rather than always the same thing. Nothing is
+         known about a card that arrives from the server, so it offers to put
+         it there; once it has been put there from here, it offers to take it
+         back off. */
+      key: pinned ? "unpin" : "pin",
+      mark: <PinIcon size={SHAPE} filled={pinned} />,
       allowed: account?.is_administrator === true,
-      act: () => void api.setPinned(card.id, true).catch(() => {}),
+      act: () => marks.setPinned(card, !pinned),
     },
     {
       key: "delete",

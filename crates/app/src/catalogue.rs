@@ -362,7 +362,21 @@ async fn the_hero(
         }
     };
 
+    // Read before anything is let in, because what it holds is kept for it.
+    // Filling the banner with what was left halfway and only then looking at
+    // this is how "put on the front page" came to do nothing at all: somebody
+    // watching five things at once has a full banner before the question is
+    // ever asked, and that is the normal state of a server in use.
+    let pinned = state
+        .database()
+        .pinned_works(who.id, granted, IN_THE_HERO)
+        .await?;
+    let room_for_the_rest = (IN_THE_HERO as usize).saturating_sub(pinned.len());
+
     for entry in carry_on {
+        if hero.len() >= room_for_the_rest {
+            break;
+        }
         let place = entry.series_id.zip(entry.series_title.clone()).map(
             |(series_id, series_title)| EpisodePlace {
                 series_id,
@@ -373,14 +387,8 @@ async fn the_hero(
         );
         take(&entry.card, Because::Started, place, &mut hero);
     }
-    if hero.len() < IN_THE_HERO as usize {
-        for card in state
-            .database()
-            .pinned_works(who.id, granted, IN_THE_HERO)
-            .await?
-        {
-            take(&card, Because::Pinned, None, &mut hero);
-        }
+    for card in &pinned {
+        take(card, Because::Pinned, None, &mut hero);
     }
     for card in &recently_added.cards {
         take(card, Because::New, None, &mut hero);
@@ -733,6 +741,66 @@ mod tests {
         let page = home(&state, Some(library_id), &viewer).await.expect("read");
         assert_eq!(page.hero[0].card.id, oldest);
         assert_eq!(page.hero[0].because, Because::Pinned);
+    }
+
+    #[tokio::test]
+    async fn what_is_pinned_is_in_the_hero_however_much_was_left_halfway() {
+        let (_directory, state, library_id, viewer) = state_with_films(&[
+            "Quiet Harbour",
+            "Amber Field",
+            "Winter Signal",
+            "Paper Lantern",
+            "Slow Tide",
+            "Copper Hour",
+            "Glass Meadow",
+        ])
+        .await;
+        let films = state
+            .database()
+            .recent_works(library_id, 10)
+            .await
+            .expect("read");
+
+        // Enough left halfway to fill the banner on its own, which is where
+        // this used to end: what an administrator put in front of everybody
+        // was read only if there was room left, and there never was.
+        for film in films.iter().take(IN_THE_HERO as usize + 1) {
+            state
+                .database()
+                .record_playback_progress(
+                    viewer.id,
+                    film.id,
+                    melyxar_core::time::Millis::new(1_800_000),
+                    melyxar_core::work::PlaybackState::InProgress,
+                    melyxar_core::time::now(),
+                )
+                .await
+                .expect("recorded");
+        }
+
+        let chosen = films.last().expect("a film").id;
+        state.database().pin_work(chosen).await.expect("pinned");
+
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
+        assert_eq!(page.hero.len(), IN_THE_HERO as usize);
+        let pinned: Vec<_> = page
+            .hero
+            .iter()
+            .filter(|entry| entry.because == Because::Pinned)
+            .map(|entry| entry.card.id)
+            .collect();
+        assert_eq!(
+            pinned,
+            vec![chosen],
+            "what was put in front of everybody is in the banner, whatever else is waiting"
+        );
+        assert!(
+            page.hero
+                .iter()
+                .take(IN_THE_HERO as usize - 1)
+                .all(|entry| entry.because == Because::Started),
+            "and the rest of the banner is still what was left halfway, first"
+        );
     }
 
     #[tokio::test]
