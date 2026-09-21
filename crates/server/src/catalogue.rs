@@ -310,6 +310,9 @@ async fn works(
         search: params.search.filter(|value| !value.trim().is_empty()),
         unidentified_only: params.unidentified,
         favourites_only: params.favourites,
+        // Asked by kind only by the home page, which builds its own request:
+        // a grid is opened on a library, not on a kind of one.
+        library_kind: None,
         // A letter nobody could mean is refused rather than quietly ignored:
         // a grid that answers everything to a narrowing looks broken.
         initial: params
@@ -445,14 +448,52 @@ struct HomeParams {
 
 #[derive(Debug, Serialize)]
 struct HomeView {
+    /// The few works the page opens on, largest of all.
+    hero: Vec<HeroView>,
     /// Films this viewer started and has not finished, the latest first.
     carry_on: Vec<CarryOnView>,
+    /// The episode each started series is waiting on.
+    up_next: Vec<UpNextView>,
     /// What a home page leads with, newest first.
     recently_added: Vec<CardView>,
+    /// One row per kind of library this server really holds.
+    shelves: Vec<ShelfView>,
     works: i64,
     /// Whether anything is still waiting to be looked up, so the page can say
     /// so rather than showing untitled films with no explanation.
     awaiting_identification: i64,
+}
+
+/// One work the page opens on, and why it is there.
+#[derive(Debug, Serialize)]
+struct HeroView {
+    #[serde(flatten)]
+    card: CardView,
+    /// started, pinned, new or suggested. What the button says is drawn from
+    /// it, so the interface never has to work out again what the server
+    /// already decided when it filled the row.
+    because: &'static str,
+}
+
+/// One episode a started series is waiting on.
+#[derive(Debug, Serialize)]
+struct UpNextView {
+    #[serde(flatten)]
+    card: CardView,
+    /// The series, which is what the card leads with: an episode's own title
+    /// is not what anybody remembers a series by.
+    series: String,
+    series_title: String,
+    season_number: Option<i32>,
+    episode_number: Option<i32>,
+}
+
+/// One row of the home page, for one kind of library.
+#[derive(Debug, Serialize)]
+struct ShelfView {
+    /// movies, series, anime or shows.
+    kind: &'static str,
+    cards: Vec<CardView>,
 }
 
 /// One film somebody started and has not finished.
@@ -474,6 +515,14 @@ async fn home(
     let page = melyxar_app::catalogue::home(&state, library_id, &who).await?;
 
     Ok(Json(HomeView {
+        hero: page
+            .hero
+            .iter()
+            .map(|entry| HeroView {
+                card: card_view(&entry.card),
+                because: entry.because.as_str(),
+            })
+            .collect(),
         carry_on: page
             .carry_on
             .iter()
@@ -482,7 +531,26 @@ async fn home(
                 position_seconds: entry.position.get() as f64 / 1000.0,
             })
             .collect(),
+        up_next: page
+            .up_next
+            .iter()
+            .map(|entry| UpNextView {
+                card: card_view(&entry.card),
+                series: entry.series_id.to_string(),
+                series_title: entry.series_title.clone(),
+                season_number: entry.season_number,
+                episode_number: entry.episode_number,
+            })
+            .collect(),
         recently_added: page.recently_added.cards.iter().map(card_view).collect(),
+        shelves: page
+            .shelves
+            .iter()
+            .map(|shelf| ShelfView {
+                kind: shelf.kind.as_str(),
+                cards: shelf.cards.iter().map(card_view).collect(),
+            })
+            .collect(),
         works: page.works,
         awaiting_identification: page.awaiting_identification,
     }))

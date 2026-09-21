@@ -41,6 +41,10 @@ export interface Picture {
 
 export type WorkKind = "movie" | "series" | "season" | "episode";
 
+/** What a library holds, which is what the header's categories are built
+    from: a kind with no library of it is a category that does not exist. */
+export type LibraryKind = "movies" | "series" | "anime" | "shows" | "music";
+
 export type Seen = "not_started" | "in_progress" | "watched";
 
 export interface Card {
@@ -108,7 +112,7 @@ export interface Root {
 export interface Library {
   id: string;
   name: string;
-  kind: string;
+  kind: LibraryKind;
   works: number;
   version: number;
   /** Whether a scan of this library reads every film for where it can be
@@ -236,10 +240,25 @@ export interface Filters {
   initials: { name: string; works: number }[];
 }
 
+/** Why a work opens the page, which is what its button says. */
+export type Because = "started" | "pinned" | "new" | "suggested";
+
 export interface Home {
+  /** The few works the page opens on, largest of all. */
+  hero: (Card & { because: Because })[];
   /** Films started and not finished, the latest first. */
   carry_on: (Card & { position_seconds: number })[];
+  /** The episode each started series is waiting on, with the series it
+      belongs to: an episode's own title is not what anybody remembers. */
+  up_next: (Card & {
+    series: string;
+    series_title: string;
+    season_number: number | null;
+    episode_number: number | null;
+  })[];
   recently_added: Card[];
+  /** One row per kind of library this server really holds. */
+  shelves: { kind: LibraryKind; cards: Card[] }[];
   works: number;
   awaiting_identification: number;
 }

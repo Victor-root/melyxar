@@ -13,6 +13,7 @@
 //! and a card appears twice or not at all.
 
 use melyxar_core::id::{LibraryId, MediaSourceId, UserId, WorkId};
+use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::{IdentificationNote, IdentificationState, PlaybackState, WorkKind};
 use sqlx::{AssertSqlSafe, Row};
@@ -150,6 +151,13 @@ pub struct BrowseRequest {
     /// Only the works this viewer marked. Needs a viewer, and answers nothing
     /// without one: a favourite belongs to somebody or it is not one.
     pub favourites_only: bool,
+    /// Only the works of libraries of one kind, whichever libraries those are.
+    ///
+    /// A row of films on a home page means every film on the server, and a
+    /// collection spread over four disks is four libraries of the same kind.
+    /// Asking by kind is what lets one row hold them all without the caller
+    /// having to know which libraries exist.
+    pub library_kind: Option<LibraryKind>,
     /// Who is looking, when somebody is. Named, the page comes back with what
     /// this account has made of each card: where they are in it, whether they
     /// marked it, what is left of a series. Absent, the cards carry the work's
@@ -261,6 +269,7 @@ impl Default for BrowseRequest {
             search: None,
             unidentified_only: false,
             favourites_only: false,
+            library_kind: None,
             viewer: None,
         }
     }
@@ -389,6 +398,14 @@ impl Database {
                                WHERE fav.work_id = w.id AND fav.user_id = ?)",
             );
         }
+        // Asked the same way and for the same reason: a join would sit ahead
+        // of the where clause and shift every bound value after it.
+        if request.library_kind.is_some() {
+            sql.push_str(
+                " AND EXISTS (SELECT 1 FROM libraries lib
+                               WHERE lib.id = w.library_id AND lib.kind = ?)",
+            );
+        }
         match request.initial {
             Some(Initial::Letter(_)) => {
                 sql.push_str(" AND w.sort_title >= ? AND w.sort_title < ?");
@@ -450,6 +467,9 @@ impl Database {
         // there, which is how it comes back empty.
         if request.favourites_only {
             query = query.bind(request.viewer.map(|viewer| viewer.to_db_string()));
+        }
+        if let Some(kind) = request.library_kind {
+            query = query.bind(kind.as_str());
         }
         if let Some((from, to)) = request.initial.and_then(Initial::range) {
             query = query.bind(from).bind(to);

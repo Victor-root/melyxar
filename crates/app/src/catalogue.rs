@@ -9,9 +9,9 @@ use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::user::User;
 use melyxar_core::library::{LibraryKind, LibraryOptions, RootAccess};
 
-use crate::browse::{BrowseRequest, WorkOrder, WorkPage};
+use crate::browse::{BrowseRequest, WorkCard, WorkOrder, WorkPage};
 use crate::{AppState, Result};
-use melyxar_database::playback::WorkToCarryOn;
+use melyxar_database::playback::{UpNext, WorkToCarryOn};
 
 /// A library as a menu shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,15 +57,70 @@ pub struct Filters {
 /// What a home page leads with.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Home {
+    /// What the page leads with, at most five, largest of all.
+    pub hero: Vec<HeroItem>,
     /// Films this viewer started and has not finished, the latest first.
     ///
-    /// First on the page, before anything else: a film left halfway is the one
-    /// thing somebody comes back for, and finding it meant remembering its
-    /// title and hunting it down in the whole library.
+    /// A film left halfway is the one thing somebody comes back for, and
+    /// finding it meant remembering its title and hunting it down in the whole
+    /// library.
     pub carry_on: Vec<WorkToCarryOn>,
+    /// The episode each started series is waiting on. Distinct from carrying
+    /// on: what somebody left halfway is not what they have not started.
+    pub up_next: Vec<UpNext>,
+    /// Everything newest, whatever kind it is.
     pub recently_added: WorkPage,
+    /// One row per kind of library this server really holds, newest first.
+    pub shelves: Vec<Shelf>,
     pub works: i64,
     pub awaiting_identification: i64,
+}
+
+/// One row of the home page, for one kind of library.
+///
+/// Built from the libraries that are really there rather than from a written
+/// list of kinds: a server with no anime has no row of anime, and a server
+/// with two libraries of films has one row holding both.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shelf {
+    pub kind: LibraryKind,
+    pub cards: Vec<WorkCard>,
+}
+
+/// One of the few works the page opens on, and why it is there.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeroItem {
+    pub card: WorkCard,
+    pub because: Because,
+}
+
+/// Why a work is in the hero, which decides what its button says.
+///
+/// Carried rather than worked out again by the interface: whether something
+/// is there to be carried on or to be discovered is what the server decided
+/// when it filled the row, and two places deciding it separately would
+/// eventually decide it differently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Because {
+    /// Left halfway. Its button says carry on, and it comes first.
+    Started,
+    /// An administrator put it there.
+    Pinned,
+    /// Newly arrived.
+    New,
+    /// Nobody chose it: the server offers it.
+    Suggested,
+}
+
+impl Because {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Started => "started",
+            Self::Pinned => "pinned",
+            Self::New => "new",
+            Self::Suggested => "suggested",
+        }
+    }
 }
 
 /// How many cards the home page leads with.
@@ -78,6 +133,18 @@ const RECENTLY_ADDED: i64 = 24;
 /// A row, not a library: past a certain number these are films somebody
 /// abandoned rather than films they mean to come back to.
 const CARRY_ON: i64 = 20;
+
+/// How many series the page says are waiting.
+///
+/// The same size as the row above it: both are rows of the same shape, and a
+/// screen showing twenty of one and five of the other looks broken.
+const UP_NEXT: i64 = 20;
+
+/// How many works the page opens on, which the maintainer set.
+const IN_THE_HERO: i64 = 5;
+
+/// How many cards one kind's row holds.
+const ON_A_SHELF: i64 = 24;
 
 /// Every library this viewer may see, with what it holds and what the server
 /// can reach.
@@ -185,8 +252,16 @@ pub async fn set_pinned(
 }
 
 /// What a home page opens on.
+///
+/// Every row is bounded by what this account was granted, and a row with
+/// nothing in it comes back empty rather than absent: what to do with an empty
+/// row is the interface's business, and a server deciding to hide one would be
+/// deciding how the page looks.
 pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -> Result<Home> {
     let database = state.database();
+    let within = crate::reach::within(who);
+    let granted = within.as_deref();
+
     let recently_added = browse(
         state,
         &BrowseRequest {
@@ -200,19 +275,122 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
     )
     .await?;
 
+    let carry_on = database
+        .works_to_carry_on(who.id, granted, CARRY_ON)
+        .await?;
+    let up_next = database.up_next(who.id, granted, UP_NEXT).await?;
+
     // Counted once per change rather than on the way here: both of these walk
     // the whole collection, and a home page that counts a hundred thousand
     // works to print two numbers is a home page nobody waits for.
     let counted = crate::reach::counted_for(state, who, library_id).await?;
 
     Ok(Home {
-        carry_on: database
-            .works_to_carry_on(who.id, crate::reach::within(who).as_deref(), CARRY_ON)
-            .await?,
+        hero: the_hero(state, who, granted, &carry_on, &recently_added).await?,
+        carry_on,
+        up_next,
+        shelves: the_shelves(state, who).await?,
         recently_added,
         works: counted.browsable,
         awaiting_identification: counted.awaiting_identification,
     })
+}
+
+/// The few works the page opens on.
+///
+/// What somebody left halfway comes first, and the maintainer chose that
+/// knowing it puts the same films in the hero and in the row just below it.
+/// The reason is written in the decisions: reaching for the film you were
+/// watching is what people come here to do, and meeting it twice costs less
+/// than looking for it once.
+///
+/// Then what an administrator put there, then what has just arrived, then
+/// what the server offers. Each source is asked only for what the ones before
+/// it left room for, and nothing appears twice.
+async fn the_hero(
+    state: &AppState,
+    who: &User,
+    granted: Option<&[LibraryId]>,
+    carry_on: &[WorkToCarryOn],
+    recently_added: &WorkPage,
+) -> Result<Vec<HeroItem>> {
+    let mut hero: Vec<HeroItem> = Vec::with_capacity(IN_THE_HERO as usize);
+    let mut already: std::collections::HashSet<WorkId> = std::collections::HashSet::new();
+
+    let mut take = |card: &WorkCard, because: Because, hero: &mut Vec<HeroItem>| {
+        if hero.len() < IN_THE_HERO as usize && already.insert(card.id) {
+            hero.push(HeroItem {
+                card: card.clone(),
+                because,
+            });
+        }
+    };
+
+    for entry in carry_on {
+        take(&entry.card, Because::Started, &mut hero);
+    }
+    if hero.len() < IN_THE_HERO as usize {
+        for card in state
+            .database()
+            .pinned_works(who.id, granted, IN_THE_HERO)
+            .await?
+        {
+            take(&card, Because::Pinned, &mut hero);
+        }
+    }
+    for card in &recently_added.cards {
+        take(card, Because::New, &mut hero);
+    }
+    if hero.len() < IN_THE_HERO as usize {
+        for card in state
+            .database()
+            .suggestions(who.id, granted, IN_THE_HERO)
+            .await?
+        {
+            take(&card, Because::Suggested, &mut hero);
+        }
+    }
+    Ok(hero)
+}
+
+/// One row per kind of library this server really holds.
+///
+/// Read from the libraries themselves rather than from a written list of
+/// kinds, so a server with no anime has no row of anime and nobody has to
+/// remember to add one the day a kind is invented. A kind holding several
+/// libraries gets one row across all of them, which is what somebody means by
+/// "films" when their films are spread over four disks.
+async fn the_shelves(state: &AppState, who: &User) -> Result<Vec<Shelf>> {
+    let mut shelves = Vec::new();
+    let mut seen: Vec<LibraryKind> = Vec::new();
+
+    for library in libraries(state, who).await? {
+        if seen.contains(&library.kind) {
+            continue;
+        }
+        seen.push(library.kind);
+        // Music has no card to show yet: the model is there, nothing fills it.
+        if library.kind == LibraryKind::Music {
+            continue;
+        }
+        let page = browse(
+            state,
+            &BrowseRequest {
+                library_kind: Some(library.kind),
+                order: WorkOrder::AddedAt,
+                descending: true,
+                limit: ON_A_SHELF,
+                ..Default::default()
+            },
+            who,
+        )
+        .await?;
+        shelves.push(Shelf {
+            kind: library.kind,
+            cards: page.cards,
+        });
+    }
+    Ok(shelves)
 }
 
 #[cfg(test)]
@@ -390,6 +568,82 @@ mod tests {
             melyxar_core::time::Millis::new(1_800_000),
             "a card has to know how far in it is without asking again per film"
         );
+    }
+
+    #[tokio::test]
+    async fn the_hero_leads_with_what_was_left_halfway_then_what_is_new() {
+        let (_directory, state, library_id, viewer) =
+            state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
+        let newest = state
+            .database()
+            .recent_works(library_id, 10)
+            .await
+            .expect("read");
+        let started = newest.last().expect("a film").id;
+
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
+        assert!(
+            page.hero.iter().all(|entry| entry.because == Because::New),
+            "with nothing started and nothing pinned, the hero is what arrived"
+        );
+
+        state
+            .database()
+            .record_playback_progress(
+                viewer.id,
+                started,
+                melyxar_core::time::Millis::new(1_800_000),
+                melyxar_core::work::PlaybackState::InProgress,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("recorded");
+
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
+        assert_eq!(page.hero[0].card.id, started);
+        assert_eq!(page.hero[0].because, Because::Started);
+        assert_eq!(
+            page.hero.len(),
+            3,
+            "three films, and the one carried on is not shown twice"
+        );
+        let mut every: Vec<_> = page.hero.iter().map(|entry| entry.card.id).collect();
+        every.sort();
+        every.dedup();
+        assert_eq!(every.len(), page.hero.len(), "nothing appears twice");
+    }
+
+    #[tokio::test]
+    async fn what_an_administrator_pinned_comes_before_what_is_merely_new() {
+        let (_directory, state, library_id, viewer) =
+            state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
+        let oldest = state
+            .database()
+            .recent_works(library_id, 10)
+            .await
+            .expect("read")
+            .pop()
+            .expect("a film")
+            .id;
+
+        state.database().pin_work(oldest).await.expect("pinned");
+
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
+        assert_eq!(page.hero[0].card.id, oldest);
+        assert_eq!(page.hero[0].because, Because::Pinned);
+    }
+
+    #[tokio::test]
+    async fn a_row_exists_for_each_kind_of_library_and_for_no_other() {
+        let (_directory, state, _, viewer) = state_with_films(&["Quiet Harbour"]).await;
+
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert_eq!(
+            page.shelves.iter().map(|shelf| shelf.kind).collect::<Vec<_>>(),
+            vec![LibraryKind::Movies],
+            "a server with only films has one row, and no empty row of anime"
+        );
+        assert_eq!(page.shelves[0].cards.len(), 1);
     }
 
     #[tokio::test]
