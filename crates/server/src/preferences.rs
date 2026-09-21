@@ -41,6 +41,16 @@ struct PreferencesView {
     /// The range the gain is kept inside, so a screen can draw a slider that
     /// cannot be dragged somewhere the server would refuse.
     downmix_gain_range: [f64; 2],
+    /// How tall the banner of the home page is, as a share of the screen's
+    /// width: what it really sets is how much of the picture behind it
+    /// survives.
+    banner_height: f64,
+    banner_height_range: [f64; 2],
+    /// Where a band is cut out of that picture, nought at its top and one at
+    /// its foot.
+    banner_cut: f64,
+    /// Whether the banner draws a fresh handful every time the page opens.
+    banner_at_random: bool,
     /// Every fold this server knows how to perform.
     downmix_methods: Vec<&'static str>,
     /// The languages the library actually holds, which is what a picker
@@ -68,6 +78,12 @@ struct PreferencesBody {
     downmix_method: Option<String>,
     #[serde(default)]
     downmix_gain: Option<f64>,
+    #[serde(default)]
+    banner_height: Option<f64>,
+    #[serde(default)]
+    banner_cut: Option<f64>,
+    #[serde(default)]
+    banner_at_random: Option<bool>,
 }
 
 async fn read(
@@ -124,6 +140,18 @@ async fn write(
     if let Some(gain) = body.downmix_gain {
         chosen.downmix_gain = gain;
     }
+    // Clamped rather than refused, unlike the colour: these two are dragged
+    // on a slider, and a slider that ends one step past what is accepted
+    // would answer with an error rather than with the end of its own track.
+    if let Some(height) = body.banner_height {
+        chosen.banner_height = height;
+    }
+    if let Some(cut) = body.banner_cut {
+        chosen.banner_cut = cut;
+    }
+    if let Some(at_random) = body.banner_at_random {
+        chosen.banner_at_random = at_random;
+    }
 
     let kept = melyxar_app::preferences::save(&state, who.id, chosen).await?;
     view(&state, kept).await
@@ -148,6 +176,13 @@ async fn view(state: &AppState, chosen: Preferences) -> Result<Json<PreferencesV
             melyxar_core::user::MIN_DOWNMIX_GAIN,
             melyxar_core::user::MAX_DOWNMIX_GAIN,
         ],
+        banner_height: chosen.banner_height,
+        banner_height_range: [
+            melyxar_core::user::MIN_BANNER_HEIGHT,
+            melyxar_core::user::MAX_BANNER_HEIGHT,
+        ],
+        banner_cut: chosen.banner_cut,
+        banner_at_random: chosen.banner_at_random,
         downmix_methods: DownmixMethod::every()
             .iter()
             .map(|one| one.as_str())

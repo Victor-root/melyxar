@@ -29,6 +29,8 @@ import { asLocalTime, asUtcMinutes } from "../readable";
 import { useSettingsScreen } from "../screens/settings";
 import { useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
+import type { ViewerPreferences } from "../api";
+import { useMarks } from "../marks";
 
 export function SettingsPage() {
   const { t, language } = useSettings();
@@ -55,6 +57,8 @@ export function SettingsPage() {
       {failed && <p className="notice">{t(failed === "not_kept" ? "settings.not_kept" : "error.unreachable")}</p>}
 
       <Appearance />
+
+      <Banner kept={kept} change={change} />
 
       <DeviceOptimization />
 
@@ -316,6 +320,102 @@ export function SettingsPage() {
  * top, where it took the room three categories now stand in; a setting
  * somebody changes twice a year does not belong on every screen.
  */
+/**
+ * How the banner of the home page is drawn.
+ *
+ * The two numbers apply as they are dragged, on this page and on every other,
+ * because they are written onto the document rather than passed down. Going
+ * back to the home page is the only thing left to do to see them at work,
+ * which is why the share of the picture kept is said here in words: it is the
+ * thing the height really decides, and it is not visible from a slider.
+ */
+function Banner({
+  kept,
+  change,
+}: {
+  kept: ViewerPreferences | null;
+  change: (changes: Partial<ViewerPreferences>) => void;
+}) {
+  const { t, bannerHeight, setBannerHeight, bannerCut, setBannerCut } = useSettings();
+  const marks = useMarks();
+
+  return (
+    <section className="settings-block">
+      <h2>{t("settings.banner")}</h2>
+      <p className="settings-why">{t("settings.banner_why")}</p>
+
+      <div className="controls">
+        <label className="choice">
+          <span className="choice-label">
+            {t("settings.banner_height")}
+            <span className="settings-value">
+              {t("settings.banner_kept", { percent: shareOfThePictureKept(bannerHeight) })}
+            </span>
+          </span>
+          <input
+            type="range"
+            min={kept?.banner_height_range[0] ?? 0.2}
+            max={kept?.banner_height_range[1] ?? 0.55}
+            step={0.01}
+            value={bannerHeight}
+            onChange={(event) => setBannerHeight(Number(event.target.value))}
+          />
+        </label>
+
+        <label className="choice">
+          <span className="choice-label">
+            {t("settings.banner_cut")}
+            <span className="settings-value">{Math.round(bannerCut * 100)}%</span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={bannerCut}
+            onChange={(event) => setBannerCut(Number(event.target.value))}
+          />
+        </label>
+      </div>
+      <p className="settings-why">{t("settings.banner_cut_why")}</p>
+
+      {kept && (
+        <label className="settings-switch">
+          <input
+            type="checkbox"
+            checked={kept.banner_at_random}
+            onChange={(event) => {
+              change({ banner_at_random: event.target.checked });
+              // The banner is part of the page this changes, so the page is
+              // read again rather than left showing the old handful until
+              // somebody reloads by hand.
+              marks.rowsHaveMoved();
+            }}
+          />
+          <span>{t("settings.banner_at_random")}</span>
+        </label>
+      )}
+      <p className="settings-why">{t("settings.banner_at_random_why")}</p>
+    </section>
+  );
+}
+
+/**
+ * How much of a sixteen by nine picture a banner of this height keeps, on the
+ * window it is being read in.
+ *
+ * Worked out rather than written down, because the bar drawn over the banner
+ * counts towards it and its height is the stylesheet's to say.
+ */
+function shareOfThePictureKept(height: number): number {
+  const bar = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue("--header-height"),
+  );
+  const across = window.innerWidth;
+  const whole = across / (16 / 9);
+  return Math.round(Math.min(1, (height * across + (bar || 0)) / whole) * 100);
+}
+
 function Appearance() {
   const { t, language, setLanguage, theme, setTheme } = useSettings();
 

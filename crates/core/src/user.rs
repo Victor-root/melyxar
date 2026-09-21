@@ -170,6 +170,27 @@ pub const MIN_DOWNMIX_GAIN: f64 = 0.5;
 pub const MAX_DOWNMIX_GAIN: f64 = 3.0;
 pub const DEFAULT_DOWNMIX_GAIN: f64 = 2.0;
 
+/// How tall the banner of the home page is, as a share of the screen's width.
+///
+/// A share of the width rather than of the height, because what it really sets
+/// is how much of the picture behind it survives: those pictures are sixteen
+/// by nine, so a third of the width keeps about two thirds of one.
+///
+/// The range is what is worth looking at. Under a fifth it is a strip that
+/// throws away most of every picture, which is the fault this exists to let
+/// somebody escape; over half it is a page with nothing under the banner.
+pub const MIN_BANNER_HEIGHT: f64 = 0.20;
+pub const MAX_BANNER_HEIGHT: f64 = 0.55;
+pub const DEFAULT_BANNER_HEIGHT: f64 = 0.33;
+
+/// Where a band is taken out of a picture taller than the band, from its top.
+///
+/// Nought keeps the top of the picture and throws away its foot, one does the
+/// opposite. A quarter of the way down was measured over a shelf of real
+/// pictures at the height above and cut nobody off, but a library is not a
+/// shelf, so it is a number anybody can move.
+pub const DEFAULT_BANNER_CUT: f64 = 0.25;
+
 /// Which colour scheme the interface uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -244,6 +265,15 @@ pub struct Preferences {
     pub volume: f64,
     pub downmix_method: DownmixMethod,
     pub downmix_gain: f64,
+    /// How tall the banner of the home page is, as a share of the screen's
+    /// width.
+    pub banner_height: f64,
+    /// Where a band is cut out of a picture taller than the band, between
+    /// nought at its top and one at its foot.
+    pub banner_cut: f64,
+    /// Whether the banner draws a fresh handful every time the page is
+    /// opened, in place of what was left halfway and what has just arrived.
+    pub banner_at_random: bool,
 }
 
 impl Default for Preferences {
@@ -258,6 +288,9 @@ impl Default for Preferences {
             volume: 1.0,
             downmix_method: DownmixMethod::default(),
             downmix_gain: DEFAULT_DOWNMIX_GAIN,
+            banner_height: DEFAULT_BANNER_HEIGHT,
+            banner_cut: DEFAULT_BANNER_CUT,
+            banner_at_random: false,
         }
     }
 }
@@ -271,6 +304,10 @@ impl Preferences {
     pub fn normalised(mut self) -> Self {
         self.volume = self.volume.clamp(0.0, 1.0);
         self.downmix_gain = self.downmix_gain.clamp(MIN_DOWNMIX_GAIN, MAX_DOWNMIX_GAIN);
+        self.banner_height = self
+            .banner_height
+            .clamp(MIN_BANNER_HEIGHT, MAX_BANNER_HEIGHT);
+        self.banner_cut = self.banner_cut.clamp(0.0, 1.0);
         if !is_an_accent_colour(&self.accent_color) {
             self.accent_color = DEFAULT_ACCENT_COLOR.to_string();
         }
@@ -458,6 +495,32 @@ mod tests {
         .normalised();
         assert_eq!(negative.volume, 0.0);
         assert_eq!(negative.downmix_gain, MIN_DOWNMIX_GAIN);
+    }
+
+    #[test]
+    fn a_banner_is_never_a_hairline_nor_the_whole_page() {
+        let squashed = Preferences {
+            banner_height: 0.01,
+            banner_cut: -2.0,
+            ..Preferences::default()
+        }
+        .normalised();
+        assert_eq!(squashed.banner_height, MIN_BANNER_HEIGHT);
+        assert_eq!(squashed.banner_cut, 0.0);
+
+        let swollen = Preferences {
+            banner_height: 9.0,
+            banner_cut: 4.0,
+            ..Preferences::default()
+        }
+        .normalised();
+        assert_eq!(swollen.banner_height, MAX_BANNER_HEIGHT);
+        assert_eq!(swollen.banner_cut, 1.0);
+
+        // And what nobody touched comes back untouched.
+        let usual = Preferences::default().normalised();
+        assert_eq!(usual.banner_height, DEFAULT_BANNER_HEIGHT);
+        assert_eq!(usual.banner_cut, DEFAULT_BANNER_CUT);
     }
 
     #[test]

@@ -29,6 +29,17 @@ const en: Dictionary = {
   "settings.appearance": "Appearance",
   "settings.appearance_why":
     "Kept by your account, so a choice made here is the same on every machine you sign in from.",
+  "settings.banner": "The banner of the home page",
+  "settings.banner_why":
+    "Its height decides how much of the picture behind it you see: those pictures are wider than they are tall, so a short banner throws most of each one away and no placing can save what is left.",
+  "settings.banner_height": "Height",
+  "settings.banner_cut": "Where the picture is cut",
+  "settings.banner_cut_why":
+    "Towards the left keeps the top of the picture, towards the right keeps its foot.",
+  "settings.banner_kept": "{percent}% of the picture kept",
+  "settings.banner_at_random": "A different handful every time",
+  "settings.banner_at_random_why":
+    "The banner is drawn from the whole library each time the page is opened, in place of what you left halfway and what has just arrived. Anything put in front by hand still comes first.",
   "home.hero": "What the page opens on",
   "home.hero.carry_on": "Carry on",
   "home.hero.open": "Open",
@@ -682,6 +693,17 @@ const fr: Dictionary = {
   "settings.appearance": "Apparence",
   "settings.appearance_why":
     "Gardé par votre compte, donc un choix fait ici est le même sur toutes les machines où vous vous connectez.",
+  "settings.banner": "La bannière de l'accueil",
+  "settings.banner_why":
+    "Sa hauteur décide de la part de l'image que vous voyez : ces images sont bien plus larges que hautes, donc une bannière basse en jette la majeure partie, et aucun placement ne peut rattraper ce qu'il en reste.",
+  "settings.banner_height": "Hauteur",
+  "settings.banner_cut": "Où l'image est coupée",
+  "settings.banner_cut_why":
+    "Vers la gauche garde le haut de l'image, vers la droite garde son bas.",
+  "settings.banner_kept": "{percent} % de l'image gardée",
+  "settings.banner_at_random": "Une poignée différente à chaque fois",
+  "settings.banner_at_random_why":
+    "La bannière est tirée dans toute la médiathèque à chaque ouverture de la page, à la place de ce que vous avez laissé en cours et de ce qui vient d'arriver. Ce qui est mis en avant à la main passe toujours devant.",
   "home.hero": "Ce sur quoi la page s'ouvre",
   "home.hero.carry_on": "Reprendre",
   "home.hero.open": "Voir la fiche",

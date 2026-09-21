@@ -1758,6 +1758,22 @@ button.seen-mark:not(.seen-mark-on):hover {
   cursor: pointer;
 }
 
+/* A setting that is on or off, on a page whose other settings are pickers and
+   sliders: the same measurements, so the three line up down the block. */
+.settings-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin-top: var(--gap);
+  cursor: pointer;
+}
+
+.settings-switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
 .identify-also input {
   width: 18px;
   height: 18px;

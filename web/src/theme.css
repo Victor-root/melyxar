@@ -110,13 +110,22 @@
      points, so that the banner never swallows the window: a fixed ceiling in
      points is one a four thousand point screen passes without noticing, and
      that screen would have ended up with the smallest share of its picture of
-     anybody. What the ceiling is really for is the short wide screen, where a
-     third of the width is taller than there is room for.
+     anybody.
+
+     The ceiling is set high on purpose. What bounds the height is the slider
+     somebody drags, and a ceiling low enough to be met halfway along it is a
+     slider whose upper half does nothing: measured in a browser, at seventy
+     two hundredths of the height the banner stopped growing past about two
+     fifths of the width on an ordinary screen. All this stops now is a
+     banner taller than the window it is drawn in.
 
      The height of the bar comes on top, because the bar is drawn over the
      banner rather than above it: without that the banner would simply lose its
      first sixty points to something laid over it. */
-  --hero-height: calc(clamp(320px, 33vw, 72vh) + var(--header-height));
+  --banner-share: 33;
+  --hero-height: calc(
+    clamp(320px, calc(var(--banner-share) * 1vw), 88vh) + var(--header-height)
+  );
 
   /* Where a band is taken out of a picture taller than the band, from its top.
 
@@ -130,7 +139,12 @@
      two thirds of the picture is kept, what goes is its floor, and measured
      over a shelf of real pictures a quarter of the way down cut nobody off.
      Lower it towards nought to favour the sky, raise it to favour the
-     ground. */
+     ground.
+
+     Both of these are what the interface writes over when somebody moves
+     them in their settings, which is why the number of the height is kept
+     apart from the sum it goes into: what is chosen is one number, not a
+     formula. */
   --where-a-band-is-cut: 25%;
 
   /* Cards are 2:3, the shape of a poster. A wide screen holds more of them

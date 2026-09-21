@@ -373,8 +373,22 @@ async fn the_hero(
         .await?;
     let room_for_the_rest = (IN_THE_HERO as usize).saturating_sub(pinned.len());
 
+    // A banner somebody asked to be different every time is filled from a
+    // draw instead of from what was left halfway and what has just arrived.
+    // What an administrator put there still comes first: a choice made
+    // deliberately is not something a shuffle undoes.
+    let drawn = match who.preferences.banner_at_random {
+        true => {
+            state
+                .database()
+                .works_at_random(who.id, granted, IN_THE_HERO)
+                .await?
+        }
+        false => Vec::new(),
+    };
+
     for entry in carry_on {
-        if hero.len() >= room_for_the_rest {
+        if who.preferences.banner_at_random || hero.len() >= room_for_the_rest {
             break;
         }
         let place = entry.series_id.zip(entry.series_title.clone()).map(
@@ -390,8 +404,13 @@ async fn the_hero(
     for card in &pinned {
         take(card, Because::Pinned, None, &mut hero);
     }
-    for card in &recently_added.cards {
-        take(card, Because::New, None, &mut hero);
+    for card in &drawn {
+        take(card, Because::Suggested, None, &mut hero);
+    }
+    if !who.preferences.banner_at_random {
+        for card in &recently_added.cards {
+            take(card, Because::New, None, &mut hero);
+        }
     }
     if hero.len() < IN_THE_HERO as usize {
         for card in state

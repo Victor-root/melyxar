@@ -25,15 +25,30 @@ export type ThemeChoice = "dark" | "light" | "system";
 
 const STORED_THEME = "melyxar.theme";
 const STORED_ACCENT = "melyxar.accent";
+const STORED_BANNER_HEIGHT = "melyxar.banner.height";
+const STORED_BANNER_CUT = "melyxar.banner.cut";
 
 /** The red of the Melyxar theme, which needs none of the work below. */
 const THE_USUAL_ACCENT = "#c81e1e";
+
+/** What the banner measures when nobody has moved it, matching the
+ *  stylesheet: a third of the screen's width, cut a quarter of the way down.
+ *  Held here as well so the banner is the right size on the very first frame,
+ *  before the server has said anything. */
+const THE_USUAL_BANNER = { height: 0.33, cut: 0.25 };
 
 interface Settings {
   language: Language;
   setLanguage: (language: Language) => void;
   theme: ThemeChoice;
   setTheme: (theme: ThemeChoice) => void;
+  /** How tall the banner is, as a share of the screen's width. */
+  bannerHeight: number;
+  setBannerHeight: (share: number) => void;
+  /** Where a band is cut out of a picture, nought at its top, one at its
+      foot. */
+  bannerCut: number;
+  setBannerCut: (share: number) => void;
   /** What the account chose, once the server has said. */
   adopt: (chosen: ViewerPreferences) => void;
   /** The wording of one key, in the language in force. */
@@ -51,10 +66,22 @@ function initialAccent(): string {
   return safeRead(STORED_ACCENT) ?? THE_USUAL_ACCENT;
 }
 
+/** A number this browser kept, or the one the stylesheet already carries. */
+function initialNumber(key: string, usual: number): number {
+  const stored = Number(safeRead(key));
+  return Number.isFinite(stored) && stored > 0 ? stored : usual;
+}
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(initialLanguage);
   const [theme, setThemeState] = useState<ThemeChoice>(initialTheme);
   const [accent, setAccentState] = useState<string>(initialAccent);
+  const [bannerHeight, setBannerHeightState] = useState(() =>
+    initialNumber(STORED_BANNER_HEIGHT, THE_USUAL_BANNER.height),
+  );
+  const [bannerCut, setBannerCutState] = useState(() =>
+    initialNumber(STORED_BANNER_CUT, THE_USUAL_BANNER.cut),
+  );
 
   // The theme is put on the document rather than passed down, so a stylesheet
   // can answer it without a single component knowing a colour.
@@ -92,6 +119,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--accent-contrast", readableOn(accent));
   }, [accent]);
 
+  // The banner writes two numbers onto the document, the way the accent
+  // writes a colour: the stylesheet carries the same two, so nothing has to
+  // be removed when they are back where they started.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--banner-share", (bannerHeight * 100).toFixed(2));
+    root.style.setProperty("--where-a-band-is-cut", `${(bannerCut * 100).toFixed(1)}%`);
+  }, [bannerHeight, bannerCut]);
+
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
@@ -108,6 +144,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ theme_mode: next });
   }, []);
 
+  const setBannerHeight = useCallback((share: number) => {
+    safeWrite(STORED_BANNER_HEIGHT, String(share));
+    setBannerHeightState(share);
+    tellTheServerOnceTheHandStops({ banner_height: share });
+  }, []);
+
+  const setBannerCut = useCallback((share: number) => {
+    safeWrite(STORED_BANNER_CUT, String(share));
+    setBannerCutState(share);
+    tellTheServerOnceTheHandStops({ banner_cut: share });
+  }, []);
+
   const adopt = useCallback((chosen: ViewerPreferences) => {
     const language = chosen.interface_language === "fr" ? "fr" : "en";
     rememberLanguage(language);
@@ -121,6 +169,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     safeWrite(STORED_ACCENT, chosen.accent_color);
     setAccentState(chosen.accent_color);
+
+    safeWrite(STORED_BANNER_HEIGHT, String(chosen.banner_height));
+    setBannerHeightState(chosen.banner_height);
+    safeWrite(STORED_BANNER_CUT, String(chosen.banner_cut));
+    setBannerCutState(chosen.banner_cut);
   }, []);
 
   const value = useMemo<Settings>(
@@ -129,10 +182,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setLanguage,
       theme,
       setTheme,
+      bannerHeight,
+      setBannerHeight,
+      bannerCut,
+      setBannerCut,
       adopt,
       t: (key, values) => translate(language, key, values),
     }),
-    [language, setLanguage, theme, setTheme, adopt],
+    [
+      language,
+      setLanguage,
+      theme,
+      setTheme,
+      bannerHeight,
+      setBannerHeight,
+      bannerCut,
+      setBannerCut,
+      adopt,
+    ],
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
@@ -155,6 +222,29 @@ export function useSettings(): Settings {
  */
 function tellTheServer(changed: Partial<ViewerPreferences>) {
   void api.savePreferences(changed).catch(() => {});
+}
+
+/**
+ * The same, once whoever is dragging has let go.
+ *
+ * A slider answers on every step it travels, so saying it each time would be
+ * one request and one row written per pixel crossed. The screen is already
+ * right either way: it is drawn from what this browser holds, and only the
+ * saving waits. What accumulates in the meantime goes in one request, so the
+ * two numbers moved one after the other still travel together.
+ */
+const STILL_MOVING = 400;
+let waiting: Partial<ViewerPreferences> = {};
+let soon: ReturnType<typeof setTimeout> | undefined;
+
+function tellTheServerOnceTheHandStops(changed: Partial<ViewerPreferences>) {
+  waiting = { ...waiting, ...changed };
+  clearTimeout(soon);
+  soon = setTimeout(() => {
+    const said = waiting;
+    waiting = {};
+    tellTheServer(said);
+  }, STILL_MOVING);
 }
 
 /**
