@@ -3103,8 +3103,12 @@ button.seen-mark:not(.seen-mark-on):hover {
   gap: 10px;
   /* Lined up with the rows underneath rather than with the edge of the
      screen: the banner spans the whole width, the words start where the page
-     starts. */
-  padding: var(--gap-wide) var(--gutter);
+     starts.
+     And clear of the bar at the top. The banner reaches up behind it on
+     purpose, so that the bar has a picture to carry, but only the picture is
+     meant to go up there: the words are centred in what is left below the
+     bar, so a tagline or a drawn title never ends up read through it. */
+  padding: calc(var(--header-height) + var(--gap-wide)) var(--gutter) var(--gap-wide);
 }
 
 .hero-tagline {
