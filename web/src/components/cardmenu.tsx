@@ -68,6 +68,7 @@ export function CardMenu({
   card,
   from,
   openedBy,
+  onIdentify,
   onClose,
 }: {
   card: Card;
@@ -78,6 +79,11 @@ export function CardMenu({
       to: closing here as well shut it and let the button open it again, so
       it never seemed to close at all. */
   openedBy: HTMLElement | null;
+  /** Opens the panel that says by hand what this work is. Asked of whoever
+      drew this menu rather than opened from here: this menu is taken away the
+      moment anything in it is pressed, and a panel drawn inside it would go
+      with it. */
+  onIdentify: () => void;
   onClose: () => void;
 }) {
   const { t } = useSettings();
@@ -201,9 +207,7 @@ export function CardMenu({
       key: "identify",
       mark: <IdentifyIcon size={SHAPE} />,
       allowed: account?.is_administrator === true,
-      // The one action of this menu that is wired all the way through, and it
-      // lives on the work's own page, which is where the candidates are shown.
-      act: () => navigate(`/work/${card.id}`),
+      act: onIdentify,
     },
     {
       key: "forget_identity",

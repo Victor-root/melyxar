@@ -49,6 +49,10 @@ interface Marks {
       it again rather than mending it here, since what replaces what left is
       the server's answer and nobody else's. */
   rowsMoved: number;
+  /** Says that something outside this store changed what a row of the server's
+      holds: a work named by hand is a different card with a different title
+      and a different poster. */
+  rowsHaveMoved: () => void;
 }
 
 const MarksContext = createContext<Marks | null>(null);
@@ -107,8 +111,9 @@ export function MarksProvider({ children }: { children: ReactNode }) {
       setFavourite,
       setPinned,
       rowsMoved,
+      rowsHaveMoved,
     }),
-    [said, setWatched, setFavourite, setPinned, rowsMoved],
+    [said, setWatched, setFavourite, setPinned, rowsMoved, rowsHaveMoved],
   );
 
   return <MarksContext.Provider value={value}>{children}</MarksContext.Provider>;

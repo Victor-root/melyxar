@@ -489,3 +489,23 @@ export function DeleteIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** A cross, for shutting a panel. */
+export function CloseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6.2 6.2 17.8 17.8" />
+      <path d="M17.8 6.2 6.2 17.8" />
+    </Icon>
+  );
+}
+
+/** An arrow back, for a step of a panel that is left rather than shut. */
+export function BackIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M19.4 12H5.2" />
+      <path d="m11 5.6-5.8 6.4 5.8 6.4" />
+    </Icon>
+  );
+}

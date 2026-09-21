@@ -1491,107 +1491,257 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--accent-bright);
 }
 
-/* Saying by hand what a film is. Sits inside the page rather than in a window
-   of its own: the poster and the name being wrong are right there next to it,
-   which is what somebody is comparing against. */
-.byhand {
+/* --------------------------------------------------------------------------
+ * A panel over the page
+ * ----------------------------------------------------------------------- */
+
+/* What is behind it is dimmed rather than hidden: the panel is a step in the
+   page, not a place somebody has been taken to. */
+.modal-over {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: var(--gap-wide);
+  background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
+}
+
+.modal {
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
-  margin: var(--gap) 0;
-  max-width: 640px;
-}
-
-.byhand-ask {
-  display: flex;
-  gap: var(--gap-tight);
-}
-
-.byhand-ask input {
-  flex: 1;
-  min-width: 0;
-  padding: 9px 14px;
-  border-radius: var(--radius-control);
+  width: min(760px, 100%);
+  max-height: min(860px, 100%);
+  border-radius: var(--radius-card);
   border: 1px solid var(--border);
   background: var(--surface);
-  color: var(--text);
-  font: inherit;
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
 }
 
-.byhand-list {
+.modal-head {
+  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  gap: var(--gap-tight);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.byhand-choice {
-  display: flex;
+  align-items: center;
   gap: var(--gap);
-  width: 100%;
-  padding: var(--gap-tight);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.byhand-choice:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-.byhand-choice:disabled {
-  opacity: 0.5;
-}
-
-.byhand-choice img,
-.byhand-blank {
-  width: 60px;
-  height: 90px;
-  flex: none;
-  object-fit: cover;
-  border-radius: var(--radius-control);
+  padding: var(--gap) var(--gap-wide);
+  border-bottom: 1px solid var(--border);
   background: var(--surface-raised);
 }
 
-.byhand-words {
+.modal-title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.modal-step {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-control);
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.modal-step:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* The one part that scrolls, so the title and the action stay where they
+   were put however long what is between them turns out to be. */
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--gap-wide);
+}
+
+.modal-foot {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  gap: var(--gap);
+  padding: var(--gap) var(--gap-wide);
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+/* --------------------------------------------------------------------------
+ * Saying by hand what a work is
+ * ----------------------------------------------------------------------- */
+
+.identify-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.identify-said {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.identify-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.identify-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+/* Where the file is. Shown because it is often the only clue to what a film
+   actually is, and it is long, so it wraps rather than being cut. */
+.identify-path {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+}
+
+.identify-file {
+  color: var(--text-faint);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.identify-field input {
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+}
+
+.identify-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.identify-heading {
+  margin: 0 0 var(--gap);
+  font-size: 19px;
+  font-weight: 650;
+}
+
+/* Posters rather than a list of titles: two films of the same name and the
+   same year are told apart by their artwork and by nothing else. */
+.identify-found {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: var(--gap);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.identify-choice {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  min-width: 0;
+  width: 100%;
+  text-align: left;
+  transition: transform var(--quick) var(--ease);
 }
 
-.byhand-title {
+.identify-choice:hover {
+  transform: scale(1.035);
+}
+
+.identify-poster {
+  display: block;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.identify-choice:hover .identify-poster {
+  border-color: var(--accent);
+}
+
+.identify-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.identify-blank {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.identify-name {
   font-weight: 600;
+  line-height: 1.3;
 }
 
-.byhand-year {
-  color: var(--text-soft);
-  font-weight: 400;
-}
-
-.byhand-original {
-  color: var(--text-soft);
+.identify-year,
+.identify-original {
   font-size: 13px;
+  color: var(--text-soft);
 }
 
-/* Enough to recognise the film, never the whole synopsis: the list has to
-   stay a list. */
-.byhand-overview {
+/* The one that was chosen, large enough to be sure of before agreeing to it. */
+.identify-agreeing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-wide);
+}
+
+.identify-chosen {
+  display: flex;
+  gap: var(--gap-wide);
+}
+
+.identify-chosen .identify-poster {
+  flex: 0 0 160px;
+}
+
+.identify-chosen .identify-said {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.identify-chosen .identify-name {
+  font-size: 19px;
+}
+
+.identify-overview {
   color: var(--text-soft);
-  font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.identify-also {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  cursor: pointer;
+}
+
+.identify-also input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
 
 .work-actions {
