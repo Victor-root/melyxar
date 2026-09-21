@@ -509,3 +509,72 @@ export function BackIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/* -------------------------------------------------------------------------
+ * The door
+ * ---------------------------------------------------------------------- */
+
+/** Whose account this is: the mark beside the name somebody types. */
+export function AccountIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="8.2" r="3.6" />
+      <path d="M5.4 19.4a6.6 6.6 0 0 1 13.2 0" />
+    </Icon>
+  );
+}
+
+/** A padlock, closed: the mark beside the password. */
+export function LockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="4.8" y="10.4" width="14.4" height="9.4" rx="2.2" />
+      <path d="M8.4 10.4V7.8a3.6 3.6 0 0 1 7.2 0v2.6" />
+      <path d="M12 14.2v2" />
+    </Icon>
+  );
+}
+
+/** Shown: what pressing it does, which is let the password be read. */
+export function EyeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M2.6 12S6.4 5.8 12 5.8 21.4 12 21.4 12 17.6 18.2 12 18.2 2.6 12 2.6 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </Icon>
+  );
+}
+
+/** The same eye, struck through: what pressing it does once it is shown. */
+export function EyeOffIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9.9 6.1A8.5 8.5 0 0 1 12 5.8c5.6 0 9.4 6.2 9.4 6.2a17 17 0 0 1-2.7 3.4" />
+      <path d="M6.3 8A17.5 17.5 0 0 0 2.6 12s3.8 6.2 9.4 6.2a8.7 8.7 0 0 0 3.5-.7" />
+      <path d="M10 10a2.8 2.8 0 0 0 4 4" />
+      <path d="M4.4 4.4 19.6 19.6" />
+    </Icon>
+  );
+}
+
+/** A way in: an arrow that goes through the door rather than out of it. */
+export function EnterIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M13.2 4.6h4.2a1.8 1.8 0 0 1 1.8 1.8v11.2a1.8 1.8 0 0 1-1.8 1.8h-4.2" />
+      <path d="m9 8.4 3.6 3.6L9 15.6" />
+      <path d="M12.6 12H4.8" />
+    </Icon>
+  );
+}
+
+/** Somebody who is not here yet. */
+export function AccountAddIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="9.8" cy="8.2" r="3.6" />
+      <path d="M3.6 19.4a6.4 6.4 0 0 1 12.4-2.2" />
+      <path d="M18.4 14.6v5.2M21 17.2h-5.2" />
+    </Icon>
+  );
+}

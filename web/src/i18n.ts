@@ -101,10 +101,18 @@ const en: Dictionary = {
   "door.invitation": "Sign in to carry on watching.",
   "door.first.invitation":
     "Nobody has set this server up yet. Choose the name and the password of the first account, which is yours and is an administrator.",
-  "door.name": "Name",
+  "door.name": "Username",
   "door.password": "Password",
   "door.password_again": "Password again",
-  "door.remember": "Stay signed in on this device",
+  "door.remember": "Stay signed in",
+  "door.forgot": "Forgot your password?",
+  "door.forgot_why":
+    "There is no way to put a password back from this screen yet. Ask whoever runs this server.",
+  "door.show_password": "Show the password",
+  "door.hide_password": "Hide the password",
+  "door.or": "or",
+  "door.create": "Create an account",
+  "door.create_why": "Accounts on this server are made by whoever runs it.",
   "door.rule":
     "Pick something long. A phrase you will remember beats a short word nobody can guess.",
   "door.go": "Sign in",
@@ -768,10 +776,18 @@ const fr: Dictionary = {
   "door.invitation": "Connectez-vous pour reprendre vos films.",
   "door.first.invitation":
     "Personne n'a encore configuré ce serveur. Choisissez le nom et le mot de passe du premier compte, qui est le vôtre et qui est administrateur.",
-  "door.name": "Nom",
+  "door.name": "Nom d'utilisateur",
   "door.password": "Mot de passe",
   "door.password_again": "Mot de passe à nouveau",
-  "door.remember": "Rester connecté sur cet appareil",
+  "door.remember": "Rester connecté",
+  "door.forgot": "Mot de passe oublié ?",
+  "door.forgot_why":
+    "Aucun moyen de redéfinir un mot de passe depuis cet écran pour l'instant. Demandez à la personne qui gère ce serveur.",
+  "door.show_password": "Afficher le mot de passe",
+  "door.hide_password": "Masquer le mot de passe",
+  "door.or": "ou",
+  "door.create": "Créer un compte",
+  "door.create_why": "Les comptes de ce serveur sont créés par la personne qui le gère.",
   "door.rule":
     "Prenez quelque chose de long. Une phrase dont vous vous souviendrez vaut mieux qu'un mot court que personne ne devine.",
   "door.go": "Se connecter",
