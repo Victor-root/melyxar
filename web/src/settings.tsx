@@ -33,10 +33,10 @@ const STORED_BANNER_WHOLE = "melyxar.banner.whole";
 const THE_USUAL_ACCENT = "#c81e1e";
 
 /** What the banner measures when nobody has moved it, matching the
- *  stylesheet: a third of the screen's width, cut a quarter of the way down.
- *  Held here as well so the banner is the right size on the very first frame,
- *  before the server has said anything. */
-const THE_USUAL_BANNER = { height: 0.33, cut: 0.25 };
+ *  stylesheet: a little under a third of the screen's width, cut an eighth of
+ *  the way down. Held here as well so the banner is the right size on the
+ *  very first frame, before the server has said anything. */
+const THE_USUAL_BANNER = { height: 0.31, cut: 0.13 };
 
 interface Settings {
   language: Language;
