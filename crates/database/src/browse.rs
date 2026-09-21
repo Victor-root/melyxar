@@ -18,6 +18,8 @@ use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::{IdentificationNote, IdentificationState, PlaybackState, WorkKind};
 use sqlx::{AssertSqlSafe, Row};
 
+use std::collections::HashMap;
+
 use crate::convert::{parse_id, parse_timestamp};
 use crate::images::StoredImage;
 use crate::{Database, DatabaseError, Result};
@@ -304,6 +306,14 @@ pub struct WorkCard {
     pub added_at: Timestamp,
     /// Every size of the poster, largest first.
     pub poster: Vec<StoredImage>,
+    /// A picture wider than it is tall, for the rows that lie a card down
+    /// rather than standing it up. Filled only for those rows: a grid of
+    /// posters never asks for it and never pays for it.
+    ///
+    /// Empty where there is nothing wide to show, and a card drawn lying then
+    /// falls back to its poster, which is what it did before there was
+    /// anything better.
+    pub wide: Vec<StoredImage>,
     /// What this card shows beyond the work's own facts. Absent when nobody
     /// was named as asking, which is what the scan's own reads do: they check
     /// what is in a library, not what somebody has made of it.
@@ -660,6 +670,95 @@ impl Database {
         Ok(())
     }
 
+    /// Puts a wide picture on every card of a row that lies its cards down.
+    ///
+    /// A poster is two thirds as wide as it is tall and a lying card is very
+    /// nearly twice as wide as it is tall. Filling one with the other crops
+    /// away most of the picture and leaves a band cut out of its middle,
+    /// which is what a row of half watched films looked like: the same
+    /// posters as everywhere else, beheaded.
+    ///
+    /// What is wide, in the order it is looked for:
+    ///
+    /// 1. The work's own backdrop, which is what a catalogue offers for
+    ///    exactly this.
+    /// 2. For an episode, its own picture, since what a scan stores for an
+    ///    episode is a still off the film and a still is already wide.
+    /// 3. The backdrop of the series two steps above it, because an episode
+    ///    that nobody has a still for still belongs to something that has a
+    ///    picture.
+    ///
+    /// The posters must already be in place, since the second of those reads
+    /// them. One query for the parents and one for the pictures, whatever the
+    /// row holds.
+    pub(crate) async fn attach_wide_pictures(&self, cards: &mut [WorkCard]) -> Result<()> {
+        if cards.is_empty() {
+            return Ok(());
+        }
+        let owners: Vec<String> = cards.iter().map(|card| card.id.to_db_string()).collect();
+        let places = vec!["?"; owners.len()].join(", ");
+
+        // The series an episode hangs under, two steps up. Nothing at all for
+        // anything that is not one.
+        let mut parents = sqlx::query(AssertSqlSafe(format!(
+            "SELECT w.id, season.parent_id AS series_id
+               FROM works w
+               JOIN works season ON season.id = w.parent_id
+              WHERE w.kind = 'episode' AND season.parent_id IS NOT NULL
+                AND w.id IN ({places})"
+        )));
+        for owner in &owners {
+            parents = parents.bind(owner);
+        }
+        let mut series_of: HashMap<String, String> = HashMap::new();
+        for row in parents.fetch_all(self.reader()).await? {
+            series_of.insert(row.try_get("id")?, row.try_get("series_id")?);
+        }
+
+        let mut wanted: Vec<String> = owners.clone();
+        for series in series_of.values() {
+            if !wanted.contains(series) {
+                wanted.push(series.clone());
+            }
+        }
+        let places = vec!["?"; wanted.len()].join(", ");
+        let mut pictures = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM images
+              WHERE owner_kind = 'work' AND image_kind = 'backdrop'
+                AND owner_id IN ({places})
+              ORDER BY width DESC",
+            crate::images::WHAT_A_PICTURE_IS
+        )));
+        for owner in &wanted {
+            pictures = pictures.bind(owner);
+        }
+        let mut backdrops: HashMap<String, Vec<StoredImage>> = HashMap::new();
+        for row in pictures.fetch_all(self.reader()).await? {
+            backdrops
+                .entry(row.try_get("owner_id")?)
+                .or_default()
+                .push(crate::images::image_from_row(&row)?);
+        }
+
+        for card in cards.iter_mut() {
+            let own = card.id.to_db_string();
+            if let Some(wide) = backdrops.get(&own) {
+                card.wide = wide.clone();
+                continue;
+            }
+            if card.kind == WorkKind::Episode && !card.poster.is_empty() {
+                card.wide = card.poster.clone();
+                continue;
+            }
+            card.wide = series_of
+                .get(&own)
+                .and_then(|series| backdrops.get(series))
+                .cloned()
+                .unwrap_or_default();
+        }
+        Ok(())
+    }
+
     /// How many works a grid would show for this request.
     ///
     /// Asked for separately and only when a total is actually displayed: a
@@ -862,6 +961,7 @@ pub(crate) fn card_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<WorkCard> {
         dominant_color: row.try_get("dominant_color")?,
         added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
         poster: Vec::new(),
+        wide: Vec::new(),
         state: None,
     })
 }

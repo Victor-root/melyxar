@@ -57,7 +57,14 @@ export function Card({
   const { t } = useSettings();
   const navigate = useNavigate();
   const marks = useMarks();
-  const { picture: poster, itDidNotLoad } = useShownPicture(card.poster);
+  /* A lying card is nearly twice as wide as it is tall and a poster is two
+     thirds as wide as it is tall: filling one with the other cuts a band out
+     of the middle of the picture. So such a row is given something wide, and
+     falls back to the poster only where the server had nothing wide to
+     send. */
+  const { picture: poster, itDidNotLoad } = useShownPicture(
+    shape === "lying" && card.wide.length > 0 ? card.wide : card.poster,
+  );
   /* Where the menu is drawn from. Kept as the button's place at the moment
      it was pressed, because the menu is drawn over the page rather than
      inside the card, which clips what it holds. */

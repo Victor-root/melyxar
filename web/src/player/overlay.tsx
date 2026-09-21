@@ -53,13 +53,13 @@ import {
   PlayIcon,
   PreviousChapterIcon,
   PreviousEpisodeIcon,
-  SettingsIcon,
   StepBackIcon,
   StepOnIcon,
   SubtitlesIcon,
   UpNextIcon,
   VolumeIcon,
 } from "./icons";
+import { GearIcon } from "../icons";
 import type { Mark } from "./logo";
 import { QUALITIES, qualityName } from "./quality";
 import { CODECS, codecName } from "./codec";
@@ -686,7 +686,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
           aria-expanded={panel?.startsWith("settings") ?? false}
           aria-label={t("player.settings")}
         >
-          <SettingsIcon size={ICON} />
+          <GearIcon size={ICON} />
         </button>
       );
 

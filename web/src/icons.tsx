@@ -298,23 +298,24 @@ export function SparkIcon(props: IconProps) {
  * What belongs to the account, in the bar
  * ---------------------------------------------------------------------- */
 
-/** A cog, for the settings. */
+/* The wheel's own middle sat away from the hole cut in it, off by most of a
+   pixel, which is what read as a hole leaning to one side. Moved as a whole
+   rather than redrawn: every tooth keeps the shape it already had, and only
+   the wheel's centre was ever wrong. */
 export function GearIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M19.2 14.6a1.5 1.5 0 0 0 .3 1.66l.06.06a1.8 1.8 0 1 1-2.56 2.56l-.06-.06a1.5 1.5 0 0 0-1.66-.3 1.5 1.5 0 0 0-.9 1.38v.17a1.8 1.8 0 1 1-3.6 0v-.09a1.5 1.5 0 0 0-.98-1.37 1.5 1.5 0 0 0-1.66.3l-.06.06a1.8 1.8 0 1 1-2.56-2.56l.06-.06a1.5 1.5 0 0 0 .3-1.66 1.5 1.5 0 0 0-1.38-.9H4.2a1.8 1.8 0 1 1 0-3.6h.09a1.5 1.5 0 0 0 1.37-.98 1.5 1.5 0 0 0-.3-1.66l-.06-.06A1.8 1.8 0 1 1 7.86 4.9l.06.06a1.5 1.5 0 0 0 1.66.3h.07a1.5 1.5 0 0 0 .9-1.38V3.7a1.8 1.8 0 1 1 3.6 0v.09a1.5 1.5 0 0 0 .9 1.38 1.5 1.5 0 0 0 1.66-.3l.06-.06a1.8 1.8 0 1 1 2.56 2.56l-.06.06a1.5 1.5 0 0 0-.3 1.66v.07a1.5 1.5 0 0 0 1.38.9h.17a1.8 1.8 0 1 1 0 3.6h-.09a1.5 1.5 0 0 0-1.38.9Z" />
+      <circle cx="12" cy="12" r="3.1" />
+      <path d="M18.66 14.63a1.5 1.5 0 0 0 .3 1.66l.06.05a1.8 1.8 0 1 1-2.55 2.55l-.05-.06a1.5 1.5 0 0 0-1.66-.3 1.5 1.5 0 0 0-.9 1.37v.16a1.8 1.8 0 1 1-3.6 0v-.09a1.5 1.5 0 0 0-.99-1.37 1.5 1.5 0 0 0-1.65.3l-.06.06a1.8 1.8 0 1 1-2.55-2.55l.06-.05a1.5 1.5 0 0 0 .3-1.66 1.5 1.5 0 0 0-1.38-.9h-.16a1.8 1.8 0 1 1 0-3.6h.09a1.5 1.5 0 0 0 1.37-.99 1.5 1.5 0 0 0-.3-1.65l-.06-.06A1.8 1.8 0 1 1 7.56 5.11l.05.06a1.5 1.5 0 0 0 1.66.3h.07a1.5 1.5 0 0 0 .9-1.38v-.16a1.8 1.8 0 1 1 3.6 0v.09a1.5 1.5 0 0 0 .9 1.37 1.5 1.5 0 0 0 1.66-.3l.05-.06a1.8 1.8 0 1 1 2.55 2.55l-.06.05a1.5 1.5 0 0 0-.3 1.66v.07a1.5 1.5 0 0 0 1.38.9h.16a1.8 1.8 0 1 1 0 3.6h-.09a1.5 1.5 0 0 0-1.37.9Z" />
     </Icon>
   );
 }
 
-/** A dial, for what the server is doing. */
+/** A trace with a beat in it, for what the server is doing. */
 export function ActivityIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M3.4 12a8.6 8.6 0 0 1 17.2 0" />
-      <path d="M12 12 16 8.6" />
-      <path d="M3.4 12h2M18.6 12h2M12 3.4v2" />
+      <path d="M3 12.6h3.8L9.4 5.8l4.4 12.6 2.5-5.8H21" />
     </Icon>
   );
 }
