@@ -929,41 +929,63 @@
   border: 1px solid var(--border-strong);
 }
 
-/* How many episodes of a series are left. In the accent, because it is the
-   one number on a card that asks somebody to do something. */
-/* Where somebody is with a work: a disc in the corner of the picture holding
-   either how many episodes are left or a tick. Drawn by the interface and by
-   the player alike, which is why it carries no name of either.
+/* Where somebody is with a work: a banner folded over the corner of the
+   picture, holding either how many episodes are left or a tick. Drawn by the
+   interface and by the player alike, which is why it carries no name of
+   either.
+
+   Cut to a triangle by the corner itself: the picture already hides what runs
+   past its rounded edge, so the banner follows that edge rather than sitting
+   square over it.
 
    At rest it is there only when it has something to say. Under the pointer it
    is the button that marks and unmarks, and appears on cards that had nothing
    to say, since marking a film watched has to be reachable without a menu. */
 .seen-mark {
   position: absolute;
-  top: 7px;
-  right: 7px;
+  top: 0;
+  right: 0;
   z-index: 3;
-  display: grid;
-  place-items: center;
-  min-width: 25px;
-  height: 25px;
-  padding: 0 6px;
+  display: block;
+  width: var(--seen-corner, 46px);
+  height: var(--seen-corner, 46px);
+  padding: 0;
   border: none;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--surface-deep) 78%, transparent);
+  /* The corner itself: the top edge and the right edge, closed by the slant
+     between them. */
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  /* Grey where nobody has watched it: the banner that appears when the
+     pointer arrives says what pressing it would do without pretending the
+     film is already watched. Grey rather than a darker shade of the
+     background, which over a dark poster is no colour at all. */
+  background: color-mix(in srgb, var(--text) 42%, var(--surface-deep));
   color: var(--text);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   line-height: 1;
   opacity: 0;
   transition:
     opacity var(--quick) var(--ease),
-    background var(--quick) var(--ease),
-    transform var(--quick) var(--ease);
+    background var(--quick) var(--ease);
 }
 
-button.seen-mark:hover {
-  transform: scale(1.08);
+/* Room for a long count. The corner narrows as it goes down, so what room
+   there is has to come from the corner being larger, not from the words
+   being moved. */
+.seen-mark[data-long="yes"] {
+  --seen-corner: 58px;
+}
+
+/* What is written sits in the corner's own angle, where it is thickest, and
+   far enough in from both edges not to touch them. */
+.seen-mark-said {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
 }
 
 .card:hover .seen-mark,
@@ -979,6 +1001,13 @@ button.seen-mark:hover {
 
 button.seen-mark-on:hover {
   background: var(--accent-bright);
+}
+
+/* And the accent once the pointer is on the banner itself: what it is about
+   to become, shown before it is pressed. */
+button.seen-mark:not(.seen-mark-on):hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 /* A finger has no pointer: the button is simply always reachable. */
