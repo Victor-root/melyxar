@@ -87,11 +87,11 @@ function TheLibrary() {
   return (
     <RunningContext.Provider value={running}>
       <LibrariesContext.Provider value={libraries}>
-        {/* The bar stands still and everything under it scrolls, rather than
-            the whole window scrolling with the bar stuck to its top. What
-            that changes on the screen is small and was asked for: the bar of
-            the scroll now begins exactly where the header ends instead of
-            running up behind it. */}
+        {/* The bar stands over the page rather than beside it, so the page
+            can be scrolled up behind it and read faintly through the glass.
+            Where the two sit in the markup does not decide that on its own;
+            it is the bar's own fixed position, in app.css, that lifts it out
+            of the page. */}
         <div className="shell">
           <Header libraries={libraries.all} />
           <div className="shell-scroll">

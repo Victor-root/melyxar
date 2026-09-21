@@ -101,6 +101,12 @@
   --header-line: 1px;
   --header-band: calc(var(--header-height) + var(--header-line));
 
+  /* The same recipe the player's panels mix for their own glass, worked out
+     here from this theme's surface instead of a forced dark one: what sits
+     behind the header is a page, not a film, so it has to follow day and
+     night like everything else rather than stay black on a light theme. */
+  --header-glass: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+
   /* How tall the banner of the home page is, and with it the grey block drawn
      in its place while the page loads, so the two can never drift apart and
      the page never jumps once the picture arrives.
