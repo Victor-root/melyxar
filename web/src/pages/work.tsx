@@ -57,6 +57,17 @@ export function WorkPage() {
      before it shuts the film, and a page listening underneath it took a viewer
      off the film every time they shut a menu. */
   const watching = playing !== null || trailer !== null;
+
+  /* Asked for above every way out of this function, and with nothing when
+     there is nothing yet. A hook reached only once the film has arrived is a
+     hook this page renders a different number of times, and React stops the
+     whole page over it: this one had every fiche of the library answering
+     with a blank screen. */
+  const { picture: backdrop, itDidNotLoad: backdropFailed } = useShownPicture(
+    work?.backdrop ?? [],
+  );
+  const { picture: poster, itDidNotLoad: posterFailed } = useShownPicture(work?.poster ?? []);
+
   useEffect(() => {
     if (watching) {
       return;
@@ -82,8 +93,6 @@ export function WorkPage() {
   }
 
   const { here, away } = onOffer;
-  const { picture: backdrop, itDidNotLoad: backdropFailed } = useShownPicture(work.backdrop);
-  const { picture: poster, itDidNotLoad: posterFailed } = useShownPicture(work.poster);
   const version = work.versions[chosen];
   /* A season is announced by its number in the language being read, and by
      the name it was given only when that name says something the number does
