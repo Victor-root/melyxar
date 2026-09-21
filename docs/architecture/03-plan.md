@@ -288,6 +288,30 @@ Corrigé sur le retour de la vraie collection : une série dont deux saisons ven
 
 Vérifié dans un vrai navigateur contre un serveur qui tourne : les quatre rangements en même temps, une vraie série identifiée avec ses affiches de saison et ses épisodes nommés, un fichier que personne n'a su numéroter qui reste visible, trois épisodes qui s'enchaînent tout seuls, et le bouton de saut qui apparaît dans le générique, disparaît en plein film et revient au générique de fin.
 
+## Jalon 11 : interface principale
+
+État : en cours.
+
+Reprise à zéro de l'accueil et de la navigation, sur une direction visuelle donnée par le mainteneur : l'accessibilité d'Emby et de Jellyfin, avec une identité plus soignée et plus cinématique. Le modèle de base prévoyait presque tout ce que cette interface demande depuis la première migration : favoris, à voir plus tard, collections, listes de lecture, étiquettes, compteurs d'épisodes non vus, droits par compte. L'essentiel du travail moteur est donc de brancher, pas d'inventer.
+
+Côté moteur :
+
+- **La carte enrichie** : sa sorte, sa médiathèque, où en est celui qui regarde, son favori, ses épisodes restants, et de quoi lancer la lecture sans ouvrir la fiche. C'est la fondation de tout le reste, parce que chaque signe du survol est une donnée qui appartient à celui qui regarde.
+- **Vu et non vu à la main**, sur un film, une saison et une série entière, compteurs réécrits dans la même transaction.
+- **Les favoris** comme vue à part entière, et **À suivre**, qui donne le prochain épisode non commencé de chaque série commencée.
+- **L'accueil en modules** au lieu d'une seule rangée : hero, continuer la lecture, à suivre, ajoutés récemment, puis une rangée par sorte de médiathèque réellement présente. Chaque module vide disparaît, et tout est borné aux médiathèques que le compte a le droit de voir.
+- **Épinglé** par l'administrateur, et **suggestions** définies honnêtement (voir le README des décisions).
+
+Côté interface :
+
+- Le jeu d'icônes, dessiné à la main comme celui du lecteur, sans bibliothèque externe.
+- Le header : catégories déduites des médiathèques réelles, recherche avec filtre de périmètre, cast et notifications visibles mais grisés avec leur infobulle.
+- La carte et son survol : agrandissement sans déplacer les voisines, lecture au centre, vu en haut à droite, favori et menu en bas à droite, barre de progression, badge d'épisodes restants.
+- Le hero, module désactivable de cinq éléments au maximum, défilement lent qui s'arrête dès qu'on le touche.
+- Le menu contextuel préparant toutes les actions prévues, grisées quand elles ne sont pas câblées et masquées quand le compte n'y a pas droit.
+
+Ce qui n'est pas dans ce jalon : l'écran de personnalisation de l'accueil (l'architecture doit le permettre, il ne se développe pas encore), l'interface d'administration séparée, et l'adaptation au téléphone, qui ne doit simplement pas être rendue impossible.
+
 ## Après la V0.1
 
 - Séries : **corriger un générique à la main** depuis la fiche d'un épisode, ce qui passe devant ce que le fichier dit et devant ce que l'écoute a trouvé. La place est déjà faite dans le modèle, il manque l'écran.
