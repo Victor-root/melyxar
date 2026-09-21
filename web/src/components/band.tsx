@@ -73,7 +73,9 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
           {t("home.band.count", { count: works.toLocaleString(language) })}
         </span>
       </span>
-      <ChevronRightIcon size={18} className="band-arrow" />
+      <span className="band-arrow" aria-hidden="true">
+        <ChevronRightIcon size={18} />
+      </span>
     </Link>
   );
 }

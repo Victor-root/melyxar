@@ -23,7 +23,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { HeroItem } from "../api";
 import { useShownPicture } from "./picture";
-import { howLong, whatTheFileHolds } from "../readable";
+import { howLong, whatTheFileHolds, whichEpisode } from "../readable";
 import { useSettings } from "../settings";
 import { ChevronLeftIcon, ChevronRightIcon, InfoIcon, PlayIcon } from "../icons";
 
@@ -96,6 +96,9 @@ export function Hero({ items }: { items: HeroItem[] }) {
 
         <p className="hero-facts">
           {[
+            // An episode leads with which episode it is: the title above is
+            // its series, so without this nobody knows where they left off.
+            whichEpisode(shown, t),
             shown.year,
             shown.runtime_minutes ? howLong(shown.runtime_minutes, t) : null,
             ...shown.genres.slice(0, GENRES_NAMED),
@@ -238,19 +241,21 @@ function HeroBackdrop({ item, shown }: { item: HeroItem; shown: boolean }) {
 }
 
 /** Its title as its own designers drew it, or written out when there is
- *  none: a work nobody has looked up still has a name. */
+ *  none: a work nobody has looked up still has a name. An episode is named
+ *  by its series, which is the only name anybody remembers it by. */
 function HeroTitle({ item }: { item: HeroItem }) {
   const { picture, itDidNotLoad } = useShownPicture(item.logo);
+  const name = item.series_title ?? item.title;
 
   if (!picture) {
-    return <h2 className="hero-title">{item.title}</h2>;
+    return <h2 className="hero-title">{name}</h2>;
   }
   return (
     <h2 className="hero-title hero-title-drawn">
       <img
         src={picture.src}
         srcSet={picture.srcSet}
-        alt={item.title}
+        alt={name}
         decoding="async"
         onError={itDidNotLoad}
       />

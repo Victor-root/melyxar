@@ -152,6 +152,27 @@ export function howLong(minutes: number, t: Wording): string {
 }
 
 /**
+ * Which episode a work is, when it is one.
+ *
+ * Short, because it is read under a still in a row and beside a title in a
+ * banner rather than on a page of its own. The long form, "season one,
+ * episode three", is what a menu and a detail page say.
+ */
+export function whichEpisode(
+  work: { season_number: number | null; episode_number: number | null; title: string },
+  t: Wording,
+): string | undefined {
+  if (work.season_number === null || work.episode_number === null) {
+    return undefined;
+  }
+  const which = t("home.up_next.short", {
+    season: work.season_number,
+    episode: work.episode_number,
+  });
+  return `${which} · ${work.title}`;
+}
+
+/**
  * What the file itself holds, as the badges beside a title say it.
  *
  * The server sends what the file states and nothing more, because a height in

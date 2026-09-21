@@ -313,6 +313,11 @@ Côté interface :
 
 Ce qui n'est pas dans ce jalon : l'écran de personnalisation de l'accueil (l'architecture doit le permettre, il ne se développe pas encore), l'interface d'administration séparée, et l'adaptation au téléphone, qui ne doit simplement pas être rendue impossible.
 
+Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
+
+- **L'ordre du bandeau de catégories choisi par la personne.** Aujourd'hui il suit l'ordre standard, Films puis Séries, Animés, Émissions, Musique, et ne montre que les sortes que le serveur tient vraiment. L'ordre voulu est un réglage de compte, donc il appartient au même écran que la personnalisation de l'accueil, qui le portera.
+- **Changer son nom d'utilisateur.** Rien ne le permet aujourd'hui, ni dans l'interface ni dans l'API : la seule chose qu'un compte peut changer de lui-même est son mot de passe et ses préférences. Le nom sert à se connecter, donc le changer touche aussi les sessions ouvertes. Cela appartient au chantier de gestion des comptes, avec la création, la suppression et les droits par médiathèque.
+
 ## Après la V0.1
 
 - Séries : **corriger un générique à la main** depuis la fiche d'un épisode, ce qui passe devant ce que le fichier dit et devant ce que l'écoute a trouvé. La place est déjà faite dans le modèle, il manque l'écran.

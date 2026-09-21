@@ -259,6 +259,11 @@ export type HeroItem = Card & {
   height: number | null;
   hdr: string | null;
   sound: string | null;
+  /** Set where the work shown large is an episode: the picture and the drawn
+      title above already come from the series, and these place it in words. */
+  series_title: string | null;
+  season_number: number | null;
+  episode_number: number | null;
 };
 
 export interface Home {

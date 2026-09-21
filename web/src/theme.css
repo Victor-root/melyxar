@@ -161,7 +161,7 @@ body {
 
 /* The scrollbar carries the accent, the way the maintainer asked. */
 * {
-  scrollbar-color: var(--accent-dim) transparent;
+  scrollbar-color: var(--accent) transparent;
   scrollbar-width: thin;
 }
 
@@ -170,15 +170,17 @@ body {
   height: 10px;
 }
 
+/* The accent itself, not a shade of it: a bar in a slightly different red
+   next to a button in the real one reads as a mistake. */
 *::-webkit-scrollbar-thumb {
-  background: var(--accent-dim);
+  background: var(--accent);
   border-radius: var(--radius-pill);
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
+  background: var(--accent-bright);
   background-clip: content-box;
 }
 

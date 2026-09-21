@@ -265,20 +265,6 @@ export function MoreIcon(props: IconProps) {
   );
 }
 
-/** A circle with a tick in it, for what has been watched, and an empty one
- *  for what has not: the mark is pressed, so it has to look pressable. */
-export function WatchedIcon({ watched, ...props }: IconProps & { watched: boolean }) {
-  return (
-    <Icon {...props}>
-      <circle cx="12" cy="12" r="9" fill={watched ? "currentColor" : "none"} />
-      <path
-        d="M7.8 12.2 10.7 15 16.2 9.4"
-        stroke={watched ? "var(--accent-contrast, #fff)" : "currentColor"}
-      />
-    </Icon>
-  );
-}
-
 /* -------------------------------------------------------------------------
  * What a row is
  * ---------------------------------------------------------------------- */

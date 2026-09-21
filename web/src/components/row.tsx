@@ -14,7 +14,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useDragToScroll } from "../dragging";
 import { useSettings } from "../settings";
+import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 
 /** How much of the visible width one press of an arrow moves. */
 const ALMOST_A_SCREENFUL = 0.9;
@@ -24,6 +26,8 @@ export function Row({ children }: { children: ReactNode }) {
   const track = useRef<HTMLDivElement>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoOn, setCanGoOn] = useState(false);
+  // Held down and pulled, the way the player's own rows already worked.
+  const drag = useDragToScroll(track);
 
   const measure = useCallback(() => {
     const element = track.current;
@@ -110,11 +114,17 @@ export function Row({ children }: { children: ReactNode }) {
           onClick={() => move(-1)}
           aria-label={t("row.back")}
         >
-          ‹
+          <ChevronLeftIcon size={26} />
         </button>
       )}
 
-      <div className="row-track" ref={track} onScroll={measure} onKeyDown={onKeyDown}>
+      <div
+        className="row-track"
+        ref={track}
+        onScroll={measure}
+        onKeyDown={onKeyDown}
+        {...drag}
+      >
         {children}
       </div>
 
@@ -124,7 +134,7 @@ export function Row({ children }: { children: ReactNode }) {
           onClick={() => move(1)}
           aria-label={t("row.on")}
         >
-          ›
+          <ChevronRightIcon size={26} />
         </button>
       )}
     </div>
