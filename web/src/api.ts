@@ -24,10 +24,24 @@ export interface Account {
  * mark, and whether it has been set up at all. No account list, no library
  * name, no version.
  */
+/** What is drawn behind the sign in screen when no picture was put there.
+ *
+ *  Read as a word rather than matched on, so that a server newer than this
+ *  interface naming a third one is drawn with the usual rather than with
+ *  nothing at all. */
+export type LoginBackgroundStyle = "abstract" | "library";
+
+/** What this server calls itself and wears, before anybody has signed in.
+ *
+ *  Everything here belongs to the administrator rather than to Melyxar: what
+ *  the server ships with is a fallback the screen holds, never something the
+ *  screen assumes. */
 export interface Branding {
   server_name: string;
   logo_path: string | null;
+  /** A picture behind the sign in screen, which wins over the drawn one. */
   login_background_path: string | null;
+  login_background_style: LoginBackgroundStyle;
   /** False on a brand new server, which asks for a first account instead of a
       password. */
   setup_complete: boolean;

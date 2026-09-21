@@ -1,0 +1,17 @@
+-- Which of the drawn backgrounds the sign in screen wears.
+--
+-- The column beside this one, login_background_path, holds a picture an
+-- administrator put there, and a picture wins over anything drawn: there is
+-- nothing to choose between once somebody has said what they want behind
+-- their own door. This says what is drawn when they have not.
+--
+-- Two of them so far. 'abstract' is light and dust in the accent colour,
+-- moving slowly, and is the one a server wears out of the box. 'library' is
+-- the shelf of drawn things a media server holds, a poster and a sleeve and
+-- a reel and the rest, which is what this screen wore before.
+--
+-- Written as a word rather than a number so that a database read by hand says
+-- what it means, and so that a third one can be added without renumbering
+-- anything. A word this server does not know is read as the default rather
+-- than refused: a background is not worth failing to start over.
+ALTER TABLE server_settings ADD COLUMN login_background_style TEXT NOT NULL DEFAULT 'abstract';
