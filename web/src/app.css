@@ -24,27 +24,25 @@
   overflow-x: hidden;
 }
 
-/* Over the page rather than above it, and see through.
+/* Over the page rather than above it, and carrying nothing of its own.
  *
- * A bar sitting in its own band at the top has nothing behind it, so a blur
- * there blurs nothing and reads as a flat strip of another colour. Drawn over
- * what scrolls, it carries whatever is underneath: the banner at rest, the
- * rows once they start moving under it. That is the whole of the effect, and
- * it is the one the panels of the player already use, said in the same terms
- * so the two go on agreeing: a little more than half of the raised surface,
- * and eighteen points of blur.
+ * It wore a wash of the raised surface and a blur, in the same terms as the
+ * panels of the player, so that the two went on agreeing. Taken away on the
+ * maintainer's word once the banner behind it grew: with a picture running
+ * the full height of the window underneath, a band of another colour laid
+ * across its top is a bar drawn on the picture rather than a page opening on
+ * one. What is under the bar now is simply what is under it.
  *
- * One of the two places in this interface allowed a blur, the other being the
- * banner's own. Every other blur was measured off the cards and taken away. */
+ * Nothing is drawn between the words of the bar and what they sit on now, so
+ * what passes under them is what they are read against: a pale sky at the top
+ * of a banner, and the rows themselves once the page is scrolled. That is the
+ * cost of it and it was accepted knowingly. */
 .header {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   z-index: 20;
-  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
-  backdrop-filter: blur(18px);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
 /* Three parts, and the search really in the middle of the bar rather than in
