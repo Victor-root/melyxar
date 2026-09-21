@@ -87,23 +87,32 @@ function TheLibrary() {
   return (
     <RunningContext.Provider value={running}>
       <LibrariesContext.Provider value={libraries}>
-        <Header libraries={libraries.all} />
-        <Routes>
-          <Route path="/" element={<HomePage libraries={libraries.all} />} />
-          <Route path="/library/:id" element={<LibraryPage libraries={libraries.all} />} />
-          <Route path="/search" element={<SearchPage libraries={libraries.all} />} />
-          {/* The same grid, narrowed to what this account marked: a view of the
-              library rather than a library of its own. */}
-          <Route path="/favourites" element={<LibraryPage libraries={libraries.all} />} />
-          <Route path="/work/:id" element={<WorkPage />} />
-          <Route path="/activity" element={<ActivityPage libraries={libraries.all} />} />
-          <Route path="/journal" element={<JournalPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
-        </Routes>
-        <footer className="footer">
-          <span>{t("attribution.tmdb")}</span>
-        </footer>
+        {/* The bar stands still and everything under it scrolls, rather than
+            the whole window scrolling with the bar stuck to its top. What
+            that changes on the screen is small and was asked for: the bar of
+            the scroll now begins exactly where the header ends instead of
+            running up behind it. */}
+        <div className="shell">
+          <Header libraries={libraries.all} />
+          <div className="shell-scroll">
+            <Routes>
+              <Route path="/" element={<HomePage libraries={libraries.all} />} />
+              <Route path="/library/:id" element={<LibraryPage libraries={libraries.all} />} />
+              <Route path="/search" element={<SearchPage libraries={libraries.all} />} />
+              {/* The same grid, narrowed to what this account marked: a view of the
+                  library rather than a library of its own. */}
+              <Route path="/favourites" element={<LibraryPage libraries={libraries.all} />} />
+              <Route path="/work/:id" element={<WorkPage />} />
+              <Route path="/activity" element={<ActivityPage libraries={libraries.all} />} />
+              <Route path="/journal" element={<JournalPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
+            </Routes>
+            <footer className="footer">
+              <span>{t("attribution.tmdb")}</span>
+            </footer>
+          </div>
+        </div>
       </LibrariesContext.Provider>
     </RunningContext.Provider>
   );

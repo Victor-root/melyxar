@@ -40,6 +40,7 @@ export function WorkPage() {
     resumeFrom,
     readAgain,
     playing,
+    openingToPlay,
     play,
     stopPlaying,
     onOffer,
@@ -88,7 +89,10 @@ export function WorkPage() {
       </main>
     );
   }
-  if (!work) {
+  /* Opened only to play, and the film is not up yet: nothing of the page is
+     drawn. Somebody who pressed play on a card never asked to see this page,
+     and it used to flash past them on the way to the film. */
+  if (!work || openingToPlay) {
     return <main className="page" aria-busy="true" />;
   }
 

@@ -22,7 +22,6 @@ import { Band } from "../components/band";
 import { Card } from "../components/card";
 import { Hero } from "../components/hero";
 import { Row } from "../components/row";
-import { JobLine } from "../components/job";
 import { howFarIn, useHomeScreen } from "../screens/home";
 import { refusalKey } from "../i18n";
 import { howLong, whichEpisode } from "../readable";
@@ -63,15 +62,15 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
           <h1>{t("home.empty.title")}</h1>
           {/* While the scan runs, what it is doing replaces the invitation to
               start one: reading "run a scan" during a scan is what sends
-              somebody to press the button a second time. */}
+              somebody to press the button a second time. How far along it is
+              belongs to the screen that exists for it, and the way there is
+              said rather than left to be found. */}
           {jobs.length > 0 ? (
             <>
               <p>{t("home.scanning")}</p>
-              <div className="jobs">
-                {jobs.map((job) => (
-                  <JobLine key={job.id} job={job} />
-                ))}
-              </div>
+              <Link className="button" to="/activity">
+                {t("nav.jobs")}
+              </Link>
             </>
           ) : (
             <>
@@ -93,122 +92,113 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   }
 
   return (
-    <main className="page page-home">
+    <>
+      {/* Outside the page rather than inside it: the banner is the picture,
+          and a picture held inside a column that stops short of both edges of
+          a wide screen is a picture with a margin drawn round it. */}
       <Hero items={home.hero} />
 
-      {/* Where to go for somebody who already knows what they want, before
-          any row of suggestions. */}
-      <Band shelves={home.shelves} libraries={libraries} />
+      <main className="page page-home">
+        {/* Where to go for somebody who already knows what they want, before
+            any row of suggestions. */}
+        <Band shelves={home.shelves} libraries={libraries} />
 
-      {/* Work the server is doing, before anything suggested. It is the one
-          thing here that is changing, and a scan of a whole library runs for
-          hours: somebody who opens this page during one is opening it to see
-          that. Buried between two rows of films it reads as one more row. */}
-      {jobs.length > 0 && (
-        <section className="section">
-          <div className="jobs">
-            {jobs.map((job) => (
-              <JobLine key={job.id} job={job} />
-            ))}
-          </div>
-        </section>
-      )}
+        {/* What was left halfway. Lying down, because what tells two of these
+            apart is the still and the bar under it rather than the poster, and
+            each one says how much of it is left and where it sits in its
+            series: an episode title on its own is a title nobody placed. */}
+        {home.carry_on.length > 0 && (
+          <section className="section">
+            <RowHead mark={<ClockIcon size={18} />} title={t("home.carry_on")} />
+            <Row>
+              {home.carry_on.map((card) => (
+                <Card
+                  key={card.id}
+                  card={card}
+                  shape="lying"
+                  watched={howFarIn(card.position_seconds, card.runtime_minutes)}
+                  lead={card.series_title ?? undefined}
+                  note={whichEpisode(card, t)}
+                  trailing={whatIsLeft(card.position_seconds, card.runtime_minutes, t)}
+                />
+              ))}
+            </Row>
+          </section>
+        )}
 
-      {/* What was left halfway. Lying down, because what tells two of these
-          apart is the still and the bar under it rather than the poster, and
-          each one says how much of it is left and where it sits in its
-          series: an episode title on its own is a title nobody placed. */}
-      {home.carry_on.length > 0 && (
+        {/* And what has not been started: the next episode of each series that
+            is waiting on one, under the name of the series rather than under
+            the episode's own, which nobody remembers. */}
+        {home.up_next.length > 0 && (
+          <section className="section">
+            <RowHead mark={<SparkIcon size={18} />} title={t("home.up_next")} />
+            <Row>
+              {home.up_next.map((card) => (
+                <Card
+                  key={card.id}
+                  card={card}
+                  shape="lying"
+                  lead={card.series_title}
+                  note={whichEpisode(card, t)}
+                />
+              ))}
+            </Row>
+          </section>
+        )}
+
         <section className="section">
-          <RowHead mark={<ClockIcon size={18} />} title={t("home.carry_on")} />
+          <RowHead
+            mark={<ArrivedIcon size={18} />}
+            title={t("home.recently_added")}
+            to={EVERYTHING_NEWEST}
+          >
+            {home.awaiting_identification > 0 && (
+              <>
+                <Link className="pill" to="/search?unidentified=true">
+                  {t("home.awaiting", { count: home.awaiting_identification })}
+                </Link>
+                {/* The one way to ask for it from a screen. Without this the
+                    films sit there named after their file for ever, and the
+                    only way out is a terminal. */}
+                {jobs.length === 0 && (
+                  <button
+                    className="button button-small"
+                    onClick={lookUp.start}
+                    disabled={lookUp.starting}
+                  >
+                    {t("home.identify")}
+                  </button>
+                )}
+              </>
+            )}
+          </RowHead>
           <Row>
-            {home.carry_on.map((card) => (
-              <Card
-                key={card.id}
-                card={card}
-                shape="lying"
-                watched={howFarIn(card.position_seconds, card.runtime_minutes)}
-                lead={card.series_title ?? undefined}
-                note={whichEpisode(card, t)}
-                trailing={whatIsLeft(card.position_seconds, card.runtime_minutes, t)}
-              />
+            {home.recently_added.map((card) => (
+              <Card key={card.id} card={card} />
             ))}
           </Row>
         </section>
-      )}
 
-      {/* And what has not been started: the next episode of each series that
-          is waiting on one, under the name of the series rather than under
-          the episode's own, which nobody remembers. */}
-      {home.up_next.length > 0 && (
-        <section className="section">
-          <RowHead mark={<SparkIcon size={18} />} title={t("home.up_next")} />
-          <Row>
-            {home.up_next.map((card) => (
-              <Card
-                key={card.id}
-                card={card}
-                shape="lying"
-                lead={card.series_title}
-                note={whichEpisode(card, t)}
-              />
-            ))}
-          </Row>
-        </section>
-      )}
+        {/* One row per kind of library this server really holds. */}
+        {home.shelves.map((shelf) => (
+          <Shelf
+            key={shelf.kind}
+            title={t(`home.newest.${shelf.kind}`)}
+            mark={<KindIcon kind={shelf.kind} size={18} />}
+            cards={shelf.cards}
+            to={whereAKindLeads(shelf.kind, libraries)}
+          />
+        ))}
 
-      <section className="section">
-        <RowHead
-          mark={<ArrivedIcon size={18} />}
-          title={t("home.recently_added")}
-          to={EVERYTHING_NEWEST}
-        >
-          {home.awaiting_identification > 0 && (
-            <>
-              <Link className="pill" to="/search?unidentified=true">
-                {t("home.awaiting", { count: home.awaiting_identification })}
-              </Link>
-              {/* The one way to ask for it from a screen. Without this the
-                  films sit there named after their file for ever, and the
-                  only way out is a terminal. */}
-              {jobs.length === 0 && (
-                <button
-                  className="button button-small"
-                  onClick={lookUp.start}
-                  disabled={lookUp.starting}
-                >
-                  {t("home.identify")}
-                </button>
-              )}
-            </>
-          )}
-        </RowHead>
-        <Row>
-          {home.recently_added.map((card) => (
-            <Card key={card.id} card={card} />
-          ))}
-        </Row>
-      </section>
-
-      {/* One row per kind of library this server really holds. */}
-      {home.shelves.map((shelf) => (
-        <Shelf
-          key={shelf.kind}
-          title={t(`home.newest.${shelf.kind}`)}
-          mark={<KindIcon kind={shelf.kind} size={18} />}
-          cards={shelf.cards}
-          to={whereAKindLeads(shelf.kind, libraries)}
-        />
-      ))}
-
-      {/* The server said no, which is an answer and belongs on the screen that
-          asked rather than in a log nobody is reading. */}
-      {refused && (
-        <section className="section">
-          <p className="notice">{t(refusalKey(refused))}</p>
-        </section>
-      )}
-    </main>
+        {/* The server said no, which is an answer and belongs on the screen
+            that asked rather than in a log nobody is reading. */}
+        {refused && (
+          <section className="section">
+            <p className="notice">{t(refusalKey(refused))}</p>
+          </section>
+        )}
+      </main>
+    </>
   );
 }
 

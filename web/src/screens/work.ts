@@ -133,6 +133,11 @@ export interface WorkScreen {
   readAgain: () => void;
   /** What is being watched, and how to start and stop it. */
   playing: Watching | null;
+  /** True while this page was opened only in order to play, and the film has
+      not started yet. The page under it is not drawn at all during that
+      moment: it is a page nobody asked for, and it showed for long enough to
+      be seen every time a film was started from a card. */
+  openingToPlay: boolean;
   play: (source: string, fromTheStart: boolean) => void;
   stopPlaying: () => void;
   /** Which trailer the film can be offered by. */
@@ -230,6 +235,17 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     }
   }, [id]);
 
+  /* Between the address saying "play" and the film being on the screen there
+     is a moment where everything needed to start it is still being fetched.
+     Nothing of the page is drawn in that moment. It ends the instant the
+     film starts, and also the instant it turns out there is nothing to play:
+     a blank screen for ever would be worse than a page that flashed. */
+  const openingToPlay =
+    address.has(START_AT_ONCE) &&
+    playing === null &&
+    !asked.failure &&
+    (work === null || (version !== undefined && !version.missing));
+
   const readAgain = useCallback(() => setAgain((count) => count + 1), []);
   const play = useCallback(
     (source: string, fromTheStart: boolean) => setPlaying({ source, fromTheStart }),
@@ -272,6 +288,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     resumeFrom: resume.failure ? null : resume.answer,
     readAgain,
     playing,
+    openingToPlay,
     play,
     stopPlaying,
     onOffer: trailerToOffer(work),

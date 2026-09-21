@@ -68,11 +68,17 @@ const OFF_THE_EDGE = 8;
 export function CardMenu({
   card,
   from,
+  openedBy,
   onClose,
 }: {
   card: Card;
   /** The button it was opened from, which is where it is drawn. */
   from: DOMRect;
+  /** That button itself. A press on it is the one press anywhere outside
+      this menu that must not close it, because the button is already going
+      to: closing here as well shut it and let the button open it again, so
+      it never seemed to close at all. */
+  openedBy: HTMLElement | null;
   onClose: () => void;
 }) {
   const { t } = useSettings();
@@ -105,7 +111,8 @@ export function CardMenu({
 
   useEffect(() => {
     const elsewhere = (event: MouseEvent) => {
-      if (!holder.current?.contains(event.target as Node)) {
+      const where = event.target as Node;
+      if (!holder.current?.contains(where) && !openedBy?.contains(where)) {
         onClose();
       }
     };
@@ -134,7 +141,7 @@ export function CardMenu({
       window.removeEventListener("scroll", moved, true);
       window.removeEventListener("resize", onClose);
     };
-  }, [onClose]);
+  }, [onClose, openedBy]);
 
   const seen = marks.seenOf(card);
   const favourite = marks.favouriteOf(card);
