@@ -528,7 +528,21 @@
   }
 }
 
+/* Text that only a screen reader needs: taken out of the page without being
+   taken out of the accessibility tree, which display:none would do. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -539,7 +553,7 @@
   contain-intrinsic-size: auto 320px;
 }
 
-.card-poster {
+.card-picture {
   position: relative;
   aspect-ratio: 2 / 3;
   border-radius: var(--radius-card);
@@ -549,16 +563,36 @@
   transition: transform var(--calm) var(--ease), box-shadow var(--calm) var(--ease);
 }
 
-.card:hover .card-poster,
-.card:focus-visible .card-poster {
+/* An episode and a film left halfway lie down: a still is a wide picture, and
+   a row of them that stood up would be a row of cropped middles. */
+.card-lying {
+  contain-intrinsic-size: auto 190px;
+}
+
+.card-lying .card-picture {
+  aspect-ratio: 16 / 9;
+}
+
+/* Grown rather than reflowed: a transform moves nothing around it, so the
+   grid under the pointer stays exactly where it was. */
+.card:hover .card-picture,
+.card:focus-within .card-picture {
   transform: translateY(-4px) scale(1.02);
   box-shadow: var(--shadow-raised);
 }
 
-.card-poster img {
+.card-picture img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* The whole picture leads to the work. Under everything drawn on top of it,
+   which is what makes those buttons and not parts of a link. */
+.card-open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 .card-initial {
@@ -584,21 +618,27 @@
   border: 1px solid var(--border-strong);
 }
 
-/* Drawn on the poster itself: it is the one thing that tells two cards of a
-   row apart at a glance. */
-.card-progress {
+/* How many episodes of a series are left. In the accent, because it is the
+   one number on a card that asks somebody to do something. */
+.card-left {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 4px;
-  background: rgba(0, 0, 0, 0.55);
+  right: 8px;
+  top: 8px;
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: center;
+  transition: opacity var(--quick) var(--ease);
 }
 
-.card-progress-done {
-  display: block;
-  height: 100%;
-  background: var(--accent);
+/* Out of the way of the tick, which takes that corner under the pointer. */
+.card:hover .card-left,
+.card:focus-within .card-left {
+  opacity: 0;
 }
 
 .card-rating {
@@ -611,6 +651,207 @@
   backdrop-filter: blur(6px);
   font-size: 12px;
   font-weight: 650;
+  transition: opacity var(--quick) var(--ease);
+}
+
+.card:hover .card-rating,
+.card:focus-within .card-rating {
+  opacity: 0;
+}
+
+/* Everything the hover offers, in one layer over the picture. */
+.card-hover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.55),
+    rgba(0, 0, 0, 0.1) 45%,
+    rgba(0, 0, 0, 0.35)
+  );
+  transition: opacity var(--calm) var(--ease);
+  pointer-events: none;
+}
+
+.card:hover .card-hover,
+.card:focus-within .card-hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* A finger has no hover: with the pointer that never arrives, the layer is
+   simply always there, faintly, and everything on it can be pressed. */
+@media (hover: none) {
+  .card-hover {
+    opacity: 1;
+    pointer-events: auto;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent 40%);
+  }
+
+  .card-play {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.card-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.86);
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding-left: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: var(--shadow-raised);
+  transition: transform var(--calm) var(--ease), background var(--quick) var(--ease);
+}
+
+.card:hover .card-play,
+.card:focus-within .card-play {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.card-play:hover {
+  background: var(--accent-bright);
+}
+
+/* The marks: watched at the top right, liked and the rest at the bottom. */
+.card-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
+  backdrop-filter: blur(6px);
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  color: var(--text);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.card-mark:hover {
+  background: var(--surface-raised);
+}
+
+.card-mark-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.card-mark-on:hover {
+  background: var(--accent-bright);
+}
+
+.card-seen {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.card-corner {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+/* Drawn on the picture itself: it is the one thing that tells two cards of a
+   row apart at a glance. Above the hover layer, since how far in something is
+   does not stop being true under the pointer. */
+.card-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  z-index: 3;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.card-progress-done {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* What the card offers beyond pressing it. */
+/* Drawn over the page, at the place the button was: a card clips what it
+   holds, so a menu inside one comes out cut in half. */
+.card-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 210px;
+  /* Long on purpose: everything this interface is meant to do is listed,
+     wired or not. Taller than the window it scrolls rather than spilling. */
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+  animation: card-menu-arrive var(--quick) var(--ease) both;
+}
+
+@keyframes card-menu-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.card-menu-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 7px 10px;
+  border-radius: var(--radius-control);
+  text-align: left;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  white-space: nowrap;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.card-menu-line:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.card-menu-line:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* What a greyed line is waiting for, said on the line rather than only in a
+   tooltip nobody on a telephone can reach. */
+.card-menu-later {
+  font-size: 11px;
+  color: var(--text-faint);
+  opacity: 0.8;
+}
+
+/* The series an episode belongs to, above its own name. */
+.card-above {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-title {
@@ -622,6 +863,13 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.card-above + .card-title {
+  margin-top: 0;
+  font-size: 13px;
+  font-weight: 450;
+  color: var(--text-soft);
 }
 
 .card-year {

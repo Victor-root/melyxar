@@ -1,31 +1,88 @@
 /*
- * One card in a grid.
+ * One card in a grid or a row.
  *
- * The colour of the poster is painted behind it before the picture arrives, so
- * a grid has colour from the first moment instead of a wall of grey holes. A
- * film nobody recognised keeps its place and wears a marker: a file set aside
- * is a file forgotten.
+ * The colour of the poster is painted behind it before the picture arrives,
+ * so a grid has colour from the first moment instead of a wall of grey holes.
+ * A film nobody recognised keeps its place and wears a marker: a file set
+ * aside is a file forgotten.
+ *
+ * What the hover offers is the whole ergonomics of this interface: play in
+ * the middle, watched at the top right, liked and the rest at the bottom
+ * right. None of it grows the card or moves its neighbours, because a grid
+ * that reflows under the pointer is a grid nobody can aim at.
+ *
+ * And none of it is hover alone. A finger has no hover, so everything here is
+ * reachable by a press on the card's own menu, and the menu opens on a tap
+ * rather than on a pointer that never arrives. The mobile interface is a
+ * later worksite; a card that could only be used with a mouse would be a
+ * rewrite when it comes rather than an adjustment.
  */
 
-import { Link } from "react-router-dom";
+import { useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import type { Card as CardData } from "../api";
+import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 import { useShownPicture } from "./picture";
+import { CardMenu } from "./cardmenu";
+import { HeartIcon, MoreIcon, PlayIcon, WatchedIcon } from "../icons";
 
-export function Card({ card, watched }: { card: CardData; watched?: number }) {
+/** How a card is laid out: standing like a poster, or lying like a still. */
+export type CardShape = "standing" | "lying";
+
+export function Card({
+  card,
+  shape = "standing",
+  /** How far in, between nought and one, when a row knows and the card does
+      not: what somebody left halfway carries it in the row's own answer. */
+  watched,
+  /** What the card says instead of its own title, for an episode shown under
+      the name of its series. */
+  above,
+  below,
+}: {
+  card: CardData;
+  shape?: CardShape;
+  watched?: number;
+  above?: string;
+  below?: string;
+}) {
   const { t } = useSettings();
+  const navigate = useNavigate();
+  const marks = useMarks();
   const { picture: poster, itDidNotLoad } = useShownPicture(card.poster);
+  /* Where the menu is drawn from. Kept as the button's place at the moment
+     it was pressed, because the menu is drawn over the page rather than
+     inside the card, which clips what it holds. */
+  const kebab = useRef<HTMLButtonElement>(null);
+  const [menuFrom, setMenuFrom] = useState<DOMRect | null>(null);
+
   const unknown = card.identification === "unidentified" || card.identification === "pending";
+  const seen = marks.seenOf(card);
+  const favourite = marks.favouriteOf(card);
+  /* A series is opened rather than played: what a play button on one would
+     mean is the next episode, which is what the row of them is for. */
+  const playable = card.source !== null && card.kind !== "series";
+  const howFar =
+    watched ??
+    (card.resume_from_seconds !== null && card.runtime_minutes
+      ? card.resume_from_seconds / (card.runtime_minutes * 60)
+      : undefined);
+
+  const stop = (doing: () => void) => (event: React.MouseEvent) => {
+    // The card is one big link; everything drawn on top of it has to say so.
+    event.preventDefault();
+    event.stopPropagation();
+    doing();
+  };
 
   return (
-    <Link
-      className="card"
-      to={`/work/${card.id}`}
+    <article
+      className={`card card-${shape}`}
       data-card
-      title={card.title}
       style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
     >
-      <div className="card-poster">
+      <div className="card-picture">
         {poster ? (
           <img
             src={poster.src}
@@ -34,8 +91,6 @@ export function Card({ card, watched }: { card: CardData; watched?: number }) {
             alt=""
             loading="lazy"
             decoding="async"
-            width={2}
-            height={3}
             onError={itDidNotLoad}
           />
         ) : (
@@ -43,6 +98,14 @@ export function Card({ card, watched }: { card: CardData; watched?: number }) {
             {card.title.slice(0, 1)}
           </span>
         )}
+
+        {/* The whole card leads to the work. Stretched over the picture
+            rather than wrapped around everything, so the buttons drawn on top
+            are buttons and not parts of a link. */}
+        <Link className="card-open" to={`/work/${card.id}`} title={card.title}>
+          <span className="visually-hidden">{card.title}</span>
+        </Link>
+
         {/* The reason wins over the state: knowing a film is not identified is
             what the grid already showed, knowing why is what sends somebody to
             rename a file rather than to press the button again. */}
@@ -53,17 +116,95 @@ export function Card({ card, watched }: { card: CardData; watched?: number }) {
               : t(card.identification === "pending" ? "work.pending" : "work.unidentified")}
           </span>
         )}
-        {card.rating !== null && <span className="card-rating">{card.rating.toFixed(1)}</span>}
-        {/* How far in this film already is, drawn on the poster itself: it is
-            the one thing that tells two cards of a row apart at a glance. */}
-        {watched !== undefined && watched > 0 && (
-          <span className="card-progress" aria-hidden="true">
-            <span className="card-progress-done" style={{ width: `${watched * 100}%` }} />
+
+        {/* What is left of a series, which drops as episodes are watched. The
+            tick takes its place once there is nothing left. */}
+        {card.episodes > 0 && card.unwatched > 0 && (
+          <span className="card-left" title={t("card.unwatched", { count: card.unwatched })}>
+            {card.unwatched}
           </span>
         )}
+
+        {card.rating !== null && !unknown && (
+          <span className="card-rating">{card.rating.toFixed(1)}</span>
+        )}
+
+        <div className="card-hover">
+          {playable && (
+            <button
+              type="button"
+              className="card-play"
+              aria-label={t("work.play")}
+              title={t("work.play")}
+              onClick={stop(() => navigate(`/work/${card.id}?play`))}
+            >
+              <PlayIcon size={22} />
+            </button>
+          )}
+
+          <button
+            type="button"
+            className={`card-mark card-seen${seen === "watched" ? " card-mark-on" : ""}`}
+            aria-pressed={seen === "watched"}
+            aria-label={t(seen === "watched" ? "card.mark_unwatched" : "card.mark_watched")}
+            title={t(seen === "watched" ? "card.mark_unwatched" : "card.mark_watched")}
+            onClick={stop(() => marks.setWatched(card, seen !== "watched"))}
+          >
+            <WatchedIcon size={19} watched={seen === "watched"} />
+          </button>
+
+          <div className="card-corner">
+            <button
+              type="button"
+              className={`card-mark${favourite ? " card-mark-on" : ""}`}
+              aria-pressed={favourite}
+              aria-label={t(favourite ? "card.unfavourite" : "card.favourite")}
+              title={t(favourite ? "card.unfavourite" : "card.favourite")}
+              onClick={stop(() => marks.setFavourite(card, !favourite))}
+            >
+              <HeartIcon size={17} filled={favourite} />
+            </button>
+            <button
+              ref={kebab}
+              type="button"
+              className={`card-mark${menuFrom ? " card-mark-on" : ""}`}
+              aria-label={t("card.more")}
+              title={t("card.more")}
+              aria-expanded={menuFrom !== null}
+              onClick={stop(() =>
+                setMenuFrom((was) =>
+                  was ? null : (kebab.current?.getBoundingClientRect() ?? null),
+                ),
+              )}
+            >
+              <MoreIcon size={17} />
+            </button>
+          </div>
+        </div>
+
+        {/* How far in this film already is, drawn on the picture itself: it is
+            the one thing that tells two cards of a row apart at a glance. */}
+        {howFar !== undefined && howFar > 0 && (
+          <span className="card-progress" aria-hidden="true">
+            <span
+              className="card-progress-done"
+              style={{ width: `${Math.min(howFar, 1) * 100}%` }}
+            />
+          </span>
+        )}
+
       </div>
-      <span className="card-title">{card.title}</span>
-      <span className="card-year">{card.year ?? ""}</span>
-    </Link>
+
+      {/* An episode leads with its series, which is the only name anybody
+          remembers, and says which episode underneath. */}
+      {above && <span className="card-above">{above}</span>}
+      <span className="card-title">{above ? (below ?? card.title) : card.title}</span>
+      {!above && <span className="card-year">{card.year ?? ""}</span>}
+      {above && below && <span className="card-year">{card.title}</span>}
+
+      {menuFrom && (
+        <CardMenu card={card} from={menuFrom} onClose={() => setMenuFrom(null)} />
+      )}
+    </article>
   );
 }

@@ -1161,6 +1161,10 @@ export const api = {
      the answer is about: the tick is drawn from what came back. */
   setWatched: (work: string, watched: boolean) =>
     put<{ watched: boolean }>(`/api/v1/works/${work}/watched`, { watched }),
+  /* The server's own shelf, not a bookmark: an administrator's to set, and
+     refused to anybody else. */
+  setPinned: (work: string, pinned: boolean) =>
+    put<{ pinned: boolean }>(`/api/v1/works/${work}/pinned`, { pinned }),
   openSession: (source: string, body: unknown, signal?: AbortSignal) =>
     post<PlaybackSession>(`/api/v1/playback/${source}/session`, body, signal),
   preparation: (session: string, signal?: AbortSignal) =>
