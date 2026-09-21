@@ -516,9 +516,13 @@
 }
 
 /* The same ring the search field wears when it is being used: one way of
-   saying "this is the thing you are on", everywhere. */
-.band-tile:hover {
-  transform: translateY(-2px);
+   saying "this is the thing you are on", everywhere. And the same growing as
+   a card and as every button: one gesture for "this comes forward", not a
+   tile that nudges upwards while the posters below it grow. */
+.band-tile:hover,
+.band-tile:focus-visible {
+  transform: scale(1.035);
+  z-index: 1;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
