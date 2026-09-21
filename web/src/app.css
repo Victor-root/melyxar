@@ -1431,9 +1431,9 @@ button.seen-mark:not(.seen-mark-on):hover {
 /* The same as the banner of the home page, for the same reason. */
 .work-backdrop img {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   object-fit: cover;
-  object-position: center top;
+  object-position: center 38%;
 }
 
 .work-scrim {
@@ -3059,23 +3059,17 @@ button.seen-mark:not(.seen-mark-on):hover {
   opacity: 1;
 }
 
-/* Fitted to the screen, not to the strip.
- *
- * A wide picture and a screen are both about sixteen by nine; a banner is a
- * band across the top of one. Squeezing the picture into the band scales it
- * up until it is two or three times too tall for its window, and every
- * window then falls in the middle of somebody: a head cut at the top edge, a
- * body cut at the bottom. That is what the maintainer saw.
- *
- * Sized to the screen instead, the picture is at the scale it was made for
- * and the banner is a window onto its upper part: the sky and the faces,
- * which is where a still puts what it is about. What is cut is the floor,
- * under a wash that ends the picture rather than slicing it. */
+/* Where the band is taken from is read off each picture when it is prepared
+   and written on the element itself, since it is a different place for every
+   picture: a still framed with its subject high wants the band high, one
+   framed with a sky above wants it low, and one number was wrong on half of
+   them whichever number it was. What is here is what to do when nobody could
+   read it. */
 .hero-backdrop img {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   object-fit: cover;
-  object-position: center top;
+  object-position: center 38%;
 }
 
 /* The words have to be readable over whatever picture is behind them, and a

@@ -297,6 +297,12 @@ struct ImageView {
     url: String,
     width: Option<i32>,
     height: Option<i32>,
+    /// Where a band of it is taken from when it is shown in a strip, between
+    /// nought and one, read off the picture when it was prepared. Absent for
+    /// a picture prepared before that was worked out, and for the kinds no
+    /// band is ever cut out of; the interface then falls back to the one
+    /// number it used for every picture before this.
+    framing: Option<f64>,
 }
 
 async fn works(
@@ -437,6 +443,7 @@ fn image_view(image: &StoredImage) -> ImageView {
         url: format!("/api/v1/images/{}", image.relative_path),
         width: image.width,
         height: image.height,
+        framing: image.framing,
     }
 }
 
@@ -1265,6 +1272,7 @@ mod tests {
             height: Some(600),
             fingerprint: "abc123".to_string(),
             dominant_color: None,
+            framing: Some(0.42),
         };
         assert_eq!(
             image_view(&image),
@@ -1272,6 +1280,7 @@ mod tests {
                 url: "/api/v1/images/works/w/poster-abc123-400.webp".to_string(),
                 width: Some(400),
                 height: Some(600),
+                framing: Some(0.42),
             }
         );
     }
@@ -1287,6 +1296,7 @@ mod tests {
             height: Some(width / 2),
             fingerprint: "abc123".to_string(),
             dominant_color: None,
+            framing: None,
         };
         let held = [
             picture("poster", 400),

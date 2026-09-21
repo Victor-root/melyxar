@@ -228,7 +228,7 @@ function HeroProgress({ item }: { item: HeroItem }) {
 
 /** The wide picture behind one work, or its own colour when it has none. */
 function HeroBackdrop({ item, shown }: { item: HeroItem; shown: boolean }) {
-  const { picture, itDidNotLoad } = useShownPicture(item.backdrop);
+  const { picture, framing, itDidNotLoad } = useShownPicture(item.backdrop);
 
   return (
     <div
@@ -241,6 +241,9 @@ function HeroBackdrop({ item, shown }: { item: HeroItem; shown: boolean }) {
           src={picture.src}
           srcSet={picture.srcSet}
           sizes="100vw"
+          /* Where this picture is cut, read off this picture: one fixed place
+             showed a sky on one film and a pair of shoulders on the next. */
+          style={{ objectPosition: framing }}
           alt=""
           decoding="async"
           onError={itDidNotLoad}

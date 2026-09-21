@@ -1,0 +1,14 @@
+-- Where a band of a picture is taken from, read off the picture itself.
+--
+-- A banner is a band across the top of a screen and a wide picture is nearly
+-- twice as tall as that band, so something is always left out. One fixed
+-- place cannot serve every picture: a still framed with its subject high
+-- wants the band high, one framed with a sky above wants it low, and the
+-- interface was wrong on one of the two whichever it chose.
+--
+-- So it is worked out once, when the picture is prepared, and written here:
+-- a share between nought and one, nought being the top of the picture. Empty
+-- for every picture prepared before this, and for the kinds nothing ever
+-- cuts a band out of; the interface then falls back to the one number it
+-- used before, which is what it did for all of them.
+ALTER TABLE images ADD COLUMN framing REAL;

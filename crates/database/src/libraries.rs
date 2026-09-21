@@ -1203,6 +1203,7 @@ mod tests {
                     height: Some(600),
                     fingerprint: "abc".to_string(),
                     dominant_color: None,
+                    framing: None,
                 }],
             )
             .await
@@ -1222,6 +1223,7 @@ mod tests {
                     height: Some(288),
                     fingerprint: "abc".to_string(),
                     dominant_color: None,
+                    framing: None,
                 }],
             )
             .await

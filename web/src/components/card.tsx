@@ -88,7 +88,7 @@ export function Card({
      of the middle of the picture. So such a row is given something wide, and
      falls back to the poster only where the server had nothing wide to
      send. */
-  const { picture: poster, itDidNotLoad } = useShownPicture(
+  const { picture: poster, framing, itDidNotLoad } = useShownPicture(
     shape === "lying" && card.wide.length > 0 ? card.wide : card.poster,
   );
   /* Where the menu is drawn from. Kept as the button's place at the moment
@@ -132,6 +132,9 @@ export function Card({
             src={poster.src}
             srcSet={poster.srcSet}
             sizes={ROOM_FOR_A_PICTURE[shape]}
+            /* Only a lying card cuts a strip out of what it shows; a poster
+               standing up is shown whole and this changes nothing for it. */
+            style={shape === "lying" ? { objectPosition: framing } : undefined}
             alt=""
             loading="lazy"
             decoding="async"
