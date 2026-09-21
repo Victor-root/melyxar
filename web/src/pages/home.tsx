@@ -25,7 +25,7 @@ import { Row } from "../components/row";
 import { JobLine } from "../components/job";
 import { howFarIn, useHomeScreen } from "../screens/home";
 import { refusalKey } from "../i18n";
-import { howLong } from "../readable";
+import { howLong, whichEpisode } from "../readable";
 import { whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { ArrivedIcon, ChevronRightIcon, ClockIcon, KindIcon, SparkIcon } from "../icons";
@@ -282,22 +282,6 @@ function Shelf<T extends CardData>({
       </Row>
     </section>
   );
-}
-
-/** Which episode a card is, when it is one: short, because it sits under a
- *  still in a row rather than on a page of its own. */
-function whichEpisode(
-  card: { season_number: number | null; episode_number: number | null; title: string },
-  t: ReturnType<typeof useSettings>["t"],
-): string | undefined {
-  if (card.season_number === null || card.episode_number === null) {
-    return undefined;
-  }
-  const which = t("home.up_next.short", {
-    season: card.season_number,
-    episode: card.episode_number,
-  });
-  return `${which} · ${card.title}`;
 }
 
 /** How much of a film is left, which is what a row of half watched ones is

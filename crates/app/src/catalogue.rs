@@ -102,6 +102,22 @@ pub struct HeroItem {
     pub card: WorkCard,
     pub because: Because,
     pub dressed: Dressed,
+    /// Set when the work shown large is an episode, which is what somebody
+    /// left halfway in the middle of a series. Nothing for a film.
+    pub episode_of: Option<EpisodePlace>,
+}
+
+/// The series an episode belongs to, and where it sits in it.
+///
+/// An episode has no wide picture of its own and no drawn title: what it has
+/// is a thumbnail, which is not a banner. Shown large, it borrows both from
+/// its series, and says which episode it is in words.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EpisodePlace {
+    pub series_id: WorkId,
+    pub series_title: String,
+    pub season_number: Option<i32>,
+    pub episode_number: Option<i32>,
 }
 
 /// Why a work is in the hero, which decides what its button says.
@@ -332,18 +348,30 @@ async fn the_hero(
     let mut hero: Vec<HeroItem> = Vec::with_capacity(IN_THE_HERO as usize);
     let mut already: std::collections::HashSet<WorkId> = std::collections::HashSet::new();
 
-    let mut take = |card: &WorkCard, because: Because, hero: &mut Vec<HeroItem>| {
+    let mut take = |card: &WorkCard,
+                    because: Because,
+                    episode_of: Option<EpisodePlace>,
+                    hero: &mut Vec<HeroItem>| {
         if hero.len() < IN_THE_HERO as usize && already.insert(card.id) {
             hero.push(HeroItem {
                 card: card.clone(),
                 because,
                 dressed: Dressed::default(),
+                episode_of,
             });
         }
     };
 
     for entry in carry_on {
-        take(&entry.card, Because::Started, &mut hero);
+        let place = entry.series_id.zip(entry.series_title.clone()).map(
+            |(series_id, series_title)| EpisodePlace {
+                series_id,
+                series_title,
+                season_number: entry.season_number,
+                episode_number: entry.episode_number,
+            },
+        );
+        take(&entry.card, Because::Started, place, &mut hero);
     }
     if hero.len() < IN_THE_HERO as usize {
         for card in state
@@ -351,11 +379,11 @@ async fn the_hero(
             .pinned_works(who.id, granted, IN_THE_HERO)
             .await?
         {
-            take(&card, Because::Pinned, &mut hero);
+            take(&card, Because::Pinned, None, &mut hero);
         }
     }
     for card in &recently_added.cards {
-        take(card, Because::New, &mut hero);
+        take(card, Because::New, None, &mut hero);
     }
     if hero.len() < IN_THE_HERO as usize {
         for card in state
@@ -363,19 +391,41 @@ async fn the_hero(
             .suggestions(who.id, granted, IN_THE_HERO)
             .await?
         {
-            take(&card, Because::Suggested, &mut hero);
+            take(&card, Because::Suggested, None, &mut hero);
         }
     }
 
-    // Dressed once the five are known, in two questions for the lot: asking
-    // per work would be five more round trips to draw one banner.
-    let named: Vec<WorkId> = hero.iter().map(|entry| entry.card.id).collect();
-    let mut dressed = state
+    // Dressed once the five are known, in one set of questions for the lot:
+    // asking per work would be five more round trips to draw one banner. The
+    // series of an episode is asked for in the same breath, since that is
+    // where an episode's wide picture and drawn title come from.
+    let named: Vec<WorkId> = hero
+        .iter()
+        .flat_map(|entry| {
+            std::iter::once(entry.card.id)
+                .chain(entry.episode_of.as_ref().map(|place| place.series_id))
+        })
+        .collect();
+    let dressed = state
         .database()
         .dressed_large(&named, &who.preferences.interface_language)
         .await?;
     for entry in &mut hero {
-        entry.dressed = dressed.remove(&entry.card.id).unwrap_or_default();
+        entry.dressed = dressed.get(&entry.card.id).cloned().unwrap_or_default();
+        // An episode carries a thumbnail, which is not a banner, and no drawn
+        // title at all. Both come from the series above it.
+        if let Some(from) = entry
+            .episode_of
+            .as_ref()
+            .and_then(|place| dressed.get(&place.series_id))
+        {
+            if entry.dressed.backdrop.is_empty() {
+                entry.dressed.backdrop = from.backdrop.clone();
+            }
+            if entry.dressed.logo.is_empty() {
+                entry.dressed.logo = from.logo.clone();
+            }
+        }
     }
     Ok(hero)
 }

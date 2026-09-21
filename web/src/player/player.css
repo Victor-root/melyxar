@@ -1749,19 +1749,6 @@
    border-radius, and the frame clips to it: a second, slightly different
    curve drawn on top of that one is what left a sliver of the frame's
    background showing between the two. */
-.player-drawer-card-watched {
-  position: absolute;
-  top: 0;
-  right: 0;
-  padding: 3px 6px;
-  border-radius: 0 0 0 var(--radius-control);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-}
-
 /* Who is in it ----------------------------------------------------------- */
 
 /* Faces are taller than they are wide, which is how every catalogue in the

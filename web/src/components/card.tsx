@@ -25,7 +25,8 @@ import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 import { useShownPicture } from "./picture";
 import { CardMenu } from "./cardmenu";
-import { HeartIcon, MoreIcon, PlayIcon, WatchedIcon } from "../icons";
+import { SeenMark } from "./seen";
+import { HeartIcon, MoreIcon, PlayIcon } from "../icons";
 
 /** How a card is laid out: standing like a poster, or lying like a still. */
 export type CardShape = "standing" | "lying";
@@ -131,9 +132,14 @@ export function Card({
           </span>
         )}
 
-        {card.rating !== null && !unknown && (
-          <span className="card-rating">{card.rating.toFixed(1)}</span>
-        )}
+        {/* Watched, in the corner of the picture and always there: it is what
+            tells one card of a row from the next, and a mark that only shows
+            under the pointer is a mark nobody reads a row by. The same one
+            the player draws. */}
+        <SeenMark
+          watched={seen === "watched"}
+          onPress={(watched) => marks.setWatched(card, watched)}
+        />
 
         <div className="card-hover">
           {playable && (
@@ -144,20 +150,9 @@ export function Card({
               title={t("work.play")}
               onClick={stop(() => navigate(`/work/${card.id}?play`))}
             >
-              <PlayIcon size={22} />
+              <PlayIcon size={26} />
             </button>
           )}
-
-          <button
-            type="button"
-            className={`card-mark card-seen${seen === "watched" ? " card-mark-on" : ""}`}
-            aria-pressed={seen === "watched"}
-            aria-label={t(seen === "watched" ? "card.mark_unwatched" : "card.mark_watched")}
-            title={t(seen === "watched" ? "card.mark_unwatched" : "card.mark_watched")}
-            onClick={stop(() => marks.setWatched(card, seen !== "watched"))}
-          >
-            <WatchedIcon size={19} watched={seen === "watched"} />
-          </button>
 
           <div className="card-corner">
             <button

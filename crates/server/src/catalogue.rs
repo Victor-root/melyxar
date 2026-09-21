@@ -492,6 +492,12 @@ struct HeroView {
     height: Option<i64>,
     hdr: Option<String>,
     sound: Option<String>,
+    /// Set where the work shown large is an episode: the series it belongs to
+    /// and where it sits in it. The picture and the drawn title above already
+    /// come from that series, and these are what place it in words.
+    series_title: Option<String>,
+    season_number: Option<i32>,
+    episode_number: Option<i32>,
 }
 
 /// One episode a started series is waiting on.
@@ -559,6 +565,15 @@ async fn home(
                 height: entry.dressed.height,
                 hdr: entry.dressed.hdr.clone(),
                 sound: entry.dressed.sound.clone(),
+                series_title: entry
+                    .episode_of
+                    .as_ref()
+                    .map(|place| place.series_title.clone()),
+                season_number: entry.episode_of.as_ref().and_then(|place| place.season_number),
+                episode_number: entry
+                    .episode_of
+                    .as_ref()
+                    .and_then(|place| place.episode_number),
             })
             .collect(),
         carry_on: page

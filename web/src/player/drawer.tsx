@@ -16,6 +16,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Credit, PlaybackChapter, PlaybackPlan, Work } from "../api";
 import { api, pictureSet } from "../api";
 import { useAsked } from "../asking";
+import { useDragToScroll } from "../dragging";
+import { SeenMark } from "../components/seen";
 import { asClock } from "./clock";
 import type { Playback } from "./engine";
 import { PlayIcon } from "./icons";
@@ -433,15 +435,7 @@ function Episodes({
                 </span>
               )}
               {now && <span className="player-drawer-card-now">{t("player.playing_now")}</span>}
-              {episode.watched && (
-                <span
-                  className="player-drawer-card-watched"
-                  title={t("work.watched")}
-                  aria-label={t("work.watched")}
-                >
-                  ✓
-                </span>
-              )}
+              {episode.watched && <SeenMark watched />}
             </span>
             <span className="player-drawer-card-name">
               {numberOfOne("episode", episode.number, t)}
@@ -513,65 +507,9 @@ function Strip({
   const along = (by: number) =>
     row.current?.scrollBy({ left: by * CARDS_AT_A_TIME * card, behavior: "smooth" });
 
-  /* Held down and dragged sideways, a mouse runs the row the way a finger
-     already does on a touchscreen and two fingers already do on a trackpad:
-     neither is a mouse, and a mouse is the one hand left with nothing but the
-     arrows. Left to touch and the pen alike, which already scroll this row
-     natively and would only fight a second hand doing the same thing. */
-  const dragging = useRef<{ x: number; scrollLeft: number } | null>(null);
-  const dragged = useRef(false);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    const element = row.current;
-    if (event.pointerType !== "mouse" || event.button !== 0 || !element) {
-      return;
-    }
-    dragging.current = { x: event.clientX, scrollLeft: element.scrollLeft };
-    // Not captured yet: a plain press that never moves is a press on
-    // whatever card is under it, and capturing the pointer here would carry
-    // the click that ends it away to this row instead of to that card,
-    // whether or not a drag ever happened.
-  };
-
-  const holdDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragging.current;
-    const element = row.current;
-    if (!drag || !element) {
-      return;
-    }
-    const moved = event.clientX - drag.x;
-    // A press that never really moved is a click that happened to land on
-    // this row, not a drag: nothing here should swallow it. Capturing only
-    // now, the moment that stops being true, is what leaves an ordinary
-    // click alone while still following the hand wherever it goes once a
-    // drag is under way.
-    if (!dragged.current && Math.abs(moved) > 4) {
-      dragged.current = true;
-      element.setPointerCapture(event.pointerId);
-    }
-    element.scrollLeft = drag.scrollLeft - moved;
-  };
-
-  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) {
-      return;
-    }
-    dragging.current = null;
-    if (row.current?.hasPointerCapture(event.pointerId)) {
-      row.current.releasePointerCapture(event.pointerId);
-    }
-  };
-
-  /* A drag that really moved the row still ends in a click, on whatever card
-     the hand happens to be over: caught here, in the one place above every
-     card, rather than taught to each kind of card the row might ever hold. */
-  const stopClickAfterADrag = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (dragged.current) {
-      dragged.current = false;
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  };
+  // Held down and pulled sideways. The same one every sideways row in this
+  // interface uses, this one included: it was written here first.
+  const drag = useDragToScroll(row);
 
   return (
     <div
@@ -582,11 +520,7 @@ function Strip({
         className="player-drawer-row"
         ref={row}
         onScroll={look}
-        onPointerDown={startDrag}
-        onPointerMove={holdDrag}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onClickCapture={stopClickAfterADrag}
+        {...drag}
       >
         {children}
       </div>

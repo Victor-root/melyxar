@@ -1,11 +1,17 @@
 /*
- * The bar at the top: where you are, what you can look for, and who you are.
+ * The bar at the top: what you can look for, and who you are.
  *
- * The categories are read from the libraries this server really holds rather
- * than written down here. A server with no anime has no category of anime, a
- * collection of films spread over four disks is one category rather than
- * four, and nobody has to remember to add a category the day a kind of
- * library is invented.
+ * It holds no list of places. The libraries are reached from the band under
+ * the banner, which is wide enough to show what each one is rather than only
+ * name it, and the way back to the front page is the name of the server
+ * itself, which is where everybody presses anyway. What is left is the
+ * search, in the middle where it belongs, and the account at the end.
+ *
+ * The categories the search can be narrowed to are read from the libraries
+ * this server really holds rather than written down here. A server with no
+ * anime offers no anime, a collection of films spread over four disks is one
+ * category rather than four, and nobody has to remember to add one the day a
+ * kind of library is invented.
  *
  * What the engine cannot do yet is shown all the same, greyed and saying so.
  * A function that is simply absent is a function nobody knows is coming; one
@@ -24,7 +30,6 @@ import {
   BellIcon,
   ChevronDownIcon,
   HeartIcon,
-  HomeIcon,
   KindIcon,
   ScreenCastIcon,
   SearchIcon,
@@ -32,9 +37,6 @@ import {
 
 /** The order categories are offered in, which is the order they are read in. */
 const KINDS: LibraryKind[] = ["movies", "series", "anime", "shows", "music"];
-
-/** How many categories stand in the bar before the rest go behind one word. */
-const IN_THE_BAR = 4;
 
 /**
  * The two keys that reach the search field, written the way this machine
@@ -76,8 +78,6 @@ export function Header({ libraries }: { libraries: Library[] }) {
   const scan = useStartScan(libraries);
 
   const categories = categoriesOf(libraries);
-  const inTheBar = categories.slice(0, IN_THE_BAR);
-  const behindMore = categories.slice(IN_THE_BAR);
 
   // A slash puts the cursor in the search field, the way every list of things
   // has worked for thirty years, and so does the command key with a K, which
@@ -122,38 +122,6 @@ export function Header({ libraries }: { libraries: Library[] }) {
           <span className="brand-name">{t("app.name")}</span>
         </Link>
 
-        <nav className="header-nav" aria-label={t("nav.libraries")}>
-          <NavLink to="/" end className="header-link">
-            <HomeIcon size={17} />
-            {t("nav.home")}
-          </NavLink>
-
-          {inTheBar.map((category) => (
-            <CategoryLink key={category.kind} category={category} />
-          ))}
-
-          {behindMore.length > 0 && (
-            <Dropdown label={t("nav.more")}>
-              {behindMore.flatMap((category) =>
-                category.libraries.map((library) => (
-                  <NavLink
-                    key={library.id}
-                    to={`/library/${library.id}`}
-                    className="header-menu-line"
-                  >
-                    {library.name}
-                  </NavLink>
-                )),
-              )}
-            </Dropdown>
-          )}
-
-          <NavLink to="/favourites" className="header-link">
-            <HeartIcon size={17} filled={false} />
-            {t("nav.favourites")}
-          </NavLink>
-        </nav>
-
         <form className="search" role="search" onSubmit={look}>
           <SearchIcon size={17} />
           <input
@@ -173,25 +141,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
           {/* The scope, next to the words rather than on the page of results:
               it narrows what is being asked, so it belongs where the asking
               happens. */}
-          <select
-            className="search-scope"
-            value={scope}
-            onChange={(event) => setScope(event.target.value)}
-            aria-label={t("search.scope")}
-          >
-            <option value="">{t("search.everywhere")}</option>
-            {categories.map((category) => (
-              <option key={category.kind} value={`kind:${category.kind}`}>
-                {t(`kind.${category.kind}`)}
-              </option>
-            ))}
-            {libraries.length > 1 &&
-              libraries.map((library) => (
-                <option key={library.id} value={`library:${library.id}`}>
-                  {library.name}
-                </option>
-              ))}
-          </select>
+          <Scope categories={categories} scope={scope} onChoose={setScope} />
         </form>
 
         <div className="header-side">
@@ -250,40 +200,96 @@ export function Header({ libraries }: { libraries: Library[] }) {
 }
 
 /**
- * One category in the bar.
+ * What the search is narrowed to.
  *
- * A kind holding one library leads straight to it, since a menu of one entry
- * is a click that asks nothing. A kind holding several opens on them, because
- * "films" then means four folders on four disks and only their owner knows
- * which one they meant.
+ * A list of this interface's own making rather than the browser's: a system
+ * menu is drawn by the machine, in its own colours and its own corners, and
+ * sitting inside a rounded field it is the one thing on this bar that belongs
+ * to something else.
+ *
+ * A kind is offered whenever the server holds one; a library by name only
+ * where its kind holds more than one, since "Films" listed under "Films" says
+ * the same thing twice and leaves whoever reads it working out which is
+ * which.
  */
-function CategoryLink({ category }: { category: Category }) {
+function Scope({
+  categories,
+  scope,
+  onChoose,
+}: {
+  categories: Category[];
+  scope: string;
+  onChoose: (scope: string) => void;
+}) {
   const { t } = useSettings();
-  const name = t(`kind.${category.kind}`);
 
-  if (category.libraries.length === 1) {
-    return (
-      <NavLink to={`/library/${category.libraries[0].id}`} className="header-link">
-        <KindIcon kind={category.kind} size={17} />
-        {name}
-      </NavLink>
-    );
-  }
+  const named = (value: string): string => {
+    const kind = categories.find((category) => `kind:${category.kind}` === value);
+    if (kind) {
+      return t(`kind.${kind.kind}`);
+    }
+    const library = categories
+      .flatMap((category) => category.libraries)
+      .find((entry) => `library:${entry.id}` === value);
+    return library?.name ?? t("search.everywhere");
+  };
+
   return (
-    <Dropdown
-      label={
-        <>
-          <KindIcon kind={category.kind} size={17} />
-          {name}
-        </>
-      }
-    >
-      {category.libraries.map((library) => (
-        <NavLink key={library.id} to={`/library/${library.id}`} className="header-menu-line">
-          {library.name}
-        </NavLink>
+    <Dropdown className="search-scope" label={named(scope)}>
+      <ScopeLine value="" scope={scope} onChoose={onChoose}>
+        {t("search.everywhere")}
+      </ScopeLine>
+      {categories.map((category) => (
+        <div key={category.kind}>
+          <ScopeLine value={`kind:${category.kind}`} scope={scope} onChoose={onChoose}>
+            <KindIcon kind={category.kind} size={16} />
+            {t(`kind.${category.kind}`)}
+          </ScopeLine>
+          {category.libraries.length > 1 &&
+            category.libraries.map((library) => (
+              <ScopeLine
+                key={library.id}
+                value={`library:${library.id}`}
+                scope={scope}
+                onChoose={onChoose}
+                under
+              >
+                {library.name}
+              </ScopeLine>
+            ))}
+        </div>
       ))}
     </Dropdown>
+  );
+}
+
+function ScopeLine({
+  value,
+  scope,
+  onChoose,
+  under,
+  children,
+}: {
+  value: string;
+  scope: string;
+  onChoose: (scope: string) => void;
+  /** One of the libraries under a kind, stepped in so the two read as a list
+   *  and a sub-list rather than as one flat run of names. */
+  under?: boolean;
+  children: React.ReactNode;
+}) {
+  const chosen = scope === value;
+  return (
+    <button
+      type="button"
+      className={`header-menu-line${under ? " header-menu-under" : ""}${
+        chosen ? " header-menu-line-on" : ""
+      }`}
+      aria-current={chosen}
+      onClick={() => onChoose(value)}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -293,7 +299,16 @@ function CategoryLink({ category }: { category: Category }) {
  * Closes on a click anywhere else and on the escape key, which are the two
  * ways anybody ever tries to close one.
  */
-function Dropdown({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+function Dropdown({
+  label,
+  className,
+  children,
+}: {
+  label: React.ReactNode;
+  /** What this one is, for the few that are not a word in the bar. */
+  className?: string;
+  children: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const holder = useRef<HTMLDivElement>(null);
 
@@ -320,7 +335,7 @@ function Dropdown({ label, children }: { label: React.ReactNode; children: React
   }, [open]);
 
   return (
-    <div className="header-menu" ref={holder}>
+    <div className={`header-menu${className ? ` ${className}` : ""}`} ref={holder}>
       <button
         type="button"
         className={`header-link${open ? " header-link-on" : ""}`}
@@ -362,6 +377,12 @@ function AccountMenu() {
         </>
       }
     >
+      {/* Somebody's own marks, which left the bar when the bar stopped being
+          a list of places: they are theirs, so they live under their name. */}
+      <NavLink to="/favourites" className="header-menu-line">
+        <HeartIcon size={16} filled={false} />
+        {t("nav.favourites")}
+      </NavLink>
       <NavLink to="/settings" className="header-menu-line">
         {t("nav.settings")}
       </NavLink>

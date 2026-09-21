@@ -10,8 +10,6 @@ type Dictionary = Record<string, string>;
 
 const en: Dictionary = {
   "app.name": "Melyxar",
-  "nav.home": "Home",
-  "nav.libraries": "Libraries",
   "nav.search": "Search",
   "nav.jobs": "Activity",
   "nav.journal": "Journal",
@@ -19,7 +17,6 @@ const en: Dictionary = {
   "nav.theme": "Theme",
   "nav.language": "Language",
   "nav.favourites": "Favourites",
-  "nav.more": "More",
   "nav.cast": "Play on another screen",
   "nav.notifications": "Notifications",
   "nav.account": "Account",
@@ -645,8 +642,6 @@ const en: Dictionary = {
 
 const fr: Dictionary = {
   "app.name": "Melyxar",
-  "nav.home": "Accueil",
-  "nav.libraries": "Bibliothèques",
   "nav.search": "Rechercher",
   "nav.jobs": "Activité",
   "nav.journal": "Journal",
@@ -654,7 +649,6 @@ const fr: Dictionary = {
   "nav.theme": "Thème",
   "nav.language": "Langue",
   "nav.favourites": "Favoris",
-  "nav.more": "Plus",
   "nav.cast": "Lire sur un autre écran",
   "nav.notifications": "Notifications",
   "nav.account": "Compte",
