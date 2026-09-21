@@ -3137,7 +3137,13 @@ button.seen-mark:not(.seen-mark-on):hover {
   object-fit: contain;
 }
 
+/* What the film is and what the copy holds, on one line. Two lines cost the
+   synopsis one of its three, and the synopsis is the line somebody reads. */
 .hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--gap);
   margin: 0;
   font-size: 13.5px;
   color: var(--text-soft);
@@ -3146,7 +3152,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 /* What the file holds: short, bordered rather than filled, so a row of three
    of them reads as facts about the film and not as three buttons. */
 .hero-badges {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   gap: 6px;
   margin: 0;
@@ -3166,6 +3172,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .hero-overview {
+  flex: 0 0 auto;
   margin: 0;
   font-size: 14.5px;
   line-height: 1.55;
