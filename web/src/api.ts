@@ -59,6 +59,11 @@ export interface Card {
   identification_note: IdentificationNote | null;
   color: string | null;
   poster: Picture[];
+  /** A picture wider than it is tall, for the rows that lie a card down. A
+      poster cropped into a band is a poster beheaded. Empty elsewhere, and
+      empty where there is nothing wide, which such a row answers by falling
+      back to the poster. */
+  wide: Picture[];
   /** What it is: a film plays from its card, a series is opened. */
   kind: WorkKind;
   library: string;

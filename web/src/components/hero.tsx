@@ -119,7 +119,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
         <div className="hero-buttons">
           <HeroPlay item={shown} />
           <Link className="button button-large" to={`/work/${shown.id}`}>
-            <InfoIcon size={19} />
+            <InfoIcon size={24} />
             {t("home.hero.open")}
           </Link>
         </div>
@@ -136,7 +136,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
             aria-label={t("home.hero.previous")}
             onClick={() => go(at - 1)}
           >
-            <ChevronLeftIcon size={32} />
+            <ChevronLeftIcon size={34} />
           </button>
           <button
             type="button"
@@ -144,7 +144,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
             aria-label={t("home.hero.next")}
             onClick={() => go(at + 1)}
           >
-            <ChevronRightIcon size={32} />
+            <ChevronRightIcon size={34} />
           </button>
 
           <div className="hero-dots">
@@ -272,7 +272,7 @@ function HeroPlay({ item }: { item: HeroItem }) {
   if (item.source === null || item.kind === "series") {
     return (
       <Link className="button button-accent button-large" to={`/work/${item.id}`}>
-        <PlayIcon size={20} />
+        <PlayIcon size={26} />
         {t("home.hero.open")}
       </Link>
     );

@@ -269,6 +269,10 @@ struct CardView {
     /// first moment rather than grey holes.
     color: Option<String>,
     poster: Vec<ImageView>,
+    /// A picture wider than it is tall, for the rows that lie a card down.
+    /// Empty everywhere else, and empty where there is nothing wide to show,
+    /// which such a row answers by falling back to the poster.
+    wide: Vec<ImageView>,
     /// movie, series, season or episode. What a card offers depends on it: a
     /// film plays, a series is opened.
     kind: &'static str,
@@ -348,6 +352,7 @@ fn card_view(card: &WorkCard) -> CardView {
         identification_note: card.identification_note.map(IdentificationNote::as_str),
         color: card.dominant_color.clone(),
         poster: card.poster.iter().map(image_view).collect(),
+        wide: card.wide.iter().map(image_view).collect(),
         kind: card.kind.as_str(),
         library: card.library_id.to_string(),
         // A read nobody was named for carries nobody's marks, and answers as

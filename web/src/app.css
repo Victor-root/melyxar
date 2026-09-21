@@ -691,6 +691,7 @@
 }
 
 .button-large {
+  gap: 10px;
   padding: 12px 26px;
   font-size: 16px;
 }
@@ -2778,6 +2779,11 @@ button.seen-mark-on:hover {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* A banner is wider than any picture a catalogue holds, so something has to
+     go. Taken off the bottom rather than half from each end: what is at the
+     top of a wide picture is faces and sky, and what is at the bottom is
+     usually floor. */
+  object-position: center 38%;
 }
 
 /* The words have to be readable over whatever picture is behind them, and a
@@ -2805,7 +2811,7 @@ button.seen-mark-on:hover {
   gap: 10px;
   /* Clear of the arrow on the left, which is drawn over the picture at the
      banner's own edge. */
-  padding: var(--gap-wide) var(--gap-wide) var(--gap-wide) calc(var(--gap-wide) * 3);
+  padding: var(--gap-wide) var(--gap-wide) var(--gap-wide) calc(var(--gap-wide) * 4);
 }
 
 .hero-tagline {
@@ -2904,7 +2910,10 @@ button.seen-mark-on:hover {
   background: var(--accent);
 }
 
-/* The two arrows, on the picture and out of the way of the words. */
+/* The two arrows, on the picture and out of the way of the words. A small
+   disc holding a large chevron rather than the other way round: what is
+   pressed is the chevron, and the disc is only there to be seen against
+   whatever picture happens to be behind it. */
 .hero-step {
   position: absolute;
   top: 50%;
@@ -2912,8 +2921,8 @@ button.seen-mark-on:hover {
   transform: translateY(-50%);
   display: grid;
   place-items: center;
-  width: 60px;
-  height: 60px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   background: color-mix(in srgb, var(--surface-deep) 60%, transparent);
   backdrop-filter: blur(8px);
@@ -2937,11 +2946,11 @@ button.seen-mark-on:hover {
 }
 
 .hero-step-back {
-  left: var(--gap);
+  left: var(--gap-wide);
 }
 
 .hero-step-on {
-  right: var(--gap);
+  right: var(--gap-wide);
 }
 
 /* Where it is in the five, and a way to go straight to one. */

@@ -180,6 +180,9 @@ impl Database {
         let mut cards: Vec<crate::browse::WorkCard> =
             carrying_on.iter().map(|entry| entry.card.clone()).collect();
         self.attach_posters(&mut cards).await?;
+        // This row lies its cards down, so each one needs a picture wider
+        // than it is tall rather than a poster cropped into a band.
+        self.attach_wide_pictures(&mut cards).await?;
         // The same card is drawn here as in a grid, so it carries the same
         // marks: one component, one shape of card, one hover.
         self.attach_viewer_state(user_id, &mut cards).await?;
@@ -403,6 +406,7 @@ impl Database {
         let mut cards: Vec<crate::browse::WorkCard> =
             waiting.iter().map(|entry| entry.card.clone()).collect();
         self.attach_posters(&mut cards).await?;
+        self.attach_wide_pictures(&mut cards).await?;
         self.attach_viewer_state(user_id, &mut cards).await?;
         for (entry, card) in waiting.iter_mut().zip(cards) {
             entry.card = card;
@@ -1298,6 +1302,84 @@ mod tests {
         assert_eq!(carrying_on[0].series_title.as_deref(), Some("Amber Field"));
         assert_eq!(carrying_on[0].season_number, Some(1));
         assert_eq!(carrying_on[0].episode_number, Some(2));
+    }
+
+    #[tokio::test]
+    async fn a_row_of_lying_cards_is_given_pictures_wider_than_they_are_tall() {
+        // A poster cropped into a band is what this row used to show. Each
+        // card now carries something wide, and an episode that has none of
+        // its own borrows its series'.
+        use crate::images::StoredImage;
+
+        let (database, user_id, series, _, episodes) = one_series().await;
+        let a_picture = |owner: WorkId, kind: &str, name: &str| StoredImage {
+            owner_kind: "work".to_string(),
+            owner_id: owner.to_db_string(),
+            image_kind: kind.to_string(),
+            relative_path: format!("{name}.webp"),
+            width: Some(1280),
+            height: Some(720),
+            fingerprint: name.to_string(),
+            dominant_color: None,
+        };
+
+        database
+            .replace_images(
+                "work",
+                &series.to_db_string(),
+                "backdrop",
+                &[a_picture(series, "backdrop", "series-wide")],
+            )
+            .await
+            .expect("series backdrop written");
+        database
+            .replace_images(
+                "work",
+                &episodes[0].to_db_string(),
+                "poster",
+                &[a_picture(episodes[0], "poster", "first-still")],
+            )
+            .await
+            .expect("episode still written");
+
+        for episode in [episodes[0], episodes[1]] {
+            database
+                .record_playback_progress(
+                    user_id,
+                    episode,
+                    Millis::new(600_000),
+                    PlaybackState::InProgress,
+                    datetime!(2026-01-01 12:00 UTC),
+                )
+                .await
+                .expect("recorded");
+        }
+
+        let carrying_on = database
+            .works_to_carry_on(user_id, None, 20)
+            .await
+            .expect("read");
+        let wide_of = |id: WorkId| {
+            carrying_on
+                .iter()
+                .find(|entry| entry.card.id == id)
+                .expect("the episode is in the row")
+                .card
+                .wide
+                .iter()
+                .map(|picture| picture.fingerprint.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            wide_of(episodes[0]),
+            vec!["first-still".to_string()],
+            "an episode's own still is already wide"
+        );
+        assert_eq!(
+            wide_of(episodes[1]),
+            vec!["series-wide".to_string()],
+            "an episode with no still of its own borrows its series' picture"
+        );
     }
 
     #[tokio::test]
