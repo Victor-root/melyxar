@@ -86,6 +86,9 @@ function TheLibrary() {
           <Route path="/" element={<HomePage libraries={libraries.all} />} />
           <Route path="/library/:id" element={<LibraryPage libraries={libraries.all} />} />
           <Route path="/search" element={<SearchPage libraries={libraries.all} />} />
+          {/* The same grid, narrowed to what this account marked: a view of the
+              library rather than a library of its own. */}
+          <Route path="/favourites" element={<LibraryPage libraries={libraries.all} />} />
           <Route path="/work/:id" element={<WorkPage />} />
           <Route path="/activity" element={<ActivityPage libraries={libraries.all} />} />
           <Route path="/journal" element={<JournalPage />} />

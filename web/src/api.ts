@@ -968,6 +968,11 @@ export interface BrowseOptions {
   unidentified?: boolean;
   /** One letter, or "#" for everything that starts with none. */
   initial?: string;
+  /** Only what this account marked, which is a narrowing of the grid rather
+      than a library of its own. */
+  favourites?: boolean;
+  /** Only the libraries of one kind, whichever libraries those are. */
+  kind?: LibraryKind;
 }
 
 /** Turns the choices of a grid into a query the server understands. */
@@ -983,6 +988,8 @@ export function browseQuery(options: BrowseOptions): string {
   if (options.search) parameters.set("search", options.search);
   if (options.unidentified) parameters.set("unidentified", "true");
   if (options.initial) parameters.set("initial", options.initial);
+  if (options.favourites) parameters.set("favourites", "true");
+  if (options.kind) parameters.set("kind", options.kind);
   return parameters.toString();
 }
 

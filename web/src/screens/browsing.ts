@@ -14,9 +14,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import type { Card, Filters } from "../api";
+import type { Card, Filters, LibraryKind } from "../api";
 import { useAsked, wasAbandoned } from "../asking";
 
 /** The orderings a library can be read in. */
@@ -32,6 +32,37 @@ export interface Narrowing {
   search: string | undefined;
   unidentified: boolean;
   initial: string | undefined;
+  /** Only what this account marked. A view rather than a library, so it
+      sorts, filters and pages like everything else. */
+  favourites: boolean;
+  /** Only the libraries of one kind, which is what the search's scope
+      narrows by when it names a category rather than a folder. */
+  kind: LibraryKind | undefined;
+}
+
+/** The kinds a scope may name, so a word out of the address cannot become a
+ *  question the server has to refuse. */
+const KINDS: LibraryKind[] = ["movies", "series", "anime", "shows", "music"];
+
+/**
+ * What the search box put in the address, read back.
+ *
+ * One value rather than two, because it is one choice: a scope names a
+ * category or one library, never both, and two parameters that must never
+ * both be set are two parameters that will one day both be set.
+ */
+function scopeOf(written: string | null): {
+  library: string | undefined;
+  kind: LibraryKind | undefined;
+} {
+  if (written?.startsWith("kind:")) {
+    const named = written.slice("kind:".length) as LibraryKind;
+    return { library: undefined, kind: KINDS.includes(named) ? named : undefined };
+  }
+  if (written?.startsWith("library:")) {
+    return { library: written.slice("library:".length), kind: undefined };
+  }
+  return { library: undefined, kind: undefined };
 }
 
 /** Everything a grid is handed to draw itself and to be driven by. */
@@ -57,6 +88,7 @@ export interface Browsing {
 
 export function useBrowsing(): Browsing {
   const { id } = useParams();
+  const { pathname } = useLocation();
   const [parameters, setParameters] = useSearchParams();
 
   /* Pulled out one by one and watched one by one. Watching the address as a
@@ -70,11 +102,28 @@ export function useBrowsing(): Browsing {
   const search = parameters.get("search") ?? undefined;
   const unidentified = parameters.get("unidentified") === "true";
   const initial = parameters.get("initial") ?? undefined;
+  /* Read from the path rather than from a parameter: the favourites are a
+     place somebody goes to, and a place is an address. */
+  const favourites = pathname === "/favourites";
+  const scope = parameters.get("in");
 
-  const narrowing = useMemo<Narrowing>(
-    () => ({ library: id, order, descending, genre, decade, search, unidentified, initial }),
-    [id, order, descending, genre, decade, search, unidentified, initial],
-  );
+  const narrowing = useMemo<Narrowing>(() => {
+    const asked = scopeOf(scope);
+    return {
+      // A grid opened on a library is that library; a search narrowed to one
+      // is the same thing said in the address rather than in the path.
+      library: id ?? asked.library,
+      order,
+      descending,
+      genre,
+      decade,
+      search,
+      unidentified,
+      initial,
+      favourites,
+      kind: asked.kind,
+    };
+  }, [id, order, descending, genre, decade, search, unidentified, initial, favourites, scope]);
 
   const [cards, setCards] = useState<Card[]>([]);
   const [next, setNext] = useState<string | null>(null);

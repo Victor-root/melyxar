@@ -52,10 +52,14 @@
 }
 
 .header-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 7px 12px;
   border-radius: var(--radius-pill);
   color: var(--text-soft);
   font-weight: 500;
+  white-space: nowrap;
   transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
 }
 
@@ -70,25 +74,55 @@
   color: var(--accent-contrast);
 }
 
+/* The search, the scope and the magnifier are one control: a box, a word and
+   a picker that all narrow the same question, so they share one outline and
+   one focus ring rather than lining up as three things. */
 .search {
   margin-left: auto;
-}
-
-.search input {
-  width: 240px;
-  max-width: 44vw;
-  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: var(--surface);
-  color: var(--text);
-  font: inherit;
+  color: var(--text-faint);
   transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
 }
 
-.search input:focus-visible {
+.search:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.search-scope {
+  border: none;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 4px 8px 10px;
+  max-width: 130px;
+}
+
+.search-scope:focus-visible {
+  outline: none;
+  color: var(--text);
+}
+
+.search input {
+  width: 210px;
+  max-width: 34vw;
+  padding: 9px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+}
+
+.search input:focus-visible {
   outline: none;
 }
 
@@ -141,13 +175,93 @@
   }
 }
 
-/* The two choices wrap rather than push the header past the edge: on a
-   telephone they are the last thing in the row and the first to need a line
-   of their own. */
-.header-choices {
+/* What sits at the right hand end: the two functions that have no engine yet,
+   what the server is doing, and who is here. */
+.header-side {
   display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
   flex-wrap: wrap;
-  gap: var(--gap);
+}
+
+/* A function that is coming. Greyed and saying so, rather than left out: one
+   nobody can see is one nobody knows is coming. */
+.header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.header-icon:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.header-icon:disabled {
+  color: var(--text-faint);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* A word that opens a short list under it. */
+.header-menu {
+  position: relative;
+}
+
+.header-link-on {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.header-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 190px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+  animation: header-menu-arrive var(--quick) var(--ease) both;
+}
+
+/* Opening at the right hand edge, where a menu that opened leftwards would
+   hang off the screen. */
+.header-side .header-menu-list {
+  left: auto;
+  right: 0;
+}
+
+@keyframes header-menu-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.header-menu-line {
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  text-align: left;
+  color: var(--text-soft);
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.header-menu-line:hover,
+.header-menu-line.active {
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .choice {
@@ -2097,39 +2211,3 @@
   font-size: 14px;
 }
 
-
-/* --------------------------------------------------------------------------
- * Who is signed in, in the bar
- * ----------------------------------------------------------------------- */
-
-/* One control saying who is here and offering the way out. Two lines rather
-   than two controls: the name is what tells somebody they are looking at
-   their own library, and it has no other job. */
-.header-account {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 4px 12px;
-  border-radius: var(--radius-control);
-  line-height: 1.25;
-  transition: background var(--quick) var(--ease);
-}
-
-.header-account:hover {
-  background: var(--surface-raised);
-}
-
-.header-account-name {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.header-account-out {
-  font-size: 11.5px;
-  color: var(--text-faint);
-}
-
-.header-account:hover .header-account-out {
-  color: var(--accent-bright);
-}

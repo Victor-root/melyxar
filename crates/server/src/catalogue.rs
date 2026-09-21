@@ -18,6 +18,7 @@ use melyxar_app::picture::StoredImage;
 use melyxar_app::AppState;
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::Millis;
+use melyxar_core::library::LibraryKind;
 use melyxar_core::work::{IdentificationNote, PlaybackState};
 use serde::{Deserialize, Serialize};
 
@@ -234,6 +235,11 @@ struct BrowseParams {
     /// sorts, filters and pages exactly like everything else.
     #[serde(default)]
     favourites: bool,
+    /// Only the libraries of one kind, whichever libraries those are. What
+    /// the search's scope filter narrows by, and what a row of one kind is
+    /// read from: a collection of films spread over four disks is four
+    /// libraries and one category.
+    kind: Option<LibraryKind>,
     /// One letter, or the sign standing for everything that starts with none.
     initial: Option<String>,
 }
@@ -310,9 +316,7 @@ async fn works(
         search: params.search.filter(|value| !value.trim().is_empty()),
         unidentified_only: params.unidentified,
         favourites_only: params.favourites,
-        // Asked by kind only by the home page, which builds its own request:
-        // a grid is opened on a library, not on a kind of one.
-        library_kind: None,
+        library_kind: params.kind,
         // A letter nobody could mean is refused rather than quietly ignored:
         // a grid that answers everything to a narrowing looks broken.
         initial: params
