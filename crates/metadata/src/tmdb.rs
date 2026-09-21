@@ -411,13 +411,18 @@ struct Named {
     name: String,
 }
 
-/// Only the title images are read here. The posters and backdrops come along
-/// in the same answer and are ignored: the film's own two pictures are named
-/// on the film itself, where the provider has already made the choice.
+/// The title images and the wide ones. The posters are ignored: a poster is
+/// shown small and the one the provider puts forward is the one to show.
+///
+/// A wide picture is the other way round. It is drawn across the whole top of
+/// a screen, so how large it is matters as much as how well thought of it is,
+/// and the one put forward is often the smallest of the set.
 #[derive(Debug, Default, Deserialize)]
 struct RawImages {
     #[serde(default)]
     logos: Vec<RawImage>,
+    #[serde(default)]
+    backdrops: Vec<RawImage>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -430,6 +435,10 @@ struct RawImage {
     vote_average: f64,
     #[serde(default)]
     vote_count: i64,
+    /// How large the picture really is, which is the whole reason the wide
+    /// ones are looked through rather than taken as offered.
+    #[serde(default)]
+    width: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -585,6 +594,7 @@ fn candidate_from(raw: RawMovie, catalogue: Catalogue) -> Candidate {
 }
 
 fn details_from(raw: DetailsResponse, language: &str) -> Details {
+    let pictures = raw.images.unwrap_or_default();
     let credits = raw.credits.unwrap_or_default();
     let mut people: Vec<Credit> = credits
         .cast
@@ -684,8 +694,8 @@ fn details_from(raw: DetailsResponse, language: &str) -> Details {
             backdrop_path: value.backdrop_path,
         }),
         poster_path: raw.poster_path,
-        backdrop_path: raw.backdrop_path,
-        logo_path: best_logo(raw.images.unwrap_or_default(), language),
+        backdrop_path: best_backdrop(&pictures, raw.backdrop_path),
+        logo_path: best_logo(pictures.logos, language),
         trailers,
         season_count: raw.number_of_seasons,
     }
@@ -724,19 +734,24 @@ fn year_of(date: Option<&str>) -> Option<i32> {
     date?.get(..4)?.parse().ok()
 }
 
-/// The languages title images are asked for.
+/// The languages pictures are asked for.
 ///
 /// The library's own first, and English behind it: a great many films are
 /// drawn under an English title and under no other, so a library that asked
 /// for its language alone would show a plain line of text for most of its
-/// shelf. Pictures carrying no language at all are left out on purpose: a
-/// title image is a title, so it has one, and asking for them drags in every
-/// wordless backdrop the film has, measured at twice the answer for nothing.
+/// shelf.
+///
+/// And the ones carrying no language at all, which is what every wide picture
+/// is: they were left out while this answer was read for title images alone,
+/// since a title is words and so has a language. They are what the banner is
+/// chosen from now, so they have to be in the answer. It is about twice as
+/// long for it, once per film, and it is what lets a banner be picked for its
+/// size rather than taken as offered.
 fn image_languages(language: &str) -> String {
     let wanted = short_language(language);
     match wanted == "en" {
-        true => wanted.to_string(),
-        false => format!("{wanted},en"),
+        true => format!("{wanted},null"),
+        false => format!("{wanted},en,null"),
     }
 }
 
@@ -755,10 +770,9 @@ fn short_language(language: &str) -> String {
 /// drawn in that language, however well thought of another is. Among those
 /// left, the provider's own voters decide, which is the same thing that
 /// settles two films sharing a name.
-fn best_logo(images: RawImages, language: &str) -> Option<String> {
+fn best_logo(logos: Vec<RawImage>, language: &str) -> Option<String> {
     let wanted = short_language(language);
-    let mut offered: Vec<(u8, f64, i64, String)> = images
-        .logos
+    let mut offered: Vec<(u8, f64, i64, String)> = logos
         .into_iter()
         .filter_map(|image| {
             let path = image.file_path?;
@@ -782,6 +796,60 @@ fn best_logo(images: RawImages, language: &str) -> Option<String> {
             .then(right.2.cmp(&left.2))
     });
     offered.into_iter().next().map(|(_, _, _, path)| path)
+}
+
+/// How wide a picture has to be for the one the provider puts forward to be
+/// kept as it is.
+///
+/// A banner is drawn across the whole top of a screen. Below this, a screen
+/// of any size today is showing an enlargement, and what is lost there is
+/// what the maintainer reported: a soft banner over a sharp page.
+const WIDE_ENOUGH_FOR_A_BANNER: i64 = 1920;
+
+/// The wide picture a work is shown behind, among those the provider offers.
+///
+/// The one put forward comes first when it is large enough: it is the one its
+/// voters chose, and the widest of a set is often a frame somebody grabbed.
+/// When it is not, the widest is taken instead, its own voters breaking a tie,
+/// because a banner that covers a screen is a banner whose size is the first
+/// thing anybody sees.
+///
+/// Nothing at all changes for a work whose set says nothing about sizes, or
+/// whose set is empty: what the provider put forward stands.
+fn best_backdrop(images: &RawImages, put_forward: Option<String>) -> Option<String> {
+    let offered: Vec<(i64, f64, i64, &str)> = images
+        .backdrops
+        .iter()
+        .filter_map(|image| {
+            let path = image.file_path.as_deref()?;
+            let width = image.width.filter(|width| *width > 0)?;
+            match is_readable_picture(path) {
+                true => Some((width, image.vote_average, image.vote_count, path)),
+                false => None,
+            }
+        })
+        .collect();
+
+    if let Some(chosen) = put_forward.as_deref() {
+        let wide_enough = offered
+            .iter()
+            .find(|(_, _, _, path)| *path == chosen)
+            .is_some_and(|(width, _, _, _)| *width >= WIDE_ENOUGH_FOR_A_BANNER);
+        if wide_enough {
+            return put_forward;
+        }
+    }
+
+    offered
+        .into_iter()
+        .max_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then(left.1.total_cmp(&right.1))
+                .then(left.2.cmp(&right.2))
+        })
+        .map(|(_, _, _, path)| path.to_string())
+        .or(put_forward)
 }
 
 /// Whether a picture is in a form the media tool reads whatever it was built
@@ -1116,18 +1184,81 @@ mod tests {
     }
 
     #[test]
-    fn title_images_are_asked_for_in_the_language_of_the_shelf_and_in_english() {
-        assert_eq!(image_languages("fr"), "fr,en");
-        assert_eq!(image_languages("fr-FR"), "fr,en");
+    fn pictures_are_asked_for_in_the_language_of_the_shelf_in_english_and_in_none() {
+        assert_eq!(image_languages("fr"), "fr,en,null");
+        assert_eq!(image_languages("fr-FR"), "fr,en,null");
         assert_eq!(
             image_languages("en"),
-            "en",
+            "en,null",
             "asking for English twice asks for nothing more"
         );
         assert!(
-            !image_languages("fr").contains("null"),
-            "pictures carrying no language drag in every wordless backdrop \
-             the film has, for a title image that has a language by nature"
+            image_languages("fr").contains("null"),
+            "a wide picture carries no language, and it is among those that \
+             the banner is chosen from"
+        );
+    }
+
+    #[test]
+    fn the_banner_is_the_one_put_forward_when_it_is_large_enough() {
+        let raw: DetailsResponse = serde_json::from_str(
+            r#"{"id": 1, "backdrop_path": "/chosen.jpg", "images": {"backdrops": [
+                 {"file_path": "/chosen.jpg", "width": 1920, "vote_average": 5.0},
+                 {"file_path": "/huge.jpg", "width": 3840, "vote_average": 1.0}]}}"#,
+        )
+        .expect("parses");
+        assert_eq!(
+            details_from(raw, "fr").backdrop_path.as_deref(),
+            Some("/chosen.jpg"),
+            "the one its voters chose stands as long as it covers a screen"
+        );
+    }
+
+    #[test]
+    fn a_banner_too_small_for_a_screen_gives_way_to_the_widest_offered() {
+        let raw: DetailsResponse = serde_json::from_str(
+            r#"{"id": 1, "backdrop_path": "/small.jpg", "images": {"backdrops": [
+                 {"file_path": "/small.jpg", "width": 1280, "vote_average": 9.0},
+                 {"file_path": "/wide.jpg", "width": 3840, "vote_average": 1.0},
+                 {"file_path": "/middling.jpg", "width": 1920, "vote_average": 8.0}]}}"#,
+        )
+        .expect("parses");
+        assert_eq!(
+            details_from(raw, "fr").backdrop_path.as_deref(),
+            Some("/wide.jpg"),
+            "a banner drawn across a whole screen is read for its size first"
+        );
+    }
+
+    #[test]
+    fn a_film_whose_pictures_say_nothing_of_their_size_keeps_the_one_offered() {
+        for answer in [
+            r#"{"id": 1, "backdrop_path": "/only.jpg"}"#,
+            r#"{"id": 1, "backdrop_path": "/only.jpg", "images": {"backdrops": []}}"#,
+            r#"{"id": 1, "backdrop_path": "/only.jpg", "images": {"backdrops": [
+                 {"file_path": "/only.jpg"}]}}"#,
+        ] {
+            let raw: DetailsResponse = serde_json::from_str(answer).expect("parses");
+            assert_eq!(
+                details_from(raw, "fr").backdrop_path.as_deref(),
+                Some("/only.jpg"),
+                "nothing known about the set is no reason to drop what was offered"
+            );
+        }
+    }
+
+    #[test]
+    fn a_banner_in_a_form_the_tool_cannot_read_is_never_chosen() {
+        let raw: DetailsResponse = serde_json::from_str(
+            r#"{"id": 1, "backdrop_path": "/small.jpg", "images": {"backdrops": [
+                 {"file_path": "/small.jpg", "width": 1280},
+                 {"file_path": "/huge.svg", "width": 3840}]}}"#,
+        )
+        .expect("parses");
+        assert_eq!(
+            details_from(raw, "fr").backdrop_path.as_deref(),
+            Some("/small.jpg"),
+            "the widest is no use if nothing here can open it"
         );
     }
 

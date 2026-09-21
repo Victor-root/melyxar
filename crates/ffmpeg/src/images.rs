@@ -27,8 +27,14 @@ const QUALITY: u8 = 80;
 /// header of a detail page. A viewer's browser picks among them; the server
 /// never resizes on demand.
 pub const POSTER_WIDTHS: [u32; 3] = [200, 400, 800];
-/// Backdrops are shown wide, so they start where posters end.
-pub const BACKDROP_WIDTHS: [u32; 3] = [640, 1280, 1920];
+/// Backdrops are shown wide, so they start where posters end and go as far as
+/// the screens they are drawn on: a banner covers the whole top of one, so
+/// its width is the screen's own. The tile of a way in, a laptop, most
+/// monitors, a wide desk monitor, and a four thousand line screen.
+///
+/// Nothing here is ever written larger than the picture that arrived, so a
+/// film the provider holds small costs the first of these and no more.
+pub const BACKDROP_WIDTHS: [u32; 5] = [640, 1280, 1920, 2560, 3840];
 /// A face is shown in a small round frame, and a screen with fine pixels wants
 /// twice what it measures. Two widths cover both and no more.
 pub const PHOTO_WIDTHS: [u32; 2] = [96, 192];
