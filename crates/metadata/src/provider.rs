@@ -82,6 +82,60 @@ pub struct Candidate {
     pub popularity: f64,
 }
 
+/// What a picture is for.
+///
+/// The three a work wears, and the three the interface serves. Anything else a
+/// provider holds is not asked for: there is nowhere to draw it, and a panel
+/// offering a kind nothing shows is a panel that lies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PictureKind {
+    /// Standing, two thirds as wide as it is tall.
+    Poster,
+    /// Wide, drawn behind the work across a whole screen.
+    Backdrop,
+    /// The work's title drawn as it draws itself.
+    Logo,
+}
+
+impl PictureKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Poster => "poster",
+            Self::Backdrop => "backdrop",
+            Self::Logo => "logo",
+        }
+    }
+
+    pub fn parse(word: &str) -> Option<Self> {
+        match word {
+            "poster" => Some(Self::Poster),
+            "backdrop" => Some(Self::Backdrop),
+            "logo" => Some(Self::Logo),
+            _ => None,
+        }
+    }
+}
+
+/// One picture a provider holds for a work, as it offers it.
+///
+/// Its size is what the panel that shows these is for: choosing between them
+/// is choosing which one is large enough and which one looks right, and
+/// neither can be judged without the other.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OfferedPicture {
+    pub kind: PictureKind,
+    /// Path at the provider, not a full address, like every other picture
+    /// here: what an address looks like is the provider's business.
+    pub path: String,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
+    /// The language written on it, where words are written on it at all. A
+    /// wide picture carries none, a title image always does.
+    pub language: Option<String>,
+    pub vote_average: f64,
+    pub vote_count: i64,
+}
+
 /// Everything the provider knows about one work.
 ///
 /// One shape for a film and for a series, because a page shows the same things
@@ -233,6 +287,18 @@ pub trait MetadataProvider: Send + Sync {
 
     /// Fetches a picture the provider named.
     fn fetch_image(&self, path: &str) -> impl Future<Output = Result<Vec<u8>>> + Send;
+
+    /// Every picture the provider holds for one work.
+    ///
+    /// What the identification uses is the one picture of each kind the
+    /// provider puts forward, chosen for it. This is the whole set, asked for
+    /// only when somebody opens the panel that chooses among them by hand.
+    fn pictures(
+        &self,
+        catalogue: Catalogue,
+        external_id: &str,
+        language: &str,
+    ) -> impl Future<Output = Result<Vec<OfferedPicture>>> + Send;
 
     /// The work an identifier from another site stands for.
     ///

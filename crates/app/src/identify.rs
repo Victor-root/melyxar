@@ -1436,6 +1436,8 @@ mod tests {
         /// Whether this film has only ever been described in English, which
         /// is the ordinary state of a film nobody has translated yet.
         only_in_english: bool,
+        /// Every picture it holds for a work, for whoever chooses one by hand.
+        offered: Vec<melyxar_metadata::OfferedPicture>,
     }
 
     impl StandIn {
@@ -1451,6 +1453,7 @@ mod tests {
                 picture: None,
                 exact: false,
                 only_in_english: false,
+                offered: Vec::new(),
             }
         }
 
@@ -1483,6 +1486,7 @@ mod tests {
                 picture: None,
                 exact: false,
                 only_in_english: false,
+                offered: Vec::new(),
             }
         }
 
@@ -1609,6 +1613,18 @@ mod tests {
                     poster_path: None,
                     episodes: Vec::new(),
                 }))
+        }
+
+        async fn pictures(
+            &self,
+            _catalogue: Catalogue,
+            _external_id: &str,
+            _language: &str,
+        ) -> melyxar_metadata::provider::Result<Vec<melyxar_metadata::OfferedPicture>> {
+            if let Some(failure) = self.failure {
+                return Err(failure());
+            }
+            Ok(self.offered.clone())
         }
 
         async fn by_imdb_id(
@@ -3284,6 +3300,116 @@ mod tests {
         assert!(
             poster_fetched(&provider),
             "and asking for them replaced goes and gets them"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_picture_chosen_by_hand_is_never_undone_by_a_later_run() {
+        let Some(picture) = a_real_poster() else {
+            eprintln!("no media tool here, the preparation of a picture was not exercised");
+            return;
+        };
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture),
+        );
+
+        // Named, which is what puts the provider's own poster on it.
+        run(&state, &provider, &library).await;
+        let poster_of = |state: &AppState| {
+            let owner = work.id.to_db_string();
+            let database = state.database().clone();
+            async move {
+                database
+                    .images_of("work", &owner)
+                    .await
+                    .expect("read")
+                    .into_iter()
+                    .find(|image| image.image_kind == "poster")
+                    .map(|image| image.fingerprint)
+            }
+        };
+        let from_the_provider = poster_of(&state).await.expect("a poster arrived");
+
+        crate::images::choose_picture(
+            &state,
+            provider.as_ref(),
+            work.id,
+            melyxar_metadata::PictureKind::Poster,
+            "/chosen-by-hand.jpg",
+        )
+        .await
+        .expect("chosen");
+        let chosen = poster_of(&state).await.expect("the chosen one is there");
+        assert_ne!(chosen, from_the_provider, "the poster is the one chosen");
+
+        // Everything a refresh does, twice over: the work is described again,
+        // and its pictures are asked for again.
+        crate::images::store_provider_images(
+            &state,
+            provider.as_ref(),
+            work.id,
+            &details("111", "Quiet Harbour", Some(2019)),
+        )
+        .await;
+        identify_by_hand(&state, &provider, library.id, work.id, "111", true)
+            .await
+            .expect("chosen by hand");
+
+        assert_eq!(
+            poster_of(&state).await.as_deref(),
+            Some(chosen.as_str()),
+            "what somebody chose looking at the work outlives every later run"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_picture_taken_off_by_hand_does_not_come_back() {
+        let Some(picture) = a_real_poster() else {
+            eprintln!("no media tool here, the preparation of a picture was not exercised");
+            return;
+        };
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(
+            StandIn::new(
+                vec![candidate("111", "Quiet Harbour", Some(2019))],
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture),
+        );
+        run(&state, &provider, &library).await;
+
+        crate::images::forget_picture(
+            &state,
+            work.id,
+            melyxar_metadata::PictureKind::Poster,
+        )
+        .await
+        .expect("taken off");
+
+        crate::images::store_provider_images(
+            &state,
+            provider.as_ref(),
+            work.id,
+            &details("111", "Quiet Harbour", Some(2019)),
+        )
+        .await;
+
+        assert!(
+            !state
+                .database()
+                .images_of("work", &work.id.to_db_string())
+                .await
+                .expect("read")
+                .iter()
+                .any(|image| image.image_kind == "poster"),
+            "a refresh that puts back what somebody took off is a refresh arguing with them"
         );
     }
 

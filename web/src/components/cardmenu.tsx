@@ -69,6 +69,7 @@ export function CardMenu({
   from,
   openedBy,
   onIdentify,
+  onEditImages,
   onClose,
 }: {
   card: Card;
@@ -84,6 +85,9 @@ export function CardMenu({
       moment anything in it is pressed, and a panel drawn inside it would go
       with it. */
   onIdentify: () => void;
+  /** Opens the panel that chooses the pictures this work wears, for the same
+      reason as the one above. */
+  onEditImages: () => void;
   onClose: () => void;
 }) {
   const { t } = useSettings();
@@ -195,7 +199,7 @@ export function CardMenu({
       key: "edit_images",
       mark: <ImageIcon size={SHAPE} />,
       allowed: account?.is_administrator === true,
-      later: true,
+      act: onEditImages,
     },
     {
       key: "edit_subtitles",

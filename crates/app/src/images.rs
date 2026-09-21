@@ -17,7 +17,7 @@ use melyxar_core::fingerprint;
 use melyxar_core::id::WorkId;
 use melyxar_database::images::StoredImage;
 use melyxar_database::metadata::CreditedPerson;
-use melyxar_metadata::{Details, MetadataProvider};
+use melyxar_metadata::{Details, MetadataProvider, PictureKind};
 
 use crate::{AppState, Result};
 
@@ -48,6 +48,17 @@ enum Kind {
 }
 
 impl Kind {
+    /// The one a caller outside this file names. A face belongs to a person
+    /// rather than to a work, and nobody chooses one by hand, so the kinds
+    /// that can be chosen are the three a work wears.
+    fn of(kind: PictureKind) -> Self {
+        match kind {
+            PictureKind::Poster => Self::Poster,
+            PictureKind::Backdrop => Self::Backdrop,
+            PictureKind::Logo => Self::Logo,
+        }
+    }
+
     fn as_str(self) -> &'static str {
         match self {
             Self::Poster => "poster",
@@ -154,12 +165,24 @@ async fn store(
         return 0;
     };
 
+    // What somebody chose by hand, which no run of this undoes. A picture put
+    // there deliberately and swept away by the next refresh is the whole
+    // reason a person stops trusting a server with their library.
+    let by_hand = state
+        .database()
+        .locked_fields(work_id)
+        .await
+        .unwrap_or_default();
+
     let owner_id = work_id.to_db_string();
     let mut prepared = 0;
     for (kind, path) in wanted.iter().copied() {
         let Some(path) = path else {
             continue;
         };
+        if by_hand.iter().any(|field| field == kind.as_str()) {
+            continue;
+        }
         match store_one(state, provider, &tools.ffmpeg, kind, &owner_id, path).await {
             Ok(None) => {}
             Ok(Some(picture)) => {
@@ -192,6 +215,112 @@ async fn store(
         }
     }
     prepared
+}
+
+/// Every picture the provider holds for one work, to be chosen among by hand.
+///
+/// Asked for only when somebody opens the panel that chooses: it is a request
+/// of its own, and nothing else in the server has any use for the whole set.
+pub async fn offered_pictures(
+    state: &AppState,
+    provider: &impl MetadataProvider,
+    work_id: WorkId,
+) -> Result<Vec<melyxar_metadata::OfferedPicture>> {
+    let work = state
+        .database()
+        .work(work_id)
+        .await?
+        .ok_or_else(|| crate::AppError::Domain(melyxar_core::Error::not_found("work")))?;
+    let catalogue = melyxar_metadata::Catalogue::of(work.kind)
+        .ok_or_else(|| crate::AppError::Domain(melyxar_core::Error::not_found("catalogue")))?;
+    let named = state
+        .database()
+        .work_external_ids(work_id)
+        .await?
+        .into_iter()
+        .find(|(who, _)| who == provider.name())
+        .map(|(_, id)| id)
+        .ok_or_else(|| {
+            crate::AppError::Domain(melyxar_core::Error::invalid_input(
+                "this work has not been identified, so there is nothing to offer",
+            ))
+        })?;
+
+    let language = state
+        .database()
+        .list_libraries()
+        .await?
+        .into_iter()
+        .find(|library| library.id == work.library_id)
+        .map(|library| library.metadata_language)
+        .unwrap_or_else(|| "en".to_string());
+
+    provider
+        .pictures(catalogue, &named, &language)
+        .await
+        .map_err(|error| {
+            crate::AppError::Domain(melyxar_core::Error::invalid_input(error.to_string()))
+        })
+}
+
+/// Puts one picture chosen by hand on a work, in place of whatever was there.
+///
+/// Remembered as a choice: the kind is locked, so no later run replaces it.
+/// What a person chose looking at the work is worth more than what a rule
+/// chose looking at a name, and a picture swept away by the next refresh is
+/// how somebody stops trusting a server with their library.
+pub async fn choose_picture(
+    state: &AppState,
+    provider: &impl MetadataProvider,
+    work_id: WorkId,
+    kind: PictureKind,
+    provider_path: &str,
+) -> Result<bool> {
+    let Some(tools) = state.tools() else {
+        return Ok(false);
+    };
+    let kind = Kind::of(kind);
+    let owner_id = work_id.to_db_string();
+
+    let prepared = store_one(
+        state,
+        provider,
+        &tools.ffmpeg,
+        kind,
+        &owner_id,
+        provider_path,
+    )
+    .await?;
+
+    state.database().lock_field(work_id, kind.as_str()).await?;
+    if kind == Kind::Poster {
+        if let Some(colour) = prepared.as_ref().and_then(|picture| picture.colour.clone()) {
+            state
+                .database()
+                .set_work_dominant_color(work_id, &colour)
+                .await?;
+        }
+    }
+    Ok(prepared.is_some())
+}
+
+/// Takes a picture off a work, files and all.
+///
+/// Remembered like a choice, and for the same reason: somebody who took a
+/// picture off did not want it, and a refresh that puts it back is a refresh
+/// arguing with them.
+pub async fn forget_picture(state: &AppState, work_id: WorkId, kind: PictureKind) -> Result<()> {
+    let kind = Kind::of(kind);
+    let root = state.config().directories.images();
+    let no_longer_used = state
+        .database()
+        .replace_images(kind.owner_kind(), &work_id.to_db_string(), kind.as_str(), &[])
+        .await?;
+    for path in no_longer_used {
+        tokio::fs::remove_file(root.join(path)).await.ok();
+    }
+    state.database().lock_field(work_id, kind.as_str()).await?;
+    Ok(())
 }
 
 /// How many faces are worth fetching for one work.

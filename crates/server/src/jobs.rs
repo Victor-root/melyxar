@@ -372,7 +372,7 @@ struct DetachedView {
     work_id: String,
 }
 
-fn provider_of(
+pub(crate) fn provider_of(
     state: &AppState,
 ) -> Result<std::sync::Arc<impl melyxar_app::metadata::MetadataProvider + 'static>> {
     state.metadata_provider().ok_or_else(|| {
