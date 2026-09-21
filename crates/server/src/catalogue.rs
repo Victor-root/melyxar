@@ -40,6 +40,7 @@ pub fn router() -> Router<AppState> {
             "/api/v1/works/{id}/watched",
             axum::routing::put(set_watched),
         )
+        .route("/api/v1/works/{id}/pinned", axum::routing::put(set_pinned))
         .route(
             "/api/v1/works/{id}/trailers/{rank}",
             axum::routing::get(trailer),
@@ -748,6 +749,35 @@ async fn set_favourite(
     let favourite =
         melyxar_app::playback::set_favourite(&state, &who, work_id, body.favourite).await?;
     Ok(Json(FavouriteView { favourite }))
+}
+
+/// Whether this work is to stand on the server's own shelf.
+#[derive(Debug, Deserialize)]
+struct PinnedBody {
+    pinned: bool,
+}
+
+/// What it is now, which is what the menu entry is drawn from.
+#[derive(Debug, Serialize)]
+struct PinnedView {
+    pinned: bool,
+}
+
+/// Puts a work in front of everybody, or takes it back off.
+///
+/// Asks for an administrator, which is the whole difference between this and
+/// a favourite: one is the server saying what to watch, the other is a person
+/// saying what they liked.
+async fn set_pinned(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    _: crate::account::Administrator,
+    Path(id): Path<String>,
+    Json(body): Json<PinnedBody>,
+) -> Result<Json<PinnedView>> {
+    let work_id = parse_work(&id)?;
+    let pinned = melyxar_app::catalogue::set_pinned(&state, &who, work_id, body.pinned).await?;
+    Ok(Json(PinnedView { pinned }))
 }
 
 /// Whether this viewer is saying they have watched it.

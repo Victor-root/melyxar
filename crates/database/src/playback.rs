@@ -14,6 +14,7 @@ use melyxar_core::time::{now, Millis, Timestamp};
 use melyxar_core::work::{should_accept_position, PlaybackState};
 use sqlx::{AssertSqlSafe, Row};
 
+use crate::browse::WHAT_A_CARD_IS;
 use crate::convert::{parse_id, parse_optional_timestamp, timestamp_to_text};
 use crate::{Database, DatabaseError, Result};
 
@@ -110,9 +111,7 @@ impl Database {
             return Ok(Vec::new());
         };
         let mut query = sqlx::query(AssertSqlSafe(format!(
-            "SELECT w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
-                    w.community_rating, w.identification, w.identification_note,
-                    w.dominant_color, w.added_at,
+            "SELECT {WHAT_A_CARD_IS},
                     p.position_ms, p.last_played_at
              FROM playback_progress p
              JOIN works w ON w.id = p.work_id
@@ -313,9 +312,7 @@ impl Database {
                                  WHERE m.work_id = e.id AND m.missing_since IS NULL)
                     {inside}
              )
-             SELECT w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
-                    w.community_rating, w.identification, w.identification_note,
-                    w.dominant_color, w.added_at,
+             SELECT {WHAT_A_CARD_IS},
                     waiting.series_id, waiting.season_number, waiting.episode_number,
                     series.title AS series_title,
                     -- When this series was last touched at all, which is the
