@@ -204,11 +204,15 @@ async fn start_identification(
     }))
 }
 
+/// What to look for. Every part of it narrows, and all of it is optional: a
+/// name left empty falls back to what the work is called, which is the first
+/// thing anybody would try.
 #[derive(Debug, Deserialize)]
 struct Asked {
-    /// What to look for. Empty falls back to what the work is called, which is
-    /// the first thing anybody would try.
     query: Option<String>,
+    year: Option<i32>,
+    imdb_id: Option<String>,
+    provider_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -233,20 +237,18 @@ async fn candidates(
     let work_id = parse_work(&id)?;
     let provider = provider_of(&state)?;
 
-    let query = match asked.query.map(|value| value.trim().to_string()) {
-        Some(query) if !query.is_empty() => query,
-        _ => {
-            state
-                .database()
-                .work(work_id)
-                .await
-                .map_err(internal)?
-                .ok_or_else(|| ServerError::not_found("no work with that identifier"))?
-                .title
-        }
-    };
-
-    let found = melyxar_app::identify::candidates_for(&state, &provider, work_id, &query).await?;
+    let found = melyxar_app::identify::candidates_for(
+        &state,
+        &provider,
+        work_id,
+        melyxar_app::identify::SearchCriteria {
+            name: asked.query,
+            year: asked.year,
+            imdb_id: asked.imdb_id,
+            provider_id: asked.provider_id,
+        },
+    )
+    .await?;
     Ok(Json(
         found
             .iter()
@@ -268,6 +270,18 @@ async fn candidates(
 #[derive(Debug, Deserialize)]
 struct Chosen {
     external_id: String,
+    /// Whether the pictures already held are made again from the work just
+    /// chosen. Left out, they are: correcting a work that was wholly the wrong
+    /// work is the ordinary case, and a poster of the wrong film is the most
+    /// visible part of it.
+    #[serde(default = "yes")]
+    replace_pictures: bool,
+}
+
+/// What a field left out of the body means, where leaving it out has to mean
+/// something rather than nothing.
+const fn yes() -> bool {
+    true
 }
 
 /// Records the film a person picked, which no later run undoes.
@@ -292,6 +306,7 @@ async fn choose(
         work.library_id,
         work_id,
         &chosen.external_id,
+        chosen.replace_pictures,
     )
     .await?;
 

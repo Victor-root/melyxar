@@ -38,7 +38,7 @@ export function IdentifyByHand({
     setBusy(true);
     setRefused(null);
     try {
-      setCandidates(await api.candidates(workId, query));
+      setCandidates(await api.candidates(workId, { name: query }));
     } catch (error) {
       setRefused(refusalOf(error));
     } finally {

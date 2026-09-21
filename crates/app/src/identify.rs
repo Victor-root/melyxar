@@ -1228,21 +1228,62 @@ where
     Ok(IdentifyJob { started, outcome })
 }
 
+/// What somebody typed to find the right work.
+///
+/// Every part of it is optional and every part of it narrows: a name alone is
+/// the ordinary case, a name and a year separates two films that share a
+/// title, and an identifier settles it outright. Nothing here is guessed from
+/// the file, because a person searching by hand is already saying that what
+/// was read from the file was wrong.
+#[derive(Debug, Clone, Default)]
+pub struct SearchCriteria {
+    pub name: Option<String>,
+    pub year: Option<i32>,
+    /// An identifier at the site that names films, which the provider can
+    /// turn into one of its own.
+    pub imdb_id: Option<String>,
+    /// The provider's own identifier, which names the work outright.
+    pub provider_id: Option<String>,
+}
+
+impl SearchCriteria {
+    /// The same, with what is only spaces treated as nothing at all: a field
+    /// somebody cleared and left is a field they are not searching by.
+    fn tidied(self) -> Self {
+        let kept = |value: Option<String>| {
+            value
+                .map(|text| text.trim().to_string())
+                .filter(|text| !text.is_empty())
+        };
+        Self {
+            name: kept(self.name),
+            year: self.year,
+            imdb_id: kept(self.imdb_id),
+            provider_id: kept(self.provider_id),
+        }
+    }
+}
+
 /// Films a person could mean, for a work no provider recognised.
 ///
 /// The rules that read a file name do their best and sometimes there is
 /// nothing to be done: a copy named after the wrong film, a title the provider
 /// spells differently, a name that is only a marker. Somebody looking at the
 /// film knows what it is, and this is how they say so.
+///
+/// An identifier wins over a name, since it is the one thing that cannot be
+/// ambiguous: given one, the work it names is the only answer, and a list of
+/// near misses beside it would only invite a wrong press.
 pub async fn candidates_for<P>(
     state: &AppState,
     provider: &Arc<P>,
     work_id: WorkId,
-    query: &str,
+    asked: SearchCriteria,
 ) -> Result<Vec<Candidate>>
 where
     P: MetadataProvider + 'static,
 {
+    let asked = asked.tidied();
     let work = state
         .database()
         .work(work_id)
@@ -1262,23 +1303,59 @@ where
     // series by hand is offered series, not films of the same name.
     let catalogue = Catalogue::of(work.kind)
         .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("catalogue")))?;
+    let refused = |error: melyxar_metadata::ProviderError| {
+        AppError::Domain(melyxar_core::Error::invalid_input(error.to_string()))
+    };
 
-    // Whatever was typed, and never the year: a person searching by hand is
-    // already saying the automatic attempt was wrong, and the year it used
-    // came from the same file name that was wrong.
+    if let Some(named) = &asked.provider_id {
+        let details = provider
+            .details(catalogue, named, &language)
+            .await
+            .map_err(refused)?;
+        return Ok(vec![Candidate {
+            external_id: details.external_id,
+            catalogue,
+            title: details.title,
+            original_title: details.original_title,
+            release_year: details.release_year,
+            overview: details.overview,
+            poster_path: details.poster_path,
+            popularity: 0.0,
+        }]);
+    }
+
+    if let Some(elsewhere) = &asked.imdb_id {
+        return Ok(provider
+            .by_imdb_id(elsewhere, &language)
+            .await
+            .map_err(refused)?
+            .into_iter()
+            .collect());
+    }
+
+    // What the work is called now when nothing was typed: it is the first
+    // thing anybody would try, and it is already in the field.
+    let name = asked.name.unwrap_or(work.title);
     provider
-        .search(catalogue, query, None, &language)
+        .search(catalogue, &name, asked.year, &language)
         .await
-        .map_err(|error| AppError::Domain(melyxar_core::Error::invalid_input(error.to_string())))
+        .map_err(refused)
 }
 
 /// Chooses a match by hand, and remembers that a person chose it.
+///
+/// `replace_pictures` says whether the pictures already held are to be made
+/// again from the work just chosen. Somebody who put a poster there by hand
+/// and is only correcting the name wants to keep it; somebody correcting a
+/// work that was wholly the wrong work wants the lot replaced, and that is
+/// the ordinary case.
 pub async fn identify_by_hand<P>(
     state: &AppState,
     provider: &Arc<P>,
     library_id: LibraryId,
     work_id: WorkId,
     external_id: &str,
+    replace_pictures: bool,
 ) -> Result<()>
 where
     P: MetadataProvider + 'static,
@@ -1316,8 +1393,11 @@ where
 
     // A film someone identified by hand gets its pictures like any other: the
     // provider has just described it, so asking again would be a request for
-    // nothing.
-    crate::images::store_provider_images(state, provider.as_ref(), work_id, &details).await;
+    // nothing. Unless the pictures it already holds are to be kept, which is
+    // the whole of what a picture chosen by hand is.
+    if replace_pictures {
+        crate::images::store_provider_images(state, provider.as_ref(), work_id, &details).await;
+    }
     crate::images::store_person_photos(state, provider, &people).await;
 
     state.database().bump_library_version(library_id).await?;
@@ -3063,6 +3143,151 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_search_by_hand_narrows_by_whatever_was_filled_in() {
+        let (_directory, state, _library, work) =
+            state_with_work("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![
+                candidate("111", "Quiet Harbour", Some(2019)),
+                candidate("222", "Quiet Harbour", Some(1998)),
+            ],
+            vec![details("333", "Amber Field", Some(2004))],
+        ));
+
+        let by_name = candidates_for(
+            &state,
+            &provider,
+            work.id,
+            SearchCriteria {
+                name: Some("Quiet Harbour".to_string()),
+                ..SearchCriteria::default()
+            },
+        )
+        .await
+        .expect("asked");
+        assert_eq!(by_name.len(), 2, "two works share the name");
+
+        let by_year = candidates_for(
+            &state,
+            &provider,
+            work.id,
+            SearchCriteria {
+                name: Some("Quiet Harbour".to_string()),
+                year: Some(1998),
+                ..SearchCriteria::default()
+            },
+        )
+        .await
+        .expect("asked");
+        assert_eq!(
+            by_year.iter().map(|one| one.external_id.as_str()).collect::<Vec<_>>(),
+            vec!["222"],
+            "the year is what separates two works of the same name"
+        );
+
+        // An identifier names the work outright, so it answers with that work
+        // and nothing beside it, whatever else was filled in.
+        let by_provider = candidates_for(
+            &state,
+            &provider,
+            work.id,
+            SearchCriteria {
+                name: Some("something else entirely".to_string()),
+                provider_id: Some("333".to_string()),
+                ..SearchCriteria::default()
+            },
+        )
+        .await
+        .expect("asked");
+        assert_eq!(
+            by_provider.iter().map(|one| one.title.as_str()).collect::<Vec<_>>(),
+            vec!["Amber Field"]
+        );
+
+        let elsewhere = candidates_for(
+            &state,
+            &provider,
+            work.id,
+            SearchCriteria {
+                imdb_id: Some("tt333".to_string()),
+                ..SearchCriteria::default()
+            },
+        )
+        .await
+        .expect("asked");
+        assert_eq!(
+            elsewhere.iter().map(|one| one.external_id.as_str()).collect::<Vec<_>>(),
+            vec!["333"],
+            "an identifier from the other site is turned into one of the provider's own"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_search_by_hand_falls_back_to_what_the_work_is_called() {
+        let (_directory, state, _library, work) =
+            state_with_work("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("111", "Quiet Harbour", Some(2019))],
+            Vec::new(),
+        ));
+
+        candidates_for(
+            &state,
+            &provider,
+            work.id,
+            SearchCriteria {
+                // Left empty, and nothing but spaces, which is the same thing.
+                name: Some("   ".to_string()),
+                ..SearchCriteria::default()
+            },
+        )
+        .await
+        .expect("asked");
+
+        assert_eq!(
+            provider.searches(),
+            vec![("Quiet Harbour".to_string(), None)],
+            "an empty field is the film's own name, not a search for nothing"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_pictures_of_a_work_corrected_by_hand_are_kept_when_asked() {
+        let Some(picture) = a_real_poster() else {
+            eprintln!("no media tool here, the preparation of a picture was not exercised");
+            return;
+        };
+        let (_directory, state, library, work) =
+            state_with_tools("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(
+            StandIn::new(
+                Vec::new(),
+                vec![details("111", "Quiet Harbour", Some(2019))],
+            )
+            .serving(picture),
+        );
+
+        let poster_fetched =
+            |provider: &StandIn| provider.fetched().iter().any(|path| path == "/poster.jpg");
+
+        identify_by_hand(&state, &provider, library.id, work.id, "111", false)
+            .await
+            .expect("chosen by hand");
+        assert!(
+            !poster_fetched(&provider),
+            "somebody correcting only the name keeps the pictures already there"
+        );
+
+        identify_by_hand(&state, &provider, library.id, work.id, "111", true)
+            .await
+            .expect("chosen by hand");
+        assert!(
+            poster_fetched(&provider),
+            "and asking for them replaced goes and gets them"
+        );
+    }
+
+    #[tokio::test]
     async fn a_match_picked_by_hand_is_never_undone_by_a_later_run() {
         let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
         let provider = Arc::new(StandIn::new(
@@ -3073,7 +3298,7 @@ mod tests {
             ],
         ));
 
-        identify_by_hand(&state, &provider, library.id, work.id, "111")
+        identify_by_hand(&state, &provider, library.id, work.id, "111", true)
             .await
             .expect("chosen by hand");
 
