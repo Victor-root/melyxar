@@ -11,17 +11,18 @@ import { useSettings } from "../settings";
 export function LibraryPage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
   const { narrowing, choose, cards, more, loadMore, loading, failed, filters } = useBrowsing();
-  const { order, descending, genre, decade, search, unidentified, initial } = narrowing;
+  const { order, descending, genre, decade, search, unidentified, initial, favourites } =
+    narrowing;
   const library = libraries.find((entry) => entry.id === narrowing.library);
 
   return (
     <main className="page">
       <div className="section-head">
-        <h1>{library?.name ?? t("library.all")}</h1>
+        <h1>{favourites ? t("nav.favourites") : (library?.name ?? t("library.all"))}</h1>
         {/* What the library holds, not what has been scrolled to so far: a
             grid that counts its own loaded cards tells the viewer how far
             they have scrolled, which nobody asked. */}
-        {library && !search && !genre && decade === undefined && !unidentified && (
+        {library && !search && !genre && decade === undefined && !unidentified && !favourites && (
           <span className="count">{t("library.count", { count: library.works })}</span>
         )}
       </div>
@@ -91,7 +92,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
 
       {failed && <p className="notice">{t("error.unreachable")}</p>}
       {!failed && cards.length === 0 && !loading && (
-        <p className="notice">{t("library.empty")}</p>
+        <p className="notice">{t(favourites ? "favourites.empty" : "library.empty")}</p>
       )}
 
       {/* The grid and the letters beside it. A few hundred films is too long

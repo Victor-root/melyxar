@@ -28,6 +28,7 @@ import { DeviceOptimization } from "../player/DeviceOptimization";
 import { asLocalTime, asUtcMinutes } from "../readable";
 import { useSettingsScreen } from "../screens/settings";
 import { useSettings } from "../settings";
+import type { ThemeChoice } from "../settings";
 
 export function SettingsPage() {
   const { t, language } = useSettings();
@@ -52,6 +53,8 @@ export function SettingsPage() {
       </div>
 
       {failed && <p className="notice">{t(failed === "not_kept" ? "settings.not_kept" : "error.unreachable")}</p>}
+
+      <Appearance />
 
       <DeviceOptimization />
 
@@ -302,6 +305,47 @@ export function SettingsPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+/**
+ * How the interface looks and what language it speaks.
+ *
+ * Kept by the account rather than by this browser, so a choice made on one
+ * machine is the same choice on the next. It used to live in the bar at the
+ * top, where it took the room three categories now stand in; a setting
+ * somebody changes twice a year does not belong on every screen.
+ */
+function Appearance() {
+  const { t, language, setLanguage, theme, setTheme } = useSettings();
+
+  return (
+    <section className="settings-block">
+      <h2>{t("settings.appearance")}</h2>
+      <p className="settings-why">{t("settings.appearance_why")}</p>
+
+      <div className="controls">
+        <Choice
+          label={t("nav.theme")}
+          value={theme}
+          onPick={(picked) => setTheme(picked as ThemeChoice)}
+          options={[
+            ["system", t("theme.system")],
+            ["dark", t("theme.dark")],
+            ["light", t("theme.light")],
+          ]}
+        />
+        <Choice
+          label={t("nav.language")}
+          value={language}
+          onPick={(picked) => setLanguage(picked === "fr" ? "fr" : "en")}
+          options={[
+            ["en", "English"],
+            ["fr", "Français"],
+          ]}
+        />
+      </div>
+    </section>
   );
 }
 
