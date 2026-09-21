@@ -23,8 +23,13 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { HeroItem } from "../api";
 import { useShownPicture } from "./picture";
+import { howLong, whatTheFileHolds } from "../readable";
 import { useSettings } from "../settings";
-import { ChevronLeftIcon, ChevronRightIcon, PlayIcon } from "../icons";
+import { ChevronLeftIcon, ChevronRightIcon, InfoIcon, PlayIcon } from "../icons";
+
+/** How many genres are named beside a title. Two: past that it is a list of
+ *  everything the film could be filed under rather than what it is. */
+const GENRES_NAMED = 2;
 
 /** How long one work stands before the next takes its place. */
 const EACH_STANDS_FOR = 9000;
@@ -92,46 +97,32 @@ export function Hero({ items }: { items: HeroItem[] }) {
         <p className="hero-facts">
           {[
             shown.year,
-            shown.runtime_minutes ? t("work.minutes", { count: shown.runtime_minutes }) : null,
+            shown.runtime_minutes ? howLong(shown.runtime_minutes, t) : null,
+            ...shown.genres.slice(0, GENRES_NAMED),
             shown.episodes > 0 ? t("card.unwatched", { count: shown.unwatched }) : null,
           ]
             .filter(Boolean)
             .join(" · ")}
         </p>
 
+        {/* What the file itself holds. Beside the title because it is what
+            decides whether somebody watches this one here or on the screen
+            in the other room, and because it is the one thing a catalogue
+            cannot promise: it was read off the copy on the disk. */}
+        <HeroBadges item={shown} />
+
         {shown.overview && <p className="hero-overview">{shown.overview}</p>}
 
         <div className="hero-buttons">
           <HeroPlay item={shown} />
           <Link className="button button-large" to={`/work/${shown.id}`}>
+            <InfoIcon size={19} />
             {t("home.hero.open")}
           </Link>
         </div>
 
         {/* How far in it already is, under the buttons that carry on with it. */}
-        {shown.resume_from_seconds !== null && shown.runtime_minutes && (
-          <p className="hero-progress">
-            <span className="hero-progress-bar" aria-hidden="true">
-              <span
-                className="hero-progress-done"
-                style={{
-                  width: `${Math.min(
-                    shown.resume_from_seconds / (shown.runtime_minutes * 60),
-                    1,
-                  ) * 100}%`,
-                }}
-              />
-            </span>
-            <span className="hero-progress-said">
-              {t("home.hero.left", {
-                count: Math.max(
-                  Math.round(shown.runtime_minutes - shown.resume_from_seconds / 60),
-                  0,
-                ),
-              })}
-            </span>
-          </p>
-        )}
+        <HeroProgress item={shown} />
       </div>
 
       {many && (
@@ -168,6 +159,57 @@ export function Hero({ items }: { items: HeroItem[] }) {
         </>
       )}
     </section>
+  );
+}
+
+/** What the copy on the disk holds, as badges. Nothing at all for a work
+ *  whose file nobody has analysed, rather than a row of empty pills. */
+function HeroBadges({ item }: { item: HeroItem }) {
+  const badges = whatTheFileHolds(item);
+
+  if (badges.length === 0) {
+    return null;
+  }
+  return (
+    <p className="hero-badges">
+      {badges.map((badge) => (
+        <span className="hero-badge" key={badge}>
+          {badge}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+/**
+ * How far in it already is.
+ *
+ * Where it stopped and how long it is, both spelled out: "one hour twelve of
+ * two hours forty six" says at once how much was watched and how much is
+ * left, which a bar alone never says and a count of minutes left says only
+ * half of.
+ */
+function HeroProgress({ item }: { item: HeroItem }) {
+  const { t } = useSettings();
+
+  if (item.resume_from_seconds === null || !item.runtime_minutes) {
+    return null;
+  }
+  const whole = item.runtime_minutes * 60;
+  const done = Math.min(item.resume_from_seconds, whole);
+
+  return (
+    <p className="hero-progress">
+      <span className="hero-progress-bar" aria-hidden="true">
+        <span className="hero-progress-done" style={{ width: `${(done / whole) * 100}%` }} />
+      </span>
+      <span className="hero-progress-said">
+        {t("home.hero.progress", {
+          done: howLong(Math.round(done / 60), t),
+          whole: howLong(item.runtime_minutes, t),
+        })}
+      </span>
+    </p>
   );
 }
 

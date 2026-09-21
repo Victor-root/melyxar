@@ -18,14 +18,21 @@
 
 import { Link } from "react-router-dom";
 import type { Card as CardData, Library } from "../api";
+import { Band } from "../components/band";
 import { Card } from "../components/card";
 import { Hero } from "../components/hero";
 import { Row } from "../components/row";
 import { JobLine } from "../components/job";
 import { howFarIn, useHomeScreen } from "../screens/home";
 import { refusalKey } from "../i18n";
+import { howLong } from "../readable";
+import { whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
-import { ArrivedIcon, ClockIcon, SparkIcon } from "../icons";
+import { ArrivedIcon, ChevronRightIcon, ClockIcon, KindIcon, SparkIcon } from "../icons";
+
+/** Where the row of everything newest leads, which is the same grid read in
+ *  the same order. */
+const EVERYTHING_NEWEST = "/search?order=added_at&descending=true";
 
 export function HomePage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
@@ -89,6 +96,10 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
     <main className="page page-home">
       <Hero items={home.hero} />
 
+      {/* Where to go for somebody who already knows what they want, before
+          any row of suggestions. */}
+      <Band shelves={home.shelves} libraries={libraries} />
+
       {/* Work the server is doing, before anything suggested. It is the one
           thing here that is changing, and a scan of a whole library runs for
           hours: somebody who opens this page during one is opening it to see
@@ -104,41 +115,42 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       )}
 
       {/* What was left halfway. Lying down, because what tells two of these
-          apart is the still and the bar under it rather than the poster. */}
-      <Shelf
-        title={t("home.carry_on")}
-        mark={<ClockIcon size={18} />}
-        cards={home.carry_on}
-        shape="lying"
-        howFar={(card) => howFarIn(card.position_seconds, card.runtime_minutes)}
-      />
+          apart is the still and the bar under it rather than the poster, and
+          each one says how much of it is left and where it sits in its
+          series: an episode title on its own is a title nobody placed. */}
+      {home.carry_on.length > 0 && (
+        <section className="section">
+          <RowHead mark={<ClockIcon size={18} />} title={t("home.carry_on")} />
+          <Row>
+            {home.carry_on.map((card) => (
+              <Card
+                key={card.id}
+                card={card}
+                shape="lying"
+                watched={howFarIn(card.position_seconds, card.runtime_minutes)}
+                lead={card.series_title ?? undefined}
+                note={whichEpisode(card, t)}
+                trailing={whatIsLeft(card.position_seconds, card.runtime_minutes, t)}
+              />
+            ))}
+          </Row>
+        </section>
+      )}
 
       {/* And what has not been started: the next episode of each series that
           is waiting on one, under the name of the series rather than under
           the episode's own, which nobody remembers. */}
       {home.up_next.length > 0 && (
         <section className="section">
-          <div className="section-head">
-            <h2>
-              <SparkIcon size={18} />
-              {t("home.up_next")}
-            </h2>
-          </div>
+          <RowHead mark={<SparkIcon size={18} />} title={t("home.up_next")} />
           <Row>
             {home.up_next.map((card) => (
               <Card
                 key={card.id}
                 card={card}
                 shape="lying"
-                above={card.series_title}
-                below={
-                  card.season_number !== null && card.episode_number !== null
-                    ? t("home.up_next.which", {
-                        season: card.season_number,
-                        episode: card.episode_number,
-                      })
-                    : undefined
-                }
+                lead={card.series_title}
+                note={whichEpisode(card, t)}
               />
             ))}
           </Row>
@@ -146,11 +158,11 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       )}
 
       <section className="section">
-        <div className="section-head">
-          <h2>
-            <ArrivedIcon size={18} />
-            {t("home.recently_added")}
-          </h2>
+        <RowHead
+          mark={<ArrivedIcon size={18} />}
+          title={t("home.recently_added")}
+          to={EVERYTHING_NEWEST}
+        >
           {home.awaiting_identification > 0 && (
             <>
               <Link className="pill" to="/search?unidentified=true">
@@ -170,7 +182,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
               )}
             </>
           )}
-        </div>
+        </RowHead>
         <Row>
           {home.recently_added.map((card) => (
             <Card key={card.id} card={card} />
@@ -180,7 +192,13 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
       {/* One row per kind of library this server really holds. */}
       {home.shelves.map((shelf) => (
-        <Shelf key={shelf.kind} title={t(`home.newest.${shelf.kind}`)} cards={shelf.cards} />
+        <Shelf
+          key={shelf.kind}
+          title={t(`home.newest.${shelf.kind}`)}
+          mark={<KindIcon kind={shelf.kind} size={18} />}
+          cards={shelf.cards}
+          to={whereAKindLeads(shelf.kind, libraries)}
+        />
       ))}
 
       {/* The server said no, which is an answer and belongs on the screen that
@@ -194,38 +212,106 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   );
 }
 
+/**
+ * The heading of one row.
+ *
+ * A row that has a whole grid behind it says so twice: the heading itself
+ * leads there, carrying the chevron that says it is a way through, and the
+ * words at the right say it in words for whoever does not read chevrons. A
+ * row that is only ever a row, like what somebody left halfway, has neither,
+ * because a chevron leading nowhere is worse than no chevron.
+ */
+function RowHead({
+  mark,
+  title,
+  to,
+  children,
+}: {
+  mark?: React.ReactNode;
+  title: string;
+  to?: string;
+  children?: React.ReactNode;
+}) {
+  const { t } = useSettings();
+
+  return (
+    <div className="section-head">
+      <h2>
+        {mark}
+        {to ? (
+          <Link className="section-through" to={to}>
+            {title}
+            <ChevronRightIcon size={17} />
+          </Link>
+        ) : (
+          title
+        )}
+      </h2>
+      {children}
+      {to && (
+        <Link className="section-all" to={to}>
+          {t("home.see_all")}
+        </Link>
+      )}
+    </div>
+  );
+}
+
 /** One row of cards, which draws nothing at all when it holds nothing. */
 function Shelf<T extends CardData>({
   title,
   mark,
   cards,
-  shape,
-  howFar,
+  to,
 }: {
   title: string;
   mark?: React.ReactNode;
   cards: T[];
-  shape?: "standing" | "lying";
-  howFar?: (card: T) => number | undefined;
+  to?: string;
 }) {
   if (cards.length === 0) {
     return null;
   }
   return (
     <section className="section">
-      <div className="section-head">
-        <h2>
-          {mark}
-          {title}
-        </h2>
-      </div>
+      <RowHead mark={mark} title={title} to={to} />
       <Row>
         {cards.map((card) => (
-          <Card key={card.id} card={card} shape={shape} watched={howFar?.(card)} />
+          <Card key={card.id} card={card} />
         ))}
       </Row>
     </section>
   );
+}
+
+/** Which episode a card is, when it is one: short, because it sits under a
+ *  still in a row rather than on a page of its own. */
+function whichEpisode(
+  card: { season_number: number | null; episode_number: number | null; title: string },
+  t: ReturnType<typeof useSettings>["t"],
+): string | undefined {
+  if (card.season_number === null || card.episode_number === null) {
+    return undefined;
+  }
+  const which = t("home.up_next.short", {
+    season: card.season_number,
+    episode: card.episode_number,
+  });
+  return `${which} · ${card.title}`;
+}
+
+/** How much of a film is left, which is what a row of half watched ones is
+ *  read for. */
+function whatIsLeft(
+  seconds: number,
+  runtimeMinutes: number | null,
+  t: ReturnType<typeof useSettings>["t"],
+): string | undefined {
+  if (!runtimeMinutes || runtimeMinutes <= 0) {
+    return undefined;
+  }
+  const left = Math.max(Math.round(runtimeMinutes - seconds / 60), 0);
+  return left === 0 ? undefined : t("home.hero.left", { time: howLong(left, t) });
 }
 
 /**

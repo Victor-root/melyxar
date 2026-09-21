@@ -25,6 +25,7 @@ import {
   ChevronDownIcon,
   HeartIcon,
   HomeIcon,
+  KindIcon,
   ScreenCastIcon,
   SearchIcon,
 } from "../icons";
@@ -34,6 +35,18 @@ const KINDS: LibraryKind[] = ["movies", "series", "anime", "shows", "music"];
 
 /** How many categories stand in the bar before the rest go behind one word. */
 const IN_THE_BAR = 4;
+
+/**
+ * The two keys that reach the search field, written the way this machine
+ * writes them.
+ *
+ * A badge saying Ctrl on a Mac is a badge saying the wrong thing, and the
+ * badge is there precisely to be believed.
+ */
+function theShortcut(): string {
+  const apple = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  return apple ? "⌘K" : "Ctrl K";
+}
 
 /** One category: a kind of library, and the libraries of that kind. */
 interface Category {
@@ -67,13 +80,15 @@ export function Header({ libraries }: { libraries: Library[] }) {
   const behindMore = categories.slice(IN_THE_BAR);
 
   // A slash puts the cursor in the search field, the way every list of things
-  // has worked for thirty years.
+  // has worked for thirty years, and so does the command key with a K, which
+  // is how everything written in the last ten years does it.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const typing =
         target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
-      if (event.key === "/" && !typing) {
+      const held = event.metaKey || event.ctrlKey;
+      if ((event.key === "/" && !typing) || (held && event.key.toLowerCase() === "k")) {
         event.preventDefault();
         field.current?.focus();
       }
@@ -149,6 +164,12 @@ export function Header({ libraries }: { libraries: Library[] }) {
             placeholder={t("search.placeholder")}
             aria-label={t("nav.search")}
           />
+          {/* What opens it without the mouse, said rather than left to be
+              discovered. Hidden from readers who are not looking at it: it is
+              a picture of two keys, and the field already announces itself. */}
+          <kbd className="search-key" aria-hidden="true">
+            {theShortcut()}
+          </kbd>
           {/* The scope, next to the words rather than on the page of results:
               it narrows what is being asked, so it belongs where the asking
               happens. */}
@@ -243,12 +264,20 @@ function CategoryLink({ category }: { category: Category }) {
   if (category.libraries.length === 1) {
     return (
       <NavLink to={`/library/${category.libraries[0].id}`} className="header-link">
+        <KindIcon kind={category.kind} size={17} />
         {name}
       </NavLink>
     );
   }
   return (
-    <Dropdown label={name}>
+    <Dropdown
+      label={
+        <>
+          <KindIcon kind={category.kind} size={17} />
+          {name}
+        </>
+      }
+    >
       {category.libraries.map((library) => (
         <NavLink key={library.id} to={`/library/${library.id}`} className="header-menu-line">
           {library.name}
@@ -264,7 +293,7 @@ function CategoryLink({ category }: { category: Category }) {
  * Closes on a click anywhere else and on the escape key, which are the two
  * ways anybody ever tries to close one.
  */
-function Dropdown({ label, children }: { label: string; children: React.ReactNode }) {
+function Dropdown({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const holder = useRef<HTMLDivElement>(null);
 
@@ -320,9 +349,19 @@ function Dropdown({ label, children }: { label: string; children: React.ReactNod
 function AccountMenu() {
   const { t } = useSettings();
   const { account, leave } = useAccount();
+  const name = account?.name ?? t("nav.account");
 
   return (
-    <Dropdown label={account?.name ?? t("nav.account")}>
+    <Dropdown
+      label={
+        <>
+          <span className="avatar" aria-hidden="true">
+            {initialsOf(name)}
+          </span>
+          <span className="account-name">{name}</span>
+        </>
+      }
+    >
       <NavLink to="/settings" className="header-menu-line">
         {t("nav.settings")}
       </NavLink>
@@ -341,4 +380,20 @@ function AccountMenu() {
       </button>
     </Dropdown>
   );
+}
+
+/**
+ * The letters standing for a name, where a picture would go.
+ *
+ * Accounts carry no picture yet, and a blank circle says nothing. Two letters
+ * for a name in two parts, one otherwise, which is what tells two accounts
+ * apart at the size this is drawn.
+ */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return "?";
+  }
+  const letters = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : parts[0].slice(0, 1);
+  return letters.toLocaleUpperCase();
 }

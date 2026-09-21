@@ -133,6 +133,95 @@ export function outOfAHundred(ratio: number): number {
   return ratio >= 1 ? 100 : Math.min(99, Math.floor(ratio * 100));
 }
 
+/**
+ * How long a film is, said the way anybody says it out loud.
+ *
+ * A hundred and sixty one minutes is a figure somebody has to divide in their
+ * head before it means anything. Two hours forty one is the same number,
+ * already read.
+ */
+export function howLong(minutes: number, t: Wording): string {
+  if (minutes < 60) {
+    return t("work.minutes", { count: minutes });
+  }
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0
+    ? t("work.hours", { hours })
+    : t("work.hours_minutes", { hours, minutes: rest });
+}
+
+/**
+ * What the file itself holds, as the badges beside a title say it.
+ *
+ * The server sends what the file states and nothing more, because a height in
+ * pixels is a fact and "4K" is a way of saying it. None of these are
+ * translated: they are the names their own makers gave them, and a viewer
+ * reading the interface in French is still looking for "Dolby Atmos".
+ */
+export function whatTheFileHolds(facts: {
+  height: number | null;
+  hdr: string | null;
+  sound: string | null;
+}): string[] {
+  return [pictureName(facts.height), rangeName(facts.hdr), soundName(facts.sound)].filter(
+    (name): name is string => name !== null,
+  );
+}
+
+/** How tall a picture is, said as the badge on a box says it. */
+function pictureName(height: number | null): string | null {
+  if (height === null) {
+    return null;
+  }
+  if (height >= 2000) {
+    return "4K";
+  }
+  if (height >= 1000) {
+    return "1080p";
+  }
+  return height >= 700 ? "720p" : null;
+}
+
+const RANGE_NAMES: Record<string, string> = {
+  hdr10: "HDR10",
+  hlg: "HLG",
+  dolby_vision: "Dolby Vision",
+};
+
+function rangeName(hdr: string | null): string | null {
+  return hdr === null ? null : (RANGE_NAMES[hdr] ?? hdr.toUpperCase());
+}
+
+/* A file states its codec in the short form an analyser uses. Nobody is
+   looking for "eac3" on a badge. */
+const SOUND_NAMES: Record<string, string> = {
+  ac3: "Dolby Digital",
+  eac3: "Dolby Digital+",
+  truehd: "Dolby TrueHD",
+  dts: "DTS",
+  aac: "AAC",
+  flac: "FLAC",
+  opus: "Opus",
+  mp3: "MP3",
+  vorbis: "Vorbis",
+};
+
+function soundName(sound: string | null): string | null {
+  if (sound === null) {
+    return null;
+  }
+  // Atmos is written in the profile beside whatever carries it, and it is the
+  // one thing somebody looks for when they have the speakers for it.
+  if (/atmos/i.test(sound)) {
+    return "Dolby Atmos";
+  }
+  if (sound.startsWith("pcm")) {
+    return "PCM";
+  }
+  return SOUND_NAMES[sound.toLowerCase()] ?? sound;
+}
+
 /** What a film is rated, on the scale the provider uses. */
 export function outOfTen(rating: number): string {
   return `${rating.toFixed(1)} / 10`;

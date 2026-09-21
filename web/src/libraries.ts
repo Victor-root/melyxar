@@ -16,7 +16,7 @@
 import { createContext, useContext } from "react";
 import { api } from "./api";
 import { useAsked } from "./asking";
-import type { Library } from "./api";
+import type { Library, LibraryKind } from "./api";
 
 export interface Libraries {
   all: Library[];
@@ -46,4 +46,28 @@ export function useWatchedLibraries(finished: number): Libraries {
 /** The libraries, for any page or part of the bar that shows them. */
 export function useLibraries(): Libraries {
   return useContext(LibrariesContext);
+}
+
+/** The libraries of one kind, which is what a category really is. */
+export function librariesOfKind(kind: LibraryKind, libraries: Library[]): Library[] {
+  return libraries.filter((library) => library.kind === kind);
+}
+
+/**
+ * Where a whole category leads.
+ *
+ * Straight into the library when a kind holds one, since a grid of everything
+ * of that kind and the grid of that library are then the same page. Into a
+ * grid narrowed to the kind when it holds several, because a collection of
+ * films spread over four disks is one category and nobody wants to be asked
+ * which disk they meant.
+ */
+export function whereAKindLeads(kind: LibraryKind, libraries: Library[]): string {
+  const ofThatKind = librariesOfKind(kind, libraries);
+  return ofThatKind.length === 1 ? `/library/${ofThatKind[0].id}` : `/search?in=kind:${kind}`;
+}
+
+/** How many works a category holds, over every library of that kind. */
+export function worksOfKind(kind: LibraryKind, libraries: Library[]): number {
+  return librariesOfKind(kind, libraries).reduce((total, library) => total + library.works, 0);
 }

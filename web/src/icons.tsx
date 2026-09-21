@@ -20,6 +20,8 @@
  * rather than there.
  */
 
+import type { LibraryKind } from "./api";
+
 export interface IconProps {
   /** Drawn at the size of the text around it unless told otherwise. */
   size?: number;
@@ -152,6 +154,39 @@ export function MusicIcon(props: IconProps) {
       <path d="M9.4 18.2V5.6l10-2v12.2" />
       <circle cx="6.8" cy="18.2" r="2.6" />
       <circle cx="16.8" cy="15.8" r="2.6" />
+    </Icon>
+  );
+}
+
+/**
+ * The icon of a kind of library, whichever kind it is.
+ *
+ * One place rather than a match written out at each of the three screens that
+ * needs one: the day a kind is added, the bar, the band and the rows all get
+ * its shape at once.
+ */
+export function KindIcon({ kind, ...props }: IconProps & { kind: LibraryKind }) {
+  switch (kind) {
+    case "series":
+      return <SeriesIcon {...props} />;
+    case "anime":
+      return <AnimeIcon {...props} />;
+    case "shows":
+      return <ShowsIcon {...props} />;
+    case "music":
+      return <MusicIcon {...props} />;
+    default:
+      return <FilmIcon {...props} />;
+  }
+}
+
+/** A letter i in a circle: what opening the page of a work leads to. */
+export function InfoIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.8" />
+      <path d="M12 11v5.4" />
+      <path d="M12 7.8h.01" />
     </Icon>
   );
 }
