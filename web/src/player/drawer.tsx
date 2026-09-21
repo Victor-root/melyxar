@@ -36,6 +36,23 @@ const CARDS_AT_A_TIME = 4;
 /** What a card and a face are while the stylesheet has not answered yet. */
 const ABOUT = { card: 214, face: 148 };
 
+/**
+ * How much room each picture in the drawer really has, so the browser picks a
+ * size to fit it.
+ *
+ * Said out loud because a picture offered in several sizes and asked for
+ * without this is assumed to fill the window: the drawer then pulled the
+ * largest poster held, eight hundred points across, to draw it at a hundred
+ * and eighteen, while a film was streaming through the same connection.
+ *
+ * The lengths follow the drawer's own tokens above.
+ */
+const ROOM_FOR = {
+  poster: "118px",
+  face: `${ABOUT.face}px`,
+  card: `${ABOUT.card}px`,
+};
+
 /** What a scene card looks like when the film was never read for thumbnails. */
 const A_PICTURE_IS = 9 / 16;
 /** What every catalogue in the world draws a face at. */
@@ -207,7 +224,13 @@ function About({
   return (
     <div className="player-drawer-about">
       {poster && (
-        <img className="player-drawer-poster" src={poster.src} srcSet={poster.srcSet} alt="" />
+        <img
+          className="player-drawer-poster"
+          src={poster.src}
+          srcSet={poster.srcSet}
+          sizes={ROOM_FOR.poster}
+          alt=""
+        />
       )}
 
       <div className="player-drawer-said">
@@ -347,6 +370,7 @@ function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number 
                 <img
                   src={photo.src}
                   srcSet={photo.srcSet}
+                  sizes={ROOM_FOR.face}
                   alt=""
                   loading="lazy"
                   draggable={false}
@@ -425,6 +449,7 @@ function Episodes({
                 <img
                   src={poster.src}
                   srcSet={poster.srcSet}
+                  sizes={ROOM_FOR.card}
                   alt=""
                   loading="lazy"
                   draggable={false}
