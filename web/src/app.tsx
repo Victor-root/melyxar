@@ -22,6 +22,7 @@ import { Door } from "./pages/door";
 import { LibrariesContext, useWatchedLibraries } from "./libraries";
 import { RunningContext, useWatchedWork } from "./running";
 import { useWhoIsThere, WhoProvider } from "./account";
+import { MarksProvider } from "./marks";
 import { useSettings } from "./settings";
 
 export function App() {
@@ -40,7 +41,12 @@ export function App() {
 
   return (
     <WhoProvider who={who}>
-      <TheLibrary />
+      {/* What this viewer has said about a work, held above every screen: one
+          press of a tick has to change every card showing that work, not the
+          one that was pressed. */}
+      <MarksProvider>
+        <TheLibrary />
+      </MarksProvider>
     </WhoProvider>
   );
 }
