@@ -8,8 +8,9 @@
  * tomorrow needs every bit of it unchanged.
  */
 
+import { useMemo } from "react";
 import { api } from "../api";
-import type { Home, Job, Library } from "../api";
+import type { Card, Home, Job, Library } from "../api";
 import { useAsked } from "../asking";
 import { useMarks } from "../marks";
 import { useRunning, useStartIdentification, useStartScan } from "../running";
@@ -54,17 +55,38 @@ export function useHomeScreen(libraries: Library[]): HomeScreen {
      produced when it ends. Without that, pressing a button looks exactly like
      pressing a button that does nothing. */
   const { jobs, finished } = useRunning();
-  /* And the same for the front shelf, which is what the banner stands on: the
-     server decides what goes in it, so putting a work there is a reason to
-     ask again rather than something to mend here. */
-  const { frontShelf } = useMarks();
-  const asked = useAsked((signal) => api.home(undefined, signal), [finished, frontShelf]);
+  /* And the same whenever something pressed on a card changes which works a
+     row holds: a film put on the front page, an episode ticked off. What
+     takes its place is the server's answer, so it is asked again. */
+  const marks = useMarks();
+  const asked = useAsked((signal) => api.home(undefined, signal), [finished, marks.rowsMoved]);
+
+  /* The rows of unfinished work say what is unfinished now, not what was when
+     the page was read. A tick pressed on one of their cards has to empty its
+     place at once: the answer coming back from the server says the same
+     thing, but it says it a round trip later, and a card that lingers for
+     that long is a card somebody presses again.
+     Only taken away, never added: which episode a series waits on once this
+     one is watched is a question only the server can answer, and it is on its
+     way. */
+  const home = useMemo(() => {
+    if (!asked.answer) {
+      return null;
+    }
+    const unfinished = (card: Card) => marks.seenOf(card) === "in_progress";
+    return {
+      ...asked.answer,
+      hero: asked.answer.hero.filter((entry) => entry.because !== "started" || unfinished(entry)),
+      carry_on: asked.answer.carry_on.filter(unfinished),
+      up_next: asked.answer.up_next.filter((card) => marks.seenOf(card) !== "watched"),
+    };
+  }, [asked.answer, marks]);
 
   const scan = useStartScan(libraries);
   const lookUp = useStartIdentification(libraries);
 
   return {
-    home: asked.answer,
+    home,
     failed: asked.failure !== null,
     again: asked.again,
     jobs,
