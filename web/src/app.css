@@ -1420,7 +1420,10 @@ button.seen-mark:not(.seen-mark-on):hover {
 .work-backdrop {
   position: absolute;
   inset: 0 0 auto 0;
-  height: min(62vh, 620px);
+  /* Taller by the height of the bar drawn over it, like the banner of the
+     home page: what was visible before is visible still, and what the bar
+     covers is picture that was not there before. */
+  height: calc(min(62vh, 620px) + var(--header-height));
   z-index: -1;
   overflow: hidden;
 }
@@ -1441,7 +1444,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 .work-inner {
   display: flex;
   gap: var(--gap-section);
-  padding-top: min(26vh, 240px);
+  padding-top: calc(min(26vh, 240px) + var(--header-height));
 }
 
 .work-poster {
@@ -3031,8 +3034,12 @@ button.seen-mark:not(.seen-mark-on):hover {
   margin: 0;
   /* Kept in proportion to the screen rather than pinned to one height: at a
      fixed four hundred and sixty it is a strip across the top of a large
-     monitor and most of a small one. */
-  height: clamp(300px, 24vw, 560px);
+     monitor and most of a small one.
+     And the height of the bar on top of that, since the bar is drawn over it:
+     without it the banner would simply have lost its first sixty points to
+     something laid over it. It is taller by exactly what is covered, so what
+     was visible before is visible still. */
+  height: calc(clamp(300px, 24vw, 560px) + var(--header-height));
   border-radius: 0 0 var(--radius-card) var(--radius-card);
   overflow: hidden;
   isolation: isolate;
@@ -3296,8 +3303,8 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .skeleton-hero {
-  height: min(46vw, 460px);
-  min-height: 320px;
+  height: calc(min(46vw, 460px) + var(--header-height));
+  min-height: calc(320px + var(--header-height));
   margin: calc(var(--gap-wide) * -1) calc(var(--gap-wide) * -1) var(--gap-section);
   border-radius: 0 0 var(--radius-card) var(--radius-card);
 }
