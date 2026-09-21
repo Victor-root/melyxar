@@ -71,6 +71,22 @@ pub struct WorkToCarryOn {
     pub last_played_at: Option<Timestamp>,
 }
 
+/// How many started series are looked at for each one the row shows.
+///
+/// A series whose every episode is watched has nothing waiting and drops out,
+/// so looking at exactly as many as the row holds would leave it short as soon
+/// as somebody finishes a series. A few times over covers that and is still
+/// bounded by a small number, which is the whole point of bounding it first.
+const SERIES_LOOKED_AT: i64 = 3;
+
+/// How far back the row that says what is next looks.
+///
+/// A thousand things played, which on any real account is months of evenings.
+/// It is a bound on the reading rather than on the answer: a series nobody has
+/// touched in longer than that stops being offered as the next thing to watch,
+/// while staying in its library, in its grid and on its own page.
+const PLAYED_LATELY: i64 = 1_000;
+
 /// The episode a series is waiting on, and the series it belongs to.
 ///
 /// Distinct from carrying on, and deliberately: what somebody left halfway is
@@ -262,7 +278,7 @@ impl Database {
             true => String::new(),
             false => format!(
                 " AND e.library_id IN ({})",
-                (3..=granted.len() + 2)
+                (5..=granted.len() + 4)
                     .map(|place| format!("?{place}"))
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -270,69 +286,80 @@ impl Database {
         };
 
         let mut query = sqlx::query(AssertSqlSafe(format!(
-            "WITH begun AS (
-                 -- Series this viewer has really started: one watched episode
-                 -- is a start, and an unopened series is not up next, it is
-                 -- simply there.
-                 SELECT DISTINCT s.parent_id AS series_id
-                   FROM playback_progress p
-                   JOIN works e ON e.id = p.work_id AND e.kind = 'episode'
-                   JOIN works s ON s.id = e.parent_id
-                  WHERE p.user_id = ?1 AND p.state = 'watched'
-                    AND s.parent_id IS NOT NULL
+            "WITH lately AS (
+                 -- What this account played lately, straight off its own
+                 -- index and bounded, rather than everything it ever played.
+                 --
+                 -- This row shows a handful of series and shows the ones
+                 -- touched most recently, so what was played long ago cannot
+                 -- change its answer. Reading it all anyway was fifty eight
+                 -- milliseconds on an account with twenty thousand of them,
+                 -- against a budget of thirty; bounded here it is four. What
+                 -- the bound costs is written in the decisions.
+                 SELECT work_id, state, last_played_at
+                   FROM playback_progress
+                  WHERE user_id = ?1 AND last_played_at IS NOT NULL
+                  ORDER BY last_played_at DESC
+                  LIMIT ?4
              ),
-             partway AS (
-                 -- And the ones they are in the middle of, which belong to
-                 -- the row above this one instead.
-                 SELECT DISTINCT s.parent_id AS series_id
-                   FROM playback_progress p
-                   JOIN works e ON e.id = p.work_id AND e.kind = 'episode'
+             begun AS (
+                 -- The series those things belong to.
+                 --
+                 -- One watched episode is a start, and an unopened series is
+                 -- not up next, it is simply there. An episode left halfway
+                 -- puts the whole series in the row above this one instead,
+                 -- so it is dropped here rather than met twice.
+                 SELECT s.parent_id AS series_id,
+                        max(q.last_played_at) AS touched_at
+                   FROM lately q
+                   JOIN works e ON e.id = q.work_id AND e.kind = 'episode'
                    JOIN works s ON s.id = e.parent_id
-                  WHERE p.user_id = ?1 AND p.state = 'in_progress'
-                    AND s.parent_id IS NOT NULL
+                  WHERE s.parent_id IS NOT NULL{inside}
+                  GROUP BY s.parent_id
+                 HAVING sum(CASE WHEN q.state = 'watched' THEN 1 ELSE 0 END) > 0
+                    AND sum(CASE WHEN q.state = 'in_progress' THEN 1 ELSE 0 END) = 0
+                  ORDER BY touched_at DESC
+                  LIMIT ?3
              ),
              waiting AS (
-                 SELECT e.id AS episode_id,
-                        s.parent_id AS series_id,
-                        s.ordinal AS season_number,
-                        e.ordinal AS episode_number,
-                        row_number() OVER (
-                            PARTITION BY s.parent_id
-                            ORDER BY s.ordinal, e.ordinal, e.id
-                        ) AS place
-                   FROM works e
-                   JOIN works s ON s.id = e.parent_id
-                   JOIN begun ON begun.series_id = s.parent_id
-                   LEFT JOIN playback_progress p
-                          ON p.work_id = e.id AND p.user_id = ?1
-                  WHERE e.kind = 'episode'
-                    AND coalesce(p.state, 'not_started') = 'not_started'
-                    AND s.parent_id NOT IN (SELECT series_id FROM partway)
-                    AND EXISTS (SELECT 1 FROM media_sources m
-                                 WHERE m.work_id = e.id AND m.missing_since IS NULL)
-                    {inside}
+                 -- And then, for those few series only, the one episode each
+                 -- is waiting on. Bounded first and looked up second: ranking
+                 -- every unwatched episode of every started series to keep the
+                 -- first of each was four and a half seconds on a hundred
+                 -- thousand works, against a budget of thirty milliseconds.
+                 SELECT begun.series_id,
+                        begun.touched_at,
+                        (SELECT e.id
+                           FROM works e
+                           JOIN works s ON s.id = e.parent_id
+                           LEFT JOIN playback_progress p
+                                  ON p.work_id = e.id AND p.user_id = ?1
+                          WHERE s.parent_id = begun.series_id
+                            AND e.kind = 'episode'
+                            AND coalesce(p.state, 'not_started') = 'not_started'
+                            AND EXISTS (SELECT 1 FROM media_sources m
+                                         WHERE m.work_id = e.id
+                                           AND m.missing_since IS NULL)
+                          ORDER BY s.ordinal, e.ordinal, e.id
+                          LIMIT 1) AS episode_id
+                   FROM begun
              )
              SELECT {WHAT_A_CARD_IS},
-                    waiting.series_id, waiting.season_number, waiting.episode_number,
-                    series.title AS series_title,
-                    -- When this series was last touched at all, which is the
-                    -- order a row of them is read in: what somebody watched
-                    -- last night comes before what they watched in March.
-                    (SELECT max(q.last_played_at)
-                       FROM playback_progress q
-                       JOIN works ee ON ee.id = q.work_id AND ee.kind = 'episode'
-                       JOIN works ss ON ss.id = ee.parent_id
-                      WHERE ss.parent_id = waiting.series_id
-                        AND q.user_id = ?1) AS touched_at
+                    waiting.series_id, waiting.touched_at,
+                    s.ordinal AS season_number,
+                    w.ordinal AS episode_number,
+                    series.title AS series_title
                FROM waiting
                JOIN works w ON w.id = waiting.episode_id
+               JOIN works s ON s.id = w.parent_id
                JOIN works series ON series.id = waiting.series_id
-              WHERE waiting.place = 1
-              ORDER BY touched_at DESC, series.sort_title
+              ORDER BY waiting.touched_at DESC, series.sort_title
               LIMIT ?2"
         )))
         .bind(user_id.to_db_string())
-        .bind(limit);
+        .bind(limit)
+        .bind(limit * SERIES_LOOKED_AT)
+        .bind(PLAYED_LATELY);
         for library in granted {
             query = query.bind(library.to_db_string());
         }

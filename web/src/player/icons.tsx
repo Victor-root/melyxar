@@ -16,39 +16,17 @@
  * where a shape reads better solid, so they sit together as one set.
  */
 
-interface IconProps {
-  /** Drawn at the size of the text around it unless told otherwise. */
-  size?: number;
-}
+/* The base and the three shapes the whole interface uses are shared: the
+   player drew them first, and a second copy of a play triangle is a second
+   play triangle to keep in step. Only the player's own controls live here. */
+import { Icon as Drawn, HeartIcon, PlayIcon, TickIcon } from "../icons";
+import type { IconProps } from "../icons";
 
-function Icon({ size = 22, children }: IconProps & { children: React.ReactNode }) {
-  return (
-    <svg
-      className="player-icon"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {children}
-    </svg>
-  );
-}
+export { HeartIcon, PlayIcon };
 
-export function PlayIcon(props: IconProps) {
-  // Solid: the one control a hand goes to without looking, and the only one
-  // worth making heavier than the rest.
-  return (
-    <Icon {...props}>
-      <path d="M8 5.2v13.6a.6.6 0 0 0 .92.5l10.6-6.8a.6.6 0 0 0 0-1l-10.6-6.8A.6.6 0 0 0 8 5.2Z" fill="currentColor" stroke="none" />
-    </Icon>
-  );
+/** The player's own, which its stylesheet has a word about. */
+function Icon(props: IconProps & { strokeWidth?: number; children: React.ReactNode }) {
+  return <Drawn className="player-icon" {...props} />;
 }
 
 export function PauseIcon(props: IconProps) {
@@ -177,18 +155,6 @@ export function BackIcon(props: IconProps) {
     <Icon {...props}>
       <path d="M19 12H5" />
       <path d="M11 6l-6 6 6 6" />
-    </Icon>
-  );
-}
-
-/** Outlined when nothing has been said, solid once somebody has. */
-export function HeartIcon({ filled, ...props }: IconProps & { filled: boolean }) {
-  return (
-    <Icon {...props}>
-      <path
-        d="M12 20.3 4.6 13a4.7 4.7 0 0 1 6.6-6.7l.8.8.8-.8A4.7 4.7 0 0 1 19.4 13Z"
-        fill={filled ? "currentColor" : "none"}
-      />
     </Icon>
   );
 }
@@ -329,13 +295,10 @@ export function CastIcon(props: IconProps) {
   );
 }
 
-/** A tick, for what is chosen in a menu. */
+/** A tick, for what is chosen in a menu. The same one the rest of the
+ *  interface marks a watched film with. */
 export function ChosenIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M5 12.6l4.6 4.6L19 7.4" />
-    </Icon>
-  );
+  return <TickIcon className="player-icon" {...props} />;
 }
 
 /** The arrow that says a menu entry opens another one. */
