@@ -341,6 +341,65 @@ impl Database {
         self.attach_viewer_state(viewer, &mut cards).await?;
         Ok(cards)
     }
+
+    /// A handful of works drawn at random, for a banner that is meant to be
+    /// different every time the page is opened.
+    ///
+    /// Only what carries a wide picture: a banner is that picture, and one
+    /// without it is a slab of colour with a title on it. That is also what
+    /// keeps the draw from wasting its five places on things nobody put a
+    /// picture to.
+    ///
+    /// Works met on their own, like everywhere else a card is offered: a
+    /// season and an episode belong inside the thing they hang under.
+    pub async fn works_at_random(
+        &self,
+        viewer: UserId,
+        within: Option<&[LibraryId]>,
+        limit: i64,
+    ) -> Result<Vec<WorkCard>> {
+        // An account granted nothing has nothing to draw from.
+        if within.is_some_and(<[LibraryId]>::is_empty) {
+            return Ok(Vec::new());
+        }
+        let granted = within.unwrap_or_default();
+        let inside = match granted.is_empty() {
+            true => String::new(),
+            false => format!(
+                " AND w.library_id IN ({})",
+                (2..=granted.len() + 1)
+                    .map(|place| format!("?{place}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        };
+
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_CARD_IS}
+               FROM works w
+              WHERE {}
+                AND EXISTS (SELECT 1 FROM images i
+                             WHERE i.owner_kind = 'work'
+                               AND i.owner_id = w.id
+                               AND i.image_kind = 'backdrop'){inside}
+              ORDER BY random()
+              LIMIT ?1",
+            met_on_its_own("w.")
+        )))
+        .bind(limit);
+        for library in granted {
+            query = query.bind(library.to_db_string());
+        }
+        let rows = query.fetch_all(self.reader()).await?;
+
+        let mut cards = rows
+            .iter()
+            .map(crate::browse::card_from_row)
+            .collect::<Result<Vec<_>>>()?;
+        self.attach_posters(&mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards).await?;
+        Ok(cards)
+    }
 }
 
 #[cfg(test)]
@@ -409,6 +468,103 @@ mod tests {
             .expect("account created")
             .id;
         (database, library.id, who, written)
+    }
+
+    /// Gives a work the wide picture a banner is made of.
+    async fn with_a_backdrop(database: &Database, work: WorkId) {
+        database
+            .replace_images(
+                "work",
+                &work.to_db_string(),
+                "backdrop",
+                &[StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: work.to_db_string(),
+                    image_kind: "backdrop".to_string(),
+                    relative_path: format!("works/{}/backdrop-abc-1280.webp", work.to_db_string()),
+                    width: Some(1280),
+                    height: Some(720),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("picture written");
+    }
+
+    #[tokio::test]
+    async fn a_banner_drawn_at_random_only_offers_what_has_a_wide_picture() {
+        let (database, _, who, films) = a_shelf(&[
+            ("Sel", 7.0, "drame"),
+            ("Fougère", 7.5, "drame"),
+            ("Vertige", 8.0, "drame"),
+        ])
+        .await;
+        with_a_backdrop(&database, films[0]).await;
+        with_a_backdrop(&database, films[2]).await;
+
+        let drawn = database
+            .works_at_random(who, None, 5)
+            .await
+            .expect("a draw comes back");
+
+        // Two of the three carry one, and the third is never offered: a
+        // banner without its picture is a slab of colour with a title on it.
+        assert_eq!(drawn.len(), 2);
+        let mut offered: Vec<WorkId> = drawn.iter().map(|card| card.id).collect();
+        offered.sort();
+        let mut expected = vec![films[0], films[2]];
+        expected.sort();
+        assert_eq!(offered, expected);
+    }
+
+    #[tokio::test]
+    async fn a_banner_drawn_at_random_never_reaches_outside_what_was_granted() {
+        let (database, library, who, films) =
+            a_shelf(&[("Sel", 7.0, "drame"), ("Fougère", 7.5, "drame")]).await;
+        for film in &films {
+            with_a_backdrop(&database, *film).await;
+        }
+
+        assert_eq!(
+            database
+                .works_at_random(who, Some(&[library]), 5)
+                .await
+                .expect("a draw comes back")
+                .len(),
+            2,
+            "the library it was granted is drawn from"
+        );
+        assert!(
+            database
+                .works_at_random(who, Some(&[]), 5)
+                .await
+                .expect("a draw comes back")
+                .is_empty(),
+            "an account granted nothing has nothing to draw from"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_draw_never_brings_back_more_than_it_was_asked_for() {
+        let (database, _, who, films) = a_shelf(&[
+            ("Sel", 7.0, "drame"),
+            ("Fougère", 7.5, "drame"),
+            ("Vertige", 8.0, "drame"),
+        ])
+        .await;
+        for film in &films {
+            with_a_backdrop(&database, *film).await;
+        }
+
+        assert_eq!(
+            database
+                .works_at_random(who, None, 2)
+                .await
+                .expect("a draw comes back")
+                .len(),
+            2
+        );
     }
 
     #[tokio::test]

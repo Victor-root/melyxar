@@ -1012,6 +1012,16 @@ export interface ViewerPreferences {
    *  somewhere the server would refuse. */
   downmix_gain_range: [number, number];
   downmix_methods: string[];
+  /** How tall the banner of the home page is, as a share of the screen's
+   *  width: what it really sets is how much of the picture behind it
+   *  survives, since those pictures are sixteen by nine. */
+  banner_height: number;
+  banner_height_range: [number, number];
+  /** Where a band is cut out of that picture, nought at its top and one at
+   *  its foot. */
+  banner_cut: number;
+  /** Whether the banner draws a fresh handful every time the page opens. */
+  banner_at_random: boolean;
   /** The languages the library really holds, which is what a picker offers. */
   audio_languages: string[];
   subtitle_languages: string[];
