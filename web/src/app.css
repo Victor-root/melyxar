@@ -126,6 +126,51 @@
   outline: none;
 }
 
+/* The two keys that reach the field, on the field itself. Faded once
+   somebody is typing in it: at that point they found it. */
+.search-key {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  transition: opacity var(--quick) var(--ease);
+}
+
+.search:focus-within .search-key {
+  opacity: 0;
+}
+
+/* Where a picture of the account will go the day accounts carry one. Until
+   then the letters of the name, which is what tells two of them apart. */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Under a certain width the name goes and the circle stays: the circle is
+   the thing that is aimed at. */
+@media (max-width: 1100px) {
+  .account-name {
+    display: none;
+  }
+}
+
 /* What the server is doing, in the bar, where the button that started it was.
    Shaped like the button it replaces so the bar does not jump. */
 .header-busy {
@@ -344,6 +389,150 @@
 
 .section h2 {
   margin-bottom: var(--gap);
+}
+
+/* A heading with a whole grid behind it. The chevron is what says so, and it
+   leans in as the pointer arrives rather than appearing out of nothing. */
+.section-through {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.section-through > svg {
+  color: var(--text-faint);
+  transition: transform var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.section-through:hover > svg {
+  transform: translateX(3px);
+  color: var(--accent-bright);
+}
+
+/* The same thing said in words, at the far right of the row, for whoever does
+   not read chevrons. */
+.section-all {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-soft);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.section-all:hover {
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-through:hover > svg {
+    transform: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * The band of ways in, under the banner
+ * ----------------------------------------------------------------------- */
+
+/* One tile per kind of library, side by side and all of one width. They wrap
+   rather than scroll: there are never more than a handful, and a band that
+   scrolls sideways hides the very thing it is there to offer. */
+.band {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--gap);
+  margin-bottom: var(--gap-section);
+}
+
+.band-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  /* A server of films alone has one way in, and one tile stretched across a
+     whole page reads as a banner rather than as a way in. */
+  max-width: 360px;
+  height: 84px;
+  padding: 0 var(--gap);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--card-color);
+  color: var(--text);
+  text-decoration: none;
+  transition: transform var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+}
+
+.band-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raised);
+}
+
+.band-picture {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The words have to be readable over a still nobody chose. Darkest where they
+   sit, clearing towards the right so the picture is still a picture. */
+.band-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--surface-deep) 88%, transparent),
+    color-mix(in srgb, var(--surface-deep) 38%, transparent)
+  );
+}
+
+.band-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.band-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+}
+
+.band-name > svg {
+  color: var(--accent-bright);
+}
+
+.band-count {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.band-arrow {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--accent-bright);
+  transition: transform var(--quick) var(--ease);
+}
+
+.band-tile:hover .band-arrow {
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .band-tile:hover,
+  .band-tile:hover .band-arrow {
+    transform: none;
+  }
 }
 
 .count {
@@ -853,19 +1042,19 @@
   opacity: 0.8;
 }
 
-/* The series an episode belongs to, above its own name. */
-.card-above {
+/* The name, and at its right what a row of half watched films is read for.
+   The name takes whatever is left rather than a share of it, so a long title
+   is cut instead of squeezing the minutes out of the line. */
+.card-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-tight);
   margin-top: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .card-title {
-  margin-top: 6px;
+  min-width: 0;
   font-size: 14px;
   font-weight: 550;
   line-height: 1.3;
@@ -875,16 +1064,19 @@
   overflow: hidden;
 }
 
-.card-above + .card-title {
-  margin-top: 0;
-  font-size: 13px;
-  font-weight: 450;
-  color: var(--text-soft);
+.card-trailing {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
 }
 
 .card-year {
   font-size: 12px;
   color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --------------------------------------------------------------------------
@@ -935,11 +1127,6 @@
   }
 }
 
-/* A tile is as wide as its words, never a card's width. */
-.row-track > .library-tile {
-  flex: 0 0 auto;
-}
-
 .row-arrow {
   position: absolute;
   top: 0;
@@ -973,39 +1160,6 @@
   .row-arrow {
     display: none;
   }
-}
-
-.library-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap);
-}
-
-.library-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--gap) var(--gap-wide);
-  border-radius: var(--radius-card);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  min-width: 200px;
-  transition: border-color var(--quick) var(--ease), background var(--quick) var(--ease);
-}
-
-.library-tile:hover {
-  border-color: var(--accent);
-  background: var(--surface-hover);
-}
-
-.library-name {
-  font-weight: 650;
-}
-
-.library-count {
-  font-size: 13px;
-  color: var(--text-faint);
-  margin-bottom: var(--gap-tight);
 }
 
 /* The state of each disk, shown where the maintainer asked to see it. */
@@ -2490,10 +2644,10 @@
    that hides the library behind it. */
 .hero {
   position: relative;
-  margin: calc(var(--gap-wide) * -1) calc(var(--gap-wide) * -1) var(--gap-section);
+  margin: 0 0 var(--gap-section);
   height: min(46vw, 460px);
   min-height: 320px;
-  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  border-radius: var(--radius-card);
   overflow: hidden;
   isolation: isolate;
   background: var(--surface);
@@ -2540,7 +2694,9 @@
   flex-direction: column;
   justify-content: center;
   gap: 10px;
-  padding: var(--gap-wide) var(--gap-wide) var(--gap-wide) calc(var(--gap-wide) * 2);
+  /* Clear of the arrow on the left, which is drawn over the picture at the
+     banner's own edge. */
+  padding: var(--gap-wide) var(--gap-wide) var(--gap-wide) calc(var(--gap-wide) * 3);
 }
 
 .hero-tagline {
@@ -2572,6 +2728,28 @@
 .hero-facts {
   margin: 0;
   font-size: 13.5px;
+  color: var(--text-soft);
+}
+
+/* What the file holds: short, bordered rather than filled, so a row of three
+   of them reads as facts about the film and not as three buttons. */
+.hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.hero-badge {
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-deep) 45%, transparent);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  /* Written as their makers write them: 1080p is not 1080P, and a badge that
+     shouts a name back in the wrong case reads as a machine's own word. */
   color: var(--text-soft);
 }
 
@@ -2632,8 +2810,11 @@
   backdrop-filter: blur(8px);
   border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
   color: var(--text);
-  opacity: 0;
-  transition: opacity var(--calm) var(--ease), background var(--quick) var(--ease);
+  /* Always there. An arrow that appears under the pointer is an arrow nobody
+     knows about until they have already stopped looking for one, and on a
+     screen with no pointer at all it never appears. */
+  opacity: 0.7;
+  transition: opacity var(--quick) var(--ease), background var(--quick) var(--ease);
 }
 
 .hero:hover .hero-step,
@@ -2642,6 +2823,7 @@
 }
 
 .hero-step:hover {
+  opacity: 1;
   background: var(--surface-raised);
 }
 

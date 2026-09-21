@@ -37,9 +37,16 @@ const en: Dictionary = {
   "home.hero.open": "Open",
   "home.hero.previous": "Previous",
   "home.hero.next": "Next",
-  "home.hero.left": "{count} min left",
+  "home.hero.left": "{time} left",
+  "home.hero.progress": "{done} / {whole}",
   "home.up_next": "Up next",
   "home.up_next.which": "Season {season}, episode {episode}",
+  // Short enough to sit under a still without wrapping, which is where it is
+  // read. The long form is what a menu and a detail page say.
+  "home.up_next.short": "S{season}E{episode}",
+  "home.see_all": "See all",
+  "home.band": "Where to look",
+  "home.band.count": "{count} titles",
   "home.newest.movies": "Films, newest first",
   "home.newest.series": "Series, newest first",
   "home.newest.anime": "Anime, newest first",
@@ -140,6 +147,10 @@ const en: Dictionary = {
   "work.version": "Version",
   "work.collection": "Part of {name}",
   "work.minutes": "{count} min",
+  // Past an hour, a runtime is said in hours: nobody divides by sixty in
+  // their head to find out whether a film fits into an evening.
+  "work.hours": "{hours}h",
+  "work.hours_minutes": "{hours}h {minutes}",
   "work.unidentified": "Not identified",
   "work.pending": "Waiting to be looked up",
 
@@ -661,9 +672,14 @@ const fr: Dictionary = {
   "home.hero.open": "Voir la fiche",
   "home.hero.previous": "Précédent",
   "home.hero.next": "Suivant",
-  "home.hero.left": "{count} min restantes",
+  "home.hero.left": "{time} restantes",
+  "home.hero.progress": "{done} / {whole}",
   "home.up_next": "À suivre",
   "home.up_next.which": "Saison {season}, épisode {episode}",
+  "home.up_next.short": "S{season}E{episode}",
+  "home.see_all": "Tout voir",
+  "home.band": "Où chercher",
+  "home.band.count": "{count} titres",
   "home.newest.movies": "Films récemment ajoutés",
   "home.newest.series": "Séries récemment ajoutées",
   "home.newest.anime": "Animés récemment ajoutés",
@@ -765,6 +781,8 @@ const fr: Dictionary = {
   "work.version": "Version",
   "work.collection": "Fait partie de {name}",
   "work.minutes": "{count} min",
+  "work.hours": "{hours} h",
+  "work.hours_minutes": "{hours} h {minutes}",
   "work.unidentified": "Non identifié",
   "work.pending": "En attente d'identification",
 

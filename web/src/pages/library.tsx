@@ -18,7 +18,14 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
   return (
     <main className="page">
       <div className="section-head">
-        <h1>{favourites ? t("nav.favourites") : (library?.name ?? t("library.all"))}</h1>
+        {/* A grid narrowed to a kind is that category, and says so: reaching
+            it from the band and being told "All" reads as a wrong turn. */}
+        <h1>
+          {favourites
+            ? t("nav.favourites")
+            : (library?.name ??
+              (narrowing.kind ? t(`kind.${narrowing.kind}`) : t("library.all")))}
+        </h1>
         {/* What the library holds, not what has been scrolled to so far: a
             grid that counts its own loaded cards tells the viewer how far
             they have scrolled, which nobody asked. */}

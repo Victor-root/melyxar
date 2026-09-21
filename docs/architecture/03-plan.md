@@ -309,6 +309,7 @@ Côté interface :
 - La carte et son survol : agrandissement sans déplacer les voisines, lecture au centre, vu en haut à droite, favori et menu en bas à droite, barre de progression, badge d'épisodes restants.
 - Le hero, module désactivable de cinq éléments au maximum, défilement lent qui s'arrête dès qu'on le touche.
 - Le menu contextuel préparant toutes les actions prévues, grisées quand elles ne sont pas câblées et masquées quand le compte n'y a pas droit.
+- La passe de finition, menée en regardant la direction visuelle à côté de l'écran : le bandeau de catégories sous le hero, le chevron et le « Tout voir » des rangées adossées à une grille, les pastilles techniques et la durée en heures du hero, le temps restant et la ligne de saison sur les cartes de reprise, l'icône de chaque catégorie, la pastille de raccourci clavier et la pastille du compte dans la barre du haut.
 
 Ce qui n'est pas dans ce jalon : l'écran de personnalisation de l'accueil (l'architecture doit le permettre, il ne se développe pas encore), l'interface d'administration séparée, et l'adaptation au téléphone, qui ne doit simplement pas être rendue impossible.
 

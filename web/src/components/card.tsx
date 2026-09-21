@@ -36,16 +36,22 @@ export function Card({
   /** How far in, between nought and one, when a row knows and the card does
       not: what somebody left halfway carries it in the row's own answer. */
   watched,
-  /** What the card says instead of its own title, for an episode shown under
-      the name of its series. */
-  above,
-  below,
+  /** The name the card leads with, when it is not the work's own: an episode
+      is shown under the name of its series, which is the only name anybody
+      remembers. */
+  lead,
+  /** The faint line under it, in place of the year. */
+  note,
+  /** A few words at the right of the name, where a row of stills needs them:
+      how much of it is left. */
+  trailing,
 }: {
   card: CardData;
   shape?: CardShape;
   watched?: number;
-  above?: string;
-  below?: string;
+  lead?: string;
+  note?: string;
+  trailing?: string;
 }) {
   const { t } = useSettings();
   const navigate = useNavigate();
@@ -195,12 +201,14 @@ export function Card({
 
       </div>
 
-      {/* An episode leads with its series, which is the only name anybody
-          remembers, and says which episode underneath. */}
-      {above && <span className="card-above">{above}</span>}
-      <span className="card-title">{above ? (below ?? card.title) : card.title}</span>
-      {!above && <span className="card-year">{card.year ?? ""}</span>}
-      {above && below && <span className="card-year">{card.title}</span>}
+      {/* The name, and at its right what a row of half watched films is read
+          for: how much of each one is left. Underneath, which episode it is,
+          or the year for anything that is not one. */}
+      <span className="card-line">
+        <span className="card-title">{lead ?? card.title}</span>
+        {trailing && <span className="card-trailing">{trailing}</span>}
+      </span>
+      <span className="card-year">{note ?? card.year ?? ""}</span>
 
       {menuFrom && (
         <CardMenu card={card} from={menuFrom} onClose={() => setMenuFrom(null)} />
