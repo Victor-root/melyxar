@@ -94,8 +94,12 @@ export function Hero({ items }: { items: HeroItem[] }) {
         {shown.tagline && <p className="hero-tagline">{shown.tagline}</p>}
         <HeroTitle item={shown} />
 
+        {/* One line: what the film is, and then what the copy on the disk
+            holds. They were two lines, and the second cost the synopsis one
+            of its own, which is the line somebody actually reads. */}
         <p className="hero-facts">
-          {[
+          <span>
+            {[
             // An episode leads with which episode it is: the title above is
             // its series, so without this nobody knows where they left off.
             whichEpisode(shown, t),
@@ -103,16 +107,17 @@ export function Hero({ items }: { items: HeroItem[] }) {
             shown.runtime_minutes ? howLong(shown.runtime_minutes, t) : null,
             ...shown.genres.slice(0, GENRES_NAMED),
             shown.episodes > 0 ? t("card.unwatched", { count: shown.unwatched }) : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
 
-        {/* What the file itself holds. Beside the title because it is what
-            decides whether somebody watches this one here or on the screen
-            in the other room, and because it is the one thing a catalogue
-            cannot promise: it was read off the copy on the disk. */}
-        <HeroBadges item={shown} />
+          {/* What the file itself holds. Beside the rest because it is what
+              decides whether somebody watches this one here or on the screen
+              in the other room, and because it is the one thing a catalogue
+              cannot promise: it was read off the copy on the disk. */}
+          <HeroBadges item={shown} />
+        </p>
 
         {shown.overview && <p className="hero-overview">{shown.overview}</p>}
 
@@ -179,13 +184,13 @@ function HeroBadges({ item }: { item: HeroItem }) {
     return null;
   }
   return (
-    <p className="hero-badges">
+    <span className="hero-badges">
       {badges.map((badge) => (
         <span className="hero-badge" key={badge}>
           {badge}
         </span>
       ))}
-    </p>
+    </span>
   );
 }
 
