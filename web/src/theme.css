@@ -92,6 +92,31 @@
   --gutter: clamp(14px, 2.2vw, 56px);
   --header-height: 60px;
 
+  /* How tall the banner of the home page is, and with it the grey block drawn
+     in its place while the page loads, so the two can never drift apart and
+     the page never jumps once the picture arrives.
+
+     Kept in proportion to the width rather than pinned to one height, because
+     what it really sets is how much of the picture behind it is thrown away: a
+     picture from the provider is sixteen by nine, and a banner a third of the
+     screen wide in height keeps about two thirds of it. That is what decides
+     whether the banner looks right, far more than where the band is taken from
+     does: at a shade under half the height it was before, more than half of
+     every picture went before anything could place what was left well, and no
+     rule can fit a cast of six, a face and a landscape into that.
+
+     Held back by a share of the screen's height rather than by a number of
+     points, so that the banner never swallows the window: a fixed ceiling in
+     points is one a four thousand point screen passes without noticing, and
+     that screen would have ended up with the smallest share of its picture of
+     anybody. What the ceiling is really for is the short wide screen, where a
+     third of the width is taller than there is room for.
+
+     The height of the bar comes on top, because the bar is drawn over the
+     banner rather than above it: without that the banner would simply lose its
+     first sixty points to something laid over it. */
+  --hero-height: calc(clamp(320px, 33vw, 72vh) + var(--header-height));
+
   /* Cards are 2:3, the shape of a poster. A wide screen holds more of them
      rather than bigger ones: more of the library at a glance is the whole
      point of the width. */
