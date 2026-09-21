@@ -1229,9 +1229,12 @@ button.seen-mark-on:hover {
   gap: var(--gap);
   overflow-x: auto;
   /* Room for the focus ring and for a card grown under the pointer, both of
-     which a hidden overflow would otherwise clip. */
-  padding: 8px 8px var(--gap-tight);
-  margin: -8px -8px calc(var(--gap-tight) * -1);
+     which a hidden overflow would otherwise clip. Four pixels at the sides
+     rather than eight: a card grown by a thirtieth reaches three of them,
+     and every pixel kept here is a pixel taken from the margin the arrows
+     stand in. */
+  padding: 8px 4px var(--gap-tight);
+  margin: -8px -4px calc(var(--gap-tight) * -1);
   scrollbar-width: none;
   /* A hand pulling a row of posters is not a hand selecting their titles,
      and the blue wash that appeared under one was the whole reason the drag
@@ -1298,9 +1301,10 @@ button.seen-mark-on:hover {
   z-index: 2;
   display: grid;
   place-items: center;
-  /* What is left of the page's margin once the row has taken the eight
-     pixels it keeps for a card grown under the pointer. */
-  width: calc(var(--gutter) - 8px);
+  /* All of the page's margin bar the four pixels the row keeps for a card
+     grown under the pointer. The chevron is centred in what is left, so it
+     stands off the cards rather than against them. */
+  width: calc(var(--gutter) - 4px);
   border: none;
   background: none;
   color: var(--accent-bright);
@@ -1311,7 +1315,7 @@ button.seen-mark-on:hover {
    margin narrows with the window, and an icon wider than it would be back
    over the posters, which is the whole thing this moved away from. */
 .row-arrow > svg {
-  width: min(26px, calc(var(--gutter) - 10px));
+  width: min(24px, calc(var(--gutter) - 10px));
   height: auto;
 }
 
@@ -1320,14 +1324,14 @@ button.seen-mark-on:hover {
   color: var(--accent);
 }
 
-/* Right up against the outside of the row, which is the inside of the
-   page's own margin. */
+/* Outside the row, in the page's own margin, and clear of the four pixels
+   the row keeps for itself. */
 .row-arrow-back {
-  right: 100%;
+  right: calc(100% + 4px);
 }
 
 .row-arrow-on {
-  left: 100%;
+  left: calc(100% + 4px);
 }
 
 /* Nothing to hover on a touch screen, and a finger swipes the row anyway. */
@@ -3001,24 +3005,22 @@ button.seen-mark-on:hover {
   gap: var(--gap);
 }
 
-/* A small disc holding a large chevron rather than the other way round: what
-   is pressed is the chevron, and the disc is only there to be seen against
-   whatever picture happens to be behind it. */
+/* The chevron alone: no disc, no outline. What was pressed was always the
+   chevron, and the disc behind it only made a button out of something that
+   reads as a direction. It stays legible over a bright picture by carrying
+   its own shadow rather than a background. */
 .hero-step {
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--surface-deep) 60%, transparent);
-  backdrop-filter: blur(8px);
-  border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
   color: var(--text);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.65));
   /* Always there. An arrow that appears under the pointer is an arrow nobody
      knows about until they have already stopped looking for one, and on a
      screen with no pointer at all it never appears. */
   opacity: 0.7;
-  transition: opacity var(--quick) var(--ease), background var(--quick) var(--ease);
+  transition: opacity var(--quick) var(--ease), transform var(--quick) var(--ease);
 }
 
 .hero:hover .hero-step,
@@ -3028,7 +3030,7 @@ button.seen-mark-on:hover {
 
 .hero-step:hover {
   opacity: 1;
-  background: var(--surface-raised);
+  transform: scale(1.15);
 }
 
 .hero-dots {
