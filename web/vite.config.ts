@@ -1,8 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-/// The built interface is committed and embedded in the server binary, so the
-/// container it runs in needs no JavaScript tooling of its own.
+/// What comes out of here is baked into the server's own binary, so deploying
+/// the server is deploying one file and nothing beside it.
+///
+/// It is never kept in the repository, on purpose: a built interface sitting
+/// next to the sources it was built from goes stale the moment anybody edits
+/// one of them, and nothing would say so. The update script builds it again
+/// just before it compiles the server, which is the only order in which the
+/// two can agree.
 export default defineConfig({
   plugins: [react()],
   build: {
