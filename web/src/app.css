@@ -712,8 +712,12 @@
   box-shadow: 0 4px 16px var(--accent-glow);
 }
 
-.button-accent:hover {
-  background: var(--accent-bright);
+/* It keeps its colour under the pointer: it is already the loudest thing on
+   the banner, and a second red says nothing the growing has not said. The
+   same shape of selector as the rule above, or that one wins on being one
+   pseudo-class longer and paints the accent button grey. */
+.button-accent:hover:not(:disabled) {
+  background: var(--accent);
 }
 
 .button-large {
@@ -834,6 +838,23 @@
      library and the hand measured heights one needs. */
   content-visibility: auto;
   contain-intrinsic-size: auto 320px;
+  transition: transform var(--calm) var(--ease);
+}
+
+/* The whole card grows a little under the pointer, picture and words
+   together, the way every button in this interface does. It used to be the
+   picture alone that grew, inside a card that stayed where it was, which
+   read as a picture swelling in its own frame rather than as a card coming
+   forward.
+
+   Grown rather than reflowed: a transform moves nothing around it, so the
+   grid under the pointer stays exactly where it was. Lifted above its
+   neighbours while it is grown, or the one it grows over would be drawn on
+   top of it. */
+.card:hover,
+.card:focus-within {
+  transform: scale(1.035);
+  z-index: 3;
 }
 
 .card-picture {
@@ -843,7 +864,7 @@
   overflow: hidden;
   background: var(--card-color);
   box-shadow: var(--shadow-card);
-  transition: transform var(--calm) var(--ease), box-shadow var(--calm) var(--ease);
+  transition: box-shadow var(--calm) var(--ease);
 }
 
 /* An episode and a film left halfway lie down: a still is a wide picture, and
@@ -856,12 +877,16 @@
   aspect-ratio: 16 / 9;
 }
 
-/* Grown rather than reflowed: a transform moves nothing around it, so the
-   grid under the pointer stays exactly where it was. */
 .card:hover .card-picture,
 .card:focus-within .card-picture {
-  transform: translateY(-4px) scale(1.02);
   box-shadow: var(--shadow-raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover,
+  .card:focus-within {
+    transform: none;
+  }
 }
 
 .card-picture img {
@@ -894,8 +919,7 @@
   top: 8px;
   padding: 3px 8px;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--surface-deep) 80%, transparent);
-  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--surface-deep) 90%, transparent);
   font-size: 11px;
   color: var(--text-soft);
   border: 1px solid var(--border-strong);
@@ -922,8 +946,7 @@
   padding: 0 6px;
   border: none;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--surface-deep) 62%, transparent);
-  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--surface-deep) 78%, transparent);
   color: var(--text);
   font-size: 12px;
   font-weight: 700;
@@ -1038,8 +1061,7 @@ button.seen-mark-on:hover {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
-  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--surface-deep) 86%, transparent);
   border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
   color: var(--text);
   transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
@@ -1202,10 +1224,10 @@ button.seen-mark-on:hover {
   display: flex;
   gap: var(--gap);
   overflow-x: auto;
-  /* Room for the focus ring and the raised state of a card, which a hidden
-     overflow would otherwise clip. */
-  padding: 4px 4px var(--gap-tight);
-  margin: -4px -4px calc(var(--gap-tight) * -1);
+  /* Room for the focus ring and for a card grown under the pointer, both of
+     which a hidden overflow would otherwise clip. */
+  padding: 8px 8px var(--gap-tight);
+  margin: -8px -8px calc(var(--gap-tight) * -1);
   scrollbar-width: none;
   /* A hand pulling a row of posters is not a hand selecting their titles,
      and the blue wash that appeared under one was the whole reason the drag

@@ -229,10 +229,13 @@ export function ChevronDownIcon(props: IconProps) {
   );
 }
 
+/* Both are drawn about the middle of the square to the decimal: a chevron
+   that sits off centre in a round button is a chevron nobody can unsee, and
+   the one in the banner did exactly that. */
 export function ChevronLeftIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M15 5.6 8.6 12 15 18.4" />
+      <path d="M15.2 5.6 8.8 12 15.2 18.4" />
     </Icon>
   );
 }
@@ -240,7 +243,7 @@ export function ChevronLeftIcon(props: IconProps) {
 export function ChevronRightIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M9 5.6 15.4 12 9 18.4" />
+      <path d="M8.8 5.6 15.2 12 8.8 18.4" />
     </Icon>
   );
 }
