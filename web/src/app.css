@@ -11,6 +11,7 @@
    everything under it is one box that scrolls, which is what puts the bar of
    the scroll under the header rather than behind it. */
 .shell {
+  position: relative;
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -23,12 +24,27 @@
   overflow-x: hidden;
 }
 
+/* Over the page rather than above it, and see through.
+ *
+ * A bar sitting in its own band at the top has nothing behind it, so a blur
+ * there blurs nothing and reads as a flat strip of another colour. Drawn over
+ * what scrolls, it carries whatever is underneath: the banner at rest, the
+ * rows once they start moving under it. That is the whole of the effect, and
+ * it is the one the panels of the player already use, said in the same terms
+ * so the two go on agreeing: a little more than half of the raised surface,
+ * and eighteen points of blur.
+ *
+ * One of the two places in this interface allowed a blur, the other being the
+ * banner's own. Every other blur was measured off the cards and taken away. */
 .header {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 20;
-  background: color-mix(in srgb, var(--surface-deep) 88%, transparent);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
 /* Three parts, and the search really in the middle of the bar rather than in
@@ -388,7 +404,7 @@
  * ----------------------------------------------------------------------- */
 
 .page {
-  padding: var(--gap-wide) var(--gutter) var(--gap-section);
+  padding: calc(var(--header-height) + var(--gap-wide)) var(--gutter) var(--gap-section);
 }
 
 /* The band sits almost against the foot of the banner: the two are read as
