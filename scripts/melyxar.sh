@@ -263,6 +263,8 @@ en|build_notice|This takes 5 to 10 minutes the first time and 1 to 2 minutes aft
 fr|build_notice|Cela prend 5 à 10 minutes la première fois, puis 1 à 2 minutes ensuite.
 en|build_nice|The build runs at the highest priority, for the fastest rebuild while this is still being developed.
 fr|build_nice|La compilation tourne à la priorité la plus haute, pour aller le plus vite possible tant que c'est en plein développement.
+en|build_nice_denied|This container is not allowed to raise a priority, so the build runs at the usual one. Nothing else changes.
+fr|build_nice_denied|Ce conteneur n'a pas le droit d'augmenter une priorité, la compilation tourne donc à la priorité normale. Rien d'autre ne change.
 en|step_build|Building the server
 fr|step_build|Compilation du serveur
 en|step_install_binary|Installing the binary
@@ -836,19 +838,31 @@ fetch_source() {
 build_and_install() {
   section "$(tr_msg section_build)"
   info "$(tr_msg build_notice)"
-  info "$(tr_msg build_nice)"
 
   export PATH="/root/.cargo/bin:${PATH}"
+
+  # Asked for, not assumed. Raising a priority needs a capability an
+  # unprivileged container is not given, even as root inside it, and `nice`
+  # then prints a refusal in the middle of the build and carries on at the
+  # normal priority anyway. Trying it on something that does nothing tells us
+  # which of the two messages to print, and leaves the build itself clean.
+  local priority=()
+  if nice -n -20 true 2>/dev/null; then
+    priority=(nice -n -20)
+    info "$(tr_msg build_nice)"
+  else
+    info "$(tr_msg build_nice_denied)"
+  fi
 
   # The server embeds the interface at compile time, straight out of
   # web/dist: it has to exist and be current before cargo ever runs.
   step "$(tr_msg step_npm_install)" npm --prefix "${SOURCE_DIR}/web" ci
   step "$(tr_msg step_npm_build)" npm --prefix "${SOURCE_DIR}/web" run build
 
-  # Highest priority the processor allows: this is still in active
-  # development, and waiting on a rebuild costs more right now than a film
-  # playing at the same moment would.
-  step "$(tr_msg step_build)" nice -n -20 cargo build --release --locked \
+  # Highest priority the processor allows, when this machine allows it at
+  # all: this is still in active development, and waiting on a rebuild costs
+  # more right now than a film playing at the same moment would.
+  step "$(tr_msg step_build)" "${priority[@]}" cargo build --release --locked \
     --manifest-path "${SOURCE_DIR}/Cargo.toml"
 
   step "$(tr_msg step_install_binary)" bash -c "
