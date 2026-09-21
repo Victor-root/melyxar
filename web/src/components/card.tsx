@@ -213,7 +213,12 @@ export function Card({
       <span className="card-year">{note ?? card.year ?? ""}</span>
 
       {menuFrom && (
-        <CardMenu card={card} from={menuFrom} onClose={() => setMenuFrom(null)} />
+        <CardMenu
+          card={card}
+          from={menuFrom}
+          openedBy={kebab.current}
+          onClose={() => setMenuFrom(null)}
+        />
       )}
     </article>
   );

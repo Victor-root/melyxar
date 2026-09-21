@@ -128,23 +128,19 @@ export function Hero({ items }: { items: HeroItem[] }) {
         <HeroProgress item={shown} />
       </div>
 
+      {/* Where it is in the five and the two ways to move through them, in
+          one place at the bottom corner. Over the picture rather than over
+          the words, and never again across the middle of the banner, where
+          an arrow sat between somebody and what they were reading. */}
       {many && (
-        <>
+        <div className="hero-steps">
           <button
             type="button"
-            className="hero-step hero-step-back"
+            className="hero-step"
             aria-label={t("home.hero.previous")}
             onClick={() => go(at - 1)}
           >
-            <ChevronLeftIcon size={34} />
-          </button>
-          <button
-            type="button"
-            className="hero-step hero-step-on"
-            aria-label={t("home.hero.next")}
-            onClick={() => go(at + 1)}
-          >
-            <ChevronRightIcon size={34} />
+            <ChevronLeftIcon size={26} />
           </button>
 
           <div className="hero-dots">
@@ -159,7 +155,16 @@ export function Hero({ items }: { items: HeroItem[] }) {
               />
             ))}
           </div>
-        </>
+
+          <button
+            type="button"
+            className="hero-step"
+            aria-label={t("home.hero.next")}
+            onClick={() => go(at + 1)}
+          >
+            <ChevronRightIcon size={26} />
+          </button>
+        </div>
       )}
     </section>
   );
@@ -272,7 +277,7 @@ function HeroPlay({ item }: { item: HeroItem }) {
   if (item.source === null || item.kind === "series") {
     return (
       <Link className="button button-accent button-large" to={`/work/${item.id}`}>
-        <PlayIcon size={26} />
+        <PlayIcon size={30} />
         {t("home.hero.open")}
       </Link>
     );

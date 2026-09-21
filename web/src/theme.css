@@ -37,6 +37,27 @@
 }
 
 /*
+ * The one face that is not Inter, and it writes exactly one word: the name of
+ * the server, at the top left.
+ *
+ * A wordmark set in the same face as the menu beside it is not a wordmark, it
+ * is a heading. This one is a grotesque with square counters and a cut-off
+ * R, which is what makes it read as a mark at a glance and still sit level
+ * with everything around it. Latin alone and one weight: the word is seven
+ * letters long, and thirteen kilobytes is what it costs.
+ *
+ * Space Grotesk, under the same open licence as Inter, credited beside it.
+ */
+@font-face {
+  font-family: "Melyxar Display";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/space-grotesk-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF;
+}
+
+/*
  * Every colour, spacing and radius the interface uses lives here as a token.
  * Nothing else in the interface writes a colour: that is what lets the accent
  * be changed in one place, and what makes a light and a dark theme the same
@@ -143,11 +164,13 @@
   box-sizing: border-box;
 }
 
+/* The window never scrolls: the box under the bar at the top does. */
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
@@ -159,24 +182,45 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The scrollbar carries the accent, the way the maintainer asked. */
-* {
-  scrollbar-color: var(--accent) transparent;
-  scrollbar-width: thin;
+/*
+ * The scrollbar carries the accent, the way the maintainer asked.
+ *
+ * Two ways of saying it, and they must not both be said at once. A browser
+ * built on WebKit that is given the standard `scrollbar-width` draws the
+ * system's own thin bar and ignores every `::-webkit-scrollbar` rule below,
+ * steppers at the ends included: that is why the two little arrows kept
+ * coming back however often they were told to go.
+ *
+ * So the standard properties are said only where the pieces below do not
+ * exist, which is Firefox, and the pieces are used everywhere else.
+ */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-color: var(--accent) transparent;
+    scrollbar-width: thin;
+  }
 }
 
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
+  background: transparent;
 }
 
 /* No stepper at either end. Nobody has pressed one of those since the wheel
    was invented, and two little squares of a different shade at the ends are
    what makes a bar look like it came from another decade. */
-*::-webkit-scrollbar-button {
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button:start,
+*::-webkit-scrollbar-button:end {
   display: none;
   width: 0;
   height: 0;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* The accent itself, not a shade of it: a bar in a slightly different red

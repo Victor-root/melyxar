@@ -10,7 +10,11 @@
  */
 
 .door {
-  min-height: 100vh;
+  /* The window itself does not scroll, so this screen holds its own scroll:
+     on a short window the sign in field has to stay reachable. */
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -18,7 +22,6 @@
   gap: var(--gap-wide);
   padding: var(--gap-wide);
   position: relative;
-  overflow: hidden;
   /* Its own background rather than the page's: this screen is the only one
      with nothing else on it, so the surface it sits on is part of it. */
   background: var(--surface-deep);

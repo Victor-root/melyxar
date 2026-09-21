@@ -7,9 +7,24 @@
  * The bar at the top
  * ----------------------------------------------------------------------- */
 
+/* The window itself never scrolls. The bar holds the top of the screen and
+   everything under it is one box that scrolls, which is what puts the bar of
+   the scroll under the header rather than behind it. */
+.shell {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .header {
-  position: sticky;
-  top: 0;
+  flex: 0 0 auto;
   z-index: 20;
   background: color-mix(in srgb, var(--surface-deep) 88%, transparent);
   backdrop-filter: blur(14px);
@@ -44,8 +59,11 @@
    other, which is why it is set apart rather than written like a word in a
    sentence. */
 .brand-name {
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: 19px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
 /* Served at sixty four pixels for a square of twenty six: that is what keeps
@@ -468,17 +486,20 @@
   margin-bottom: var(--gap-section);
 }
 
+/* Shaped like the picture it holds rather than like a strip of one. A wide
+   picture is sixteen by nine and the tile was four by one, so all it could
+   ever show was a band cut out of the middle of it. Given the picture's own
+   shape, nothing is cut at all. */
 .band-tile {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
-  flex: 1 1 240px;
+  align-items: flex-end;
+  flex: 1 1 200px;
   /* A server of films alone has one way in, and one tile stretched across a
      whole page reads as a banner rather than as a way in. */
-  max-width: 360px;
-  height: 84px;
-  padding: 0 var(--gap);
+  max-width: 280px;
+  aspect-ratio: 16 / 9;
+  padding: var(--gap);
   border-radius: var(--radius-card);
   overflow: hidden;
   isolation: isolate;
@@ -507,17 +528,18 @@
   object-fit: cover;
 }
 
-/* The words have to be readable over a still nobody chose. Darkest where they
-   sit, clearing towards the right so the picture is still a picture. */
+/* The words have to be readable over a still nobody chose. Darkest along the
+   foot where they sit, clearing upwards so the picture is still a picture. */
 .band-tile::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
   background: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--surface-deep) 88%, transparent),
-    color-mix(in srgb, var(--surface-deep) 38%, transparent)
+    to top,
+    color-mix(in srgb, var(--surface-deep) 92%, transparent),
+    color-mix(in srgb, var(--surface-deep) 55%, transparent) 45%,
+    color-mix(in srgb, var(--surface-deep) 20%, transparent)
   );
 }
 
@@ -526,14 +548,15 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .band-name {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 15px;
-  font-weight: 640;
+  font-size: 16px;
+  font-weight: 650;
   letter-spacing: -0.01em;
 }
 
@@ -550,7 +573,6 @@
    one piece of the tile that says "through here", and a bare stroke on a
    still says it far less than a light does. */
 .band-arrow {
-  margin-left: auto;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -2747,14 +2769,14 @@ button.seen-mark-on:hover {
    be the thing somebody meets, short enough that the first row under it is on
    the screen at the same time. A banner that fills the window is a banner
    that hides the library behind it. */
-/* Right up against the bar above it and out to both edges of the page: the
+/* Right up against the bar above it and out to both edges of the screen: the
    banner is the picture, and a picture with a margin drawn round it is a
-   picture in a frame. Rounded only underneath, where it meets the page
-   again, and closer to the band than to a row, since the two read as one
-   block: here is what you were watching, and here is where to go next. */
+   picture in a frame. It is drawn outside the page's own column for exactly
+   that, so nothing here has a width to undo. Rounded only underneath, where
+   it meets the page again. */
 .hero {
   position: relative;
-  margin: calc(var(--gap-wide) * -1) calc(var(--gap-wide) * -1) var(--gap);
+  margin: 0;
   height: min(46vw, 460px);
   min-height: 320px;
   border-radius: 0 0 var(--radius-card) var(--radius-card);
@@ -2809,9 +2831,14 @@ button.seen-mark-on:hover {
   flex-direction: column;
   justify-content: center;
   gap: 10px;
-  /* Clear of the arrow on the left, which is drawn over the picture at the
-     banner's own edge. */
-  padding: var(--gap-wide) var(--gap-wide) var(--gap-wide) calc(var(--gap-wide) * 4);
+  /* Lined up with the rows underneath rather than with the edge of the
+     screen: the banner spans the whole width, the words start where the page
+     starts. */
+  padding: var(--gap-wide);
+  padding-left: max(
+    var(--gap-wide),
+    calc((100% - var(--page-width)) / 2 + var(--gap-wide))
+  );
 }
 
 .hero-tagline {
@@ -2910,19 +2937,27 @@ button.seen-mark-on:hover {
   background: var(--accent);
 }
 
-/* The two arrows, on the picture and out of the way of the words. A small
-   disc holding a large chevron rather than the other way round: what is
-   pressed is the chevron, and the disc is only there to be seen against
+/* Where it is in the five, and the two ways through them, together in the
+   bottom corner: an arrow halfway down the banner stands between somebody
+   and the words they are reading. */
+.hero-steps {
+  position: absolute;
+  right: var(--gap-wide);
+  bottom: var(--gap-wide);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+/* A small disc holding a large chevron rather than the other way round: what
+   is pressed is the chevron, and the disc is only there to be seen against
    whatever picture happens to be behind it. */
 .hero-step {
-  position: absolute;
-  top: 50%;
-  z-index: 2;
-  transform: translateY(-50%);
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: color-mix(in srgb, var(--surface-deep) 60%, transparent);
   backdrop-filter: blur(8px);
@@ -2945,21 +2980,9 @@ button.seen-mark-on:hover {
   background: var(--surface-raised);
 }
 
-.hero-step-back {
-  left: var(--gap-wide);
-}
-
-.hero-step-on {
-  right: var(--gap-wide);
-}
-
-/* Where it is in the five, and a way to go straight to one. */
 .hero-dots {
-  position: absolute;
-  right: var(--gap-wide);
-  bottom: var(--gap-wide);
-  z-index: 2;
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
