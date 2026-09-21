@@ -253,13 +253,27 @@ export type HeroItem = Card & {
   logo: Picture[];
   tagline: string | null;
   overview: string | null;
+  genres: string[];
+  /** What the file itself holds, for the badges beside the title. Raw as the
+      file states it: turning it into "4K" or "Dolby Atmos" is drawing. */
+  height: number | null;
+  hdr: string | null;
+  sound: string | null;
 };
 
 export interface Home {
   /** The few works the page opens on, largest of all. */
   hero: HeroItem[];
-  /** Films started and not finished, the latest first. */
-  carry_on: (Card & { position_seconds: number })[];
+  /** Films and episodes started and not finished, the latest first. An
+      episode carries the series it hangs under, which is what the card leads
+      with: nobody left off in the middle of an episode title. */
+  carry_on: (Card & {
+    position_seconds: number;
+    series: string | null;
+    series_title: string | null;
+    season_number: number | null;
+    episode_number: number | null;
+  })[];
   /** The episode each started series is waiting on, with the series it
       belongs to: an episode's own title is not what anybody remembers. */
   up_next: (Card & {
@@ -270,7 +284,7 @@ export interface Home {
   })[];
   recently_added: Card[];
   /** One row per kind of library this server really holds. */
-  shelves: { kind: LibraryKind; cards: Card[] }[];
+  shelves: { kind: LibraryKind; cards: Card[]; picture: Picture[] }[];
   works: number;
   awaiting_identification: number;
 }
