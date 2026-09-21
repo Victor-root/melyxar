@@ -257,6 +257,26 @@
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
+/* Whether this machine is one to stay signed in on. Set in the accent like
+   every other switch in this interface, and the whole row is the target: a
+   box of eighteen points is a small thing to ask a hand to find. */
+.door-remember {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin-top: 2px;
+  font-size: 13.5px;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.door-remember input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .door-rule {
   margin: -4px 0 2px;
   font-size: 12.5px;

@@ -47,6 +47,41 @@ pub const A_SESSION_LASTS: time::Duration = time::Duration::days(30);
 /// nobody can feel.
 const WRITTEN_DOWN_AGAIN_AFTER: time::Duration = time::Duration::hours(1);
 
+/// Whether the browser is to hold on to its session once it is closed.
+///
+/// Nothing to do with how long a session lives, which is the thirty days
+/// above and is the server's to decide. This is the one thing the server
+/// cannot know on its own: whether the machine belongs to the person signing
+/// in. Somebody on their own television says yes; somebody on a machine at
+/// work says no, and closing the browser is the end of it for them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Remembered {
+    /// Kept by the browser, so the machine stays signed in. The ordinary one,
+    /// and what every device signed in before this existed was.
+    Yes,
+    /// Dropped the moment the browser is closed.
+    UntilTheBrowserCloses,
+}
+
+impl Remembered {
+    /// As the column holds it.
+    fn as_int(self) -> i64 {
+        match self {
+            Self::Yes => 1,
+            Self::UntilTheBrowserCloses => 0,
+        }
+    }
+
+    /// Back from the column. Anything but a plain no is a yes, since that is
+    /// what a row written before the column existed was given.
+    fn from_int(stored: i64) -> Self {
+        match stored {
+            0 => Self::UntilTheBrowserCloses,
+            _ => Self::Yes,
+        }
+    }
+}
+
 /// Whoever presented a token, and the device they presented it from.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignedIn {
@@ -54,6 +89,10 @@ pub struct SignedIn {
     /// Which device this is, so one can be signed out without touching the
     /// others.
     pub device: DeviceId,
+    /// What this browser was told about keeping its session. Carried so that
+    /// a token handed to the same browser again is kept exactly as long as
+    /// the one it replaces, rather than quietly becoming a longer one.
+    pub remembered: Remembered,
 }
 
 impl Database {
@@ -66,17 +105,20 @@ impl Database {
         user_id: UserId,
         device_name: &str,
         token_fingerprint: &str,
+        remembered: Remembered,
         at: Timestamp,
     ) -> Result<DeviceId> {
         let id = DeviceId::new();
         sqlx::query(
-            "INSERT INTO devices (id, user_id, name, token_hash, created_at, last_seen_at)
-             VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO devices
+                 (id, user_id, name, token_hash, remembered, created_at, last_seen_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id.to_db_string())
         .bind(user_id.to_db_string())
         .bind(device_name)
         .bind(token_fingerprint)
+        .bind(remembered.as_int())
         .bind(timestamp_to_text(at))
         .bind(timestamp_to_text(at))
         .execute(self.writer())
@@ -103,7 +145,7 @@ impl Database {
         // included, so it is the one place where a second round trip would be
         // paid for over and over.
         let Some(row) = sqlx::query(AssertSqlSafe(crate::users::reading_accounts(
-            ", d.id AS device_id, d.last_seen_at",
+            ", d.id AS device_id, d.last_seen_at, d.remembered",
             "JOIN devices d ON d.user_id = u.id
              WHERE d.token_hash = ? AND d.last_seen_at >= ?",
         )))
@@ -130,6 +172,7 @@ impl Database {
         Ok(Some(SignedIn {
             user: crate::users::build_user(&row, &allowed)?,
             device,
+            remembered: Remembered::from_int(row.try_get("remembered")?),
         }))
     }
 
@@ -206,7 +249,7 @@ mod tests {
     async fn a_token_brings_back_the_account_it_was_opened_for() {
         let (database, user_id) = a_server_with_one_account().await;
         let device = database
-            .open_session(user_id, "a browser", "a fingerprint", A_MOMENT)
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
 
@@ -223,6 +266,55 @@ mod tests {
         // that asks who is there asks in order to decide something.
         assert!(signed_in.user.permissions.is_administrator);
         assert_eq!(signed_in.user.preferences.accent_color, "#c81e1e");
+    }
+
+    /// What somebody said about the machine they are on comes back with them.
+    ///
+    /// It comes back because the one thing that reads it is the handing over
+    /// of a fresh token to the same browser, which has to be kept for as long
+    /// as the one it replaces rather than quietly becoming a longer one.
+    #[tokio::test]
+    async fn a_session_remembers_whether_it_was_to_be_remembered() {
+        let (database, user_id) = a_server_with_one_account().await;
+        database
+            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
+            .await
+            .expect("session opened");
+        database
+            .open_session(
+                user_id,
+                "a machine at work",
+                "another fingerprint",
+                Remembered::UntilTheBrowserCloses,
+                A_MOMENT,
+            )
+            .await
+            .expect("session opened");
+
+        let kept = database
+            .session_holder("one fingerprint", A_MOMENT)
+            .await
+            .expect("read")
+            .expect("somebody is behind that token");
+        assert_eq!(kept.remembered, Remembered::Yes);
+
+        let for_now = database
+            .session_holder("another fingerprint", A_MOMENT)
+            .await
+            .expect("read")
+            .expect("somebody is behind that token");
+        assert_eq!(for_now.remembered, Remembered::UntilTheBrowserCloses);
+    }
+
+    /// A device signed in before the column existed was given a yes by the
+    /// migration, and so is anything else that is not a plain no.
+    #[test]
+    fn a_device_that_never_said_is_one_that_is_remembered() {
+        assert_eq!(Remembered::from_int(1), Remembered::Yes);
+        assert_eq!(Remembered::from_int(0), Remembered::UntilTheBrowserCloses);
+        assert_eq!(Remembered::from_int(7), Remembered::Yes);
+        assert_eq!(Remembered::Yes.as_int(), 1);
+        assert_eq!(Remembered::UntilTheBrowserCloses.as_int(), 0);
     }
 
     #[tokio::test]
@@ -251,7 +343,7 @@ mod tests {
             .await
             .expect("account created");
         database
-            .open_session(user.id, "a browser", "a fingerprint", A_MOMENT)
+            .open_session(user.id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
 
@@ -271,7 +363,7 @@ mod tests {
     async fn a_token_nobody_opened_names_nobody() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "a browser", "a fingerprint", A_MOMENT)
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
 
@@ -288,11 +380,11 @@ mod tests {
         // Two of them, asked about once each: asking about one keeps it alive,
         // which is the whole point of it, and would answer the other question.
         database
-            .open_session(user_id, "a browser", "one fingerprint", A_MOMENT)
+            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
         database
-            .open_session(user_id, "a television", "another fingerprint", A_MOMENT)
+            .open_session(user_id, "a television", "another fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
 
@@ -321,7 +413,7 @@ mod tests {
     async fn using_a_session_keeps_it_alive_without_writing_on_every_request() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "a browser", "a fingerprint", A_MOMENT)
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
 
@@ -365,11 +457,11 @@ mod tests {
     async fn signing_one_device_out_leaves_the_others_signed_in() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "a browser", "one fingerprint", A_MOMENT)
+            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
         database
-            .open_session(user_id, "a television", "another fingerprint", A_MOMENT)
+            .open_session(user_id, "a television", "another fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
 
@@ -408,15 +500,21 @@ mod tests {
             .await
             .expect("account created");
         database
-            .open_session(user_id, "a browser", "one fingerprint", A_MOMENT)
+            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
         database
-            .open_session(user_id, "a television", "another fingerprint", A_MOMENT)
+            .open_session(user_id, "a television", "another fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
         database
-            .open_session(somebody_else.id, "a browser", "a third fingerprint", A_MOMENT)
+            .open_session(
+                somebody_else.id,
+                "a browser",
+                "a third fingerprint",
+                Remembered::Yes,
+                A_MOMENT,
+            )
             .await
             .expect("session opened");
 
@@ -451,13 +549,19 @@ mod tests {
     async fn the_sessions_nobody_uses_any_more_are_swept_and_the_live_ones_are_not() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "an old browser", "an old fingerprint", A_MOMENT)
+            .open_session(
+                user_id,
+                "an old browser",
+                "an old fingerprint",
+                Remembered::Yes,
+                A_MOMENT,
+            )
             .await
             .expect("session opened");
 
         let much_later = A_MOMENT + A_SESSION_LASTS + time::Duration::days(1);
         database
-            .open_session(user_id, "a browser", "a fresh fingerprint", much_later)
+            .open_session(user_id, "a browser", "a fresh fingerprint", Remembered::Yes, much_later)
             .await
             .expect("session opened");
 

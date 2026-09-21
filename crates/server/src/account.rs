@@ -26,7 +26,8 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::accounts::{
-    OpenedSession, PasswordChange, SessionToken, SignedIn, SignedInOrNot, A_SESSION_LASTS,
+    OpenedSession, PasswordChange, Remembered, SessionToken, SignedIn, SignedInOrNot,
+    A_SESSION_LASTS,
 };
 use melyxar_app::AppState;
 use melyxar_core::user::User;
@@ -157,6 +158,13 @@ pub(crate) struct Viewer(pub User);
 /// beside it.
 pub(crate) struct Administrator;
 
+/// What the browser behind this request was told about keeping its session.
+///
+/// For the one handler that hands the same browser a new token: it has to be
+/// kept for as long as the one it replaces, and nobody but the row of the
+/// device it came from knows how long that was.
+pub(crate) struct ThisBrowser(pub Remembered);
+
 impl<S: Send + Sync> FromRequestParts<S> for Viewer {
     type Rejection = ServerError;
 
@@ -165,6 +173,18 @@ impl<S: Send + Sync> FromRequestParts<S> for Viewer {
             .extensions
             .get::<SignedIn>()
             .map(|holder| Self(holder.user.clone()))
+            .ok_or_else(|| ServerError::unauthenticated("nobody is signed in"))
+    }
+}
+
+impl<S: Send + Sync> FromRequestParts<S> for ThisBrowser {
+    type Rejection = ServerError;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self> {
+        parts
+            .extensions
+            .get::<SignedIn>()
+            .map(|holder| Self(holder.remembered))
             .ok_or_else(|| ServerError::unauthenticated("nobody is signed in"))
     }
 }
@@ -198,20 +218,44 @@ impl<S: Send + Sync> FromRequestParts<S> for Administrator {
 /// server is serving one: a server reached in the clear on a home network,
 /// which is how most of them start, would otherwise hand out a cookie the
 /// browser refuses to send back, and nobody would ever sign in.
-fn cookie_carrying(token: &SessionToken, state: &AppState) -> HeaderValue {
+///
+/// How long the browser keeps it is the one thing somebody chooses at the
+/// door. Remembered, it is dated thirty days out, which is as long as a
+/// session survives being unused anyway. Not remembered, it is given no date
+/// at all, and a cookie with no date is one the browser drops the moment it
+/// closes: that is the whole of what the box does, and it is the browser
+/// rather than this server that honours it, which is what makes it true even
+/// for somebody who walks away from a machine that stays on.
+fn cookie_carrying(
+    token: &SessionToken,
+    state: &AppState,
+    remembered: Remembered,
+) -> HeaderValue {
     let encrypted = matches!(
         state.config().access,
         melyxar_config::AccessMode::Encrypted { .. }
     );
-    let written = format!(
-        "{COOKIE}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}{}",
-        token.as_text(),
-        A_SESSION_LASTS.whole_seconds(),
-        if encrypted { "; Secure" } else { "" }
-    );
+    let written = cookie_written(token.as_text(), encrypted, remembered);
     // Every piece of it is a constant here or a token this server just drew,
     // so there is nothing in it a header cannot hold.
     HeaderValue::from_str(&written).unwrap_or_else(|_| HeaderValue::from_static(""))
+}
+
+/// The line itself, apart from where its two answers come from.
+///
+/// Its own function so that what a browser is actually told can be read back
+/// in a test: whether this server is serving an encrypted connection and
+/// whether somebody ticked the box are both awkward to stand up, and neither
+/// is what could go wrong here.
+fn cookie_written(token: &str, encrypted: bool, remembered: Remembered) -> String {
+    let how_long = match remembered {
+        Remembered::Yes => format!("; Max-Age={}", A_SESSION_LASTS.whole_seconds()),
+        Remembered::UntilTheBrowserCloses => String::new(),
+    };
+    format!(
+        "{COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax{how_long}{}",
+        if encrypted { "; Secure" } else { "" }
+    )
 }
 
 /// The same cookie, emptied and dated in the past, which is how a browser is
@@ -246,6 +290,23 @@ fn what_asked(headers: &HeaderMap) -> String {
 struct WhoAndWhat {
     name: String,
     password: String,
+    /// Whether the browser is to keep this session once it is closed. Left
+    /// out, it is kept: that is what every client did before the box on the
+    /// sign in screen existed, and it is what the box is ticked to.
+    #[serde(default = "kept_unless_said_otherwise")]
+    remember: bool,
+}
+
+fn kept_unless_said_otherwise() -> bool {
+    true
+}
+
+/// What the person ticked, as the session layer says it.
+fn wished_for(remember: bool) -> Remembered {
+    match remember {
+        true => Remembered::Yes,
+        false => Remembered::UntilTheBrowserCloses,
+    }
 }
 
 /// An account as the interface is told about it.
@@ -287,10 +348,15 @@ async fn sign_in(
         &asked.name,
         &asked.password,
         &what_asked(&headers),
+        wished_for(asked.remember),
     )
     .await?
     {
-        SignedInOrNot::Opened(opened) => Ok(answered_with_a_session(&state, *opened)),
+        SignedInOrNot::Opened(opened) => Ok(answered_with_a_session(
+            &state,
+            *opened,
+            wished_for(asked.remember),
+        )),
         SignedInOrNot::NotAPair => Err(ServerError::unauthenticated(
             "no account answers to that pair",
         )),
@@ -333,6 +399,7 @@ async fn change_password(
     State(state): State<AppState>,
     headers: HeaderMap,
     Viewer(user): Viewer,
+    ThisBrowser(remembered): ThisBrowser,
     Json(asked): Json<TheOldAndTheNew>,
 ) -> Result<Response> {
     let changed = melyxar_app::accounts::change_password(
@@ -341,6 +408,7 @@ async fn change_password(
         &asked.current,
         &asked.wanted,
         &what_asked(&headers),
+        remembered,
     )
     .await?;
 
@@ -348,6 +416,7 @@ async fn change_password(
         PasswordChange::Changed(token) => Ok(answered_with_a_session(
             &state,
             OpenedSession { token, user },
+            remembered,
         )),
         PasswordChange::NotTheCurrentOne => Err(ServerError::unauthenticated(
             "that is not the current password",
@@ -374,6 +443,7 @@ async fn set_this_server_up(
         &user.name,
         &asked.password,
         &what_asked(&headers),
+        wished_for(asked.remember),
     )
     .await?
     else {
@@ -382,13 +452,24 @@ async fn set_this_server_up(
         ));
     };
 
-    Ok(answered_with_a_session(&state, *opened))
+    Ok(answered_with_a_session(
+        &state,
+        *opened,
+        wished_for(asked.remember),
+    ))
 }
 
 /// The answer to every door that opens a session: the cookie, and who it is.
-fn answered_with_a_session(state: &AppState, opened: OpenedSession) -> Response {
+fn answered_with_a_session(
+    state: &AppState,
+    opened: OpenedSession,
+    remembered: Remembered,
+) -> Response {
     (
-        [(header::SET_COOKIE, cookie_carrying(&opened.token, state))],
+        [(
+            header::SET_COOKIE,
+            cookie_carrying(&opened.token, state, remembered),
+        )],
         Json(AccountView::from(&opened.user)),
     )
         .into_response()
@@ -414,6 +495,7 @@ mod tests {
         request.extensions_mut().insert(SignedIn {
             user,
             device: DeviceId::new(),
+            remembered: Remembered::Yes,
         });
         request.into_parts().0
     }
@@ -474,6 +556,49 @@ mod tests {
             HeaderValue::from_static("something=else; melyxar_session=a token; more=still"),
         );
         assert_eq!(token_in(&headers).as_deref(), Some("a token"));
+    }
+
+    /// The whole of what the box on the sign in screen does.
+    ///
+    /// A cookie with a date on it is one the browser writes down and has again
+    /// the next morning; a cookie with no date at all is one it drops as it
+    /// closes. Nothing else about the two differs, and nothing else may: the
+    /// session itself lives exactly as long either way.
+    #[test]
+    fn a_browser_told_to_remember_is_given_a_date_and_one_told_not_to_is_not() {
+        let remembered = cookie_written("a token", false, Remembered::Yes);
+        assert!(
+            remembered.contains(&format!("Max-Age={}", A_SESSION_LASTS.whole_seconds())),
+            "a remembered browser keeps the session as long as the session lasts: {remembered}"
+        );
+
+        let for_now = cookie_written("a token", false, Remembered::UntilTheBrowserCloses);
+        assert!(
+            !for_now.contains("Max-Age"),
+            "a browser that was not to remember is given no date at all: {for_now}"
+        );
+
+        // What the two share, which is everything else. Closed to scripts and
+        // kept to this site whichever was chosen: the box says how long, never
+        // how safe.
+        for written in [&remembered, &for_now] {
+            assert!(written.starts_with("melyxar_session=a token; Path=/"), "{written}");
+            assert!(written.contains("HttpOnly"), "{written}");
+            assert!(written.contains("SameSite=Lax"), "{written}");
+        }
+    }
+
+    /// Only a server serving an encrypted connection may ask for the cookie
+    /// back over one. Asked for on a server reached in the clear, which is how
+    /// most of them start, the browser would keep the cookie and never send it.
+    #[test]
+    fn the_cookie_is_held_to_an_encrypted_connection_only_where_there_is_one() {
+        assert!(!cookie_written("a token", false, Remembered::Yes).contains("Secure"));
+        assert!(cookie_written("a token", true, Remembered::Yes).contains("Secure"));
+        assert!(
+            cookie_written("a token", true, Remembered::UntilTheBrowserCloses).contains("Secure"),
+            "the two choices are about how long, never about how safe"
+        );
     }
 
     #[test]

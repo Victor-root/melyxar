@@ -104,6 +104,7 @@ const en: Dictionary = {
   "door.name": "Name",
   "door.password": "Password",
   "door.password_again": "Password again",
+  "door.remember": "Stay signed in on this device",
   "door.rule":
     "Pick something long. A phrase you will remember beats a short word nobody can guess.",
   "door.go": "Sign in",
@@ -770,6 +771,7 @@ const fr: Dictionary = {
   "door.name": "Nom",
   "door.password": "Mot de passe",
   "door.password_again": "Mot de passe à nouveau",
+  "door.remember": "Rester connecté sur cet appareil",
   "door.rule":
     "Prenez quelque chose de long. Une phrase dont vous vous souviendrez vaut mieux qu'un mot court que personne ne devine.",
   "door.go": "Se connecter",

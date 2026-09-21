@@ -1256,15 +1256,19 @@ export const api = {
   branding: (signal?: AbortSignal) => get<Branding>("/api/v1/public/branding", signal),
   /* The door. Signing in answers the account, which is what the interface is
      drawn from; the session itself travels in a cookie the browser keeps and
-     this interface never sees. */
-  signIn: (name: string, password: string) =>
-    post<Account>("/api/v1/session", { name, password }),
+     this interface never sees.
+
+     Remembering is the one thing about that cookie somebody chooses: said
+     yes, the browser keeps it and the machine stays signed in; said no, the
+     browser drops it the moment it closes. */
+  signIn: (name: string, password: string, remember: boolean) =>
+    post<Account>("/api/v1/session", { name, password, remember }),
   signOut: () => remove<{ signed_out: boolean }>("/api/v1/session"),
   me: (signal?: AbortSignal) => get<Account>("/api/v1/me", signal),
   /* The first account of a brand new server, which is an administrator and is
      signed in straight away. Refused once there is one. */
-  setUp: (name: string, password: string) =>
-    post<Account>("/api/v1/setup", { name, password }),
+  setUp: (name: string, password: string, remember: boolean) =>
+    post<Account>("/api/v1/setup", { name, password, remember }),
   /* Changing it signs every other device out and keeps this one going. */
   changePassword: (current: string, wanted: string) =>
     put<Account>("/api/v1/me/password", { current, wanted }),
