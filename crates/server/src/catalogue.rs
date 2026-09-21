@@ -484,6 +484,14 @@ struct HeroView {
     logo: Vec<ImageView>,
     tagline: Option<String>,
     overview: Option<String>,
+    genres: Vec<String>,
+    /// What the file itself holds, for the badges beside the title: how tall
+    /// its picture is, which dynamic range it carries, and what its fullest
+    /// soundtrack is. Raw as the file states it, because turning that into
+    /// "4K" or "Dolby Atmos" is drawing rather than deciding.
+    height: Option<i64>,
+    hdr: Option<String>,
+    sound: Option<String>,
 }
 
 /// One episode a started series is waiting on.
@@ -505,6 +513,10 @@ struct ShelfView {
     /// movies, series, anime or shows.
     kind: &'static str,
     cards: Vec<CardView>,
+    /// A wide picture borrowed from the newest work of that kind, to stand
+    /// behind the tile that leads to it. Empty on a server whose films nobody
+    /// has looked up yet, which the tile answers with its own colour.
+    picture: Vec<ImageView>,
 }
 
 /// One film somebody started and has not finished.
@@ -515,6 +527,13 @@ struct CarryOnView {
     /// Where they got to, so a card can draw how far in it is rather than
     /// asking again for every film in the row.
     position_seconds: f64,
+    /// For an episode, the series it hangs under and where it sits in it.
+    /// Nothing at all for a film. Nobody left off in the middle of an episode
+    /// title, they left off in the middle of a series.
+    series: Option<String>,
+    series_title: Option<String>,
+    season_number: Option<i32>,
+    episode_number: Option<i32>,
 }
 
 async fn home(
@@ -536,6 +555,10 @@ async fn home(
                 logo: entry.dressed.logo.iter().map(image_view).collect(),
                 tagline: entry.dressed.tagline.clone(),
                 overview: entry.dressed.overview.clone(),
+                genres: entry.dressed.genres.clone(),
+                height: entry.dressed.height,
+                hdr: entry.dressed.hdr.clone(),
+                sound: entry.dressed.sound.clone(),
             })
             .collect(),
         carry_on: page
@@ -544,6 +567,10 @@ async fn home(
             .map(|entry| CarryOnView {
                 card: card_view(&entry.card),
                 position_seconds: entry.position.get() as f64 / 1000.0,
+                series: entry.series_id.map(|id| id.to_string()),
+                series_title: entry.series_title.clone(),
+                season_number: entry.season_number,
+                episode_number: entry.episode_number,
             })
             .collect(),
         up_next: page
@@ -564,6 +591,7 @@ async fn home(
             .map(|shelf| ShelfView {
                 kind: shelf.kind.as_str(),
                 cards: shelf.cards.iter().map(card_view).collect(),
+                picture: shelf.picture.iter().map(image_view).collect(),
             })
             .collect(),
         works: page.works,

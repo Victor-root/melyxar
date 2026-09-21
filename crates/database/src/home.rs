@@ -35,6 +35,16 @@ pub struct Dressed {
     pub logo: Vec<StoredImage>,
     pub tagline: Option<String>,
     pub overview: Option<String>,
+    pub genres: Vec<String>,
+    /// How tall the picture of the best copy is, which is what a badge
+    /// saying 4K is really saying.
+    pub height: Option<i64>,
+    /// hdr10, hlg or dolby_vision, when the picture carries one.
+    pub hdr: Option<String>,
+    /// What the fullest soundtrack is, as the file states it: the profile
+    /// when there is one, since that is where Atmos is written, and the
+    /// codec otherwise.
+    pub sound: Option<String>,
 }
 
 impl Database {
@@ -103,6 +113,58 @@ impl Database {
             if entry.tagline.is_none() {
                 entry.tagline = row.try_get("tagline")?;
             }
+        }
+
+        let mut genres = sqlx::query(AssertSqlSafe(format!(
+            "SELECT wg.work_id, g.name
+               FROM work_genres wg
+               JOIN genres g ON g.id = wg.genre_id
+              WHERE wg.work_id IN ({places})"
+        )));
+        for owner in &owners {
+            genres = genres.bind(owner);
+        }
+        for row in genres.fetch_all(self.reader()).await? {
+            let owner: WorkId = parse_id(&row.try_get::<String, _>("work_id")?)?;
+            dressed
+                .entry(owner)
+                .or_default()
+                .genres
+                .push(row.try_get("name")?);
+        }
+
+        // What the file itself says about its picture and its sound, which is
+        // what the badges beside a title are: read off the best copy on disk
+        // rather than promised by the catalogue.
+        let mut facts = sqlx::query(AssertSqlSafe(format!(
+            "SELECT w.id AS work_id,
+                    (SELECT t.height FROM tracks t
+                       JOIN media_sources s ON s.id = t.source_id
+                      WHERE s.work_id = w.id AND s.missing_since IS NULL
+                        AND t.kind = 'video' AND t.height IS NOT NULL
+                      ORDER BY t.height DESC LIMIT 1) AS height,
+                    (SELECT t.hdr_format FROM tracks t
+                       JOIN media_sources s ON s.id = t.source_id
+                      WHERE s.work_id = w.id AND s.missing_since IS NULL
+                        AND t.kind = 'video' AND t.hdr_format IS NOT NULL
+                      LIMIT 1) AS hdr,
+                    (SELECT coalesce(t.profile, t.codec) FROM tracks t
+                       JOIN media_sources s ON s.id = t.source_id
+                      WHERE s.work_id = w.id AND s.missing_since IS NULL
+                        AND t.kind = 'audio'
+                      ORDER BY t.channels DESC LIMIT 1) AS sound
+               FROM works w
+              WHERE w.id IN ({places})"
+        )));
+        for owner in &owners {
+            facts = facts.bind(owner);
+        }
+        for row in facts.fetch_all(self.reader()).await? {
+            let owner: WorkId = parse_id(&row.try_get::<String, _>("work_id")?)?;
+            let entry = dressed.entry(owner).or_default();
+            entry.height = row.try_get("height")?;
+            entry.hdr = row.try_get("hdr")?;
+            entry.sound = row.try_get("sound")?;
         }
         Ok(dressed)
     }
@@ -412,6 +474,117 @@ mod tests {
             leaning.iter().map(|card| card.id).collect::<Vec<_>>(),
             vec![films[2]],
             "a comedy watcher is offered the comedy, and never what they watched"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_work_shown_large_carries_its_genres_and_what_its_file_holds() {
+        use melyxar_core::id::{MediaSourceId, TrackId};
+        use melyxar_core::media::{
+            AudioDetails, ColorInfo, HdrFormat, Loudness, Track, TrackKind, VideoDetails,
+        };
+        use melyxar_core::time::now;
+        use std::path::Path;
+
+        let (database, library, _, films) = a_shelf(&[("One", 7.0, "Drame")]).await;
+        let root = database
+            .library_roots(library)
+            .await
+            .expect("roots read")[0]
+            .id;
+
+        let video = |source_id: MediaSourceId, height: i32, hdr: Option<HdrFormat>| Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: 0,
+            language: None,
+            title: None,
+            is_default: true,
+            is_forced: false,
+            kind: TrackKind::Video(VideoDetails {
+                codec: "hevc".to_string(),
+                profile: Some("Main 10".to_string()),
+                level: None,
+                width: height * 16 / 9,
+                height,
+                margins: None,
+                aspect_ratio: None,
+                is_interlaced: false,
+                frame_rate: None,
+                bitrate: None,
+                pixel_format: None,
+                reference_frames: None,
+                color: ColorInfo::default(),
+                hdr,
+            }),
+        };
+        let audio = |source_id: MediaSourceId, channels: i32, profile: Option<&str>| Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: 1,
+            language: None,
+            title: None,
+            is_default: true,
+            is_forced: false,
+            kind: TrackKind::Audio(AudioDetails {
+                codec: "eac3".to_string(),
+                profile: profile.map(str::to_string),
+                channels,
+                channel_layout: None,
+                sample_rate: None,
+                bit_depth: None,
+                bitrate: None,
+                loudness: Loudness::default(),
+            }),
+        };
+
+        // Two copies of the same film, one of them gone from the disk. What
+        // the badges say has to come from the copy that can really be played.
+        let good = database
+            .insert_source(films[0], root, Path::new("one-4k.mkv"), 1_000, now())
+            .await
+            .expect("copy recorded");
+        database
+            .store_analysis(
+                good,
+                &Default::default(),
+                &[
+                    video(good, 2160, Some(HdrFormat::Hdr10)),
+                    audio(good, 8, Some("Dolby Atmos")),
+                    audio(good, 2, None),
+                ],
+                &[],
+            )
+            .await
+            .expect("copy analysed");
+
+        let gone = database
+            .insert_source(films[0], root, Path::new("one-8k.mkv"), 1_000, now())
+            .await
+            .expect("copy recorded");
+        database
+            .store_analysis(gone, &Default::default(), &[video(gone, 4320, None)], &[])
+            .await
+            .expect("copy analysed");
+        sqlx::query("UPDATE media_sources SET missing_since = ? WHERE id = ?")
+            .bind(timestamp_to_text(now()))
+            .bind(gone.to_db_string())
+            .execute(database.writer())
+            .await
+            .expect("copy lost");
+
+        let dressed = database
+            .dressed_large(&films, "fr")
+            .await
+            .expect("dressed read");
+        let one = dressed.get(&films[0]).expect("the film is dressed");
+        assert_eq!(one.genres, vec!["Drame".to_string()]);
+        assert_eq!(one.height, Some(2160), "the copy still on disk decides");
+        assert_eq!(one.hdr.as_deref(), Some("hdr10"));
+        assert_eq!(
+            one.sound.as_deref(),
+            Some("Dolby Atmos"),
+            "the fullest soundtrack, named as the file names it"
         );
     }
 

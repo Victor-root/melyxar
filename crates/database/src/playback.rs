@@ -69,6 +69,13 @@ pub struct WorkToCarryOn {
     pub position: Millis,
     /// When it was last played, which is the order a row of them is read in.
     pub last_played_at: Option<Timestamp>,
+    /// For an episode, the series it belongs to and where it sits in it. A
+    /// row of episode titles says nothing: nobody left off in the middle of
+    /// "The Jumelle Sister", they left off in the middle of a series.
+    pub series_id: Option<WorkId>,
+    pub series_title: Option<String>,
+    pub season_number: Option<i32>,
+    pub episode_number: Option<i32>,
 }
 
 /// How many started series are looked at for each one the row shows.
@@ -128,9 +135,17 @@ impl Database {
         };
         let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {WHAT_A_CARD_IS},
-                    p.position_ms, p.last_played_at
+                    p.position_ms, p.last_played_at,
+                    -- The series an episode hangs under, two steps up, and
+                    -- nothing at all for a film.
+                    season.parent_id AS series_id,
+                    series.title AS series_title,
+                    season.ordinal AS season_number,
+                    w.ordinal AS episode_number
              FROM playback_progress p
              JOIN works w ON w.id = p.work_id
+             LEFT JOIN works season ON season.id = w.parent_id AND w.kind = 'episode'
+             LEFT JOIN works series ON series.id = season.parent_id
              WHERE p.user_id = ? AND p.state = 'in_progress'{inside}
              ORDER BY p.last_played_at DESC, w.sort_title
              LIMIT ?"
@@ -151,6 +166,13 @@ impl Database {
                         row.try_get::<Option<String>, _>("last_played_at")?
                             .as_deref(),
                     )?,
+                    series_id: row
+                        .try_get::<Option<String>, _>("series_id")?
+                        .map(|id| parse_id(&id))
+                        .transpose()?,
+                    series_title: row.try_get("series_title")?,
+                    season_number: row.try_get("season_number")?,
+                    episode_number: row.try_get("episode_number")?,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -1248,6 +1270,58 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_episode_left_halfway_comes_back_with_the_series_it_belongs_to() {
+        // An episode title on its own says nothing: nobody remembers leaving
+        // off in the middle of one, they remember leaving off in a series.
+        let (database, user_id, series, _, episodes) = one_series().await;
+
+        database
+            .record_playback_progress(
+                user_id,
+                episodes[1],
+                Millis::new(600_000),
+                PlaybackState::InProgress,
+                datetime!(2026-01-01 12:00 UTC),
+            )
+            .await
+            .expect("recorded");
+
+        let carrying_on = database
+            .works_to_carry_on(user_id, None, 20)
+            .await
+            .expect("read");
+        assert_eq!(carrying_on.len(), 1);
+        assert_eq!(carrying_on[0].series_id, Some(series));
+        assert_eq!(carrying_on[0].series_title.as_deref(), Some("Amber Field"));
+        assert_eq!(carrying_on[0].season_number, Some(1));
+        assert_eq!(carrying_on[0].episode_number, Some(2));
+    }
+
+    #[tokio::test]
+    async fn a_film_left_halfway_hangs_under_no_series() {
+        let (database, user_id, work_id, _) = one_film().await;
+        database
+            .record_playback_progress(
+                user_id,
+                work_id,
+                Millis::new(600_000),
+                PlaybackState::InProgress,
+                datetime!(2026-01-01 12:00 UTC),
+            )
+            .await
+            .expect("recorded");
+
+        let carrying_on = database
+            .works_to_carry_on(user_id, None, 20)
+            .await
+            .expect("read");
+        assert_eq!(carrying_on[0].series_id, None);
+        assert_eq!(carrying_on[0].series_title, None);
+        assert_eq!(carrying_on[0].season_number, None);
+        assert_eq!(carrying_on[0].episode_number, None);
     }
 
     #[tokio::test]
