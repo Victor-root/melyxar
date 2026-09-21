@@ -30,6 +30,13 @@ DEFAULT_PORT="2100"
 # Backups kept before the oldest is dropped.
 BACKUP_KEEP="7"
 
+# How long the Rust toolchain is given to arrive before it is called dead.
+#
+# It is a couple of hundred megabytes over one connection, so several minutes
+# is ordinary and a quarter of an hour is not alarming. Past that it is not
+# slow, it is stopped, and saying so beats a screen that waits for ever.
+RUST_MINUTES="20"
+
 # Whether every command shows its own output as it goes.
 #
 # On while Melyxar is being built, because "it did not work" with nothing to
@@ -176,6 +183,12 @@ en|step_npm_build|Building the web interface
 fr|step_npm_build|Compilation de l'interface web
 en|rust_present|Rust toolchain already present: %s
 fr|rust_present|Chaîne d'outils Rust déjà présente : %s
+en|rust_long|A couple of hundred megabytes over one connection. Several minutes is ordinary; the bar underneath is the installer's own.
+fr|rust_long|Deux cents mégaoctets et quelques en une seule connexion. Plusieurs minutes, c'est normal ; la barre en dessous est celle de l'installateur.
+en|rust_unreachable|rustup could not be reached. Check this container's network, then choose this entry again.
+fr|rust_unreachable|rustup est injoignable. Vérifiez le réseau de ce conteneur, puis relancez cette entrée.
+en|rust_too_long|The toolchain did not arrive within %s minutes and was stopped. Choose this entry again: it starts over from nothing and keeps nothing half written.
+fr|rust_too_long|La chaîne d'outils n'est pas arrivée en %s minutes et a été arrêtée. Relancez cette entrée : elle repart de zéro et ne garde rien d'écrit à moitié.
 en|section_account|Preparing the system account and folders
 fr|section_account|Préparation du compte système et des dossiers
 en|step_user|Creating the system account
@@ -727,10 +740,57 @@ install_packages() {
   if command -v cargo >/dev/null 2>&1; then
     success "$(tr_fmt rust_present "$(cargo --version)")"
   else
-    step "$(tr_msg step_rust)" bash -c \
-      "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal"
+    info "$(tr_msg rust_long)"
+    step "$(tr_msg step_rust)" install_rust
     export PATH="/root/.cargo/bin:${PATH}"
   fi
+}
+
+# The Rust toolchain, from rustup.
+#
+# This is the one step of the whole install that spends minutes saying
+# nothing, and it looked stopped every time. Three reasons, all dealt with
+# here.
+#
+# The installer draws a progress bar only for a person, and everything this
+# script runs talks to the script rather than to the screen. So it is given a
+# terminal of its own, and the bar it then draws is the one thing on screen
+# that proves the download is moving.
+#
+# It is fetched to a file and then run, rather than piped straight into a
+# shell: a download cut off halfway down the pipe is half a script already
+# being obeyed, which is the one way this step could fail into something
+# worse than not running at all.
+#
+# And it is given a deadline. A connection that has really died is not slow,
+# and waiting for ever on it is what sent the maintainer to the interrupt
+# key. Past the deadline it stops and says what happened.
+install_rust() {
+  local installer rc=0 run
+  installer="$(mktemp)"
+
+  if ! curl --proto '=https' --tlsv1.2 -sSfL \
+    --connect-timeout 20 --retry 3 --retry-delay 2 --retry-all-errors \
+    https://sh.rustup.rs -o "$installer"; then
+    rm -f "$installer"
+    error "$(tr_msg rust_unreachable)"
+    return 1
+  fi
+
+  run="timeout ${RUST_MINUTES}m sh '$installer' -y --no-modify-path --profile minimal"
+  if command -v script >/dev/null 2>&1; then
+    # -e gives back what the command returned rather than what script did,
+    # -f writes each line through at once so the bar moves as it happens.
+    script -qefc "$run" /dev/null || rc=$?
+  else
+    eval "$run" || rc=$?
+  fi
+
+  rm -f "$installer"
+  if [[ "$rc" -eq 124 ]]; then
+    error "$(tr_fmt rust_too_long "$RUST_MINUTES")"
+  fi
+  return "$rc"
 }
 
 create_account_and_folders() {
