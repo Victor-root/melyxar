@@ -58,15 +58,19 @@ export function Icon({
  * The ones the whole interface uses, player included
  * ---------------------------------------------------------------------- */
 
-/** Solid: the one control a hand goes to without looking. */
+/**
+ * Solid: the one control a hand goes to without looking.
+ *
+ * Filled and stroked with the same colour, which is what rounds its three
+ * corners without drawing them by hand. Its bounding box leans a hair to the
+ * right of the square's middle on purpose: a triangle centred by measurement
+ * reads as sitting too far left, which is the whole reason play buttons have
+ * been nudged by eye since the first tape deck.
+ */
 export function PlayIcon(props: IconProps) {
   return (
-    <Icon {...props}>
-      <path
-        d="M8 5.2v13.6a.6.6 0 0 0 .92.5l10.6-6.8a.6.6 0 0 0 0-1l-10.6-6.8A.6.6 0 0 0 8 5.2Z"
-        fill="currentColor"
-        stroke="none"
-      />
+    <Icon {...props} strokeWidth={2.6}>
+      <path d="M7.9 6.1 17.3 12 7.9 17.9Z" fill="currentColor" />
     </Icon>
   );
 }
@@ -95,15 +99,6 @@ export function TickIcon(props: IconProps) {
 /* -------------------------------------------------------------------------
  * The bar at the top
  * ---------------------------------------------------------------------- */
-
-export function HomeIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M3.4 10.6 12 3.6l8.6 7v8.2a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6Z" />
-      <path d="M9.4 20.4v-6.2h5.2v6.2" />
-    </Icon>
-  );
-}
 
 /** A reel of film, for the library of films. */
 export function FilmIcon(props: IconProps) {
@@ -295,6 +290,194 @@ export function SparkIcon(props: IconProps) {
   return (
     <Icon {...props}>
       <path d="M12 3.2s5.4 4 5.4 9.2a5.4 5.4 0 0 1-10.8 0c0-1.8.8-3.4 1.8-4.6.2 1.4 1 2.4 2 2.4 1.4 0 1.8-2.2 1.6-7Z" />
+    </Icon>
+  );
+}
+
+/* -------------------------------------------------------------------------
+ * What belongs to the account, in the bar
+ * ---------------------------------------------------------------------- */
+
+/** A cog, for the settings. */
+export function GearIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.2 14.6a1.5 1.5 0 0 0 .3 1.66l.06.06a1.8 1.8 0 1 1-2.56 2.56l-.06-.06a1.5 1.5 0 0 0-1.66-.3 1.5 1.5 0 0 0-.9 1.38v.17a1.8 1.8 0 1 1-3.6 0v-.09a1.5 1.5 0 0 0-.98-1.37 1.5 1.5 0 0 0-1.66.3l-.06.06a1.8 1.8 0 1 1-2.56-2.56l.06-.06a1.5 1.5 0 0 0 .3-1.66 1.5 1.5 0 0 0-1.38-.9H4.2a1.8 1.8 0 1 1 0-3.6h.09a1.5 1.5 0 0 0 1.37-.98 1.5 1.5 0 0 0-.3-1.66l-.06-.06A1.8 1.8 0 1 1 7.86 4.9l.06.06a1.5 1.5 0 0 0 1.66.3h.07a1.5 1.5 0 0 0 .9-1.38V3.7a1.8 1.8 0 1 1 3.6 0v.09a1.5 1.5 0 0 0 .9 1.38 1.5 1.5 0 0 0 1.66-.3l.06-.06a1.8 1.8 0 1 1 2.56 2.56l-.06.06a1.5 1.5 0 0 0-.3 1.66v.07a1.5 1.5 0 0 0 1.38.9h.17a1.8 1.8 0 1 1 0 3.6h-.09a1.5 1.5 0 0 0-1.38.9Z" />
+    </Icon>
+  );
+}
+
+/** A dial, for what the server is doing. */
+export function ActivityIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.4 12a8.6 8.6 0 0 1 17.2 0" />
+      <path d="M12 12 16 8.6" />
+      <path d="M3.4 12h2M18.6 12h2M12 3.4v2" />
+    </Icon>
+  );
+}
+
+/** Lines on a page, for the journal. */
+export function JournalIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5.4 4.6h13.2v14.8H5.4z" />
+      <path d="M8.4 8.6h7.2M8.4 12h7.2M8.4 15.4h4.4" />
+    </Icon>
+  );
+}
+
+/** A door with an arrow out of it, for leaving. */
+export function LeaveIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14.4 4.6H6.6a1.8 1.8 0 0 0-1.8 1.8v11.2a1.8 1.8 0 0 0 1.8 1.8h7.8" />
+      <path d="M15.6 8.4 19.2 12l-3.6 3.6" />
+      <path d="M19.2 12H9.6" />
+    </Icon>
+  );
+}
+
+/* -------------------------------------------------------------------------
+ * What a card's menu offers
+ * ---------------------------------------------------------------------- */
+
+/** A triangle with a bar after it, for playing everything from here. */
+export function PlayAllIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 5.6 14 12l-8 6.4Z" fill="currentColor" />
+      <path d="M18.4 5.6v12.8" />
+    </Icon>
+  );
+}
+
+/** Two squares one behind the other, for a collection. */
+export function CollectionIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M8.6 4.6h10.8v10.8" />
+      <rect x="4.6" y="8.6" width="10.8" height="10.8" rx="1.8" />
+    </Icon>
+  );
+}
+
+/** A short list with a plus, for a playlist. */
+export function PlaylistIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.4 7h11M4.4 12h11M4.4 17h6.6" />
+      <path d="M16.6 14.4v5.2M14 17h5.2" />
+    </Icon>
+  );
+}
+
+/** A box with a tick, for choosing several at once. */
+export function SelectIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="4.4" y="4.4" width="15.2" height="15.2" rx="2.4" />
+      <path d="M8.4 12.2 11 14.8l4.8-5" />
+    </Icon>
+  );
+}
+
+/** An arrow into a tray, for taking a copy away. */
+export function DownloadIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3.6v11" />
+      <path d="M7.8 10.4 12 14.6l4.2-4.2" />
+      <path d="M4.4 17.4v1.2a1.8 1.8 0 0 0 1.8 1.8h11.6a1.8 1.8 0 0 0 1.8-1.8v-1.2" />
+    </Icon>
+  );
+}
+
+/** A pencil, for editing what is written. */
+export function EditIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M16.2 4.6 19.4 7.8 8.6 18.6l-4.2 1 1-4.2Z" />
+      <path d="M14.2 6.6 17.4 9.8" />
+    </Icon>
+  );
+}
+
+/** A framed picture, for editing the pictures. */
+export function ImageIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.6" y="5.4" width="16.8" height="13.2" rx="2" />
+      <circle cx="8.6" cy="10" r="1.6" />
+      <path d="M4.4 16.4 9.4 12l3.4 3 2.6-2.2 4.2 3.6" />
+    </Icon>
+  );
+}
+
+/** A screen with two lines at its foot, for the subtitles. */
+export function SubtitlesIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.6" y="5.4" width="16.8" height="13.2" rx="2" />
+      <path d="M7 14.6h4.4M13.6 14.6h3.4" />
+      <path d="M7 11h2.4M11.6 11h5.4" />
+    </Icon>
+  );
+}
+
+/** A tag, for naming a work. */
+export function IdentifyIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M11 3.8H19a1.2 1.2 0 0 1 1.2 1.2v8l-9.4 9.4a1.2 1.2 0 0 1-1.7 0l-6.7-6.7a1.2 1.2 0 0 1 0-1.7Z" />
+      <circle cx="15.6" cy="8.4" r="1.4" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
+/** The same tag, crossed out: forgetting what was found. */
+export function ForgetIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M10.6 4.2h8.2a1.2 1.2 0 0 1 1.2 1.2v8" />
+      <path d="M4.4 13.4 12 21a1.2 1.2 0 0 0 1.7 0l4.6-4.6" />
+      <path d="M4.4 19.6 19.6 4.4" />
+    </Icon>
+  );
+}
+
+/** Two arrows chasing each other, for asking the catalogue again. */
+export function RefreshIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M20 11.4a8 8 0 0 0-13.7-4.6L3.6 9.4" />
+      <path d="M3.6 4.8v4.6h4.6" />
+      <path d="M4 12.6a8 8 0 0 0 13.7 4.6l2.7-2.6" />
+      <path d="M20.4 19.2v-4.6h-4.6" />
+    </Icon>
+  );
+}
+
+/** A pin, for what an administrator puts in front of everybody. */
+export function PinIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14.4 3.6 20.4 9.6l-2.4 1.2-1.2 3.6-5.4-5.4 3.6-1.2Z" />
+      <path d="M11.4 9 4.6 19.4l10.4-6.8" />
+    </Icon>
+  );
+}
+
+/** A bin, for taking a work away for good. */
+export function DeleteIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.6 6.6h14.8" />
+      <path d="M9.4 6.6V4.8h5.2v1.8" />
+      <path d="M6.4 6.6l.9 12a1.8 1.8 0 0 0 1.8 1.6h5.8a1.8 1.8 0 0 0 1.8-1.6l.9-12" />
+      <path d="M10.4 10.4v6M13.6 10.4v6" />
     </Icon>
   );
 }

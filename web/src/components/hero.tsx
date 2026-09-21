@@ -136,7 +136,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
             aria-label={t("home.hero.previous")}
             onClick={() => go(at - 1)}
           >
-            <ChevronLeftIcon size={22} />
+            <ChevronLeftIcon size={32} />
           </button>
           <button
             type="button"
@@ -144,7 +144,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
             aria-label={t("home.hero.next")}
             onClick={() => go(at + 1)}
           >
-            <ChevronRightIcon size={22} />
+            <ChevronRightIcon size={32} />
           </button>
 
           <div className="hero-dots">

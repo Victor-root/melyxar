@@ -98,6 +98,7 @@ export function Card({
             alt=""
             loading="lazy"
             decoding="async"
+            draggable={false}
             onError={itDidNotLoad}
           />
         ) : (
@@ -109,7 +110,12 @@ export function Card({
         {/* The whole card leads to the work. Stretched over the picture
             rather than wrapped around everything, so the buttons drawn on top
             are buttons and not parts of a link. */}
-        <Link className="card-open" to={`/work/${card.id}`} title={card.title}>
+        <Link
+          className="card-open"
+          to={`/work/${card.id}`}
+          title={card.title}
+          draggable={false}
+        >
           <span className="visually-hidden">{card.title}</span>
         </Link>
 
@@ -124,20 +130,14 @@ export function Card({
           </span>
         )}
 
-        {/* What is left of a series, which drops as episodes are watched. The
-            tick takes its place once there is nothing left. */}
-        {card.episodes > 0 && card.unwatched > 0 && (
-          <span className="card-left" title={t("card.unwatched", { count: card.unwatched })}>
-            {card.unwatched}
-          </span>
-        )}
-
-        {/* Watched, in the corner of the picture and always there: it is what
-            tells one card of a row from the next, and a mark that only shows
-            under the pointer is a mark nobody reads a row by. The same one
-            the player draws. */}
+        {/* Where somebody is with it: how many episodes are left, or a tick
+            once there are none and for a film that was watched. One badge,
+            the same one the player draws, and under the pointer the button
+            that marks and unmarks. */}
         <SeenMark
           watched={seen === "watched"}
+          episodes={card.episodes}
+          unwatched={card.unwatched}
           onPress={(watched) => marks.setWatched(card, watched)}
         />
 
@@ -150,7 +150,7 @@ export function Card({
               title={t("work.play")}
               onClick={stop(() => navigate(`/work/${card.id}?play`))}
             >
-              <PlayIcon size={26} />
+              <PlayIcon size={32} />
             </button>
           )}
 

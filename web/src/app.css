@@ -103,16 +103,24 @@
 
 /* Drawn by this interface rather than by the machine: a system menu inside a
    rounded field is the one thing on this bar that belongs to something else,
-   and it shows. */
+   and it shows.
+
+   It fills its side of the field, from the rule down the middle out to the
+   edge, so what lights up under the pointer is the whole of the part that
+   can be pressed rather than a pill floating inside it. */
 .search-scope {
+  align-self: stretch;
+  display: flex;
   border-left: 1px solid var(--border);
-  padding-left: 4px;
+  margin-right: -12px;
 }
 
 .search-scope > .header-link {
-  padding: 6px 8px;
+  height: 100%;
+  padding: 0 14px;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
   font-size: 13px;
-  max-width: 150px;
+  max-width: 170px;
 }
 
 .search input {
@@ -164,14 +172,6 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
-}
-
-/* Under a certain width the name goes and the circle stays: the circle is
-   the thing that is aimed at. */
-@media (max-width: 1100px) {
-  .account-name {
-    display: none;
-  }
 }
 
 /* What the server is doing, in the bar, where the button that started it was.
@@ -656,12 +656,22 @@
   transition: background var(--quick) var(--ease), transform var(--quick) var(--ease);
 }
 
-.button:hover {
+/* It grows a little under the pointer. Small enough not to push anything
+   about, large enough to answer the hand before the click. */
+.button:hover:not(:disabled) {
   background: var(--surface-hover);
+  transform: scale(1.04);
 }
 
-.button:active {
-  transform: translateY(1px);
+.button:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button:hover:not(:disabled),
+  .button:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 .button:disabled {
@@ -866,50 +876,46 @@
 
 /* How many episodes of a series are left. In the accent, because it is the
    one number on a card that asks somebody to do something. */
-.card-left {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  min-width: 22px;
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 12px;
-  font-weight: 650;
-  text-align: center;
-  transition: opacity var(--quick) var(--ease);
-}
+/* Where somebody is with a work: a disc in the corner of the picture holding
+   either how many episodes are left or a tick. Drawn by the interface and by
+   the player alike, which is why it carries no name of either.
 
-/* Out of the way of the tick, which takes that corner under the pointer. */
-.card:hover .card-left,
-.card:focus-within .card-left {
-  opacity: 0;
-}
-
-/* Watched, in the corner of the picture. Drawn by the interface and by the
-   player alike, which is why it carries no name of either. */
+   At rest it is there only when it has something to say. Under the pointer it
+   is the button that marks and unmarks, and appears on cards that had nothing
+   to say, since marking a film watched has to be reachable without a menu. */
 .seen-mark {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 7px;
+  right: 7px;
   z-index: 3;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 26px;
-  padding: 0;
+  min-width: 25px;
+  height: 25px;
+  padding: 0 6px;
   border: none;
-  border-radius: 0 0 0 var(--radius-control);
-  background: color-mix(in srgb, var(--surface-deep) 66%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface-deep) 62%, transparent);
   backdrop-filter: blur(6px);
-  color: color-mix(in srgb, var(--text) 55%, transparent);
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  transition:
+    opacity var(--quick) var(--ease),
+    background var(--quick) var(--ease),
+    transform var(--quick) var(--ease);
 }
 
-.seen-mark:hover {
-  background: color-mix(in srgb, var(--surface-deep) 88%, transparent);
-  color: var(--text);
+button.seen-mark:hover {
+  transform: scale(1.08);
+}
+
+.card:hover .seen-mark,
+.card:focus-within .seen-mark,
+.seen-mark-on {
+  opacity: 1;
 }
 
 .seen-mark-on {
@@ -921,7 +927,18 @@ button.seen-mark-on:hover {
   background: var(--accent-bright);
 }
 
-/* Everything the hover offers, in one layer over the picture. */
+/* A finger has no pointer: the button is simply always reachable. */
+@media (hover: none) {
+  button.seen-mark {
+    opacity: 1;
+  }
+}
+
+/* Everything the hover offers, in one layer over the picture.
+
+   The layer itself never takes a press, only the buttons on it do: it covers
+   the whole picture, and a picture whose card no longer opens when pressed
+   anywhere but on its buttons is a card that looks broken. */
 .card-hover {
   position: absolute;
   inset: 0;
@@ -937,10 +954,13 @@ button.seen-mark-on:hover {
   pointer-events: none;
 }
 
+.card-hover button {
+  pointer-events: auto;
+}
+
 .card:hover .card-hover,
 .card:focus-within .card-hover {
   opacity: 1;
-  pointer-events: auto;
 }
 
 /* A finger has no hover: with the pointer that never arrives, the layer is
@@ -948,7 +968,6 @@ button.seen-mark-on:hover {
 @media (hover: none) {
   .card-hover {
     opacity: 1;
-    pointer-events: auto;
     background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent 40%);
   }
 
@@ -970,7 +989,6 @@ button.seen-mark-on:hover {
   place-items: center;
   width: 56px;
   height: 56px;
-  padding-left: 3px;
   border-radius: 50%;
   background: color-mix(in srgb, var(--accent) 90%, transparent);
   color: #ffffff;
@@ -1072,9 +1090,8 @@ button.seen-mark-on:hover {
 .card-menu-line {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--gap);
-  padding: 7px 10px;
+  gap: 10px;
+  padding: 6px 10px;
   border-radius: var(--radius-control);
   text-align: left;
   color: var(--text-soft);
@@ -1083,22 +1100,27 @@ button.seen-mark-on:hover {
   transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
 }
 
-.card-menu-line:hover:not(:disabled) {
+.card-menu-line > svg {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+
+.card-menu-line:hover:not([aria-disabled="true"]) {
   background: var(--surface-hover);
   color: var(--text);
 }
 
-.card-menu-line:disabled {
+.card-menu-line:hover:not([aria-disabled="true"]) > svg {
+  color: var(--accent-bright);
+}
+
+.card-menu-line[aria-disabled="true"] {
   color: var(--text-faint);
   cursor: not-allowed;
 }
 
-/* What a greyed line is waiting for, said on the line rather than only in a
-   tooltip nobody on a telephone can reach. */
-.card-menu-later {
-  font-size: 11px;
-  color: var(--text-faint);
-  opacity: 0.8;
+.card-menu-line[aria-disabled="true"] > svg {
+  opacity: 0.55;
 }
 
 /* The name, and at its right what a row of half watched films is read for.
@@ -1153,12 +1175,32 @@ button.seen-mark-on:hover {
   display: flex;
   gap: var(--gap);
   overflow-x: auto;
-  scroll-snap-type: x proximity;
   /* Room for the focus ring and the raised state of a card, which a hidden
      overflow would otherwise clip. */
   padding: 4px 4px var(--gap-tight);
   margin: -4px -4px calc(var(--gap-tight) * -1);
   scrollbar-width: none;
+  /* A hand pulling a row of posters is not a hand selecting their titles,
+     and the blue wash that appeared under one was the whole reason the drag
+     felt broken. */
+  user-select: none;
+  cursor: grab;
+}
+
+/* While the hand is pulling, a closed hand for a pointer. There is no
+   snapping to turn off: a row that pulls itself a little further the moment
+   it is let go is a row that does not do what the hand did. */
+.row-track[data-dragging="yes"],
+.player-drawer-row[data-dragging="yes"] {
+  cursor: grabbing;
+}
+
+/* A picture dragged out of the page as a picture is the browser's own idea,
+   and it fights every row here. */
+.row-track img,
+.row-track a,
+.player-drawer-row img {
+  -webkit-user-drag: none;
 }
 
 .row-track::-webkit-scrollbar {
@@ -1167,7 +1209,6 @@ button.seen-mark-on:hover {
 
 .row-track > * {
   flex: 0 0 var(--card-width);
-  scroll-snap-align: start;
 }
 
 /* A still is a wide picture: a row of them at a poster's width would be a row
@@ -2705,12 +2746,17 @@ button.seen-mark-on:hover {
    be the thing somebody meets, short enough that the first row under it is on
    the screen at the same time. A banner that fills the window is a banner
    that hides the library behind it. */
+/* Right up against the bar above it and out to both edges of the page: the
+   banner is the picture, and a picture with a margin drawn round it is a
+   picture in a frame. Rounded only underneath, where it meets the page
+   again, and closer to the band than to a row, since the two read as one
+   block: here is what you were watching, and here is where to go next. */
 .hero {
   position: relative;
-  margin: 0 0 var(--gap-section);
+  margin: calc(var(--gap-wide) * -1) calc(var(--gap-wide) * -1) var(--gap);
   height: min(46vw, 460px);
   min-height: 320px;
-  border-radius: var(--radius-card);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
   overflow: hidden;
   isolation: isolate;
   background: var(--surface);
@@ -2866,8 +2912,8 @@ button.seen-mark-on:hover {
   transform: translateY(-50%);
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: color-mix(in srgb, var(--surface-deep) 60%, transparent);
   backdrop-filter: blur(8px);
