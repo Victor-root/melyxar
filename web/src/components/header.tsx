@@ -27,10 +27,14 @@ import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
 import { useSettings } from "../settings";
 import {
+  ActivityIcon,
   BellIcon,
   ChevronDownIcon,
+  GearIcon,
   HeartIcon,
+  JournalIcon,
   KindIcon,
+  LeaveIcon,
   ScreenCastIcon,
   SearchIcon,
 } from "../icons";
@@ -72,7 +76,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
   const [scope, setScope] = useState(parameters.get("in") ?? "");
   const field = useRef<HTMLInputElement>(null);
   const { jobs } = useRunning();
-  const { account } = useAccount();
+  const { account, leave } = useAccount();
   /* A scan is the one thing an administrator needs from wherever they happen
      to be: films were added, a name was corrected, a disk came back. */
   const scan = useStartScan(libraries);
@@ -155,7 +159,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
             title={t("nav.later")}
             aria-label={`${t("nav.cast")} (${t("nav.later")})`}
           >
-            <ScreenCastIcon size={19} />
+            <ScreenCastIcon size={22} />
           </button>
           <button
             type="button"
@@ -164,7 +168,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
             title={t("nav.later")}
             aria-label={`${t("nav.notifications")} (${t("nav.later")})`}
           >
-            <BellIcon size={19} />
+            <BellIcon size={22} />
           </button>
 
           {/* What the server is doing, and how to set it going. Both belong to
@@ -192,7 +196,67 @@ export function Header({ libraries }: { libraries: Library[] }) {
               )
             ))}
 
-          <AccountMenu />
+          {/* Everything that used to hide behind the account's name, out in
+              the open as one icon each. A menu of five entries opened by one
+              press is five presses for every one of them, and the name it
+              hung under said nothing anybody needed to read twice. */}
+          <NavLink
+            to="/favourites"
+            className="header-icon"
+            title={t("nav.favourites")}
+            aria-label={t("nav.favourites")}
+          >
+            <HeartIcon size={22} filled={false} />
+          </NavLink>
+          <NavLink
+            to="/settings"
+            className="header-icon"
+            title={t("nav.settings")}
+            aria-label={t("nav.settings")}
+          >
+            <GearIcon size={22} />
+          </NavLink>
+
+          {/* The two screens that belong to whoever runs the server, drawn
+              for them alone. They are the last of the administration sitting
+              in the main interface, and it will have one of its own. */}
+          {account?.is_administrator && (
+            <>
+              <NavLink
+                to="/activity"
+                className="header-icon"
+                title={t("nav.jobs")}
+                aria-label={t("nav.jobs")}
+              >
+                <ActivityIcon size={22} />
+              </NavLink>
+              <NavLink
+                to="/journal"
+                className="header-icon"
+                title={t("nav.journal")}
+                aria-label={t("nav.journal")}
+              >
+                <JournalIcon size={22} />
+              </NavLink>
+            </>
+          )}
+
+          <button
+            type="button"
+            className="header-icon"
+            title={t("nav.sign_out")}
+            aria-label={t("nav.sign_out")}
+            onClick={() => void leave()}
+          >
+            <LeaveIcon size={22} />
+          </button>
+
+          {/* Who is signed in. A statement, not a way in: everything that
+              used to be behind it is now beside it. */}
+          <span className="avatar" title={account?.name ?? t("nav.account")}>
+            {initialsOf(account?.name ?? t("nav.account"))}
+          </span>
+
         </div>
       </div>
     </header>
@@ -351,55 +415,6 @@ function Dropdown({
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * Who is here, and what belongs to them.
- *
- * The two screens that belong to whoever runs the server are drawn here and
- * only for them: they are the last of the administration still sitting in the
- * main interface, and it will have one of its own.
- */
-function AccountMenu() {
-  const { t } = useSettings();
-  const { account, leave } = useAccount();
-  const name = account?.name ?? t("nav.account");
-
-  return (
-    <Dropdown
-      label={
-        <>
-          <span className="avatar" aria-hidden="true">
-            {initialsOf(name)}
-          </span>
-          <span className="account-name">{name}</span>
-        </>
-      }
-    >
-      {/* Somebody's own marks, which left the bar when the bar stopped being
-          a list of places: they are theirs, so they live under their name. */}
-      <NavLink to="/favourites" className="header-menu-line">
-        <HeartIcon size={16} filled={false} />
-        {t("nav.favourites")}
-      </NavLink>
-      <NavLink to="/settings" className="header-menu-line">
-        {t("nav.settings")}
-      </NavLink>
-      {account?.is_administrator && (
-        <>
-          <NavLink to="/activity" className="header-menu-line">
-            {t("nav.jobs")}
-          </NavLink>
-          <NavLink to="/journal" className="header-menu-line">
-            {t("nav.journal")}
-          </NavLink>
-        </>
-      )}
-      <button type="button" className="header-menu-line" onClick={() => void leave()}>
-        {t("nav.sign_out")}
-      </button>
-    </Dropdown>
   );
 }
 

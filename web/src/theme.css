@@ -170,6 +170,15 @@ body {
   height: 10px;
 }
 
+/* No stepper at either end. Nobody has pressed one of those since the wheel
+   was invented, and two little squares of a different shade at the ends are
+   what makes a bar look like it came from another decade. */
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* The accent itself, not a shade of it: a bar in a slightly different red
    next to a button in the real one reads as a mistake. */
 *::-webkit-scrollbar-thumb {

@@ -26,13 +26,38 @@ import type { Card } from "../api";
 import { useAccount } from "../account";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
+import {
+  CollectionIcon,
+  DeleteIcon,
+  DownloadIcon,
+  EditIcon,
+  ForgetIcon,
+  HeartIcon,
+  IdentifyIcon,
+  ImageIcon,
+  PinIcon,
+  PlayAllIcon,
+  PlayIcon,
+  PlaylistIcon,
+  RefreshIcon,
+  SelectIcon,
+  SubtitlesIcon,
+  TickIcon,
+} from "../icons";
+
+/** How big the shape at the left of a line is. */
+const SHAPE = 17;
 
 /** One line of the menu. */
 interface Entry {
   key: string;
+  /** Its shape, which is what the eye finds before the words are read. */
+  mark: React.ReactNode;
   /** Left out entirely when false: a right nobody has is not a grey line. */
   allowed?: boolean;
-  /** Greyed with its reason when there is no engine behind it yet. */
+  /** Greyed, and saying when under the pointer, where there is no engine
+      behind it yet. Written beside every such line it became a second column
+      of the same three words repeated down the menu. */
   later?: boolean;
   act?: () => void;
 }
@@ -90,15 +115,23 @@ export function CardMenu({
       }
     };
     /* Drawn at a place rather than next to the button, so a page that moves
-       under it leaves it behind: it closes instead of floating. */
+       under it leaves it behind: it closes instead of floating. Its own
+       scrolling is not the page moving, though, and watching every scroll in
+       the document made a menu too tall for the window close the moment
+       anybody reached for what was below the fold. */
+    const moved = (event: Event) => {
+      if (!holder.current?.contains(event.target as Node)) {
+        onClose();
+      }
+    };
     document.addEventListener("mousedown", elsewhere);
     document.addEventListener("keydown", away);
-    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("scroll", moved, true);
     window.addEventListener("resize", onClose);
     return () => {
       document.removeEventListener("mousedown", elsewhere);
       document.removeEventListener("keydown", away);
-      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("scroll", moved, true);
       window.removeEventListener("resize", onClose);
     };
   }, [onClose]);
@@ -108,38 +141,87 @@ export function CardMenu({
   const playable = card.source !== null && card.kind !== "series";
 
   const entries: Entry[] = [
-    { key: "play", allowed: playable, act: () => navigate(`/work/${card.id}?play`) },
-    { key: "play_from_here", allowed: playable, later: true },
-    { key: "collection", later: true },
-    { key: "playlist", later: true },
+    {
+      key: "play",
+      mark: <PlayIcon size={SHAPE} />,
+      allowed: playable,
+      act: () => navigate(`/work/${card.id}?play`),
+    },
+    {
+      key: "play_from_here",
+      mark: <PlayAllIcon size={SHAPE} />,
+      allowed: playable,
+      later: true,
+    },
+    { key: "collection", mark: <CollectionIcon size={SHAPE} />, later: true },
+    { key: "playlist", mark: <PlaylistIcon size={SHAPE} />, later: true },
     {
       key: favourite ? "unfavourite" : "favourite",
+      mark: <HeartIcon size={SHAPE} filled={favourite} />,
       act: () => marks.setFavourite(card, !favourite),
     },
     {
       key: seen === "watched" ? "mark_unwatched" : "mark_watched",
+      mark: <TickIcon size={SHAPE} />,
       act: () => marks.setWatched(card, seen !== "watched"),
     },
-    { key: "select", later: true },
-    { key: "download", allowed: account?.may_download === true, later: true },
-    { key: "edit_metadata", allowed: account?.is_administrator === true, later: true },
-    { key: "edit_images", allowed: account?.is_administrator === true, later: true },
-    { key: "edit_subtitles", allowed: account?.is_administrator === true, later: true },
+    { key: "select", mark: <SelectIcon size={SHAPE} />, later: true },
+    {
+      key: "download",
+      mark: <DownloadIcon size={SHAPE} />,
+      allowed: account?.may_download === true,
+      later: true,
+    },
+    {
+      key: "edit_metadata",
+      mark: <EditIcon size={SHAPE} />,
+      allowed: account?.is_administrator === true,
+      later: true,
+    },
+    {
+      key: "edit_images",
+      mark: <ImageIcon size={SHAPE} />,
+      allowed: account?.is_administrator === true,
+      later: true,
+    },
+    {
+      key: "edit_subtitles",
+      mark: <SubtitlesIcon size={SHAPE} />,
+      allowed: account?.is_administrator === true,
+      later: true,
+    },
     {
       key: "identify",
+      mark: <IdentifyIcon size={SHAPE} />,
       allowed: account?.is_administrator === true,
       // The one action of this menu that is wired all the way through, and it
       // lives on the work's own page, which is where the candidates are shown.
       act: () => navigate(`/work/${card.id}`),
     },
-    { key: "forget_identity", allowed: account?.is_administrator === true, later: true },
-    { key: "refresh", allowed: account?.is_administrator === true, later: true },
+    {
+      key: "forget_identity",
+      mark: <ForgetIcon size={SHAPE} />,
+      allowed: account?.is_administrator === true,
+      later: true,
+    },
+    {
+      key: "refresh",
+      mark: <RefreshIcon size={SHAPE} />,
+      allowed: account?.is_administrator === true,
+      later: true,
+    },
     {
       key: "pin",
+      mark: <PinIcon size={SHAPE} />,
       allowed: account?.is_administrator === true,
       act: () => void api.setPinned(card.id, true).catch(() => {}),
     },
-    { key: "delete", allowed: account?.may_delete === true, later: true },
+    {
+      key: "delete",
+      mark: <DeleteIcon size={SHAPE} />,
+      allowed: account?.may_delete === true,
+      later: true,
+    },
   ];
 
   return createPortal(
@@ -162,16 +244,23 @@ export function CardMenu({
             type="button"
             role="menuitem"
             className="card-menu-line"
-            disabled={entry.later}
+            /* Said rather than disabled outright: a disabled button takes no
+               pointer, so the very tooltip that explains why it is grey
+               never appears. */
+            aria-disabled={entry.later}
+            title={entry.later ? t("nav.later") : undefined}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              if (entry.later) {
+                return;
+              }
               entry.act?.();
               onClose();
             }}
           >
+            {entry.mark}
             {t(`card.menu.${entry.key}`)}
-            {entry.later && <span className="card-menu-later">{t("nav.later")}</span>}
           </button>
         ))}
     </div>,

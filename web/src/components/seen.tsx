@@ -1,16 +1,22 @@
 /*
- * The mark that says a work has been watched.
+ * The one badge in the corner of a picture that says where somebody is with
+ * a work.
  *
- * One shape everywhere: the player's row of episodes wears it, every card in
- * the interface wears it, and the day it changes it changes in both at once.
- * It was drawn twice before, and the two did not look alike.
+ * One element, not two. A series with episodes left shows how many; a series
+ * with none left, and a film that has been watched, show a tick. They are the
+ * same badge in the same corner and only what is inside it changes, because
+ * they answer the same question and two badges that take turns in one corner
+ * read as a badge that moves.
  *
- * A corner of the picture rather than a badge floating over it: it belongs to
- * the still it sits on, it never covers what the still is showing, and it
- * reads at a glance across a whole row without being aimed at.
+ * At rest it appears only when it has something to say. A row where every
+ * card wears an empty circle is a row of empty circles, and the one card that
+ * really was watched no longer stands out, which is the only thing the badge
+ * is for.
  *
- * Given something to do, it becomes the button that marks and unmarks; given
- * nothing, it is a statement, which is what the player needs.
+ * Under the pointer it becomes the button that marks and unmarks, and appears
+ * on cards that had nothing to say, since marking a film watched by hand has
+ * to be reachable without opening a menu. Given nothing to do it stays a
+ * statement, which is what the player's row of episodes needs.
  */
 
 import { useSettings } from "../settings";
@@ -18,31 +24,37 @@ import { TickIcon } from "../icons";
 
 export function SeenMark({
   watched,
+  /** Episodes below this work, and how many of them are left. Both nothing
+      for a film, which holds none. */
+  episodes = 0,
+  unwatched = 0,
   onPress,
 }: {
   watched: boolean;
-  /** What pressing it does, where it may be pressed at all. */
+  episodes?: number;
+  unwatched?: number;
   onPress?: (watched: boolean) => void;
 }) {
   const { t } = useSettings();
-  const said = t(watched ? "card.mark_unwatched" : "card.mark_watched");
+  const counting = episodes > 0 && unwatched > 0;
+  const said = counting
+    ? t("card.unwatched", { count: unwatched })
+    : t(watched ? "card.mark_unwatched" : "card.mark_watched");
+  const inside = counting ? unwatched : <TickIcon size={15} />;
+  const marked = counting || watched;
 
   if (!onPress) {
-    return (
-      <span
-        className="seen-mark seen-mark-on"
-        title={t("work.watched")}
-        aria-label={t("work.watched")}
-      >
-        <TickIcon size={14} />
+    return marked ? (
+      <span className="seen-mark seen-mark-on" title={said} aria-label={said}>
+        {inside}
       </span>
-    );
+    ) : null;
   }
   return (
     <button
       type="button"
-      className={`seen-mark${watched ? " seen-mark-on" : ""}`}
-      aria-pressed={watched}
+      className={`seen-mark${marked ? " seen-mark-on" : ""}`}
+      aria-pressed={counting ? undefined : watched}
       aria-label={said}
       title={said}
       onClick={(event) => {
@@ -53,7 +65,7 @@ export function SeenMark({
         onPress(!watched);
       }}
     >
-      <TickIcon size={14} />
+      {inside}
     </button>
   );
 }

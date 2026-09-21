@@ -14,7 +14,7 @@
  * second hand doing the same thing at the same time fights the first.
  */
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 /** How far the hand moves before a press becomes a drag. */
@@ -27,13 +27,29 @@ export interface DragToScroll {
   onPointerUp: (event: React.PointerEvent) => void;
   onPointerCancel: (event: React.PointerEvent) => void;
   onClickCapture: (event: React.MouseEvent) => void;
+  /* Said on the element itself so the stylesheet can answer: while a hand is
+     pulling the row, the pointer is a closed hand. */
+  "data-dragging"?: "yes";
 }
 
 export function useDragToScroll(row: RefObject<HTMLElement | null>): DragToScroll {
   const from = useRef<{ x: number; scrollLeft: number } | null>(null);
   const moved = useRef(false);
+  const [pulling, setPulling] = useState(false);
+
+  const letGo = (event: React.PointerEvent) => {
+    if (!from.current) {
+      return;
+    }
+    from.current = null;
+    setPulling(false);
+    if (row.current?.hasPointerCapture(event.pointerId)) {
+      row.current.releasePointerCapture(event.pointerId);
+    }
+  };
 
   return {
+    "data-dragging": pulling ? "yes" : undefined,
     onPointerDown: (event) => {
       const element = row.current;
       if (event.pointerType !== "mouse" || event.button !== 0 || !element) {
@@ -58,30 +74,14 @@ export function useDragToScroll(row: RefObject<HTMLElement | null>): DragToScrol
       // wherever it goes once a drag is really under way.
       if (!moved.current && Math.abs(by) > A_PRESS_THAT_MOVED) {
         moved.current = true;
+        setPulling(true);
         element.setPointerCapture(event.pointerId);
       }
       element.scrollLeft = start.scrollLeft - by;
     },
 
-    onPointerUp: (event) => {
-      if (!from.current) {
-        return;
-      }
-      from.current = null;
-      if (row.current?.hasPointerCapture(event.pointerId)) {
-        row.current.releasePointerCapture(event.pointerId);
-      }
-    },
-
-    onPointerCancel: (event) => {
-      if (!from.current) {
-        return;
-      }
-      from.current = null;
-      if (row.current?.hasPointerCapture(event.pointerId)) {
-        row.current.releasePointerCapture(event.pointerId);
-      }
-    },
+    onPointerUp: letGo,
+    onPointerCancel: letGo,
 
     /* A drag that really moved the row still ends in a click, on whatever card
        the hand happens to be over: caught here, in the one place above every
