@@ -305,8 +305,8 @@ export function WorkPage() {
             </p>
           )}
 
-          {/* What Emby calls "about": the things that belong to the film rather
-              than to the copy of it on disk. */}
+          {/* What other servers call "about": the things that belong to the
+              film rather than to the copy of it on disk. */}
           {work.studios.length > 0 && (
             <p className="work-studios">
               <span className="work-studios-label">{t("media.studios")}</span>

@@ -8,7 +8,7 @@
 //! requests, dozens of them a second while the finger is moving. So they are
 //! gathered a hundred at a time into sheets: one request covers a thousand
 //! seconds of film, and the next sheet is fetched long before it is reached.
-//! This is what Jellyfin and Emby do, and it is why.
+//! This is what the other servers do, and it is why.
 //!
 //! One reading of the film produces every sheet. The reading is the whole
 //! cost, exactly as it is for subtitles, and only the pictures that stand on

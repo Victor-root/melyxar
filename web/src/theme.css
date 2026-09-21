@@ -65,9 +65,10 @@
  */
 
 :root {
-  /* The accent, and the shades derived from it. Emby uses its accent barely
-     at all; here it carries the play button, the focus ring, the active tab
-     and every emphasis worth noticing. */
+  /* The accent, and the shades derived from it. The servers this one is
+     answering to use their accent barely at all; here it carries the play
+     button, the focus ring, the active tab and every emphasis worth
+     noticing. */
   --accent: #c81e1e;
   --accent-bright: #e63535;
   --accent-dim: #9b1616;

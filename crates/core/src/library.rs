@@ -129,7 +129,7 @@ pub struct LibraryRoot {
 /// it. On, a scan does the lot in one sitting, which is what somebody with a
 /// machine to spare and a small library wants.
 ///
-/// Jellyfin words the same choice the same way, and warns in its own
+/// The other servers word the same choice the same way, and warn in their own
 /// documentation against ticking it on a large collection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct LibraryOptions {
@@ -178,9 +178,9 @@ mod tests {
 
     #[test]
     fn a_library_nobody_configured_leaves_the_heavy_readings_to_the_night() {
-        // The switch Jellyfin warns about in its own documentation: ticked on
-        // a large collection, a scan that took minutes takes days. Off is the
-        // answer for the library that needs the setting at all.
+        // The switch the other servers warn about in their documentation:
+        // ticked on a large collection, a scan that took minutes takes days.
+        // Off is the answer for the library that needs the setting at all.
         let usual = LibraryOptions::default();
         assert!(!usual.key_frames_during_scan);
         assert!(!usual.thumbnails_during_scan);
