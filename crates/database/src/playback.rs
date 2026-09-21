@@ -366,6 +366,64 @@ impl Database {
         }
         Ok(liked)
     }
+
+    /// Marks a work watched, or puts it back to unwatched, by hand.
+    ///
+    /// A film and an episode answer for themselves. A season and a series
+    /// answer for their episodes, because a series is not what anybody
+    /// watches: marking one without going down would leave a badge saying
+    /// twelve episodes left on a series marked watched, which is two screens
+    /// contradicting each other.
+    ///
+    /// The mark is written as a manual one, which is what makes it outlast
+    /// whatever a player reports afterwards. Unmarking takes the position with
+    /// it: a series put back to unwatched that still offered to carry on
+    /// halfway through would be saying two things at once.
+    ///
+    /// Answers how many works it wrote, so a caller can tell a work that was
+    /// marked from a name that means nothing here.
+    pub async fn mark_watched(
+        &self,
+        user_id: UserId,
+        work_id: WorkId,
+        watched: bool,
+    ) -> Result<u64> {
+        let state = match watched {
+            true => PlaybackState::Watched,
+            false => PlaybackState::NotStarted,
+        };
+        // One statement for the three shapes: the work itself when it is not
+        // one that holds episodes, and otherwise every episode below it, at
+        // either depth, since a series holds them under its seasons.
+        let written = sqlx::query(
+            "INSERT INTO playback_progress
+                (user_id, work_id, position_ms, state, marked_manually, reported_at,
+                 last_played_at)
+             SELECT ?1, t.id, 0, ?2, ?3, ?4, ?4
+               FROM works t
+              WHERE (t.id = ?5 AND t.kind NOT IN ('series', 'season'))
+                 OR (t.kind = 'episode'
+                     AND (t.parent_id = ?5
+                          OR t.parent_id IN (SELECT id FROM works WHERE parent_id = ?5)))
+             ON CONFLICT (user_id, work_id) DO UPDATE SET
+                state = excluded.state,
+                marked_manually = excluded.marked_manually,
+                position_ms = CASE WHEN excluded.state = 'watched'
+                                   THEN playback_progress.position_ms
+                                   ELSE 0 END,
+                reported_at = excluded.reported_at,
+                last_played_at = excluded.last_played_at",
+        )
+        .bind(user_id.to_db_string())
+        .bind(state.as_str())
+        .bind(crate::convert::bool_to_int(watched))
+        .bind(timestamp_to_text(now()))
+        .bind(work_id.to_db_string())
+        .execute(self.writer())
+        .await?
+        .rows_affected();
+        Ok(written)
+    }
 }
 
 /// Reads back a track identifier, treating a malformed one as none.
@@ -422,6 +480,210 @@ mod tests {
             .await
             .expect("account created");
         (database, user.id, work.id, source)
+    }
+
+    /// A series of one season and three episodes, with somebody to watch it.
+    async fn one_series() -> (Database, UserId, WorkId, WorkId, Vec<WorkId>) {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Series",
+                LibraryKind::Series,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Series"))],
+            )
+            .await
+            .expect("library created");
+        let series = database
+            .create_work(
+                library.id,
+                WorkKind::Series,
+                "Amber Field",
+                "amber field",
+                Some(2021),
+            )
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(
+                library.id,
+                series.id,
+                1,
+                WorkKind::Season,
+                "Season 1",
+                "season 1",
+            )
+            .await
+            .expect("season created");
+        let mut episodes = Vec::new();
+        for number in 1..=3 {
+            episodes.push(
+                database
+                    .create_child_work(
+                        library.id,
+                        season.id,
+                        number,
+                        WorkKind::Episode,
+                        &format!("Episode {number}"),
+                        &format!("episode {number}"),
+                    )
+                    .await
+                    .expect("episode created")
+                    .id,
+            );
+        }
+        let user = database
+            .create_user("victor", None, &Permissions::administrator())
+            .await
+            .expect("account created");
+        (database, user.id, series.id, season.id, episodes)
+    }
+
+    #[tokio::test]
+    async fn marking_a_film_watched_by_hand_outlasts_what_a_player_says_next() {
+        let (database, user_id, work_id, _) = one_film().await;
+
+        assert_eq!(
+            database
+                .mark_watched(user_id, work_id, true)
+                .await
+                .expect("marked"),
+            1
+        );
+
+        // A player reporting the very beginning afterwards does not undo it.
+        database
+            .record_playback_progress(
+                user_id,
+                work_id,
+                Millis::new(400),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("position recorded");
+
+        let stored = database
+            .playback_progress(user_id, work_id)
+            .await
+            .expect("progress read")
+            .expect("a row was written");
+        assert_eq!(stored.state, PlaybackState::Watched);
+    }
+
+    #[tokio::test]
+    async fn putting_a_film_back_to_unwatched_takes_its_position_with_it() {
+        let (database, user_id, work_id, _) = one_film().await;
+        database
+            .record_playback_progress(
+                user_id,
+                work_id,
+                Millis::new(920_000),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("position recorded");
+
+        database
+            .mark_watched(user_id, work_id, false)
+            .await
+            .expect("marked");
+
+        let stored = database
+            .playback_progress(user_id, work_id)
+            .await
+            .expect("progress read")
+            .expect("a row was written");
+        assert_eq!(stored.state, PlaybackState::NotStarted);
+        assert_eq!(
+            stored.position,
+            Millis::new(0),
+            "a work put back to unwatched must not still offer to carry on"
+        );
+    }
+
+    #[tokio::test]
+    async fn marking_a_series_watched_marks_every_episode_under_it() {
+        let (database, user_id, series, _, episodes) = one_series().await;
+
+        assert_eq!(
+            database
+                .mark_watched(user_id, series, true)
+                .await
+                .expect("marked"),
+            3,
+            "a series is not what anybody watches: its episodes are"
+        );
+
+        for episode in &episodes {
+            let stored = database
+                .playback_progress(user_id, *episode)
+                .await
+                .expect("progress read")
+                .expect("a row was written");
+            assert_eq!(stored.state, PlaybackState::Watched);
+        }
+    }
+
+    #[tokio::test]
+    async fn marking_a_season_watched_marks_only_its_own_episodes() {
+        let (database, user_id, series, season, _) = one_series().await;
+        let other = database
+            .create_child_work(
+                database
+                    .work(series)
+                    .await
+                    .expect("series read")
+                    .expect("series present")
+                    .library_id,
+                series,
+                2,
+                WorkKind::Season,
+                "Season 2",
+                "season 2",
+            )
+            .await
+            .expect("season created");
+        let apart = database
+            .create_child_work(
+                other.library_id,
+                other.id,
+                1,
+                WorkKind::Episode,
+                "Episode 1",
+                "episode 1",
+            )
+            .await
+            .expect("episode created");
+
+        assert_eq!(
+            database
+                .mark_watched(user_id, season, true)
+                .await
+                .expect("marked"),
+            3
+        );
+        assert_eq!(
+            database
+                .playback_progress(user_id, apart.id)
+                .await
+                .expect("progress read"),
+            None,
+            "another season's episodes are not this season's to mark"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_name_that_means_nothing_here_marks_nothing() {
+        let (database, user_id, _, _) = one_film().await;
+        assert_eq!(
+            database
+                .mark_watched(user_id, WorkId::new(), false)
+                .await
+                .expect("marked"),
+            0
+        );
     }
 
     #[tokio::test]

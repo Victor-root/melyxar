@@ -37,6 +37,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(set_favourite),
         )
         .route(
+            "/api/v1/works/{id}/watched",
+            axum::routing::put(set_watched),
+        )
+        .route(
             "/api/v1/works/{id}/trailers/{rank}",
             axum::routing::get(trailer),
         )
@@ -738,6 +742,34 @@ async fn set_favourite(
     let favourite =
         melyxar_app::playback::set_favourite(&state, &who, work_id, body.favourite).await?;
     Ok(Json(FavouriteView { favourite }))
+}
+
+/// Whether this viewer is saying they have watched it.
+#[derive(Debug, Deserialize)]
+struct WatchedBody {
+    watched: bool,
+}
+
+/// What it is now, which is what the tick on the card is drawn from.
+#[derive(Debug, Serialize)]
+struct WatchedView {
+    watched: bool,
+}
+
+/// Marks a work watched by hand, or puts it back to unwatched.
+///
+/// The tick on a card is pressed directly, so this answers the state it is in
+/// now for the same reason the favourite does: a card is drawn from the
+/// answer, not from what was asked for.
+async fn set_watched(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+    Json(body): Json<WatchedBody>,
+) -> Result<Json<WatchedView>> {
+    let work_id = parse_work(&id)?;
+    let watched = melyxar_app::playback::mark_watched(&state, &who, work_id, body.watched).await?;
+    Ok(Json(WatchedView { watched }))
 }
 
 fn work_view(detail: &WorkDetail) -> WorkView {
