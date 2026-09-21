@@ -372,9 +372,17 @@ struct DetachedView {
     work_id: String,
 }
 
+/// The provider this server talks to, or the refusal to hand a caller when
+/// there is none.
+///
+/// `use<>` says the answer borrows nothing from the state it was read off.
+/// From the 2024 edition an unnamed return type takes in the lifetimes of
+/// everything the function was given unless it is told otherwise, and taking
+/// in this one would tie the provider to the borrow of the state: every caller
+/// hands it to work that outlives the request, and none of them could.
 pub(crate) fn provider_of(
     state: &AppState,
-) -> Result<std::sync::Arc<impl melyxar_app::metadata::MetadataProvider + 'static>> {
+) -> Result<std::sync::Arc<impl melyxar_app::metadata::MetadataProvider + 'static + use<>>> {
     state.metadata_provider().ok_or_else(|| {
         ServerError::new(
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
