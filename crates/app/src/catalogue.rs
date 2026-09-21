@@ -5,7 +5,7 @@
 //! a second entry point, a command line or a television client, behave exactly
 //! like the browser without any rule being written twice.
 
-use melyxar_core::id::LibraryId;
+use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::user::User;
 use melyxar_core::library::{LibraryKind, LibraryOptions, RootAccess};
 
@@ -157,6 +157,31 @@ pub async fn browse(
         ..request.clone()
     };
     Ok(state.database().browse_works(&request).await?)
+}
+
+/// Puts a work in front of everybody, or takes it back off.
+///
+/// An administrator's doing and nobody else's, which the route says by asking
+/// for one: this is the server's own shelf, not a bookmark. Each person's own
+/// list is the favourites.
+///
+/// Answers what it is now rather than what was asked for, so a button pressed
+/// twice in a second cannot end up saying one thing while the server says
+/// another.
+pub async fn set_pinned(
+    state: &AppState,
+    who: &User,
+    work_id: WorkId,
+    pinned: bool,
+) -> Result<bool> {
+    crate::reach::may_read_the_work(state, who, work_id).await?;
+    match pinned {
+        true => state.database().pin_work(work_id).await?,
+        false => {
+            state.database().unpin_work(work_id).await?;
+        }
+    }
+    Ok(pinned)
 }
 
 /// What a home page opens on.

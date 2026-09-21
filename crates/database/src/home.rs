@@ -1,0 +1,358 @@
+//! The rows a home page is made of that belong to nobody in particular.
+//!
+//! What somebody left halfway and what their series are waiting on live next
+//! to the progress they are read from. What is here is the other half: what
+//! the server was told to put in front of everybody, and what it picks when
+//! nobody told it anything.
+
+use melyxar_core::id::{LibraryId, UserId, WorkId};
+use melyxar_core::time::now;
+use sqlx::AssertSqlSafe;
+
+use crate::browse::{kept_inside, met_on_its_own, WorkCard, WHAT_A_CARD_IS};
+use crate::convert::timestamp_to_text;
+use crate::{Database, Result};
+
+/// How many genres of somebody's own count as what they watch.
+///
+/// Five rather than all of them: a person who has watched forty films has
+/// touched nearly every genre there is, and weighing them all equally is the
+/// same as weighing none of them.
+const GENRES_THAT_COUNT: i64 = 5;
+
+impl Database {
+    /// What an administrator put in front of everybody, in the order they
+    /// chose.
+    pub async fn pinned_works(
+        &self,
+        viewer: UserId,
+        within: Option<&[LibraryId]>,
+        limit: i64,
+    ) -> Result<Vec<WorkCard>> {
+        let Some(inside) = kept_inside(within, "w.library_id") else {
+            return Ok(Vec::new());
+        };
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_CARD_IS}
+               FROM pinned_works p
+               JOIN works w ON w.id = p.work_id
+              WHERE {}{inside}
+              ORDER BY p.rank, p.pinned_at
+              LIMIT ?",
+            met_on_its_own("w.")
+        )));
+        for granted in within.iter().copied().flatten() {
+            query = query.bind(granted.to_db_string());
+        }
+        let rows = query.bind(limit).fetch_all(self.reader()).await?;
+
+        let mut cards = rows
+            .iter()
+            .map(crate::browse::card_from_row)
+            .collect::<Result<Vec<_>>>()?;
+        self.attach_posters(&mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards).await?;
+        Ok(cards)
+    }
+
+    /// Puts a work in front of everybody, at the end of what is already there.
+    ///
+    /// Pinning what is already pinned leaves it where it is rather than moving
+    /// it to the end: an administrator who presses twice meant to pin it once,
+    /// and the order of this row is arranged by hand.
+    pub async fn pin_work(&self, work_id: WorkId) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO pinned_works (work_id, rank, pinned_at)
+             VALUES (?, coalesce((SELECT max(rank) FROM pinned_works), 0) + 1, ?)
+             ON CONFLICT (work_id) DO NOTHING",
+        )
+        .bind(work_id.to_db_string())
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// Takes a work back off the front page. Answers whether one was there.
+    pub async fn unpin_work(&self, work_id: WorkId) -> Result<bool> {
+        let gone = sqlx::query("DELETE FROM pinned_works WHERE work_id = ?")
+            .bind(work_id.to_db_string())
+            .execute(self.writer())
+            .await?
+            .rows_affected();
+        Ok(gone > 0)
+    }
+
+    /// Whether this work is one of the ones put in front of everybody.
+    pub async fn is_pinned(&self, work_id: WorkId) -> Result<bool> {
+        let row = sqlx::query("SELECT 1 FROM pinned_works WHERE work_id = ?")
+            .bind(work_id.to_db_string())
+            .fetch_optional(self.reader())
+            .await?;
+        Ok(row.is_some())
+    }
+
+    /// What this account might want to watch, said as honestly as the server
+    /// can say it today.
+    ///
+    /// Works nobody here has started, well thought of elsewhere, kept to the
+    /// genres this account watches most. There is no recommendation engine
+    /// behind this and the name promises none: what has been watched is the
+    /// only matter there is, and its genres are enough not to offer a horror
+    /// film to somebody who only watches comedies.
+    ///
+    /// An account that has watched nothing yet gets the best rated things it
+    /// has not started, which is the only honest answer to a question nobody
+    /// has given any material for.
+    ///
+    /// Ordered by rating alone rather than by rating inside each genre, which
+    /// is what lets it walk the index of well rated works and stop at the
+    /// dozen it was asked for instead of reading and sorting every work that
+    /// carries a rating.
+    pub async fn suggestions(
+        &self,
+        viewer: UserId,
+        within: Option<&[LibraryId]>,
+        limit: i64,
+    ) -> Result<Vec<WorkCard>> {
+        // An account granted nothing has nothing to be suggested.
+        if within.is_some_and(<[LibraryId]>::is_empty) {
+            return Ok(Vec::new());
+        }
+        // Numbered throughout, and the libraries numbered on from four: the
+        // viewer is named three times over, and one plain question mark among
+        // them would shift every place after it.
+        let granted = within.unwrap_or_default();
+        let inside = match granted.is_empty() {
+            true => String::new(),
+            false => format!(
+                " AND w.library_id IN ({})",
+                (4..=granted.len() + 3)
+                    .map(|place| format!("?{place}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        };
+
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "WITH watched_genres AS (
+                 SELECT wg.genre_id
+                   FROM playback_progress p
+                   JOIN works e ON e.id = p.work_id
+                   JOIN work_genres wg ON wg.work_id = e.id
+                  WHERE p.user_id = ?1 AND p.state = 'watched'
+                  GROUP BY wg.genre_id
+                  ORDER BY count(*) DESC
+                  LIMIT ?2
+             )
+             SELECT {WHAT_A_CARD_IS}
+               FROM works w
+               LEFT JOIN playback_progress p ON p.work_id = w.id AND p.user_id = ?1
+              WHERE {}
+                AND w.community_rating IS NOT NULL
+                AND coalesce(p.state, 'not_started') = 'not_started'
+                -- A series is not started by playing the series: it is started
+                -- by playing an episode of it, so the row above says nothing
+                -- about one and its episodes have to be asked.
+                AND (w.kind <> 'series'
+                     OR NOT EXISTS (
+                         SELECT 1 FROM playback_progress q
+                           JOIN works e ON e.id = q.work_id AND e.kind = 'episode'
+                          WHERE q.user_id = ?1
+                            AND q.state <> 'not_started'
+                            AND (e.parent_id = w.id
+                                 OR e.parent_id IN (SELECT id FROM works
+                                                     WHERE parent_id = w.id))))
+                -- Nothing watched yet leaves every genre open, which is the
+                -- only honest answer before there is anything to go on.
+                AND (NOT EXISTS (SELECT 1 FROM watched_genres)
+                     OR EXISTS (SELECT 1 FROM work_genres wg
+                                  JOIN watched_genres ON watched_genres.genre_id = wg.genre_id
+                                 WHERE wg.work_id = w.id)){inside}
+              ORDER BY w.community_rating DESC
+              LIMIT ?3",
+            met_on_its_own("w.")
+        )))
+        .bind(viewer.to_db_string())
+        .bind(GENRES_THAT_COUNT)
+        .bind(limit);
+        for library in granted {
+            query = query.bind(library.to_db_string());
+        }
+        let rows = query.fetch_all(self.reader()).await?;
+
+        let mut cards = rows
+            .iter()
+            .map(crate::browse::card_from_row)
+            .collect::<Result<Vec<_>>>()?;
+        self.attach_posters(&mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards).await?;
+        Ok(cards)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use melyxar_core::library::LibraryKind;
+    use melyxar_core::time::Millis;
+    use melyxar_core::user::Permissions;
+    use melyxar_core::work::{PlaybackState, WorkKind};
+    use std::path::PathBuf;
+
+    /// A library of films, each with a rating and a genre, and two accounts.
+    async fn a_shelf(films: &[(&str, f64, &str)]) -> (Database, LibraryId, UserId, Vec<WorkId>) {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Films"))],
+            )
+            .await
+            .expect("library created");
+
+        let mut written = Vec::new();
+        for (title, rating, genre) in films {
+            let work = database
+                .create_work(
+                    library.id,
+                    WorkKind::Movie,
+                    title,
+                    &title.to_lowercase(),
+                    Some(2019),
+                )
+                .await
+                .expect("work created");
+            sqlx::query(
+                "UPDATE works SET community_rating = ?, identification = 'identified'
+                 WHERE id = ?",
+            )
+            .bind(rating)
+            .bind(work.id.to_db_string())
+            .execute(database.writer())
+            .await
+            .expect("film completed");
+
+            let genre_id = format!("genre-{genre}");
+            sqlx::query("INSERT INTO genres (id, name) VALUES (?, ?) ON CONFLICT DO NOTHING")
+                .bind(&genre_id)
+                .bind(*genre)
+                .execute(database.writer())
+                .await
+                .expect("genre written");
+            sqlx::query("INSERT INTO work_genres (work_id, genre_id) VALUES (?, ?)")
+                .bind(work.id.to_db_string())
+                .bind(&genre_id)
+                .execute(database.writer())
+                .await
+                .expect("genre attached");
+            written.push(work.id);
+        }
+
+        let who = database
+            .create_user("vera", None, &Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
+        (database, library.id, who, written)
+    }
+
+    #[tokio::test]
+    async fn what_is_pinned_comes_back_in_the_order_it_was_pinned_in() {
+        let (database, _, who, films) =
+            a_shelf(&[("One", 7.0, "Drame"), ("Two", 8.0, "Drame")]).await;
+
+        database.pin_work(films[1]).await.expect("pinned");
+        database.pin_work(films[0]).await.expect("pinned");
+        // Pressing twice on the same one leaves it where it is.
+        database.pin_work(films[1]).await.expect("pinned again");
+
+        let front = database
+            .pinned_works(who, None, 10)
+            .await
+            .expect("pinned read");
+        assert_eq!(
+            front.iter().map(|card| card.id).collect::<Vec<_>>(),
+            vec![films[1], films[0]]
+        );
+
+        assert!(database.is_pinned(films[0]).await.expect("read"));
+        assert!(database.unpin_work(films[0]).await.expect("unpinned"));
+        assert!(!database.is_pinned(films[0]).await.expect("read"));
+        assert!(
+            !database.unpin_work(films[0]).await.expect("unpinned"),
+            "taking off what is not there says so"
+        );
+
+        assert!(
+            database
+                .pinned_works(who, Some(&[]), 10)
+                .await
+                .expect("pinned read")
+                .is_empty(),
+            "an account granted nothing sees nothing, front page included"
+        );
+    }
+
+    #[tokio::test]
+    async fn suggestions_lean_on_the_genres_this_account_watches() {
+        let (database, _, who, films) = a_shelf(&[
+            ("Watched Comedy", 6.0, "Comedie"),
+            ("Great Horror", 9.5, "Horreur"),
+            ("Good Comedy", 8.0, "Comedie"),
+        ])
+        .await;
+
+        // Nothing watched yet: the best rated thing comes first, whatever it
+        // is, because there is nothing to go on.
+        let blind = database
+            .suggestions(who, None, 10)
+            .await
+            .expect("suggestions read");
+        assert_eq!(blind[0].id, films[1], "the best rated, with nothing to go on");
+
+        database
+            .mark_watched(who, films[0], true)
+            .await
+            .expect("marked");
+
+        let leaning = database
+            .suggestions(who, None, 10)
+            .await
+            .expect("suggestions read");
+        assert_eq!(
+            leaning.iter().map(|card| card.id).collect::<Vec<_>>(),
+            vec![films[2]],
+            "a comedy watcher is offered the comedy, and never what they watched"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_work_already_started_is_never_suggested() {
+        let (database, _, who, films) =
+            a_shelf(&[("One", 9.0, "Drame"), ("Two", 8.0, "Drame")]).await;
+
+        database
+            .record_playback_progress(
+                who,
+                films[0],
+                Millis::new(600_000),
+                PlaybackState::InProgress,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("position recorded");
+
+        let offered = database
+            .suggestions(who, None, 10)
+            .await
+            .expect("suggestions read");
+        assert_eq!(
+            offered.iter().map(|card| card.id).collect::<Vec<_>>(),
+            vec![films[1]],
+            "what somebody is in the middle of belongs to carrying on"
+        );
+    }
+}

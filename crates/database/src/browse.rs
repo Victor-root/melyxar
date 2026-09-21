@@ -45,7 +45,7 @@ use crate::{Database, DatabaseError, Result};
 /// Takes the table it is written about, because half these queries join and
 /// half do not, and `kind` alone is ambiguous as soon as something else in the
 /// statement carries one.
-fn met_on_its_own(table: &str) -> String {
+pub(crate) fn met_on_its_own(table: &str) -> String {
     format!(
         "({table}kind IN ('movie', 'series', 'album')
           OR ({table}kind = 'episode' AND {table}parent_id IS NULL))"
@@ -175,6 +175,15 @@ pub enum Initial {
 /// What the bucket for everything else is written as, in an address and on a
 /// button alike.
 const OTHER_INITIAL: &str = "#";
+
+/// The columns a card is read from, always under the name `w`.
+///
+/// Written once because five queries now answer with cards, and a column one
+/// of them forgot is a card that cannot be read back at all.
+pub(crate) const WHAT_A_CARD_IS: &str =
+    "w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
+     w.community_rating, w.identification, w.identification_note,
+     w.dominant_color, w.added_at";
 
 /// The clause that keeps a read inside the libraries an account was granted.
 ///
@@ -334,12 +343,7 @@ impl Database {
         let limit = request.limit.clamp(1, LARGEST_PAGE);
         let statements = request.order.statements();
 
-        let mut sql = String::from(
-            "SELECT DISTINCT w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
-                    w.community_rating, w.identification, w.identification_note, w.dominant_color,
-                    w.added_at
-             FROM works w",
-        );
+        let mut sql = format!("SELECT DISTINCT {WHAT_A_CARD_IS} FROM works w");
         if request.genre.is_some() {
             sql.push_str(
                 " JOIN work_genres wg ON wg.work_id = w.id
