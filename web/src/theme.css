@@ -117,6 +117,21 @@
      first sixty points to something laid over it. */
   --hero-height: calc(clamp(320px, 33vw, 72vh) + var(--header-height));
 
+  /* Where a band is taken out of a picture taller than the band, from its top.
+
+     One number for every picture, and it took two attempts at reading each
+     picture to be sure of that. Both read the wrong thing: how much each row
+     of a picture differs from itself, which is texture and not the subject,
+     and then the colour of skin, which a fire, a desert and a warm wall all
+     pass while a face in cold light does not. Both were worse than this.
+
+     What made one number work is the height above, not cleverness: once about
+     two thirds of the picture is kept, what goes is its floor, and measured
+     over a shelf of real pictures a quarter of the way down cut nobody off.
+     Lower it towards nought to favour the sky, raise it to favour the
+     ground. */
+  --where-a-band-is-cut: 25%;
+
   /* Cards are 2:3, the shape of a poster. A wide screen holds more of them
      rather than bigger ones: more of the library at a glance is the whole
      point of the width. */

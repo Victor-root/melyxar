@@ -37,10 +37,6 @@ export interface Picture {
   url: string;
   width: number | null;
   height: number | null;
-  /** Where a band of it is taken from when it is shown in a strip, between
-      nought and one, read off the picture itself. Absent where nobody read
-      it, and the one number every picture used before then is used instead. */
-  framing: number | null;
 }
 
 export type WorkKind = "movie" | "series" | "season" | "episode";

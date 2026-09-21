@@ -8,7 +8,6 @@
 
 pub mod error;
 pub mod fingerprint;
-pub mod framing;
 pub mod id;
 pub mod job;
 pub mod journal;

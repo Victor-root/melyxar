@@ -15,11 +15,10 @@ use crate::{Database, Result};
 ///
 /// Written once because four queries hand their rows to the same reader.
 pub(crate) const WHAT_A_PICTURE_IS: &str =
-    "owner_kind, owner_id, image_kind, relative_path, width, height, fingerprint, dominant_color, \
-     framing";
+    "owner_kind, owner_id, image_kind, relative_path, width, height, fingerprint, dominant_color";
 
 /// One generated picture, as it is stored.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredImage {
     /// work, person, collection, library, server.
     pub owner_kind: String,
@@ -33,10 +32,6 @@ pub struct StoredImage {
     /// Name the content earned, shared by every size of one picture.
     pub fingerprint: String,
     pub dominant_color: Option<String>,
-    /// Where a band of it is taken from, between nought and one, when it was
-    /// read off the picture. Nothing for a picture prepared before that was
-    /// worked out, and for the kinds nothing ever cuts a band out of.
-    pub framing: Option<f64>,
 }
 
 impl Database {
@@ -80,8 +75,8 @@ impl Database {
             sqlx::query(
                 "INSERT INTO images
                     (id, owner_kind, owner_id, image_kind, relative_path, width, height,
-                     fingerprint, dominant_color, framing, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                     fingerprint, dominant_color, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(ImageId::new().to_db_string())
             .bind(&image.owner_kind)
@@ -92,7 +87,6 @@ impl Database {
             .bind(image.height)
             .bind(&image.fingerprint)
             .bind(image.dominant_color.as_deref())
-            .bind(image.framing)
             .bind(&moment)
             .execute(&mut *transaction)
             .await?;
@@ -209,7 +203,6 @@ pub(crate) fn image_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredImag
         height: row.try_get("height")?,
         fingerprint: row.try_get("fingerprint")?,
         dominant_color: row.try_get("dominant_color")?,
-        framing: row.try_get("framing")?,
     })
 }
 
@@ -254,7 +247,6 @@ mod tests {
             height: Some(width * 3 / 2),
             fingerprint: fingerprint.to_string(),
             dominant_color: Some("#c81e1e".to_string()),
-            framing: None,
         }
     }
 
@@ -460,7 +452,6 @@ mod tests {
             height: Some(width * 3 / 2),
             fingerprint: "abc".to_string(),
             dominant_color: None,
-            framing: None,
         }
     }
 

@@ -20,17 +20,9 @@ import { pictureSet } from "../api";
 /** A picture to show, and what to call when the browser cannot show it. */
 export interface Shown {
   picture: { src: string; srcSet: string } | null;
-  /** Where a band of it is taken from when it is shown in a strip, written
-      the way a stylesheet takes it. The one number every picture used before
-      any of them was read, where none was. */
-  framing: string;
   /** Hand to the picture's `onError`. */
   itDidNotLoad: () => void;
 }
-
-/** What a picture nobody has read is placed at: a little above the middle,
- *  which is the best one number for a picture nobody has looked at. */
-const BY_DEFAULT = 0.38;
 
 export function useShownPicture(pictures: Picture[]): Shown {
   const chosen = pictureSet(pictures);
@@ -39,10 +31,8 @@ export function useShownPicture(pictures: Picture[]): Shown {
   // failure of one card onto every card after it.
   const [wouldNotLoad, setWouldNotLoad] = useState<string | null>(null);
 
-  const framing = pictures.find((picture) => picture.framing !== null)?.framing;
   return {
     picture: chosen && chosen.src !== wouldNotLoad ? chosen : null,
-    framing: `center ${((framing ?? BY_DEFAULT) * 100).toFixed(1)}%`,
     itDidNotLoad: () => setWouldNotLoad(chosen?.src ?? null),
   };
 }

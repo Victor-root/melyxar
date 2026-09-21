@@ -1321,7 +1321,6 @@ mod tests {
             height: Some(720),
             fingerprint: name.to_string(),
             dominant_color: None,
-            framing: None,
         };
 
         database

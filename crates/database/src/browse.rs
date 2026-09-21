@@ -2141,7 +2141,6 @@ mod tests {
                 height: Some(width * 3 / 2),
                 fingerprint: "abc".to_string(),
                 dominant_color: Some("#c81e1e".to_string()),
-                framing: None,
             })
             .collect();
         database
