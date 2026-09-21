@@ -1131,6 +1131,10 @@ export const api = {
     put<Account>("/api/v1/me/password", { current, wanted }),
   setFavourite: (work: string, favourite: boolean) =>
     put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
+  /* On a season or a series this marks every episode below it, which is what
+     the answer is about: the tick is drawn from what came back. */
+  setWatched: (work: string, watched: boolean) =>
+    put<{ watched: boolean }>(`/api/v1/works/${work}/watched`, { watched }),
   openSession: (source: string, body: unknown, signal?: AbortSignal) =>
     post<PlaybackSession>(`/api/v1/playback/${source}/session`, body, signal),
   preparation: (session: string, signal?: AbortSignal) =>

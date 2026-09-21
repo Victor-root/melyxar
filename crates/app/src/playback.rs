@@ -1065,6 +1065,32 @@ pub async fn set_favourite(
         .await?)
 }
 
+/// Marks a work watched by hand, or puts it back to unwatched.
+///
+/// A season and a series answer for their episodes, which is the storage's
+/// affair; what belongs here is that a work this account cannot reach is a
+/// work it cannot mark, and that a name meaning nothing is a name meaning
+/// nothing rather than a silent success.
+pub async fn mark_watched(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    work_id: WorkId,
+    watched: bool,
+) -> Result<bool> {
+    crate::reach::may_read_the_work(state, who, work_id).await?;
+    let written = state
+        .database()
+        .mark_watched(who.id, work_id, watched)
+        .await?;
+    if written == 0 {
+        return Err(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::NotFound,
+            "no work with that identifier",
+        )));
+    }
+    Ok(watched)
+}
+
 pub async fn record_position(
     state: &AppState,
     who: &melyxar_core::user::User,
