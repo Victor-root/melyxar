@@ -48,7 +48,8 @@
 }
 
 /*
- * Posters drifting behind it all.
+ * The library drifting behind it all: posters, sleeves, episodes, a reel of
+ * film, a player bar, sound.
  *
  * What this server is for, said without a word, on the one screen that has
  * nothing of the library on it yet.
@@ -61,56 +62,54 @@
  * be blurred again sixty times a second, which is how a screen with nothing
  * happening on it comes to hold a graphics card at full tilt.
  */
-.door-posters {
+.door-media {
   position: absolute;
   inset: 0;
   pointer-events: none;
   /* Arriving a moment after the card, so the screen settles rather than
      appearing all at once. */
   opacity: 0;
-  animation: door-posters-arrive 900ms var(--ease) 250ms forwards;
+  animation: door-media-arrive 900ms var(--ease) 250ms forwards;
 }
 
-@keyframes door-posters-arrive {
+@keyframes door-media-arrive {
   to {
     opacity: 1;
   }
 }
 
-.door-poster {
+.door-piece {
   position: absolute;
   left: var(--at-x);
   top: var(--at-y);
   width: var(--wide);
-  /* The shape of a poster, which is what makes them read as films rather than
-     as rectangles. */
-  aspect-ratio: 2 / 3;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--surface-raised) 88%, var(--accent)),
-      var(--surface)
-    );
-  /* Fainter the smaller it is, which is the whole of the depth here. */
-  opacity: 0.42;
+  /* The height follows the square each one is drawn in, so a poster stands and
+     a player bar lies flat without either being written down twice. */
+  height: auto;
+  color: var(--text-faint);
+  opacity: 0.4;
   transform: rotate(var(--turn));
   animation: door-drift var(--over) ease-in-out var(--from) infinite;
   will-change: transform;
 }
 
-/* The strip along the bottom where a title would be. Enough of one to tell
-   the shape from a plain box, and nothing anybody could try to read. */
-.door-poster::after {
-  content: "";
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  bottom: 10%;
-  height: 5%;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--text-faint) 45%, transparent);
+/*
+ * One line weight across the whole set.
+ *
+ * These objects are drawn at very different sizes, and a line drawn inside a
+ * small square and blown up to the size of a big one comes out heavier. Held
+ * to the screen rather than to the drawing, a note and a player bar are the
+ * same hand.
+ */
+.door-piece * {
+  vector-effect: non-scaling-stroke;
+}
+
+/* Two of them carry the accent, which is what stops the set reading as grey
+   furniture. Anything more and the background competes with the button. */
+.door-piece-accent {
+  color: var(--accent);
+  opacity: 0.5;
 }
 
 @keyframes door-drift {
@@ -118,22 +117,34 @@
     transform: translateY(0) rotate(var(--turn));
   }
   50% {
-    transform: translateY(-20px) rotate(var(--turn));
+    transform: translateY(var(--lift)) rotate(var(--turn));
   }
   to {
     transform: translateY(0) rotate(var(--turn));
   }
 }
 
-/* The ones that fill the gap on a wide screen. On a narrow one they would sit
-   under the card, and a poster behind the box somebody is typing into is a
-   poster in the way. */
-.door-poster-roomy {
+/*
+ * The ones that need room.
+ *
+ * The card is the same width on every screen, so what the sides have to spare
+ * is whatever is left of it. Each of these waits for the screen to be wide
+ * enough that it sits beside the card rather than behind it: a poster behind
+ * the box somebody is typing into is a poster in the way.
+ */
+.door-piece-from-900,
+.door-piece-from-1100 {
   display: none;
 }
 
+@media (min-width: 900px) {
+  .door-piece-from-900 {
+    display: block;
+  }
+}
+
 @media (min-width: 1100px) {
-  .door-poster-roomy {
+  .door-piece-from-1100 {
     display: block;
   }
 }
@@ -141,7 +152,7 @@
 /* A screen with no room to spare shows the card and the light behind it, and
    nothing else: half a poster cut off by the edge is not a background. */
 @media (max-width: 700px) {
-  .door-posters {
+  .door-media {
     display: none;
   }
 }
