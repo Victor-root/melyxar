@@ -1022,6 +1022,8 @@ export interface ViewerPreferences {
   banner_cut: number;
   /** Whether the banner draws a fresh handful every time the page opens. */
   banner_at_random: boolean;
+  /** Whether it takes the whole window, the height then deciding nothing. */
+  banner_fills_the_screen: boolean;
   /** The languages the library really holds, which is what a picker offers. */
   audio_languages: string[];
   subtitle_languages: string[];

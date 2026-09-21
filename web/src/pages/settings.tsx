@@ -336,7 +336,15 @@ function Banner({
   kept: ViewerPreferences | null;
   change: (changes: Partial<ViewerPreferences>) => void;
 }) {
-  const { t, bannerHeight, setBannerHeight, bannerCut, setBannerCut } = useSettings();
+  const {
+    t,
+    bannerHeight,
+    setBannerHeight,
+    bannerCut,
+    setBannerCut,
+    bannerFillsTheScreen,
+    setBannerFillsTheScreen,
+  } = useSettings();
   const marks = useMarks();
 
   return (
@@ -349,7 +357,9 @@ function Banner({
           <span className="choice-label">
             {t("settings.banner_height")}
             <span className="settings-value">
-              {t("settings.banner_kept", { percent: shareOfThePictureKept(bannerHeight) })}
+              {bannerFillsTheScreen
+                ? t("settings.banner_whole_window")
+                : t("settings.banner_kept", { percent: shareOfThePictureKept(bannerHeight) })}
             </span>
           </span>
           <input
@@ -358,6 +368,10 @@ function Banner({
             max={kept?.banner_height_range[1] ?? 0.55}
             step={0.01}
             value={bannerHeight}
+            /* Nothing left for it to decide while the banner takes the whole
+               window, and still readable, so what it is set to can be seen
+               before it is turned back on. */
+            disabled={bannerFillsTheScreen}
             onChange={(event) => setBannerHeight(Number(event.target.value))}
           />
         </label>
@@ -378,6 +392,16 @@ function Banner({
         </label>
       </div>
       <p className="settings-why">{t("settings.banner_cut_why")}</p>
+
+      <label className="settings-switch">
+        <input
+          type="checkbox"
+          checked={bannerFillsTheScreen}
+          onChange={(event) => setBannerFillsTheScreen(event.target.checked)}
+        />
+        <span>{t("settings.banner_whole")}</span>
+      </label>
+      <p className="settings-why">{t("settings.banner_whole_why")}</p>
 
       {kept && (
         <label className="settings-switch">

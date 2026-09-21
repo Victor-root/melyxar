@@ -31,7 +31,7 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
      p.theme_mode, p.accent_color, p.custom_css, p.volume,
      p.downmix_method, p.downmix_gain,
-     p.banner_height, p.banner_cut, p.banner_at_random";
+     p.banner_height, p.banner_cut, p.banner_at_random, p.banner_fills_the_screen";
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
@@ -265,7 +265,8 @@ impl Database {
                 interface_language = ?, preferred_audio_language = ?,
                 preferred_subtitle_language = ?, theme_mode = ?, accent_color = ?,
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
-                banner_height = ?, banner_cut = ?, banner_at_random = ?
+                banner_height = ?, banner_cut = ?, banner_at_random = ?,
+                banner_fills_the_screen = ?
              WHERE user_id = ?",
         )
         .bind(&preferences.interface_language)
@@ -280,6 +281,7 @@ impl Database {
         .bind(preferences.banner_height)
         .bind(preferences.banner_cut)
         .bind(preferences.banner_at_random)
+        .bind(preferences.banner_fills_the_screen)
         .bind(id.to_db_string())
         .execute(self.writer())
         .await?;
@@ -324,8 +326,9 @@ async fn write_an_account(
     sqlx::query(
         "INSERT INTO user_preferences (user_id, interface_language, theme_mode, accent_color,
                                        volume, downmix_method, downmix_gain,
-                                       banner_height, banner_cut, banner_at_random)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       banner_height, banner_cut, banner_at_random,
+                                       banner_fills_the_screen)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -337,6 +340,7 @@ async fn write_an_account(
     .bind(preferences.banner_height)
     .bind(preferences.banner_cut)
     .bind(preferences.banner_at_random)
+    .bind(preferences.banner_fills_the_screen)
     .execute(&mut **transaction)
     .await?;
 
@@ -400,6 +404,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             banner_height: row.try_get("banner_height")?,
             banner_cut: row.try_get("banner_cut")?,
             banner_at_random: row.try_get("banner_at_random")?,
+            banner_fills_the_screen: row.try_get("banner_fills_the_screen")?,
         }
         .normalised(),
         created_at,
@@ -677,6 +682,7 @@ mod tests {
             banner_height: 9.0,
             banner_cut: 0.6,
             banner_at_random: true,
+            banner_fills_the_screen: true,
             ..Preferences::default()
         };
         database
@@ -700,6 +706,7 @@ mod tests {
         // what says the three really made the round trip through the row.
         assert_eq!(loaded.preferences.banner_cut, 0.6);
         assert!(loaded.preferences.banner_at_random);
+        assert!(loaded.preferences.banner_fills_the_screen);
         assert_eq!(
             loaded.preferences.downmix_method,
             DownmixMethod::NightDialogue

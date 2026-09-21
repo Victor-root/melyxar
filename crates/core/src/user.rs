@@ -274,6 +274,9 @@ pub struct Preferences {
     /// Whether the banner draws a fresh handful every time the page is
     /// opened, in place of what was left halfway and what has just arrived.
     pub banner_at_random: bool,
+    /// Whether the banner takes the whole window, the height above then
+    /// having nothing left to decide.
+    pub banner_fills_the_screen: bool,
 }
 
 impl Default for Preferences {
@@ -291,6 +294,7 @@ impl Default for Preferences {
             banner_height: DEFAULT_BANNER_HEIGHT,
             banner_cut: DEFAULT_BANNER_CUT,
             banner_at_random: false,
+            banner_fills_the_screen: false,
         }
     }
 }

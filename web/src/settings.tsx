@@ -27,6 +27,7 @@ const STORED_THEME = "melyxar.theme";
 const STORED_ACCENT = "melyxar.accent";
 const STORED_BANNER_HEIGHT = "melyxar.banner.height";
 const STORED_BANNER_CUT = "melyxar.banner.cut";
+const STORED_BANNER_WHOLE = "melyxar.banner.whole";
 
 /** The red of the Melyxar theme, which needs none of the work below. */
 const THE_USUAL_ACCENT = "#c81e1e";
@@ -49,6 +50,10 @@ interface Settings {
       foot. */
   bannerCut: number;
   setBannerCut: (share: number) => void;
+  /** Whether the banner takes the whole window, the height above then having
+      nothing left to decide. */
+  bannerFillsTheScreen: boolean;
+  setBannerFillsTheScreen: (whole: boolean) => void;
   /** What the account chose, once the server has said. */
   adopt: (chosen: ViewerPreferences) => void;
   /** The wording of one key, in the language in force. */
@@ -81,6 +86,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
   const [bannerCut, setBannerCutState] = useState(() =>
     initialNumber(STORED_BANNER_CUT, THE_USUAL_BANNER.cut),
+  );
+  const [bannerFillsTheScreen, setBannerFillsState] = useState(
+    () => safeRead(STORED_BANNER_WHOLE) === "yes",
   );
 
   // The theme is put on the document rather than passed down, so a stylesheet
@@ -126,7 +134,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const root = document.documentElement;
     root.style.setProperty("--banner-share", (bannerHeight * 100).toFixed(2));
     root.style.setProperty("--where-a-band-is-cut", `${(bannerCut * 100).toFixed(1)}%`);
-  }, [bannerHeight, bannerCut]);
+    // Taking the whole window is a height of its own rather than a share of
+    // the width, so it is written over the sum the stylesheet works out, and
+    // taken back off when it is turned off. The dynamic unit rather than the
+    // plain one: on a telephone the plain one counts the bars of the browser
+    // as screen and the banner ends up taller than what can be seen.
+    if (bannerFillsTheScreen) {
+      root.style.setProperty("--hero-height", "100dvh");
+    } else {
+      root.style.removeProperty("--hero-height");
+    }
+  }, [bannerHeight, bannerCut, bannerFillsTheScreen]);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -156,6 +174,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServerOnceTheHandStops({ banner_cut: share });
   }, []);
 
+  const setBannerFillsTheScreen = useCallback((whole: boolean) => {
+    safeWrite(STORED_BANNER_WHOLE, whole ? "yes" : "no");
+    setBannerFillsState(whole);
+    tellTheServer({ banner_fills_the_screen: whole });
+  }, []);
+
   const adopt = useCallback((chosen: ViewerPreferences) => {
     const language = chosen.interface_language === "fr" ? "fr" : "en";
     rememberLanguage(language);
@@ -174,6 +198,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setBannerHeightState(chosen.banner_height);
     safeWrite(STORED_BANNER_CUT, String(chosen.banner_cut));
     setBannerCutState(chosen.banner_cut);
+    safeWrite(STORED_BANNER_WHOLE, chosen.banner_fills_the_screen ? "yes" : "no");
+    setBannerFillsState(chosen.banner_fills_the_screen);
   }, []);
 
   const value = useMemo<Settings>(
@@ -186,6 +212,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerHeight,
       bannerCut,
       setBannerCut,
+      bannerFillsTheScreen,
+      setBannerFillsTheScreen,
       adopt,
       t: (key, values) => translate(language, key, values),
     }),
@@ -198,6 +226,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerHeight,
       bannerCut,
       setBannerCut,
+      bannerFillsTheScreen,
+      setBannerFillsTheScreen,
       adopt,
     ],
   );
