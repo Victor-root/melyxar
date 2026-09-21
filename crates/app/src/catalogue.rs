@@ -147,8 +147,13 @@ pub async fn browse(
     if let Some(library_id) = request.library_id {
         crate::reach::may_read(who, library_id)?;
     }
+    // Both of these are put on here rather than sent by the client: what an
+    // account may read and who it is are the use case's to know, and a client
+    // that could name either could read a library it was never given or wear
+    // somebody else's marks.
     let request = BrowseRequest {
         within: crate::reach::within(who),
+        viewer: Some(who.id),
         ..request.clone()
     };
     Ok(state.database().browse_works(&request).await?)
