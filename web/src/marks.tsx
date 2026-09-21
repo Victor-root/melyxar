@@ -26,21 +26,34 @@ import type { Card, Seen } from "./api";
 interface Mark {
   seen?: Seen;
   favourite?: boolean;
+  /** On the server's own front shelf. Unlike the two above, nothing is known
+      about this until somebody says it here: a card does not arrive saying
+      whether it is on the front page. */
+  pinned?: boolean;
 }
 
 interface Marks {
   /** Where this viewer is in a work, their own answer winning. */
   seenOf: (card: Card) => Seen;
   favouriteOf: (card: Card) => boolean;
+  /** Whether this work was put on the front page from this page, and nothing
+      at all when nobody has said. */
+  pinnedOf: (card: Card) => boolean | undefined;
   /** Says it, everywhere at once, and tells the server. */
   setWatched: (card: Card, watched: boolean) => void;
   setFavourite: (card: Card, favourite: boolean) => void;
+  setPinned: (card: Card, pinned: boolean) => void;
+  /** Bumped whenever the front shelf changes, for the screens that show it:
+      the banner of the home page is read from the server, so it has to be
+      read again rather than mended here. */
+  frontShelf: number;
 }
 
 const MarksContext = createContext<Marks | null>(null);
 
 export function MarksProvider({ children }: { children: ReactNode }) {
   const [said, setSaid] = useState<Record<string, Mark>>({});
+  const [frontShelf, setFrontShelf] = useState(0);
 
   const say = useCallback((id: string, mark: Mark) => {
     setSaid((before) => ({ ...before, [id]: { ...before[id], ...mark } }));
@@ -64,14 +77,31 @@ export function MarksProvider({ children }: { children: ReactNode }) {
     [said, say],
   );
 
+  /* The banner of the home page is the one thing this changes, and it is the
+     server that decides what stands in it. So nothing is mended here beyond
+     the menu entry's own wording: what is said is that the shelf moved, and
+     the screens that show it ask again. */
+  const setPinned = useCallback(
+    (card: Card, pinned: boolean) => {
+      const before = said[card.id]?.pinned;
+      say(card.id, { pinned });
+      setFrontShelf((count) => count + 1);
+      api.setPinned(card.id, pinned).catch(() => say(card.id, { pinned: before }));
+    },
+    [said, say],
+  );
+
   const value = useMemo<Marks>(
     () => ({
       seenOf: (card) => said[card.id]?.seen ?? card.seen,
       favouriteOf: (card) => said[card.id]?.favourite ?? card.favourite,
+      pinnedOf: (card) => said[card.id]?.pinned,
       setWatched,
       setFavourite,
+      setPinned,
+      frontShelf,
     }),
-    [said, setWatched, setFavourite],
+    [said, setWatched, setFavourite, setPinned, frontShelf],
   );
 
   return <MarksContext.Provider value={value}>{children}</MarksContext.Provider>;

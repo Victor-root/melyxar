@@ -11,6 +11,7 @@
 import { api } from "../api";
 import type { Home, Job, Library } from "../api";
 import { useAsked } from "../asking";
+import { useMarks } from "../marks";
 import { useRunning, useStartIdentification, useStartScan } from "../running";
 import type { Starter } from "../running";
 
@@ -53,7 +54,11 @@ export function useHomeScreen(libraries: Library[]): HomeScreen {
      produced when it ends. Without that, pressing a button looks exactly like
      pressing a button that does nothing. */
   const { jobs, finished } = useRunning();
-  const asked = useAsked((signal) => api.home(undefined, signal), [finished]);
+  /* And the same for the front shelf, which is what the banner stands on: the
+     server decides what goes in it, so putting a work there is a reason to
+     ask again rather than something to mend here. */
+  const { frontShelf } = useMarks();
+  const asked = useAsked((signal) => api.home(undefined, signal), [finished, frontShelf]);
 
   const scan = useStartScan(libraries);
   const lookUp = useStartIdentification(libraries);

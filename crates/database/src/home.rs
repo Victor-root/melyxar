@@ -180,14 +180,18 @@ impl Database {
         let Some(inside) = kept_inside(within, "w.library_id") else {
             return Ok(Vec::new());
         };
+        // No question here of what is met on its own. That rule keeps seasons
+        // and episodes out of the grids nobody asked to see them in; this row
+        // is the one place where somebody did ask, by hand, for this exact
+        // work. Asking it again dropped a pinned episode on the floor without
+        // a word, which from the outside is a menu entry that does nothing.
         let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {WHAT_A_CARD_IS}
                FROM pinned_works p
                JOIN works w ON w.id = p.work_id
-              WHERE {}{inside}
+              WHERE 1 = 1{inside}
               ORDER BY p.rank, p.pinned_at
-              LIMIT ?",
-            met_on_its_own("w.")
+              LIMIT ?"
         )));
         for granted in within.iter().copied().flatten() {
             query = query.bind(granted.to_db_string());
@@ -441,6 +445,48 @@ mod tests {
                 .expect("pinned read")
                 .is_empty(),
             "an account granted nothing sees nothing, front page included"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_episode_put_in_front_of_everybody_comes_back_like_anything_else() {
+        let (database, library_id, who, _) = a_shelf(&[("One", 7.0, "Drame")]).await;
+
+        let mut hung = Vec::new();
+        for (kind, title) in [
+            (WorkKind::Series, "Distant Signal"),
+            (WorkKind::Season, "Distant Signal, first year"),
+            (WorkKind::Episode, "Distant Signal, first night"),
+        ] {
+            hung.push(
+                database
+                    .create_work(library_id, kind, title, &title.to_lowercase(), Some(2019))
+                    .await
+                    .expect("work created")
+                    .id,
+            );
+        }
+        for (child, parent) in [(1, 0), (2, 1)] {
+            sqlx::query("UPDATE works SET parent_id = ? WHERE id = ?")
+                .bind(hung[parent].to_db_string())
+                .bind(hung[child].to_db_string())
+                .execute(database.writer())
+                .await
+                .expect("hung under its parent");
+        }
+
+        database.pin_work(hung[2]).await.expect("pinned");
+
+        assert_eq!(
+            database
+                .pinned_works(who, None, 10)
+                .await
+                .expect("pinned read")
+                .iter()
+                .map(|card| card.id)
+                .collect::<Vec<_>>(),
+            vec![hung[2]],
+            "an episode nobody would meet on its own was asked for by hand"
         );
     }
 
