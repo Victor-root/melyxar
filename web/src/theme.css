@@ -107,8 +107,9 @@
 
      Kept in proportion to the width rather than pinned to one height, because
      what it really sets is how much of the picture behind it is thrown away: a
-     picture from the provider is sixteen by nine, and a banner a third of the
-     screen wide in height keeps about two thirds of it. That is what decides
+     picture from the provider is sixteen by nine, so a banner a little under
+     a third of the screen wide in height keeps about fifty five out of every
+     hundred of it. That is what decides
      whether the banner looks right, far more than where the band is taken from
      does: at a shade under half the height it was before, more than half of
      every picture went before anything could place what was left well, and no
@@ -130,7 +131,7 @@
      Nothing of the bar comes into it: the bar holds its own band above
      everything that scrolls, so the banner begins where the bar ends and
      covers none of it. */
-  --banner-share: 33;
+  --banner-share: 31;
   --hero-height: clamp(320px, calc(var(--banner-share) * 1vw), 88vh);
 
   /* Where a band is taken out of a picture taller than the band, from its top.
@@ -141,17 +142,18 @@
      and then the colour of skin, which a fire, a desert and a warm wall all
      pass while a face in cold light does not. Both were worse than this.
 
-     What made one number work is the height above, not cleverness: once about
-     two thirds of the picture is kept, what goes is its floor, and measured
-     over a shelf of real pictures a quarter of the way down cut nobody off.
-     Lower it towards nought to favour the sky, raise it to favour the
-     ground.
+     What made one number work is the height above, not cleverness: once most
+     of the picture is kept, what goes is its floor. A quarter of the way down
+     came out of a shelf of twenty eight real pictures; an eighth came out of
+     the maintainer's own library, which is the larger sample and the one
+     written here. Lower it towards nought to favour the sky, raise it to
+     favour the ground.
 
      Both of these are what the interface writes over when somebody moves
      them in their settings, which is why the number of the height is kept
      apart from the sum it goes into: what is chosen is one number, not a
      formula. */
-  --where-a-band-is-cut: 25%;
+  --where-a-band-is-cut: 13%;
 
   /* Cards are 2:3, the shape of a poster. A wide screen holds more of them
      rather than bigger ones: more of the library at a glance is the whole

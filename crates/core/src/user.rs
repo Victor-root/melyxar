@@ -179,17 +179,23 @@ pub const DEFAULT_DOWNMIX_GAIN: f64 = 2.0;
 /// The range is what is worth looking at. Under a fifth it is a strip that
 /// throws away most of every picture, which is the fault this exists to let
 /// somebody escape; over half it is a page with nothing under the banner.
+///
+/// The number everybody starts at is the maintainer's, settled by trying them
+/// against his own library rather than against the shelf this was measured
+/// on: a little under a third of the width, which keeps about fifty five out
+/// of every hundred of a picture and leaves the first row on the screen.
 pub const MIN_BANNER_HEIGHT: f64 = 0.20;
 pub const MAX_BANNER_HEIGHT: f64 = 0.55;
-pub const DEFAULT_BANNER_HEIGHT: f64 = 0.33;
+pub const DEFAULT_BANNER_HEIGHT: f64 = 0.31;
 
 /// Where a band is taken out of a picture taller than the band, from its top.
 ///
 /// Nought keeps the top of the picture and throws away its foot, one does the
-/// opposite. A quarter of the way down was measured over a shelf of real
-/// pictures at the height above and cut nobody off, but a library is not a
-/// shelf, so it is a number anybody can move.
-pub const DEFAULT_BANNER_CUT: f64 = 0.25;
+/// opposite. A quarter of the way down came out of a shelf of twenty eight
+/// real pictures; an eighth came out of the maintainer's own library, which
+/// is the larger sample and the one that counts. Both say the same thing,
+/// which is that what a banner has to give up is the floor.
+pub const DEFAULT_BANNER_CUT: f64 = 0.13;
 
 /// Which colour scheme the interface uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]

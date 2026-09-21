@@ -425,19 +425,17 @@ function Banner({
 }
 
 /**
- * How much of a sixteen by nine picture a banner of this height keeps, on the
- * window it is being read in.
+ * How much of a sixteen by nine picture a banner of this height keeps.
  *
- * Worked out rather than written down, because the bar drawn over the banner
- * counts towards it and its height is the stylesheet's to say.
+ * The height is a share of the width and the picture is sixteen by nine, so
+ * the two divide into each other and no measurement of the window comes into
+ * it. It counted the bar at the top as well while the bar was drawn over the
+ * banner; once the bar went back to a band of its own it was reading about
+ * five too high on an ordinary screen, and saying that a banner kept three
+ * fifths of a picture when it kept a little over a half.
  */
 function shareOfThePictureKept(height: number): number {
-  const bar = Number.parseFloat(
-    getComputedStyle(document.documentElement).getPropertyValue("--header-height"),
-  );
-  const across = window.innerWidth;
-  const whole = across / (16 / 9);
-  return Math.round(Math.min(1, (height * across + (bar || 0)) / whole) * 100);
+  return Math.round(Math.min(1, height * (16 / 9)) * 100);
 }
 
 function Appearance() {
