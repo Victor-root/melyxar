@@ -45,7 +45,8 @@ const en: Dictionary = {
     "A password is at least {shortest} characters long.",
   "door.slogan": "Your content, your server, your rules.",
   "door.theme_toggle": "Change theme",
-  "door.footer": "Melyxar, an open source project by Victor-root.",
+  "door.footer_before": "Melyxar, an open source project by ",
+  "door.footer_after": ".",
   "nav.sign_out": "Sign out",
 
   "home.recently_added": "Recently added",
@@ -614,7 +615,8 @@ const fr: Dictionary = {
     "Un mot de passe fait au moins {shortest} caractères.",
   "door.slogan": "Votre contenu, votre serveur, vos règles.",
   "door.theme_toggle": "Changer de thème",
-  "door.footer": "Melyxar, un projet open source par Victor-root.",
+  "door.footer_before": "Melyxar, un projet open source par ",
+  "door.footer_after": ".",
   "nav.sign_out": "Se déconnecter",
 
   "home.recently_added": "Récemment ajoutés",
