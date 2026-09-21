@@ -181,7 +181,9 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
     let counted = crate::reach::counted_for(state, who, library_id).await?;
 
     Ok(Home {
-        carry_on: database.works_to_carry_on(who.id, CARRY_ON).await?,
+        carry_on: database
+            .works_to_carry_on(who.id, crate::reach::within(who).as_deref(), CARRY_ON)
+            .await?,
         recently_added,
         works: counted.browsable,
         awaiting_identification: counted.awaiting_identification,

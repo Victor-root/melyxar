@@ -228,6 +228,11 @@ struct BrowseParams {
     search: Option<String>,
     #[serde(default)]
     unidentified: bool,
+    /// Only what this account marked. A view rather than a library, which is
+    /// why it is a narrowing of the grid and not an address of its own: it
+    /// sorts, filters and pages exactly like everything else.
+    #[serde(default)]
+    favourites: bool,
     /// One letter, or the sign standing for everything that starts with none.
     initial: Option<String>,
 }
@@ -303,6 +308,7 @@ async fn works(
         decade: params.decade,
         search: params.search.filter(|value| !value.trim().is_empty()),
         unidentified_only: params.unidentified,
+        favourites_only: params.favourites,
         // A letter nobody could mean is refused rather than quietly ignored:
         // a grid that answers everything to a narrowing looks broken.
         initial: params

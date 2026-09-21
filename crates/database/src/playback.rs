@@ -9,12 +9,12 @@
 
 use std::path::PathBuf;
 
-use melyxar_core::id::{MediaSourceId, TrackId, UserId, WorkId};
+use melyxar_core::id::{LibraryId, MediaSourceId, TrackId, UserId, WorkId};
 use melyxar_core::time::{now, Millis, Timestamp};
 use melyxar_core::work::{should_accept_position, PlaybackState};
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 
-use crate::convert::{parse_optional_timestamp, timestamp_to_text};
+use crate::convert::{parse_id, parse_optional_timestamp, timestamp_to_text};
 use crate::{Database, DatabaseError, Result};
 
 /// One file, with everything needed to hand it to a viewer.
@@ -70,6 +70,21 @@ pub struct WorkToCarryOn {
     pub last_played_at: Option<Timestamp>,
 }
 
+/// The episode a series is waiting on, and the series it belongs to.
+///
+/// Distinct from carrying on, and deliberately: what somebody left halfway is
+/// not what they have not started. An episode here has never been played, so
+/// it shows no progress bar, and what a card leads with is the series rather
+/// than the episode, which is the only name anybody remembers.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UpNext {
+    pub card: crate::browse::WorkCard,
+    pub series_id: WorkId,
+    pub series_title: String,
+    pub season_number: Option<i32>,
+    pub episode_number: Option<i32>,
+}
+
 impl Database {
     /// Works this viewer started and has not finished, the latest first.
     ///
@@ -83,23 +98,33 @@ impl Database {
     pub async fn works_to_carry_on(
         &self,
         user_id: UserId,
+        within: Option<&[LibraryId]>,
         limit: i64,
     ) -> Result<Vec<WorkToCarryOn>> {
-        let rows = sqlx::query(
+        // Kept inside what this account was granted, like every other read.
+        // Progress outlives a grant: somebody who watched half a film in a
+        // library that was later taken away from them still has the row, and
+        // without this the row would put the title and the poster back on
+        // their home page.
+        let Some(inside) = crate::browse::kept_inside(within, "w.library_id") else {
+            return Ok(Vec::new());
+        };
+        let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
                     w.community_rating, w.identification, w.identification_note,
                     w.dominant_color, w.added_at,
                     p.position_ms, p.last_played_at
              FROM playback_progress p
              JOIN works w ON w.id = p.work_id
-             WHERE p.user_id = ? AND p.state = 'in_progress'
+             WHERE p.user_id = ? AND p.state = 'in_progress'{inside}
              ORDER BY p.last_played_at DESC, w.sort_title
-             LIMIT ?",
-        )
-        .bind(user_id.to_db_string())
-        .bind(limit)
-        .fetch_all(self.reader())
-        .await?;
+             LIMIT ?"
+        )))
+        .bind(user_id.to_db_string());
+        for granted in within.iter().copied().flatten() {
+            query = query.bind(granted.to_db_string());
+        }
+        let rows = query.bind(limit).fetch_all(self.reader()).await?;
 
         let mut carrying_on: Vec<WorkToCarryOn> = rows
             .iter()
@@ -118,6 +143,9 @@ impl Database {
         let mut cards: Vec<crate::browse::WorkCard> =
             carrying_on.iter().map(|entry| entry.card.clone()).collect();
         self.attach_posters(&mut cards).await?;
+        // The same card is drawn here as in a grid, so it carries the same
+        // marks: one component, one shape of card, one hover.
+        self.attach_viewer_state(user_id, &mut cards).await?;
         for (entry, card) in carrying_on.iter_mut().zip(cards) {
             entry.card = card;
         }
@@ -201,6 +229,139 @@ impl Database {
             })
         })
         .transpose()
+    }
+
+    /// The episode each started series is waiting on, the latest first.
+    ///
+    /// A series is here when this viewer has watched at least one episode of
+    /// it and is not partway through another: an episode left halfway belongs
+    /// to carrying on, and a series would otherwise stand in both rows at once
+    /// saying two different things.
+    ///
+    /// Read in order rather than from the last one played, for the same reason
+    /// a single series is: a series watched out of order has a hole in it, and
+    /// the hole is what somebody means by where they are. Episodes with no
+    /// file behind them are skipped, because this ends in a button that has to
+    /// play something.
+    pub async fn up_next(
+        &self,
+        user_id: UserId,
+        within: Option<&[LibraryId]>,
+        limit: i64,
+    ) -> Result<Vec<UpNext>> {
+        // An account granted nothing has nothing waiting for it.
+        if within.is_some_and(<[LibraryId]>::is_empty) {
+            return Ok(Vec::new());
+        }
+        let granted = within.unwrap_or_default();
+        // Every place in this statement is numbered, and the libraries are
+        // numbered on from three. Mixed with plain question marks, the viewer
+        // named four times over would shift everything after it and the joins
+        // would match nobody, which reads exactly like an account that has
+        // watched nothing.
+        let inside = match granted.is_empty() {
+            true => String::new(),
+            false => format!(
+                " AND e.library_id IN ({})",
+                (3..=granted.len() + 2)
+                    .map(|place| format!("?{place}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        };
+
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "WITH begun AS (
+                 -- Series this viewer has really started: one watched episode
+                 -- is a start, and an unopened series is not up next, it is
+                 -- simply there.
+                 SELECT DISTINCT s.parent_id AS series_id
+                   FROM playback_progress p
+                   JOIN works e ON e.id = p.work_id AND e.kind = 'episode'
+                   JOIN works s ON s.id = e.parent_id
+                  WHERE p.user_id = ?1 AND p.state = 'watched'
+                    AND s.parent_id IS NOT NULL
+             ),
+             partway AS (
+                 -- And the ones they are in the middle of, which belong to
+                 -- the row above this one instead.
+                 SELECT DISTINCT s.parent_id AS series_id
+                   FROM playback_progress p
+                   JOIN works e ON e.id = p.work_id AND e.kind = 'episode'
+                   JOIN works s ON s.id = e.parent_id
+                  WHERE p.user_id = ?1 AND p.state = 'in_progress'
+                    AND s.parent_id IS NOT NULL
+             ),
+             waiting AS (
+                 SELECT e.id AS episode_id,
+                        s.parent_id AS series_id,
+                        s.ordinal AS season_number,
+                        e.ordinal AS episode_number,
+                        row_number() OVER (
+                            PARTITION BY s.parent_id
+                            ORDER BY s.ordinal, e.ordinal, e.id
+                        ) AS place
+                   FROM works e
+                   JOIN works s ON s.id = e.parent_id
+                   JOIN begun ON begun.series_id = s.parent_id
+                   LEFT JOIN playback_progress p
+                          ON p.work_id = e.id AND p.user_id = ?1
+                  WHERE e.kind = 'episode'
+                    AND coalesce(p.state, 'not_started') = 'not_started'
+                    AND s.parent_id NOT IN (SELECT series_id FROM partway)
+                    AND EXISTS (SELECT 1 FROM media_sources m
+                                 WHERE m.work_id = e.id AND m.missing_since IS NULL)
+                    {inside}
+             )
+             SELECT w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
+                    w.community_rating, w.identification, w.identification_note,
+                    w.dominant_color, w.added_at,
+                    waiting.series_id, waiting.season_number, waiting.episode_number,
+                    series.title AS series_title,
+                    -- When this series was last touched at all, which is the
+                    -- order a row of them is read in: what somebody watched
+                    -- last night comes before what they watched in March.
+                    (SELECT max(q.last_played_at)
+                       FROM playback_progress q
+                       JOIN works ee ON ee.id = q.work_id AND ee.kind = 'episode'
+                       JOIN works ss ON ss.id = ee.parent_id
+                      WHERE ss.parent_id = waiting.series_id
+                        AND q.user_id = ?1) AS touched_at
+               FROM waiting
+               JOIN works w ON w.id = waiting.episode_id
+               JOIN works series ON series.id = waiting.series_id
+              WHERE waiting.place = 1
+              ORDER BY touched_at DESC, series.sort_title
+              LIMIT ?2"
+        )))
+        .bind(user_id.to_db_string())
+        .bind(limit);
+        for library in granted {
+            query = query.bind(library.to_db_string());
+        }
+        let rows = query.fetch_all(self.reader()).await?;
+
+        let mut waiting: Vec<UpNext> = rows
+            .iter()
+            .map(|row| {
+                Ok(UpNext {
+                    card: crate::browse::card_from_row(row)?,
+                    series_id: parse_id(&row.try_get::<String, _>("series_id")?)?,
+                    series_title: row.try_get("series_title")?,
+                    season_number: row.try_get("season_number")?,
+                    episode_number: row.try_get("episode_number")?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut cards: Vec<crate::browse::WorkCard> =
+            waiting.iter().map(|entry| entry.card.clone()).collect();
+        self.attach_posters(&mut cards).await?;
+        self.attach_viewer_state(user_id, &mut cards).await?;
+        for (entry, card) in waiting.iter_mut().zip(cards) {
+            entry.card = card;
+        }
+        Ok(waiting)
     }
 
     /// Records where a viewer got to, unless a fresher report is already here.
@@ -539,6 +700,194 @@ mod tests {
         (database, user.id, series.id, season.id, episodes)
     }
 
+    /// A file behind an episode, so it can be offered by a button that plays.
+    async fn a_file_behind(database: &Database, work_id: WorkId, library: LibraryId) {
+        let root = database
+            .library_roots(library)
+            .await
+            .expect("roots read")
+            .remove(0);
+        database
+            .insert_source(
+                work_id,
+                root.id,
+                Path::new(&format!("{work_id}.mkv")),
+                1_000,
+                now(),
+            )
+            .await
+            .expect("file recorded");
+    }
+
+    #[tokio::test]
+    async fn a_started_series_offers_the_episode_it_is_waiting_on() {
+        let (database, user_id, series, _, episodes) = one_series().await;
+        let library = database
+            .work(series)
+            .await
+            .expect("series read")
+            .expect("series present")
+            .library_id;
+        for episode in &episodes {
+            a_file_behind(&database, *episode, library).await;
+        }
+
+        assert!(
+            database
+                .up_next(user_id, None, 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "a series nobody has opened is not waiting on anything"
+        );
+
+        database
+            .mark_watched(user_id, episodes[0], true)
+            .await
+            .expect("marked");
+
+        let waiting = database.up_next(user_id, None, 10).await.expect("read");
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(waiting[0].card.id, episodes[1], "the next one, in order");
+        assert_eq!(waiting[0].series_id, series);
+        assert_eq!(waiting[0].series_title, "Amber Field");
+        assert_eq!(waiting[0].season_number, Some(1));
+        assert_eq!(waiting[0].episode_number, Some(2));
+    }
+
+    #[tokio::test]
+    async fn a_series_being_watched_right_now_is_not_also_waiting() {
+        let (database, user_id, series, _, episodes) = one_series().await;
+        let library = database
+            .work(series)
+            .await
+            .expect("series read")
+            .expect("series present")
+            .library_id;
+        for episode in &episodes {
+            a_file_behind(&database, *episode, library).await;
+        }
+
+        database
+            .mark_watched(user_id, episodes[0], true)
+            .await
+            .expect("marked");
+        database
+            .record_playback_progress(
+                user_id,
+                episodes[1],
+                Millis::new(600_000),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("position recorded");
+
+        assert!(
+            database
+                .up_next(user_id, None, 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "an episode left halfway belongs to carrying on, not to this row"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_episode_with_no_file_behind_it_is_never_offered() {
+        let (database, user_id, series, _, episodes) = one_series().await;
+        let library = database
+            .work(series)
+            .await
+            .expect("series read")
+            .expect("series present")
+            .library_id;
+        // Only the third has a file: the second is a gap in the collection.
+        a_file_behind(&database, episodes[0], library).await;
+        a_file_behind(&database, episodes[2], library).await;
+
+        database
+            .mark_watched(user_id, episodes[0], true)
+            .await
+            .expect("marked");
+
+        let waiting = database.up_next(user_id, None, 10).await.expect("read");
+        assert_eq!(
+            waiting[0].card.id, episodes[2],
+            "this ends in a button that has to play something"
+        );
+    }
+
+    #[tokio::test]
+    async fn neither_row_reaches_past_the_libraries_an_account_was_granted() {
+        let (database, user_id, series, _, episodes) = one_series().await;
+        let library = database
+            .work(series)
+            .await
+            .expect("series read")
+            .expect("series present")
+            .library_id;
+        for episode in &episodes {
+            a_file_behind(&database, *episode, library).await;
+        }
+        database
+            .mark_watched(user_id, episodes[0], true)
+            .await
+            .expect("marked");
+        database
+            .record_playback_progress(
+                user_id,
+                episodes[2],
+                Millis::new(600_000),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("position recorded");
+
+        let elsewhere = database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-two".to_string(), PathBuf::from("/mnt/two/Films"))],
+            )
+            .await
+            .expect("library created");
+
+        assert!(
+            database
+                .works_to_carry_on(user_id, Some(&[elsewhere.id]), 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "progress outlives a grant, so the row has to be kept inside it"
+        );
+        assert!(
+            database
+                .up_next(user_id, Some(&[elsewhere.id]), 10)
+                .await
+                .expect("read")
+                .is_empty()
+        );
+        assert!(
+            database
+                .works_to_carry_on(user_id, Some(&[]), 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "an account granted nothing reads nothing"
+        );
+        assert!(
+            !database
+                .works_to_carry_on(user_id, Some(&[library]), 10)
+                .await
+                .expect("read")
+                .is_empty(),
+            "and the library it was granted still answers"
+        );
+    }
+
     #[tokio::test]
     async fn marking_a_film_watched_by_hand_outlasts_what_a_player_says_next() {
         let (database, user_id, work_id, _) = one_film().await;
@@ -833,7 +1182,7 @@ mod tests {
         // remembering the title and hunting it down in the whole library.
         let (database, user_id, work_id, _) = one_film().await;
         assert!(database
-            .works_to_carry_on(user_id, 20)
+            .works_to_carry_on(user_id, None, 20)
             .await
             .expect("read")
             .is_empty());
@@ -849,7 +1198,7 @@ mod tests {
             .await
             .expect("recorded");
 
-        let carrying_on = database.works_to_carry_on(user_id, 20).await.expect("read");
+        let carrying_on = database.works_to_carry_on(user_id, None, 20).await.expect("read");
         assert_eq!(carrying_on.len(), 1);
         assert_eq!(carrying_on[0].card.id, work_id);
         assert_eq!(carrying_on[0].card.title, "Quiet Harbour");
@@ -871,7 +1220,7 @@ mod tests {
             .await
             .expect("recorded");
         assert!(database
-            .works_to_carry_on(user_id, 20)
+            .works_to_carry_on(user_id, None, 20)
             .await
             .expect("read")
             .is_empty());
@@ -907,7 +1256,7 @@ mod tests {
             .await
             .expect("recorded");
 
-        let carrying_on = database.works_to_carry_on(user_id, 20).await.expect("read");
+        let carrying_on = database.works_to_carry_on(user_id, None, 20).await.expect("read");
         assert_eq!(
             carrying_on
                 .iter()

@@ -147,6 +147,9 @@ pub struct BrowseRequest {
     pub search: Option<String>,
     /// Only the works nobody has managed to identify.
     pub unidentified_only: bool,
+    /// Only the works this viewer marked. Needs a viewer, and answers nothing
+    /// without one: a favourite belongs to somebody or it is not one.
+    pub favourites_only: bool,
     /// Who is looking, when somebody is. Named, the page comes back with what
     /// this account has made of each card: where they are in it, whether they
     /// marked it, what is left of a series. Absent, the cards carry the work's
@@ -172,6 +175,28 @@ pub enum Initial {
 /// What the bucket for everything else is written as, in an address and on a
 /// button alike.
 const OTHER_INITIAL: &str = "#";
+
+/// The clause that keeps a read inside the libraries an account was granted.
+///
+/// Three answers, and they are not the same. An account that sees every
+/// library gets no clause at all, which is what makes it cost nothing. An
+/// account granted some gets a row of question marks to bind its libraries
+/// into. An account granted none reads nothing, and answers nothing here
+/// rather than an empty list of question marks, which is not something any
+/// engine would run.
+///
+/// Written once because every row of the home page asks it, and a row that
+/// forgot to would show an account a film from a library it was never given.
+pub(crate) fn kept_inside(within: Option<&[LibraryId]>, column: &str) -> Option<String> {
+    match within {
+        None => Some(String::new()),
+        Some([]) => None,
+        Some(granted) => Some(format!(
+            " AND {column} IN ({})",
+            vec!["?"; granted.len()].join(", ")
+        )),
+    }
+}
 
 impl Initial {
     /// Reads one from what a client sent, refusing anything else.
@@ -226,6 +251,7 @@ impl Default for BrowseRequest {
             decade: None,
             search: None,
             unidentified_only: false,
+            favourites_only: false,
             viewer: None,
         }
     }
@@ -325,22 +351,15 @@ impl Database {
         if request.library_id.is_some() {
             sql.push_str(" AND w.library_id = ?");
         }
-        // An account granted nothing reads nothing, and says so here rather
-        // than by way of a list of no question marks, which is not a
-        // statement anything would run.
-        if let Some(within) = &request.within {
-            if within.is_empty() {
-                return Ok(WorkPage {
-                    cards: Vec::new(),
-                    next: None,
-                });
-            }
-            // The only thing assembled is a row of question marks, one per
-            // library this account was granted.
-            sql.push_str(" AND w.library_id IN (");
-            sql.push_str(&vec!["?"; within.len()].join(", "));
-            sql.push(')');
-        }
+        // An account granted nothing reads nothing, and says so by answering
+        // an empty page rather than by running a statement that cannot match.
+        let Some(inside) = kept_inside(request.within.as_deref(), "w.library_id") else {
+            return Ok(WorkPage {
+                cards: Vec::new(),
+                next: None,
+            });
+        };
+        sql.push_str(&inside);
         if request.genre.is_some() {
             sql.push_str(" AND g.name = ? COLLATE NOCASE");
         }
@@ -356,6 +375,15 @@ impl Database {
         }
         if request.unidentified_only {
             sql.push_str(" AND w.identification IN ('pending', 'unidentified')");
+        }
+        // Asked as a question about the work rather than joined onto it, so
+        // its place among the bound values is the plain one: a join would sit
+        // before the where clause in the text and shift every value after it.
+        if request.favourites_only {
+            sql.push_str(
+                " AND EXISTS (SELECT 1 FROM favorites fav
+                               WHERE fav.work_id = w.id AND fav.user_id = ?)",
+            );
         }
         match request.initial {
             Some(Initial::Letter(_)) => {
@@ -411,6 +439,13 @@ impl Database {
         }
         if let Some(search) = &request.search {
             query = query.bind(format!("%{}%", escape_for_like(search)));
+        }
+        // Bound where it sits in the statement, between the search and the
+        // letter. A favourite nobody owns is nobody's, so a request asking for
+        // them without naming a viewer asks about an account that is not
+        // there, which is how it comes back empty.
+        if request.favourites_only {
+            query = query.bind(request.viewer.map(|viewer| viewer.to_db_string()));
         }
         if let Some((from, to)) = request.initial.and_then(Initial::range) {
             query = query.bind(from).bind(to);
@@ -998,6 +1033,55 @@ mod tests {
             state.source_id,
             Some(biggest),
             "a play button on a card means the biggest copy, like every other"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_favourites_are_a_narrowing_of_the_grid_like_any_other() {
+        let (database, films) =
+            library_of(&[("Quiet Harbour", 2019, 7.4), ("Amber Field", 2021, 8.1)]).await;
+        let who = somebody(&database, "vera").await;
+        let other = somebody(&database, "mattis").await;
+        let liked = grid_of(&database, films, who).await[1].id;
+        database
+            .set_favourite(who, liked, true)
+            .await
+            .expect("favourite set");
+
+        let only_liked = |viewer| BrowseRequest {
+            library_id: Some(films),
+            favourites_only: true,
+            viewer: Some(viewer),
+            ..Default::default()
+        };
+
+        let mine = database
+            .browse_works(&only_liked(who))
+            .await
+            .expect("grid read");
+        assert_eq!(mine.cards.len(), 1);
+        assert_eq!(mine.cards[0].id, liked);
+
+        let theirs = database
+            .browse_works(&only_liked(other))
+            .await
+            .expect("grid read");
+        assert!(
+            theirs.cards.is_empty(),
+            "a favourite belongs to somebody or it is not one"
+        );
+
+        let nobody = database
+            .browse_works(&BrowseRequest {
+                library_id: Some(films),
+                favourites_only: true,
+                ..Default::default()
+            })
+            .await
+            .expect("grid read");
+        assert!(
+            nobody.cards.is_empty(),
+            "asked without a viewer, it asks about an account that is not there"
         );
     }
 
