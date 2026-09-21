@@ -265,10 +265,20 @@ a {
   text-decoration: none;
 }
 
+/* The padding is taken off along with the rest.
+ *
+ * A button the machine has not been told about keeps a padding of one pixel
+ * by six of its own, and every round icon button here sets a width and a
+ * height instead: the content box then comes out narrower than the icon in
+ * it, the icon overflows, and centring pushes the overflow to one side. That
+ * is what made the chevron in the banner sit off to the right of its disc,
+ * by a pixel and a half. Every button in this interface says what its own
+ * box is, so there is nothing left for a default to help with. */
 button {
   font: inherit;
   color: inherit;
   border: none;
+  padding: 0;
   background: none;
   cursor: pointer;
 }
