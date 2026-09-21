@@ -239,8 +239,14 @@ function wording(error: unknown): string {
 
 /** Everything the player is handed to draw itself and to be driven by. */
 export interface Playback {
-  /** The element the film plays in. Put on the one the player draws. */
-  video: React.RefObject<HTMLVideoElement>;
+  /** The element the film plays in. Put on the one the player draws.
+   *
+   *  Empty until React has drawn it, which the type now says out loud: a
+   *  holder made with nothing in it answers with nothing until the element
+   *  exists, and React only started admitting that in its nineteenth
+   *  version. Nothing here changes, every reader already looked before
+   *  touching it. */
+  video: React.RefObject<HTMLVideoElement | null>;
   /** What the server decided, once it has answered. */
   plan: PlaybackPlan | null;
   /** The session a rebuilt film is fed from, when there is one. */
