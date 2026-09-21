@@ -65,65 +65,42 @@ impl Database {
         password_hash: Option<&str>,
         permissions: &Permissions,
     ) -> Result<User> {
-        let id = UserId::new();
-        let created_at = now();
-        let preferences = Preferences::default();
+        let mut transaction = self.begin().await?;
+        let made = write_an_account(&mut transaction, name, password_hash, permissions).await?;
+        transaction.commit().await?;
+        Ok(made)
+    }
 
+    /// Creates the very first account of a server, and nothing if there is one.
+    ///
+    /// The looking and the writing inside one transaction, on the one
+    /// connection this database writes through. Two people reaching a brand
+    /// new server in the same breath would otherwise both find it empty and
+    /// both make themselves its administrator; the second now waits for the
+    /// first, and then finds an account.
+    pub async fn create_the_first_user(
+        &self,
+        name: &str,
+        password_hash: &str,
+    ) -> Result<Option<User>> {
         let mut transaction = self.begin().await?;
 
-        sqlx::query(
-            "INSERT INTO users (id, name, password_hash, is_administrator, sees_every_library,
-                                max_age_rating,
-                                may_download, may_delete, may_delete_from_disk, max_sessions, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(id.to_db_string())
-        .bind(name)
-        .bind(password_hash)
-        .bind(bool_to_int(permissions.is_administrator))
-        .bind(bool_to_int(permissions.sees_every_library))
-        .bind(permissions.max_age_rating)
-        .bind(bool_to_int(permissions.may_download))
-        .bind(bool_to_int(permissions.may_delete))
-        .bind(bool_to_int(permissions.may_delete_from_disk))
-        .bind(permissions.max_sessions)
-        .bind(timestamp_to_text(created_at))
-        .execute(&mut *transaction)
-        .await?;
-
-        sqlx::query(
-            "INSERT INTO user_preferences (user_id, interface_language, theme_mode, accent_color,
-                                           volume, downmix_method, downmix_gain)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(id.to_db_string())
-        .bind(&preferences.interface_language)
-        .bind(preferences.theme_mode.as_str())
-        .bind(&preferences.accent_color)
-        .bind(preferences.volume)
-        .bind(preferences.downmix_method.as_str())
-        .bind(preferences.downmix_gain)
-        .execute(&mut *transaction)
-        .await?;
-
-        for library in &permissions.allowed_libraries {
-            sqlx::query("INSERT INTO user_library_access (user_id, library_id) VALUES (?, ?)")
-                .bind(id.to_db_string())
-                .bind(library.to_db_string())
-                .execute(&mut *transaction)
-                .await?;
+        let (already,): (i64,) = sqlx::query_as("SELECT count(*) FROM users")
+            .fetch_one(&mut *transaction)
+            .await?;
+        if already > 0 {
+            return Ok(None);
         }
 
+        let made = write_an_account(
+            &mut transaction,
+            name,
+            Some(password_hash),
+            &Permissions::administrator(),
+        )
+        .await?;
         transaction.commit().await?;
-
-        Ok(User {
-            id,
-            name: name.to_string(),
-            avatar_path: None,
-            permissions: permissions.clone(),
-            preferences,
-            created_at,
-        })
+        Ok(Some(made))
     }
 
     /// Number of accounts, used to decide whether the setup wizard still has
@@ -305,6 +282,73 @@ impl Database {
     }
 }
 
+/// Writes an account, its preferences and its grants, inside one transaction.
+///
+/// Shared by the two that make one, which differ only in what they look at
+/// before writing.
+async fn write_an_account(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    name: &str,
+    password_hash: Option<&str>,
+    permissions: &Permissions,
+) -> Result<User> {
+    let id = UserId::new();
+    let created_at = now();
+    let preferences = Preferences::default();
+
+    sqlx::query(
+        "INSERT INTO users (id, name, password_hash, is_administrator, sees_every_library,
+                            max_age_rating, may_download, may_delete, may_delete_from_disk,
+                            max_sessions, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(id.to_db_string())
+    .bind(name)
+    .bind(password_hash)
+    .bind(bool_to_int(permissions.is_administrator))
+    .bind(bool_to_int(permissions.sees_every_library))
+    .bind(permissions.max_age_rating)
+    .bind(bool_to_int(permissions.may_download))
+    .bind(bool_to_int(permissions.may_delete))
+    .bind(bool_to_int(permissions.may_delete_from_disk))
+    .bind(permissions.max_sessions)
+    .bind(timestamp_to_text(created_at))
+    .execute(&mut **transaction)
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO user_preferences (user_id, interface_language, theme_mode, accent_color,
+                                       volume, downmix_method, downmix_gain)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(id.to_db_string())
+    .bind(&preferences.interface_language)
+    .bind(preferences.theme_mode.as_str())
+    .bind(&preferences.accent_color)
+    .bind(preferences.volume)
+    .bind(preferences.downmix_method.as_str())
+    .bind(preferences.downmix_gain)
+    .execute(&mut **transaction)
+    .await?;
+
+    for library in &permissions.allowed_libraries {
+        sqlx::query("INSERT INTO user_library_access (user_id, library_id) VALUES (?, ?)")
+            .bind(id.to_db_string())
+            .bind(library.to_db_string())
+            .execute(&mut **transaction)
+            .await?;
+    }
+
+    Ok(User {
+        id,
+        name: name.to_string(),
+        avatar_path: None,
+        permissions: permissions.clone(),
+        preferences,
+        created_at,
+    })
+}
+
 /// Builds a domain account out of a row and its granted libraries.
 ///
 /// A stored value that no longer maps to a known variant falls back to the
@@ -377,6 +421,30 @@ mod tests {
             .await
             .expect("account created");
         assert_eq!(database.user_count().await.expect("counted"), 2);
+    }
+
+    #[tokio::test]
+    async fn only_one_first_account_is_ever_made() {
+        let database = database().await;
+
+        let first = database
+            .create_the_first_user("victor", "a stored form")
+            .await
+            .expect("asked")
+            .expect("a brand new server had none");
+        assert!(first.permissions.is_administrator);
+
+        // The looking and the writing happen together, so a second one asking
+        // finds an account rather than an empty server.
+        assert!(
+            database
+                .create_the_first_user("somebody else", "another stored form")
+                .await
+                .expect("asked")
+                .is_none(),
+            "a server is set up once"
+        );
+        assert_eq!(database.user_count().await.expect("counted"), 1);
     }
 
     #[tokio::test]
