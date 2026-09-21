@@ -61,7 +61,7 @@ pub mod settings {
 /// Re-exported for the same reason as the rest: the layer above asks this
 /// crate for a provider and never reaches past it for the trait it satisfies.
 pub mod metadata {
-    pub use melyxar_metadata::{Candidate, MetadataProvider};
+    pub use melyxar_metadata::{Candidate, MetadataProvider, OfferedPicture, PictureKind};
 }
 
 /// An ordinary account, for the tests that are about something else.

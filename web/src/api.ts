@@ -108,6 +108,35 @@ export interface SearchCriteria {
   providerId?: string;
 }
 
+/** A kind of picture a work wears. The three the interface draws, and the
+ *  three the server prepares. */
+export type PictureKind = "poster" | "backdrop" | "logo";
+
+/** One picture the work wears now. */
+export interface HeldPicture {
+  kind: PictureKind;
+  url: string;
+  width: number | null;
+  height: number | null;
+  /** Chosen by hand, which means no later run replaces it. */
+  by_hand: boolean;
+}
+
+/** One picture the provider holds, offered to be chosen. */
+export interface OfferedPicture {
+  kind: PictureKind;
+  /** What the provider calls it, which is what says which one was chosen. */
+  path: string;
+  /** Where to show it from: the provider's own address, so choosing among
+      thirty of them costs this server nothing. */
+  url: string;
+  width: number | null;
+  height: number | null;
+  language: string | null;
+  vote_average: number;
+  vote_count: number;
+}
+
 export type IdentificationNote =
   | "no_match"
   | "provider_unreachable"
@@ -1155,6 +1184,17 @@ export const api = {
       external_id: externalId,
       replace_pictures: replacePictures,
     }),
+  /* The pictures a work wears, what the provider offers instead, and saying
+     which one it is to wear. A picture chosen or taken off by hand is
+     remembered as a choice and no later run undoes it. */
+  heldPictures: (work: string, signal?: AbortSignal) =>
+    get<HeldPicture[]>(`/api/v1/works/${work}/pictures`, signal),
+  offeredPictures: (work: string, signal?: AbortSignal) =>
+    get<OfferedPicture[]>(`/api/v1/works/${work}/pictures/offered`, signal),
+  choosePicture: (work: string, kind: PictureKind, path: string) =>
+    put<{ changed: boolean }>(`/api/v1/works/${work}/pictures/${kind}`, { path }),
+  forgetPicture: (work: string, kind: PictureKind) =>
+    remove<{ changed: boolean }>(`/api/v1/works/${work}/pictures/${kind}`),
   /* When two copies on one film turn out not to be the same film at all. */
   detachCopy: (copy: string) =>
     post<{ work_id: string }>(`/api/v1/copies/${copy}/detach`),

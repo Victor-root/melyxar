@@ -3312,3 +3312,168 @@ button.seen-mark:not(.seen-mark-on):hover {
     animation: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+ * The pictures a work wears
+ * ----------------------------------------------------------------------- */
+
+/* One tile per kind, all of one height: a poster is half again as tall as a
+   wide picture, and tiles shaped after what they hold left a row of ragged
+   columns with the words of one at the height of the picture of the next.
+   Each picture is shown whole inside its tile instead, which is what judging
+   one asks for anyway. */
+.pictures-held {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--gap-wide);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pictures-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+}
+
+.pictures-frame {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.pictures-tile .pictures-frame {
+  height: 200px;
+  padding: var(--gap-tight);
+}
+
+.pictures-tile .pictures-frame img {
+  object-fit: contain;
+}
+
+.pictures-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A drawn title is a shape on nothing, so it is shown whole rather than
+   filled to the frame: cropping one cuts the word in half. */
+.pictures-tile-logo .pictures-frame img,
+.pictures-offered-logo .pictures-frame img {
+  object-fit: contain;
+  padding: var(--gap);
+}
+
+.pictures-none {
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.pictures-what {
+  display: flex;
+  flex-direction: column;
+}
+
+.pictures-kind {
+  font-weight: 600;
+}
+
+.pictures-size {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+/* The language written on a picture, where words are written on it: it is
+   what tells two title images apart. */
+.pictures-tongue {
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.pictures-doing {
+  display: flex;
+  gap: var(--gap-tight);
+}
+
+.pictures-act {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+  transition: border-color var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.pictures-act:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.pictures-act:disabled {
+  opacity: 0.5;
+}
+
+.pictures-heading {
+  margin: 0 0 var(--gap);
+  font-size: 19px;
+  font-weight: 650;
+}
+
+/* What the provider offers of one kind, largest first. Wide pictures need
+   fewer and larger tiles than posters do. */
+.pictures-offered {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--gap);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pictures-offered-backdrop,
+.pictures-offered-logo {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.pictures-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  transition: transform var(--quick) var(--ease);
+}
+
+.pictures-choice:hover:not(:disabled) {
+  transform: scale(1.035);
+}
+
+.pictures-choice:hover:not(:disabled) .pictures-frame {
+  border-color: var(--accent);
+}
+
+.pictures-choice:disabled {
+  opacity: 0.5;
+}
+
+.pictures-offered .pictures-frame {
+  aspect-ratio: 2 / 3;
+}
+
+.pictures-offered-backdrop .pictures-frame,
+.pictures-offered-logo .pictures-frame {
+  aspect-ratio: 16 / 9;
+}

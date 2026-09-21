@@ -12,7 +12,7 @@ use serde::Deserialize;
 
 use crate::provider::{
     Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, MetadataProvider,
-    ProviderError, Result, SeasonDetails, Trailer,
+    OfferedPicture, PictureKind, ProviderError, Result, SeasonDetails, Trailer,
 };
 
 const BASE_URL: &str = "https://api.themoviedb.org/3";
@@ -275,6 +275,43 @@ impl MetadataProvider for TmdbProvider {
         Ok(bytes.to_vec())
     }
 
+    async fn pictures(
+        &self,
+        catalogue: Catalogue,
+        external_id: &str,
+        language: &str,
+    ) -> Result<Vec<OfferedPicture>> {
+        let held: RawImages = self
+            .get(
+                &format!("/{}/{external_id}/images", road_of(catalogue)),
+                &[("include_image_language", image_languages(language))],
+            )
+            .await?;
+
+        let mut offered = Vec::new();
+        for (kind, set) in [
+            (PictureKind::Poster, held.posters),
+            (PictureKind::Backdrop, held.backdrops),
+            (PictureKind::Logo, held.logos),
+        ] {
+            for picture in set {
+                let Some(path) = picture.file_path.filter(|path| is_readable_picture(path)) else {
+                    continue;
+                };
+                offered.push(OfferedPicture {
+                    kind,
+                    path,
+                    width: picture.width,
+                    height: picture.height,
+                    language: picture.iso_639_1.filter(|tongue| !tongue.is_empty()),
+                    vote_average: picture.vote_average,
+                    vote_count: picture.vote_count,
+                });
+            }
+        }
+        Ok(offered)
+    }
+
     async fn by_imdb_id(&self, imdb_id: &str, language: &str) -> Result<Option<Candidate>> {
         let found: FindResponse = self
             .get(
@@ -423,6 +460,10 @@ struct RawImages {
     logos: Vec<RawImage>,
     #[serde(default)]
     backdrops: Vec<RawImage>,
+    /// Read only when the whole set is asked for, to be chosen among by hand.
+    /// What a work is described with takes the one the provider puts forward.
+    #[serde(default)]
+    posters: Vec<RawImage>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -439,6 +480,8 @@ struct RawImage {
     /// ones are looked through rather than taken as offered.
     #[serde(default)]
     width: Option<i64>,
+    #[serde(default)]
+    height: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]

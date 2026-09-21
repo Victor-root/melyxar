@@ -18,6 +18,7 @@ pub mod interface;
 pub mod jobs;
 pub mod libraries;
 pub mod page;
+pub mod pictures;
 pub mod playback;
 pub mod preferences;
 pub mod routes;

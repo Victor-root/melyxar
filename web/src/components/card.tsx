@@ -26,6 +26,7 @@ import { useSettings } from "../settings";
 import { useShownPicture } from "./picture";
 import { CardMenu } from "./cardmenu";
 import { IdentifyDialog } from "./identify";
+import { PicturesDialog } from "./pictures";
 import { SeenMark } from "./seen";
 import { HeartIcon, MoreIcon, PlayIcon } from "../icons";
 
@@ -98,6 +99,7 @@ export function Card({
   /* Held by the card rather than by the menu, which is taken away the moment
      one of its lines is pressed. */
   const [identifying, setIdentifying] = useState(false);
+  const [choosingPictures, setChoosingPictures] = useState(false);
 
   const unknown = card.identification === "unidentified" || card.identification === "pending";
   const seen = marks.seenOf(card);
@@ -246,6 +248,7 @@ export function Card({
           from={menuFrom}
           openedBy={kebab.current}
           onIdentify={() => setIdentifying(true)}
+          onEditImages={() => setChoosingPictures(true)}
           onClose={() => setMenuFrom(null)}
         />
       )}
@@ -258,6 +261,14 @@ export function Card({
           /* The card says what it is from the answer the page was drawn
              from, so the page is read again rather than mended here. */
           onIdentified={() => marks.rowsHaveMoved()}
+        />
+      )}
+
+      {choosingPictures && (
+        <PicturesDialog
+          workId={card.id}
+          onClose={() => setChoosingPictures(false)}
+          onChanged={() => marks.rowsHaveMoved()}
         />
       )}
     </article>
