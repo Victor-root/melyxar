@@ -828,8 +828,8 @@ mod tests {
         // A mode reaches a screen as a choice somebody has to make, and one
         // with no words behind it reaches it as `refresh.what_is_missing`.
         // Both the name and the sentence saying what it costs: these three
-        // differ by hours of work, and Jellyfin's own users have asked for
-        // years what its three actually do.
+        // differ by hours of work, and the users of the servers this one
+        // answers to have asked for years what their three actually do.
         for mode in melyxar_core::refresh::RefreshMode::ALL {
             said_twice(&format!("refresh.{}", mode.as_str()));
             said_twice(&format!("refresh.{}_why", mode.as_str()));

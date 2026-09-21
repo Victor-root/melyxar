@@ -35,9 +35,10 @@
  * read at a glance and change in one edit. And they are the next thing a
  * viewer is going to be given control of, beside which button sits where.
  *
- * The bar and its handle are the figures the maintainer's own Jellyfin theme
- * uses, read off it rather than guessed at: a ten pixel track and a white
- * rounded rectangle for the handle, not a hairline and a dot.
+ * The bar and its handle are the figures the maintainer's own theme on the
+ * server he came from uses, read off it rather than guessed at: a ten pixel
+ * track and a white rounded rectangle for the handle, not a hairline and a
+ * dot.
  */
 :root {
   /* The bar: the track, the handle that rides it, and the marks on it. */

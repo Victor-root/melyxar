@@ -8,8 +8,8 @@
 //! wrong from end to end, and the only answer is to do the lot again.
 //!
 //! Three modes rather than a switch per pass: these are the three questions
-//! anybody actually asks, they are the three Jellyfin offers, and a screen can
-//! word them in a sentence each.
+//! anybody actually asks, they are the three the other servers offer, and a
+//! screen can word them in a sentence each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RefreshMode {

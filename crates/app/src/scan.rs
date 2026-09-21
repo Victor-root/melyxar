@@ -227,8 +227,8 @@ pub async fn start_scan_and_identification(
 /// **After the pages and the pictures, never before.** Each of these goes
 /// through every film from end to end, hours of it on a collection of any
 /// size, and a grid that sits empty for those hours while the posters wait
-/// behind them is the thing everybody complains about. Emby and Jellyfin both
-/// put the pages first for exactly this reason, and so does this.
+/// behind them is the thing everybody complains about. The servers this one
+/// answers to put the pages first for exactly this reason, and so does this.
 ///
 /// Started as jobs of their own rather than carried inside the scan, which is
 /// what lets them be watched and stopped one by one: somebody who wants their
@@ -2398,7 +2398,7 @@ mod tests {
         // posters. Each of the two readings goes through every film from end
         // to end, hours of it on a real collection, so a library that asks for
         // them used to leave the grid blank for those hours and only then
-        // fetch a single page. Emby and Jellyfin both put the pages first.
+        // fetch a single page. The other servers put the pages first.
         //
         // Read off the jobs rather than off a clock: each is written down when
         // it starts, so the order they were written down in is the order they

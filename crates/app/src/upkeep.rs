@@ -12,7 +12,7 @@
 //!
 //! * a library may ask for either of them to be done during its scan, which is
 //!   what a small library on a machine with time to spare wants. Off by
-//!   default, and Jellyfin, which offers the same switch, warns against it on a
+//!   default, and the servers that offer the same switch warn against it on a
 //!   large collection;
 //! * otherwise they run of a night, when nobody is waiting on anything;
 //! * and a button starts either of them now, for somebody who will not wait for
@@ -175,8 +175,8 @@ pub struct WhatIsLeft {
 ///
 /// A reading that has never run and one that ran last night and found nothing
 /// look exactly alike from a count of what is waiting, and the difference is
-/// whether anybody should be worried. Jellyfin puts the same line under each
-/// of its tasks, for the same reason.
+/// whether anybody should be worried. The other servers put the same line
+/// under each of their tasks, for the same reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LastRun {
     pub at: melyxar_core::time::Timestamp,

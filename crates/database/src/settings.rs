@@ -307,7 +307,7 @@ mod tests {
         assert_eq!(
             settings.work.upkeep_at_utc_minutes,
             3 * 60,
-            "three in the morning, the hour Jellyfin settles on for the same work"
+            "three in the morning, the hour the other servers settle on for the same work"
         );
         assert!(settings.show_user_picker);
         assert_eq!(settings.watched_threshold, 0.9);
