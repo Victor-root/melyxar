@@ -62,7 +62,7 @@ export function Door({
   return (
     <main className="door">
       <div className="door-glow" aria-hidden="true" />
-      <DriftingPosters />
+      <DriftingMedia />
 
       <form className="door-card" onSubmit={send}>
         {/* The mark this server wears. A server given one of its own shows
@@ -170,89 +170,318 @@ export function Door({
   );
 }
 
-/**
- * One poster, as the background drifts it.
+/*
+ * What drifts behind the card.
  *
- * Nothing but where it sits, how big it is, how far round it is turned, and
- * how long it takes to rise and fall. The drawing itself is in the
- * stylesheet, because every one of them is drawn the same way.
+ * A row of identical rectangles said nothing: a shape with one line on it is
+ * not a film, it is a box. What a media server holds is films, series,
+ * episodes, records and sound, so that is what is drawn: a poster with a title
+ * on three lines, a sleeve with a disc, an episode card, a reel of film, a
+ * player bar part way through, a note, a waveform, a clapperboard.
+ *
+ * All of it is drawn rather than typed, in the same square-cornered style as
+ * the player's icons, so nine different objects read as one set. The stroke
+ * does not scale with the object: a bar drawn twice the size of a note would
+ * otherwise carry a line twice as heavy, and the set would fall apart.
  */
-interface Drifting {
-  /** Across and down, as a share of the screen. */
+type Shape =
+  | "poster"
+  | "album"
+  | "episode"
+  | "strip"
+  | "badge"
+  | "bar"
+  | "note"
+  | "wave"
+  | "clapper";
+
+/** The drawing of each one, and the square it is drawn in. */
+const DRAWN: Record<Shape, { box: [number, number]; ink: React.ReactNode }> = {
+  /* A film poster: artwork, then a title long enough to be a title. */
+  poster: {
+    box: [60, 90],
+    ink: (
+      <>
+        <rect x="0.9" y="0.9" width="58.2" height="88.2" rx="4.5" />
+        <rect x="6" y="6" width="48" height="52" rx="2.6" />
+        <circle cx="41" cy="19" r="5" />
+        <path
+          d="M6 58 L21 33 L33 49 L41 40 L54 58 Z"
+          fill="currentColor"
+          stroke="none"
+          opacity="0.5"
+        />
+        <g fill="currentColor" stroke="none">
+          <rect x="6" y="66" width="42" height="3" rx="1.5" />
+          <rect x="6" y="74" width="30" height="3" rx="1.5" opacity="0.7" />
+          <rect x="6" y="82" width="19" height="3" rx="1.5" opacity="0.7" />
+        </g>
+      </>
+    ),
+  },
+
+  /* A record sleeve, the disc sitting in it. */
+  album: {
+    box: [64, 64],
+    ink: (
+      <>
+        <rect x="0.9" y="0.9" width="62.2" height="62.2" rx="4.5" />
+        <circle cx="32" cy="27" r="15" />
+        <circle cx="32" cy="27" r="5.4" />
+        <circle cx="32" cy="27" r="1.2" fill="currentColor" stroke="none" />
+        <g fill="currentColor" stroke="none">
+          <rect x="11" y="50" width="30" height="3" rx="1.5" />
+          <rect x="11" y="57" width="18" height="3" rx="1.5" opacity="0.7" />
+        </g>
+      </>
+    ),
+  },
+
+  /* An episode: the wide card, the play mark, the name under it. */
+  episode: {
+    box: [96, 74],
+    ink: (
+      <>
+        <rect x="0.9" y="0.9" width="94.2" height="52.2" rx="4.5" />
+        <circle cx="48" cy="27" r="10.5" />
+        <path d="M44.8 21.8 L54 27 L44.8 32.2 Z" fill="currentColor" stroke="none" />
+        <g fill="currentColor" stroke="none">
+          <rect x="1" y="60" width="56" height="3.2" rx="1.6" />
+          <rect x="1" y="68" width="33" height="3.2" rx="1.6" opacity="0.7" />
+        </g>
+      </>
+    ),
+  },
+
+  /* A length of film, perforated down both edges. */
+  strip: {
+    box: [36, 100],
+    ink: (
+      <>
+        <rect x="0.9" y="0.9" width="34.2" height="98.2" rx="3" />
+        {[6, 18, 30, 42, 54, 66, 78, 90].map((y) => (
+          <g key={y} fill="currentColor" stroke="none" opacity="0.6">
+            <rect x="3.4" y={y} width="4.2" height="5" rx="1.2" />
+            <rect x="28.4" y={y} width="4.2" height="5" rx="1.2" />
+          </g>
+        ))}
+        {[5, 29, 53, 77].map((y) => (
+          <rect key={y} x="10.5" y={y} width="15" height="18" rx="1.6" />
+        ))}
+      </>
+    ),
+  },
+
+  /* The round play mark, on its own. */
+  badge: {
+    box: [48, 48],
+    ink: (
+      <>
+        <circle cx="24" cy="24" r="22.6" />
+        <path d="M19 15.4 L34 24 L19 32.6 Z" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+
+  /* A player bar, a third of the way through something. */
+  bar: {
+    box: [168, 30],
+    ink: (
+      <>
+        <rect x="0.9" y="0.9" width="166.2" height="28.2" rx="14.1" />
+        <path d="M13 9.6 L23 15 L13 20.4 Z" fill="currentColor" stroke="none" />
+        <rect
+          x="32"
+          y="13.8"
+          width="104"
+          height="2.4"
+          rx="1.2"
+          fill="currentColor"
+          stroke="none"
+          opacity="0.4"
+        />
+        <rect
+          x="32"
+          y="13.8"
+          width="44"
+          height="2.4"
+          rx="1.2"
+          fill="currentColor"
+          stroke="none"
+        />
+        <circle cx="76" cy="15" r="4.2" fill="currentColor" stroke="none" />
+        <path
+          d="M145 11.4h3l4-3.4v14l-4-3.4h-3Z"
+          fill="currentColor"
+          stroke="none"
+          opacity="0.8"
+        />
+        <path d="M155.6 11.8a3 3 0 0 1 0 6.4" />
+      </>
+    ),
+  },
+
+  /* Two notes under one beam, the shape sound has had for four hundred
+     years. */
+  note: {
+    box: [40, 48],
+    ink: (
+      <>
+        <ellipse
+          cx="9"
+          cy="38.5"
+          rx="6.2"
+          ry="4.8"
+          transform="rotate(-18 9 38.5)"
+          fill="currentColor"
+          stroke="none"
+        />
+        <ellipse
+          cx="30"
+          cy="33.5"
+          rx="6.2"
+          ry="4.8"
+          transform="rotate(-18 30 33.5)"
+          fill="currentColor"
+          stroke="none"
+        />
+        <path d="M15 38.5V8M36 33.5V3" />
+        <path d="M15 8 L36 3 L36 9.6 L15 14.6 Z" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+
+  /* Sound seen rather than heard. */
+  wave: {
+    box: [96, 40],
+    ink: (
+      <g fill="currentColor" stroke="none">
+        {[10, 22, 34, 16, 28, 38, 24, 12, 30, 20, 34, 14].map((tall, at) => (
+          <rect
+            key={at}
+            x={at * 8.2}
+            y={20 - tall / 2}
+            width="4.2"
+            height={tall}
+            rx="2.1"
+            opacity={0.5 + (tall / 38) * 0.5}
+          />
+        ))}
+      </g>
+    ),
+  },
+
+  /* The board that opens a take. */
+  clapper: {
+    box: [84, 64],
+    ink: (
+      <>
+        <rect x="1.4" y="24" width="81.2" height="38.6" rx="3.4" />
+        <g fill="currentColor" stroke="none">
+          <rect x="11" y="36" width="44" height="3.2" rx="1.6" opacity="0.7" />
+          <rect x="11" y="45" width="27" height="3.2" rx="1.6" opacity="0.5" />
+        </g>
+        <g transform="rotate(-6 42 14)">
+          <rect x="3" y="7" width="78" height="13" rx="2.4" />
+          {[10, 30, 50, 70].map((x) => (
+            <path
+              key={x}
+              d={`M${x} 7 h6 l-5 13 h-6 Z`}
+              fill="currentColor"
+              stroke="none"
+              opacity="0.6"
+            />
+          ))}
+        </g>
+      </>
+    ),
+  },
+};
+
+/** One object, where it sits and how slowly it moves. */
+interface Piece {
+  what: Shape;
   x: string;
   y: string;
-  /** How wide, which is also how near it reads as being. */
+  /** Its width on screen; its height follows from the square it is drawn in. */
   wide: number;
-  turn: string;
-  /** How long one rise and fall takes. */
-  over: string;
-  /** Where in that it starts, so no two of them move together. Negative, so
-   *  none of them is waiting to begin when the screen arrives. */
-  from: string;
-  /** Left out on a narrow screen, where they would sit under the card. */
-  onlyWide?: boolean;
+  turn: number;
+  /** How far it rises before coming back down. */
+  lift: number;
+  /** How long one rise and fall takes, and how far into it this one starts. */
+  over: number;
+  from: number;
+  /** The width the screen has to reach before this one is drawn at all: see
+   *  the stylesheet. Left out, it is drawn as soon as there is a background. */
+  needs?: 900 | 1100;
+  /** The few that carry the accent rather than the faint grey. */
+  accent?: boolean;
 }
 
-/**
- * Where each one sits.
+/*
+ * Where each one goes.
  *
- * Down both sides and never in the middle, which is where the card is: a
- * poster behind the box somebody is typing into is a poster in the way. The
- * four marked as wide only are the ones that fill the gap on a big screen and
- * would land on the card on a small one.
- *
- * Nearer ones are bigger and are drawn a little stronger, further ones smaller
- * and fainter, which is the whole of the depth here and costs nothing.
+ * Two rules hold the whole arrangement together. Nothing sits where the card
+ * does, at any width the background is shown at, which is why each one says
+ * how much screen it needs before it appears at all: a poster behind the box
+ * somebody is typing into is a poster in the way, and the card takes the same
+ * three hundred and eighty pixels whatever is around it, so the narrower the
+ * screen the less there is left at the sides. And no two of the same kind sit
+ * near each other, so the eye reads a shelf of different things rather than a
+ * pattern.
  */
-const POSTERS: Drifting[] = [
-  { x: "7%", y: "12%", wide: 104, turn: "-9deg", over: "13s", from: "-1s" },
-  { x: "4%", y: "52%", wide: 132, turn: "6deg", over: "17s", from: "-6s" },
-  { x: "11%", y: "78%", wide: 88, turn: "-4deg", over: "15s", from: "-3s" },
-  { x: "83%", y: "9%", wide: 96, turn: "8deg", over: "16s", from: "-9s" },
-  { x: "88%", y: "46%", wide: 124, turn: "-7deg", over: "14s", from: "-4s" },
-  { x: "79%", y: "80%", wide: 80, turn: "11deg", over: "18s", from: "-12s" },
-  { x: "22%", y: "24%", wide: 72, turn: "5deg", over: "19s", from: "-7s", onlyWide: true },
-  { x: "19%", y: "68%", wide: 92, turn: "-12deg", over: "12s", from: "-2s", onlyWide: true },
-  { x: "70%", y: "22%", wide: 84, turn: "-6deg", over: "20s", from: "-15s", onlyWide: true },
-  { x: "73%", y: "66%", wide: 68, turn: "9deg", over: "16s", from: "-10s", onlyWide: true },
+const DRIFT: Piece[] = [
+  { what: "poster", x: "1%", y: "13%", wide: 112, turn: -7, lift: -22, over: 15, from: 0 },
+  { what: "album", x: "3%", y: "70%", wide: 92, turn: -5, lift: -18, over: 17, from: -2 },
+  { what: "episode", x: "2%", y: "52%", wide: 170, turn: 4, lift: -15, over: 18, from: -5, needs: 900 },
+  { what: "note", x: "23%", y: "12%", wide: 40, turn: 6, lift: -20, over: 12, from: -7, needs: 900 },
+  { what: "strip", x: "20%", y: "72%", wide: 62, turn: 9, lift: -26, over: 21, from: -9, needs: 900 },
+  { what: "wave", x: "19%", y: "33%", wide: 124, turn: -2, lift: -13, over: 13, from: -3, needs: 1100, accent: true },
+  { what: "badge", x: "26%", y: "51%", wide: 52, turn: 0, lift: -20, over: 15, from: -10, needs: 1100, accent: true },
+
+  { what: "poster", x: "81%", y: "10%", wide: 120, turn: 6, lift: -24, over: 19, from: -11 },
+  { what: "clapper", x: "82%", y: "62%", wide: 96, turn: -8, lift: -18, over: 14, from: -4 },
+  { what: "album", x: "72%", y: "18%", wide: 88, turn: -4, lift: -16, over: 20, from: -8, needs: 1100 },
+  { what: "episode", x: "74%", y: "44%", wide: 150, turn: 5, lift: -22, over: 22, from: -13, needs: 900 },
+  { what: "note", x: "94%", y: "76%", wide: 36, turn: -10, lift: -18, over: 11, from: -1, needs: 900 },
+  { what: "wave", x: "90%", y: "33%", wide: 104, turn: 3, lift: -12, over: 13, from: -5, needs: 1100 },
+  { what: "bar", x: "69%", y: "82%", wide: 236, turn: -3, lift: -15, over: 16, from: -6, needs: 1100 },
 ];
 
-/**
- * Posters drifting behind the door.
- *
- * What this server is for, said without a word, on the one screen that has
- * nothing of the library on it yet.
- *
- * Two things learnt from doing this before and worth not learning again. The
- * movement is a turn and a rise and nothing else: a transform is handed to the
- * card that composes the page and costs nothing per frame, where a shadow or a
- * colour that moves is drawn again every frame. And none of them is given a
- * blur: a blurred thing that moves makes the screen behind it be blurred again
- * sixty times a second, which is how an idle page comes to hold a graphics
- * card at full tilt.
- *
- * They stand still for anybody who asked their system for less movement, which
- * the theme sees to for every animation at once.
- */
-function DriftingPosters() {
+function DriftingMedia() {
   return (
-    <div className="door-posters" aria-hidden="true">
-      {POSTERS.map((poster) => (
-        <span
-          key={`${poster.x} ${poster.y}`}
-          className={`door-poster${poster.onlyWide ? " door-poster-roomy" : ""}`}
-          style={
-            {
-              "--at-x": poster.x,
-              "--at-y": poster.y,
-              "--wide": `${poster.wide}px`,
-              "--turn": poster.turn,
-              "--over": poster.over,
-              "--from": poster.from,
-            } as React.CSSProperties
-          }
-        />
-      ))}
+    <div className="door-media" aria-hidden="true">
+      {DRIFT.map((piece, at) => {
+        const [wide, tall] = DRAWN[piece.what].box;
+        return (
+          <svg
+            key={`${piece.what}-${at}`}
+            className={`door-piece${piece.needs ? ` door-piece-from-${piece.needs}` : ""}${
+              piece.accent ? " door-piece-accent" : ""
+            }`}
+            viewBox={`0 0 ${wide} ${tall}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            focusable="false"
+            style={
+              {
+                "--at-x": piece.x,
+                "--at-y": piece.y,
+                "--wide": `${piece.wide}px`,
+                "--turn": `${piece.turn}deg`,
+                "--lift": `${piece.lift}px`,
+                "--over": `${piece.over}s`,
+                "--from": `${piece.from}s`,
+              } as React.CSSProperties
+            }
+          >
+            {DRAWN[piece.what].ink}
+          </svg>
+        );
+      })}
     </div>
   );
 }
