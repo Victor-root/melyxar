@@ -1032,10 +1032,102 @@
  */
 .band-posters {
   --open: 0;
+  /* Where the posters stand, as a share of the tile's height from its top.
+     Said once because three things have to agree on it: the posters' own
+     feet, the line the reflection is folded about, and where that reflection
+     is cut off. */
+  --ground: 65%;
+
   position: absolute;
   inset: 0;
   z-index: -2;
   pointer-events: none;
+}
+
+/*
+ * The floor the fan stands on.
+ *
+ * The same fan, turned over about the line its feet rest on and faded out as
+ * it falls away, which is what a polished floor does to what stands on it.
+ * Folded rather than drawn again: a second arrangement would be a second
+ * thing to keep in step, and this one cannot drift because it is the first
+ * one seen upside down.
+ *
+ * Cut dead at the fold. Below the fold there is nothing but the corners a
+ * leaning poster dips past its own feet, and turned over those would land
+ * above the fold, as a ghost of a poster over the real one.
+ */
+.band-mirror {
+  transform: scaleY(-1);
+  transform-origin: 50% var(--ground);
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 33%,
+    /* An alpha and not a colour: a mask reads nothing but how opaque each
+       point is, so black here means "keep" rather than "paint black". */
+    rgb(0 0 0 / 62%) var(--ground),
+    transparent var(--ground)
+  );
+  /* A floor is never as bright as what stands on it, and never as sharp. */
+  filter: brightness(0.82) blur(0.4px);
+}
+
+/* A reflection carries neither the shadow a poster casts nor the light it
+   catches: both belong to the thing itself. */
+.band-mirror .band-poster {
+  box-shadow: none;
+}
+
+.band-mirror .band-poster::after {
+  display: none;
+}
+
+/* The air lit behind the fan, which is what gives the middle of the tile
+   somewhere to be. Drawn as one soft pool rather than blurred, since a
+   gradient is already nothing but falloff. */
+.band-halo {
+  position: absolute;
+  z-index: -3;
+  left: 50%;
+  top: 2%;
+  width: 66%;
+  height: 78%;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--accent) calc(30% * var(--band-force)), transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+
+/*
+ * The kind's own mark, run off the top corner.
+ *
+ * Behind the middle of a fan it came out as the ends of a shape poking past
+ * the posters covering it, which reads as something broken. Off a corner,
+ * what shows is one whole quarter of it, and a quarter of a shape that
+ * large reads as a mark rather than as a fragment.
+ */
+.band-ghost {
+  position: absolute;
+  z-index: -4;
+  top: -26%;
+  right: -10%;
+  width: 58%;
+  height: 104%;
+  display: grid;
+  place-items: center;
+  color: color-mix(in srgb, var(--text) 4%, transparent);
+  pointer-events: none;
+}
+
+.band-ghost > svg {
+  width: auto;
+  height: 100%;
+  /* Thinned as it grows: a stroke drawn for a shape of seventeen points is
+     a bar at ten times that. */
+  stroke-width: 0.7;
 }
 
 .band-poster {
@@ -1045,8 +1137,8 @@
      whose lower third has been faded out is a poster with no bottom edge,
      and three of those read as a row of smudges. What is left above is all
      the height a tile of this shape has to give, so the fan takes it. */
-  bottom: 30%;
-  height: 61%;
+  bottom: calc(100% - var(--ground));
+  height: 59%;
   aspect-ratio: 2 / 3;
   border-radius: var(--radius-control);
   overflow: hidden;
@@ -1130,7 +1222,7 @@
 .band-fan-3 > :nth-child(2),
 .band-fan-5 > :nth-child(2) {
   z-index: 2;
-  height: 53%;
+  height: 51%;
   --shift: calc(-84% - 10% * var(--open));
   --lean: calc(-7deg - 2deg * var(--open));
 }
@@ -1138,7 +1230,7 @@
 .band-fan-3 > :nth-child(3),
 .band-fan-5 > :nth-child(3) {
   z-index: 2;
-  height: 53%;
+  height: 51%;
   --shift: calc(84% + 10% * var(--open));
   --lean: calc(7deg + 2deg * var(--open));
 }
@@ -1148,14 +1240,14 @@
    and left a hole at either end. */
 .band-fan-5 > :nth-child(4) {
   z-index: 1;
-  height: 45%;
+  height: 43%;
   --shift: calc(-168% - 16% * var(--open));
   --lean: calc(-14deg - 3deg * var(--open));
 }
 
 .band-fan-5 > :nth-child(5) {
   z-index: 1;
-  height: 45%;
+  height: 43%;
   --shift: calc(168% + 16% * var(--open));
   --lean: calc(14deg + 3deg * var(--open));
 }
@@ -1165,7 +1257,7 @@
 .band-fan-2 > :nth-child(1),
 .band-fan-4 > :nth-child(1) {
   z-index: 3;
-  height: 57%;
+  height: 55%;
   --shift: calc(45% + 7% * var(--open));
   --lean: calc(5deg + 2deg * var(--open));
 }
@@ -1173,21 +1265,21 @@
 .band-fan-2 > :nth-child(2),
 .band-fan-4 > :nth-child(2) {
   z-index: 2;
-  height: 57%;
+  height: 55%;
   --shift: calc(-45% - 7% * var(--open));
   --lean: calc(-5deg - 2deg * var(--open));
 }
 
 .band-fan-4 > :nth-child(3) {
   z-index: 1;
-  height: 47%;
+  height: 45%;
   --shift: calc(132% + 14% * var(--open));
   --lean: calc(13deg + 3deg * var(--open));
 }
 
 .band-fan-4 > :nth-child(4) {
   z-index: 1;
-  height: 47%;
+  height: 45%;
   --shift: calc(-132% - 14% * var(--open));
   --lean: calc(-13deg - 3deg * var(--open));
 }
@@ -1195,7 +1287,7 @@
 /* One: dead centre and a shade taller, since there is nothing beside it to
    be measured against. */
 .band-fan-1 > :nth-child(1) {
-  height: 65%;
+  height: 63%;
   --lift: calc(-4% * var(--open));
   box-shadow:
     var(--shadow-raised),

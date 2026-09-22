@@ -112,20 +112,24 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
           under it, and a screen reader reading out five film titles nobody
           asked for is five titles in the way of the one word that matters.
 
-          What fills the air the fan leaves at the corners is the painting
-          behind it, which the stylesheet does on the tile itself. The kind's
-          own mark was tried there too, drawn large and faint behind the
-          posters, and it is not here because of what it looked like: a fan
-          covers the middle of it and leaves the ends of the shape poking
-          out, which reads as something broken rather than as a watermark. It
-          stands only where it can stand whole, on a library with nothing in
-          it yet, where it is the whole of what the tile has to show. */}
+          The fan is drawn twice: once standing, once upside down under its
+          own feet and faded out, which is the floor it stands on. One
+          component for both, so the two can never fall out of step, and the
+          same pictures either way, so the floor costs nothing to fetch. */}
       {fan.length > 0 ? (
-        <span className={`band-posters band-fan-${fan.length}`} aria-hidden="true">
-          {fan.map((card) => (
-            <FanPoster key={card.id} card={card} />
-          ))}
-        </span>
+        <>
+          {/* The kind's mark, run off the top corner rather than stood
+              behind the middle of the fan, where its ends poked past the
+              posters covering it and read as something broken. A library
+              with nothing in it gets the centred one below instead, which
+              is whole, so the two never appear together. */}
+          <span className="band-ghost" aria-hidden="true">
+            <KindIcon kind={shelf.kind} />
+          </span>
+          <span className="band-halo" aria-hidden="true" />
+          <Fan fan={fan} mirror />
+          <Fan fan={fan} />
+        </>
       ) : (
         <span className="band-mark" aria-hidden="true">
           <KindIcon kind={shelf.kind} />
@@ -147,6 +151,27 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
         <ChevronRightIcon size={18} />
       </span>
     </Link>
+  );
+}
+
+/**
+ * The fan itself, standing or reflected.
+ *
+ * The same component both times so the floor can never drift from what is
+ * standing on it: the reflection is not a second arrangement but the same
+ * one turned over, which the stylesheet does with a flip about the line the
+ * posters stand on. What the mirror adds is only that flip and the fade.
+ */
+function Fan({ fan, mirror }: { fan: Card[]; mirror?: boolean }) {
+  return (
+    <span
+      className={`band-posters band-fan-${fan.length}${mirror ? " band-mirror" : ""}`}
+      aria-hidden="true"
+    >
+      {fan.map((card) => (
+        <FanPoster key={card.id} card={card} />
+      ))}
+    </span>
   );
 }
 
