@@ -319,6 +319,7 @@ async fn works(
         decade: params.decade,
         search: params.search.filter(|value| !value.trim().is_empty()),
         unidentified_only: params.unidentified,
+        identified_only: false,
         favourites_only: params.favourites,
         library_kind: params.kind,
         // A letter nobody could mean is refused rather than quietly ignored:
@@ -523,10 +524,12 @@ struct UpNextView {
 struct ShelfView {
     /// movies, series, anime or shows.
     kind: &'static str,
-    /// The newest works of that kind. The row of them further down the home
-    /// page is drawn from these, and so is the fan of posters on the tile
-    /// that leads to the kind: one answer, asked for once.
+    /// The newest works of that kind, for the row of them further down the
+    /// home page.
     cards: Vec<CardView>,
+    /// The newest of them somebody named, for the fan of posters on the tile
+    /// that leads to the kind.
+    fan: Vec<CardView>,
 }
 
 /// One film somebody started and has not finished.
@@ -610,6 +613,7 @@ async fn home(
             .map(|shelf| ShelfView {
                 kind: shelf.kind.as_str(),
                 cards: shelf.cards.iter().map(card_view).collect(),
+                fan: shelf.fan.iter().map(card_view).collect(),
             })
             .collect(),
         works: page.works,

@@ -353,10 +353,10 @@ export interface Home {
     episode_number: number | null;
   })[];
   recently_added: Card[];
-  /** One row per kind of library this server really holds. The row of that
-      kind is drawn from these, and so is the fan of posters on the tile that
-      leads to it. */
-  shelves: { kind: LibraryKind; cards: Card[] }[];
+  /** One row per kind of library this server really holds: its newest
+      works for the row of that kind, and the newest of them somebody named
+      for the fan of posters on the tile that leads to it. */
+  shelves: { kind: LibraryKind; cards: Card[]; fan: Card[] }[];
   works: number;
   awaiting_identification: number;
 }
