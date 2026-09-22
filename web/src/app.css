@@ -926,26 +926,34 @@
   margin-bottom: var(--gap-section);
 }
 
-/* Shaped like the picture it holds rather than like a strip of one. A wide
-   picture is sixteen by nine and the tile was four by one, so all it could
-   ever show was a band cut out of the middle of it. Given the picture's own
-   shape, nothing is cut at all. */
+/* Shaped for what it holds: a few posters standing side by side, which want
+   height a strip of sixteen by nine does not have. It used to be cut to the
+   shape of the one wide still behind it, and that still is gone.
+
+   The panel behind them is the deep surface with a breath of the newest
+   work's own colour in it, so two ways in are not the same dark rectangle
+   twice, and so a poster is read against a ground rather than against
+   another poster's neighbour. */
 .band-tile {
   position: relative;
   display: flex;
   align-items: flex-end;
-  flex: 1 1 200px;
+  flex: 1 1 280px;
   /* A server of films alone has one way in, and one tile stretched across a
      whole page reads as a banner rather than as a way in. The bound grows
      with the screen, so a large monitor gets larger ways in rather than the
      same small ones with a field of background beside them. */
-  max-width: clamp(220px, 20vw, 340px);
-  aspect-ratio: 16 / 9;
+  max-width: clamp(260px, 26vw, 420px);
+  aspect-ratio: 7 / 5;
   padding: var(--gap);
   border-radius: var(--radius-card);
   overflow: hidden;
   isolation: isolate;
-  background: var(--card-color);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--tile-color) 24%, var(--surface-raised)),
+    var(--surface-deep)
+  );
   color: var(--text);
   text-decoration: none;
   /* The air just off the rim below, one layer of it: these stand several to
@@ -973,13 +981,144 @@
     0 0 0 4px var(--accent-glow);
 }
 
-.band-picture {
+/*
+ * The fan of posters a way in is made of.
+ *
+ * Laid out against the tile's own height rather than in points, so one set
+ * of rules draws a tile at any width a screen gives it and nothing has to be
+ * said twice for a smaller one.
+ *
+ * Each poster's place is three numbers it sets for itself, and the transform
+ * that reads them is written once. How far the fan is opened is one more,
+ * held by the group and turned up under the pointer: the geometry of each
+ * slot is therefore declared in one place rather than in a second copy for
+ * the hover.
+ *
+ * How many posters there are is a class on the group, so the day the mobile
+ * pass wants two instead of three it asks for two and the rules for two are
+ * already here.
+ */
+.band-posters {
+  --open: 0;
   position: absolute;
   inset: 0;
   z-index: -2;
+  pointer-events: none;
+}
+
+.band-poster {
+  position: absolute;
+  left: 50%;
+  /* Standing clear of the wash along the foot rather than in it: a poster
+     whose lower third has been faded out is a poster with no bottom edge,
+     and three of those read as a row of smudges. */
+  bottom: 28%;
+  height: 60%;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--card-color);
+  /* Pivoted at the foot, so a leaning poster stands on the same ground as
+     the one beside it rather than tipping through it. */
+  transform-origin: bottom center;
+  transform:
+    translateX(calc(-50% + var(--shift, 0%)))
+    translateY(var(--lift, 0%))
+    rotate(var(--lean, 0deg));
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent);
+  transition: transform var(--calm) var(--ease);
+}
+
+.band-poster img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* The letter a work begins with, where its poster would be: the same answer
+   every card in this interface gives to a work with no picture. */
+.band-poster-initial {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text) 40%, transparent);
+}
+
+/* Three: the newest in the middle and forward, the next two leaning away
+   either side and passing behind it. */
+.band-fan-3 > :nth-child(1) {
+  z-index: 2;
+  --lift: calc(-4% * var(--open));
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent),
+    0 0 26px -8px var(--accent-glow);
+}
+
+.band-fan-3 > :nth-child(2) {
+  z-index: 1;
+  height: 52%;
+  --shift: calc(-84% - 10% * var(--open));
+  --lean: calc(-7deg - 2deg * var(--open));
+}
+
+.band-fan-3 > :nth-child(3) {
+  z-index: 1;
+  height: 52%;
+  --shift: calc(84% + 10% * var(--open));
+  --lean: calc(7deg + 2deg * var(--open));
+}
+
+/* Two: a pair leaning apart from the middle, of one height so that the pair
+   sits square in the tile, with the newer one in front where the two meet. A
+   fan of two built out of the fan of three leans them both the same way and
+   lands them off to one side, which reads as a fan that lost a poster. */
+.band-fan-2 > :nth-child(1) {
+  z-index: 2;
+  height: 56%;
+  --shift: calc(45% + 7% * var(--open));
+  --lean: calc(5deg + 2deg * var(--open));
+}
+
+.band-fan-2 > :nth-child(2) {
+  z-index: 1;
+  height: 56%;
+  --shift: calc(-45% - 7% * var(--open));
+  --lean: calc(-5deg - 2deg * var(--open));
+}
+
+/* One: dead centre and a shade taller, since there is nothing beside it to
+   be measured against. */
+.band-fan-1 > :nth-child(1) {
+  height: 64%;
+  --lift: calc(-4% * var(--open));
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent),
+    0 0 26px -8px var(--accent-glow);
+}
+
+.band-tile:hover .band-posters,
+.band-tile:focus-visible .band-posters {
+  --open: 1;
+}
+
+/* What a library with nothing in it yet shows in place of the fan: its own
+   mark, faint enough to be a watermark rather than a thing to press, stood
+   where the posters will stand once there are any. */
+.band-empty {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  display: grid;
+  place-items: center;
+  padding-bottom: 16%;
+  color: color-mix(in srgb, var(--text) 11%, transparent);
 }
 
 /*
@@ -1025,8 +1164,9 @@
   opacity: 0;
 }
 
-/* The words have to be readable over a still nobody chose. Darkest along the
-   foot where they sit, clearing upwards so the picture is still a picture. */
+/* The ground the fan stands on, and what keeps the words off it. Solid along
+   the foot where they sit and gone by the time it reaches the posters, so
+   the poster nearest the words is grounded rather than cut in half. */
 .band-tile::after {
   content: "";
   position: absolute;
@@ -1034,9 +1174,10 @@
   z-index: -1;
   background: linear-gradient(
     to top,
-    color-mix(in srgb, var(--surface-deep) 92%, transparent),
-    color-mix(in srgb, var(--surface-deep) 55%, transparent) 45%,
-    color-mix(in srgb, var(--surface-deep) 20%, transparent)
+    var(--surface-deep),
+    var(--surface-deep) 13%,
+    color-mix(in srgb, var(--surface-deep) 55%, transparent) 20%,
+    transparent 30%
   );
 }
 
@@ -1094,10 +1235,22 @@
   color: var(--accent-contrast);
 }
 
+/* Somebody who asked their system for less movement still gets the light and
+   the ring that say which tile they are on; what they do not get is the
+   growing, the chevron sliding and the fan opening under them. */
 @media (prefers-reduced-motion: reduce) {
   .band-tile:hover,
   .band-tile:hover .band-arrow {
     transform: none;
+  }
+
+  .band-tile:hover .band-posters,
+  .band-tile:focus-visible .band-posters {
+    --open: 0;
+  }
+
+  .band-poster {
+    transition: none;
   }
 }
 
