@@ -10,6 +10,12 @@
  * server nobody can get into without a terminal. A server that has been set up
  * asks for a password, once.
  *
+ * And it opens on the accounts rather than on the form. A household signs in
+ * by pressing a face and typing a password, so the name field is not the first
+ * thing on the screen; it is behind one button, for whoever asked to be left
+ * off the list and for whoever would rather type. A server that offers no
+ * names has nothing to open on and shows the form straight away.
+ *
  * Nothing of Melyxar is written into this screen. The mark, the name and what
  * is behind the card all come from what the server says it wears, and what
  * this project ships with is the fallback rather than the rule: an
@@ -23,6 +29,7 @@ import { DoorBackground } from "../components/door-background";
 import {
   AccountAddIcon,
   AccountIcon,
+  BackIcon,
   EnterIcon,
   EyeIcon,
   EyeOffIcon,
@@ -43,6 +50,24 @@ function firstLetterOf(name: string): string {
 
 /** The mark this project ships with, worn by a server that was given none. */
 const THE_MARK_WE_SHIP = "/melyxar-512.png";
+
+/**
+ * What the card is showing.
+ *
+ * The accounts on this server, or the form. On the form, the name is either
+ * already settled, because a card was pressed, or still to be typed.
+ */
+type Showing = { the: "accounts" } | { the: "form"; forWhom: string | null };
+
+/**
+ * The most account cards the card puts across before wrapping to a second row.
+ *
+ * It is what the card's own width is worked out from, so it is a count rather
+ * than a width: four of them and the card comes out a little wider than it
+ * stands at on its own, which is as wide as a sign in card should ever get.
+ * A fifth account starts a second row instead of widening the screen further.
+ */
+const MOST_ACROSS = 4;
 
 export function Door({
   branding,
@@ -68,9 +93,28 @@ export function Door({
   const first = useRef<HTMLInputElement>(null);
   const passwordField = useRef<HTMLInputElement>(null);
 
-  // The cursor where the first word goes, on a screen whose only purpose is to
-  // be typed into.
-  useEffect(() => first.current?.focus(), []);
+  /* Nothing until something is pressed. Until then the card shows the accounts
+     when the server offers any and the form when it does not, which is the
+     only way a list that arrives a moment after the screen can be the thing
+     the screen opens on. */
+  const [turnedTo, setTurnedTo] = useState<Showing | null>(null);
+  const showing: Showing =
+    turnedTo ??
+    (door.names.length > 0
+      ? { the: "accounts" }
+      : { the: "form", forWhom: null });
+  const onTheForm = showing.the === "form";
+  const forWhom = showing.the === "form" ? showing.forWhom : null;
+
+  // The cursor where the next word goes, every time the card turns to the
+  // form: the name for somebody typing their own, the password for somebody
+  // whose name was settled by the card they pressed.
+  useEffect(() => {
+    if (!onTheForm) {
+      return;
+    }
+    (forWhom === null ? first : passwordField).current?.focus();
+  }, [onTheForm, forWhom]);
 
   const refusal = twiceDiffers
     ? { key: "door.refused.not_the_same", values: {} }
@@ -93,6 +137,18 @@ export function Door({
     set(value);
   };
 
+  /* Turning the card empties it: a password half typed for one account and a
+     refusal earned by another both belong to the view being left. The name
+     comes from where the card is being turned to, so there is one place it is
+     ever decided. */
+  const turnTo = (next: Showing) => {
+    setTwiceDiffers(false);
+    door.forget();
+    setName(next.the === "form" ? (next.forWhom ?? "") : "");
+    setPassword("");
+    setTurnedTo(next);
+  };
+
   return (
     <main className="door">
       <DoorBackground branding={branding} />
@@ -101,7 +157,33 @@ export function Door({
           being in the way of the one thing on this screen to do. */}
       <p className="door-slogan">{t("door.slogan")}</p>
 
-      <form className="door-card" onSubmit={send}>
+      {/* How many cards go across is what this card is as wide as, so the
+          count is handed to the drawing and the arithmetic stays in it. The
+          width is the same on both views: a card that shrank the moment
+          somebody pressed a face would be a screen that moves under a hand
+          already going for the password. */}
+      <form
+        className="door-card"
+        style={
+          {
+            "--across": Math.min(door.names.length, MOST_ACROSS),
+          } as React.CSSProperties
+        }
+        onSubmit={send}
+      >
+        {/* Only ever on the form, and only when there is a list to go back
+            to: on a server that offers no names it would go nowhere. */}
+        {onTheForm && door.names.length > 0 && (
+          <button
+            type="button"
+            className="door-back"
+            onClick={() => turnTo({ the: "accounts" })}
+          >
+            <BackIcon size={16} />
+            {t("door.back")}
+          </button>
+        )}
+
         <div className="door-crown">
           <img
             className="door-mark"
@@ -112,192 +194,248 @@ export function Door({
           <h1 className="door-name">{branding.server_name}</h1>
         </div>
 
-        <p className="door-invitation">
-          {t(door.brandNew ? "door.first.invitation" : "door.invitation")}
-        </p>
+        {/* Nothing here once a card has been pressed: the face and the name
+            under the mark say who this is for, and a line saying it again in
+            words is one the eye reads past on the way to the password. */}
+        {forWhom === null && (
+          <p className="door-invitation">
+            {showing.the === "accounts"
+              ? t("door.pick")
+              : t(door.brandNew ? "door.first.invitation" : "door.invitation")}
+          </p>
+        )}
 
         {/* Who is on this server, for whoever is not typing their own name for
-            the thousandth time. Pressing one fills the field rather than
-            replacing it: somebody who asked to be left off this list signs in
-            by typing, and the field they type into has to be the same one. */}
-        {door.names.length > 0 && (
-          <div className="door-who">
-            {door.names.map((offered) => (
-              <button
-                type="button"
-                key={offered}
-                className={`door-who-one${offered === name ? " door-who-chosen" : ""}`}
-                onClick={() => {
-                  typing(setName)(offered);
-                  passwordField.current?.focus();
-                }}
-                aria-pressed={offered === name}
-                /* A name too long for the card is cut on it, so the whole of
-                   it has to be readable from somewhere. */
-                title={offered}
-              >
-                <span className="door-who-face" aria-hidden="true">
-                  {firstLetterOf(offered)}
-                </span>
-                <span className="door-who-name">{offered}</span>
-              </button>
-            ))}
+            the thousandth time. Pressing one settles the name and turns the
+            card to the password, which is the whole of the first half of
+            signing in done in one press. */}
+        {showing.the === "accounts" && (
+          <>
+            <div className="door-who">
+              {door.names.map((offered) => (
+                <button
+                  type="button"
+                  key={offered}
+                  className="door-who-one"
+                  onClick={() => turnTo({ the: "form", forWhom: offered })}
+                  /* A name too long for the card is cut on it, so the whole
+                     of it has to be readable from somewhere. */
+                  title={offered}
+                >
+                  <span className="door-face door-who-face" aria-hidden="true">
+                    {firstLetterOf(offered)}
+                  </span>
+                  <span className="door-who-name">{offered}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* The way in that is not on the list: an account that asked to be
+                left off it signs in by typing its name, and so does anybody
+                who would rather. */}
+            <button
+              type="button"
+              className="door-by-hand"
+              onClick={() => turnTo({ the: "form", forWhom: null })}
+            >
+              <AccountIcon size={18} />
+              {t("door.by_hand")}
+            </button>
+          </>
+        )}
+
+        {/* Whose password is being asked for, once a card has settled it. The
+            name itself is held rather than drawn as a field, so the one thing
+            left on the card is the one thing left to do. */}
+        {forWhom !== null && (
+          <div className="door-forwhom">
+            <span className="door-face door-forwhom-face" aria-hidden="true">
+              {firstLetterOf(forWhom)}
+            </span>
+            <span className="door-forwhom-name">{forWhom}</span>
+            {/* Out of sight and genuinely there: a password keeper fills the
+                entry it recognises by the name beside it, and a card with no
+                name on it anywhere offers nothing to recognise. */}
+            <input
+              className="door-kept-name"
+              type="text"
+              value={forWhom}
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+              autoComplete="username"
+            />
           </div>
         )}
 
-        <label className="door-label" htmlFor="door-name">
-          {t("door.name")}
-        </label>
-        <div className="door-box">
-          <AccountIcon className="door-box-mark" size={19} />
-          <input
-            id="door-name"
-            ref={first}
-            className="door-field"
-            value={name}
-            onChange={(event) => typing(setName)(event.target.value)}
-            placeholder={t("door.name")}
-            autoComplete="username"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            required
-          />
-        </div>
-
-        <label className="door-label" htmlFor="door-password">
-          {t("door.password")}
-        </label>
-        <div className="door-box">
-          <LockIcon className="door-box-mark" size={19} />
-          <input
-            id="door-password"
-            ref={passwordField}
-            className="door-field"
-            type={shown ? "text" : "password"}
-            value={password}
-            onChange={(event) => typing(setPassword)(event.target.value)}
-            placeholder={t("door.password")}
-            autoComplete={door.brandNew ? "new-password" : "current-password"}
-            required
-          />
-          {/* Reading back what was typed is the one way out of a password
-              mistyped behind dots, and on a door that holds somebody's whole
-              library it is worth the moment it is readable for. */}
-          <button
-            type="button"
-            className="door-reveal"
-            onClick={() => setShown(!shown)}
-            aria-label={t(shown ? "door.hide_password" : "door.show_password")}
-            aria-pressed={shown}
-            title={t(shown ? "door.hide_password" : "door.show_password")}
-          >
-            {shown ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}
-          </button>
-        </div>
-
-        {door.brandNew && (
+        {onTheForm && (
           <>
-            <label className="door-label" htmlFor="door-again">
-              {t("door.password_again")}
+            {forWhom === null && (
+              <>
+                <label className="door-label" htmlFor="door-name">
+                  {t("door.name")}
+                </label>
+                <div className="door-box">
+                  <AccountIcon className="door-box-mark" size={19} />
+                  <input
+                    id="door-name"
+                    ref={first}
+                    className="door-field"
+                    value={name}
+                    onChange={(event) => typing(setName)(event.target.value)}
+                    placeholder={t("door.name")}
+                    autoComplete="username"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    required
+                  />
+                </div>
+              </>
+            )}
+
+            <label className="door-label" htmlFor="door-password">
+              {t("door.password")}
             </label>
             <div className="door-box">
               <LockIcon className="door-box-mark" size={19} />
               <input
-                id="door-again"
+                id="door-password"
+                ref={passwordField}
                 className="door-field"
                 type={shown ? "text" : "password"}
-                value={again}
-                onChange={(event) => typing(setAgain)(event.target.value)}
-                placeholder={t("door.password_again")}
-                autoComplete="new-password"
+                value={password}
+                onChange={(event) => typing(setPassword)(event.target.value)}
+                placeholder={t("door.password")}
+                autoComplete={
+                  door.brandNew ? "new-password" : "current-password"
+                }
                 required
               />
+              {/* Reading back what was typed is the one way out of a password
+                  mistyped behind dots, and on a door that holds somebody's
+                  whole library it is worth the moment it is readable for. */}
+              <button
+                type="button"
+                className="door-reveal"
+                onClick={() => setShown(!shown)}
+                aria-label={t(
+                  shown ? "door.hide_password" : "door.show_password",
+                )}
+                aria-pressed={shown}
+                title={t(shown ? "door.hide_password" : "door.show_password")}
+              >
+                {shown ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}
+              </button>
             </div>
-            {/* Deliberately without the number: the shortest a password may
-                be is the server's rule, and it travels with the refusal that
-                names it. Written here as well, the two would drift apart and
-                the wrong one would be the one on screen. */}
-            <p className="door-rule">{t("door.rule")}</p>
-          </>
-        )}
 
-        <div className="door-aside">
-          {/* Whether the browser holds on to the session once it is closed.
-              Nothing else about it changes: a session lasts exactly as long
-              either way, and what this asks is whether the machine is one to
-              be left signed in. */}
-          <label className="door-remember">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(event) => setRemember(event.target.checked)}
-            />
-            {t("door.remember")}
-          </label>
+            {door.brandNew && (
+              <>
+                <label className="door-label" htmlFor="door-again">
+                  {t("door.password_again")}
+                </label>
+                <div className="door-box">
+                  <LockIcon className="door-box-mark" size={19} />
+                  <input
+                    id="door-again"
+                    className="door-field"
+                    type={shown ? "text" : "password"}
+                    value={again}
+                    onChange={(event) => typing(setAgain)(event.target.value)}
+                    placeholder={t("door.password_again")}
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+                {/* Deliberately without the number: the shortest a password
+                    may be is the server's rule, and it travels with the
+                    refusal that names it. Written here as well, the two would
+                    drift apart and the wrong one would be the one on
+                    screen. */}
+                <p className="door-rule">{t("door.rule")}</p>
+              </>
+            )}
 
-          {/* Nothing behind it yet: there is no way to put a password back
-              from this screen, and the one that exists is a command on the
-              server itself. Drawn all the same, and turned off until there
-              is something for it to do. */}
-          {!door.brandNew && (
-            <button
-              type="button"
-              className="door-forgot"
-              disabled
-              title={t("door.forgot_why")}
-            >
-              {t("door.forgot")}
-            </button>
-          )}
-        </div>
+            <div className="door-aside">
+              {/* Whether the browser holds on to the session once it is
+                  closed. Nothing else about it changes: a session lasts
+                  exactly as long either way, and what this asks is whether
+                  the machine is one to be left signed in. */}
+              <label className="door-remember">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(event) => setRemember(event.target.checked)}
+                />
+                {t("door.remember")}
+              </label>
 
-        {/* The refusal takes the place under the fields rather than appearing
-            between them: a message that pushes the button down as it arrives
-            is a message somebody clicks through by accident. */}
-        <div className="door-answer" role="alert" aria-live="polite">
-          {refusal && (
-            <span className="door-refused" key={refusal.key}>
-              {t(refusal.key, refusal.values)}
-            </span>
-          )}
-        </div>
-
-        <button
-          className="button button-accent button-large door-go"
-          type="submit"
-          disabled={door.asking || name.trim() === "" || password === ""}
-        >
-          <EnterIcon size={20} />
-          {t(
-            door.asking
-              ? "door.asking"
-              : door.brandNew
-                ? "door.first.go"
-                : "door.go",
-          )}
-        </button>
-
-        {/* On a brand new server the button above is the one that makes an
-            account, so a second one offering the same thing would be two
-            doors into one room. */}
-        {!door.brandNew && (
-          <>
-            <div className="door-or">
-              <span>{t("door.or")}</span>
+              {/* Nothing behind it yet: there is no way to put a password back
+                  from this screen, and the one that exists is a command on the
+                  server itself. Drawn all the same, and turned off until there
+                  is something for it to do. */}
+              {!door.brandNew && (
+                <button
+                  type="button"
+                  className="door-forgot"
+                  disabled
+                  title={t("door.forgot_why")}
+                >
+                  {t("door.forgot")}
+                </button>
+              )}
             </div>
-            {/* Nothing behind this one either: accounts on this server are
-                made by whoever runs it. Turned off rather than left out, so
-                the day the screen for it exists there is a place for it. */}
+
+            {/* The refusal takes the place under the fields rather than
+                appearing between them: a message that pushes the button down
+                as it arrives is a message somebody clicks through by
+                accident. */}
+            <div className="door-answer" role="alert" aria-live="polite">
+              {refusal && (
+                <span className="door-refused" key={refusal.key}>
+                  {t(refusal.key, refusal.values)}
+                </span>
+              )}
+            </div>
+
             <button
-              type="button"
-              className="button button-large door-make"
-              disabled
-              title={t("door.create_why")}
+              className="button button-accent button-large door-go"
+              type="submit"
+              disabled={door.asking || name.trim() === "" || password === ""}
             >
-              <AccountAddIcon size={20} />
-              {t("door.create")}
+              <EnterIcon size={20} />
+              {t(
+                door.asking
+                  ? "door.asking"
+                  : door.brandNew
+                    ? "door.first.go"
+                    : "door.go",
+              )}
             </button>
+
+            {/* On a brand new server the button above is the one that makes an
+                account, so a second one offering the same thing would be two
+                doors into one room. */}
+            {!door.brandNew && (
+              <>
+                <div className="door-or">
+                  <span>{t("door.or")}</span>
+                </div>
+                {/* Nothing behind this one either: accounts on this server are
+                    made by whoever runs it. Turned off rather than left out,
+                    so the day the screen for it exists there is a place for
+                    it. */}
+                <button
+                  type="button"
+                  className="button button-large door-make"
+                  disabled
+                  title={t("door.create_why")}
+                >
+                  <AccountAddIcon size={20} />
+                  {t("door.create")}
+                </button>
+              </>
+            )}
           </>
         )}
       </form>

@@ -99,6 +99,9 @@ const en: Dictionary = {
 
   /* The door: what anybody meets before this server knows them. */
   "door.invitation": "Sign in to carry on watching.",
+  "door.pick": "Choose your account.",
+  "door.by_hand": "Sign in with a username",
+  "door.back": "Back",
   "door.first.invitation":
     "Nobody has set this server up yet. Choose the name and the password of the first account, which is yours and is an administrator.",
   "door.name": "Username",
@@ -780,6 +783,9 @@ const fr: Dictionary = {
 
   /* La porte : ce que rencontre quelqu'un avant que ce serveur le connaisse. */
   "door.invitation": "Connectez-vous pour reprendre vos films.",
+  "door.pick": "Choisissez votre compte.",
+  "door.by_hand": "Se connecter avec un nom d'utilisateur",
+  "door.back": "Retour",
   "door.first.invitation":
     "Personne n'a encore configuré ce serveur. Choisissez le nom et le mot de passe du premier compte, qui est le vôtre et qui est administrateur.",
   "door.name": "Nom d'utilisateur",
