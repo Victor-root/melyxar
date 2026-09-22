@@ -132,8 +132,11 @@ export function Door({
                   passwordField.current?.focus();
                 }}
                 aria-pressed={offered === name}
+                /* A name too long for the card is cut on it, so the whole of
+                   it has to be readable from somewhere. */
+                title={offered}
               >
-                <span className="door-who-mark" aria-hidden="true">
+                <span className="door-who-face" aria-hidden="true">
                   {firstLetterOf(offered)}
                 </span>
                 <span className="door-who-name">{offered}</span>
