@@ -37,35 +37,18 @@ export function DoorBackground({ branding }: { branding: Branding }) {
  * The one a server wears out of the box: light, and dust caught in it.
  *
  * Nothing here is a shape anybody has to read, which is the point. It is the
- * accent behind a sheet of glass, moving slowly enough to be light rather
- * than an animation, and it says the screen is alive without asking for a
- * moment of anybody's attention.
+ * accent behind a sheet of glass, and it says the screen is alive without
+ * asking for a moment of anybody's attention.
  *
- * Every piece of it is drawn by the stylesheet, out of gradients and one
- * repeated dot. Nothing is computed here and nothing is fetched: a background
- * that costs a request is a background somebody waits for, and a field of
- * dust worked out in a loop is a field of dust redrawn every time this screen
- * is opened. What moves is a transform and an opacity and nothing besides,
- * which the browser hands to the part of itself that composes the page.
- *
- * It stays on this screen. The home page is set on the same light, but
- * painted once rather than assembled out of boxes that never stop moving:
- * behind a card somebody types a password into, seven moving layers cost
- * what they are worth, and behind a whole library they cost far more than
- * that. The stylesheet has the sum.
+ * One box, and the stylesheet paints the lot: nothing is computed here and
+ * nothing is fetched, since a background that costs a request is a
+ * background somebody waits for. It used to be seven boxes each moving at
+ * its own pace, which cost a graphics card more than the whole rest of the
+ * interface put together; the stylesheet has that sum, and the home page is
+ * set on the same painting.
  */
 function Drift() {
-  return (
-    <div className="door-drift" aria-hidden="true">
-      <div className="door-drift-light door-drift-light-one" />
-      <div className="door-drift-light door-drift-light-two" />
-      <div className="door-drift-light door-drift-light-three" />
-      <div className="door-drift-dust" />
-      <div className="door-drift-dust door-drift-dust-far" />
-      <div className="door-drift-arc" />
-      <div className="door-drift-arc door-drift-arc-faint" />
-    </div>
-  );
+  return <div className="door-drift drift" aria-hidden="true" />;
 }
 
 /*

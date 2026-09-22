@@ -579,28 +579,16 @@
 }
 
 /*
- * The light the library is set on: the door's own, standing still.
+ * Where the library's light stands.
  *
- * The door draws this as seven boxes that never stop moving, three of them
- * under a blur of seventy points, and that is affordable on a screen holding
- * one card for as long as it takes to type a password. Here it is behind the
- * whole library, for as long as anybody is in it, and it was not affordable
- * at all: measured on a page where nothing was happening, the window was
- * managing eight frames a second at 1080p and two at 4K. A blurred box that
- * is also being scaled has its blur worked out again every frame, over the
- * whole window, and there were three of them plus two glowing rings and two
- * drifting fields of dust.
- *
- * So the same light is painted rather than assembled: pools of accent and
- * the wash the two arcs cast, as gradients on one box that is painted once
- * and then only composed. Nothing moves, nothing is filtered, and because it
- * is all in fractions of the window rather than in pixels, it is drawn at
- * the screen's own resolution whatever that is, on a laptop and on a 4K
- * panel alike.
+ * The painting itself is the door's, and this page wears the same one: it
+ * is the same server and there is no reason for its two screens to be set
+ * on two different lights. What is said here is only where it stands.
  *
  * Fixed to the window rather than to the page: the page runs on for several
  * screens of rows, and a background sized to the page would have run out
- * long before the scroll did.
+ * long before the scroll did. Held a step behind ordinary content and
+ * taking no press, the same as the door's own.
  */
 .home-backdrop {
   position: fixed;
@@ -608,82 +596,8 @@
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
-  background:
-    /* What the two arcs were: a ring of light with nothing drawn on it. */
-    radial-gradient(
-      124% 98% at 4% -26%,
-      transparent 55%,
-      color-mix(in srgb, var(--accent) 19%, transparent) 63%,
-      transparent 72%
-    ),
-    radial-gradient(
-      88% 106% at 106% 8%,
-      transparent 58%,
-      color-mix(in srgb, var(--accent-dim) 15%, transparent) 66%,
-      transparent 74%
-    ),
-    /* And the three pools, where each one stood. */
-    radial-gradient(
-      58% 72% at 10% 30%,
-      color-mix(in srgb, var(--accent) 25%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      56% 66% at 90% 88%,
-      color-mix(in srgb, var(--accent-bright) 19%, transparent),
-      transparent 72%
-    ),
-    radial-gradient(
-      46% 52% at 53% 108%,
-      color-mix(in srgb, var(--accent-dim) 17%, transparent),
-      transparent 74%
-    );
   opacity: 0;
   animation: door-arrive-slowly 1100ms var(--ease) 200ms forwards;
-}
-
-/* The dust, on its own layer because it is the one part of this that is a
-   pattern rather than a wash: one dot repeated, cut to two soft bands by a
-   mask so it reads as a drift of it and not as graph paper. It keeps its
-   size in points rather than in fractions, so it is the same dust on a
-   laptop as on a large panel instead of growing with the screen. */
-.home-backdrop::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--accent-bright) 62%, transparent) 1.1px,
-    transparent 1.2px
-  );
-  background-size: 17px 17px;
-  opacity: 0.5;
-  mask-image:
-    radial-gradient(
-      46% 34% at 20% 52%,
-      #000 0%,
-      color-mix(in srgb, #000 45%, transparent) 46%,
-      transparent 78%
-    ),
-    radial-gradient(
-      44% 44% at 80% 34%,
-      #000 0%,
-      color-mix(in srgb, #000 40%, transparent) 42%,
-      transparent 74%
-    );
-  -webkit-mask-image:
-    radial-gradient(
-      46% 34% at 20% 52%,
-      #000 0%,
-      color-mix(in srgb, #000 45%, transparent) 46%,
-      transparent 78%
-    ),
-    radial-gradient(
-      44% 44% at 80% 34%,
-      #000 0%,
-      color-mix(in srgb, #000 40%, transparent) 42%,
-      transparent 74%
-    );
 }
 
 .section {

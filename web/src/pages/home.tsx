@@ -40,7 +40,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   if (failed) {
     return (
       <>
-        <div className="home-backdrop" aria-hidden="true" />
+        <div className="home-backdrop drift" aria-hidden="true" />
         <main className="page">
           <p className="notice">{t("error.unreachable")}</p>
           <button className="button" onClick={again}>
@@ -61,7 +61,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   if (home.works === 0) {
     return (
       <>
-        <div className="home-backdrop" aria-hidden="true" />
+        <div className="home-backdrop drift" aria-hidden="true" />
         <main className="page">
           <section className="empty">
             <h1>{t("home.empty.title")}</h1>
@@ -99,7 +99,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
   return (
     <>
-      <div className="home-backdrop" aria-hidden="true" />
+      <div className="home-backdrop drift" aria-hidden="true" />
 
       {/* Outside the page rather than inside it: the banner is the picture,
           and a picture held inside a column that stops short of both edges of
@@ -305,7 +305,7 @@ function whatIsLeft(
 function HomeSkeleton() {
   return (
     <>
-      <div className="home-backdrop" aria-hidden="true" />
+      <div className="home-backdrop drift" aria-hidden="true" />
       <main className="page page-home" aria-busy="true">
         <div className="skeleton skeleton-hero" />
         {[0, 1].map((row) => (
