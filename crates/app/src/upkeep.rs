@@ -397,6 +397,35 @@ pub async fn start_what_is_waiting(state: &AppState, priority: JobPriority) -> u
 /// run can be.
 const LOOK_AT_THE_CLOCK_EVERY: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
+/// How often the sessions nobody uses any more are thrown away.
+///
+/// Once a day, and once on the way up. Neither on its own is enough: a server
+/// restarted every morning would never reach a timer of its own, and a server
+/// left up for months would never come back to a sweep that only ran at
+/// startup.
+///
+/// It is not the nightly run and it is not tied to it. What that run does is
+/// read films, and an administrator who turns it off is saying something
+/// about their library, not about who may still sign in. This costs one
+/// statement a day either way.
+const FORGET_UNUSED_SESSIONS_EVERY: time::Duration = time::Duration::hours(24);
+
+/// Throws away the sessions nobody has used in a year, and says when it ran.
+///
+/// Answers the moment either way. A sweep that could not be done is one to try
+/// again tomorrow rather than one to retry in five minutes: nothing depends on
+/// it having happened today, and a database that will not answer has a larger
+/// problem being reported elsewhere.
+async fn forget_the_sessions_nobody_uses(state: &AppState) -> melyxar_core::time::Timestamp {
+    let at = melyxar_core::time::now();
+    match state.database().forget_stale_sessions(at).await {
+        Ok(0) => tracing::debug!("no session had gone a year unused"),
+        Ok(swept) => tracing::info!(swept, "sessions nobody had used in a year were forgotten"),
+        Err(error) => tracing::warn!(%error, "the sessions nobody uses could not be swept"),
+    }
+    at
+}
+
 /// Keeps the upkeep running of a night, for as long as the server runs.
 ///
 /// The time of day is a setting, read again on every look at the clock, so a
@@ -427,8 +456,16 @@ pub fn keep_the_upkeep_running(state: &AppState) -> tokio::task::JoinHandle<()> 
         }
 
         let mut last_run = melyxar_core::time::now();
+        let mut last_sweep = forget_the_sessions_nobody_uses(&state).await;
         loop {
             tokio::time::sleep(LOOK_AT_THE_CLOCK_EVERY).await;
+
+            // Before anything the library needs, and outside the setting that
+            // governs it: who may still sign in is not a question about
+            // thumbnails.
+            if melyxar_core::time::now() - last_sweep >= FORGET_UNUSED_SESSIONS_EVERY {
+                last_sweep = forget_the_sessions_nobody_uses(&state).await;
+            }
 
             let Ok(work) = state.database().library_work().await else {
                 continue;

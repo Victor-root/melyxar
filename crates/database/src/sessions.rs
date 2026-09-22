@@ -14,11 +14,15 @@
 //!
 //! **A session is not given an end, it is given a last use.** It lives for as
 //! long as it goes on being used, which is what anybody means by staying
-//! signed in, and it is the same fact the list of devices shows. The one thing
-//! that has to be watched is how often that fact is written: there is a single
-//! writer for the whole database, and a film being watched asks for a segment
-//! every few seconds. So it is written again only once it has gone stale,
-//! which costs at most one write an hour per device.
+//! signed in, and it is the same fact the list of devices shows. Nothing here
+//! ever refuses a token for its age: a row that is present is a session that
+//! works. What ends one is somebody signing out, a password being changed, or
+//! the sweep below taking away a row nobody has used in a year.
+//!
+//! The one thing that has to be watched is how often the last use is written:
+//! there is a single writer for the whole database, and a film being watched
+//! asks for a segment every few seconds. So it is written again only once it
+//! has gone stale, which costs at most one write an hour per device.
 
 use melyxar_core::id::{DeviceId, UserId};
 use melyxar_core::time::Timestamp;
@@ -28,13 +32,20 @@ use sqlx::{AssertSqlSafe, Row};
 use crate::convert::{parse_id, timestamp_to_text};
 use crate::{Database, Result};
 
-/// How long a session survives without being used.
+/// How long a session nobody uses is kept before it is thrown away.
 ///
-/// Thirty days: long enough that nobody is asked to sign in again in ordinary
-/// use, and that a television sitting unused over a holiday still works on the
-/// way back; short enough that a token taken off a machine somebody stopped
-/// using stops working on its own.
-pub const A_SESSION_LASTS: time::Duration = time::Duration::days(30);
+/// A year, and it is the only thing that ends a session on its own. Nothing
+/// refuses a token for its age: a browser that still holds its cookie is
+/// signed in however long it has been, which is what ticking the box at the
+/// door was meant to promise. A household that watches something over the
+/// holidays and nothing else is not asked to sign in again every spring.
+///
+/// A year rather than never, because a device nobody has touched in twelve
+/// months is a device somebody has stopped using, and a token still good on
+/// one is a token nobody would miss. It is swept rather than refused, so the
+/// row goes with it: a server used for years should not carry a line for
+/// every browser anybody ever opened it in.
+pub const AN_UNUSED_SESSION_IS_KEPT_FOR: time::Duration = time::Duration::days(365);
 
 /// How stale the record of a session's last use may get before it is written
 /// down again.
@@ -43,17 +54,18 @@ pub const A_SESSION_LASTS: time::Duration = time::Duration::days(30);
 /// writer for the whole database. Written on every request, one film being
 /// watched would queue a write per segment of it behind every scan and every
 /// resume position. An hour costs at most one write an hour per device, and
-/// moves the end of a session by at most an hour out of thirty days, which
-/// nobody can feel.
+/// moves the moment the sweep would reach a session by at most an hour out of
+/// a year, which nobody can feel.
 const WRITTEN_DOWN_AGAIN_AFTER: time::Duration = time::Duration::hours(1);
 
 /// Whether the browser is to hold on to its session once it is closed.
 ///
-/// Nothing to do with how long a session lives, which is the thirty days
-/// above and is the server's to decide. This is the one thing the server
-/// cannot know on its own: whether the machine belongs to the person signing
-/// in. Somebody on their own television says yes; somebody on a machine at
-/// work says no, and closing the browser is the end of it for them.
+/// Nothing to do with the sweep above, which is the server's to decide. This
+/// is the one thing the server cannot know on its own: whether the machine
+/// belongs to the person signing in. Somebody on their own television says
+/// yes and stays signed in for as long as they go on using it; somebody on a
+/// machine at work says no, and closing the browser is the end of it for
+/// them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Remembered {
     /// Kept by the browser, so the machine stays signed in. The ordinary one,
@@ -129,9 +141,12 @@ impl Database {
     /// The account behind a token, and nothing when there is none.
     ///
     /// Answers nothing rather than failing for every way a token can fail to
-    /// name anybody: never issued, signed out since, or simply not used for
-    /// longer than a session lasts. From outside they are one answer, which is
-    /// the answer somebody gets when they are not signed in.
+    /// name anybody: never issued, signed out since, or swept for having gone
+    /// a year unused. From outside they are one answer, which is the answer
+    /// somebody gets when they are not signed in.
+    ///
+    /// Age is not one of those ways. A row that is here is a session that
+    /// works, whenever it was opened.
     ///
     /// Writes down that the session was used, but only once it has gone stale:
     /// see the note at the top of this file.
@@ -147,10 +162,9 @@ impl Database {
         let Some(row) = sqlx::query(AssertSqlSafe(crate::users::reading_accounts(
             ", d.id AS device_id, d.last_seen_at, d.remembered",
             "JOIN devices d ON d.user_id = u.id
-             WHERE d.token_hash = ? AND d.last_seen_at >= ?",
+             WHERE d.token_hash = ?",
         )))
         .bind(token_fingerprint)
-        .bind(timestamp_to_text(at - A_SESSION_LASTS))
         .fetch_optional(self.reader())
         .await?
         else {
@@ -198,15 +212,17 @@ impl Database {
         Ok(done.rows_affected())
     }
 
-    /// Throws away the sessions nobody has used for longer than one lasts.
+    /// Throws away the sessions nobody has used in a year.
     ///
-    /// They already answer nothing, so this changes no answer: it is there so
-    /// that a server used for years does not carry a row per browser anybody
-    /// ever opened it in, and so that the list of devices shows the ones that
-    /// are real.
+    /// This is what ends a session that nobody ended, so it is not tidying:
+    /// until it runs, every one of these rows still signs somebody in. It has
+    /// to be run, and the upkeep runs it once a day.
+    ///
+    /// Says how many it took, which is the only way anybody finds out that it
+    /// is doing its job.
     pub async fn forget_stale_sessions(&self, at: Timestamp) -> Result<u64> {
         let done = sqlx::query("DELETE FROM devices WHERE last_seen_at < ?")
-            .bind(timestamp_to_text(at - A_SESSION_LASTS))
+            .bind(timestamp_to_text(at - AN_UNUSED_SESSION_IS_KEPT_FOR))
             .execute(self.writer())
             .await?;
         Ok(done.rows_affected())
@@ -374,39 +390,28 @@ mod tests {
             .is_none());
     }
 
+    /// Age alone never refuses a token.
+    ///
+    /// This is the promise the box at the door makes, and it is the one thing
+    /// here somebody would break by adding a sensible looking bound back into
+    /// the query. A browser that kept its cookie is signed in, whenever it was
+    /// last here; what ends a session is a sweep, a sign out or a password
+    /// changed.
     #[tokio::test]
-    async fn a_session_nobody_used_for_longer_than_it_lasts_names_nobody() {
+    async fn a_session_nobody_used_for_years_still_names_whoever_opened_it() {
         let (database, user_id) = a_server_with_one_account().await;
-        // Two of them, asked about once each: asking about one keeps it alive,
-        // which is the whole point of it, and would answer the other question.
         database
-            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
-            .await
-            .expect("session opened");
-        database
-            .open_session(user_id, "a television", "another fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
             .await
             .expect("session opened");
 
-        let an_hour_short = A_MOMENT + A_SESSION_LASTS - time::Duration::hours(1);
-        assert!(
-            database
-                .session_holder("one fingerprint", an_hour_short)
-                .await
-                .expect("read")
-                .is_some(),
-            "still inside its life"
-        );
-
-        let well_past = A_MOMENT + A_SESSION_LASTS + time::Duration::days(1);
-        assert!(
-            database
-                .session_holder("another fingerprint", well_past)
-                .await
-                .expect("read")
-                .is_none(),
-            "a token nobody has used in a month is a token nobody holds"
-        );
+        let years_later = A_MOMENT + time::Duration::days(3 * 365);
+        let signed_in = database
+            .session_holder("a fingerprint", years_later)
+            .await
+            .expect("read")
+            .expect("nothing refuses a token for its age");
+        assert_eq!(signed_in.user.id, user_id);
     }
 
     #[tokio::test]
@@ -432,8 +437,9 @@ mod tests {
             "nothing was written for a request a minute after the last one"
         );
 
-        // Past the point where it has gone stale, it is written down again,
-        // which is what carries the end of the session forward.
+        // Past the point where it has gone stale, it is written down again.
+        // That is what carries a session out of the sweep's reach: the sweep
+        // reads this date and nothing else.
         let much_later = A_MOMENT + time::Duration::days(20);
         database
             .session_holder("a fingerprint", much_later)
@@ -441,16 +447,6 @@ mod tests {
             .expect("read")
             .expect("still there");
         assert_eq!(last_used(&database).await, much_later);
-
-        let past_the_first_month = A_MOMENT + A_SESSION_LASTS + time::Duration::days(1);
-        assert!(
-            database
-                .session_holder("a fingerprint", past_the_first_month)
-                .await
-                .expect("read")
-                .is_some(),
-            "used twenty days in, it lasts thirty days from there and not from the start"
-        );
     }
 
     #[tokio::test]
@@ -559,7 +555,7 @@ mod tests {
             .await
             .expect("session opened");
 
-        let much_later = A_MOMENT + A_SESSION_LASTS + time::Duration::days(1);
+        let much_later = A_MOMENT + AN_UNUSED_SESSION_IS_KEPT_FOR + time::Duration::days(1);
         database
             .open_session(user_id, "a browser", "a fresh fingerprint", Remembered::Yes, much_later)
             .await
@@ -574,6 +570,43 @@ mod tests {
         );
         assert!(database
             .session_holder("a fresh fingerprint", much_later)
+            .await
+            .expect("read")
+            .is_some());
+
+        // And the swept one is gone for good rather than merely refused: this
+        // is now the only thing that ends a session nobody ended.
+        assert!(
+            database
+                .session_holder("an old fingerprint", much_later)
+                .await
+                .expect("read")
+                .is_none(),
+            "a session the sweep took is a session that names nobody"
+        );
+    }
+
+    /// A day short of the year, it stays. That bound is the whole setting, and
+    /// a sweep that took a session somebody still uses would sign them out of
+    /// their own television for no reason they could see.
+    #[tokio::test]
+    async fn a_session_used_within_the_year_is_left_alone() {
+        let (database, user_id) = a_server_with_one_account().await;
+        database
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
+            .await
+            .expect("session opened");
+
+        let a_day_short = A_MOMENT + AN_UNUSED_SESSION_IS_KEPT_FOR - time::Duration::days(1);
+        assert_eq!(
+            database
+                .forget_stale_sessions(a_day_short)
+                .await
+                .expect("swept"),
+            0
+        );
+        assert!(database
+            .session_holder("a fingerprint", a_day_short)
             .await
             .expect("read")
             .is_some());
