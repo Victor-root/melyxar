@@ -73,11 +73,7 @@ async fn held_pictures(
         .map_err(internal)?;
 
     let mut views = Vec::new();
-    for kind in [
-        PictureKind::Poster,
-        PictureKind::Backdrop,
-        PictureKind::Logo,
-    ] {
+    for kind in PictureKind::every() {
         let named = kind.as_str();
         // The largest of the set, which is the one worth looking at here. They
         // come back largest first, and a kind with nothing in it is a kind the

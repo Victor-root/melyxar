@@ -137,6 +137,8 @@ pub struct IncompleteNamedWork {
     /// filled in before title images existed already has its poster, so a film
     /// wanting one and nothing else would never be asked about again.
     pub wants_a_title_image: bool,
+    /// The same, for the thumb, which came after both.
+    pub wants_a_thumb: bool,
     pub wants_a_synopsis: bool,
 }
 
@@ -462,6 +464,11 @@ impl Database {
                            AND i.image_kind = 'logo'
                            AND i.fingerprint LIKE ?) AS wants_a_title_image,
                     NOT EXISTS (
+                        SELECT 1 FROM images i
+                         WHERE i.owner_kind = 'work' AND i.owner_id = w.id
+                           AND i.image_kind = 'thumb'
+                           AND i.fingerprint LIKE ?) AS wants_a_thumb,
+                    NOT EXISTS (
                         SELECT 1 FROM work_translations t
                          WHERE t.work_id = w.id AND t.language = ?
                            AND t.overview IS NOT NULL AND t.overview <> '') AS wants_a_synopsis
@@ -477,6 +484,7 @@ impl Database {
         )
         .bind(&made_today)
         .bind(&made_today)
+        .bind(&made_today)
         .bind(language)
         .bind(provider)
         .bind(library_id.to_db_string())
@@ -487,8 +495,9 @@ impl Database {
         for row in &rows {
             let wants_pictures: bool = int_to_bool(row.try_get("wants_pictures")?);
             let wants_a_title_image: bool = int_to_bool(row.try_get("wants_a_title_image")?);
+            let wants_a_thumb: bool = int_to_bool(row.try_get("wants_a_thumb")?);
             let wants_a_synopsis: bool = int_to_bool(row.try_get("wants_a_synopsis")?);
-            if !wants_pictures && !wants_a_title_image && !wants_a_synopsis {
+            if !wants_pictures && !wants_a_title_image && !wants_a_thumb && !wants_a_synopsis {
                 continue;
             }
             let kind_text: String = row.try_get("kind")?;
@@ -502,6 +511,7 @@ impl Database {
                 external_id: row.try_get("external_id")?,
                 wants_pictures,
                 wants_a_title_image,
+                wants_a_thumb,
                 wants_a_synopsis,
             });
         }
@@ -1907,7 +1917,7 @@ mod tests {
             "the provider gave one: {waiting:?}"
         );
 
-        for kind in ["poster", "logo"] {
+        for kind in ["poster", "logo", "thumb"] {
             store_one_picture(&database, work.id, kind).await;
         }
 
@@ -1933,7 +1943,7 @@ mod tests {
             .apply_identification(work.id, &found(), false)
             .await
             .expect("identification applied");
-        for kind in ["poster", "logo"] {
+        for kind in ["poster", "logo", "thumb"] {
             store_one_picture_made_by(&database, work.id, kind, "made-the-old-way").await;
         }
 
@@ -1944,8 +1954,9 @@ mod tests {
         assert_eq!(waiting.len(), 1);
         assert!(waiting[0].wants_pictures);
         assert!(waiting[0].wants_a_title_image);
+        assert!(waiting[0].wants_a_thumb);
 
-        for kind in ["poster", "logo"] {
+        for kind in ["poster", "logo", "thumb"] {
             store_one_picture(&database, work.id, kind).await;
         }
         assert!(
@@ -1982,7 +1993,17 @@ mod tests {
         );
         assert!(waiting[0].wants_a_title_image);
 
+        // The thumb came later still, and the same holds for it.
         store_one_picture(&database, work.id, "logo").await;
+        let waiting = database
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+            .await
+            .expect("read");
+        assert_eq!(waiting.len(), 1);
+        assert!(!waiting[0].wants_a_title_image);
+        assert!(waiting[0].wants_a_thumb);
+
+        store_one_picture(&database, work.id, "thumb").await;
         assert!(
             database
                 .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)

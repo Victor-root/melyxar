@@ -4501,6 +4501,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .pictures-offered-backdrop,
+.pictures-offered-thumb,
 .pictures-offered-logo {
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
@@ -4531,6 +4532,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .pictures-offered-backdrop .pictures-frame,
+.pictures-offered-thumb .pictures-frame,
 .pictures-offered-logo .pictures-frame {
   aspect-ratio: 16 / 9;
 }

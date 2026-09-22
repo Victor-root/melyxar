@@ -1335,6 +1335,15 @@ mod tests {
         database
             .replace_images(
                 "work",
+                &series.to_db_string(),
+                "thumb",
+                &[a_picture(series, "thumb", "series-titled")],
+            )
+            .await
+            .expect("series thumb written");
+        database
+            .replace_images(
+                "work",
                 &episodes[0].to_db_string(),
                 "poster",
                 &[a_picture(episodes[0], "poster", "first-still")],
@@ -1377,8 +1386,9 @@ mod tests {
         );
         assert_eq!(
             wide_of(episodes[1]),
-            vec!["series-wide".to_string()],
-            "an episode with no still of its own borrows its series' picture"
+            vec!["series-titled".to_string()],
+            "an episode with no still of its own borrows its series' picture, \
+             the one with the title written on it before the plain one"
         );
     }
 

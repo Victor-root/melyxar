@@ -122,9 +122,9 @@ export interface SearchCriteria {
   providerId?: string;
 }
 
-/** A kind of picture a work wears. The three the interface draws, and the
- *  three the server prepares. */
-export type PictureKind = "poster" | "backdrop" | "logo";
+/** A kind of picture a work wears. The four the interface draws, and the
+ *  four the server prepares. */
+export type PictureKind = "poster" | "backdrop" | "thumb" | "logo";
 
 /** One picture the work wears now. */
 export interface HeldPicture {

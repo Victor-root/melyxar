@@ -85,25 +85,34 @@ pub struct Candidate {
 
 /// What a picture is for.
 ///
-/// The three a work wears, and the three the interface serves. Anything else a
+/// The four a work wears, and the four the interface serves. Anything else a
 /// provider holds is not asked for: there is nowhere to draw it, and a panel
 /// offering a kind nothing shows is a panel that lies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PictureKind {
     /// Standing, two thirds as wide as it is tall.
     Poster,
-    /// Wide, drawn behind the work across a whole screen.
+    /// Wide, drawn behind the work across a whole screen. No words on it.
     Backdrop,
     /// The work's title drawn as it draws itself.
     Logo,
+    /// Wide too, with the title written on it: what a card lying on its side
+    /// shows, where the title is not written under the picture.
+    Thumb,
 }
 
 impl PictureKind {
+    /// Every kind, in the order a panel shows them.
+    pub const fn every() -> [Self; 4] {
+        [Self::Poster, Self::Backdrop, Self::Thumb, Self::Logo]
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Poster => "poster",
             Self::Backdrop => "backdrop",
             Self::Logo => "logo",
+            Self::Thumb => "thumb",
         }
     }
 
@@ -112,6 +121,7 @@ impl PictureKind {
             "poster" => Some(Self::Poster),
             "backdrop" => Some(Self::Backdrop),
             "logo" => Some(Self::Logo),
+            "thumb" => Some(Self::Thumb),
             _ => None,
         }
     }
@@ -131,7 +141,7 @@ pub struct OfferedPicture {
     pub width: Option<i64>,
     pub height: Option<i64>,
     /// The language written on it, where words are written on it at all. A
-    /// wide picture carries none, a title image always does.
+    /// backdrop carries none, a title image and a thumb always do.
     pub language: Option<String>,
     pub vote_average: f64,
     pub vote_count: i64,
@@ -168,6 +178,9 @@ pub struct Details {
     /// than a line of text. A kind of its own: it is neither the poster nor
     /// the backdrop, and plenty of films have none.
     pub logo_path: Option<String>,
+    /// A wide picture with the title written on it, for a card lying on its
+    /// side.
+    pub thumb_path: Option<String>,
     pub trailers: Vec<Trailer>,
     /// How many episodes each season of a series holds, as the provider
     /// counts them. Empty for a film, which holds none.

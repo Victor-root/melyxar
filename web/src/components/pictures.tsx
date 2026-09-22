@@ -27,8 +27,9 @@ import { DeleteIcon, SearchIcon } from "../icons";
 import { Modal } from "./modal";
 
 /** The kinds a work wears, in the order the panel shows them: the one every
- *  card shows first, then the one behind the banner, then the drawn title. */
-const KINDS: PictureKind[] = ["poster", "backdrop", "logo"];
+ *  card shows first, then the one behind the banner, then the one a lying
+ *  card shows, then the drawn title. */
+const KINDS: PictureKind[] = ["poster", "backdrop", "thumb", "logo"];
 
 export function PicturesDialog({
   workId,
