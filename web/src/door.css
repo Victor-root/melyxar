@@ -484,80 +484,125 @@
 /*
  * Who is on this server.
  *
+ * A card each rather than a row of pills: this is the one place on the screen
+ * where somebody is picked rather than a setting, and a thing to be picked is
+ * drawn large enough to be aimed at from a sofa.
+ *
  * Wrapped rather than scrolled: a household is a handful of names, and a row
  * that scrolls sideways hides the very thing it is there to offer. A server
  * with a great many accounts turns the whole list off, which is what that
  * switch is for.
  *
- * Each one is a letter and a name rather than a face: nobody has a picture on
- * this server yet, and a row of identical grey circles says less than a row of
- * initials.
+ * A letter rather than a face. Nobody has a picture on this server yet, and
+ * the address that offers these names deliberately carries none: a row of
+ * identical silhouettes would say less than a row of initials anyway.
  */
 .door-who {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: var(--gap);
+  margin-bottom: 22px;
 }
 
 .door-who-one {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px 5px 5px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-deep) 60%, transparent);
+  gap: 9px;
+  width: 92px;
+  padding: 0;
+  background: none;
+  border: none;
   color: var(--text-soft);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 550;
-  max-width: 100%;
+  transition: color var(--quick) var(--ease);
+}
+
+/*
+ * The card itself.
+ *
+ * Quiet until it is chosen: a row of accent coloured squares would shout over
+ * the one button on this screen that is meant to, and the accent has a job
+ * here already. So the tile is glass with the letter in the accent, and being
+ * picked is what fills it.
+ *
+ * Rounded further than a card of the library is. Those are pictures, where a
+ * large radius eats the corners of what is drawn; this is a plain tile, and
+ * at ninety two points a soft corner is what tells it from a button.
+ */
+.door-who-face {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-raised) 70%, transparent);
+  color: var(--accent-bright);
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
   transition:
+    transform var(--quick) var(--ease),
     border-color var(--quick) var(--ease),
     background var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease),
     color var(--quick) var(--ease);
 }
 
-.door-who-one:hover {
+/* It comes forward under the pointer, the way every card and every button in
+   this interface does. */
+.door-who-one:hover .door-who-face {
+  transform: scale(1.04);
   border-color: var(--border-strong);
   background: var(--surface-hover);
+}
+
+.door-who-one:hover {
   color: var(--text);
 }
 
 .door-who-one:focus-visible {
   outline: none;
+}
+
+.door-who-one:focus-visible .door-who-face {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
-/* The one whose name is in the field. Marked in the accent like everything
-   else that is current in this interface, so the card says who it is about to
-   let in. */
-.door-who-chosen,
-.door-who-chosen:hover {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+/*
+ * The one whose name is in the field.
+ *
+ * Filled rather than merely ringed: on a screen where the next thing to do is
+ * type a password, who the password is for has to be readable at a glance and
+ * from across a room.
+ */
+.door-who-chosen .door-who-face,
+.door-who-one:hover.door-who-chosen .door-who-face {
+  border-color: transparent;
+  background: linear-gradient(
+    150deg,
+    var(--accent-bright),
+    var(--accent-dim)
+  );
+  color: var(--accent-contrast);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
+    0 8px 24px color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+.door-who-chosen {
   color: var(--text);
 }
 
-.door-who-mark {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-/* A long name is cut rather than allowed to push the row into a column. */
+/* A long name is cut rather than allowed to widen the card, and the whole of
+   it is on the card's own title. */
 .door-who-name {
-  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -943,6 +988,14 @@
 
 :root[data-theme="light"] .door-slogan {
   background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+:root[data-theme="light"] .door-who-face {
+  background: var(--surface-hover);
+}
+
+:root[data-theme="light"] .door-who-one:hover .door-who-face {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-hover));
 }
 
 /* ---------------------------------------------------------------------------
