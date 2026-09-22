@@ -551,6 +551,50 @@
   object-fit: cover;
 }
 
+/*
+ * The same rim the door's card wears, at a fraction of it.
+ *
+ * These are the ways in, so they are the one set of tiles on the page worth
+ * giving an edge of its own: a hairline of accent whose colour turns as it
+ * goes round, which is what tells a lit edge from a border. Kept far dimmer
+ * than the door's, because there is one card at the door and there are
+ * several of these, and four bright rims side by side is a shop sign.
+ *
+ * It goes out under the pointer: what says "this is the one you are on" is
+ * the ring below, and two rims on one tile is one too many.
+ */
+.band-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: calc(var(--radius-card) - 1px);
+  padding: 1px;
+  background: conic-gradient(
+    from 128deg,
+    color-mix(in srgb, var(--accent-bright) 55%, transparent),
+    color-mix(in srgb, var(--accent) 22%, transparent) 16%,
+    color-mix(in srgb, var(--accent-dim) 12%, transparent) 33%,
+    color-mix(in srgb, var(--accent-bright) 58%, transparent) 54%,
+    color-mix(in srgb, var(--accent) 20%, transparent) 74%,
+    color-mix(in srgb, var(--accent-bright) 50%, transparent)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  transition: opacity var(--quick) var(--ease);
+}
+
+.band-tile:hover::before,
+.band-tile:focus-visible::before {
+  opacity: 0;
+}
+
 /* The words have to be readable over a still nobody chose. Darkest along the
    foot where they sit, clearing upwards so the picture is still a picture. */
 .band-tile::after {
@@ -896,9 +940,16 @@
   aspect-ratio: 16 / 9;
 }
 
+/* Coming forward, and lit while it is: the raised shadow it always had, then
+   a hairline of accent against the picture and a breath of the same just off
+   it. The one under the pointer is the one the accent is on, so nothing on a
+   page of a hundred posters is wearing it at rest. */
 .card:hover .card-picture,
 .card:focus-within .card-picture {
-  box-shadow: var(--shadow-raised);
+  box-shadow:
+    var(--shadow-raised),
+    0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent),
+    0 4px 26px -10px var(--accent-glow);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3050,7 +3101,29 @@ button.seen-mark:not(.seen-mark-on):hover {
   border-radius: 0 0 var(--radius-card) var(--radius-card);
   overflow: hidden;
   isolation: isolate;
-  background: var(--surface);
+  /* The edge it ends on, which is the same lit hairline the door's card wears
+     all the way round: here only the foot carries it, because the foot is the
+     only edge of the banner there is. Brightest in the middle and gone by both
+     ends, so it reads as the picture catching the light rather than as a rule
+     drawn under it. The line is a gradient painted over the whole box and the
+     surface is laid on top of it clipped to the inside, so the only place it
+     is left showing is the border itself, which a border colour could not
+     have carried. */
+  border-bottom: 1px solid transparent;
+  background:
+    var(--surface) padding-box,
+    linear-gradient(
+      to right,
+      transparent,
+      color-mix(in srgb, var(--accent-dim) 38%, transparent) 22%,
+      color-mix(in srgb, var(--accent-bright) 62%, transparent) 50%,
+      color-mix(in srgb, var(--accent-dim) 38%, transparent) 78%,
+      transparent
+    ) border-box;
+  /* And the air just under it. One blur, tucked well up so what shows is a
+     breath of accent along the join and not a coloured shadow the banner
+     floats on. */
+  box-shadow: 0 10px 40px -22px var(--accent-glow);
 }
 
 .hero-backdrop {
