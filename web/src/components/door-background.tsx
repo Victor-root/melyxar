@@ -30,7 +30,11 @@ export function DoorBackground({ branding }: { branding: Branding }) {
     );
   }
 
-  return branding.login_background_style === "library" ? <DrawnLibrary /> : <Drift />;
+  return branding.login_background_style === "library" ? (
+    <DrawnLibrary />
+  ) : (
+    <Drift className="door-drift" />
+  );
 }
 
 /*
@@ -47,10 +51,14 @@ export function DoorBackground({ branding }: { branding: Branding }) {
  * dust worked out in a loop is a field of dust redrawn every time this screen
  * is opened. What moves is a transform and an opacity and nothing besides,
  * which the browser hands to the part of itself that composes the page.
+ *
+ * Exported rather than kept to the door: the home page wears the same drift
+ * behind its rows, under its own class so it can stand fixed behind a page
+ * that scrolls rather than absolute behind one that does not.
  */
-function Drift() {
+export function Drift({ className }: { className: string }) {
   return (
-    <div className="door-drift" aria-hidden="true">
+    <div className={className} aria-hidden="true">
       <div className="door-drift-light door-drift-light-one" />
       <div className="door-drift-light door-drift-light-two" />
       <div className="door-drift-light door-drift-light-three" />

@@ -20,6 +20,7 @@ import { Link } from "react-router-dom";
 import type { Card as CardData, Library } from "../api";
 import { Band } from "../components/band";
 import { Card } from "../components/card";
+import { Drift } from "../components/door-background";
 import { Hero } from "../components/hero";
 import { Row } from "../components/row";
 import { howFarIn, useHomeScreen } from "../screens/home";
@@ -39,12 +40,15 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
   if (failed) {
     return (
-      <main className="page">
-        <p className="notice">{t("error.unreachable")}</p>
-        <button className="button" onClick={again}>
-          {t("error.retry")}
-        </button>
-      </main>
+      <>
+        <Drift className="home-backdrop" />
+        <main className="page">
+          <p className="notice">{t("error.unreachable")}</p>
+          <button className="button" onClick={again}>
+            {t("error.retry")}
+          </button>
+        </main>
+      </>
     );
   }
 
@@ -57,42 +61,47 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
   if (home.works === 0) {
     return (
-      <main className="page">
-        <section className="empty">
-          <h1>{t("home.empty.title")}</h1>
-          {/* While the scan runs, what it is doing replaces the invitation to
-              start one: reading "run a scan" during a scan is what sends
-              somebody to press the button a second time. How far along it is
-              belongs to the screen that exists for it, and the way there is
-              said rather than left to be found. */}
-          {jobs.length > 0 ? (
-            <>
-              <p>{t("home.scanning")}</p>
-              <Link className="button" to="/activity">
-                {t("nav.jobs")}
-              </Link>
-            </>
-          ) : (
-            <>
-              <p>{t("home.empty.body")}</p>
-              {libraries.length > 0 && (
-                <button
-                  className="button button-accent"
-                  onClick={scan.start}
-                  disabled={scan.starting}
-                >
-                  {t("home.scan")}
-                </button>
-              )}
-            </>
-          )}
-        </section>
-      </main>
+      <>
+        <Drift className="home-backdrop" />
+        <main className="page">
+          <section className="empty">
+            <h1>{t("home.empty.title")}</h1>
+            {/* While the scan runs, what it is doing replaces the invitation
+                to start one: reading "run a scan" during a scan is what
+                sends somebody to press the button a second time. How far
+                along it is belongs to the screen that exists for it, and
+                the way there is said rather than left to be found. */}
+            {jobs.length > 0 ? (
+              <>
+                <p>{t("home.scanning")}</p>
+                <Link className="button" to="/activity">
+                  {t("nav.jobs")}
+                </Link>
+              </>
+            ) : (
+              <>
+                <p>{t("home.empty.body")}</p>
+                {libraries.length > 0 && (
+                  <button
+                    className="button button-accent"
+                    onClick={scan.start}
+                    disabled={scan.starting}
+                  >
+                    {t("home.scan")}
+                  </button>
+                )}
+              </>
+            )}
+          </section>
+        </main>
+      </>
     );
   }
 
   return (
     <>
+      <Drift className="home-backdrop" />
+
       {/* Outside the page rather than inside it: the banner is the picture,
           and a picture held inside a column that stops short of both edges of
           a wide screen is a picture with a margin drawn round it. */}
@@ -296,18 +305,21 @@ function whatIsLeft(
  */
 function HomeSkeleton() {
   return (
-    <main className="page page-home" aria-busy="true">
-      <div className="skeleton skeleton-hero" />
-      {[0, 1].map((row) => (
-        <section className="section" key={row}>
-          <div className="skeleton skeleton-heading" />
-          <div className="row-track">
-            {[0, 1, 2, 3, 4, 5, 6].map((card) => (
-              <div className="skeleton skeleton-card" key={card} />
-            ))}
-          </div>
-        </section>
-      ))}
-    </main>
+    <>
+      <Drift className="home-backdrop" />
+      <main className="page page-home" aria-busy="true">
+        <div className="skeleton skeleton-hero" />
+        {[0, 1].map((row) => (
+          <section className="section" key={row}>
+            <div className="skeleton skeleton-heading" />
+            <div className="row-track">
+              {[0, 1, 2, 3, 4, 5, 6].map((card) => (
+                <div className="skeleton skeleton-card" key={card} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </main>
+    </>
   );
 }
