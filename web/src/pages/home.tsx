@@ -20,7 +20,6 @@ import { Link } from "react-router-dom";
 import type { Card as CardData, Library } from "../api";
 import { Band } from "../components/band";
 import { Card } from "../components/card";
-import { Drift } from "../components/door-background";
 import { Hero } from "../components/hero";
 import { Row } from "../components/row";
 import { howFarIn, useHomeScreen } from "../screens/home";
@@ -41,7 +40,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   if (failed) {
     return (
       <>
-        <Drift className="home-backdrop" />
+        <div className="home-backdrop" aria-hidden="true" />
         <main className="page">
           <p className="notice">{t("error.unreachable")}</p>
           <button className="button" onClick={again}>
@@ -62,7 +61,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   if (home.works === 0) {
     return (
       <>
-        <Drift className="home-backdrop" />
+        <div className="home-backdrop" aria-hidden="true" />
         <main className="page">
           <section className="empty">
             <h1>{t("home.empty.title")}</h1>
@@ -100,7 +99,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
   return (
     <>
-      <Drift className="home-backdrop" />
+      <div className="home-backdrop" aria-hidden="true" />
 
       {/* Outside the page rather than inside it: the banner is the picture,
           and a picture held inside a column that stops short of both edges of
@@ -306,7 +305,7 @@ function whatIsLeft(
 function HomeSkeleton() {
   return (
     <>
-      <Drift className="home-backdrop" />
+      <div className="home-backdrop" aria-hidden="true" />
       <main className="page page-home" aria-busy="true">
         <div className="skeleton skeleton-hero" />
         {[0, 1].map((row) => (

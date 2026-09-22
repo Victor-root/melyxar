@@ -31,6 +31,12 @@ const SHORTEST = 38;
 export function ScrollBar({ holder }: { holder: React.RefObject<HTMLElement | null> }) {
   const track = useRef<HTMLDivElement>(null);
   const mark = useRef<HTMLDivElement>(null);
+  /* The length last written. How long the mark is changes when the page
+     does and not while one is scrolled, and writing a height is what makes
+     a browser work the layout out again: written every frame, the one thing
+     here that costs anything would have been costing it sixty times a
+     second for nothing. */
+  const drawn = useRef(-1);
   /* Whether there is more page than screen. Drawn nowhere at all when there
      is not: a bar as long as its own track says nothing and is one more thing
      on a screen that does not scroll. */
@@ -55,7 +61,10 @@ export function ScrollBar({ holder }: { holder: React.RefObject<HTMLElement | nu
     }
     const room = road.clientHeight;
     const long = Math.max(SHORTEST, (view / box.scrollHeight) * room);
-    it.style.height = `${long}px`;
+    if (long !== drawn.current) {
+      drawn.current = long;
+      it.style.height = `${long}px`;
+    }
     it.style.transform = `translateY(${(box.scrollTop / over) * (room - long)}px)`;
   }, [holder]);
 
