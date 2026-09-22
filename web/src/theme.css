@@ -93,18 +93,17 @@
   --gutter: clamp(14px, 2.2vw, 56px);
   --header-height: 60px;
 
-  /* The line drawn under the bar counts towards the band it holds, so the two
-     are written together and the line is taken from here rather than typed
-     where it is drawn. Anything working out the room left under the bar has
-     to subtract the line as well: a sum that forgot it left the page
-     scrolling by one point with nothing under the fold. */
-  --header-line: 1px;
-  --header-band: calc(var(--header-height) + var(--header-line));
+  /* The bar is not a bar: it is a handful of glass pieces floating at the top
+     of the screen, and this is how tall each of them stands inside the band
+     the bar reserves. What is left over, above and below, is the air that
+     tells them from the page they sit on. */
+  --header-piece: 46px;
 
   /* The same recipe the player's panels mix for their own glass, worked out
      here from this theme's surface instead of a forced dark one: what sits
      behind the header is a page, not a film, so it has to follow day and
-     night like everything else rather than stay black on a light theme. */
+     night like everything else rather than stay black on a light theme. Each
+     piece of the bar is mixed from it. */
   --header-glass: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 
   /* How tall the banner of the home page is, and with it the grey block drawn

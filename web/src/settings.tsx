@@ -142,7 +142,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     // a telephone the plain one counts the bars of the browser as screen, and
     // the banner ends up taller than what can be seen.
     if (bannerFillsTheScreen) {
-      root.style.setProperty("--hero-height", "calc(100dvh - var(--header-band))");
+      root.style.setProperty("--hero-height", "calc(100dvh - var(--header-height))");
     } else {
       root.style.removeProperty("--hero-height");
     }
