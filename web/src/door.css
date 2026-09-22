@@ -417,17 +417,74 @@
   /* Glass rather than a solid panel: it stands over a background of its own
      server's choosing, and a solid box on top of one is a box stuck to a
      photograph. The wash is dark enough that the fields inside it hold their
-     contrast over anything behind. */
-  border: 1px solid color-mix(in srgb, var(--border-strong) 85%, transparent);
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
+     contrast over anything behind, and the accent rises into it from below and
+     from the top corner, so the rim that surrounds it is not a line stuck onto
+     a grey box but the edge of something already lit. */
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  background:
+    radial-gradient(
+      118% 78% at 50% 116%,
+      color-mix(in srgb, var(--accent) 26%, transparent),
+      color-mix(in srgb, var(--accent-dim) 11%, transparent) 44%,
+      transparent 72%
+    ),
+    radial-gradient(
+      76% 56% at 6% -10%,
+      color-mix(in srgb, var(--accent-dim) 18%, transparent),
+      transparent 62%
+    ),
+    color-mix(in srgb, var(--surface) 80%, transparent);
   backdrop-filter: blur(26px) saturate(125%);
-  /* Two shadows: one that seats it on the screen, and a hairline of accent
-     around it that ties it to the light behind. */
+  /* The light the card sits in. One shadow seats it on the screen; the three
+     above it are the same accent at widening blurs, which is what a bloom is:
+     a bright edge, the air just off it, and the whole card's worth of it
+     spilling down the background. No spread ring among them, because the rim
+     itself is drawn below and a hard ring outside it would flatten it. */
   box-shadow:
     var(--shadow-raised),
-    0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent),
-    0 0 60px color-mix(in srgb, var(--accent) 12%, transparent);
+    0 0 24px -3px color-mix(in srgb, var(--accent-bright) 42%, transparent),
+    0 0 72px -10px color-mix(in srgb, var(--accent) 38%, transparent),
+    0 20px 110px -18px color-mix(in srgb, var(--accent-dim) 55%, transparent);
   animation: door-arrive var(--calm) var(--ease) both;
+}
+
+/*
+ * The rim.
+ *
+ * One hairline of accent all the way round, and not the same accent all the
+ * way round: a colour turning as it goes is what tells a lit edge from a
+ * border, and it is the whole of the difference here. Drawn as a filled
+ * rounded box with its middle cut out by a mask, because a border cannot hold
+ * a gradient of its own.
+ *
+ * Out of the flow, so the column the card is laid out as does not take it for
+ * a row of its own, and sitting exactly on the card's own border rather than
+ * outside it: the box is the size it was before, to the point.
+ */
+.door-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 128deg,
+    color-mix(in srgb, var(--accent-bright) 92%, transparent),
+    color-mix(in srgb, var(--accent) 54%, transparent) 16%,
+    color-mix(in srgb, var(--accent-dim) 34%, transparent) 33%,
+    color-mix(in srgb, var(--accent-bright) 96%, transparent) 54%,
+    color-mix(in srgb, var(--accent) 52%, transparent) 74%,
+    color-mix(in srgb, var(--accent-bright) 86%, transparent)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 @keyframes door-arrive {
@@ -1097,13 +1154,30 @@
 }
 
 /* Solid, and seated on the page by its shadow rather than by its glow: glass
-   over white is white. */
+   over white is white, and a bloom of accent over white is a pink smudge. The
+   wash inside it and the light around it are kept, at a fraction: enough that
+   the rim reads as the edge of something and not as a red line ruled on a
+   white box. */
 :root[data-theme="light"] .door-card {
-  background: var(--surface);
+  background:
+    radial-gradient(
+      118% 78% at 50% 116%,
+      color-mix(in srgb, var(--accent) 7%, transparent),
+      transparent 68%
+    ),
+    var(--surface);
   backdrop-filter: none;
   box-shadow:
     var(--shadow-raised),
-    0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
+    0 0 26px -6px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 16px 60px -22px color-mix(in srgb, var(--accent-dim) 30%, transparent);
+}
+
+/* The turn of the colour is the point of the rim, so it stays; what goes is
+   the strength of it, which on white would read at several times what it
+   reads at on black. */
+:root[data-theme="light"] .door-card::before {
+  opacity: 0.62;
 }
 
 :root[data-theme="light"] .door-box {
