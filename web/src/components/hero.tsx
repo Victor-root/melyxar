@@ -37,23 +37,25 @@ const EACH_STANDS_FOR = 9000;
 /**
  * The fewest lines of synopsis worth drawing, and the most.
  *
- * Under two there is no synopsis, only the first half of a sentence, and at
- * that point the room is better left empty. Over a dozen it stops being what
- * the film is about and becomes the whole of the page: a banner set to fill a
- * tall screen would otherwise hand over thirty lines of it.
+ * One line, cut short, is still a synopsis beginning, so the synopsis is
+ * drawn whenever a single line of it will go in. It goes only where not even
+ * that fits, which is the one case where drawing it means pushing the buttons
+ * off the foot of the banner. Over a dozen it stops being what the film is
+ * about and becomes the whole of the page: a banner set to fill a tall screen
+ * would otherwise hand over thirty lines of it.
  */
-const FEWEST_LINES = 2;
+const FEWEST_LINES = 1;
 const MOST_LINES = 12;
 
 /**
- * How many whole lines fit in the room left over, and none at all when two
- * of them do not.
+ * How many whole lines fit in the room left over, and none at all when not
+ * even one does.
  *
  * Whole ones: a box given the room for three lines and a third draws the
  * third one cut off along the middle of its letters, and a banner is the one
- * place on the screen where that is unmissable. And none rather than two that
- * do not fit, since what a banner too short for a synopsis must not do is
- * push the buttons off the foot of itself to make room for one.
+ * place on the screen where that is unmissable. The text that will not fit is
+ * cut short with an ellipsis, which the stylesheet does; this only says how
+ * many lines there are to cut it to.
  */
 function linesThatFit(room: number, lineHeight: number): number {
   if (!(lineHeight > 0)) {

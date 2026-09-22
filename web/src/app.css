@@ -3378,7 +3378,7 @@ button.seen-mark:not(.seen-mark-on):hover {
   overflow: hidden;
 }
 
-/* A banner too short to hold even two lines of it drops the synopsis rather
+/* A banner with no room for even one line of it drops the synopsis rather
    than the buttons under it. It stays on the page all the same, at no height,
    because it is what the sum above is measured against. */
 .hero-overview-no-room {
