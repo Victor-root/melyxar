@@ -880,13 +880,14 @@
 }
 
 .section-through > svg {
-  color: var(--text-faint);
-  transition: transform var(--quick) var(--ease), color var(--quick) var(--ease);
+  position: relative;
+  top: 1px;
+  color: var(--accent-bright);
+  transition: transform var(--quick) var(--ease);
 }
 
 .section-through:hover > svg {
   transform: translateX(3px);
-  color: var(--accent-bright);
 }
 
 /* The same thing said in words, at the far right of the row, for whoever does
