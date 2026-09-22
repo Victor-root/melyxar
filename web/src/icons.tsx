@@ -121,12 +121,18 @@ export function SeriesIcon(props: IconProps) {
   );
 }
 
-/** A star, for animation: the one category a screen alone cannot tell from
- *  the one above it. */
+/** Two theatre masks, both smiling, for anime. */
 export function AnimeIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M12 3.2l2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.7l6.1-.9Z" />
+      <path d="M13.192 9h6.616a2 2 0 0 1 1.992 2.183l-.567 6.182a4 4 0 0 1 -3.983 3.635h-1.5a4 4 0 0 1 -3.983 -3.635l-.567 -6.182a2 2 0 0 1 1.992 -2.183" />
+      <path d="M15 13h.01" />
+      <path d="M18 13h.01" />
+      <path d="M15 16.5c1 .667 2 .667 3 0" />
+      <path d="M8.632 15.982a4.037 4.037 0 0 1 -.382 .018h-1.5a4 4 0 0 1 -3.983 -3.635l-.567 -6.182a2 2 0 0 1 1.992 -2.183h6.616a2 2 0 0 1 2 2" />
+      <path d="M6 8h.01" />
+      <path d="M9 8h.01" />
+      <path d="M6 12c.884 .251 1.648 .131 2.291 -.36" />
     </Icon>
   );
 }
