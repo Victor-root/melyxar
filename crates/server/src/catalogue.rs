@@ -523,11 +523,10 @@ struct UpNextView {
 struct ShelfView {
     /// movies, series, anime or shows.
     kind: &'static str,
+    /// The newest works of that kind. The row of them further down the home
+    /// page is drawn from these, and so is the fan of posters on the tile
+    /// that leads to the kind: one answer, asked for once.
     cards: Vec<CardView>,
-    /// A wide picture borrowed from the newest work of that kind, to stand
-    /// behind the tile that leads to it. Empty on a server whose films nobody
-    /// has looked up yet, which the tile answers with its own colour.
-    picture: Vec<ImageView>,
 }
 
 /// One film somebody started and has not finished.
@@ -611,7 +610,6 @@ async fn home(
             .map(|shelf| ShelfView {
                 kind: shelf.kind.as_str(),
                 cards: shelf.cards.iter().map(card_view).collect(),
-                picture: shelf.picture.iter().map(image_view).collect(),
             })
             .collect(),
         works: page.works,

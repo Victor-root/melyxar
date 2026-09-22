@@ -86,10 +86,6 @@ pub struct Home {
 pub struct Shelf {
     pub kind: LibraryKind,
     pub cards: Vec<WorkCard>,
-    /// A wide picture to stand behind the tile that leads to this kind,
-    /// borrowed from the newest work in it: a row of five named rectangles
-    /// is a menu, and what this band is meant to be is a way in.
-    pub picture: Vec<melyxar_database::images::StoredImage>,
 }
 
 /// One of the few works the page opens on, and why it is there.
@@ -171,11 +167,6 @@ const IN_THE_HERO: i64 = 5;
 
 /// How many cards one kind's row holds.
 const ON_A_SHELF: i64 = 24;
-
-/// How many of a row's newest works are looked at for a picture to stand
-/// behind its tile. The first few, because the very newest may be a film
-/// nobody has looked up yet, which has no picture at all.
-const LOOKED_AT_FOR_A_TILE: usize = 6;
 
 /// Every library this viewer may see, with what it holds and what the server
 /// can reach.
@@ -492,33 +483,9 @@ async fn the_shelves(state: &AppState, who: &User) -> Result<Vec<Shelf>> {
         shelves.push(Shelf {
             kind: library.kind,
             cards: page.cards,
-            picture: Vec::new(),
         });
     }
 
-    // The picture behind each tile, taken from the newest work of that kind
-    // that has one, in a single question for every shelf at once.
-    let leading: Vec<WorkId> = shelves
-        .iter()
-        .flat_map(|shelf| shelf.cards.iter().take(LOOKED_AT_FOR_A_TILE).map(|card| card.id))
-        .collect();
-    let dressed = state
-        .database()
-        .dressed_large(&leading, &who.preferences.interface_language)
-        .await?;
-    for shelf in &mut shelves {
-        shelf.picture = shelf
-            .cards
-            .iter()
-            .take(LOOKED_AT_FOR_A_TILE)
-            .find_map(|card| {
-                dressed
-                    .get(&card.id)
-                    .filter(|entry| !entry.backdrop.is_empty())
-                    .map(|entry| entry.backdrop.clone())
-            })
-            .unwrap_or_default();
-    }
     Ok(shelves)
 }
 
