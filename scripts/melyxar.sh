@@ -37,6 +37,19 @@ BACKUP_KEEP="7"
 # slow, it is stopped, and saying so beats a screen that waits for ever.
 RUST_MINUTES="20"
 
+# Which line of Node the interface is built with.
+#
+# The long term line, and its newest release rather than a version written
+# down here: a version written down is a version that stops being current the
+# week after, without anything saying so. Raised only when that line is
+# retired in its turn.
+NODE_MAJOR="24"
+
+# Where Node is unpacked. Under /opt because it belongs to nothing the
+# distribution manages, and its commands are linked into /usr/local/bin,
+# which every shell already looks in before /usr/bin.
+NODE_PREFIX="/opt/node"
+
 # Whether every command shows its own output as it goes.
 #
 # On while Melyxar is being built, because "it did not work" with nothing to
@@ -177,6 +190,26 @@ en|step_apt_install|Installing build tools and media tools
 fr|step_apt_install|Installation des outils de compilation et des outils média
 en|step_rust|Installing the Rust toolchain
 fr|step_rust|Installation de la chaîne d'outils Rust
+en|step_node|Installing Node.js %s
+fr|step_node|Installation de Node.js %s
+en|step_node_distribution|Installing the distribution's Node.js
+fr|step_node_distribution|Installation du Node.js de la distribution
+en|node_present|Node.js already current: %s
+fr|node_present|Node.js déjà à jour : %s
+en|node_arch_unknown|Unknown processor type: %s. Node.js cannot be fetched for it.
+fr|node_arch_unknown|Type de processeur inconnu : %s. Node.js ne peut pas être téléchargé pour lui.
+en|node_unreachable|nodejs.org could not be reached.
+fr|node_unreachable|nodejs.org est injoignable.
+en|node_bad_sum|What arrived does not match the published checksum and was thrown away.
+fr|node_bad_sum|Ce qui est arrivé ne correspond pas à l'empreinte publiée et a été jeté.
+en|node_unpack_failed|The archive could not be unpacked. Nothing was replaced.
+fr|node_unpack_failed|L'archive n'a pas pu être décompressée. Rien n'a été remplacé.
+en|node_installed|Node.js %s installed
+fr|node_installed|Node.js %s installé
+en|node_kept|The Node.js already installed is kept: %s
+fr|node_kept|Le Node.js déjà installé est conservé : %s
+en|node_fallback|Node.js is taken from the distribution instead. It is older than the interface's own tools ask for, which is what the warnings during the build are about.
+fr|node_fallback|Node.js est pris dans la distribution à la place. Il est plus ancien que ce que demandent les outils de l'interface, et c'est de là que viennent les avertissements pendant la compilation.
 en|step_npm_install|Installing the interface's own dependencies
 fr|step_npm_install|Installation des dépendances propres à l'interface
 en|step_npm_build|Building the web interface
@@ -737,7 +770,16 @@ install_packages() {
   step "$(tr_msg step_apt_update)" apt-get update -qq
 
   step "$(tr_msg step_apt_install)" apt-get install -y --no-install-recommends \
-    build-essential pkg-config git curl ca-certificates ffmpeg sqlite3 nodejs npm
+    build-essential pkg-config git curl ca-certificates xz-utils ffmpeg sqlite3
+
+  # Node comes from its own source rather than from the distribution, for the
+  # reason written above install_node. It gives up only when this machine ends
+  # up with no Node at all, and a build needs one rather than none: the
+  # distribution's is taken then, saying why the build is about to complain.
+  if ! step "$(tr_fmt step_node "$NODE_MAJOR")" install_node; then
+    warn "$(tr_msg node_fallback)"
+    step "$(tr_msg step_node_distribution)" apt-get install -y --no-install-recommends nodejs npm
+  fi
 
   if command -v cargo >/dev/null 2>&1; then
     success "$(tr_fmt rust_present "$(cargo --version)")"
@@ -793,6 +835,125 @@ install_rust() {
     error "$(tr_fmt rust_too_long "$RUST_MINUTES")"
   fi
   return "$rc"
+}
+
+# Node, from nodejs.org rather than from the distribution.
+#
+# Debian carries the Node that was current the day Debian froze, and keeps it
+# for years: on Debian 13 it is a line that has already reached its own end of
+# life, and the interface's own tools say so on every single build. Rust is
+# already taken from rustup for exactly that reason, so Node is taken from its
+# own source in the same spirit, and the distribution's copy is left where it
+# is rather than fought with. What is unpacked under /opt is linked into
+# /usr/local/bin, which every shell looks in before /usr/bin.
+#
+# Returning without having installed anything is not always a failure: a Node
+# already there still builds the interface, badly, and that beats an update
+# that stops dead because nodejs.org had a bad minute. It is a failure only
+# when the machine has no Node at all, and the caller then falls back to the
+# distribution's.
+install_node() {
+  local running rc=0
+  running="$(node --version 2>/dev/null || true)"
+
+  node_from_source "$running" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    return 0
+  fi
+
+  if [[ -n "$running" ]]; then
+    warn "$(tr_fmt node_kept "$running")"
+    return 0
+  fi
+  return 1
+}
+
+# The newest release of the wanted line, fetched and put in place.
+#
+# The list of checksums published beside that line answers both questions at
+# once: which version is current, and whether what arrived is really it. So
+# no version is written down anywhere, and nothing is unpacked that has not
+# been checked first.
+node_from_source() {
+  local running="$1"
+  local machine arch sums line sum file version dir
+
+  machine="$(uname -m)"
+  case "$machine" in
+    x86_64 ) arch="x64" ;;
+    aarch64 | arm64 ) arch="arm64" ;;
+    armv7l ) arch="armv7l" ;;
+    * )
+      error "$(tr_fmt node_arch_unknown "$machine")"
+      return 1
+      ;;
+  esac
+
+  sums="$(mktemp)"
+  if ! node_fetch "https://nodejs.org/dist/latest-v${NODE_MAJOR}.x/SHASUMS256.txt" "$sums"; then
+    rm -f "$sums"
+    error "$(tr_msg node_unreachable)"
+    return 1
+  fi
+
+  line="$(grep -E "  node-v[0-9.]+-linux-${arch}\.tar\.xz\$" "$sums" || true)"
+  rm -f "$sums"
+  if [[ -z "$line" ]]; then
+    error "$(tr_fmt node_arch_unknown "$machine")"
+    return 1
+  fi
+
+  sum="${line%% *}"
+  file="${line##* }"
+  version="${file#node-}"
+  version="${version%%-linux*}"
+
+  if [[ "$running" == "$version" ]]; then
+    success "$(tr_fmt node_present "$version")"
+    return 0
+  fi
+
+  dir="$(mktemp -d)"
+  if ! node_fetch "https://nodejs.org/dist/${version}/${file}" "${dir}/${file}"; then
+    rm -rf "$dir"
+    error "$(tr_msg node_unreachable)"
+    return 1
+  fi
+
+  if ! printf '%s  %s\n' "$sum" "$file" |
+    (cd "$dir" && sha256sum --check --status -); then
+    rm -rf "$dir"
+    error "$(tr_msg node_bad_sum)"
+    return 1
+  fi
+
+  # Unpacked beside the one in use, and only put in its place once it is whole:
+  # an archive that stops halfway must never leave the machine with half a Node
+  # where its Node used to be.
+  rm -rf "${NODE_PREFIX}.new"
+  if ! (mkdir -p "${NODE_PREFIX}.new" &&
+    tar -xJf "${dir}/${file}" -C "${NODE_PREFIX}.new" --strip-components=1); then
+    rm -rf "$dir" "${NODE_PREFIX}.new"
+    error "$(tr_msg node_unpack_failed)"
+    return 1
+  fi
+  rm -rf "$dir" "$NODE_PREFIX"
+  mv "${NODE_PREFIX}.new" "$NODE_PREFIX"
+
+  ln -sfn "${NODE_PREFIX}/bin/node" /usr/local/bin/node
+  ln -sfn "${NODE_PREFIX}/bin/npm" /usr/local/bin/npm
+  ln -sfn "${NODE_PREFIX}/bin/npx" /usr/local/bin/npx
+  success "$(tr_fmt node_installed "$version")"
+}
+
+# One download, with the same manners as the rest of the script: https only,
+# a connection that refuses to open is retried, and a transfer that has gone
+# to sleep is dropped rather than waited on for ever.
+node_fetch() {
+  curl --proto '=https' --tlsv1.2 -sSfL \
+    --connect-timeout 20 --retry 3 --retry-delay 2 --retry-all-errors \
+    --speed-limit 1024 --speed-time 60 \
+    "$1" -o "$2"
 }
 
 create_account_and_folders() {
