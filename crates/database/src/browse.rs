@@ -695,55 +695,14 @@ impl Database {
 
     /// Gives every folder card with no picture of its own the picture of the
     /// first thing inside it that has one.
-    ///
-    /// First by depth, then by name: what sits in the folder itself before
-    /// what sits in a folder inside it, in the order the folder shows them.
-    /// Nothing is copied: the folder is shown the same picture, read at the
-    /// same moment, so it follows whatever becomes of that picture.
     async fn lend_pictures_to_folders(&self, cards: &mut [WorkCard]) -> Result<()> {
-        let folders: Vec<String> = cards
+        let folders: Vec<WorkId> = cards
             .iter()
             .filter(|card| card.kind == WorkKind::Folder && card.poster.is_empty())
-            .map(|card| card.id.to_db_string())
+            .map(|card| card.id)
             .collect();
-        if folders.is_empty() {
-            return Ok(());
-        }
-        let places = vec!["?"; folders.len()].join(", ");
-        let mut query = sqlx::query(AssertSqlSafe(format!(
-            "WITH RECURSIVE inside(folder_id, work_id, depth) AS (
-                 SELECT parent_id, id, 1 FROM works WHERE parent_id IN ({places})
-                 UNION ALL
-                 SELECT inside.folder_id, works.id, inside.depth + 1
-                   FROM inside JOIN works ON works.parent_id = inside.work_id
-             ),
-             chosen AS (
-                 SELECT folder_id, work_id FROM (
-                     SELECT inside.folder_id, inside.work_id,
-                            row_number() OVER (PARTITION BY inside.folder_id
-                                               ORDER BY inside.depth, w.sort_title, w.id) AS rank
-                       FROM inside JOIN works w ON w.id = inside.work_id
-                      WHERE EXISTS (SELECT 1 FROM images p
-                                     WHERE p.owner_kind = 'work' AND p.owner_id = inside.work_id
-                                       AND p.image_kind = 'poster'))
-                  WHERE rank = 1
-             )
-             SELECT chosen.folder_id, {} FROM chosen
-               JOIN images ON images.owner_kind = 'work' AND images.owner_id = chosen.work_id
-                          AND images.image_kind = 'poster'
-              ORDER BY images.width DESC",
-            crate::images::WHAT_A_PICTURE_IS
-        )));
-        for folder in &folders {
-            query = query.bind(folder);
-        }
-        for row in query.fetch_all(self.reader()).await? {
-            let folder_id: String = row.try_get("folder_id")?;
-            let image = crate::images::image_from_row(&row)?;
-            if let Some(card) = cards
-                .iter_mut()
-                .find(|card| card.id.to_db_string() == folder_id)
-            {
+        for (folder, image) in self.pictures_lent_to_folders(&folders).await? {
+            if let Some(card) = cards.iter_mut().find(|card| card.id == folder) {
                 card.poster.push(image);
             }
         }

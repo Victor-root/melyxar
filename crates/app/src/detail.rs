@@ -51,6 +51,10 @@ pub struct WorkDetail {
     /// it. Absent for anything that is not an episode, and for the first
     /// episode of a series.
     pub previous_episode: Option<CarryOn>,
+    /// The photos before and after this one in its folder, for looking
+    /// through them one by one. Both absent for anything but a photo.
+    pub previous_photo: Option<WorkId>,
+    pub next_photo: Option<WorkId>,
 }
 
 /// The episode a page offers to play next, and where in it.
@@ -355,6 +359,25 @@ pub async fn work_detail(
                 work: child,
             }
         })
+        .collect::<Vec<_>>();
+    // A folder inside this one has no picture of its own and is shown with
+    // one of what it holds, as on a grid.
+    let bare_folders: Vec<WorkId> = children
+        .iter()
+        .filter(|child| child.work.kind == melyxar_core::work::WorkKind::Folder)
+        .map(|child| child.work.id)
+        .collect();
+    let lent = database.pictures_lent_to_folders(&bare_folders).await?;
+    let children = children
+        .into_iter()
+        .map(|mut child| {
+            child.poster.extend(
+                lent.iter()
+                    .filter(|(folder, _)| *folder == child.work.id)
+                    .map(|(_, image)| image.clone()),
+            );
+            child
+        })
         .collect();
 
     // Only a series is ever given a mark of its own: a season and an episode
@@ -413,7 +436,14 @@ pub async fn work_detail(
         _ => None,
     };
 
+    let (previous_photo, next_photo) = match work.kind {
+        melyxar_core::work::WorkKind::Photo => database.neighbouring_photos(&work).await?,
+        _ => (None, None),
+    };
+
     Ok(Some(WorkDetail {
+        previous_photo,
+        next_photo,
         children,
         ancestry,
         carry_on_with,

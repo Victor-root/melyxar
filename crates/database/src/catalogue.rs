@@ -66,7 +66,10 @@ const HOW_DEEP_IT_GOES: usize = 2;
 /// Written once because two reads answer "what hangs under this", one for a
 /// page and one for the look up, and two orders would put an episode in one
 /// place on screen and fill in another.
-const IN_THE_ONE_ORDER: &str = "ORDER BY ordinal, sort_title";
+///
+/// In a folder of one's own, where nothing has a rank, the folders come
+/// before the files, the way every file manager shows them.
+const IN_THE_ONE_ORDER: &str = "ORDER BY ordinal, kind <> 'folder', sort_title";
 
 /// One work hanging under another, stripped to where it sits.
 #[derive(Debug, Clone, PartialEq, Eq)]

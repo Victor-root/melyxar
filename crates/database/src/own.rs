@@ -14,6 +14,7 @@ use sqlx::{AssertSqlSafe, Row};
 
 use crate::catalogue::{insert_work, what_a_work_is, work_from_row, Placed};
 use crate::convert::parse_id;
+use crate::images::{image_from_row, StoredImage, WHAT_A_PICTURE_IS};
 use crate::{Database, DatabaseError, Result};
 
 /// A video or a photo whose card has no picture made the way pictures are
@@ -109,6 +110,90 @@ impl Database {
 }
 
 impl Database {
+    /// The picture each of these folders is shown with: every size of the
+    /// picture of the first thing inside it that has one.
+    ///
+    /// First by depth, then in the order the folder shows what it holds: what
+    /// sits in the folder itself before what sits in a folder inside it.
+    /// Nothing is copied: the folder is shown the same picture, read at the
+    /// same moment, so it follows whatever becomes of that picture.
+    pub async fn pictures_lent_to_folders(
+        &self,
+        folders: &[WorkId],
+    ) -> Result<Vec<(WorkId, StoredImage)>> {
+        if folders.is_empty() {
+            return Ok(Vec::new());
+        }
+        let places = vec!["?"; folders.len()].join(", ");
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "WITH RECURSIVE inside(folder_id, work_id, depth) AS (
+                 SELECT parent_id, id, 1 FROM works WHERE parent_id IN ({places})
+                 UNION ALL
+                 SELECT inside.folder_id, works.id, inside.depth + 1
+                   FROM inside JOIN works ON works.parent_id = inside.work_id
+             ),
+             chosen AS (
+                 SELECT folder_id, work_id FROM (
+                     SELECT inside.folder_id, inside.work_id,
+                            row_number() OVER (PARTITION BY inside.folder_id
+                                               ORDER BY inside.depth, w.sort_title, w.id) AS rank
+                       FROM inside JOIN works w ON w.id = inside.work_id
+                      WHERE EXISTS (SELECT 1 FROM images p
+                                     WHERE p.owner_kind = 'work' AND p.owner_id = inside.work_id
+                                       AND p.image_kind = 'poster'))
+                  WHERE rank = 1
+             )
+             SELECT chosen.folder_id, {WHAT_A_PICTURE_IS} FROM chosen
+               JOIN images ON images.owner_kind = 'work' AND images.owner_id = chosen.work_id
+                          AND images.image_kind = 'poster'
+              ORDER BY images.width DESC"
+        )));
+        for folder in folders {
+            query = query.bind(folder.to_db_string());
+        }
+        query
+            .fetch_all(self.reader())
+            .await?
+            .iter()
+            .map(|row| {
+                Ok((
+                    parse_id(&row.try_get::<String, _>("folder_id")?)?,
+                    image_from_row(row)?,
+                ))
+            })
+            .collect()
+    }
+
+    /// The photos just before and just after this one in the folder it sits
+    /// in, in the order the folder shows them, for whoever is looking through
+    /// them one by one.
+    pub async fn neighbouring_photos(
+        &self,
+        photo: &Work,
+    ) -> Result<(Option<WorkId>, Option<WorkId>)> {
+        let mut found = [None, None];
+        for (slot, (side, order)) in [("<", "DESC"), (">", "ASC")].iter().enumerate() {
+            let row = sqlx::query(AssertSqlSafe(format!(
+                "SELECT id FROM works
+                  WHERE library_id = ? AND parent_id IS ? AND kind = 'photo'
+                    AND (sort_title, id) {side} (?, ?)
+                  ORDER BY sort_title {order}, id {order}
+                  LIMIT 1"
+            )))
+            .bind(photo.library_id.to_db_string())
+            .bind(photo.parent_id.map(|folder| folder.to_db_string()))
+            .bind(&photo.sort_title)
+            .bind(photo.id.to_db_string())
+            .fetch_optional(self.reader())
+            .await?;
+            found[slot] = row
+                .map(|row| parse_id(&row.try_get::<String, _>("id")?))
+                .transpose()?;
+        }
+        let [before, after] = found;
+        Ok((before, after))
+    }
+
     /// The videos and photos of a library of home media whose card has no
     /// picture made by `recipe`, the way pictures are prepared today.
     ///
@@ -173,7 +258,6 @@ mod tests {
     use melyxar_core::time::now;
 
     use super::*;
-    use crate::images::StoredImage;
 
     #[tokio::test]
     async fn what_is_left_to_picture_is_each_file_without_a_picture_of_today() {
@@ -368,6 +452,68 @@ mod tests {
             shown("Winter"),
             ["snowman"],
             "a folder holding only folders shows what is further in"
+        );
+    }
+
+    #[tokio::test]
+    async fn photos_are_looked_through_in_the_order_their_folder_shows_them() {
+        let (database, library_id) = library().await;
+        let summer = database
+            .own_folder(library_id, None, "Summer", "summer")
+            .await
+            .expect("written");
+        let mut photos = Vec::new();
+        for name in ["c", "a", "b"] {
+            photos.push(
+                database
+                    .create_own_work(library_id, Some(summer.id), WorkKind::Photo, name, name)
+                    .await
+                    .expect("written"),
+            );
+        }
+        // Neither a video nor a photo elsewhere is looked through with them.
+        database
+            .create_own_work(library_id, Some(summer.id), WorkKind::Video, "ab", "ab")
+            .await
+            .expect("written");
+        database
+            .create_own_work(library_id, None, WorkKind::Photo, "b2", "b2")
+            .await
+            .expect("written");
+        database
+            .own_folder(library_id, Some(summer.id), "zz", "zz")
+            .await
+            .expect("written");
+
+        let [c, a, b] = [&photos[0], &photos[1], &photos[2]];
+        assert_eq!(
+            database.neighbouring_photos(b).await.expect("read"),
+            (Some(a.id), Some(c.id))
+        );
+        assert_eq!(
+            database.neighbouring_photos(a).await.expect("read"),
+            (None, Some(b.id))
+        );
+        assert_eq!(
+            database.neighbouring_photos(c).await.expect("read"),
+            (Some(b.id), None)
+        );
+
+        let viewer = database
+            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created");
+        let shown: Vec<String> = database
+            .children_of(viewer.id, summer.id)
+            .await
+            .expect("read")
+            .into_iter()
+            .map(|child| child.title)
+            .collect();
+        assert_eq!(
+            shown,
+            ["zz", "a", "ab", "b", "c"],
+            "the folders first, then the files by name"
         );
     }
 
