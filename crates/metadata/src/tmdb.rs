@@ -8,6 +8,7 @@
 use std::time::Duration;
 
 use melyxar_core::time::Millis;
+use melyxar_core::work::SeasonLength;
 use serde::Deserialize;
 
 use crate::provider::{
@@ -416,9 +417,10 @@ struct DetailsResponse {
     /// and says it as a list because the answer has changed over the years.
     #[serde(default)]
     episode_run_time: Vec<i64>,
-    /// How many seasons the provider counts. Absent for a film.
+    /// The seasons of a series, each with how many episodes it holds.
+    /// Absent for a film.
     #[serde(default)]
-    number_of_seasons: Option<i32>,
+    seasons: Vec<RawSeasonLength>,
     #[serde(default)]
     content_ratings: Option<RawContentRatings>,
     #[serde(default)]
@@ -537,6 +539,14 @@ struct RawContentRating {
     iso_3166_1: String,
     #[serde(default)]
     rating: String,
+}
+
+/// One season as a series lists it: its number and how long it is.
+#[derive(Debug, Deserialize)]
+struct RawSeasonLength {
+    season_number: i32,
+    #[serde(default)]
+    episode_count: i32,
 }
 
 /// One season, with the episodes under it.
@@ -740,7 +750,14 @@ fn details_from(raw: DetailsResponse, language: &str) -> Details {
         backdrop_path: best_backdrop(&pictures, raw.backdrop_path),
         logo_path: best_logo(pictures.logos, language),
         trailers,
-        season_count: raw.number_of_seasons,
+        season_lengths: raw
+            .seasons
+            .into_iter()
+            .map(|season| SeasonLength {
+                season: season.season_number,
+                episodes: season.episode_count,
+            })
+            .collect(),
     }
 }
 
@@ -1048,6 +1065,31 @@ mod tests {
         assert_eq!(candidates[0].title, "Quiet Harbour");
         assert_eq!(candidates[0].release_year, Some(2019));
         assert_eq!(candidates[1].overview, None, "an empty text is no text");
+    }
+
+    #[test]
+    fn a_series_says_how_long_each_of_its_seasons_is() {
+        let raw: DetailsResponse = serde_json::from_str(
+            r#"{"id": 222, "name": "Amber Field", "seasons": [
+                {"season_number": 0, "episode_count": 3},
+                {"season_number": 1, "episode_count": 28}
+            ]}"#,
+        )
+        .expect("the answer parses");
+        assert_eq!(
+            details_from(raw, "fr").season_lengths,
+            [
+                SeasonLength {
+                    season: 0,
+                    episodes: 3
+                },
+                SeasonLength {
+                    season: 1,
+                    episodes: 28
+                },
+            ]
+        );
+        assert!(details("fr").season_lengths.is_empty(), "a film holds none");
     }
 
     #[test]

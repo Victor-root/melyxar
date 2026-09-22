@@ -639,11 +639,16 @@ async fn reread_names_of_nameless_series(
 /// removed here, where the folder they live in is known.
 pub(crate) async fn join_work_into(state: &AppState, from: WorkId, into: WorkId) -> Result<()> {
     let no_longer_used = state.database().merge_work_into(from, into).await?;
+    forget_pictures(state, no_longer_used).await;
+    Ok(())
+}
+
+/// Takes pictures nothing points at any more out of the cache.
+pub(crate) async fn forget_pictures(state: &AppState, no_longer_used: Vec<String>) {
     let images = state.config().directories.images();
     for path in no_longer_used {
         tokio::fs::remove_file(images.join(path)).await.ok();
     }
-    Ok(())
 }
 
 /// Takes one copy away from the film it sits on, as a film of its own.
