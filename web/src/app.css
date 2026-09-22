@@ -233,9 +233,11 @@
 /* Where the cursor is, said with a line under the words rather than a ring
    around them. Said at all, because the ring was the only thing saying it
    and a field that answers the keyboard with nothing is a field nobody can
-   use without a pointer. */
+   use without a pointer. In the same ink as the words rather than the
+   accent: the accent marks a choice made, and no choice is made by putting
+   the cursor in a field. */
 .search-open:focus-within input {
-  box-shadow: 0 1px 0 var(--accent);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 35%, transparent);
 }
 
 /* The magnifier goes on carrying the accent it wears while the field is open,
@@ -270,6 +272,114 @@
 
 .search input:focus-visible {
   outline: none;
+}
+
+/* Left to the browser otherwise, which draws it at a strength that survives
+   the bar's own glass and dies the moment a bright picture sits behind it.
+   Said in the same ink as a greyed line, so it reads as a hint rather than
+   as the words themselves. */
+.search input::placeholder {
+  color: var(--text-soft);
+  opacity: 1;
+}
+
+/*
+ * The few results the field offers on its own, right under the bar, while
+ * the grid the enter key leads to waits behind a press.
+ *
+ * Drawn at the end of the page and placed against the window by hand, the
+ * same as every other list this bar drops: the piece it would otherwise sit
+ * inside is already frosted glass, and a panel frosting the inside of that
+ * frosts nothing at all.
+ */
+.quick-search {
+  position: fixed;
+  z-index: 30;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 96px));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--header-glass);
+  color: var(--text);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-raised);
+  animation: header-menu-arrive var(--quick) var(--ease) both;
+}
+
+.quick-search-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  color: inherit;
+  transition: background var(--quick) var(--ease);
+}
+
+.quick-search-line:hover,
+.quick-search-line:focus-visible {
+  background: var(--surface-hover);
+}
+
+.quick-search-picture {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 44px;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--card-color, var(--surface-raised));
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.quick-search-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.quick-search-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.quick-search-year {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.quick-search-empty {
+  padding: 10px 8px;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.quick-search-all {
+  margin-top: 2px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--accent-bright);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.quick-search-all:hover {
+  background: var(--surface-hover);
 }
 
 /* Drawn by this interface rather than by the machine: a system menu inside a
@@ -457,8 +567,13 @@
   transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
 }
 
+/* No wash, the same as the account's own name: the piece it sits on is
+   already glass, and a wash lit inside it is a pill floating in a pill. What
+   answers the pointer is the icon coming up to full strength, which also
+   survives being held over a bright picture better than a patch of dark
+   ever did. */
 .header-icon:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: none;
   color: var(--text);
 }
 

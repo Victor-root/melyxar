@@ -34,7 +34,9 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import type { Library, LibraryKind } from "../api";
+import type { Card, Library, LibraryKind } from "../api";
+import { api, pictureSet } from "../api";
+import { wasAbandoned } from "../asking";
 import { outOfAHundred } from "../readable";
 import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
@@ -76,6 +78,36 @@ interface Category {
   libraries: Library[];
 }
 
+/** How many results the field offers on its own, before somebody presses
+ *  enter for the rest of them. */
+const QUICK_RESULTS = 6;
+
+/** How long a pause in typing has to last before it is read as a question. A
+ *  word typed at speed is one question, not five. */
+const QUICK_DEBOUNCE_MS = 200;
+
+/** Where the full grid of results for these words lives, which is also what
+ *  the enter key sends somebody to. */
+export function searchAddress(words: string, scope: string): string {
+  const asked = new URLSearchParams({ search: words });
+  if (scope) {
+    asked.set("in", scope);
+  }
+  return `/search?${asked.toString()}`;
+}
+
+/** The scope as the works endpoint reads it, split back out of the one value
+ *  the address holds it as. */
+export function scopeToBrowse(scope: string): { kind?: LibraryKind; library?: string } {
+  if (scope.startsWith("kind:")) {
+    return { kind: scope.slice("kind:".length) as LibraryKind };
+  }
+  if (scope.startsWith("library:")) {
+    return { library: scope.slice("library:".length) };
+  }
+  return {};
+}
+
 /** The categories this server really has, in the order they are offered. */
 function categoriesOf(libraries: Library[]): Category[] {
   return KINDS.map((kind) => ({
@@ -90,12 +122,14 @@ export function Header({ libraries }: { libraries: Library[] }) {
   const location = useLocation();
   const [parameters] = useSearchParams();
   const [query, setQuery] = useState(parameters.get("search") ?? "");
+  const words = query.trim();
   const [scope, setScope] = useState(parameters.get("in") ?? "");
   /* Whether the field is out of its magnifier. Open already when the address
      carries a search: landing on a page of results with the words hidden
      inside an icon is a page answering a question nobody can see. */
   const [looking, setLooking] = useState(() => (parameters.get("search") ?? "") !== "");
   const field = useRef<HTMLInputElement>(null);
+  const searchForm = useRef<HTMLFormElement>(null);
   const { jobs } = useRunning();
   const { account, leave } = useAccount();
   /* A scan is the one thing an administrator needs from wherever they happen
@@ -126,16 +160,12 @@ export function Header({ libraries }: { libraries: Library[] }) {
   }, []);
 
   const ask = () => {
-    const words = query.trim();
     if (!words) {
       navigate("/");
       return;
     }
-    const asked = new URLSearchParams({ search: words });
-    if (scope) {
-      asked.set("in", scope);
-    }
-    navigate(`/search?${asked.toString()}`);
+    setQuickDismissed(true);
+    navigate(searchAddress(words, scope));
   };
 
   const look = (event: React.FormEvent) => {
@@ -159,7 +189,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
       field.current?.focus();
       return;
     }
-    if (query.trim()) {
+    if (words) {
       ask();
       return;
     }
@@ -171,7 +201,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
      field with words in it stays open wherever the next press lands, because
      those words are the question whatever is on the screen is answering. */
   const letGo = (event: React.FocusEvent<HTMLFormElement>) => {
-    if (query.trim()) {
+    if (words) {
       return;
     }
     const next = event.relatedTarget as Node | null;
@@ -179,6 +209,98 @@ export function Header({ libraries }: { libraries: Library[] }) {
       return;
     }
     setLooking(false);
+  };
+
+  /*
+   * The few results the field offers on its own, right under the bar, while
+   * the grid the enter key leads to waits behind a press.
+   *
+   * Fetched on a short pause rather than on every key: a word typed at speed
+   * is one question, not five, and the FTS index this asks of is built for
+   * exactly this, prefix and all.
+   */
+  const [quickResults, setQuickResults] = useState<Card[] | null>(null);
+  /* Put aside by a press outside, the enter key, or a result chosen: what it
+     answers is done with, and typing again is what asks it back. */
+  const [quickDismissed, setQuickDismissed] = useState(false);
+  const quickPanel = useRef<HTMLDivElement>(null);
+  const [quickUnder, setQuickUnder] = useState({ top: 0, left: 0 });
+
+  useEffect(() => setQuickDismissed(false), [words, scope]);
+
+  useEffect(() => {
+    if (!looking || !words) {
+      setQuickResults(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      api
+        .works({ search: words, limit: QUICK_RESULTS, ...scopeToBrowse(scope) }, controller.signal)
+        .then((page) => setQuickResults(page.cards))
+        .catch((error) => {
+          if (!wasAbandoned(error)) {
+            setQuickResults([]);
+          }
+        });
+    }, QUICK_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [words, scope, looking]);
+
+  const quickOpen = looking && words !== "" && quickResults !== null && !quickDismissed;
+
+  /* Measured against the bar rather than against the field: the field grows
+     while somebody watches, and a panel chasing that growth would jump under
+     them. The bar it hangs from is fixed to the window, so a page scrolled
+     underneath moves nothing here. */
+  useLayoutEffect(() => {
+    if (!quickOpen) {
+      return;
+    }
+    const place = () => {
+      const it = searchForm.current?.getBoundingClientRect();
+      if (it) {
+        setQuickUnder({ top: it.bottom + 8, left: it.left });
+      }
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [quickOpen]);
+
+  useEffect(() => {
+    if (!quickOpen) {
+      return;
+    }
+    const elsewhere = (event: MouseEvent) => {
+      const on = event.target as Node;
+      if (!searchForm.current?.contains(on) && !quickPanel.current?.contains(on)) {
+        setQuickDismissed(true);
+      }
+    };
+    const away = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setQuickDismissed(true);
+      }
+    };
+    document.addEventListener("mousedown", elsewhere);
+    document.addEventListener("keydown", away);
+    return () => {
+      document.removeEventListener("mousedown", elsewhere);
+      document.removeEventListener("keydown", away);
+    };
+  }, [quickOpen]);
+
+  /* A result chosen closes the field along with the panel: the question is
+     answered, and there is nothing left for either to keep showing. Closing
+     the field is enough on its own, since the panel only ever shows while it
+     is open. */
+  const chooseQuickResult = () => {
+    setLooking(false);
+    setQuery("");
   };
 
   const administrator = account?.is_administrator === true;
@@ -232,6 +354,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
               them, and the name it used to hang under said nothing anybody
               needed to read twice. */}
           <form
+            ref={searchForm}
             className={`search${looking ? " search-open" : ""}`}
             role="search"
             onSubmit={look}
@@ -285,6 +408,49 @@ export function Header({ libraries }: { libraries: Library[] }) {
               reachable={looking}
             />
           </form>
+
+          {/* The few results the field offers on its own, drawn at the end of
+              the page for the same reason the menus are: a panel frosting
+              what is behind it becomes the backdrop of anything drawn inside
+              the field, which is nothing at all. */}
+          {quickOpen &&
+            quickResults &&
+            createPortal(
+              <div
+                className="quick-search"
+                ref={quickPanel}
+                style={{ top: quickUnder.top, left: quickUnder.left }}
+              >
+                {quickResults.length === 0 ? (
+                  <p className="quick-search-empty">{t("library.empty")}</p>
+                ) : (
+                  <>
+                    {quickResults.map((card) => (
+                      <Link
+                        key={card.id}
+                        className="quick-search-line"
+                        to={`/work/${card.id}`}
+                        onClick={chooseQuickResult}
+                      >
+                        <QuickPicture card={card} />
+                        <span className="quick-search-title">{card.title}</span>
+                        {card.year !== null && (
+                          <span className="quick-search-year">{card.year}</span>
+                        )}
+                      </Link>
+                    ))}
+                    <Link
+                      className="quick-search-all"
+                      to={searchAddress(words, scope)}
+                      onClick={() => setQuickDismissed(true)}
+                    >
+                      {t("home.see_all")}
+                    </Link>
+                  </>
+                )}
+              </div>,
+              document.body,
+            )}
 
           {/* No engine behind it yet. Shown greyed and saying when rather
               than left out: a function nobody can see is a function nobody
@@ -460,6 +626,29 @@ function Scope({
         </div>
       ))}
     </Dropdown>
+  );
+}
+
+/**
+ * One work's poster, at the size a line of the quick results is drawn at.
+ *
+ * The colour behind it and the initial in front of it are the same fallback
+ * every other card in this interface shows: a poster that has not arrived is
+ * not a hole, and one that never will is not a broken picture.
+ */
+function QuickPicture({ card }: { card: Card }) {
+  const picture = pictureSet(card.poster);
+  return (
+    <span
+      className="quick-search-picture"
+      style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
+    >
+      {picture ? (
+        <img src={picture.src} alt="" loading="lazy" decoding="async" draggable={false} />
+      ) : (
+        <span aria-hidden="true">{card.title.slice(0, 1)}</span>
+      )}
+    </span>
   );
 }
 
