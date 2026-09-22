@@ -46,11 +46,12 @@ const IN_A_FAN = 3;
  * browser can use, the whole thing is thrown away, and every poster is then
  * asked for at the full width of the window.
  *
- * The centre poster stands at about two thirds of a tile's height and a tile
- * is at most four hundred and twenty points across, so a hundred and thirty
- * covers it with room to spare. The screen's own fineness is the browser's
- * business: a fine screen takes the next size up by itself, which is the same
- * one the row of that kind further down the page is already loading.
+ * A poster of the fan is drawn at around eighty points across at the widest
+ * a tile ever gets. What is asked for here is more than that on purpose: it
+ * is the value that lands on the same stored width the row of that kind is
+ * already loading further down the page, on an ordinary screen and on a fine
+ * one alike, so the fan costs no second file. Asking for exactly what is
+ * drawn would save nothing and fetch a size nothing else uses.
  */
 const ROOM_FOR_A_POSTER = "(max-width: 900px) 22vw, 130px";
 

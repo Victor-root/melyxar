@@ -926,11 +926,12 @@
   margin-bottom: var(--gap-section);
 }
 
-/* Shaped for what it holds: a few posters standing side by side, which want
-   height a strip of sixteen by nine does not have. It used to be cut to the
-   shape of the one wide still behind it, and that still is gone.
+/* The same size and the same shape it has always had, wide picture or no
+   wide picture: a band of ways in is read in one glance across, and a taller
+   tile pushes everything the page has to say further down for the sake of a
+   few points of poster.
 
-   The panel behind them is the deep surface with a breath of the newest
+   The panel behind the fan is the deep surface with a breath of the newest
    work's own colour in it, so two ways in are not the same dark rectangle
    twice, and so a poster is read against a ground rather than against
    another poster's neighbour. */
@@ -938,13 +939,13 @@
   position: relative;
   display: flex;
   align-items: flex-end;
-  flex: 1 1 280px;
+  flex: 1 1 200px;
   /* A server of films alone has one way in, and one tile stretched across a
      whole page reads as a banner rather than as a way in. The bound grows
      with the screen, so a large monitor gets larger ways in rather than the
      same small ones with a field of background beside them. */
-  max-width: clamp(260px, 26vw, 420px);
-  aspect-ratio: 7 / 5;
+  max-width: clamp(220px, 20vw, 340px);
+  aspect-ratio: 16 / 9;
   padding: var(--gap);
   border-radius: var(--radius-card);
   overflow: hidden;
@@ -1009,11 +1010,12 @@
 .band-poster {
   position: absolute;
   left: 50%;
-  /* Standing clear of the wash along the foot rather than in it: a poster
+  /* Standing on the line where the words begin rather than in them: a poster
      whose lower third has been faded out is a poster with no bottom edge,
-     and three of those read as a row of smudges. */
-  bottom: 28%;
-  height: 60%;
+     and three of those read as a row of smudges. What is left above is all
+     the height a tile of this shape has to give, so the fan takes it. */
+  bottom: 30%;
+  height: 61%;
   aspect-ratio: 2 / 3;
   border-radius: var(--radius-control);
   overflow: hidden;
@@ -1062,14 +1064,14 @@
 
 .band-fan-3 > :nth-child(2) {
   z-index: 1;
-  height: 52%;
+  height: 53%;
   --shift: calc(-84% - 10% * var(--open));
   --lean: calc(-7deg - 2deg * var(--open));
 }
 
 .band-fan-3 > :nth-child(3) {
   z-index: 1;
-  height: 52%;
+  height: 53%;
   --shift: calc(84% + 10% * var(--open));
   --lean: calc(7deg + 2deg * var(--open));
 }
@@ -1080,14 +1082,14 @@
    lands them off to one side, which reads as a fan that lost a poster. */
 .band-fan-2 > :nth-child(1) {
   z-index: 2;
-  height: 56%;
+  height: 57%;
   --shift: calc(45% + 7% * var(--open));
   --lean: calc(5deg + 2deg * var(--open));
 }
 
 .band-fan-2 > :nth-child(2) {
   z-index: 1;
-  height: 56%;
+  height: 57%;
   --shift: calc(-45% - 7% * var(--open));
   --lean: calc(-5deg - 2deg * var(--open));
 }
@@ -1095,7 +1097,7 @@
 /* One: dead centre and a shade taller, since there is nothing beside it to
    be measured against. */
 .band-fan-1 > :nth-child(1) {
-  height: 64%;
+  height: 65%;
   --lift: calc(-4% * var(--open));
   box-shadow:
     var(--shadow-card),
