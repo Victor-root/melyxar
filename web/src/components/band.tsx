@@ -57,6 +57,12 @@ const IN_A_FAN = 5;
  */
 const ROOM_FOR_A_POSTER = "(max-width: 900px) 22vw, 130px";
 
+/** What the water's filter is called. The stylesheet asks for it by this
+ *  same name, which is the one thing here that has to be said in both
+ *  places: a name that disagrees with itself is a floor that quietly stops
+ *  rippling, and nothing else would say so. */
+const RIPPLE = "band-ripple";
+
 export function Band({ shelves, libraries }: { shelves: Shelf[]; libraries: Library[] }) {
   const { t } = useSettings();
 
@@ -65,10 +71,68 @@ export function Band({ shelves, libraries }: { shelves: Shelf[]; libraries: Libr
   }
   return (
     <nav className="band" aria-label={t("home.band")}>
+      <Water />
       {shelves.map((shelf) => (
         <Tile key={shelf.kind} shelf={shelf} libraries={libraries} />
       ))}
     </nav>
+  );
+}
+
+/**
+ * What makes the floor under the posters water rather than glass.
+ *
+ * A mirror hands back the picture exactly; still water does not. It pushes
+ * each line of what it holds a little sideways, by an amount that wanders
+ * down the surface, and what comes back is the same picture with its edges
+ * breathing. That is one filter: a field of noise, read as a map of how far
+ * to shove each pixel.
+ *
+ * The noise is stretched flat on purpose, long across and short down, so
+ * what it makes is horizontal ripples rather than a general smear. Its seed
+ * is written down, so the ripple is the same ripple from one visit to the
+ * next: what is wanted is the look of something irregular, not something
+ * that is actually different every time the page is drawn.
+ *
+ * Declared once for the whole band rather than once per tile, because every
+ * floor in the band is the same water.
+ */
+function Water() {
+  return (
+    <svg className="band-water" aria-hidden="true" focusable="false">
+      <filter id={RIPPLE} x="-6%" y="-6%" width="112%" height="112%" colorInterpolationFilters="sRGB">
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.011 0.13"
+          numOctaves="2"
+          seed="7"
+          result="swell"
+        />
+        {/* Flattened in one channel before it is read. The map pushes a pixel
+            by as much as each channel wanders off the middle, so a field of
+            noise read whole shoves things up and down as well as sideways,
+            and what that makes is a smear. Still water only moves a line of
+            what it holds along itself: the green channel is pinned to the
+            middle, which is nought lifted, and only the red one is left to
+            say how far along. */}
+        <feColorMatrix
+          in="swell"
+          type="matrix"
+          values="1 0 0 0 0
+                  0 0 0 0 0.5
+                  0 0 1 0 0
+                  0 0 0 1 0"
+          result="sideways"
+        />
+        <feDisplacementMap
+          in="SourceGraphic"
+          in2="sideways"
+          scale="30"
+          xChannelSelector="R"
+          yChannelSelector="G"
+        />
+      </filter>
+    </svg>
   );
 }
 
