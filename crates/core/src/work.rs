@@ -248,10 +248,79 @@ pub fn should_accept_position(stored_at: Option<Timestamp>, reported_at: Timesta
     }
 }
 
+/// How many episodes one season of a series holds, as its provider counts them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeasonLength {
+    pub season: i32,
+    pub episodes: i32,
+}
+
+/// Where an episode numbered across its whole series sits: which season, and
+/// which episode of that season.
+///
+/// The seasons are counted off in order, the specials left out, since nobody
+/// numbering across a series counts them. A number past everything counted
+/// continues the last season: a series still airing is described a few
+/// episodes behind what is already on the disk. Nothing counted at all is no
+/// answer, and the number is then left as it was written.
+pub fn place_across(number: i32, lengths: &[SeasonLength]) -> Option<(i32, i32)> {
+    let mut seasons: Vec<SeasonLength> = lengths
+        .iter()
+        .copied()
+        .filter(|length| length.season > 0 && length.episodes > 0)
+        .collect();
+    seasons.sort_by_key(|length| length.season);
+    let (last, before) = seasons.split_last()?;
+
+    let mut left = number;
+    for length in before {
+        if left <= length.episodes {
+            return Some((length.season, left));
+        }
+        left -= length.episodes;
+    }
+    Some((last.season, left))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use time::macros::datetime;
+
+    fn lengths(counted: &[(i32, i32)]) -> Vec<SeasonLength> {
+        counted
+            .iter()
+            .map(|&(season, episodes)| SeasonLength { season, episodes })
+            .collect()
+    }
+
+    #[test]
+    fn a_number_across_the_series_lands_in_its_season() {
+        let counted = lengths(&[(1, 28), (2, 12), (3, 10)]);
+        assert_eq!(place_across(1, &counted), Some((1, 1)));
+        assert_eq!(place_across(28, &counted), Some((1, 28)));
+        assert_eq!(place_across(29, &counted), Some((2, 1)));
+        assert_eq!(place_across(40, &counted), Some((2, 12)));
+        assert_eq!(place_across(41, &counted), Some((3, 1)));
+    }
+
+    #[test]
+    fn a_number_past_everything_counted_continues_the_last_season() {
+        let counted = lengths(&[(1, 12), (2, 12)]);
+        assert_eq!(place_across(26, &counted), Some((2, 14)));
+    }
+
+    #[test]
+    fn the_specials_and_the_order_they_came_in_change_nothing() {
+        let counted = lengths(&[(2, 12), (0, 5), (1, 12)]);
+        assert_eq!(place_across(13, &counted), Some((2, 1)));
+    }
+
+    #[test]
+    fn nothing_counted_is_no_answer() {
+        assert_eq!(place_across(29, &[]), None);
+        assert_eq!(place_across(29, &lengths(&[(0, 4)])), None);
+    }
 
     const HOUR: Millis = Millis::new(3_600_000);
 
