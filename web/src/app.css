@@ -454,9 +454,10 @@
    the same corner and the same room around the lines. Two menus in one
    interface that answer alike and look unalike are two interfaces. */
 .header-menu-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+  /* Held against the window, since it is drawn at the end of the page
+     rather than inside the bar: where it goes is measured off whatever
+     opened it. The bar is fixed to the window too, so the two agree. */
+  position: fixed;
   min-width: 190px;
   z-index: 30;
   display: flex;
@@ -469,13 +470,6 @@
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow-raised);
   animation: header-menu-arrive var(--quick) var(--ease) both;
-}
-
-/* Opening at the right hand edge, where a menu that opened leftwards would
-   hang off the screen. */
-.header-side .header-menu-list {
-  left: auto;
-  right: 0;
 }
 
 /* The scope's own list clears the piece it is dropped from rather than the
@@ -524,15 +518,6 @@
 .header-menu-later {
   color: var(--text-faint);
   cursor: not-allowed;
-}
-
-/* And when it is said: at the end of the line rather than in what the mouse
-   is told, since a menu has the room for the words and a bar had none. */
-.header-menu-when {
-  margin-left: auto;
-  padding-left: var(--gap);
-  font-size: 12px;
-  color: var(--text-faint);
 }
 
 /* The server's answer when it would not start one, said in the list where
