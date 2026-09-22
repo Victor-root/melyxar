@@ -7,10 +7,11 @@
  * one.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Route, Routes } from "react-router-dom";
 import { api } from "./api";
 import { Header } from "./components/header";
+import { ScrollBar } from "./components/scrollbar";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { SearchPage } from "./pages/search";
@@ -76,6 +77,10 @@ function TheLibrary() {
     return () => controller.abort();
   }, [adopt]);
 
+  /* The box the whole library scrolls in, held so the bar drawn over it can
+     read where it stands. */
+  const scrolling = useRef<HTMLDivElement>(null);
+
   // Watched here, where the bar that starts the work and the pages that show
   // what it produced can both read it.
   const running = useWatchedWork();
@@ -94,7 +99,7 @@ function TheLibrary() {
             of the page. */}
         <div className="shell">
           <Header libraries={libraries.all} />
-          <div className="shell-scroll">
+          <div className="shell-scroll" ref={scrolling}>
             <Routes>
               <Route path="/" element={<HomePage libraries={libraries.all} />} />
               <Route path="/library/:id" element={<LibraryPage libraries={libraries.all} />} />
@@ -112,6 +117,10 @@ function TheLibrary() {
               <span>{t("attribution.tmdb")}</span>
             </footer>
           </div>
+
+          {/* Outside the box it belongs to, because a bar drawn inside it
+              would be cut off at the same edge everything else is. */}
+          <ScrollBar holder={scrolling} />
         </div>
       </LibrariesContext.Provider>
     </RunningContext.Provider>
