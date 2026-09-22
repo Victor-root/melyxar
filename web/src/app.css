@@ -1051,10 +1051,23 @@
   color: color-mix(in srgb, var(--text) 40%, transparent);
 }
 
-/* Three: the newest in the middle and forward, the next two leaning away
-   either side and passing behind it. */
-.band-fan-3 > :nth-child(1) {
-  z-index: 2;
+/*
+ * Where each poster of a fan stands.
+ *
+ * Two families rather than five arrangements. A fan with an odd number has
+ * one in the middle and pairs either side of it; an even one has pairs alone,
+ * straddling the middle. Built the other way, an even fan is a middle with
+ * one more on one side than the other, which leans the whole thing off to
+ * that side and reads as a fan that lost a poster.
+ *
+ * So the middle and the near pair are written once for every fan that has
+ * them, and the far pair is what a fan of four or five adds on top.
+ */
+
+/* The one in the middle: in front, tallest, and wearing the only light. */
+.band-fan-3 > :nth-child(1),
+.band-fan-5 > :nth-child(1) {
+  z-index: 3;
   --lift: calc(-4% * var(--open));
   box-shadow:
     var(--shadow-card),
@@ -1062,36 +1075,70 @@
     0 0 26px -8px var(--accent-glow);
 }
 
-.band-fan-3 > :nth-child(2) {
-  z-index: 1;
+/* The pair either side of a middle, leaning away and passing behind it. */
+.band-fan-3 > :nth-child(2),
+.band-fan-5 > :nth-child(2) {
+  z-index: 2;
   height: 53%;
   --shift: calc(-84% - 10% * var(--open));
   --lean: calc(-7deg - 2deg * var(--open));
 }
 
-.band-fan-3 > :nth-child(3) {
-  z-index: 1;
+.band-fan-3 > :nth-child(3),
+.band-fan-5 > :nth-child(3) {
+  z-index: 2;
   height: 53%;
   --shift: calc(84% + 10% * var(--open));
   --lean: calc(7deg + 2deg * var(--open));
 }
 
-/* Two: a pair leaning apart from the middle, of one height so that the pair
-   sits square in the tile, with the newer one in front where the two meet. A
-   fan of two built out of the fan of three leans them both the same way and
-   lands them off to one side, which reads as a fan that lost a poster. */
-.band-fan-2 > :nth-child(1) {
-  z-index: 2;
+/* And the pair further out again, smaller and leaning further: what reaches
+   the sides of a tile this wide, where three posters stopped short of them
+   and left a hole at either end. */
+.band-fan-5 > :nth-child(4) {
+  z-index: 1;
+  height: 45%;
+  --shift: calc(-168% - 16% * var(--open));
+  --lean: calc(-14deg - 3deg * var(--open));
+}
+
+.band-fan-5 > :nth-child(5) {
+  z-index: 1;
+  height: 45%;
+  --shift: calc(168% + 16% * var(--open));
+  --lean: calc(14deg + 3deg * var(--open));
+}
+
+/* A fan with no middle: the near pair straddles it instead, the newer one in
+   front where the two meet. */
+.band-fan-2 > :nth-child(1),
+.band-fan-4 > :nth-child(1) {
+  z-index: 3;
   height: 57%;
   --shift: calc(45% + 7% * var(--open));
   --lean: calc(5deg + 2deg * var(--open));
 }
 
-.band-fan-2 > :nth-child(2) {
-  z-index: 1;
+.band-fan-2 > :nth-child(2),
+.band-fan-4 > :nth-child(2) {
+  z-index: 2;
   height: 57%;
   --shift: calc(-45% - 7% * var(--open));
   --lean: calc(-5deg - 2deg * var(--open));
+}
+
+.band-fan-4 > :nth-child(3) {
+  z-index: 1;
+  height: 47%;
+  --shift: calc(132% + 14% * var(--open));
+  --lean: calc(13deg + 3deg * var(--open));
+}
+
+.band-fan-4 > :nth-child(4) {
+  z-index: 1;
+  height: 47%;
+  --shift: calc(-132% - 14% * var(--open));
+  --lean: calc(-13deg - 3deg * var(--open));
 }
 
 /* One: dead centre and a shade taller, since there is nothing beside it to

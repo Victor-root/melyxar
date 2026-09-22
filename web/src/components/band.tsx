@@ -18,9 +18,10 @@
  *
  * What a library short of posters shows is said in three places rather than
  * left to chance: a work with none shows the letter it begins with, as every
- * other card here does; one or two works fan out as one or two rather than
- * as three with holes in; and a library with nothing in it at all shows its
- * own mark, faint, where the posters will stand once there are any.
+ * other card here does; a library of fewer than five fans out however many
+ * it has, in an arrangement written for that many rather than a full fan
+ * with holes in it; and a library with nothing in it at all shows its own
+ * mark, faint, where the posters will stand once there are any.
  */
 
 import { Link } from "react-router-dom";
@@ -32,10 +33,11 @@ import { ChevronRightIcon, KindIcon } from "../icons";
 
 type Shelf = Home["shelves"][number];
 
-/** How many posters a tile fans out at its widest. Three is what a tile this
- *  shape holds without any of them being a sliver, and the stylesheet draws
- *  one, two or three from the same set of rules. */
-const IN_A_FAN = 3;
+/** How many posters a tile fans out at its widest. Five reaches the sides of
+ *  a tile this shape, where three left a hole at either end, and the
+ *  stylesheet draws anything from one to five: the day the mobile pass wants
+ *  three again it asks for three, and the rules for three are already here. */
+const IN_A_FAN = 5;
 
 /**
  * How much room one poster of the fan really has, for the browser to pick a
@@ -75,9 +77,9 @@ export function Band({ shelves, libraries }: { shelves: Shelf[]; libraries: Libr
  *
  * The newest first, which is the order it arrived in, and the ones that have
  * a poster ahead of the ones that have none: a library of three hundred films
- * whose newest arrival has not been looked up yet still has three posters to
- * show, and showing its three newest holes instead would say the library is
- * empty when it is the opposite.
+ * whose newest arrivals have not been looked up yet still has a full fan to
+ * show, and showing its newest holes instead would say the library is empty
+ * when it is the opposite.
  *
  * What is left over, on a library where nothing has a poster at all, is the
  * newest works with no poster, which the fan draws as the letter each one
