@@ -267,32 +267,27 @@ export function MoreIcon(props: IconProps) {
  * What a row is
  * ---------------------------------------------------------------------- */
 
-/** A clock, for what was left halfway. */
-export function ClockIcon(props: IconProps) {
+/** A pair of binoculars, for what a series is being watched for. */
+export function BinocularsIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <circle cx="12" cy="12" r="8.8" />
-      <path d="M12 6.6V12l3.6 2.2" />
+      <path d="M9.2 11.4V6.2a1.6 1.6 0 0 1 1.6-1.6h2.4a1.6 1.6 0 0 1 1.6 1.6v5.2" />
+      <path d="M10.6 8.4h2.8" />
+      <path d="M9.4 13.2 10.6 9M14.6 13.2 13.4 9" />
+      <circle cx="7" cy="15.8" r="4.2" />
+      <circle cx="17" cy="15.8" r="4.2" />
     </Icon>
   );
 }
 
-/** An arrow into a tray, for what arrived last. */
-export function ArrivedIcon(props: IconProps) {
+/** A camera with a plus, for what was just added to it. */
+export function CameraIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M12 3.4v10.4" />
-      <path d="M7.8 9.8 12 14l4.2-4.2" />
-      <path d="M4 16.4v2.4a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.4" />
-    </Icon>
-  );
-}
-
-/** A flame, for what a server is offering. */
-export function SparkIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M12 3.2s5.4 4 5.4 9.2a5.4 5.4 0 0 1-10.8 0c0-1.8.8-3.4 1.8-4.6.2 1.4 1 2.4 2 2.4 1.4 0 1.8-2.2 1.6-7Z" />
+      <path d="M3 8.2a1.8 1.8 0 0 1 1.8-1.8h1.6l1-1.6h4.4l1 1.6h1.6a1.8 1.8 0 0 1 1.8 1.8" />
+      <path d="M3 8.2v9.2a1.8 1.8 0 0 0 1.8 1.8h10.2a1.8 1.8 0 0 0 1.8-1.8V8.2" />
+      <circle cx="9.9" cy="13" r="3.2" />
+      <path d="M19.2 3.6v5.2M21.8 6.2h-5.2" />
     </Icon>
   );
 }
