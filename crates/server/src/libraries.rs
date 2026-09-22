@@ -109,7 +109,8 @@ async fn folders(
 #[derive(Debug, Deserialize)]
 struct NewLibrary {
     name: String,
-    /// One of the stored library kinds: movies, series, anime, shows, music.
+    /// One of the stored library kinds: movies, series, anime, shows,
+    /// home_media, music.
     kind: String,
     /// The language its films are described in, as a two letter code.
     metadata_language: String,

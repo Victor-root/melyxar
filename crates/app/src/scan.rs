@@ -204,8 +204,9 @@ pub async fn start_scan_and_identification(
             return;
         }
 
-        // The pages and the pictures first, and waited for.
-        if let Some(provider) = provider {
+        // The pages and the pictures first, and waited for. Never for what
+        // people filmed themselves, which no catalogue holds.
+        if let Some(provider) = provider.filter(|_| library.kind.is_catalogued()) {
             match crate::identify::start_identification(&waiting, provider, library.clone(), mode)
                 .await
             {
@@ -323,7 +324,7 @@ pub async fn scan_library(
         let access = melyxar_library::check_root_access(&root.path);
         database.set_root_access(root.id, access).await?;
 
-        let outcome = match walk(&root.label, &root.path) {
+        let outcome = match walk(&root.label, &root.path, library.kind) {
             Ok(outcome) => outcome,
             Err(ScanError::RootUnusable { state }) => {
                 tracing::warn!(
@@ -867,6 +868,9 @@ async fn work_for(
     relative_path: &Path,
     signs: &naming::LibrarySigns,
 ) -> Result<WorkId> {
+    if library.kind == LibraryKind::HomeMedia {
+        return crate::own::work_for(state, library, relative_path).await;
+    }
     if library.kind.is_episodic() {
         if let Some(work) = episode_work_for(state, library, relative_path, signs).await? {
             return Ok(work);
@@ -1158,6 +1162,7 @@ fn work_kind_for(kind: LibraryKind) -> WorkKind {
         LibraryKind::Movies => WorkKind::Movie,
         LibraryKind::Series | LibraryKind::Anime | LibraryKind::Shows => WorkKind::Episode,
         LibraryKind::Music => WorkKind::Song,
+        LibraryKind::HomeMedia => WorkKind::Video,
     }
 }
 
@@ -2142,6 +2147,90 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn home_media_is_kept_by_folder_and_named_by_its_files() {
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Summer 2019/Beach Day/IMG_0001.jpg", b"x");
+        write(&media, "Summer 2019/IMG_0001.jpg", b"x");
+        write(&media, "Summer 2019/Birthday - part 2.mp4", b"x");
+        write(&media, "loose clip.mov", b"x");
+        let (state, library) = state_of_kind(
+            directory.path(),
+            vec![("disk-one", media)],
+            false,
+            "home_media",
+        )
+        .await;
+
+        let report = scan(&state, &library).await;
+        assert_eq!(report.added, 4);
+
+        let works = arrangement(&state, &library).await;
+        let named = |kind: WorkKind| {
+            let mut titles: Vec<String> = works
+                .iter()
+                .filter(|work| work.kind == kind)
+                .map(|work| work.title.clone())
+                .collect();
+            titles.sort();
+            titles
+        };
+        assert_eq!(named(WorkKind::Folder), ["Beach Day", "Summer 2019"]);
+        assert_eq!(
+            named(WorkKind::Photo),
+            ["IMG_0001", "IMG_0001"],
+            "two files of one name are two photos"
+        );
+        assert_eq!(
+            named(WorkKind::Video),
+            ["Birthday - part 2", "loose clip"],
+            "a file is named by its file, with nothing read into it"
+        );
+        assert!(works
+            .iter()
+            .all(|work| work.identification == melyxar_core::work::IdentificationState::Own));
+
+        let summer = works
+            .iter()
+            .find(|work| work.title == "Summer 2019")
+            .expect("folder");
+        let beach = works
+            .iter()
+            .find(|work| work.title == "Beach Day")
+            .expect("folder");
+        assert_eq!(summer.parent_id, None);
+        assert_eq!(beach.parent_id, Some(summer.id));
+
+        let grid = crate::catalogue::browse(
+            &state,
+            &melyxar_database::browse::BrowseRequest {
+                library_id: Some(library.id),
+                limit: 50,
+                ..Default::default()
+            },
+            &a_viewer(&state).await,
+        )
+        .await
+        .expect("read");
+        let mut at_the_root: Vec<String> =
+            grid.cards.iter().map(|card| card.title.clone()).collect();
+        at_the_root.sort();
+        assert_eq!(
+            at_the_root,
+            ["Summer 2019", "loose clip"],
+            "the library opens on what is at its root"
+        );
+        assert_eq!(
+            crate::reach::counted_for(&state, &a_viewer(&state).await, Some(library.id))
+                .await
+                .expect("counted")
+                .awaiting_identification,
+            0,
+            "nothing here waits for a catalogue"
+        );
+    }
+
+    #[tokio::test]
     async fn a_file_moved_into_a_season_folder_is_followed_rather_than_doubled() {
         // Seen on a real collection: a season folder made after the fact left
         // every file twice, once where it is and once marked absent for ever.
@@ -2204,7 +2293,7 @@ mod tests {
             )
             .await
             .expect("watched");
-        let found = walk("disk-one", &media).expect("walked");
+        let found = walk("disk-one", &media, library.kind).expect("walked");
         let file = &found.files[0];
         database
             .insert_source(

@@ -27,6 +27,19 @@ use crate::convert::{
 };
 use crate::{Database, DatabaseError, Result};
 
+/// The condition that keeps a photo out of the readings made for what moves:
+/// where a picture can be started, and the little pictures of the bar. A
+/// photo has neither, and would fail both once per photo at every pass.
+///
+/// A macro rather than a constant so it can be written into a statement that
+/// stays a plain piece of text.
+macro_rules! a_moving_picture {
+    () => {
+        "AND NOT EXISTS (SELECT 1 FROM works
+                          WHERE works.id = media_sources.work_id AND works.kind = 'photo')"
+    };
+}
+
 /// Everything a work is, as every reader of one asks for it.
 ///
 /// Written once because five queries hand their rows to the same reader, and a
@@ -798,7 +811,7 @@ impl Database {
     pub async fn catalogue_summary(&self) -> Result<CatalogueSummary> {
         let works: (i64, i64, i64) = sqlx::query_as(
             "SELECT count(*),
-                    sum(identification IN ('identified', 'manual')),
+                    sum(identification IN ('identified', 'manual', 'own')),
                     sum(identification IN ('pending', 'unidentified'))
              FROM works",
         )
@@ -1346,7 +1359,7 @@ impl Database {
         library_id: LibraryId,
         limit: i64,
     ) -> Result<Vec<MediaSourceId>> {
-        let rows = sqlx::query(
+        let rows = sqlx::query(concat!(
             "SELECT media_sources.id
              FROM media_sources
              JOIN library_roots ON library_roots.id = media_sources.root_id
@@ -1356,9 +1369,12 @@ impl Database {
                AND media_sources.analysed_at IS NOT NULL
                AND media_sources.missing_since IS NULL
                AND media_source_key_frames.source_id IS NULL
+               ",
+            a_moving_picture!(),
+            "
              ORDER BY media_sources.added_at
              LIMIT ?",
-        )
+        ))
         .bind(library_id.to_db_string())
         .bind(limit)
         .fetch_all(self.reader())
@@ -1379,7 +1395,7 @@ impl Database {
     /// shows when nothing is running, which is the moment somebody wants to
     /// know whether there is anything left to do at all.
     pub async fn count_awaiting_key_frames(&self, library_id: LibraryId) -> Result<i64> {
-        let row: (i64,) = sqlx::query_as(
+        let row: (i64,) = sqlx::query_as(concat!(
             "SELECT count(*)
              FROM media_sources
              JOIN library_roots ON library_roots.id = media_sources.root_id
@@ -1388,8 +1404,10 @@ impl Database {
              WHERE library_roots.library_id = ?
                AND media_sources.analysed_at IS NOT NULL
                AND media_sources.missing_since IS NULL
-               AND media_source_key_frames.source_id IS NULL",
-        )
+               AND media_source_key_frames.source_id IS NULL
+               ",
+            a_moving_picture!()
+        ))
         .bind(library_id.to_db_string())
         .fetch_one(self.reader())
         .await?;
@@ -1515,7 +1533,7 @@ impl Database {
         wanted: Layout,
         limit: i64,
     ) -> Result<Vec<MediaSourceId>> {
-        let rows = sqlx::query(
+        let rows = sqlx::query(concat!(
             "SELECT media_sources.id
              FROM media_sources
              JOIN library_roots ON library_roots.id = media_sources.root_id
@@ -1528,9 +1546,12 @@ impl Database {
                AND media_sources.analysed_at IS NOT NULL
                AND media_sources.missing_since IS NULL
                AND media_source_thumbnails.source_id IS NULL
+               ",
+            a_moving_picture!(),
+            "
              ORDER BY media_sources.added_at
              LIMIT ?",
-        )
+        ))
         .bind(wanted.every.get())
         .bind(wanted.rows as i64)
         .bind(wanted.columns as i64)
@@ -1556,7 +1577,7 @@ impl Database {
         library_id: LibraryId,
         wanted: Layout,
     ) -> Result<i64> {
-        let row: (i64,) = sqlx::query_as(
+        let row: (i64,) = sqlx::query_as(concat!(
             "SELECT count(*)
              FROM media_sources
              JOIN library_roots ON library_roots.id = media_sources.root_id
@@ -1568,8 +1589,10 @@ impl Database {
              WHERE library_roots.library_id = ?
                AND media_sources.analysed_at IS NOT NULL
                AND media_sources.missing_since IS NULL
-               AND media_source_thumbnails.source_id IS NULL",
-        )
+               AND media_source_thumbnails.source_id IS NULL
+               ",
+            a_moving_picture!()
+        ))
         .bind(wanted.every.get())
         .bind(wanted.rows as i64)
         .bind(wanted.columns as i64)
@@ -2492,6 +2515,17 @@ impl Placed {
         Self {
             library_id,
             parent_id: None,
+            ordinal: None,
+        }
+    }
+
+    /// Kept in a folder of a library of home media, or at its root: under a
+    /// parent when there is one, and at no rank, since what orders a folder
+    /// is the names of what is in it.
+    pub(crate) fn in_folder(library_id: LibraryId, folder: Option<WorkId>) -> Self {
+        Self {
+            library_id,
+            parent_id: folder,
             ordinal: None,
         }
     }
@@ -4198,6 +4232,51 @@ mod tests {
                 .await
                 .expect("read"),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn a_photo_is_never_read_for_what_only_moving_pictures_have() {
+        let (database, library_id, root_id) = library().await;
+        let clip = a_described_film(&database, library_id, root_id, "clip.mp4").await;
+        let photo = a_described_film(&database, library_id, root_id, "beach.jpg").await;
+        sqlx::query(
+            "UPDATE works SET kind = 'photo'
+              WHERE id = (SELECT work_id FROM media_sources WHERE id = ?)",
+        )
+        .bind(photo.to_db_string())
+        .execute(database.writer())
+        .await
+        .expect("made a photo");
+
+        assert_eq!(
+            database
+                .sources_without_key_frames(library_id, 10)
+                .await
+                .expect("read"),
+            vec![clip]
+        );
+        assert_eq!(
+            database
+                .count_awaiting_key_frames(library_id)
+                .await
+                .expect("read"),
+            1
+        );
+        assert_eq!(
+            database
+                .sources_without_thumbnails(library_id, every_ten_seconds(), 10)
+                .await
+                .expect("read"),
+            vec![clip]
+        );
+        assert_eq!(
+            database
+                .count_awaiting_thumbnails(library_id, every_ten_seconds())
+                .await
+                .expect("read"),
+            1,
+            "a photo has no bar to put little pictures on"
         );
     }
 

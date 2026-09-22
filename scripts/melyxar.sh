@@ -314,8 +314,8 @@ en|prompt_add_library|Add a library now
 fr|prompt_add_library|Ajouter une bibliothèque maintenant
 en|prompt_library_name|Library name
 fr|prompt_library_name|Nom de la bibliothèque
-en|prompt_library_kind|Library kind (movies, series, anime, shows, music)
-fr|prompt_library_kind|Type de bibliothèque (movies, series, anime, shows, music)
+en|prompt_library_kind|Library kind (movies, series, anime, shows, home_media, music)
+fr|prompt_library_kind|Type de bibliothèque (movies, series, anime, shows, home_media, music)
 en|prompt_root_path|Folder holding the media (empty to stop adding)
 fr|prompt_root_path|Dossier contenant les médias (vide pour arrêter d'ajouter)
 en|prompt_root_label|Short label for this folder, shown in logs instead of the path
@@ -328,8 +328,8 @@ en|root_unreadable|That folder exists but cannot be read by the server account.
 fr|root_unreadable|Ce dossier existe mais ne peut pas être lu par le compte du serveur.
 en|root_not_absolute|A folder has to be given in full, starting with a slash.
 fr|root_not_absolute|Un dossier doit être donné en entier, en commençant par une barre oblique.
-en|err_bad_kind|Unknown kind. Pick one of: movies, series, anime, shows, music.
-fr|err_bad_kind|Type inconnu. Choisissez parmi : movies, series, anime, shows, music.
+en|err_bad_kind|Unknown kind. Pick one of: movies, series, anime, shows, home_media, music.
+fr|err_bad_kind|Type inconnu. Choisissez parmi : movies, series, anime, shows, home_media, music.
 en|library_without_root|No folder was given, so the library was not written. You can add it later from the interface.
 fr|library_without_root|Aucun dossier n'a été donné, la bibliothèque n'a donc pas été écrite. Vous pourrez l'ajouter plus tard depuis l'interface.
 en|section_service|Service
@@ -1063,7 +1063,7 @@ prompt_library_kind() {
   while true; do
     kind="$(prompt_default "$(tr_msg prompt_library_kind)" "movies")"
     case "$kind" in
-      movies | series | anime | shows | music )
+      movies | series | anime | shows | home_media | music )
         printf "%s" "$kind"
         return 0
         ;;

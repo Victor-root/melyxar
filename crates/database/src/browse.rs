@@ -48,10 +48,15 @@ use crate::{Database, DatabaseError, Result};
 /// Takes the table it is written about, because half these queries join and
 /// half do not, and `kind` alone is ambiguous as soon as something else in the
 /// statement carries one.
+///
+/// What a library of home media holds is met at the root of the library, and
+/// what sits in a folder is met by opening that folder, like an episode by
+/// opening its season.
 pub(crate) fn met_on_its_own(table: &str) -> String {
     format!(
         "({table}kind IN ('movie', 'series', 'album')
-          OR ({table}kind = 'episode' AND {table}parent_id IS NULL))"
+          OR ({table}kind IN ('episode', 'folder', 'video', 'photo')
+              AND {table}parent_id IS NULL))"
     )
 }
 
@@ -410,8 +415,10 @@ impl Database {
         if request.unidentified_only {
             sql.push_str(" AND w.identification IN ('pending', 'unidentified')");
         }
+        // Named, whoever named it: a provider, a person, or the file of a
+        // video somebody filmed themselves.
         if request.identified_only {
-            sql.push_str(" AND w.identification IN ('identified', 'manual')");
+            sql.push_str(" AND w.identification IN ('identified', 'manual', 'own')");
         }
         // Asked as a question about the work rather than joined onto it, so
         // its place among the bound values is the plain one: a join would sit

@@ -20,6 +20,9 @@ pub enum IdentificationState {
     Unidentified,
     /// A person picked the match by hand. Never overwritten by a refresh.
     Manual,
+    /// In no catalogue and waiting for none: what somebody filmed or
+    /// photographed themselves. Named by its file, and that is all it needs.
+    Own,
 }
 
 impl IdentificationState {
@@ -29,6 +32,7 @@ impl IdentificationState {
             Self::Identified => "identified",
             Self::Unidentified => "unidentified",
             Self::Manual => "manual",
+            Self::Own => "own",
         }
     }
 
@@ -38,6 +42,7 @@ impl IdentificationState {
             "identified" => Some(Self::Identified),
             "unidentified" => Some(Self::Unidentified),
             "manual" => Some(Self::Manual),
+            "own" => Some(Self::Own),
             _ => None,
         }
     }
@@ -100,6 +105,13 @@ pub enum WorkKind {
     Artist,
     Album,
     Song,
+    /// A folder of a library of home photos and videos, holding what was put
+    /// in it on the disk.
+    Folder,
+    /// A video somebody filmed themselves.
+    Video,
+    /// A photo, looked at rather than played.
+    Photo,
 }
 
 impl WorkKind {
@@ -112,6 +124,9 @@ impl WorkKind {
             Self::Artist => "artist",
             Self::Album => "album",
             Self::Song => "song",
+            Self::Folder => "folder",
+            Self::Video => "video",
+            Self::Photo => "photo",
         }
     }
 
@@ -124,14 +139,18 @@ impl WorkKind {
             "artist" => Some(Self::Artist),
             "album" => Some(Self::Album),
             "song" => Some(Self::Song),
+            "folder" => Some(Self::Folder),
+            "video" => Some(Self::Video),
+            "photo" => Some(Self::Photo),
             _ => None,
         }
     }
 
     /// Whether a viewer plays this work itself, as opposed to opening it to
-    /// find what is inside. Only these carry files of their own.
+    /// find what is inside. Only these and a photo carry files of their own,
+    /// and a photo is looked at rather than played.
     pub fn is_playable(self) -> bool {
-        matches!(self, Self::Movie | Self::Episode | Self::Song)
+        matches!(self, Self::Movie | Self::Episode | Self::Song | Self::Video)
     }
 }
 
@@ -337,6 +356,9 @@ mod tests {
             (WorkKind::Artist, "artist"),
             (WorkKind::Album, "album"),
             (WorkKind::Song, "song"),
+            (WorkKind::Folder, "folder"),
+            (WorkKind::Video, "video"),
+            (WorkKind::Photo, "photo"),
         ] {
             assert_eq!(kind.as_str(), written);
             assert_eq!(WorkKind::parse(written), Some(kind));
@@ -356,6 +378,12 @@ mod tests {
         assert!(!WorkKind::Season.is_playable());
         assert!(!WorkKind::Artist.is_playable());
         assert!(!WorkKind::Album.is_playable());
+        assert!(WorkKind::Video.is_playable());
+        assert!(!WorkKind::Folder.is_playable());
+        assert!(
+            !WorkKind::Photo.is_playable(),
+            "a photo carries a file of its own, and it is looked at, not played"
+        );
     }
 
     #[test]
@@ -473,9 +501,11 @@ mod tests {
             IdentificationState::Identified,
             IdentificationState::Unidentified,
             IdentificationState::Manual,
+            IdentificationState::Own,
         ] {
             assert_eq!(IdentificationState::parse(state.as_str()), Some(state));
         }
+        assert!(!IdentificationState::Own.may_be_looked_up_again());
         assert!(IdentificationState::Pending.may_be_looked_up_again());
         assert!(IdentificationState::Unidentified.may_be_looked_up_again());
         assert!(!IdentificationState::Manual.may_be_looked_up_again());

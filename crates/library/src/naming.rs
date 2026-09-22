@@ -1118,6 +1118,22 @@ pub fn is_video_file(file_name: &str) -> bool {
     VIDEO_EXTENSIONS.contains(&extension.to_lowercase().as_str())
 }
 
+/// File extensions treated as a photo, in a library that holds photos.
+///
+/// Only what a browser shows as it is, since a photo is served from the disk
+/// untouched. The phones that write HEIC write a form no browser here reads.
+const PHOTO_EXTENSIONS: [&str; 6] = ["jpg", "jpeg", "png", "webp", "gif", "avif"];
+
+/// Whether a name looks like a photo.
+pub fn is_photo_file(file_name: &str) -> bool {
+    if file_name.starts_with('.') {
+        return false;
+    }
+    file_name
+        .rsplit_once('.')
+        .is_some_and(|(_, extension)| PHOTO_EXTENSIONS.contains(&extension.to_lowercase().as_str()))
+}
+
 /// Markers a release puts at the end of a clip that is not the film itself.
 const COMPANION_MARKERS: &[(&str, &str)] = &[
     ("-trailer", "trailer"),
