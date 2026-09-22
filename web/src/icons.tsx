@@ -271,23 +271,25 @@ export function MoreIcon(props: IconProps) {
 export function BinocularsIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M9.2 11.4V6.2a1.6 1.6 0 0 1 1.6-1.6h2.4a1.6 1.6 0 0 1 1.6 1.6v5.2" />
-      <path d="M10.6 8.4h2.8" />
-      <path d="M9.4 13.2 10.6 9M14.6 13.2 13.4 9" />
-      <circle cx="7" cy="15.8" r="4.2" />
-      <circle cx="17" cy="15.8" r="4.2" />
+      <path d="M4 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+      <path d="M14 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+      <path d="M16.346 9.17l-.729 -1.261c-.16 -.248 -1.056 -.203 -1.117 .091l-.177 1.38" />
+      <path d="M19.761 14.813l-2.84 -5.133c-.189 -.31 -.592 -.68 -1.421 -.68c-.828 0 -1.5 .448 -1.5 1v6" />
+      <path d="M7.654 9.17l.729 -1.261c.16 -.249 1.056 -.203 1.117 .091l.177 1.38" />
+      <path d="M4.239 14.813l2.84 -5.133c.189 -.31 .592 -.68 1.421 -.68c.828 0 1.5 .448 1.5 1v6" />
+      <path d="M10 12h4v2h-4l0 -2" />
     </Icon>
   );
 }
 
-/** A camera with a plus, for what was just added to it. */
+/** A video camera with a plus, for what was just added to it. */
 export function CameraIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M3 8.2a1.8 1.8 0 0 1 1.8-1.8h1.6l1-1.6h4.4l1 1.6h1.6a1.8 1.8 0 0 1 1.8 1.8" />
-      <path d="M3 8.2v9.2a1.8 1.8 0 0 0 1.8 1.8h10.2a1.8 1.8 0 0 0 1.8-1.8V8.2" />
-      <circle cx="9.9" cy="13" r="3.2" />
-      <path d="M19.2 3.6v5.2M21.8 6.2h-5.2" />
+      <path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4" />
+      <path d="M3 8a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -8" />
+      <path d="M7 12l4 0" />
+      <path d="M9 10l0 4" />
     </Icon>
   );
 }
