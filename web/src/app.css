@@ -425,6 +425,14 @@
   opacity: 1;
 }
 
+/* No wash here either, the same reasoning as the icons beside it: this end
+   of the field is glass too, and a grey pill lit inside it is a pill floating
+   inside a pill. */
+.search-scope > .header-link:hover {
+  background: none;
+  color: var(--text);
+}
+
 /* A field that grows while somebody watches is the point of it. A field that
    grows for somebody who asked their system for less movement is not. */
 @media (prefers-reduced-motion: reduce) {
