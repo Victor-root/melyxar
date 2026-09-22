@@ -685,9 +685,12 @@
  *
  * These are the ways in, so they are the one set of tiles on the page worth
  * giving an edge of its own: a hairline of accent whose colour turns as it
- * goes round, which is what tells a lit edge from a border. Kept far dimmer
- * than the door's, because there is one card at the door and there are
- * several of these, and four bright rims side by side is a shop sign.
+ * goes round, which is what tells a lit edge from a border.
+ *
+ * It sits straight over the picture, which is never the same colour twice,
+ * so every stop stays close to solid: a rim thinned enough to let much of
+ * the picture through reads as red over a dark still and as a washed pink or
+ * grey over a light one, which is the picture speaking, not the rim.
  *
  * It goes out under the pointer: what says "this is the one you are on" is
  * the ring below, and two rims on one tile is one too many.
@@ -700,12 +703,12 @@
   padding: 1px;
   background: conic-gradient(
     from 128deg,
-    color-mix(in srgb, var(--accent-bright) 55%, transparent),
-    color-mix(in srgb, var(--accent) 34%, transparent) 16%,
-    color-mix(in srgb, var(--accent-dim) 38%, transparent) 33%,
-    color-mix(in srgb, var(--accent-bright) 58%, transparent) 54%,
-    color-mix(in srgb, var(--accent) 34%, transparent) 74%,
-    color-mix(in srgb, var(--accent-bright) 50%, transparent)
+    color-mix(in srgb, var(--accent-bright) 92%, transparent),
+    color-mix(in srgb, var(--accent) 78%, transparent) 16%,
+    color-mix(in srgb, var(--accent-dim) 80%, transparent) 33%,
+    color-mix(in srgb, var(--accent-bright) 95%, transparent) 54%,
+    color-mix(in srgb, var(--accent) 78%, transparent) 74%,
+    color-mix(in srgb, var(--accent-bright) 90%, transparent)
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -3224,10 +3227,16 @@ button.seen-mark:not(.seen-mark-on):hover {
    banner is the picture, and a picture with a margin drawn round it is a
    picture in a frame. It is drawn outside the page's own column for exactly
    that, so nothing here has a width to undo. Rounded only underneath, where
-   it meets the page again. */
+   it meets the page again.
+
+   Its own box runs a scrollbar's width short of the right edge, because the
+   box it is measured against already gave that width up to the bar. Widened
+   by exactly that and pulled back by the same, it reaches the edge the bar
+   sits in rather than stopping short of it. */
 .hero {
   position: relative;
-  margin: 0;
+  margin: 0 calc(-1 * var(--scrollbar-width)) 0 0;
+  width: calc(100% + var(--scrollbar-width));
   /* Large enough to be the thing somebody meets, short enough that the first
      row under it is on the screen at the same time: a banner that fills the
      window is a banner that hides the library behind it. The height itself,
@@ -3240,12 +3249,24 @@ button.seen-mark:not(.seen-mark-on):hover {
   background: var(--surface);
 }
 
+/* Fades out into what the picture is standing on rather than stopping on a
+   line against it: the picture and the wash over it both go, evenly, over
+   the banner's own last stretch, and what shows through where they thin out
+   is the same drift the rows below are set on. The words and the two ways
+   through the banner are a separate layer and keep their own full strength
+   throughout: nothing here is meant to touch them, only the picture. */
 .hero-backdrop {
   position: absolute;
   inset: 0;
   opacity: 0;
   background: var(--card-color);
   transition: opacity 700ms var(--ease);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--gap-section)), transparent);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - var(--gap-section)),
+    transparent
+  );
 }
 
 .hero-backdrop-shown {
@@ -3262,7 +3283,9 @@ button.seen-mark:not(.seen-mark-on):hover {
 /* The words have to be readable over whatever picture is behind them, and a
    picture is never twice the same. Two washes rather than one: sideways for
    the words, upwards so the row under the banner is not cut off by a hard
-   edge. */
+   edge. Faded out over the banner's own last stretch along with the picture
+   it sits on, the same distance and for the same reason: what was a solid
+   strip of colour ending on a line now thins out with the picture under it. */
 .hero::after {
   content: "";
   position: absolute;
@@ -3270,6 +3293,12 @@ button.seen-mark:not(.seen-mark-on):hover {
   background:
     linear-gradient(to right, var(--surface-deep) 6%, transparent 62%),
     linear-gradient(to top, var(--surface-deep) 2%, transparent 42%);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--gap-section)), transparent);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - var(--gap-section)),
+    transparent
+  );
   pointer-events: none;
 }
 
