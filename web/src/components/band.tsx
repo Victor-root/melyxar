@@ -109,12 +109,17 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
       }}
     >
       {/* Decorative through and through: the tile is named in words right
-          under it, and a screen reader reading out three film titles nobody
-          asked for is three titles in the way of the one word that matters.
+          under it, and a screen reader reading out five film titles nobody
+          asked for is five titles in the way of the one word that matters.
 
-          A library with nothing in it has nothing to fan out, and an empty
-          box says nothing at all: it shows its own mark instead, faint and
-          large, standing where the posters will stand once there are any. */}
+          What fills the air the fan leaves at the corners is the painting
+          behind it, which the stylesheet does on the tile itself. The kind's
+          own mark was tried there too, drawn large and faint behind the
+          posters, and it is not here because of what it looked like: a fan
+          covers the middle of it and leaves the ends of the shape poking
+          out, which reads as something broken rather than as a watermark. It
+          stands only where it can stand whole, on a library with nothing in
+          it yet, where it is the whole of what the tile has to show. */}
       {fan.length > 0 ? (
         <span className={`band-posters band-fan-${fan.length}`} aria-hidden="true">
           {fan.map((card) => (
@@ -122,8 +127,8 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
           ))}
         </span>
       ) : (
-        <span className="band-empty" aria-hidden="true">
-          <KindIcon kind={shelf.kind} size={72} />
+        <span className="band-mark" aria-hidden="true">
+          <KindIcon kind={shelf.kind} />
         </span>
       )}
 
