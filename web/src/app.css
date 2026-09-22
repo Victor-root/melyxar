@@ -116,6 +116,10 @@
  * All of them stand the same height whatever is inside, which is the whole of
  * what makes several pieces read as one bar rather than as a row of things
  * that happened to land near each other.
+ *
+ * Rimmed and lit in the accent, the same as the chevron over a library's fan
+ * of posters: a ring around the shape and a halo outside it, standing rather
+ * than waiting on the pointer, since these two pieces are the bar itself.
  */
 .header-piece {
   pointer-events: auto;
@@ -125,10 +129,12 @@
   height: var(--header-piece);
   padding: 0 5px;
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   background: var(--header-glass);
   backdrop-filter: blur(18px);
-  box-shadow: var(--shadow-card);
+  box-shadow:
+    var(--shadow-card),
+    0 0 14px 2px var(--accent-glow);
 }
 
 .brand {
