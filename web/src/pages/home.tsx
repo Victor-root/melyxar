@@ -16,6 +16,7 @@
  * one is built so as not to be in its way.
  */
 
+import { useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Card as CardData, Library } from "../api";
 import { Band } from "../components/band";
@@ -117,7 +118,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
             only while there is room for one. The stylesheet decides, on the
             width of the window it is being read in. */}
         {(home.carry_on.length > 0 || home.up_next.length > 0) && (
-          <div className="rows-together">
+          <Together>
             {/* What was left halfway. Lying down, because what tells two of
                 these apart is the still and the bar under it rather than
                 the poster, and each one says how much of it is left and
@@ -162,7 +163,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
                 </Row>
               </section>
             )}
-          </div>
+          </Together>
         )}
 
         <section className="section">
@@ -218,6 +219,50 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
         )}
       </main>
     </>
+  );
+}
+
+/**
+ * The two rows of what is already under way, which share a line whenever
+ * both are short enough for one to hold them.
+ *
+ * Whether they do is the stylesheet's answer rather than this file's: it
+ * lays them side by side until the line runs out, on the width of the
+ * window it is being read in. What is read back here is only that answer,
+ * and only so a hairline can be drawn between them while they are on one
+ * line. Down the side of a row that is on a line of its own, the same
+ * hairline would be a rule drawn between nothing and nothing.
+ */
+function Together({ children }: { children: React.ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [sharing, setSharing] = useState(false);
+
+  useLayoutEffect(() => {
+    const it = box.current;
+    if (!it) {
+      return;
+    }
+    const look = () => {
+      const rows = Array.from(it.children) as HTMLElement[];
+      setSharing(rows.length === 2 && rows[0].offsetTop === rows[1].offsetTop);
+    };
+    look();
+
+    /* Watched rather than worked out: what decides this is the width the
+       rows are given and the width of what they hold, and both change
+       without this page being drawn again. */
+    const watch = new ResizeObserver(look);
+    watch.observe(it);
+    for (const row of Array.from(it.children)) {
+      watch.observe(row);
+    }
+    return () => watch.disconnect();
+  }, [children]);
+
+  return (
+    <div className={`rows-together${sharing ? " rows-sharing" : ""}`} ref={box}>
+      {children}
+    </div>
   );
 }
 
