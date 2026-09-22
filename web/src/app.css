@@ -260,14 +260,13 @@
   opacity: 1;
 }
 
-/* No ring for a click, since the field is right there to see. A tab landing
-   on it is the one case with nothing else on screen saying where the cursor
-   went, and that case keeps a ring, tucked inside the pill rather than
-   drawn over its edge. */
+/* No ring, full stop. The field is opened by a press on the magnifier that
+   then moves the focus into it by hand, and a browser reads that exactly
+   like a tab landing there out of nowhere: it draws the ring it would draw
+   for a keyboard, every single time, for a field that was just pressed with
+   the pointer right in front of it. */
 .search input:focus-visible {
-  outline: 2px solid var(--accent-bright);
-  outline-offset: -3px;
-  border-radius: 3px;
+  outline: none;
 }
 
 /* Left to the browser otherwise, which draws it at a strength that survives
