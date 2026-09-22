@@ -578,36 +578,112 @@
   padding-top: var(--gap-tight);
 }
 
-/* The same drift the door wears, behind the rows rather than the bare
-   surface. Fixed to the window rather than to the page: the page runs on
-   for several screens of rows, and a background sized to the page would
-   have run out long before the scroll did. Held a step behind ordinary
-   content and taking no press, the same as the door's own.
-
-   The same drift, at its own full strength: it is the one the door wears,
-   and a quieter copy of it is a different background rather than the same
-   one. */
+/*
+ * The light the library is set on: the door's own, standing still.
+ *
+ * The door draws this as seven boxes that never stop moving, three of them
+ * under a blur of seventy points, and that is affordable on a screen holding
+ * one card for as long as it takes to type a password. Here it is behind the
+ * whole library, for as long as anybody is in it, and it was not affordable
+ * at all: measured on a page where nothing was happening, the window was
+ * managing eight frames a second at 1080p and two at 4K. A blurred box that
+ * is also being scaled has its blur worked out again every frame, over the
+ * whole window, and there were three of them plus two glowing rings and two
+ * drifting fields of dust.
+ *
+ * So the same light is painted rather than assembled: pools of accent and
+ * the wash the two arcs cast, as gradients on one box that is painted once
+ * and then only composed. Nothing moves, nothing is filtered, and because it
+ * is all in fractions of the window rather than in pixels, it is drawn at
+ * the screen's own resolution whatever that is, on a laptop and on a 4K
+ * panel alike.
+ *
+ * Fixed to the window rather than to the page: the page runs on for several
+ * screens of rows, and a background sized to the page would have run out
+ * long before the scroll did.
+ */
 .home-backdrop {
   position: fixed;
   inset: 0;
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
+  background:
+    /* What the two arcs were: a ring of light with nothing drawn on it. */
+    radial-gradient(
+      124% 98% at 4% -26%,
+      transparent 55%,
+      color-mix(in srgb, var(--accent) 19%, transparent) 63%,
+      transparent 72%
+    ),
+    radial-gradient(
+      88% 106% at 106% 8%,
+      transparent 58%,
+      color-mix(in srgb, var(--accent-dim) 15%, transparent) 66%,
+      transparent 74%
+    ),
+    /* And the three pools, where each one stood. */
+    radial-gradient(
+      58% 72% at 10% 30%,
+      color-mix(in srgb, var(--accent) 25%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      56% 66% at 90% 88%,
+      color-mix(in srgb, var(--accent-bright) 19%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      46% 52% at 53% 108%,
+      color-mix(in srgb, var(--accent-dim) 17%, transparent),
+      transparent 74%
+    );
   opacity: 0;
   animation: door-arrive-slowly 1100ms var(--ease) 200ms forwards;
 }
 
-/* The arcs keep their light here and lose their line.
- *
- * Each one is a ring with a lit hairline and a wide glow off it. At the
- * door, where nothing stands over the background, the hairline is what
- * gives the light an edge to come from. Here the banner thins out into the
- * background rather than stopping against it, so anything with an edge
- * behind it is read as a line drawn across the picture, curving off through
- * the rows. Take the hairline and the glow stays: the same light, in the
- * same place, with nothing left for the eye to follow. */
-.home-backdrop .door-drift-arc {
-  border-color: transparent;
+/* The dust, on its own layer because it is the one part of this that is a
+   pattern rather than a wash: one dot repeated, cut to two soft bands by a
+   mask so it reads as a drift of it and not as graph paper. It keeps its
+   size in points rather than in fractions, so it is the same dust on a
+   laptop as on a large panel instead of growing with the screen. */
+.home-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent-bright) 62%, transparent) 1.1px,
+    transparent 1.2px
+  );
+  background-size: 17px 17px;
+  opacity: 0.5;
+  mask-image:
+    radial-gradient(
+      46% 34% at 20% 52%,
+      #000 0%,
+      color-mix(in srgb, #000 45%, transparent) 46%,
+      transparent 78%
+    ),
+    radial-gradient(
+      44% 44% at 80% 34%,
+      #000 0%,
+      color-mix(in srgb, #000 40%, transparent) 42%,
+      transparent 74%
+    );
+  -webkit-mask-image:
+    radial-gradient(
+      46% 34% at 20% 52%,
+      #000 0%,
+      color-mix(in srgb, #000 45%, transparent) 46%,
+      transparent 78%
+    ),
+    radial-gradient(
+      44% 44% at 80% 34%,
+      #000 0%,
+      color-mix(in srgb, #000 40%, transparent) 42%,
+      transparent 74%
+    );
 }
 
 .section {
@@ -3332,6 +3408,14 @@ button.seen-mark:not(.seen-mark-on):hover {
   border-radius: 0 0 var(--radius-card) var(--radius-card);
   overflow: hidden;
   isolation: isolate;
+  /* Kept as a layer of its own, which is what stops the fade below being
+     worked out again on every frame of a scroll. A fade is a pass over the
+     whole banner with an alpha to apply, and a banner that is part of the
+     page underneath pays for that pass every time the page moves a point:
+     measured while scrolling a 4K window, nine frames a second with this
+     line missing and fifty one with it. Drawn once and then only moved,
+     it costs its own picture in memory and nothing per frame. */
+  will-change: transform;
   /* No surface of its own under the picture. It used to carry one, and
      since a colour on the banner itself is not one of the layers the fade
      below thins out, what the fade uncovered was that colour rather than
@@ -3342,19 +3426,26 @@ button.seen-mark:not(.seen-mark-on):hover {
   background: none;
 }
 
-/* Fades out into what the picture is standing on rather than stopping on a
-   line against it, and what shows through where it thins out is the same
-   drift the rows below are set on. The words and the two ways through the
-   banner are a separate layer and keep their own full strength throughout:
-   nothing here is meant to touch them, only the picture. */
+/* The pictures, all of them, and the fade at the banner's foot worn once
+   over the lot: it fades out into what the banner is standing on rather
+   than stopping on a line against it, and what shows through where it thins
+   out is the same light the rows below are set on. The words and the two
+   ways through the banner are outside this box and keep their own full
+   strength throughout: nothing here is meant to touch them, only the
+   picture. */
+.hero-pictures {
+  position: absolute;
+  inset: 0;
+  mask-image: var(--hero-fade);
+  -webkit-mask-image: var(--hero-fade);
+}
+
 .hero-backdrop {
   position: absolute;
   inset: 0;
   opacity: 0;
   background: var(--card-color);
   transition: opacity 700ms var(--ease);
-  mask-image: var(--hero-fade);
-  -webkit-mask-image: var(--hero-fade);
 }
 
 .hero-backdrop-shown {

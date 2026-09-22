@@ -30,11 +30,7 @@ export function DoorBackground({ branding }: { branding: Branding }) {
     );
   }
 
-  return branding.login_background_style === "library" ? (
-    <DrawnLibrary />
-  ) : (
-    <Drift className="door-drift" />
-  );
+  return branding.login_background_style === "library" ? <DrawnLibrary /> : <Drift />;
 }
 
 /*
@@ -52,13 +48,15 @@ export function DoorBackground({ branding }: { branding: Branding }) {
  * is opened. What moves is a transform and an opacity and nothing besides,
  * which the browser hands to the part of itself that composes the page.
  *
- * Exported rather than kept to the door: the home page wears the same drift
- * behind its rows, under its own class so it can stand fixed behind a page
- * that scrolls rather than absolute behind one that does not.
+ * It stays on this screen. The home page is set on the same light, but
+ * painted once rather than assembled out of boxes that never stop moving:
+ * behind a card somebody types a password into, seven moving layers cost
+ * what they are worth, and behind a whole library they cost far more than
+ * that. The stylesheet has the sum.
  */
-export function Drift({ className }: { className: string }) {
+function Drift() {
   return (
-    <div className={className} aria-hidden="true">
+    <div className="door-drift" aria-hidden="true">
       <div className="door-drift-light door-drift-light-one" />
       <div className="door-drift-light door-drift-light-two" />
       <div className="door-drift-light door-drift-light-three" />

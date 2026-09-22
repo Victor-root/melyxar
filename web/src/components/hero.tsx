@@ -184,10 +184,17 @@ export function Hero({ items }: { items: HeroItem[] }) {
     >
       {/* Every one of them is drawn, and only the one in front is shown: the
           pictures are then already in the browser when the banner moves on,
-          so it changes rather than blinking through a hole. */}
-      {items.map((item, rank) => (
-        <HeroBackdrop key={item.id} item={item} shown={rank === at} />
-      ))}
+          so it changes rather than blinking through a hole.
+
+          All of them under one box, which is what wears the fade at the
+          banner's foot. Worn by each picture instead, the same fade was
+          five of them, and a browser keeps a layer of its own for every
+          box it has to fade out. */}
+      <div className="hero-pictures">
+        {items.map((item, rank) => (
+          <HeroBackdrop key={item.id} item={item} shown={rank === at} />
+        ))}
+      </div>
 
       <div
         className="hero-words"
