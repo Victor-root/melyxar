@@ -56,8 +56,12 @@ const MOST_LINES = 12;
  * place on the screen where that is unmissable. The text that will not fit is
  * cut short with an ellipsis, which the stylesheet does; this only says how
  * many lines there are to cut it to.
+ *
+ * Exported for its own test: it is the one piece of arithmetic here whose
+ * answer nobody can check by looking at the screen, since a banner that shows
+ * one line too few looks exactly like a banner with a short synopsis.
  */
-function linesThatFit(room: number, lineHeight: number): number {
+export function linesThatFit(room: number, lineHeight: number): number {
   if (!(lineHeight > 0)) {
     return FEWEST_LINES;
   }
