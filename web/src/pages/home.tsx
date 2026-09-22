@@ -21,12 +21,13 @@ import { Link } from "react-router-dom";
 import type { Card as CardData, Library } from "../api";
 import { Band } from "../components/band";
 import { Card } from "../components/card";
+import type { CardShape } from "../components/card";
 import { Hero } from "../components/hero";
 import { Row } from "../components/row";
 import { howFarIn, useHomeScreen } from "../screens/home";
 import { refusalKey } from "../i18n";
 import { howLong, whichEpisode } from "../readable";
-import { whereAKindLeads } from "../libraries";
+import { cardShapeOf, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { BinocularsIcon, CameraIcon, ChevronRightIcon, EyeIcon, KindIcon } from "../icons";
 
@@ -206,6 +207,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
             title={t(`home.newest.${shelf.kind}`)}
             mark={<KindIcon kind={shelf.kind} size={24} />}
             cards={shelf.cards}
+            shape={cardShapeOf(shelf.kind)}
             to={whereAKindLeads(shelf.kind, libraries)}
           />
         ))}
@@ -316,11 +318,13 @@ function Shelf<T extends CardData>({
   title,
   mark,
   cards,
+  shape,
   to,
 }: {
   title: string;
   mark?: React.ReactNode;
   cards: T[];
+  shape?: CardShape;
   to?: string;
 }) {
   if (cards.length === 0) {
@@ -331,7 +335,7 @@ function Shelf<T extends CardData>({
       <RowHead mark={mark} title={title} to={to} />
       <Row>
         {cards.map((card) => (
-          <Card key={card.id} card={card} />
+          <Card key={card.id} card={card} shape={shape} />
         ))}
       </Row>
     </section>

@@ -41,6 +41,7 @@ import { outOfAHundred } from "../readable";
 import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
+import { KINDS } from "../libraries";
 import { useSettings } from "../settings";
 import {
   ActivityIcon,
@@ -56,9 +57,6 @@ import {
   ScreenCastIcon,
   SearchIcon,
 } from "../icons";
-
-/** The order categories are offered in, which is the order they are read in. */
-const KINDS: LibraryKind[] = ["movies", "series", "anime", "shows", "music"];
 
 /**
  * The two keys that reach the search field, written the way this machine

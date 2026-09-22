@@ -17,9 +17,6 @@ import { api } from "../api";
 import type { Library, WouldGo } from "../api";
 import { refusalAbout, useAsked, useTold } from "../asking";
 
-/** The kinds a library can be, in the order the server names them. */
-export const KINDS = ["movies", "series", "anime", "shows", "music"];
-
 /** Turns whatever the server refused about a library into a sentence's key. */
 export function refusal(error: unknown): string {
   return refusalAbout(error, "library");

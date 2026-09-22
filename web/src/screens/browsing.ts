@@ -18,6 +18,7 @@ import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { Card, Filters, LibraryKind } from "../api";
 import { useAsked, wasAbandoned } from "../asking";
+import { KINDS } from "../libraries";
 
 /** The orderings a library can be read in. */
 export const ORDERS = ["title", "added_at", "release_year", "community_rating", "runtime"] as const;
@@ -39,10 +40,6 @@ export interface Narrowing {
       narrows by when it names a category rather than a folder. */
   kind: LibraryKind | undefined;
 }
-
-/** The kinds a scope may name, so a word out of the address cannot become a
- *  question the server has to refuse. */
-const KINDS: LibraryKind[] = ["movies", "series", "anime", "shows", "music"];
 
 /**
  * What the search box put in the address, read back.

@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { Library, LibraryKind } from "./api";
-import { kindsOnTheHomePage, movedOnTheHomePage } from "./libraries";
+import { cardShapeOf, kindsOnTheHomePage, movedOnTheHomePage } from "./libraries";
 
 /** A library with only what the order reads of it. */
 function library(kind: LibraryKind): Library {
@@ -46,5 +46,13 @@ describe("the order of the home page", () => {
     const shown: LibraryKind[] = ["movies", "anime"];
     expect(movedOnTheHomePage(EVERY, shown, "movies", -1)).toEqual(EVERY);
     expect(movedOnTheHomePage(EVERY, shown, "anime", 1)).toEqual(EVERY);
+  });
+});
+
+describe("the shape of the cards of a kind", () => {
+  it("lays down what people filmed and photographed themselves, and only that", () => {
+    expect(cardShapeOf("home_media")).toBe("lying");
+    expect(cardShapeOf("movies")).toBe("standing");
+    expect(cardShapeOf(undefined)).toBe("standing");
   });
 });
