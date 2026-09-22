@@ -623,6 +623,39 @@ impl Database {
         works_named_after_a_path(&rows)
     }
 
+    /// Episodes filed under no series, each with the one file it stands for.
+    ///
+    /// Such an episode is what a scan writes down when the rules could not
+    /// tell which episode a name was, and the scan never looks at a file again
+    /// once it is written down. The rules get better, and without this an
+    /// episode misread once stays on its own in the grid for as long as the
+    /// library exists.
+    ///
+    /// Only an episode nobody has named, and holding one file that is on the
+    /// disk: the file is what is read again, and two files would be two
+    /// readings with nothing to say they agree. Never one somebody set apart
+    /// by hand, which the same reading would put straight back.
+    pub async fn episodes_belonging_to_nothing(
+        &self,
+        library_id: LibraryId,
+    ) -> Result<Vec<WorkNamedAfterItsPath>> {
+        let rows = sqlx::query(
+            "SELECT w.id, w.title, w.release_year, min(s.relative_path) AS relative_path
+             FROM works w
+             JOIN media_sources s ON s.work_id = w.id
+             WHERE w.library_id = ? AND w.identification IN ('pending', 'unidentified')
+               AND w.kind = 'episode' AND w.parent_id IS NULL AND NOT w.set_apart_by_hand
+             GROUP BY w.id
+             HAVING count(*) = 1 AND max(s.missing_since) IS NULL
+             ORDER BY w.added_at",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        works_named_after_a_path(&rows)
+    }
+
     /// Gives a work the title its file name now reads as.
     ///
     /// Only ever called for a work still named after its file: a title a
@@ -2317,6 +2350,111 @@ mod tests {
             .expect("identification applied");
         assert!(database
             .series_named_after_their_folder(library.id)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_episode_under_no_series_is_listed_with_its_one_file() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Anime",
+                LibraryKind::Anime,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Anime"))],
+            )
+            .await
+            .expect("library created");
+        let root = library.roots[0].id;
+        let an_episode = |title: &'static str| {
+            let database = &database;
+            async move {
+                database
+                    .create_work(library.id, WorkKind::Episode, title, title, None)
+                    .await
+                    .expect("episode created")
+                    .id
+            }
+        };
+        let a_file = |work, path: &'static str| {
+            let database = &database;
+            async move {
+                database
+                    .insert_source(
+                        work,
+                        root,
+                        &PathBuf::from(path),
+                        1_000,
+                        melyxar_core::time::now(),
+                    )
+                    .await
+                    .expect("source recorded")
+            }
+        };
+
+        let alone = an_episode("5x05x- Waiting Room").await;
+        a_file(alone, "Sponge/Saison 5/5x05x- Waiting Room.avi").await;
+
+        // Two files: two readings, nothing to say they agree.
+        let twice = an_episode("Twice").await;
+        a_file(twice, "One/Twice.avi").await;
+        a_file(twice, "Two/Twice.avi").await;
+
+        // Its one file gone from the disk: nothing to read.
+        let gone = an_episode("Gone").await;
+        let file = a_file(gone, "Gone.avi").await;
+        database.mark_source_missing(file).await.expect("marked");
+
+        // Filed under a season already.
+        let series = database
+            .create_work(library.id, WorkKind::Series, "Sponge", "sponge", None)
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(library.id, series.id, 1, WorkKind::Season, "Saison 1", "1")
+            .await
+            .expect("season created");
+        let filed = database
+            .create_child_work(
+                library.id,
+                season.id,
+                1,
+                WorkKind::Episode,
+                "Pilot",
+                "pilot",
+            )
+            .await
+            .expect("episode created");
+        a_file(filed.id, "Sponge/Saison 1/01 - Pilot.avi").await;
+
+        // Set apart by hand from the episode it was filed under.
+        let copy = a_file(filed.id, "Sponge/Saison 1/01 - Pilot (copy).avi").await;
+        database
+            .detach_source(copy, WorkKind::Episode, "Pilot", "pilot", None)
+            .await
+            .expect("set apart")
+            .expect("it had two copies");
+
+        let listed = database
+            .episodes_belonging_to_nothing(library.id)
+            .await
+            .expect("read");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, alone);
+        assert_eq!(
+            listed[0].relative_path,
+            PathBuf::from("Sponge/Saison 5/5x05x- Waiting Room.avi")
+        );
+
+        // And an episode somebody named is theirs to file.
+        database
+            .apply_identification(alone, &found(), false)
+            .await
+            .expect("identification applied");
+        assert!(database
+            .episodes_belonging_to_nothing(library.id)
             .await
             .expect("read")
             .is_empty());

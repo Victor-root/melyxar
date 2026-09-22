@@ -167,7 +167,7 @@ pub fn episode_of_a_leading_number(
 ) -> Option<ParsedEpisode> {
     naming::with_the_words_of(file_name, current_year, signs, |words| {
         let (number, after) = naming::trim_leading_separators(words).split_first()?;
-        let number = a_number_alone(&plain(number))?;
+        let number = a_number_alone(plain(number).trim_end_matches(['-', '.']))?;
 
         let after = naming::trim_leading_separators(after);
         let boundary = naming::first_technical_tag(after, 0).unwrap_or(after.len());
@@ -677,13 +677,13 @@ fn a_range_ending(rest: &str, first: i32) -> Option<i32> {
     if let Some(last) = a_second_number(rest, first) {
         return Some(last);
     }
-    // A letter left stuck on the end of the marker is a slip of somebody's
-    // keyboard and not a number: `S10E04n` is still the fourth episode of the
-    // tenth season, and refusing the whole marker over it left that one file
-    // of a season of twenty four belonging to no season at all. Anything
-    // carrying another digit is still refused: a number nobody can explain is
-    // exactly what must never be guessed at.
-    rest.chars().all(char::is_alphabetic).then_some(first)
+    // What is left stuck on the end of the marker without a digit is a slip of
+    // somebody's keyboard and not a number: `S10E04n` is still the fourth
+    // episode of the tenth season, and `05x05x-` the fifth of the fifth.
+    // Refusing the whole marker over it left the file belonging to no season
+    // at all. Anything carrying another digit is still refused: a number
+    // nobody can explain is exactly what must never be guessed at.
+    (!rest.chars().any(|c| c.is_ascii_digit())).then_some(first)
 }
 
 /// The second number of a file holding several episodes.
@@ -820,6 +820,12 @@ mod tests {
             said("Distant Signal_S10E04n.mkv"),
             ("Distant Signal".to_string(), Some(10), 4, 4, None)
         );
+        let slipped = read("5x05x- Waiting Room.avi").expect("read");
+        assert_eq!(
+            (slipped.season, slipped.first, slipped.last),
+            (Some(5), 5, 5)
+        );
+        assert_eq!(slipped.title.as_deref(), Some("Waiting Room"));
         // What carries another number is still refused: a number nobody can
         // explain is what must never be guessed at.
         assert!(read("Distant Signal S01E02x264.mkv").is_none());
@@ -1054,6 +1060,8 @@ mod tests {
             ("01 The Amber Field.mkv", "The Amber Field"),
             // The technical words are taken off the title here as everywhere.
             ("01 - The Amber Field 1080p.mkv", "The Amber Field"),
+            // The separator glued to the number rather than standing apart.
+            ("01- The Amber Field.mkv", "The Amber Field"),
         ] {
             assert_eq!(
                 numbered(name),

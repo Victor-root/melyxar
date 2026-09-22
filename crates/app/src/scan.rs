@@ -595,7 +595,41 @@ pub(crate) async fn reread_names_of_nameless_works(
     }
 
     reread_names_of_nameless_series(state, library, year, &signs, &mut done).await?;
+    if library.kind.is_episodic() {
+        done.merged += file_what_belonged_to_nothing(state, library, &signs).await?;
+    }
     Ok(done)
+}
+
+/// Files again every episode a scan could not place under a series, now that
+/// the rules reading its name may know which episode it is.
+///
+/// The episode goes by joining the one its name now leads to, which carries
+/// over where everybody was in it. A name still read as nothing leaves it
+/// where it is, on its own in the grid, to be corrected by hand.
+async fn file_what_belonged_to_nothing(
+    state: &AppState,
+    library: &Library,
+    signs: &naming::LibrarySigns,
+) -> Result<usize> {
+    let mut filed = 0;
+    for episode in state
+        .database()
+        .episodes_belonging_to_nothing(library.id)
+        .await?
+    {
+        let Some(placed) = episode_work_for(state, library, &episode.relative_path, signs).await?
+        else {
+            continue;
+        };
+        join_work_into(state, episode.id, placed).await?;
+        tracing::info!(
+            file = %episode.relative_path.display(),
+            "an episode filed under nothing has found its series"
+        );
+        filed += 1;
+    }
+    Ok(filed)
 }
 
 /// Reads again the folder that names each series nobody has named.
@@ -812,7 +846,7 @@ pub async fn detach_copy(state: &AppState, source_id: MediaSourceId) -> Result<O
 pub(crate) struct Reread {
     /// Works whose title came out different.
     pub renamed: usize,
-    /// Works that turned out to be a copy of a film already in the library.
+    /// Works that turned out to be one already in the library.
     pub merged: usize,
 }
 
@@ -2135,6 +2169,73 @@ mod tests {
         let episodes = of_kind(&works, WorkKind::Episode);
         assert_eq!(episodes.len(), 1, "the episode that stood alone is gone");
         assert!(episodes[0].parent_id.is_some());
+    }
+
+    #[tokio::test]
+    async fn an_episode_filed_under_nothing_finds_its_series_once_its_name_reads() {
+        // What a collection scanned by older rules holds: a file written down
+        // as an episode of nothing, and never looked at again since it has not
+        // changed on the disk.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Sponge/Saison 5/05x05x- Waiting Room.avi", b"x");
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media.clone())]).await;
+        let database = state.database();
+        let orphan = database
+            .create_work(
+                library.id,
+                WorkKind::Episode,
+                "05x05x- Waiting Room",
+                "05x05x- waiting room",
+                None,
+            )
+            .await
+            .expect("episode written")
+            .id;
+        let viewer = a_viewer(&state).await;
+        database
+            .record_playback_progress(
+                viewer.id,
+                orphan,
+                melyxar_core::time::Millis::new(0),
+                melyxar_core::work::PlaybackState::Watched,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("watched");
+        let found = walk("disk-one", &media).expect("walked");
+        let file = &found.files[0];
+        database
+            .insert_source(
+                orphan,
+                library.roots[0].id,
+                &file.relative_path,
+                file.size_bytes,
+                file.modified_at,
+            )
+            .await
+            .expect("file written down");
+
+        let report = scan(&state, &library).await;
+
+        assert_eq!(report.added, 0, "the file was already written down");
+        assert_eq!(report.merged, 1);
+        assert!(database.work(orphan).await.expect("read").is_none());
+        let works = arrangement(&state, &library).await;
+        let episodes = of_kind(&works, WorkKind::Episode);
+        assert_eq!(episodes.len(), 1);
+        assert_eq!(episodes[0].ordinal, Some(5));
+        assert!(episodes[0].parent_id.is_some());
+        assert_eq!(
+            database
+                .playback_progress(viewer.id, episodes[0].id)
+                .await
+                .expect("read")
+                .map(|progress| progress.state),
+            Some(melyxar_core::work::PlaybackState::Watched),
+            "what was watched follows the episode"
+        );
     }
 
     #[tokio::test]

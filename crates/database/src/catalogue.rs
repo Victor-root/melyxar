@@ -396,6 +396,10 @@ impl Database {
         )
         .await?;
         remember_filing_name(&mut *transaction, work.id, sort_title, release_year).await?;
+        sqlx::query("UPDATE works SET set_apart_by_hand = 1 WHERE id = ?")
+            .bind(work.id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
         sqlx::query("UPDATE media_sources SET work_id = ? WHERE id = ?")
             .bind(work.id.to_db_string())
             .bind(source_id.to_db_string())
