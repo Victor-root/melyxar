@@ -290,10 +290,14 @@ impl MetadataProvider for TmdbProvider {
             .await?;
 
         let mut offered = Vec::new();
+        // The provider keeps both wide kinds in one list, and tells them apart
+        // only by whether words are written on them.
+        let (thumbs, backdrops) = held.backdrops.into_iter().partition(carries_words);
         for (kind, set) in [
             (PictureKind::Poster, held.posters),
-            (PictureKind::Backdrop, held.backdrops),
+            (PictureKind::Backdrop, backdrops),
             (PictureKind::Logo, held.logos),
+            (PictureKind::Thumb, thumbs),
         ] {
             for picture in set {
                 let Some(path) = picture.file_path.filter(|path| is_readable_picture(path)) else {
@@ -748,7 +752,14 @@ fn details_from(raw: DetailsResponse, language: &str) -> Details {
         }),
         poster_path: raw.poster_path,
         backdrop_path: best_backdrop(&pictures, raw.backdrop_path),
-        logo_path: best_logo(pictures.logos, language),
+        logo_path: best_in_its_language(&pictures.logos, language),
+        thumb_path: best_in_its_language(
+            pictures
+                .backdrops
+                .iter()
+                .filter(|image| carries_words(image)),
+            language,
+        ),
         trailers,
         season_lengths: raw
             .seasons
@@ -801,7 +812,7 @@ fn year_of(date: Option<&str>) -> Option<i32> {
 /// for its language alone would show a plain line of text for most of its
 /// shelf.
 ///
-/// And the ones carrying no language at all, which is what every wide picture
+/// And the ones carrying no language at all, which is what every backdrop
 /// is: they were left out while this answer was read for title images alone,
 /// since a title is words and so has a language. They are what the banner is
 /// chosen from now, so they have to be in the answer. It is about twice as
@@ -824,22 +835,39 @@ fn short_language(language: &str) -> String {
         .to_lowercase()
 }
 
-/// The title image a film is shown under, among those the provider offers.
+/// Whether words are written on a picture, which the provider says by giving
+/// it a language.
+fn carries_words(image: &RawImage) -> bool {
+    image
+        .iso_639_1
+        .as_deref()
+        .is_some_and(|tongue| !tongue.is_empty())
+}
+
+/// The picture with words on it a work is shown with, among those the
+/// provider offers: its title image, or its thumb.
 ///
 /// The language decides first: a shelf kept in one language wants the title
 /// drawn in that language, however well thought of another is. Among those
 /// left, the provider's own voters decide, which is the same thing that
 /// settles two films sharing a name.
-fn best_logo(logos: Vec<RawImage>, language: &str) -> Option<String> {
+fn best_in_its_language<'a>(
+    images: impl IntoIterator<Item = &'a RawImage>,
+    language: &str,
+) -> Option<String> {
     let wanted = short_language(language);
-    let mut offered: Vec<(u8, f64, i64, String)> = logos
+    let mut offered: Vec<(u8, f64, i64, &str)> = images
         .into_iter()
         .filter_map(|image| {
-            let path = image.file_path?;
-            if !is_readable_picture(&path) {
+            let path = image.file_path.as_deref()?;
+            if !is_readable_picture(path) {
                 return None;
             }
-            let tongue = image.iso_639_1.unwrap_or_default().to_lowercase();
+            let tongue = image
+                .iso_639_1
+                .as_deref()
+                .unwrap_or_default()
+                .to_lowercase();
             let rank = match tongue.as_str() {
                 spoken if spoken == wanted => 0,
                 "en" => 1,
@@ -855,7 +883,10 @@ fn best_logo(logos: Vec<RawImage>, language: &str) -> Option<String> {
             .then(right.1.total_cmp(&left.1))
             .then(right.2.cmp(&left.2))
     });
-    offered.into_iter().next().map(|(_, _, _, path)| path)
+    offered
+        .into_iter()
+        .next()
+        .map(|(_, _, _, path)| path.to_string())
 }
 
 /// How wide a picture has to be for the one the provider puts forward to be
@@ -874,12 +905,16 @@ const WIDE_ENOUGH_FOR_A_BANNER: i64 = 1920;
 /// because a banner that covers a screen is a banner whose size is the first
 /// thing anybody sees.
 ///
+/// Only a picture with no words on it: one with the title written across it
+/// is a thumb, and a banner already has the title drawn over it.
+///
 /// Nothing at all changes for a work whose set says nothing about sizes, or
 /// whose set is empty: what the provider put forward stands.
 fn best_backdrop(images: &RawImages, put_forward: Option<String>) -> Option<String> {
     let offered: Vec<(i64, f64, i64, &str)> = images
         .backdrops
         .iter()
+        .filter(|image| !carries_words(image))
         .filter_map(|image| {
             let path = image.file_path.as_deref()?;
             let width = image.width.filter(|width| *width > 0)?;
@@ -1330,6 +1365,32 @@ mod tests {
                 "nothing known about the set is no reason to drop what was offered"
             );
         }
+    }
+
+    #[test]
+    fn a_wide_picture_with_words_on_it_is_a_thumb_and_never_the_banner() {
+        let raw: DetailsResponse = serde_json::from_str(
+            r#"{"id": 1, "backdrop_path": "/titled-en.jpg", "images": {"backdrops": [
+                 {"file_path": "/titled-en.jpg", "iso_639_1": "en", "width": 3840,
+                  "vote_average": 9.0},
+                 {"file_path": "/titled-fr.jpg", "iso_639_1": "fr", "width": 1280,
+                  "vote_average": 2.0},
+                 {"file_path": "/plain.jpg", "width": 1920, "vote_average": 1.0}]}}"#,
+        )
+        .expect("parses");
+        let described = details_from(raw, "fr");
+        assert_eq!(
+            described.backdrop_path.as_deref(),
+            Some("/plain.jpg"),
+            "a banner has the title drawn over it already, and a second one \
+             written into the picture says it twice"
+        );
+        assert_eq!(
+            described.thumb_path.as_deref(),
+            Some("/titled-fr.jpg"),
+            "the title written on a thumb is read like a title image: in the \
+             language of the shelf first"
+        );
     }
 
     #[test]

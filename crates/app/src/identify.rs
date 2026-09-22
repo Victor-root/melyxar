@@ -328,10 +328,10 @@ where
             }
         };
 
-        // One call covers both: a picture already here is recognised by the
-        // name the provider gave it and never fetched twice, so a film wanting
-        // only its title image costs only its title image.
-        if (work.wants_pictures || work.wants_a_title_image)
+        // One call covers them all: a picture already here is recognised by
+        // the name the provider gave it and never fetched twice, so a film
+        // wanting only its title image costs only its title image.
+        if (work.wants_pictures || work.wants_a_title_image || work.wants_a_thumb)
             && crate::images::store_provider_images(state, provider.as_ref(), work.id, &details)
                 .await
                 > 0
@@ -686,6 +686,7 @@ fn as_details(
         poster_path,
         backdrop_path: None,
         logo_path: None,
+        thumb_path: None,
         trailers: Vec::new(),
         season_lengths: Vec::new(),
     }
@@ -2015,6 +2016,7 @@ mod tests {
             poster_path: Some("/poster.jpg".to_string()),
             backdrop_path: None,
             logo_path: None,
+            thumb_path: None,
             trailers: vec![Trailer {
                 name: "Bande annonce".to_string(),
                 site: "YouTube".to_string(),

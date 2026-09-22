@@ -696,13 +696,14 @@ impl Database {
     ///
     /// What is wide, in the order it is looked for:
     ///
-    /// 1. The work's own backdrop, which is what a catalogue offers for
-    ///    exactly this.
+    /// 1. The work's own thumb, which is what a catalogue offers for exactly
+    ///    this: wide, with the title written on it, since a lying card has no
+    ///    room for the title under its picture. Its backdrop otherwise.
     /// 2. For an episode, its own picture, since what a scan stores for an
     ///    episode is a still off the film and a still is already wide.
-    /// 3. The backdrop of the series two steps above it, because an episode
-    ///    that nobody has a still for still belongs to something that has a
-    ///    picture.
+    /// 3. The thumb, then the backdrop, of the series two steps above it,
+    ///    because an episode that nobody has a still for still belongs to
+    ///    something that has a picture.
     ///
     /// The posters must already be in place, since the second of those reads
     /// them. One query for the parents and one for the pictures, whatever the
@@ -740,7 +741,7 @@ impl Database {
         let places = vec!["?"; wanted.len()].join(", ");
         let mut pictures = sqlx::query(AssertSqlSafe(format!(
             "SELECT {} FROM images
-              WHERE owner_kind = 'work' AND image_kind = 'backdrop'
+              WHERE owner_kind = 'work' AND image_kind IN ('thumb', 'backdrop')
                 AND owner_id IN ({places})
               ORDER BY width DESC",
             crate::images::WHAT_A_PICTURE_IS
@@ -748,17 +749,21 @@ impl Database {
         for owner in &wanted {
             pictures = pictures.bind(owner);
         }
+        let mut thumbs: HashMap<String, Vec<StoredImage>> = HashMap::new();
         let mut backdrops: HashMap<String, Vec<StoredImage>> = HashMap::new();
         for row in pictures.fetch_all(self.reader()).await? {
-            backdrops
-                .entry(row.try_get("owner_id")?)
-                .or_default()
-                .push(crate::images::image_from_row(&row)?);
+            let image = crate::images::image_from_row(&row)?;
+            let kept = match image.image_kind.as_str() {
+                "thumb" => &mut thumbs,
+                _ => &mut backdrops,
+            };
+            kept.entry(image.owner_id.clone()).or_default().push(image);
         }
+        let wide_of = |owner: &String| thumbs.get(owner).or_else(|| backdrops.get(owner));
 
         for card in cards.iter_mut() {
             let own = card.id.to_db_string();
-            if let Some(wide) = backdrops.get(&own) {
+            if let Some(wide) = wide_of(&own) {
                 card.wide = wide.clone();
                 continue;
             }
@@ -768,7 +773,7 @@ impl Database {
             }
             card.wide = series_of
                 .get(&own)
-                .and_then(|series| backdrops.get(series))
+                .and_then(wide_of)
                 .cloned()
                 .unwrap_or_default();
         }

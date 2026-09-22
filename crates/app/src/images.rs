@@ -44,18 +44,21 @@ enum Kind {
     /// The film's title drawn as the film draws it, shown in place of the
     /// title written out.
     Logo,
+    /// Wide, with the title written on it, for a card lying on its side.
+    Thumb,
     Photo,
 }
 
 impl Kind {
     /// The one a caller outside this file names. A face belongs to a person
     /// rather than to a work, and nobody chooses one by hand, so the kinds
-    /// that can be chosen are the three a work wears.
+    /// that can be chosen are the four a work wears.
     fn of(kind: PictureKind) -> Self {
         match kind {
             PictureKind::Poster => Self::Poster,
             PictureKind::Backdrop => Self::Backdrop,
             PictureKind::Logo => Self::Logo,
+            PictureKind::Thumb => Self::Thumb,
         }
     }
 
@@ -64,6 +67,7 @@ impl Kind {
             Self::Poster => "poster",
             Self::Backdrop => "backdrop",
             Self::Logo => "logo",
+            Self::Thumb => "thumb",
             Self::Photo => "photo",
         }
     }
@@ -76,7 +80,7 @@ impl Kind {
     fn widths(self) -> &'static [u32] {
         match self {
             Self::Poster => &melyxar_ffmpeg::images::POSTER_WIDTHS,
-            Self::Backdrop => &melyxar_ffmpeg::images::BACKDROP_WIDTHS,
+            Self::Backdrop | Self::Thumb => &melyxar_ffmpeg::images::BACKDROP_WIDTHS,
             Self::Logo => &melyxar_ffmpeg::images::LOGO_WIDTHS,
             Self::Photo => &melyxar_ffmpeg::images::PHOTO_WIDTHS,
         }
@@ -85,7 +89,7 @@ impl Kind {
     /// What the picture belongs to: a film, or a person who is in several.
     fn owner_kind(self) -> &'static str {
         match self {
-            Self::Poster | Self::Backdrop | Self::Logo => "work",
+            Self::Poster | Self::Backdrop | Self::Logo | Self::Thumb => "work",
             Self::Photo => "person",
         }
     }
@@ -93,7 +97,7 @@ impl Kind {
     /// The folder of the cache it is filed under.
     fn folder(self) -> &'static str {
         match self {
-            Self::Poster | Self::Backdrop | Self::Logo => "works",
+            Self::Poster | Self::Backdrop | Self::Logo | Self::Thumb => "works",
             Self::Photo => "people",
         }
     }
@@ -113,6 +117,7 @@ pub async fn store_provider_images(
         (Kind::Poster, details.poster_path.as_deref()),
         (Kind::Backdrop, details.backdrop_path.as_deref()),
         (Kind::Logo, details.logo_path.as_deref()),
+        (Kind::Thumb, details.thumb_path.as_deref()),
     ];
     // Said out loud rather than passed over: a work with no picture is
     // indistinguishable from one whose picture failed to arrive, and the two

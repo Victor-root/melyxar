@@ -23,7 +23,7 @@ pub struct StoredImage {
     /// work, person, collection, library, server.
     pub owner_kind: String,
     pub owner_id: String,
-    /// poster, backdrop, logo, thumbnail, banner.
+    /// poster, backdrop, logo, thumb, photo.
     pub image_kind: String,
     /// Path inside the image cache.
     pub relative_path: String,
