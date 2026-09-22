@@ -1845,12 +1845,18 @@
    to say, since marking a film watched has to be reachable without a menu. */
 .seen-mark {
   position: absolute;
-  top: 0;
-  right: 0;
+  /* Bled a couple of pixels past the picture's own top and right edges,
+     which the picture's rounded overflow then clips back to its own curve.
+     Flush at 0/0 left a hairline of the page behind showing through at the
+     rounded corner itself, where the banner's straight edge and the
+     picture's arc are antialiased by two different passes that do not quite
+     agree on which pixel is the last one. */
+  top: -2px;
+  right: -2px;
   z-index: 3;
   display: block;
-  width: var(--seen-corner, 46px);
-  height: var(--seen-corner, 46px);
+  width: calc(var(--seen-corner, 46px) + 2px);
+  height: calc(var(--seen-corner, 46px) + 2px);
   padding: 0;
   border: none;
   /* The corner itself: the top edge and the right edge, closed by the slant
@@ -1879,11 +1885,13 @@
 }
 
 /* What is written sits in the corner's own angle, where it is thickest, and
-   far enough in from both edges not to touch them. */
+   far enough in from both edges not to touch them. Offset by the same 2px
+   the banner itself now bleeds by, so the words stay where they were against
+   the picture's real corner. */
 .seen-mark-said {
   position: absolute;
-  top: 5px;
-  right: 5px;
+  top: 7px;
+  right: 7px;
   display: grid;
   place-items: center;
   min-width: 15px;
