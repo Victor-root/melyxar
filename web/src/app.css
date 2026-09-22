@@ -86,6 +86,31 @@
   font-size: 17px;
 }
 
+/* The one press that undoes whatever brought this page up. Square rather
+   than the width the brand takes, since it carries a single mark and no
+   name beside it, which is what makes the pill round instead of oblong. */
+.header-back {
+  justify-content: center;
+  width: var(--header-piece);
+  padding: 0;
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.header-back:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* The way back one page, and the way back to the front page: kept as one
+   group so the space between the two ends of the bar still falls in one
+   place rather than being split by whichever of the two happens to show. */
+.header-start {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
 /* The name of the server, and the way back to its front page: there is no
    other, which is why it is set apart rather than written like a word in a
    sentence. */
