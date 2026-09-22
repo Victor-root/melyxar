@@ -576,21 +576,17 @@
   height: 34px;
   border-radius: 50%;
   color: var(--text-soft);
-  transition:
-    background var(--quick) var(--ease),
-    box-shadow var(--quick) var(--ease),
-    color var(--quick) var(--ease);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
 }
 
-/* The same disc, lit from inside, that says "through here" on the chevron
-   over a library's fan of posters: a ring of the accent and a halo outside
-   it, so the bubble it sits in lights up rather than a wash filling it. */
+/* No wash, the same as the account's own name: the piece it sits on is
+   already glass, and a wash lit inside it is a pill floating in a pill. What
+   answers the pointer is the icon coming up to full strength, which also
+   survives being held over a bright picture better than a patch of dark
+   ever did. */
 .header-icon:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
-    0 0 14px 2px var(--accent-glow);
-  color: var(--accent-bright);
+  background: none;
+  color: var(--text);
 }
 
 /* Dimmed once, not twice. It was a faint colour at a little over half
