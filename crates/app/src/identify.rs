@@ -14,12 +14,13 @@ use std::sync::Arc;
 
 use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
-use melyxar_core::library::Library;
+use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::refresh::RefreshMode;
-use melyxar_core::work::{IdentificationNote, Work};
+use melyxar_core::work::{place_across, IdentificationNote, SeasonLength, Work, WorkKind};
 use melyxar_database::metadata::{
     CollectionRecord, CreditRecord, IdentifiedWork, RemoteTrailerRecord,
 };
+use melyxar_database::numbering::EpisodeMove;
 use melyxar_jobs::{JobHandle, StartedJob};
 use melyxar_library::naming;
 use melyxar_metadata::provider::Trailer;
@@ -463,6 +464,10 @@ where
     // seasons and then its episodes, and those are described by the same
     // provider in answers of their own.
     if catalogue == Catalogue::Series {
+        if library.kind == LibraryKind::Anime {
+            place_what_was_numbered_across(state, library.id, work.id, &details.season_lengths)
+                .await?;
+        }
         fill_in_the_seasons_of(state, provider, work.id, &details.external_id, language).await?;
     }
 
@@ -472,6 +477,67 @@ where
         "work identified"
     );
     Ok(Outcome::Identified)
+}
+
+/// Puts every episode a file numbered across the series into the season the
+/// provider says it belongs to, and keeps how long each season is for the
+/// files that arrive afterwards.
+///
+/// Done before the seasons are described, so an episode is described where it
+/// ends up rather than where the scan first put it.
+async fn place_what_was_numbered_across(
+    state: &AppState,
+    library_id: LibraryId,
+    series_id: WorkId,
+    lengths: &[SeasonLength],
+) -> Result<()> {
+    let database = state.database();
+    database.set_season_lengths(series_id, lengths).await?;
+
+    let moves: Vec<EpisodeMove> = database
+        .episodes_numbered_across(series_id)
+        .await?
+        .into_iter()
+        .filter_map(|episode| {
+            let (season, ordinal) = place_across(episode.absolute_number, lengths)?;
+            if (season, ordinal) == (episode.season, episode.ordinal) {
+                return None;
+            }
+            // A name that was only ever the number follows the number.
+            let renamed = crate::episodes::is_only_a_number(
+                WorkKind::Episode,
+                Some(episode.ordinal),
+                &episode.title,
+            )
+            .then(|| {
+                let title = crate::episodes::name_of_episode(ordinal, ordinal);
+                let sort_title = naming::sort_title(&title);
+                (title, sort_title)
+            });
+            let season_title = crate::episodes::name_of_season(season);
+            Some(EpisodeMove {
+                episode: episode.id,
+                season,
+                season_sort_title: naming::sort_title(&season_title),
+                season_title,
+                ordinal,
+                renamed,
+            })
+        })
+        .collect();
+    if moves.is_empty() {
+        return Ok(());
+    }
+
+    let no_longer_used = database
+        .place_episodes(library_id, series_id, &moves)
+        .await?;
+    crate::scan::forget_pictures(state, no_longer_used).await;
+    tracing::info!(
+        moved = moves.len(),
+        "episodes numbered across the series were put in the seasons the provider counts"
+    );
+    Ok(())
 }
 
 /// Describes the seasons a series holds, and the episodes under them.
@@ -621,7 +687,7 @@ fn as_details(
         backdrop_path: None,
         logo_path: None,
         trailers: Vec::new(),
-        season_count: None,
+        season_lengths: Vec::new(),
     }
 }
 
@@ -1400,6 +1466,23 @@ where
     }
     crate::images::store_person_photos(state, provider, &people).await;
 
+    // A series named by hand is described down to its episodes, the same as
+    // one the look up named.
+    if catalogue == Catalogue::Series {
+        if library.kind == LibraryKind::Anime {
+            place_what_was_numbered_across(state, library_id, work_id, &details.season_lengths)
+                .await?;
+        }
+        fill_in_the_seasons_of(
+            state,
+            provider,
+            work_id,
+            &details.external_id,
+            &library.metadata_language,
+        )
+        .await?;
+    }
+
     state.database().bump_library_version(library_id).await?;
     Ok(())
 }
@@ -1891,7 +1974,7 @@ mod tests {
 
     fn details(id: &str, title: &str, year: Option<i32>) -> Details {
         Details {
-            season_count: None,
+            season_lengths: Vec::new(),
             external_id: id.to_string(),
             imdb_id: Some(format!("tt{id}")),
             title: title.to_string(),
@@ -2073,6 +2156,88 @@ mod tests {
             .expect("still there");
         assert_eq!(named.identification, IdentificationState::Identified);
         assert_eq!(named.title, "Distant Signal");
+    }
+
+    #[tokio::test]
+    async fn anime_numbered_across_the_series_is_put_in_the_seasons_the_provider_counts() {
+        let (_kept, state, library, series) =
+            build_state("Amber Field", None, false, "anime", WorkKind::Series).await;
+        let season = state
+            .database()
+            .create_child_work(
+                library.id,
+                series.id,
+                1,
+                WorkKind::Season,
+                "Season 1",
+                "season 1",
+            )
+            .await
+            .expect("season written");
+        for number in 1..=4 {
+            let title = crate::episodes::name_of_episode(number, number);
+            state
+                .database()
+                .create_episode_numbered_across(
+                    library.id,
+                    season.id,
+                    number,
+                    number,
+                    &title,
+                    &naming::sort_title(&title),
+                )
+                .await
+                .expect("episode written");
+        }
+
+        let mut described = details("42", "Amber Field", Some(2019));
+        described.season_lengths = vec![
+            SeasonLength {
+                season: 1,
+                episodes: 2,
+            },
+            SeasonLength {
+                season: 2,
+                episodes: 2,
+            },
+        ];
+        let mut provider = StandIn::new(
+            vec![candidate("42", "Amber Field", Some(2019))],
+            vec![described],
+        );
+        provider.seasons = vec![
+            a_season(1, &[(1, "The Long Night"), (2, "Cold Water")]),
+            a_season(2, &[(1, "First Light"), (2, "Last Light")]),
+        ];
+        let provider = Arc::new(provider);
+
+        run(&state, &provider, &library).await;
+
+        let seasons = state
+            .database()
+            .children_ranked(series.id)
+            .await
+            .expect("read");
+        let mut placed = Vec::new();
+        for season in &seasons {
+            for episode in state
+                .database()
+                .children_ranked(season.id)
+                .await
+                .expect("read")
+            {
+                placed.push((season.ordinal, episode.ordinal, episode.title));
+            }
+        }
+        assert_eq!(
+            placed,
+            [
+                (Some(1), Some(1), "The Long Night".to_string()),
+                (Some(1), Some(2), "Cold Water".to_string()),
+                (Some(2), Some(1), "First Light".to_string()),
+                (Some(2), Some(2), "Last Light".to_string()),
+            ]
+        );
     }
 
     #[tokio::test]

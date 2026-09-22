@@ -8,6 +8,7 @@
 use std::future::Future;
 
 use melyxar_core::time::Millis;
+use melyxar_core::work::SeasonLength;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProviderError {
@@ -168,9 +169,9 @@ pub struct Details {
     /// the backdrop, and plenty of films have none.
     pub logo_path: Option<String>,
     pub trailers: Vec<Trailer>,
-    /// How many seasons a series holds, as the provider counts them. Absent
-    /// for a film, which holds none.
-    pub season_count: Option<i32>,
+    /// How many episodes each season of a series holds, as the provider
+    /// counts them. Empty for a film, which holds none.
+    pub season_lengths: Vec<SeasonLength>,
 }
 
 /// One season of a series, with the episodes under it.
