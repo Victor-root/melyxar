@@ -274,6 +274,49 @@ impl Database {
         title: &str,
         sort_title: &str,
     ) -> Result<Work> {
+        self.create_child(
+            library_id, parent_id, ordinal, kind, title, sort_title, None,
+        )
+        .await
+    }
+
+    /// Writes an episode whose file numbered it across the whole series
+    /// rather than inside a season, and keeps that number with it.
+    ///
+    /// Kept so the episode can be put back in the right season whenever the
+    /// series is described again, however the provider cuts it up that time.
+    pub async fn create_episode_numbered_across(
+        &self,
+        library_id: LibraryId,
+        season_id: WorkId,
+        ordinal: i32,
+        absolute_number: i32,
+        title: &str,
+        sort_title: &str,
+    ) -> Result<Work> {
+        self.create_child(
+            library_id,
+            season_id,
+            ordinal,
+            WorkKind::Episode,
+            title,
+            sort_title,
+            Some(absolute_number),
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn create_child(
+        &self,
+        library_id: LibraryId,
+        parent_id: WorkId,
+        ordinal: i32,
+        kind: WorkKind,
+        title: &str,
+        sort_title: &str,
+        absolute_number: Option<i32>,
+    ) -> Result<Work> {
         let mut transaction = self.begin().await?;
         let work = insert_work(
             &mut *transaction,
@@ -284,6 +327,13 @@ impl Database {
             None,
         )
         .await?;
+        if absolute_number.is_some() {
+            sqlx::query("UPDATE works SET absolute_number = ? WHERE id = ?")
+                .bind(absolute_number)
+                .bind(work.id.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+        }
         sqlx::query(
             "UPDATE works
                 SET child_count = (SELECT count(*) FROM works AS child WHERE child.parent_id = works.id)
@@ -1115,92 +1165,7 @@ impl Database {
             return Ok(Vec::new());
         }
         let mut transaction = self.begin().await?;
-        let mut no_longer_used = Vec::new();
-        let mut going = Vec::new();
-        let mut receiving = Vec::new();
-        let mut pairs = vec![(from, into)];
-
-        while let Some((from, into)) = pairs.pop() {
-            for (child, ordinal) in children_with_their_ordinal(&mut *transaction, from).await? {
-                let met = match ordinal {
-                    Some(ordinal) => child_at(&mut *transaction, into, ordinal).await?,
-                    None => None,
-                };
-                match met {
-                    Some(met) => pairs.push((child, met)),
-                    None => {
-                        sqlx::query("UPDATE works SET parent_id = ? WHERE id = ?")
-                            .bind(into.to_db_string())
-                            .bind(child.to_db_string())
-                            .execute(&mut *transaction)
-                            .await?;
-                    }
-                }
-            }
-
-            sqlx::query("UPDATE media_sources SET work_id = ? WHERE work_id = ?")
-                .bind(into.to_db_string())
-                .bind(from.to_db_string())
-                .execute(&mut *transaction)
-                .await?;
-            sqlx::query("UPDATE extra_videos SET work_id = ? WHERE work_id = ?")
-                .bind(into.to_db_string())
-                .bind(from.to_db_string())
-                .execute(&mut *transaction)
-                .await?;
-
-            let pictures: Vec<String> = sqlx::query(
-                "SELECT relative_path FROM images WHERE owner_kind = 'work' AND owner_id = ?",
-            )
-            .bind(from.to_db_string())
-            .fetch_all(&mut *transaction)
-            .await?
-            .iter()
-            .map(|row| row.try_get::<String, _>("relative_path"))
-            .collect::<std::result::Result<_, _>>()?;
-            no_longer_used.extend(pictures);
-            // Pictures are found by owner rather than by a key the engine
-            // knows about, so dropping the work does not drop them.
-            sqlx::query("DELETE FROM images WHERE owner_kind = 'work' AND owner_id = ?")
-                .bind(from.to_db_string())
-                .execute(&mut *transaction)
-                .await?;
-
-            going.push(from);
-            receiving.push(into);
-        }
-
-        // The name the one that goes was filed under is the one its folder still
-        // carries. Dropped here, the next file added under that folder would
-        // write the same work down again, and the two would have to be put
-        // together all over again. Only the two at the top are filed under a
-        // name of their own; a season and an episode are placed by number.
-        sqlx::query(
-            "INSERT OR IGNORE INTO work_filing_names (work_id, sort_title, release_year)
-             SELECT ?, sort_title, release_year FROM work_filing_names WHERE work_id = ?",
-        )
-        .bind(into.to_db_string())
-        .bind(from.to_db_string())
-        .execute(&mut *transaction)
-        .await?;
-
-        for work in going {
-            sqlx::query("DELETE FROM works WHERE id = ?")
-                .bind(work.to_db_string())
-                .execute(&mut *transaction)
-                .await?;
-        }
-        for work in receiving {
-            sqlx::query(
-                "UPDATE works
-                    SET child_count = (SELECT count(*) FROM works AS child WHERE child.parent_id = works.id)
-                  WHERE id = ?",
-            )
-            .bind(work.to_db_string())
-            .execute(&mut *transaction)
-            .await?;
-        }
-
+        let no_longer_used = merge_within(&mut transaction, from, into).await?;
         transaction.commit().await?;
         Ok(no_longer_used)
     }
@@ -2511,7 +2476,7 @@ fn stored_source_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredSource>
 /// The three together rather than one by one: a work met on its own has no
 /// parent and no rank, and a season or an episode has both. Passing them apart
 /// is how one of them ends up written and the other forgotten.
-struct Placed {
+pub(crate) struct Placed {
     library_id: LibraryId,
     parent_id: Option<WorkId>,
     ordinal: Option<i32>,
@@ -2528,7 +2493,7 @@ impl Placed {
     }
 
     /// Hung under another work at a given rank.
-    fn under(library_id: LibraryId, parent_id: WorkId, ordinal: i32) -> Self {
+    pub(crate) fn under(library_id: LibraryId, parent_id: WorkId, ordinal: i32) -> Self {
         Self {
             library_id,
             parent_id: Some(parent_id),
@@ -2559,6 +2524,102 @@ where
     Ok(())
 }
 
+/// Everything [`Database::merge_work_into`] does, inside a transaction somebody
+/// else holds.
+pub(crate) async fn merge_within(
+    transaction: &mut sqlx::Transaction<'_, Sqlite>,
+    from: WorkId,
+    into: WorkId,
+) -> Result<Vec<String>> {
+    let mut no_longer_used = Vec::new();
+    let mut going = Vec::new();
+    let mut receiving = Vec::new();
+    let mut pairs = vec![(from, into)];
+
+    while let Some((from, into)) = pairs.pop() {
+        for (child, ordinal) in children_with_their_ordinal(&mut **transaction, from).await? {
+            let met = match ordinal {
+                Some(ordinal) => child_at(&mut **transaction, into, ordinal).await?,
+                None => None,
+            };
+            match met {
+                Some(met) => pairs.push((child, met)),
+                None => {
+                    sqlx::query("UPDATE works SET parent_id = ? WHERE id = ?")
+                        .bind(into.to_db_string())
+                        .bind(child.to_db_string())
+                        .execute(&mut **transaction)
+                        .await?;
+                }
+            }
+        }
+
+        sqlx::query("UPDATE media_sources SET work_id = ? WHERE work_id = ?")
+            .bind(into.to_db_string())
+            .bind(from.to_db_string())
+            .execute(&mut **transaction)
+            .await?;
+        sqlx::query("UPDATE extra_videos SET work_id = ? WHERE work_id = ?")
+            .bind(into.to_db_string())
+            .bind(from.to_db_string())
+            .execute(&mut **transaction)
+            .await?;
+
+        let pictures: Vec<String> = sqlx::query(
+            "SELECT relative_path FROM images WHERE owner_kind = 'work' AND owner_id = ?",
+        )
+        .bind(from.to_db_string())
+        .fetch_all(&mut **transaction)
+        .await?
+        .iter()
+        .map(|row| row.try_get::<String, _>("relative_path"))
+        .collect::<std::result::Result<_, _>>()?;
+        no_longer_used.extend(pictures);
+        // Pictures are found by owner rather than by a key the engine
+        // knows about, so dropping the work does not drop them.
+        sqlx::query("DELETE FROM images WHERE owner_kind = 'work' AND owner_id = ?")
+            .bind(from.to_db_string())
+            .execute(&mut **transaction)
+            .await?;
+
+        going.push(from);
+        receiving.push(into);
+    }
+
+    // The name the one that goes was filed under is the one its folder still
+    // carries. Dropped here, the next file added under that folder would
+    // write the same work down again, and the two would have to be put
+    // together all over again. Only the two at the top are filed under a
+    // name of their own; a season and an episode are placed by number.
+    sqlx::query(
+        "INSERT OR IGNORE INTO work_filing_names (work_id, sort_title, release_year)
+         SELECT ?, sort_title, release_year FROM work_filing_names WHERE work_id = ?",
+    )
+    .bind(into.to_db_string())
+    .bind(from.to_db_string())
+    .execute(&mut **transaction)
+    .await?;
+
+    for work in going {
+        sqlx::query("DELETE FROM works WHERE id = ?")
+            .bind(work.to_db_string())
+            .execute(&mut **transaction)
+            .await?;
+    }
+    for work in receiving {
+        sqlx::query(
+            "UPDATE works
+                SET child_count = (SELECT count(*) FROM works AS child WHERE child.parent_id = works.id)
+              WHERE id = ?",
+        )
+        .bind(work.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
+    }
+
+    Ok(no_longer_used)
+}
+
 /// What hangs under a work, each with the number it is ranked at.
 async fn children_with_their_ordinal<'e, E>(
     executor: E,
@@ -2583,7 +2644,11 @@ where
 }
 
 /// The work hanging under another at that number, if there is one.
-async fn child_at<'e, E>(executor: E, parent_id: WorkId, ordinal: i32) -> Result<Option<WorkId>>
+pub(crate) async fn child_at<'e, E>(
+    executor: E,
+    parent_id: WorkId,
+    ordinal: i32,
+) -> Result<Option<WorkId>>
 where
     E: sqlx::Executor<'e, Database = Sqlite>,
 {
@@ -2601,7 +2666,7 @@ where
     .transpose()
 }
 
-async fn insert_work<'e, E>(
+pub(crate) async fn insert_work<'e, E>(
     executor: E,
     placed: Placed,
     kind: WorkKind,

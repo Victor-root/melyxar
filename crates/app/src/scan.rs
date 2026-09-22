@@ -20,7 +20,7 @@ use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::media::{SubtitleDetails, Track, TrackKind};
 use melyxar_core::media_log::{file_name_of, MediaPath};
 use melyxar_core::refresh::RefreshMode;
-use melyxar_core::work::WorkKind;
+use melyxar_core::work::{place_across, WorkKind};
 use melyxar_database::catalogue::{LocalExtraVideo, SourceAnalysis, StoredSource};
 use melyxar_database::Database;
 use melyxar_jobs::{JobHandle, StartedJob};
@@ -862,14 +862,13 @@ async fn episode_work_for(
     let Some(named) = the_series(&read, &folders, year, signs) else {
         return Ok(None);
     };
-    // The name first, the season folder to fill in wherever it sits above the
-    // file, and the one season a series has when nobody ever wrote a season
-    // anywhere: a show with a single season is written without one, and that
-    // is what it means.
-    let season = read
-        .season
-        .or(from_a_season_folder)
-        .unwrap_or(THE_ONLY_SEASON);
+    // An anime episode whose name and folders never said a season is numbered
+    // across the whole series rather than inside one of its seasons.
+    let across = (library.kind == LibraryKind::Anime
+        && read.season.is_none()
+        && from_a_season_folder.is_none()
+        && !read.holds_several())
+    .then_some(read.first);
 
     let database = state.database();
     let series_sort = naming::sort_title(&named.title);
@@ -895,21 +894,45 @@ async fn episode_work_for(
         }
     };
 
-    let season_work = child_at(state, library, series.id, season, WorkKind::Season, || {
-        crate::episodes::name_of_season(season)
-    })
+    let (season, number) = match across {
+        // Where the seasons the provider counted put it, and until the series
+        // has been described, the number as written in its one season.
+        Some(across) => place_across(across, &database.season_lengths(series.id).await?)
+            .unwrap_or((THE_ONLY_SEASON, across)),
+        // The name first, the season folder to fill in wherever it sits above
+        // the file, and the one season a series has when nobody ever wrote a
+        // season anywhere: a show with a single season is written without
+        // one, and that is what it means.
+        None => (
+            read.season
+                .or(from_a_season_folder)
+                .unwrap_or(THE_ONLY_SEASON),
+            read.first,
+        ),
+    };
+
+    let season_work = child_at(
+        state,
+        library,
+        series.id,
+        season,
+        WorkKind::Season,
+        None,
+        || crate::episodes::name_of_season(season),
+    )
     .await?;
 
     let episode_work = child_at(
         state,
         library,
         season_work.id,
-        read.first,
+        number,
         WorkKind::Episode,
+        across,
         || {
-            read.title
-                .clone()
-                .unwrap_or_else(|| crate::episodes::name_of_episode(read.first, read.last))
+            read.title.clone().unwrap_or_else(|| {
+                crate::episodes::name_of_episode(number, number + read.last - read.first)
+            })
         },
     )
     .await?;
@@ -951,12 +974,16 @@ fn read_an_episode(
 /// The name is only worked out when one has to be written, because naming a
 /// season costs nothing and naming it for a season already on the page costs a
 /// string per file of the collection.
+///
+/// `across` is the number an episode's file gave it across its whole series,
+/// kept with the episode when one is written.
 async fn child_at(
     state: &AppState,
     library: &Library,
     parent_id: WorkId,
     ordinal: i32,
     kind: WorkKind,
+    across: Option<i32>,
     name: impl FnOnce() -> String,
 ) -> Result<melyxar_core::work::Work> {
     let database = state.database();
@@ -965,9 +992,25 @@ async fn child_at(
     }
     let title = name();
     let sort_title = naming::sort_title(&title);
-    Ok(database
-        .create_child_work(library.id, parent_id, ordinal, kind, &title, &sort_title)
-        .await?)
+    Ok(match across {
+        Some(across) => {
+            database
+                .create_episode_numbered_across(
+                    library.id,
+                    parent_id,
+                    ordinal,
+                    across,
+                    &title,
+                    &sort_title,
+                )
+                .await?
+        }
+        None => {
+            database
+                .create_child_work(library.id, parent_id, ordinal, kind, &title, &sort_title)
+                .await?
+        }
+    })
 }
 
 /// The season a series has when nobody wrote a season anywhere.
@@ -1971,6 +2014,57 @@ mod tests {
         let episodes = of_kind(&works, WorkKind::Episode);
         assert_eq!(episodes.len(), 3);
         assert!(episodes.iter().all(|episode| episode.parent_id.is_some()));
+    }
+
+    #[tokio::test]
+    async fn an_anime_episode_numbered_across_goes_where_the_counted_seasons_put_it() {
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Amber Field/Amber Field - 01.mkv", b"x");
+        let (state, library) = state_of_kind(
+            directory.path(),
+            vec![("disk-one", media.clone())],
+            false,
+            "anime",
+        )
+        .await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+        let series = of_kind(&works, WorkKind::Series)[0].id;
+
+        // Described since: twenty eight episodes in its first season.
+        state
+            .database()
+            .set_season_lengths(
+                series,
+                &[
+                    melyxar_core::work::SeasonLength {
+                        season: 1,
+                        episodes: 28,
+                    },
+                    melyxar_core::work::SeasonLength {
+                        season: 2,
+                        episodes: 12,
+                    },
+                ],
+            )
+            .await
+            .expect("counted");
+        write(&media, "Amber Field/Amber Field - 29.mkv", b"xx");
+        scan(&state, &library).await;
+
+        let numbered = state
+            .database()
+            .episodes_numbered_across(series)
+            .await
+            .expect("read");
+        assert_eq!(
+            numbered
+                .iter()
+                .map(|episode| (episode.absolute_number, episode.season, episode.ordinal))
+                .collect::<Vec<_>>(),
+            [(1, 1, 1), (29, 2, 1)]
+        );
     }
 
     #[tokio::test]
