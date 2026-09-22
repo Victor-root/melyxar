@@ -31,7 +31,7 @@ export type Trouble = "unreachable" | "not_kept" | null;
 export interface SettingsScreen {
   /** What this viewer has decided, or nothing until the server has said. */
   kept: ViewerPreferences | null;
-  change: (changes: Partial<ViewerPreferences>) => void;
+  change: (changes: Partial<ViewerPreferences>) => Promise<void>;
   /** What the server does with every library. */
   work: LibraryWork | null;
   setWorkTo: (changes: Partial<LibraryWork>) => void;
@@ -134,9 +134,9 @@ export function useSettingsScreen(): SettingsScreen {
       });
   };
 
-  const change = (changes: Partial<ViewerPreferences>) => {
+  const change = (changes: Partial<ViewerPreferences>): Promise<void> => {
     setKept((before) => (before ? { ...before, ...changes } : before));
-    api
+    return api
       .savePreferences(changes)
       .then((answer) => {
         setKept(answer);

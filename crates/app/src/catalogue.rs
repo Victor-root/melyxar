@@ -454,7 +454,8 @@ async fn the_hero(
     Ok(hero)
 }
 
-/// One row per kind of library this server really holds.
+/// One row per kind of library this server really holds, in the order this
+/// account chose.
 ///
 /// Read from the libraries themselves rather than from a written list of
 /// kinds, so a server with no anime has no row of anime and nobody has to
@@ -462,20 +463,19 @@ async fn the_hero(
 /// libraries gets one row across all of them, which is what somebody means by
 /// "films" when their films are spread over four disks.
 async fn the_shelves(state: &AppState, who: &User) -> Result<Vec<Shelf>> {
-    let mut shelves = Vec::new();
-    let mut seen: Vec<LibraryKind> = Vec::new();
-
+    let mut kinds: Vec<LibraryKind> = Vec::new();
     for library in libraries(state, who).await? {
-        if seen.contains(&library.kind) {
-            continue;
-        }
-        seen.push(library.kind);
         // Music has no card to show yet: the model is there, nothing fills it.
-        if library.kind == LibraryKind::Music {
-            continue;
+        if library.kind != LibraryKind::Music && !kinds.contains(&library.kind) {
+            kinds.push(library.kind);
         }
+    }
+    kinds.sort_by_key(|kind| who.preferences.place_on_the_home_page(*kind));
+
+    let mut shelves = Vec::new();
+    for kind in kinds {
         let newest = BrowseRequest {
-            library_kind: Some(library.kind),
+            library_kind: Some(kind),
             order: WorkOrder::AddedAt,
             descending: true,
             limit: ON_A_SHELF,
@@ -496,7 +496,7 @@ async fn the_shelves(state: &AppState, who: &User) -> Result<Vec<Shelf>> {
         )
         .await?;
         shelves.push(Shelf {
-            kind: library.kind,
+            kind,
             cards: page.cards,
             fan: fan.cards,
         });
@@ -820,6 +820,40 @@ mod tests {
             page.shelves[0].fan.is_empty(),
             "a film nobody named is in the row and never in the fan"
         );
+    }
+
+    #[tokio::test]
+    async fn the_rows_come_in_the_order_the_account_chose() {
+        let (directory, state, _, mut viewer) = state_with_films(&["Quiet Harbour"]).await;
+        // Named to sort before the films, which is what the rows used to
+        // follow whatever anybody chose.
+        state
+            .database()
+            .create_library(
+                "Animation",
+                LibraryKind::Anime,
+                "fr",
+                &[("disk-one".to_string(), directory.path().join("anime"))],
+            )
+            .await
+            .expect("library created");
+        let kinds = |page: &Home| {
+            page.shelves
+                .iter()
+                .map(|shelf| shelf.kind)
+                .collect::<Vec<_>>()
+        };
+
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert_eq!(kinds(&page), vec![LibraryKind::Movies, LibraryKind::Anime]);
+
+        viewer.preferences = melyxar_core::user::Preferences {
+            home_order: vec![LibraryKind::Anime],
+            ..viewer.preferences
+        }
+        .normalised();
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert_eq!(kinds(&page), vec![LibraryKind::Anime, LibraryKind::Movies]);
     }
 
     #[tokio::test]

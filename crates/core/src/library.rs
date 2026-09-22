@@ -27,6 +27,17 @@ pub enum LibraryKind {
 }
 
 impl LibraryKind {
+    /// Every kind, in the order a person meets them until they choose another.
+    pub const fn every() -> [Self; 5] {
+        [
+            Self::Movies,
+            Self::Series,
+            Self::Anime,
+            Self::Shows,
+            Self::Music,
+        ]
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Movies => "movies",

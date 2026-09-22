@@ -117,6 +117,11 @@ const en: Dictionary = {
   "door.or": "or",
   "door.create": "Create an account",
   "door.create_why": "Accounts on this server are made by whoever runs it.",
+  "settings.home_order": "Order of the home page",
+  "settings.home_order_why":
+    "The tiles under the banner and the rows below them follow this order.",
+  "settings.home_order_up": "Move {kind} up",
+  "settings.home_order_down": "Move {kind} down",
   "settings.door": "The sign in screen",
   "settings.door_why":
     "This server offers the names on it before a password is typed, so signing in is one press and a password rather than remembering how you spelt your own name.",
@@ -802,6 +807,11 @@ const fr: Dictionary = {
   "door.or": "ou",
   "door.create": "Créer un compte",
   "door.create_why": "Les comptes de ce serveur sont créés par la personne qui le gère.",
+  "settings.home_order": "Ordre de l'accueil",
+  "settings.home_order_why":
+    "Les tuiles sous la bannière et les rangées en dessous suivent cet ordre.",
+  "settings.home_order_up": "Monter {kind}",
+  "settings.home_order_down": "Descendre {kind}",
   "settings.door": "L'écran de connexion",
   "settings.door_why":
     "Ce serveur propose les noms qu'il héberge avant qu'un mot de passe soit tapé, pour que se connecter tienne en un clic et un mot de passe plutôt qu'en se rappelant comment on a écrit son propre nom.",

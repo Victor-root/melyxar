@@ -2663,6 +2663,33 @@ button.seen-mark:not(.seen-mark-on):hover {
   cursor: pointer;
 }
 
+/* A short list put in order with a pair of arrows on each line. */
+.settings-order {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  max-width: 360px;
+  margin: var(--gap) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-order li {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.settings-order-name {
+  flex: 1;
+}
+
+.settings-order .button {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+}
+
 /* A setting that is on or off, on a page whose other settings are pickers and
    sliders: the same measurements, so the three line up down the block. */
 .settings-switch {

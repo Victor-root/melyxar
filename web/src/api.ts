@@ -1043,6 +1043,8 @@ export interface ViewerPreferences {
   /** Whether this account is left off the list the sign in screen offers.
    *  Hidden, it still signs in: the name is typed rather than pressed. */
   hidden_at_the_door: boolean;
+  /** Every kind of library, in the order the home page lays them out. */
+  home_order: LibraryKind[];
   /** The languages the library really holds, which is what a picker offers. */
   audio_languages: string[];
   subtitle_languages: string[];

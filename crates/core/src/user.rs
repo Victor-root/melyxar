@@ -5,6 +5,7 @@
 //! later would mean touching every table and every route.
 
 use crate::id::{DeviceId, LibraryId, UserId};
+use crate::library::LibraryKind;
 use crate::time::Timestamp;
 
 /// What a person is allowed to do.
@@ -289,6 +290,9 @@ pub struct Preferences {
     /// by one person for themselves. Hidden, the account still signs in: the
     /// name is typed rather than pressed.
     pub hidden_at_the_door: bool,
+    /// The kinds of library in the order the home page lays them out, its
+    /// band and its rows alike. Always every kind, once each.
+    pub home_order: Vec<LibraryKind>,
 }
 
 impl Default for Preferences {
@@ -310,6 +314,7 @@ impl Default for Preferences {
             // Shown by default: a household server is the ordinary case, and a
             // list with holes in it is of no use to anybody.
             hidden_at_the_door: false,
+            home_order: LibraryKind::every().to_vec(),
         }
     }
 }
@@ -333,7 +338,26 @@ impl Preferences {
         if !is_a_language(&self.interface_language) {
             self.interface_language = "en".to_string();
         }
+        // A kind named twice keeps its first place, and one never named goes
+        // after the others, in the order everybody starts with: a kind added
+        // to the server must not be missing from anybody's home page.
+        let mut order: Vec<LibraryKind> = Vec::new();
+        for kind in self.home_order.into_iter().chain(LibraryKind::every()) {
+            if !order.contains(&kind) {
+                order.push(kind);
+            }
+        }
+        self.home_order = order;
         self
+    }
+
+    /// Where a kind of library comes on this person's home page, first at
+    /// nought.
+    pub fn place_on_the_home_page(&self, kind: LibraryKind) -> usize {
+        self.home_order
+            .iter()
+            .position(|chosen| *chosen == kind)
+            .unwrap_or(self.home_order.len())
     }
 }
 
@@ -540,6 +564,32 @@ mod tests {
         let usual = Preferences::default().normalised();
         assert_eq!(usual.banner_height, DEFAULT_BANNER_HEIGHT);
         assert_eq!(usual.banner_cut, DEFAULT_BANNER_CUT);
+    }
+
+    #[test]
+    fn the_home_order_always_holds_every_kind_once() {
+        let chosen = Preferences {
+            home_order: vec![LibraryKind::Anime, LibraryKind::Shows, LibraryKind::Anime],
+            ..Preferences::default()
+        }
+        .normalised();
+        assert_eq!(
+            chosen.home_order,
+            vec![
+                LibraryKind::Anime,
+                LibraryKind::Shows,
+                LibraryKind::Movies,
+                LibraryKind::Series,
+                LibraryKind::Music,
+            ]
+        );
+        assert_eq!(chosen.place_on_the_home_page(LibraryKind::Anime), 0);
+        assert_eq!(chosen.place_on_the_home_page(LibraryKind::Movies), 2);
+
+        assert_eq!(
+            Preferences::default().normalised().home_order,
+            LibraryKind::every().to_vec()
+        );
     }
 
     #[test]

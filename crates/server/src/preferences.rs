@@ -7,6 +7,7 @@
 use axum::extract::State;
 use axum::{Json, Router};
 use melyxar_app::AppState;
+use melyxar_core::library::LibraryKind;
 use melyxar_core::user::{DownmixMethod, Preferences, ThemeMode};
 use serde::{Deserialize, Serialize};
 
@@ -55,6 +56,8 @@ struct PreferencesView {
     banner_fills_the_screen: bool,
     /// Whether this account is left off the list the sign in screen offers.
     hidden_at_the_door: bool,
+    /// Every kind of library, in the order the home page lays them out.
+    home_order: Vec<&'static str>,
     /// Every fold this server knows how to perform.
     downmix_methods: Vec<&'static str>,
     /// The languages the library actually holds, which is what a picker
@@ -92,6 +95,8 @@ struct PreferencesBody {
     banner_fills_the_screen: Option<bool>,
     #[serde(default)]
     hidden_at_the_door: Option<bool>,
+    #[serde(default)]
+    home_order: Option<Vec<String>>,
 }
 
 async fn read(
@@ -166,6 +171,13 @@ async fn write(
     if let Some(hidden) = body.hidden_at_the_door {
         chosen.hidden_at_the_door = hidden;
     }
+    if let Some(order) = body.home_order {
+        chosen.home_order = order
+            .iter()
+            .map(|kind| LibraryKind::parse(kind))
+            .collect::<Option<_>>()
+            .ok_or_else(|| ServerError::invalid_input("no kind of library goes by that name"))?;
+    }
 
     let kept = melyxar_app::preferences::save(&state, who.id, chosen).await?;
     view(&state, kept).await
@@ -199,6 +211,7 @@ async fn view(state: &AppState, chosen: Preferences) -> Result<Json<PreferencesV
         banner_at_random: chosen.banner_at_random,
         banner_fills_the_screen: chosen.banner_fills_the_screen,
         hidden_at_the_door: chosen.hidden_at_the_door,
+        home_order: chosen.home_order.iter().map(|kind| kind.as_str()).collect(),
         downmix_methods: DownmixMethod::every()
             .iter()
             .map(|one| one.as_str())

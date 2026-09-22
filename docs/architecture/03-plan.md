@@ -315,7 +315,7 @@ Ce qui n'est pas dans ce jalon : l'écran de personnalisation de l'accueil (l'ar
 
 Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
 
-- **L'ordre du bandeau de catégories choisi par la personne.** Aujourd'hui il suit l'ordre standard, Films puis Séries, Animés, Émissions, Musique, et ne montre que les sortes que le serveur tient vraiment. L'ordre voulu est un réglage de compte, donc il appartient au même écran que la personnalisation de l'accueil, qui le portera.
+- **L'ordre du bandeau de catégories choisi par la personne.** Fait : un réglage de compte, dans les réglages, que le bandeau et les rangées par sorte suivent tous les deux (voir le README des décisions).
 - **Changer son nom d'utilisateur.** Rien ne le permet aujourd'hui, ni dans l'interface ni dans l'API : la seule chose qu'un compte peut changer de lui-même est son mot de passe et ses préférences. Le nom sert à se connecter, donc le changer touche aussi les sessions ouvertes. Cela appartient au chantier de gestion des comptes, avec la création, la suppression et les droits par médiathèque.
 
 ## Après la V0.1

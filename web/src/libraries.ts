@@ -67,6 +67,38 @@ export function whereAKindLeads(kind: LibraryKind, libraries: Library[]): string
   return ofThatKind.length === 1 ? `/library/${ofThatKind[0].id}` : `/search?in=kind:${kind}`;
 }
 
+/**
+ * The kinds the home page gives a tile and a row, in the order this account
+ * chose. Music has neither yet, on the server as here.
+ */
+export function kindsOnTheHomePage(order: LibraryKind[], libraries: Library[]): LibraryKind[] {
+  return order.filter(
+    (kind) => kind !== "music" && libraries.some((library) => library.kind === kind),
+  );
+}
+
+/**
+ * The order with one kind swapped with its neighbour among those shown. The
+ * kinds nobody sees keep their places, so a kind that comes back later finds
+ * the place it had.
+ */
+export function movedOnTheHomePage(
+  order: LibraryKind[],
+  shown: LibraryKind[],
+  kind: LibraryKind,
+  step: -1 | 1,
+): LibraryKind[] {
+  const from = shown.indexOf(kind);
+  const to = from + step;
+  if (from < 0 || to < 0 || to >= shown.length) {
+    return order;
+  }
+  const swapped = [...shown];
+  [swapped[from], swapped[to]] = [swapped[to], swapped[from]];
+  let next = 0;
+  return order.map((one) => (shown.includes(one) ? swapped[next++] : one));
+}
+
 /** How many works a category holds, over every library of that kind. */
 export function worksOfKind(kind: LibraryKind, libraries: Library[]): number {
   return librariesOfKind(kind, libraries).reduce((total, library) => total + library.works, 0);
