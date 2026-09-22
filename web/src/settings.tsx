@@ -136,13 +136,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--where-a-band-is-cut", `${(bannerCut * 100).toFixed(1)}%`);
     // Taking the whole window is a height of its own rather than a share of
     // the width, so it is written over what the stylesheet works out, and
-    // taken back off when it is turned off. What there is to take is the
-    // window less the bar at the top, which holds a band of its own above
-    // everything that scrolls. The dynamic unit rather than the plain one: on
-    // a telephone the plain one counts the bars of the browser as screen, and
-    // the banner ends up taller than what can be seen.
+    // taken back off when it is turned off. The whole window really is the
+    // whole of it: the banner runs up behind the bar, which floats on it.
+    // The dynamic unit rather than the plain one: on a telephone the plain
+    // one counts the bars of the browser as screen, and the banner ends up
+    // taller than what can be seen.
     if (bannerFillsTheScreen) {
-      root.style.setProperty("--hero-height", "calc(100dvh - var(--header-height))");
+      root.style.setProperty("--hero-height", "100dvh");
     } else {
       root.style.removeProperty("--hero-height");
     }
