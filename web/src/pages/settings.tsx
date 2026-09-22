@@ -23,13 +23,15 @@ import {
 } from "../player/appearance";
 import { Choice, NumberChoice } from "../components/choice";
 import { LibraryEditor } from "../components/libraries";
+import { ChevronDownIcon, ChevronUpIcon, KindIcon } from "../icons";
 import { languageName } from "../languages";
+import { kindsOnTheHomePage, movedOnTheHomePage, useLibraries } from "../libraries";
 import { DeviceOptimization } from "../player/DeviceOptimization";
 import { asLocalTime, asUtcMinutes } from "../readable";
 import { useSettingsScreen } from "../screens/settings";
 import { useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
-import type { ViewerPreferences } from "../api";
+import type { LibraryKind, ViewerPreferences } from "../api";
 import { useMarks } from "../marks";
 
 export function SettingsPage() {
@@ -59,6 +61,8 @@ export function SettingsPage() {
       <Appearance />
 
       <Banner kept={kept} change={change} />
+
+      <HomeOrder kept={kept} change={change} />
 
       <TheDoor kept={kept} change={change} />
 
@@ -349,6 +353,77 @@ function TheDoor({
         <span>{t("settings.door_hide_me")}</span>
       </label>
       <p className="settings-why">{t("settings.door_hide_me_why")}</p>
+    </section>
+  );
+}
+
+/**
+ * The order the home page lays the kinds of library out in, its tiles and its
+ * rows alike.
+ *
+ * Only the kinds this account holds are offered: a kind nobody has keeps its
+ * place in the order without taking a line here.
+ */
+function HomeOrder({
+  kept,
+  change,
+}: {
+  kept: ViewerPreferences | null;
+  change: (changes: Partial<ViewerPreferences>) => Promise<void>;
+}) {
+  const { t } = useSettings();
+  const marks = useMarks();
+  const libraries = useLibraries();
+
+  if (!kept) {
+    return null;
+  }
+  const shown = kindsOnTheHomePage(kept.home_order, libraries.all);
+  if (shown.length < 2) {
+    return null;
+  }
+
+  // The home page is read again once the server holds the new order, so it
+  // is already right when somebody goes back to it.
+  const move = (kind: LibraryKind, step: -1 | 1) =>
+    change({ home_order: movedOnTheHomePage(kept.home_order, shown, kind, step) }).then(
+      marks.rowsHaveMoved,
+    );
+
+  return (
+    <section className="settings-block">
+      <h2>{t("settings.home_order")}</h2>
+      <p className="settings-why">{t("settings.home_order_why")}</p>
+
+      <ol className="settings-order">
+        {shown.map((kind, place) => {
+          const name = t(`kind.${kind}`);
+          return (
+            <li key={kind}>
+              <KindIcon kind={kind} size={18} />
+              <span className="settings-order-name">{name}</span>
+              <button
+                className="button button-small"
+                onClick={() => move(kind, -1)}
+                disabled={place === 0}
+                aria-label={t("settings.home_order_up", { kind: name })}
+                title={t("settings.home_order_up", { kind: name })}
+              >
+                <ChevronUpIcon size={16} />
+              </button>
+              <button
+                className="button button-small"
+                onClick={() => move(kind, 1)}
+                disabled={place === shown.length - 1}
+                aria-label={t("settings.home_order_down", { kind: name })}
+                title={t("settings.home_order_down", { kind: name })}
+              >
+                <ChevronDownIcon size={16} />
+              </button>
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }

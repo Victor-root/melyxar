@@ -5,6 +5,7 @@
 //! user, and retrofitting that would touch every table and every route.
 
 use melyxar_core::id::{LibraryId, UserId};
+use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::user::{DownmixMethod, Permissions, Preferences, ThemeMode, User};
 use sqlx::{AssertSqlSafe, Row};
@@ -32,7 +33,7 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.theme_mode, p.accent_color, p.custom_css, p.volume,
      p.downmix_method, p.downmix_gain,
      p.banner_height, p.banner_cut, p.banner_at_random, p.banner_fills_the_screen,
-     p.hidden_at_the_door";
+     p.hidden_at_the_door, p.home_order";
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
@@ -291,7 +292,7 @@ impl Database {
                 preferred_subtitle_language = ?, theme_mode = ?, accent_color = ?,
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
                 banner_height = ?, banner_cut = ?, banner_at_random = ?,
-                banner_fills_the_screen = ?, hidden_at_the_door = ?
+                banner_fills_the_screen = ?, hidden_at_the_door = ?, home_order = ?
              WHERE user_id = ?",
         )
         .bind(&preferences.interface_language)
@@ -308,11 +309,28 @@ impl Database {
         .bind(preferences.banner_at_random)
         .bind(preferences.banner_fills_the_screen)
         .bind(preferences.hidden_at_the_door)
+        .bind(written_order(&preferences.home_order))
         .bind(id.to_db_string())
         .execute(self.writer())
         .await?;
         Ok(())
     }
+}
+
+/// The order of a home page as it is stored: the names of the kinds, joined by
+/// commas.
+fn written_order(order: &[LibraryKind]) -> String {
+    order
+        .iter()
+        .map(|kind| kind.as_str())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// The order of a home page read back. A name nobody knows is dropped rather
+/// than locking the account out.
+fn read_order(stored: &str) -> Vec<LibraryKind> {
+    stored.split(',').filter_map(LibraryKind::parse).collect()
 }
 
 /// Writes an account, its preferences and its grants, inside one transaction.
@@ -353,8 +371,9 @@ async fn write_an_account(
         "INSERT INTO user_preferences (user_id, interface_language, theme_mode, accent_color,
                                        volume, downmix_method, downmix_gain,
                                        banner_height, banner_cut, banner_at_random,
-                                       banner_fills_the_screen, hidden_at_the_door)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       banner_fills_the_screen, hidden_at_the_door,
+                                       home_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -368,6 +387,7 @@ async fn write_an_account(
     .bind(preferences.banner_at_random)
     .bind(preferences.banner_fills_the_screen)
     .bind(preferences.hidden_at_the_door)
+    .bind(written_order(&preferences.home_order))
     .execute(&mut **transaction)
     .await?;
 
@@ -433,6 +453,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             banner_at_random: row.try_get("banner_at_random")?,
             banner_fills_the_screen: row.try_get("banner_fills_the_screen")?,
             hidden_at_the_door: row.try_get("hidden_at_the_door")?,
+            home_order: read_order(&row.try_get::<String, _>("home_order")?),
         }
         .normalised(),
         created_at,
@@ -762,6 +783,7 @@ mod tests {
             banner_cut: 0.6,
             banner_at_random: true,
             banner_fills_the_screen: true,
+            home_order: vec![LibraryKind::Anime, LibraryKind::Movies],
             ..Preferences::default()
         };
         database
@@ -786,6 +808,16 @@ mod tests {
         assert_eq!(loaded.preferences.banner_cut, 0.6);
         assert!(loaded.preferences.banner_at_random);
         assert!(loaded.preferences.banner_fills_the_screen);
+        assert_eq!(
+            loaded.preferences.home_order,
+            vec![
+                LibraryKind::Anime,
+                LibraryKind::Movies,
+                LibraryKind::Series,
+                LibraryKind::Shows,
+                LibraryKind::Music,
+            ]
+        );
         assert_eq!(
             loaded.preferences.downmix_method,
             DownmixMethod::NightDialogue

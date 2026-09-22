@@ -7,7 +7,7 @@
  * reading the bar at the top word by word.
  *
  * One wide tile per kind of library this server really holds, in the order
- * the bar offers them. Each one fans out a few real posters out of that
+ * this account chose for its home page. Each one fans out a few real posters out of that
  * library rather than standing on one borrowed still: a still is one film
  * seen wide, and what a way in has to say is "this is a shelf of these".
  *

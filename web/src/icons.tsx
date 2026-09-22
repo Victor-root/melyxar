@@ -227,6 +227,14 @@ export function BellIcon(props: IconProps) {
  * Moving about
  * ---------------------------------------------------------------------- */
 
+export function ChevronUpIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5.6 15 12 8.6 18.4 15" />
+    </Icon>
+  );
+}
+
 export function ChevronDownIcon(props: IconProps) {
   return (
     <Icon {...props}>
