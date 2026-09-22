@@ -49,6 +49,7 @@ import {
   JournalIcon,
   KindIcon,
   LeaveIcon,
+  RefreshIcon,
   ScreenCastIcon,
   SearchIcon,
 } from "../icons";
@@ -210,53 +211,19 @@ export function Header({ libraries }: { libraries: Library[] }) {
         {/* Everything at this end on one piece of glass rather than three.
             Three of them read as three decisions about what goes with what,
             and there is only one: this end is what you press, the other is
-            where you are. What separates the runs inside it is a little air
-            and the fact that two of them carry a shape of their own, the
-            scan button and the account's letters. */}
+            where you are. */}
         <div className="header-piece header-side">
-          {/* What the server is doing and the two screens it is read on:
-              first, because all of it belongs to whoever runs the server and
-              none of it is drawn for anybody else. */}
-          {administrator && (
-            <>
-              {jobs.length > 0 ? (
-                <Link className="header-busy" to="/activity">
-                  <span className="header-busy-mark" aria-hidden="true" />
-                  {t(`jobs.${jobs[0].kind}`)}
-                  {jobs[0].ratio !== null && ` ${outOfAHundred(jobs[0].ratio)} %`}
-                </Link>
-              ) : scan.refused ? (
-                <span className="header-refused" role="alert">
-                  {t(refusalKey(scan.refused))}
-                </span>
-              ) : (
-                libraries.length > 0 && (
-                  <button
-                    className="button button-small"
-                    onClick={scan.start}
-                    disabled={scan.starting}
-                  >
-                    {t("home.scan")}
-                  </button>
-                )
-              )}
-              <NavLink
-                to="/activity"
-                className="header-icon"
-                title={t("nav.jobs")}
-                aria-label={t("nav.jobs")}
-              >
-                <ActivityIcon size={22} />
-              </NavLink>
-              <NavLink
-                to="/journal"
-                className="header-icon"
-                title={t("nav.journal")}
-                aria-label={t("nav.journal")}
-              >
-                <JournalIcon size={22} />
-              </NavLink>
-            </>
+          {/* What the server is doing, and only while it is doing it. It is
+              the one thing here that is news rather than a way to somewhere:
+              a scan that started ten minutes ago and is still going is worth
+              a glance from any screen, and a glance is not something anybody
+              should have to open a menu for. */}
+          {administrator && jobs.length > 0 && (
+            <Link className="header-busy" to="/activity">
+              <span className="header-busy-mark" aria-hidden="true" />
+              {t(`jobs.${jobs[0].kind}`)}
+              {jobs[0].ratio !== null && ` ${outOfAHundred(jobs[0].ratio)} %`}
+            </Link>
           )}
 
           {/* Everything anybody can press, one icon each. A menu of five
@@ -318,18 +285,9 @@ export function Header({ libraries }: { libraries: Library[] }) {
             />
           </form>
 
-          {/* Neither of these has an engine behind it yet. Shown greyed and
-              saying when rather than left out: a function nobody can see is
-              a function nobody knows is coming. */}
-          <button
-            type="button"
-            className="header-icon"
-            disabled
-            title={t("nav.later")}
-            aria-label={`${t("nav.cast")} (${t("nav.later")})`}
-          >
-            <ScreenCastIcon size={22} />
-          </button>
+          {/* No engine behind it yet. Shown greyed and saying when rather
+              than left out: a function nobody can see is a function nobody
+              knows is coming. */}
           <button
             type="button"
             className="header-icon"
@@ -348,34 +306,85 @@ export function Header({ libraries }: { libraries: Library[] }) {
           >
             <HeartIcon size={22} filled={false} />
           </NavLink>
-          <NavLink
-            to="/settings"
-            className="header-icon"
-            title={t("nav.settings")}
-            aria-label={t("nav.settings")}
-          >
-            <GearIcon size={22} />
-          </NavLink>
 
-          {/* Who is signed in, and the way out, last. The name beside the
-              letters rather than hidden in what the mouse is told: at this
-              size two letters tell two accounts apart and say which one
-              neither. */}
-          <div className="header-account">
-            <span className="avatar" aria-hidden="true">
-              {initialsOf(account?.name ?? t("nav.account"))}
+          {/*
+            * Who is signed in, and under their name everything that is
+            * theirs to do rather than somewhere to go.
+            *
+            * The bar keeps what is looked at from any screen: the search,
+            * what is waiting, what was marked. The rest is opened when it
+            * is wanted, which is what stops a bar of eight icons reading as
+            * eight things somebody is expected to know.
+            *
+            * What the server is doing is under here too, and so is the
+            * press that starts it: it belongs to whoever runs the server,
+            * and their name is the one place on the bar that is already
+            * about them.
+            */}
+          <Dropdown
+            className="header-account"
+            reachable
+            label={
+              <>
+                <span className="avatar" aria-hidden="true">
+                  {initialsOf(account?.name ?? t("nav.account"))}
+                </span>
+                <span className="header-who">{account?.name ?? t("nav.account")}</span>
+              </>
+            }
+          >
+            {administrator && (
+              <>
+                {/* Nothing to start while something is already running, and
+                    the bar is saying so meanwhile. */}
+                {jobs.length === 0 &&
+                  (scan.refused ? (
+                    <span className="header-menu-line header-menu-refused" role="alert">
+                      {t(refusalKey(scan.refused))}
+                    </span>
+                  ) : (
+                    libraries.length > 0 && (
+                      <button
+                        type="button"
+                        className="header-menu-line"
+                        onClick={scan.start}
+                        disabled={scan.starting}
+                      >
+                        <RefreshIcon size={16} />
+                        {t("home.scan")}
+                      </button>
+                    )
+                  ))}
+                <NavLink to="/activity" className="header-menu-line">
+                  <ActivityIcon size={16} />
+                  {t("nav.jobs")}
+                </NavLink>
+                <NavLink to="/journal" className="header-menu-line">
+                  <JournalIcon size={16} />
+                  {t("nav.journal")}
+                </NavLink>
+              </>
+            )}
+
+            {/* No engine behind this one yet either, and it says so here in
+                words rather than in what the mouse is told: there is room
+                for the sentence in a menu, and there was none on the bar. */}
+            <span className="header-menu-line header-menu-later" aria-disabled="true">
+              <ScreenCastIcon size={16} />
+              {t("nav.cast")}
+              <span className="header-menu-when">{t("nav.later")}</span>
             </span>
-            <span className="header-who">{account?.name ?? t("nav.account")}</span>
-            <button
-              type="button"
-              className="header-icon"
-              title={t("nav.sign_out")}
-              aria-label={t("nav.sign_out")}
-              onClick={() => void leave()}
-            >
-              <LeaveIcon size={22} />
+
+            <NavLink to="/settings" className="header-menu-line">
+              <GearIcon size={16} />
+              {t("nav.settings")}
+            </NavLink>
+
+            <button type="button" className="header-menu-line" onClick={() => void leave()}>
+              <LeaveIcon size={16} />
+              {t("nav.sign_out")}
             </button>
-          </div>
+          </Dropdown>
         </div>
       </div>
     </header>

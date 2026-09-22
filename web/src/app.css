@@ -335,15 +335,17 @@
   letter-spacing: 0.02em;
 }
 
-/* Who is here, at the end of the piece. A run of its own inside it rather
-   than a piece of its own beside it: the letters and the name go together
-   more closely than any two icons do, so they keep their own air while the
-   glass around them is shared. */
+/* Who is here, at the end of the piece, and the way into everything that is
+   theirs. The letters and the name go together more closely than any two
+   icons do, so they keep their own air while the glass around them is
+   shared. */
 .header-account {
-  display: flex;
-  align-items: center;
-  gap: 9px;
   margin-left: var(--gap-tight);
+}
+
+.header-account > .header-link {
+  gap: 9px;
+  padding: 3px 8px 3px 3px;
 }
 
 .header-who {
@@ -448,6 +450,9 @@
   color: var(--text);
 }
 
+/* Drawn as the player's panels are: the same glass, the same blur behind it,
+   the same corner and the same room around the lines. Two menus in one
+   interface that answer alike and look unalike are two interfaces. */
 .header-menu-list {
   position: absolute;
   top: calc(100% + 6px);
@@ -457,9 +462,11 @@
   display: flex;
   flex-direction: column;
   padding: 6px;
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-card);
   border: 1px solid var(--border);
-  background: var(--surface-raised);
+  background: var(--header-glass);
+  color: var(--text);
+  backdrop-filter: blur(18px);
   box-shadow: var(--shadow-raised);
   animation: header-menu-arrive var(--quick) var(--ease) both;
 }
@@ -485,23 +492,55 @@
   }
 }
 
+/* And the lines in it are the player's lines: the same gap, the same room
+   either side, the same size of word. */
 .header-menu-line {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--gap-tight);
+  padding: 9px 10px;
   border-radius: var(--radius-control);
   text-align: left;
-  color: var(--text-soft);
+  color: inherit;
   font-size: 14px;
   white-space: nowrap;
   transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
 }
 
-.header-menu-line:hover,
+.header-menu-line:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: -2px;
+}
+
+.header-menu-line:hover:not(:disabled),
 .header-menu-line.active {
   background: var(--surface-hover);
-  color: var(--text);
+}
+
+/* A press that has nothing behind it yet, and a press waiting on a scan
+   that is already under way: greyed, and left in the list rather than taken
+   out of it, so the list is the same list every time it is opened. */
+.header-menu-line:disabled,
+.header-menu-later {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* And when it is said: at the end of the line rather than in what the mouse
+   is told, since a menu has the room for the words and a bar had none. */
+.header-menu-when {
+  margin-left: auto;
+  padding-left: var(--gap);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* The server's answer when it would not start one, said in the list where
+   the press was. */
+.header-menu-refused {
+  color: var(--accent-bright);
+  white-space: normal;
+  max-width: 260px;
 }
 
 /* The one already chosen, said in the accent: a list where nothing is marked
