@@ -46,6 +46,7 @@ pub fn router() -> Router<AppState> {
             "/api/v1/works/{id}/trailers/{rank}",
             axum::routing::get(trailer),
         )
+        .route("/api/v1/works/{id}/photo", axum::routing::get(photo))
         .route("/api/v1/home", axum::routing::get(home))
 }
 
@@ -86,6 +87,42 @@ async fn serve_trailer(
         .ok_or_else(|| ServerError::not_found("no trailer of this work sits on the disk"))?;
 
     crate::serve_the_file(&file.path, request).await
+}
+
+/// Hands over a photo as it is on the disk, for looking at it whole.
+///
+/// Served untouched and read by the browser as it is: a photo is seen one at
+/// a time, and preparing every photo at full size would take as much room
+/// again as the photos themselves. Its cards are what is prepared ahead.
+async fn photo(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+    request: Request<Body>,
+) -> Response {
+    match serve_photo(&state, &who, &id, request).await {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
+async fn serve_photo(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    id: &str,
+    request: Request<Body>,
+) -> Result<Response> {
+    let work_id = parse_work(id)?;
+    let detail = melyxar_app::detail::work_detail(state, who, work_id)
+        .await?
+        .filter(|detail| detail.work.kind == melyxar_core::work::WorkKind::Photo)
+        .ok_or_else(|| ServerError::not_found("no photo with that identifier"))?;
+    let file = detail
+        .versions
+        .iter()
+        .find(|version| version.missing_since.is_none())
+        .ok_or_else(|| ServerError::not_found("the photo is not on the disk at the moment"))?;
+    crate::serve_the_file(std::path::Path::new(&file.path), request).await
 }
 
 // ---------------------------------------------------------------------------
@@ -671,6 +708,10 @@ struct WorkView {
     /// it. Absent for anything that is not an episode, and for the first
     /// episode of a series.
     previous_episode: Option<NextEpisodeView>,
+    /// The photos before and after this one in its folder. Absent for
+    /// anything that is not a photo, and at either end of the folder.
+    previous_photo: Option<String>,
+    next_photo: Option<String>,
 }
 
 /// The episode a page offers to play next.
@@ -987,6 +1028,8 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         logo: images_of("logo"),
         carry_on_with: detail.carry_on_with.as_ref().map(next_episode_view),
         previous_episode: detail.previous_episode.as_ref().map(next_episode_view),
+        previous_photo: detail.previous_photo.map(|id| id.to_string()),
+        next_photo: detail.next_photo.map(|id| id.to_string()),
         children: detail.children.iter().map(child_view).collect(),
         ancestry: detail
             .ancestry
