@@ -26,7 +26,13 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import type { Library, LibraryKind } from "../api";
 import { outOfAHundred } from "../readable";
 import { useRunning, useStartScan } from "../running";
@@ -35,6 +41,7 @@ import { useAccount } from "../account";
 import { useSettings } from "../settings";
 import {
   ActivityIcon,
+  BackIcon,
   BellIcon,
   ChevronDownIcon,
   GearIcon,
@@ -78,6 +85,7 @@ function categoriesOf(libraries: Library[]): Category[] {
 export function Header({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
   const navigate = useNavigate();
+  const location = useLocation();
   const [parameters] = useSearchParams();
   const [query, setQuery] = useState(parameters.get("search") ?? "");
   const [scope, setScope] = useState(parameters.get("in") ?? "");
@@ -176,13 +184,28 @@ export function Header({ libraries }: { libraries: Library[] }) {
   return (
     <header className="header">
       <div className="header-inner">
-        <Link className="header-piece brand" to="/">
-          {/* Decorative: the name is written right next to it, and an image
-              announced twice over is exactly what a screen reader must not
-              have to hear. */}
-          <img className="brand-mark" src="/melyxar-64.png" alt="" aria-hidden="true" />
-          <span className="brand-name">{t("app.name")}</span>
-        </Link>
+        <div className="header-start">
+          {/* Off the front page only: there is nowhere to come back from
+              there, and the brand right next to it already leads home. */}
+          {location.pathname !== "/" && (
+            <button
+              type="button"
+              className="header-piece header-back"
+              onClick={() => navigate(-1)}
+              title={t("nav.back")}
+              aria-label={t("nav.back")}
+            >
+              <BackIcon size={20} />
+            </button>
+          )}
+          <Link className="header-piece brand" to="/">
+            {/* Decorative: the name is written right next to it, and an
+                image announced twice over is exactly what a screen reader
+                must not have to hear. */}
+            <img className="brand-mark" src="/melyxar-64.png" alt="" aria-hidden="true" />
+            <span className="brand-name">{t("app.name")}</span>
+          </Link>
+        </div>
 
         <div className="header-side">
           {/* What the server is doing and the two screens it is read on: a
