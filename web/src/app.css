@@ -21,12 +21,6 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  /* The header floats over this rather than sitting above it, so this is
-     where its room is kept: at rest the scroll starts here, exactly under
-     the bar, and nothing is behind it yet. The first pixel scrolled moves
-     this padding out of the way and starts drawing the page under the bar
-     instead, which is the moment it begins showing through the glass. */
-  padding-top: var(--header-height);
 }
 
 /*
@@ -502,12 +496,23 @@
  * Pages and sections
  * ----------------------------------------------------------------------- */
 
+/*
+ * A page of plain rows, which starts under the bar rather than behind it.
+ *
+ * The scroll itself keeps no room for the bar any more: a page that opens on
+ * a picture, the home page and a work, wants that picture to run all the way
+ * to the top of the window and the bar to float on it. So the room is kept
+ * here instead, by the pages that have nothing up there to put behind it.
+ */
 .page {
-  padding: var(--gap-wide) var(--gutter) var(--gap-section);
+  padding: calc(var(--header-height) + var(--gap-wide)) var(--gutter)
+    var(--gap-section);
 }
 
 /* The band sits almost against the foot of the banner: the two are read as
-   one block, here is what you were watching and here is where to go next. */
+   one block, here is what you were watching and here is where to go next.
+   The bar's room is not kept here either, since the banner above already
+   ran the whole way up behind it. */
 .page-home {
   padding-top: var(--gap-tight);
 }
@@ -3277,8 +3282,15 @@ button.seen-mark:not(.seen-mark-on):hover {
   gap: 10px;
   /* Lined up with the rows underneath rather than with the edge of the
      screen: the banner spans the whole width, the words start where the page
-     starts. */
-  padding: var(--gap-wide) var(--gutter);
+     starts.
+
+     At the top, the bar and a breath under it. The banner runs the whole way
+     up behind the bar now, so the top of the banner is not somewhere anything
+     can be written: what is written here is centred in what is left below it
+     rather than in the whole picture, which is where the middle of it really
+     looks to be. */
+  padding: calc(var(--header-height) + var(--gap-tight)) var(--gutter)
+    var(--gap-wide);
 }
 
 .hero-tagline {
@@ -3341,6 +3353,19 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--text-soft);
 }
 
+/*
+ * The synopsis, as long as there is room for.
+ *
+ * Three lines was a number, and a number is wrong the moment anything else in
+ * the banner changes size: a work with a drawn title and a quotation above it
+ * leaves far less room than one with neither, and a banner set to fill the
+ * screen leaves several times as much. So the count is worked out from what
+ * is really there and written here as a number of lines, which is what keeps
+ * the last one a whole line rather than a row of half letters.
+ *
+ * Three until that sum has been done, which is what it was before and what a
+ * browser that never runs the sum still gets.
+ */
 .hero-overview {
   flex: 0 0 auto;
   margin: 0;
@@ -3348,9 +3373,16 @@ button.seen-mark:not(.seen-mark-on):hover {
   line-height: 1.55;
   color: var(--text-soft);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: var(--hero-lines, 3);
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* A banner too short to hold even two lines of it drops the synopsis rather
+   than the buttons under it. It stays on the page all the same, at no height,
+   because it is what the sum above is measured against. */
+.hero-overview-no-room {
+  display: none;
 }
 
 .hero-buttons {

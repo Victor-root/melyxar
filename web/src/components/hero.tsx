@@ -19,7 +19,7 @@
  * drawn: an empty one draws nothing at all.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { HeroItem } from "../api";
 import { useShownPicture } from "./picture";
@@ -34,6 +34,63 @@ const GENRES_NAMED = 2;
 /** How long one work stands before the next takes its place. */
 const EACH_STANDS_FOR = 9000;
 
+/**
+ * The fewest lines of synopsis worth drawing, and the most.
+ *
+ * Under two there is no synopsis, only the first half of a sentence, and at
+ * that point the room is better left empty. Over a dozen it stops being what
+ * the film is about and becomes the whole of the page: a banner set to fill a
+ * tall screen would otherwise hand over thirty lines of it.
+ */
+const FEWEST_LINES = 2;
+const MOST_LINES = 12;
+
+/**
+ * How many whole lines fit in the room left over, and none at all when two
+ * of them do not.
+ *
+ * Whole ones: a box given the room for three lines and a third draws the
+ * third one cut off along the middle of its letters, and a banner is the one
+ * place on the screen where that is unmissable. And none rather than two that
+ * do not fit, since what a banner too short for a synopsis must not do is
+ * push the buttons off the foot of itself to make room for one.
+ */
+function linesThatFit(room: number, lineHeight: number): number {
+  if (!(lineHeight > 0)) {
+    return FEWEST_LINES;
+  }
+  const fit = Math.floor(room / lineHeight);
+  return fit < FEWEST_LINES ? 0 : Math.min(fit, MOST_LINES);
+}
+
+/**
+ * What is left of the block for the synopsis: the block's own room, less each
+ * of the other lines with its margins, less one gap between every two of
+ * them.
+ *
+ * Nothing here knows about the bar at the top of the screen. The block keeps
+ * clear of it with a padding of its own, so what is measured here is already
+ * room the bar cannot be standing in.
+ *
+ * The synopsis itself is left out of the sum on purpose. That is what makes
+ * the answer the same whether it is drawn long, short or not at all, and so
+ * what stops the sum chasing its own result round in a circle.
+ */
+function roomLeftOver(box: HTMLElement, text: HTMLElement): number {
+  const around = getComputedStyle(box);
+  const others = (Array.from(box.children) as HTMLElement[]).filter(
+    (child) => child !== text,
+  );
+
+  let room =
+    box.clientHeight - parseFloat(around.paddingTop) - parseFloat(around.paddingBottom);
+  for (const other of others) {
+    const its = getComputedStyle(other);
+    room -= other.offsetHeight + parseFloat(its.marginTop) + parseFloat(its.marginBottom);
+  }
+  return room - (parseFloat(around.rowGap) || 0) * others.length;
+}
+
 export function Hero({ items }: { items: HeroItem[] }) {
   const { t } = useSettings();
   const [at, setAt] = useState(0);
@@ -42,8 +99,15 @@ export function Hero({ items }: { items: HeroItem[] }) {
      moved, because it moves exactly when nobody is watching for it. */
   const [held, setHeld] = useState(false);
   const holder = useRef<HTMLElement>(null);
+  const words = useRef<HTMLDivElement>(null);
+  const synopsis = useRef<HTMLParagraphElement>(null);
+  const [lines, setLines] = useState(FEWEST_LINES + 1);
 
   const many = items.length > 1;
+  /* Nothing at all while the banner holds nothing, which is answered further
+     down by drawing nothing at all. It is worked out up here because the sum
+     below is redone whenever it changes. */
+  const shown = items[Math.min(at, items.length - 1)];
 
   useEffect(() => {
     if (!many || held) {
@@ -65,11 +129,40 @@ export function Hero({ items }: { items: HeroItem[] }) {
     }
   }, []);
 
+  /*
+   * How many lines of synopsis there is room for, worked out again whenever
+   * anything it depends on moves: the window, the height the banner is set
+   * to, the work being shown, a drawn title arriving, a quotation that runs
+   * to three lines on one work and to none on the next.
+   *
+   * Watching every part of the block rather than only the block itself, since
+   * the block is as tall as the banner and stays that way while what is
+   * inside it changes. The synopsis is watched too and costs nothing: the sum
+   * leaves it out, so it lands on the same answer and stops there.
+   */
+  useLayoutEffect(() => {
+    const box = words.current;
+    const text = synopsis.current;
+    if (!box || !text) {
+      return;
+    }
+    const reckon = () =>
+      setLines(
+        linesThatFit(roomLeftOver(box, text), parseFloat(getComputedStyle(text).lineHeight)),
+      );
+
+    const watch = new ResizeObserver(reckon);
+    watch.observe(box);
+    for (const child of Array.from(box.children)) {
+      watch.observe(child);
+    }
+    return () => watch.disconnect();
+  }, [shown]);
+
   if (items.length === 0) {
     return null;
   }
 
-  const shown = items[Math.min(at, items.length - 1)];
   const go = (to: number) => {
     setHeld(true);
     setAt((to + items.length) % items.length);
@@ -90,7 +183,11 @@ export function Hero({ items }: { items: HeroItem[] }) {
         <HeroBackdrop key={item.id} item={item} shown={rank === at} />
       ))}
 
-      <div className="hero-words">
+      <div
+        className="hero-words"
+        ref={words}
+        style={{ ["--hero-lines" as string]: lines }}
+      >
         {shown.tagline && <p className="hero-tagline">{shown.tagline}</p>}
         <HeroTitle item={shown} />
 
@@ -119,7 +216,14 @@ export function Hero({ items }: { items: HeroItem[] }) {
           <HeroBadges item={shown} />
         </p>
 
-        {shown.overview && <p className="hero-overview">{shown.overview}</p>}
+        {shown.overview && (
+          <p
+            className={`hero-overview${lines === 0 ? " hero-overview-no-room" : ""}`}
+            ref={synopsis}
+          >
+            {shown.overview}
+          </p>
+        )}
 
         <div className="hero-buttons">
           <HeroPlay item={shown} />
