@@ -318,30 +318,32 @@ interface Piece {
  * Where each one goes.
  *
  * Two rules hold the whole arrangement together. Nothing sits where the card
- * does, which is the right hand side of the screen and is left empty here on
- * purpose: a poster behind the box somebody is typing into is a poster in the
+ * does, which is the middle of the screen, so the shelf keeps to the two
+ * margins: a poster behind the box somebody is typing into is a poster in the
  * way. And no two of the same kind sit near each other, so the eye reads a
  * shelf of different things rather than a pattern.
  *
  * Each one also says how much screen it needs before it is drawn at all. The
  * card takes the same width whatever is around it, so the narrower the window
- * the less there is left beside it, and the ones furthest right are the first
- * to go.
+ * the less margin there is, and the ones nearest the middle are the first to
+ * go.
  */
 const SHELF: Piece[] = [
-  { what: "poster", x: "2%", y: "12%", wide: 112, turn: -7, lift: -22, over: 15, from: 0 },
-  { what: "album", x: "4%", y: "68%", wide: 92, turn: -5, lift: -18, over: 17, from: -2 },
-  { what: "episode", x: "3%", y: "40%", wide: 170, turn: 4, lift: -15, over: 18, from: -5 },
-  { what: "note", x: "22%", y: "10%", wide: 40, turn: 6, lift: -20, over: 12, from: -7 },
-  { what: "strip", x: "17%", y: "68%", wide: 62, turn: 9, lift: -26, over: 21, from: -9 },
-  { what: "wave", x: "24%", y: "30%", wide: 124, turn: -2, lift: -13, over: 13, from: -3, accent: true },
-  { what: "badge", x: "27%", y: "52%", wide: 52, turn: 0, lift: -20, over: 15, from: -10, accent: true },
+  { what: "poster", x: "1%", y: "13%", wide: 112, turn: -7, lift: -22, over: 15, from: 0 },
+  { what: "album", x: "3%", y: "70%", wide: 92, turn: -5, lift: -18, over: 17, from: -2 },
+  { what: "episode", x: "2%", y: "52%", wide: 170, turn: 4, lift: -15, over: 18, from: -5, needs: 900 },
+  { what: "note", x: "23%", y: "12%", wide: 40, turn: 6, lift: -20, over: 12, from: -7, needs: 900 },
+  { what: "strip", x: "20%", y: "72%", wide: 62, turn: 9, lift: -26, over: 21, from: -9, needs: 900 },
+  { what: "wave", x: "19%", y: "33%", wide: 124, turn: -2, lift: -13, over: 13, from: -3, needs: 1100, accent: true },
+  { what: "badge", x: "26%", y: "51%", wide: 52, turn: 0, lift: -20, over: 15, from: -10, needs: 1100, accent: true },
 
-  { what: "clapper", x: "38%", y: "12%", wide: 96, turn: -8, lift: -18, over: 14, from: -4, needs: 900 },
-  { what: "bar", x: "30%", y: "84%", wide: 236, turn: -3, lift: -15, over: 16, from: -6, needs: 900 },
-  { what: "album", x: "48%", y: "56%", wide: 88, turn: -4, lift: -16, over: 20, from: -8, needs: 1100 },
-  { what: "poster", x: "52%", y: "16%", wide: 120, turn: 6, lift: -24, over: 19, from: -11, needs: 1100 },
-  { what: "note", x: "44%", y: "78%", wide: 36, turn: -10, lift: -18, over: 11, from: -1, needs: 1100 },
+  { what: "poster", x: "81%", y: "10%", wide: 120, turn: 6, lift: -24, over: 19, from: -11 },
+  { what: "clapper", x: "82%", y: "62%", wide: 96, turn: -8, lift: -18, over: 14, from: -4 },
+  { what: "album", x: "72%", y: "18%", wide: 88, turn: -4, lift: -16, over: 20, from: -8, needs: 1100 },
+  { what: "episode", x: "74%", y: "44%", wide: 150, turn: 5, lift: -22, over: 22, from: -13, needs: 900 },
+  { what: "note", x: "94%", y: "76%", wide: 36, turn: -10, lift: -18, over: 11, from: -1, needs: 900 },
+  { what: "wave", x: "90%", y: "33%", wide: 104, turn: 3, lift: -12, over: 13, from: -5, needs: 1100 },
+  { what: "bar", x: "69%", y: "82%", wide: 236, turn: -3, lift: -15, over: 16, from: -6, needs: 1100 },
 ];
 
 function DrawnLibrary() {

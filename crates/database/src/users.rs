@@ -31,7 +31,8 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
      p.theme_mode, p.accent_color, p.custom_css, p.volume,
      p.downmix_method, p.downmix_gain,
-     p.banner_height, p.banner_cut, p.banner_at_random, p.banner_fills_the_screen";
+     p.banner_height, p.banner_cut, p.banner_at_random, p.banner_fills_the_screen,
+     p.hidden_at_the_door";
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
@@ -167,6 +168,30 @@ impl Database {
         Ok(users)
     }
 
+    /// The names the sign in screen may offer, in the order it shows them.
+    ///
+    /// Its own small query rather than the whole of every account: this is the
+    /// one read on this server that answers somebody who has not signed in, so
+    /// it reads the two columns that screen draws and not one more. Nothing
+    /// here carries an identifier, a right or a preference, because none of
+    /// that is anybody's business before they are through the door.
+    ///
+    /// Accounts that asked to be left off are left off. They still sign in:
+    /// the name is typed rather than pressed, and the screen keeps the field
+    /// for exactly that.
+    pub async fn names_at_the_door(&self) -> Result<Vec<String>> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT u.name
+             FROM users u
+             JOIN user_preferences p ON p.user_id = u.id
+             WHERE p.hidden_at_the_door = 0
+             ORDER BY u.name COLLATE NOCASE",
+        )
+        .fetch_all(self.reader())
+        .await?;
+        Ok(rows.into_iter().map(|(name,)| name).collect())
+    }
+
     /// Every language the library actually holds, told apart by kind.
     ///
     /// A picker built from this offers what someone can really choose. A list
@@ -266,7 +291,7 @@ impl Database {
                 preferred_subtitle_language = ?, theme_mode = ?, accent_color = ?,
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
                 banner_height = ?, banner_cut = ?, banner_at_random = ?,
-                banner_fills_the_screen = ?
+                banner_fills_the_screen = ?, hidden_at_the_door = ?
              WHERE user_id = ?",
         )
         .bind(&preferences.interface_language)
@@ -282,6 +307,7 @@ impl Database {
         .bind(preferences.banner_cut)
         .bind(preferences.banner_at_random)
         .bind(preferences.banner_fills_the_screen)
+        .bind(preferences.hidden_at_the_door)
         .bind(id.to_db_string())
         .execute(self.writer())
         .await?;
@@ -327,8 +353,8 @@ async fn write_an_account(
         "INSERT INTO user_preferences (user_id, interface_language, theme_mode, accent_color,
                                        volume, downmix_method, downmix_gain,
                                        banner_height, banner_cut, banner_at_random,
-                                       banner_fills_the_screen)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       banner_fills_the_screen, hidden_at_the_door)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -341,6 +367,7 @@ async fn write_an_account(
     .bind(preferences.banner_cut)
     .bind(preferences.banner_at_random)
     .bind(preferences.banner_fills_the_screen)
+    .bind(preferences.hidden_at_the_door)
     .execute(&mut **transaction)
     .await?;
 
@@ -405,6 +432,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             banner_cut: row.try_get("banner_cut")?,
             banner_at_random: row.try_get("banner_at_random")?,
             banner_fills_the_screen: row.try_get("banner_fills_the_screen")?,
+            hidden_at_the_door: row.try_get("hidden_at_the_door")?,
         }
         .normalised(),
         created_at,
@@ -418,6 +446,56 @@ mod tests {
 
     async fn database() -> Database {
         Database::open_in_memory().await.expect("database opens")
+    }
+
+    /// What the one address that answers a stranger will say.
+    ///
+    /// Two things have to hold and both are about what is given away. The
+    /// order is the one the screen draws, so the row does not shuffle itself
+    /// between two visits. And an account that asked to be left off is left
+    /// off, which is the only thing that switch does: it is still an account,
+    /// it still signs in, and nothing here says it exists.
+    #[tokio::test]
+    async fn the_door_offers_the_names_that_did_not_ask_to_be_left_off() {
+        let database = database().await;
+        for name in ["Zoe", "alice", "Marc"] {
+            database
+                .create_user(name, Some("a stored form"), &Permissions::viewer())
+                .await
+                .expect("account created");
+        }
+
+        assert_eq!(
+            database.names_at_the_door().await.expect("read"),
+            vec!["alice", "Marc", "Zoe"],
+            "in the order the screen draws them, and without regard to case"
+        );
+
+        let (marc, _) = database
+            .user_by_name("Marc")
+            .await
+            .expect("lookup works")
+            .expect("account found");
+        let mut keeping_off = marc.preferences.clone();
+        keeping_off.hidden_at_the_door = true;
+        database
+            .save_preferences(marc.id, &keeping_off)
+            .await
+            .expect("saved");
+
+        assert_eq!(
+            database.names_at_the_door().await.expect("read"),
+            vec!["alice", "Zoe"],
+            "somebody who asked to be left off is left off"
+        );
+        assert!(
+            database
+                .user_by_name("Marc")
+                .await
+                .expect("lookup works")
+                .is_some(),
+            "and is still an account, which is how they still sign in"
+        );
     }
 
     #[tokio::test]

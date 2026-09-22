@@ -113,6 +113,12 @@ const en: Dictionary = {
   "door.or": "or",
   "door.create": "Create an account",
   "door.create_why": "Accounts on this server are made by whoever runs it.",
+  "settings.door": "The sign in screen",
+  "settings.door_why":
+    "This server offers the names on it before a password is typed, so signing in is one press and a password rather than remembering how you spelt your own name.",
+  "settings.door_hide_me": "Leave my account off that list",
+  "settings.door_hide_me_why":
+    "You sign in exactly as before: the name is typed rather than pressed.",
   "door.rule":
     "Pick something long. A phrase you will remember beats a short word nobody can guess.",
   "door.go": "Sign in",
@@ -788,6 +794,12 @@ const fr: Dictionary = {
   "door.or": "ou",
   "door.create": "Créer un compte",
   "door.create_why": "Les comptes de ce serveur sont créés par la personne qui le gère.",
+  "settings.door": "L'écran de connexion",
+  "settings.door_why":
+    "Ce serveur propose les noms qu'il héberge avant qu'un mot de passe soit tapé, pour que se connecter tienne en un clic et un mot de passe plutôt qu'en se rappelant comment on a écrit son propre nom.",
+  "settings.door_hide_me": "Ne pas afficher mon compte dans cette liste",
+  "settings.door_hide_me_why":
+    "Vous vous connectez exactement comme avant : le nom se tape au lieu de se cliquer.",
   "door.rule":
     "Prenez quelque chose de long. Une phrase dont vous vous souviendrez vaut mieux qu'un mot court que personne ne devine.",
   "door.go": "Se connecter",
