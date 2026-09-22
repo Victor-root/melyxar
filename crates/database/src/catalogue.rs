@@ -2565,6 +2565,28 @@ pub(crate) async fn merge_within(
             .execute(&mut **transaction)
             .await?;
 
+        // What each person had of the one that goes stays theirs: where they
+        // were, what they watched, what they kept. Where they already have
+        // something of the one that stays, that one is kept.
+        for carried in [
+            "INSERT OR IGNORE INTO playback_progress
+                (user_id, work_id, position_ms, state, marked_manually, play_count,
+                 audio_track_id, subtitle_track_id, reported_at, last_played_at)
+             SELECT user_id, ?, position_ms, state, marked_manually, play_count,
+                    audio_track_id, subtitle_track_id, reported_at, last_played_at
+             FROM playback_progress WHERE work_id = ?",
+            "INSERT OR IGNORE INTO favorites (user_id, work_id, created_at)
+             SELECT user_id, ?, created_at FROM favorites WHERE work_id = ?",
+            "INSERT OR IGNORE INTO watchlist (user_id, work_id, created_at)
+             SELECT user_id, ?, created_at FROM watchlist WHERE work_id = ?",
+        ] {
+            sqlx::query(carried)
+                .bind(into.to_db_string())
+                .bind(from.to_db_string())
+                .execute(&mut **transaction)
+                .await?;
+        }
+
         let pictures: Vec<String> = sqlx::query(
             "SELECT relative_path FROM images WHERE owner_kind = 'work' AND owner_id = ?",
         )

@@ -399,7 +399,7 @@ async fn refuse_while_something_is_running_on(
 ///
 /// Never a failure of the removal: the rows are gone either way, and a cache
 /// that could not be swept is a cache, not a library.
-async fn forget_the_thumbnails_of(state: &AppState, sources: &[MediaSourceId]) -> usize {
+pub(crate) async fn forget_the_thumbnails_of(state: &AppState, sources: &[MediaSourceId]) -> usize {
     let mut gone = 0;
     for source in sources {
         let folder = state
