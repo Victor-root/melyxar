@@ -584,11 +584,9 @@
    have run out long before the scroll did. Held a step behind ordinary
    content and taking no press, the same as the door's own.
 
-   Quieter here than it is at the door, and that is the whole difference
-   between the two screens. The door is one card on an empty screen, so its
-   background can be looked at; this one has the library on it, and anything
-   back there strong enough to be seen as a shape is a shape drawn across
-   somebody's films. */
+   The same drift, at its own full strength: it is the one the door wears,
+   and a quieter copy of it is a different background rather than the same
+   one. */
 .home-backdrop {
   position: fixed;
   inset: 0;
@@ -596,23 +594,20 @@
   overflow: hidden;
   pointer-events: none;
   opacity: 0;
-  animation: home-drift-arrive 1100ms var(--ease) 200ms forwards;
+  animation: door-arrive-slowly 1100ms var(--ease) 200ms forwards;
 }
 
-@keyframes home-drift-arrive {
-  to {
-    opacity: 0.62;
-  }
-}
-
-/* The two arcs stay at the door. They are a drawn edge rather than a wash,
-   which on an empty screen is what gives the light its direction, and here
-   is a long curve ruled clean across the banner and the rows alike: the one
-   piece of the drift that read as a line through the page rather than as
-   light behind it. The washes and the dust stay, because neither has an
-   edge anywhere for the eye to follow. */
+/* The arcs keep their light here and lose their line.
+ *
+ * Each one is a ring with a lit hairline and a wide glow off it. At the
+ * door, where nothing stands over the background, the hairline is what
+ * gives the light an edge to come from. Here the banner thins out into the
+ * background rather than stopping against it, so anything with an edge
+ * behind it is read as a line drawn across the picture, curving off through
+ * the rows. Take the hairline and the glow stays: the same light, in the
+ * same place, with nothing left for the eye to follow. */
 .home-backdrop .door-drift-arc {
-  display: none;
+  border-color: transparent;
 }
 
 .section {
@@ -3337,7 +3332,14 @@ button.seen-mark:not(.seen-mark-on):hover {
   border-radius: 0 0 var(--radius-card) var(--radius-card);
   overflow: hidden;
   isolation: isolate;
-  background: var(--surface);
+  /* No surface of its own under the picture. It used to carry one, and
+     since a colour on the banner itself is not one of the layers the fade
+     below thins out, what the fade uncovered was that colour rather than
+     the page: a panel of flat grey ending on a line at the banner's foot,
+     which is the hard edge that kept being there however long the fade
+     was made. The work's own colour stands behind the picture instead, on
+     the layer that does fade. */
+  background: none;
 }
 
 /* Fades out into what the picture is standing on rather than stopping on a
