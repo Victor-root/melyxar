@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use melyxar_core::library::RootAccess;
+use melyxar_core::library::{LibraryKind, RootAccess};
 use melyxar_core::media_log::MediaPath;
 use melyxar_core::time::Timestamp;
 
@@ -60,7 +60,12 @@ pub enum ScanError {
 ///
 /// The root state is checked first, and an unusable root stops the walk. That
 /// single guard is what prevents an unmounted disk from emptying a library.
-pub fn walk(root_label: &str, root: &Path) -> Result<ScanOutcome, ScanError> {
+///
+/// What is worth looking at depends on what the library holds: photos only
+/// where people keep their own, and clips told apart from the film they come
+/// with only where a release named them so. A video somebody filmed and named
+/// `beach-sample.mp4` is a video, not a sample.
+pub fn walk(root_label: &str, root: &Path, kind: LibraryKind) -> Result<ScanOutcome, ScanError> {
     let state = access::check(root);
     if !state.is_usable() {
         tracing::warn!(
@@ -77,7 +82,7 @@ pub fn walk(root_label: &str, root: &Path) -> Result<ScanOutcome, ScanError> {
         companion_files: Vec::new(),
         unreadable_folders: Vec::new(),
     };
-    walk_into(root, root, &mut outcome, root_label);
+    walk_into(root, root, kind, &mut outcome, root_label);
 
     tracing::info!(
         root = root_label,
@@ -93,7 +98,14 @@ pub fn walk(root_label: &str, root: &Path) -> Result<ScanOutcome, ScanError> {
 ///
 /// Written as a loop over a queue rather than by calling itself, so that a
 /// deeply nested or looping folder structure cannot exhaust the stack.
-fn walk_into(root: &Path, start: &Path, outcome: &mut ScanOutcome, root_label: &str) {
+fn walk_into(
+    root: &Path,
+    start: &Path,
+    kind: LibraryKind,
+    outcome: &mut ScanOutcome,
+    root_label: &str,
+) {
+    let takes_photos = kind == LibraryKind::HomeMedia;
     let mut pending = vec![start.to_path_buf()];
 
     while let Some(folder) = pending.pop() {
@@ -137,7 +149,8 @@ fn walk_into(root: &Path, start: &Path, outcome: &mut ScanOutcome, root_label: &
                 continue;
             };
 
-            let is_video = naming::is_video_file(name);
+            let is_video =
+                naming::is_video_file(name) || takes_photos && naming::is_photo_file(name);
             let is_subtitle = crate::sidecar::is_subtitle_file(name);
             let is_description = crate::companion::is_companion_file(name);
             if !is_video && !is_subtitle && !is_description {
@@ -169,7 +182,10 @@ fn walk_into(root: &Path, start: &Path, outcome: &mut ScanOutcome, root_label: &
                     .modified()
                     .map(Timestamp::from)
                     .unwrap_or_else(|_| melyxar_core::time::now()),
-                companion_kind: naming::is_companion_clip(name),
+                companion_kind: kind
+                    .is_catalogued()
+                    .then(|| naming::is_companion_clip(name))
+                    .flatten(),
             });
         }
     }
@@ -265,7 +281,7 @@ mod tests {
         write(root, "notes.txt", b"x");
         write(root, "Quiet.Harbour.2019.nfo", b"x");
 
-        let outcome = walk("disk-one", root).expect("the root is usable");
+        let outcome = walk("disk-one", root, LibraryKind::Movies).expect("the root is usable");
         assert_eq!(
             outcome.companion_files.len(),
             1,
@@ -283,13 +299,51 @@ mod tests {
     }
 
     #[test]
+    fn a_library_of_home_media_walks_photos_and_takes_no_clip_for_a_sample() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let root = directory.path();
+        write(root, "Summer/beach.JPG", b"x");
+        write(root, "Summer/beach-sample.mp4", b"x");
+        write(root, "Summer/IMG_0001.heic", b"x");
+        write(root, "notes.txt", b"x");
+
+        let outcome = walk("disk-one", root, LibraryKind::HomeMedia).expect("usable");
+        let found: Vec<(String, Option<&str>)> = outcome
+            .files
+            .iter()
+            .map(|file| {
+                (
+                    file.relative_path.to_string_lossy().into_owned(),
+                    file.companion_kind,
+                )
+            })
+            .collect();
+        assert_eq!(
+            found,
+            vec![
+                ("Summer/beach-sample.mp4".to_string(), None),
+                ("Summer/beach.JPG".to_string(), None),
+            ],
+            "a video somebody filmed is never a release's sample, and a form \
+             no browser shows is left alone"
+        );
+
+        let films = walk("disk-one", root, LibraryKind::Movies).expect("usable");
+        assert_eq!(
+            films.files.len(),
+            1,
+            "a library of films never takes a photo for a film"
+        );
+    }
+
+    #[test]
     fn a_walk_goes_into_subfolders_and_reports_paths_relative_to_the_root() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let root = directory.path();
         write(root, "Quiet.Harbour.2019.mkv", b"x");
         write(root, "Boxset/Amber.Field.2020.mkv", b"x");
 
-        let outcome = walk("disk-one", root).expect("the root is usable");
+        let outcome = walk("disk-one", root, LibraryKind::Movies).expect("the root is usable");
         assert_eq!(outcome.files.len(), 2);
         assert!(outcome
             .files
@@ -308,8 +362,12 @@ mod tests {
     fn an_unmounted_root_stops_the_scan_instead_of_reporting_an_empty_folder() {
         // The single most damaging mistake a media server can make: taking an
         // empty answer for "everything was removed".
-        let error = walk("disk-one", Path::new("/nowhere/at/all"))
-            .expect_err("an unusable root must stop the scan");
+        let error = walk(
+            "disk-one",
+            Path::new("/nowhere/at/all"),
+            LibraryKind::Movies,
+        )
+        .expect_err("an unusable root must stop the scan");
         assert!(matches!(
             error,
             ScanError::RootUnusable {
@@ -325,7 +383,7 @@ mod tests {
         write(root, "Quiet.Harbour.2019.mkv.part", b"x");
         write(root, "Quiet.Harbour.2019.mkv", b"x");
 
-        let outcome = walk("disk-one", root).expect("the root is usable");
+        let outcome = walk("disk-one", root, LibraryKind::Movies).expect("the root is usable");
         assert_eq!(outcome.files.len(), 1);
     }
 
@@ -337,7 +395,7 @@ mod tests {
         write(root, "Quiet.Harbour.2019-trailer.mkv", b"x");
         write(root, "sample.mkv", b"x");
 
-        let outcome = walk("disk-one", root).expect("the root is usable");
+        let outcome = walk("disk-one", root, LibraryKind::Movies).expect("the root is usable");
         assert_eq!(outcome.files.len(), 3);
 
         let trailer = outcome
@@ -364,7 +422,7 @@ mod tests {
         write(root, "Quiet.Harbour.2019.MULTi.1080p.en.sdh.srt", b"x");
         write(root, "notes.txt", b"x");
 
-        let outcome = walk("disk-one", root).expect("the root is usable");
+        let outcome = walk("disk-one", root, LibraryKind::Movies).expect("the root is usable");
         assert_eq!(outcome.files.len(), 1, "a subtitle is not a film");
         assert_eq!(outcome.subtitles.len(), 2);
         assert!(outcome
@@ -380,8 +438,8 @@ mod tests {
         for name in ["c.mkv", "a.mkv", "b.mkv"] {
             write(root, name, b"x");
         }
-        let first = walk("disk-one", root).expect("usable");
-        let second = walk("disk-one", root).expect("usable");
+        let first = walk("disk-one", root, LibraryKind::Movies).expect("usable");
+        let second = walk("disk-one", root, LibraryKind::Movies).expect("usable");
         assert_eq!(first.files, second.files);
         assert_eq!(
             first
@@ -519,7 +577,8 @@ mod tests {
         std::fs::write(directory.path().join("Quiet.Harbour.2019.mkv"), b"a film")
             .expect("the film itself");
 
-        let outcome = walk("disk-one", directory.path()).expect("the root is readable");
+        let outcome =
+            walk("disk-one", directory.path(), LibraryKind::Movies).expect("the root is readable");
         assert_eq!(
             outcome
                 .files
@@ -547,7 +606,8 @@ mod tests {
         permissions.set_mode(0o000);
         std::fs::set_permissions(&locked, permissions).expect("permissions set");
 
-        let outcome = walk("disk-one", root).expect("the root itself is usable");
+        let outcome =
+            walk("disk-one", root, LibraryKind::Movies).expect("the root itself is usable");
 
         let mut permissions = std::fs::metadata(&locked).expect("readable").permissions();
         permissions.set_mode(0o755);

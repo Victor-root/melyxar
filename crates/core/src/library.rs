@@ -24,16 +24,20 @@ pub enum LibraryKind {
     Shows,
     /// Music, organised in artists, albums and tracks.
     Music,
+    /// What people filmed and photographed themselves, videos and photos
+    /// together, organised by the folders they were put in.
+    HomeMedia,
 }
 
 impl LibraryKind {
     /// Every kind, in the order a person meets them until they choose another.
-    pub const fn every() -> [Self; 5] {
+    pub const fn every() -> [Self; 6] {
         [
             Self::Movies,
             Self::Series,
             Self::Anime,
             Self::Shows,
+            Self::HomeMedia,
             Self::Music,
         ]
     }
@@ -45,6 +49,7 @@ impl LibraryKind {
             Self::Anime => "anime",
             Self::Shows => "shows",
             Self::Music => "music",
+            Self::HomeMedia => "home_media",
         }
     }
 
@@ -55,6 +60,7 @@ impl LibraryKind {
             "anime" => Some(Self::Anime),
             "shows" => Some(Self::Shows),
             "music" => Some(Self::Music),
+            "home_media" => Some(Self::HomeMedia),
             _ => None,
         }
     }
@@ -62,6 +68,12 @@ impl LibraryKind {
     /// Whether the kind is organised in seasons and episodes.
     pub fn is_episodic(self) -> bool {
         matches!(self, Self::Series | Self::Anime | Self::Shows)
+    }
+
+    /// Whether what it holds is in a catalogue somebody could be asked about.
+    /// What people filmed themselves is in none.
+    pub fn is_catalogued(self) -> bool {
+        !matches!(self, Self::HomeMedia)
     }
 }
 
@@ -182,6 +194,7 @@ mod tests {
             LibraryKind::Anime,
             LibraryKind::Shows,
             LibraryKind::Music,
+            LibraryKind::HomeMedia,
         ] {
             assert_eq!(LibraryKind::parse(kind.as_str()), Some(kind));
         }
@@ -219,6 +232,17 @@ mod tests {
         assert!(LibraryKind::Shows.is_episodic());
         assert!(!LibraryKind::Movies.is_episodic());
         assert!(!LibraryKind::Music.is_episodic());
+        assert!(!LibraryKind::HomeMedia.is_episodic());
+    }
+
+    #[test]
+    fn only_what_people_filmed_themselves_is_in_no_catalogue() {
+        assert!(!LibraryKind::HomeMedia.is_catalogued());
+        for kind in LibraryKind::every() {
+            if kind != LibraryKind::HomeMedia {
+                assert!(kind.is_catalogued(), "{kind:?}");
+            }
+        }
     }
 
     /// The interface turns these into a sentence of its own, so they are part

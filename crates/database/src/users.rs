@@ -815,6 +815,7 @@ mod tests {
                 LibraryKind::Movies,
                 LibraryKind::Series,
                 LibraryKind::Shows,
+                LibraryKind::HomeMedia,
                 LibraryKind::Music,
             ]
         );

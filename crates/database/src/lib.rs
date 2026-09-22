@@ -23,6 +23,7 @@ pub mod libraries;
 pub mod metadata;
 pub mod moved;
 pub mod numbering;
+pub mod own;
 pub mod playback;
 pub mod sessions;
 pub mod settings;
