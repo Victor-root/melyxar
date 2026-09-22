@@ -28,7 +28,7 @@ import { refusalKey } from "../i18n";
 import { howLong, whichEpisode } from "../readable";
 import { whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
-import { ArrivedIcon, ChevronRightIcon, ClockIcon, KindIcon, SparkIcon } from "../icons";
+import { BinocularsIcon, CameraIcon, ChevronRightIcon, EyeIcon, KindIcon } from "../icons";
 
 /** Where the row of everything newest leads, which is the same grid read in
  *  the same order. */
@@ -126,7 +126,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
                 a title nobody placed. */}
             {home.carry_on.length > 0 && (
               <section className="section">
-                <RowHead mark={<ClockIcon size={18} />} title={t("home.carry_on")} />
+                <RowHead mark={<EyeIcon size={24} />} title={t("home.carry_on")} />
                 <Row>
                   {home.carry_on.map((card) => (
                     <Card
@@ -149,7 +149,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
                 remembers. */}
             {home.up_next.length > 0 && (
               <section className="section">
-                <RowHead mark={<SparkIcon size={18} />} title={t("home.up_next")} />
+                <RowHead mark={<BinocularsIcon size={24} />} title={t("home.up_next")} />
                 <Row>
                   {home.up_next.map((card) => (
                     <Card
@@ -168,7 +168,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
         <section className="section">
           <RowHead
-            mark={<ArrivedIcon size={18} />}
+            mark={<CameraIcon size={24} />}
             title={t("home.recently_added")}
             to={EVERYTHING_NEWEST}
           >
@@ -204,7 +204,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
           <Shelf
             key={shelf.kind}
             title={t(`home.newest.${shelf.kind}`)}
-            mark={<KindIcon kind={shelf.kind} size={18} />}
+            mark={<KindIcon kind={shelf.kind} size={24} />}
             cards={shelf.cards}
             to={whereAKindLeads(shelf.kind, libraries)}
           />
