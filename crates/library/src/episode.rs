@@ -194,6 +194,147 @@ fn a_number_alone(word: &str) -> Option<i32> {
         .flatten()
 }
 
+/// Reads a file name the way anime releases are named, or says it is not one.
+///
+/// Two shapes that carry no marker at all and that nearly every such release
+/// uses: the number after a dash, `[Group] Series - 12 [1080p][ABCD1234]`, and
+/// the number in brackets of its own, `[Group][Series][12][1080p]`. A season
+/// written just before the dash is read with it: `Series S2 - 05`.
+///
+/// Only ever asked in a library of anime, once the ordinary reading found no
+/// marker. Anywhere else a dash and a number are just as likely to be the
+/// second film of something, which is why a bare number is refused there.
+pub fn parse_anime_episode(
+    file_name: &str,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<ParsedEpisode> {
+    // Written with no space anywhere, a run of brackets is one long word with
+    // nothing to find in it.
+    let spaced = file_name.replace("][", "] [");
+    naming::with_the_words_of(&spaced, current_year, signs, |words| {
+        let (marker, bracketed) = match a_dashed_number(words, current_year) {
+            Some(marker) => (marker, false),
+            None => (a_bracketed_number(words, current_year)?, true),
+        };
+
+        // Such a name puts nothing after the number but its own title and
+        // what describes the file, and the description always opens with a
+        // bracket when no technical word opened it first.
+        let after = naming::trim_leading_separators(&words[marker.through..]);
+        let boundary = after
+            .iter()
+            .position(|word| word.starts_with(['[', '(', '{']))
+            .into_iter()
+            .chain(naming::first_technical_tag(after, 0))
+            .min()
+            .unwrap_or(after.len());
+        let title = naming::title_of(&after[..boundary], signs.marks());
+
+        // In the bracketed shape the series sits in brackets of its own, which
+        // would otherwise read as an aside and be dropped from its own name.
+        let named: Vec<&str> = words[..marker.at]
+            .iter()
+            .map(|word| if bracketed { naming::bare(word) } else { word })
+            .collect();
+        let named = &named[..naming::first_technical_tag(&named, 1).unwrap_or(named.len())];
+        let (named, year) = the_series(named, current_year);
+
+        Some(ParsedEpisode {
+            series: naming::title_of(named, signs.marks()),
+            year,
+            season: marker.season,
+            first: marker.first,
+            last: marker.last,
+            title: (!title.is_empty()).then_some(title),
+            tags: naming::tags_from(&after[boundary..]),
+        })
+    })
+}
+
+/// `Series - 12`, with the season written just before the dash if it was.
+fn a_dashed_number(words: &[&str], current_year: i32) -> Option<Marker> {
+    (1..words.len()).find_map(|dash| {
+        if !is_a_dash(words[dash]) {
+            return None;
+        }
+        let (number, through) = word_after(words, dash)?;
+        let first = an_anime_number(&plain(number), current_year)?;
+        let (at, season) = a_season_just_before(words, dash).unwrap_or((dash, None));
+        Some(Marker {
+            at,
+            through,
+            season,
+            first,
+            last: first,
+        })
+    })
+}
+
+/// `[Series][12]`: a number standing in brackets of its own.
+fn a_bracketed_number(words: &[&str], current_year: i32) -> Option<Marker> {
+    (0..words.len()).find_map(|at| {
+        let inside = words[at].strip_prefix('[')?.strip_suffix(']')?;
+        let first = an_anime_number(&inside.to_lowercase(), current_year)?;
+        Some(Marker {
+            at,
+            through: at + 1,
+            season: None,
+            first,
+            last: first,
+        })
+    })
+}
+
+/// A word that is nothing but a dash.
+fn is_a_dash(word: &str) -> bool {
+    !word.is_empty() && word.chars().all(|c| matches!(c, '-' | '\u{2013}'))
+}
+
+/// The number of an anime episode.
+///
+/// Four digits, because a long series runs past a thousand episodes, but never
+/// a year: `Series - 2019` is the year of something. A release put out again
+/// after a fix says so with a `v` and a digit, `12v2`, and is the same episode.
+fn an_anime_number(word: &str, current_year: i32) -> Option<i32> {
+    if naming::a_plausible_year(word, current_year).is_some() {
+        return None;
+    }
+    let (number, rest) = digits_at(word)?;
+    let a_version = |rest: &str| {
+        rest.strip_prefix('v').is_some_and(|version| {
+            !version.is_empty() && version.chars().all(|c| c.is_ascii_digit())
+        })
+    };
+    (rest.is_empty() || a_version(rest)).then_some(number)
+}
+
+/// A season written just before the dash, and the first word it takes.
+///
+/// `S2`, `Season 2` in either language, and the `2nd Season` a release often
+/// carries. A number on its own there is never read as one: `Series 100` is
+/// far more often the name of the series.
+fn a_season_just_before(words: &[&str], dash: usize) -> Option<(usize, Option<i32>)> {
+    let last = plain(words.get(dash.checked_sub(1)?)?);
+    if let Some(Mark::Season(season)) = a_season_alone(&last) {
+        return Some((dash - 1, Some(season)));
+    }
+    let before = plain(words.get(dash.checked_sub(2)?)?);
+    if is_a_season_word(&before) {
+        return Some((dash - 2, Some(number_of(&last)?)));
+    }
+    if is_a_season_word(&last) {
+        return Some((dash - 2, Some(an_ordinal(&before)?)));
+    }
+    None
+}
+
+/// `2nd`, and every other way English writes a rank.
+fn an_ordinal(word: &str) -> Option<i32> {
+    let (number, rest) = digits_at(word)?;
+    matches!(rest, "st" | "nd" | "rd" | "th").then_some(number)
+}
+
 /// Reads a folder name as the name of a series, or says it names none.
 ///
 /// Read exactly as a file name is read, because a folder is named the way a
@@ -949,6 +1090,90 @@ mod tests {
         ] {
             assert_eq!(numbered(name), None, "{name}");
         }
+    }
+
+    /// What an anime name said: series, season, episode, episode title.
+    fn anime(name: &str) -> Option<(String, Option<i32>, i32, Option<String>)> {
+        parse_anime_episode(name, THIS_YEAR, &LibrarySigns::default())
+            .map(|read| (read.series, read.season, read.first, read.title))
+    }
+
+    #[test]
+    fn the_number_after_a_dash_is_the_episode() {
+        for name in [
+            "Amber Field - 12.mkv",
+            "[Group] Amber Field - 12 [1080p].mkv",
+            "[Group] Amber Field - 12 (1080p) [A1B2C3D4].mkv",
+            "[Group]_Amber_Field_-_12_[BD_1080p][A1B2C3D4].mkv",
+            "Amber Field - 012.mkv",
+            // A release put out again after a fix is the same episode.
+            "[Group] Amber Field - 12v2 [1080p].mkv",
+        ] {
+            assert_eq!(
+                anime(name),
+                Some(("Amber Field".to_string(), None, 12, None)),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_long_series_runs_past_a_thousand_but_never_into_a_year() {
+        assert_eq!(
+            anime("Amber Field - 1071.mkv").map(|read| read.2),
+            Some(1071)
+        );
+        assert_eq!(anime("Amber Field - 2019.mkv"), None);
+    }
+
+    #[test]
+    fn the_number_in_brackets_of_its_own_is_the_episode() {
+        assert_eq!(
+            anime("[Group][Amber Field][07][1080p][A1B2C3D4].mkv"),
+            Some(("Amber Field".to_string(), None, 7, None))
+        );
+    }
+
+    #[test]
+    fn a_season_written_before_the_dash_is_read_with_it() {
+        for name in [
+            "[Group] Amber Field S2 - 05 [1080p].mkv",
+            "Amber Field Season 2 - 05.mkv",
+            "Amber Field Saison 2 - 05.mkv",
+            "Amber Field 2nd Season - 05.mkv",
+        ] {
+            assert_eq!(
+                anime(name),
+                Some(("Amber Field".to_string(), Some(2), 5, None)),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn what_follows_the_number_is_the_episode_title_up_to_the_description() {
+        assert_eq!(
+            anime("[Group] Amber Field - 03 - The Long Night [1080p].mkv"),
+            Some((
+                "Amber Field".to_string(),
+                None,
+                3,
+                Some("The Long Night".to_string())
+            ))
+        );
+    }
+
+    #[test]
+    fn a_number_glued_to_the_name_is_the_name() {
+        // Far more often the name of the series than one of its episodes.
+        assert_eq!(anime("Signal 100.mkv"), None);
+        // With a dash after it, the dash is what says which is which.
+        assert_eq!(
+            anime("Signal 100 - 04.mkv"),
+            Some(("Signal 100".to_string(), None, 4, None))
+        );
+        // And a number that is only a description is no episode at all.
+        assert_eq!(anime("Amber Field - 1080p.mkv"), None);
     }
 
     /// Reads a folder the way a library that knows nothing about itself would.

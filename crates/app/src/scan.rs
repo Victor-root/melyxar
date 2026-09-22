@@ -584,13 +584,18 @@ async fn reread_names_of_nameless_series(
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or_default();
+        let folders = folders_above(&series.relative_path);
+        let from_a_season_folder = folders
+            .iter()
+            .find_map(|folder| episode::season_of_folder(folder));
         // Nothing to read the name from the way it was read the first time, so
         // nothing is written: a name changed by a different reading would be a
         // guess, and a guess here renames a series nobody asked about.
-        let Some(read) = episode::parse_episode(file_name, year, signs) else {
+        let Some(read) =
+            read_an_episode(library.kind, file_name, from_a_season_folder, year, signs)
+        else {
             continue;
         };
-        let folders = folders_above(&series.relative_path);
         let Some(named) = the_series(&read, &folders, year, signs) else {
             continue;
         };
@@ -849,19 +854,8 @@ async fn episode_work_for(
         .iter()
         .find_map(|folder| episode::season_of_folder(folder));
 
-    let read = match episode::parse_episode(file_name, year, signs) {
-        Some(read) => Some(read),
-        // Nothing in the name says which episode this is. Under a season
-        // folder, where the season and the series are already settled, a name
-        // opening on a number is that number: it is how a whole run taken off
-        // a disc is usually named, and reading it nowhere else keeps a film
-        // called by a number out of it.
-        None if from_a_season_folder.is_some() => {
-            episode::episode_of_a_leading_number(file_name, year, signs)
-        }
-        None => None,
-    };
-    let Some(read) = read else {
+    let Some(read) = read_an_episode(library.kind, file_name, from_a_season_folder, year, signs)
+    else {
         return Ok(None);
     };
 
@@ -921,6 +915,35 @@ async fn episode_work_for(
     .await?;
 
     Ok(Some(episode_work.id))
+}
+
+/// Reads which episode a file is, the one way the scan and a second reading
+/// of its name both use.
+fn read_an_episode(
+    kind: LibraryKind,
+    file_name: &str,
+    from_a_season_folder: Option<i32>,
+    year: i32,
+    signs: &naming::LibrarySigns,
+) -> Option<episode::ParsedEpisode> {
+    episode::parse_episode(file_name, year, signs)
+        // Anime releases carry no ordinary marker at all, and name the episode
+        // by a number after a dash or in brackets of its own. Read only in a
+        // library of anime, where that shape means nothing else.
+        .or_else(|| {
+            (kind == LibraryKind::Anime)
+                .then(|| episode::parse_anime_episode(file_name, year, signs))
+                .flatten()
+        })
+        // Nothing in the name says which episode this is. Under a season
+        // folder, where the season and the series are already settled, a name
+        // opening on a number is that number: it is how a whole run taken off
+        // a disc is usually named, and reading it nowhere else keeps a film
+        // called by a number out of it.
+        .or_else(|| {
+            from_a_season_folder
+                .and_then(|_| episode::episode_of_a_leading_number(file_name, year, signs))
+        })
 }
 
 /// The child of a work sitting at that number, written down if it is not there.
@@ -1907,6 +1930,62 @@ mod tests {
         assert_eq!(seasons.len(), 1);
         assert_eq!(seasons[0].ordinal, Some(1));
         assert_eq!(of_kind(&works, WorkKind::Episode).len(), 2);
+    }
+
+    #[tokio::test]
+    async fn anime_releases_are_filed_by_the_number_they_carry() {
+        // No marker anywhere, only the number after a dash or in brackets:
+        // how nearly every anime release is named.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Amber Field/[Group] Amber Field - 01 [1080p].mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Amber Field/[Group][Amber Field][02][1080p].mkv",
+            b"xx",
+        );
+        write(
+            &media,
+            "Amber Field/[Group] Amber Field S2 - 01 [1080p].mkv",
+            b"xxx",
+        );
+
+        let (state, library) =
+            state_of_kind(directory.path(), vec![("disk-one", media)], false, "anime").await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        assert_eq!(of_kind(&works, WorkKind::Series).len(), 1);
+        let seasons = of_kind(&works, WorkKind::Season);
+        assert_eq!(
+            seasons
+                .iter()
+                .map(|season| season.ordinal)
+                .collect::<Vec<_>>(),
+            [Some(1), Some(2)]
+        );
+        let episodes = of_kind(&works, WorkKind::Episode);
+        assert_eq!(episodes.len(), 3);
+        assert!(episodes.iter().all(|episode| episode.parent_id.is_some()));
+    }
+
+    #[tokio::test]
+    async fn the_anime_shape_means_nothing_in_a_library_of_series() {
+        // There a dash and a number are as likely the second of something.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Amber Field/Amber Field - 02.mkv", b"x");
+
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let works = arrangement(&state, &library).await;
+
+        assert!(of_kind(&works, WorkKind::Season).is_empty());
     }
 
     #[tokio::test]
