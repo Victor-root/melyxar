@@ -931,11 +931,18 @@
    tile pushes everything the page has to say further down for the sake of a
    few points of poster.
 
-   The panel behind the fan is the deep surface with a breath of the newest
-   work's own colour in it, so two ways in are not the same dark rectangle
-   twice, and so a poster is read against a ground rather than against
-   another poster's neighbour. */
+   The panel behind the fan is painted rather than flat: the deep surface,
+   a breath of the newest work's own colour, and two pools of light coming
+   in from the top corners with a third low behind the fan's feet. It is the
+   door's own painting said in three gradients instead of a dozen, for a
+   panel a fifth the size, and it is what stops the air around the posters
+   reading as a hole. Nothing in it is meant to be looked at. */
 .band-tile {
+  /* How much of that painting there is. Turned down on a light screen
+     further down, for the reason the door's own painting gives: light added
+     to a white surface is not light, and the accent on white is pink. */
+  --band-force: 1;
+
   position: relative;
   display: flex;
   align-items: flex-end;
@@ -950,11 +957,32 @@
   border-radius: var(--radius-card);
   overflow: hidden;
   isolation: isolate;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--tile-color) 24%, var(--surface-raised)),
-    var(--surface-deep)
-  );
+  background:
+    /* The light the fan leans away from, in at the top left. */
+    radial-gradient(
+      76% 58% at 13% 2%,
+      color-mix(in srgb, var(--accent) calc(11% * var(--band-force)), transparent),
+      transparent 70%
+    ),
+    /* Its answer from the far corner, in the work's own colour, so the panel
+       is lit from two sides rather than washed evenly. */
+    radial-gradient(
+      64% 54% at 94% 6%,
+      color-mix(in srgb, var(--tile-color) calc(20% * var(--band-force)), transparent),
+      transparent 72%
+    ),
+    /* And a low one behind the feet of the fan, which is what gives the
+       posters something to stand against. */
+    radial-gradient(
+      72% 44% at 50% 92%,
+      color-mix(in srgb, var(--accent-dim) calc(9% * var(--band-force)), transparent),
+      transparent 76%
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--tile-color) 24%, var(--surface-raised)),
+      var(--surface-deep)
+    );
   color: var(--text);
   text-decoration: none;
   /* The air just off the rim below, one layer of it: these stand several to
@@ -1039,6 +1067,23 @@
   object-fit: cover;
 }
 
+/* The light of the panel caught on the face of a poster, strongest at the
+   corner nearest where that light comes in and gone by a third of the way
+   across. It is what tells a poster standing in a lit box from a picture
+   pasted on a wall, and at this strength it is felt rather than seen. */
+.band-poster::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    158deg,
+    color-mix(in srgb, var(--text) 11%, transparent),
+    transparent 34%
+  );
+  pointer-events: none;
+}
+
 /* The letter a work begins with, where its poster would be: the same answer
    every card in this interface gives to a work with no picture. */
 .band-poster-initial {
@@ -1069,10 +1114,13 @@
 .band-fan-5 > :nth-child(1) {
   z-index: 3;
   --lift: calc(-4% * var(--open));
+  /* The one the eye lands on: it is lifted off the panel rather than laid on
+     it, wears a brighter edge than the ones behind it, and carries the air
+     of the accent just off its own rim. */
   box-shadow:
-    var(--shadow-card),
-    0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent),
-    0 0 26px -8px var(--accent-glow);
+    var(--shadow-raised),
+    0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent),
+    0 0 38px -6px var(--accent-glow);
 }
 
 /* The pair either side of a middle, leaning away and passing behind it. */
@@ -1147,9 +1195,9 @@
   height: 65%;
   --lift: calc(-4% * var(--open));
   box-shadow:
-    var(--shadow-card),
-    0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent),
-    0 0 26px -8px var(--accent-glow);
+    var(--shadow-raised),
+    0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent),
+    0 0 38px -6px var(--accent-glow);
 }
 
 .band-tile:hover .band-posters,
@@ -1157,17 +1205,41 @@
   --open: 1;
 }
 
-/* What a library with nothing in it yet shows in place of the fan: its own
-   mark, faint enough to be a watermark rather than a thing to press, stood
-   where the posters will stand once there are any. */
-.band-empty {
+/* Light added to a white surface is not light. The painting behind the fan
+   is therefore turned down rather than drawn again, which is the whole of
+   what the other theme has to say about it. */
+:root[data-theme="light"] .band-tile {
+  --band-force: 0.34;
+}
+
+/*
+ * What a library with nothing in it yet shows in place of the fan: its own
+ * mark, faint enough to be a watermark rather than a thing to press, stood
+ * where the posters will stand once there are any.
+ *
+ * It is here and nowhere else. Drawn behind a fan as well, large and faint,
+ * it came out as the ends of a shape poking past the posters that covered
+ * its middle: two antennae over a fan of series, the feet of a reel under a
+ * fan of films. What fills the air around a fan is the painting on the tile
+ * itself, which has no ends to show.
+ */
+.band-mark {
   position: absolute;
   inset: 0;
-  z-index: -2;
+  z-index: -3;
   display: grid;
   place-items: center;
-  padding-bottom: 16%;
-  color: color-mix(in srgb, var(--text) 11%, transparent);
+  padding-bottom: 12%;
+  color: color-mix(in srgb, var(--text) 12%, transparent);
+  pointer-events: none;
+}
+
+.band-mark > svg {
+  width: auto;
+  height: 58%;
+  /* Thinned as it grows: a stroke drawn for a shape of seventeen points is
+     a bar at several times that. */
+  stroke-width: 1.2;
 }
 
 /*
