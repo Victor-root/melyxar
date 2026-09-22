@@ -335,12 +335,15 @@
   letter-spacing: 0.02em;
 }
 
-/* And the name itself, beside the letters rather than hidden in what the
-   mouse is told. Two letters tell two accounts apart; they do not say which
-   one this is, and on a server a household shares that is the thing worth
-   saying. Cut rather than allowed to push the piece across the bar. */
+/* Who is here, at the end of the piece. A run of its own inside it rather
+   than a piece of its own beside it: the letters and the name go together
+   more closely than any two icons do, so they keep their own air while the
+   glass around them is shared. */
 .header-account {
+  display: flex;
+  align-items: center;
   gap: 9px;
+  margin-left: var(--gap-tight);
 }
 
 .header-who {
@@ -402,12 +405,12 @@
   }
 }
 
-/* The pieces at the right hand end, with air between them rather than a rule:
-   what the server is doing, what anybody can press, and who is here. */
+/* The one piece at the right hand end, holding what the server is doing,
+   what anybody can press, and who is here. It was three, and three pieces
+   read as three decisions about what belongs with what: there is one, which
+   is that this end of the bar is the end you press. */
 .header-side {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
+  padding-right: 4px;
 }
 
 /* One icon. A function that is coming is greyed and says so rather than being
@@ -634,6 +637,31 @@
   flex: 0 1 auto;
   min-width: 0;
   margin-bottom: 0;
+}
+
+/* And a hairline down the air between them, only while they really are on
+   one line: on two, the same line would run down the side of a row with
+   nothing on the other side of it. Faded out at both ends rather than cut
+   off, so it reads as air between two things and not as a rule ruled
+   between them. */
+.rows-sharing > .section + .section {
+  position: relative;
+}
+
+.rows-sharing > .section + .section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--gap-section) / -2);
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--border) 18%,
+    var(--border) 82%,
+    transparent
+  );
 }
 
 .section-head {

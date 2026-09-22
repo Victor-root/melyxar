@@ -207,12 +207,18 @@ export function Header({ libraries }: { libraries: Library[] }) {
           </Link>
         </div>
 
-        <div className="header-side">
-          {/* What the server is doing and the two screens it is read on: a
-              piece of its own, because all of it belongs to whoever runs the
-              server and none of it is drawn for anybody else. */}
+        {/* Everything at this end on one piece of glass rather than three.
+            Three of them read as three decisions about what goes with what,
+            and there is only one: this end is what you press, the other is
+            where you are. What separates the runs inside it is a little air
+            and the fact that two of them carry a shape of their own, the
+            scan button and the account's letters. */}
+        <div className="header-piece header-side">
+          {/* What the server is doing and the two screens it is read on:
+              first, because all of it belongs to whoever runs the server and
+              none of it is drawn for anybody else. */}
           {administrator && (
-            <div className="header-piece">
+            <>
               {jobs.length > 0 ? (
                 <Link className="header-busy" to="/activity">
                   <span className="header-busy-mark" aria-hidden="true" />
@@ -250,113 +256,112 @@ export function Header({ libraries }: { libraries: Library[] }) {
               >
                 <JournalIcon size={22} />
               </NavLink>
-            </div>
+            </>
           )}
 
           {/* Everything anybody can press, one icon each. A menu of five
               entries opened by one press is five presses for every one of
               them, and the name it used to hang under said nothing anybody
               needed to read twice. */}
-          <div className="header-piece">
-            <form
-              className={`search${looking ? " search-open" : ""}`}
-              role="search"
-              onSubmit={look}
-              onBlur={letGo}
-            >
-              {/* Where the field comes out of, and where it goes back into.
-                  The two keys that reach it are said here rather than on a
-                  badge inside it: there is no inside to put one in until it
-                  is already open. */}
-              <button
-                type="button"
-                className="header-icon search-glass"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={magnifier}
-                title={`${t("nav.search")} (${theShortcut()})`}
-                aria-label={t("nav.search")}
-                aria-expanded={looking}
-              >
-                <SearchIcon size={20} />
-              </button>
-              <input
-                ref={field}
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                /* The escape key steps out of the field, and the fold above
-                   decides from there: empty, it goes back into its magnifier;
-                   with words still in it, it stays out with them. The browser
-                   would otherwise empty a field of this kind on that key and
-                   leave it standing open over nothing, which is neither of
-                   those two answers. */
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    event.currentTarget.blur();
-                  }
-                }}
-                placeholder={t("search.placeholder")}
-                aria-label={t("nav.search")}
-                /* Out of the way of the tab key while it is folded away: a
-                   field nobody can see is not a stop on the way round. */
-                tabIndex={looking ? undefined : -1}
-              />
-              {/* The scope, next to the words rather than on the page of
-                  results: it narrows what is being asked, so it belongs where
-                  the asking happens. */}
-              <Scope
-                categories={categories}
-                scope={scope}
-                onChoose={setScope}
-                reachable={looking}
-              />
-            </form>
-
-            {/* Neither of these has an engine behind it yet. Shown greyed and
-                saying when rather than left out: a function nobody can see is
-                a function nobody knows is coming. */}
+          <form
+            className={`search${looking ? " search-open" : ""}`}
+            role="search"
+            onSubmit={look}
+            onBlur={letGo}
+          >
+            {/* Where the field comes out of, and where it goes back into.
+                The two keys that reach it are said here rather than on a
+                badge inside it: there is no inside to put one in until it
+                is already open. */}
             <button
               type="button"
-              className="header-icon"
-              disabled
-              title={t("nav.later")}
-              aria-label={`${t("nav.cast")} (${t("nav.later")})`}
+              className="header-icon search-glass"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={magnifier}
+              title={`${t("nav.search")} (${theShortcut()})`}
+              aria-label={t("nav.search")}
+              aria-expanded={looking}
             >
-              <ScreenCastIcon size={22} />
+              <SearchIcon size={20} />
             </button>
-            <button
-              type="button"
-              className="header-icon"
-              disabled
-              title={t("nav.later")}
-              aria-label={`${t("nav.notifications")} (${t("nav.later")})`}
-            >
-              <BellIcon size={22} />
-            </button>
+            <input
+              ref={field}
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              /* The escape key steps out of the field, and the fold above
+                 decides from there: empty, it goes back into its magnifier;
+                 with words still in it, it stays out with them. The browser
+                 would otherwise empty a field of this kind on that key and
+                 leave it standing open over nothing, which is neither of
+                 those two answers. */
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+              }}
+              placeholder={t("search.placeholder")}
+              aria-label={t("nav.search")}
+              /* Out of the way of the tab key while it is folded away: a
+                 field nobody can see is not a stop on the way round. */
+              tabIndex={looking ? undefined : -1}
+            />
+            {/* The scope, next to the words rather than on the page of
+                results: it narrows what is being asked, so it belongs where
+                the asking happens. */}
+            <Scope
+              categories={categories}
+              scope={scope}
+              onChoose={setScope}
+              reachable={looking}
+            />
+          </form>
 
-            <NavLink
-              to="/favourites"
-              className="header-icon"
-              title={t("nav.favourites")}
-              aria-label={t("nav.favourites")}
-            >
-              <HeartIcon size={22} filled={false} />
-            </NavLink>
-            <NavLink
-              to="/settings"
-              className="header-icon"
-              title={t("nav.settings")}
-              aria-label={t("nav.settings")}
-            >
-              <GearIcon size={22} />
-            </NavLink>
-          </div>
+          {/* Neither of these has an engine behind it yet. Shown greyed and
+              saying when rather than left out: a function nobody can see is
+              a function nobody knows is coming. */}
+          <button
+            type="button"
+            className="header-icon"
+            disabled
+            title={t("nav.later")}
+            aria-label={`${t("nav.cast")} (${t("nav.later")})`}
+          >
+            <ScreenCastIcon size={22} />
+          </button>
+          <button
+            type="button"
+            className="header-icon"
+            disabled
+            title={t("nav.later")}
+            aria-label={`${t("nav.notifications")} (${t("nav.later")})`}
+          >
+            <BellIcon size={22} />
+          </button>
 
-          {/* Who is signed in, and the way out. The name beside the letters
-              rather than hidden in what the mouse is told: at this size two
-              letters tell two accounts apart and say which one neither. */}
-          <div className="header-piece header-account">
+          <NavLink
+            to="/favourites"
+            className="header-icon"
+            title={t("nav.favourites")}
+            aria-label={t("nav.favourites")}
+          >
+            <HeartIcon size={22} filled={false} />
+          </NavLink>
+          <NavLink
+            to="/settings"
+            className="header-icon"
+            title={t("nav.settings")}
+            aria-label={t("nav.settings")}
+          >
+            <GearIcon size={22} />
+          </NavLink>
+
+          {/* Who is signed in, and the way out, last. The name beside the
+              letters rather than hidden in what the mouse is told: at this
+              size two letters tell two accounts apart and say which one
+              neither. */}
+          <div className="header-account">
             <span className="avatar" aria-hidden="true">
               {initialsOf(account?.name ?? t("nav.account"))}
             </span>
