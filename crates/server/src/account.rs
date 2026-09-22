@@ -27,7 +27,6 @@ use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::accounts::{
     OpenedSession, PasswordChange, Remembered, SessionToken, SignedIn, SignedInOrNot,
-    A_SESSION_LASTS,
 };
 use melyxar_app::AppState;
 use melyxar_core::user::User;
@@ -37,6 +36,16 @@ use crate::error::{Result, ServerError};
 
 /// The name the session travels under.
 const COOKIE: &str = "melyxar_session";
+
+/// The furthest ahead it is worth dating a cookie, in seconds.
+///
+/// Four hundred days, and this server did not pick the number: browsers cap
+/// what they honour at that, and anything further ahead is quietly cut back
+/// to it. So it is not a lifetime this server is granting, it is the longest
+/// a browser will hold on to anything, which is what "stay signed in" means
+/// in practice. A browser used at least once a year never reaches it, because
+/// every sign in writes the date out afresh.
+const THE_LONGEST_A_BROWSER_KEEPS_ONE: i64 = 400 * 24 * 60 * 60;
 
 /// The longest a device name may be before it is cut.
 ///
@@ -220,12 +229,15 @@ impl<S: Send + Sync> FromRequestParts<S> for Administrator {
 /// browser refuses to send back, and nobody would ever sign in.
 ///
 /// How long the browser keeps it is the one thing somebody chooses at the
-/// door. Remembered, it is dated thirty days out, which is as long as a
-/// session survives being unused anyway. Not remembered, it is given no date
-/// at all, and a cookie with no date is one the browser drops the moment it
-/// closes: that is the whole of what the box does, and it is the browser
-/// rather than this server that honours it, which is what makes it true even
-/// for somebody who walks away from a machine that stays on.
+/// door. Remembered, it is dated as far out as a browser will take, which is
+/// to say indefinitely: this server refuses no token for its age, so nothing
+/// signs that browser out until somebody does it, changes their password, or
+/// the upkeep sweeps a session nobody has used in a year. Not remembered, it
+/// is given no date at all, and a cookie with no date is one the browser
+/// drops the moment it closes: that is the whole of what the box does, and it
+/// is the browser rather than this server that honours it, which is what
+/// makes it true even for somebody who walks away from a machine that stays
+/// on.
 fn cookie_carrying(
     token: &SessionToken,
     state: &AppState,
@@ -249,7 +261,7 @@ fn cookie_carrying(
 /// is what could go wrong here.
 fn cookie_written(token: &str, encrypted: bool, remembered: Remembered) -> String {
     let how_long = match remembered {
-        Remembered::Yes => format!("; Max-Age={}", A_SESSION_LASTS.whole_seconds()),
+        Remembered::Yes => format!("; Max-Age={THE_LONGEST_A_BROWSER_KEEPS_ONE}"),
         Remembered::UntilTheBrowserCloses => String::new(),
     };
     format!(
@@ -568,8 +580,8 @@ mod tests {
     fn a_browser_told_to_remember_is_given_a_date_and_one_told_not_to_is_not() {
         let remembered = cookie_written("a token", false, Remembered::Yes);
         assert!(
-            remembered.contains(&format!("Max-Age={}", A_SESSION_LASTS.whole_seconds())),
-            "a remembered browser keeps the session as long as the session lasts: {remembered}"
+            remembered.contains(&format!("Max-Age={THE_LONGEST_A_BROWSER_KEEPS_ONE}")),
+            "a remembered browser is asked to keep it as long as it will: {remembered}"
         );
 
         let for_now = cookie_written("a token", false, Remembered::UntilTheBrowserCloses);

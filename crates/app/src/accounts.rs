@@ -34,7 +34,7 @@ pub use melyxar_auth::SHORTEST_PASSWORD;
 /// above asks the use cases and never reaches past them to the storage, which
 /// is what keeps the dependencies pointing one way.
 pub use melyxar_auth::SessionToken;
-pub use melyxar_database::sessions::{Remembered, SignedIn, A_SESSION_LASTS};
+pub use melyxar_database::sessions::{Remembered, SignedIn, AN_UNUSED_SESSION_IS_KEPT_FOR};
 
 /// What somebody filling in the door can be told to put right.
 ///
