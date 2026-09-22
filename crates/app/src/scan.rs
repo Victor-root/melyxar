@@ -38,6 +38,9 @@ pub struct ScanReport {
     pub missing: usize,
     /// Files that were absent and turned up again.
     pub restored: usize,
+    /// Files absent from where they were and found under another folder of
+    /// the same library, and followed there.
+    pub moved: usize,
     pub unchanged: usize,
     pub analysed: usize,
     /// Files the analyser could not read. Recorded rather than hidden: a file
@@ -71,6 +74,7 @@ impl ScanReport {
             || self.changed > 0
             || self.missing > 0
             || self.restored > 0
+            || self.moved > 0
             || self.renamed > 0
             || self.merged > 0
     }
@@ -357,6 +361,8 @@ pub async fn scan_library(
         handle.advance(1).await;
     }
 
+    report.moved = follow_what_moved(state, library).await?;
+
     handle.at_step(JobStep::ReadingNamesAgain).await;
     let reread = reread_names_of_nameless_works(state, library).await?;
     report.renamed = reread.renamed;
@@ -386,6 +392,7 @@ pub async fn scan_library(
         changed = report.changed,
         missing = report.missing,
         restored = report.restored,
+        moved = report.moved,
         unchanged = report.unchanged,
         analysed = report.analysed,
         extras = report.extras,
@@ -493,6 +500,34 @@ async fn record_changes(
     }
 
     Ok(())
+}
+
+/// Follows every file of the library that was moved rather than lost.
+///
+/// Asked of the whole library once every disk has been walked, since a file
+/// can move from one disk to another, and asked of what is written down
+/// rather than of what this walk saw, so a move made before this existed is
+/// repaired too.
+async fn follow_what_moved(state: &AppState, library: &Library) -> Result<usize> {
+    let database = state.database();
+    let moved = database.moved_files(library.id).await?;
+    for file in &moved {
+        let no_longer_used = database.follow_moved_file(file).await?;
+        forget_pictures(state, no_longer_used).await;
+        crate::libraries::forget_the_thumbnails_of(state, &[file.gone]).await;
+        tracing::debug!(
+            file = %file.here.display(),
+            "a file absent from where it was is here now, and was followed"
+        );
+    }
+    if !moved.is_empty() {
+        tracing::info!(
+            library = library.name,
+            files = moved.len(),
+            "files that were moved rather than lost were followed to where they are now"
+        );
+    }
+    Ok(moved.len())
 }
 
 /// Reads the names of the works nobody has named, and keeps what changed.
@@ -2070,6 +2105,36 @@ mod tests {
                 .collect::<Vec<_>>(),
             [(1, 1, 1), (29, 2, 1)]
         );
+    }
+
+    #[tokio::test]
+    async fn a_file_moved_into_a_season_folder_is_followed_rather_than_doubled() {
+        // Seen on a real collection: a season folder made after the fact left
+        // every file twice, once where it is and once marked absent for ever.
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Road Show/16 - Wild Run (1959).mp4", b"x");
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media.clone())]).await;
+        scan(&state, &library).await;
+
+        std::fs::create_dir_all(media.join("Road Show/Saison 1")).expect("folder made");
+        std::fs::rename(
+            media.join("Road Show/16 - Wild Run (1959).mp4"),
+            media.join("Road Show/Saison 1/16 - Wild Run (1959).mp4"),
+        )
+        .expect("file moved");
+        let report = scan(&state, &library).await;
+
+        assert_eq!(report.moved, 1);
+        let root = library.roots[0].id;
+        let sources = state.database().sources_of_root(root).await.expect("read");
+        assert_eq!(sources.len(), 1, "one file, written down once");
+        assert!(sources[0].missing_since.is_none());
+        let works = arrangement(&state, &library).await;
+        let episodes = of_kind(&works, WorkKind::Episode);
+        assert_eq!(episodes.len(), 1, "the episode that stood alone is gone");
+        assert!(episodes[0].parent_id.is_some());
     }
 
     #[tokio::test]

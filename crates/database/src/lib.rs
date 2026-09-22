@@ -21,6 +21,7 @@ pub mod images;
 pub mod jobs;
 pub mod libraries;
 pub mod metadata;
+pub mod moved;
 pub mod numbering;
 pub mod playback;
 pub mod sessions;
