@@ -84,6 +84,12 @@
   --gap-wide: 24px;
   --gap-section: 44px;
 
+  /* What the scrollbar below is set to. Named here so anything that has to
+     reach past its own box to run flush with the true edge of the window,
+     the scrollbar's own gutter included, says the same number rather than
+     guessing at what the scrollbar happens to be styled to. */
+  --scrollbar-width: 10px;
+
   /* The interface takes the screen it is given. A column of a fixed width
      centred on a large monitor leaves a band of background down each side,
      and on a screen bought to watch things on that band is the screen. What
@@ -283,8 +289,8 @@ body {
 }
 
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
   background: transparent;
 }
 
