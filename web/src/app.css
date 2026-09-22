@@ -8,19 +8,71 @@
  * ----------------------------------------------------------------------- */
 
 /* The window itself never scrolls. The bar holds the top of the screen and
-   everything under it is one box that scrolls, which is what puts the bar of
-   the scroll under the header rather than behind it. */
+   everything under it is one box that scrolls. */
 .shell {
   height: 100dvh;
   display: flex;
   flex-direction: column;
 }
 
+/* It scrolls without a bar of the browser's own, because a bar of the
+   browser's own keeps a strip of the window to itself and everything in
+   here is cut off before that strip: a banner meant to run to both edges of
+   the screen could never reach the right one. The bar that shows where the
+   page stands is drawn over the top instead, by the interface, and takes no
+   width from anything. */
 .shell-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+.shell-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * The bar that says where in the page somebody is.
+ *
+ * Over the page rather than beside it, so nothing gives up any width to it.
+ * Under the pieces of the header, which are what a hand goes for at the top
+ * right hand corner, and over everything else.
+ */
+.scrollbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  width: var(--scrollbar-width);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--quick) var(--ease);
+}
+
+/* Only where there is more page than screen. */
+.scrollbar-long {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The accent itself, not a shade of it, and inset from both sides by a
+   border it does not paint: that is what leaves it a rounded bar with air
+   around it rather than a stripe stuck to the edge of the glass. */
+.scrollbar-mark {
+  width: 100%;
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  background-clip: content-box;
+  transition: background var(--quick) var(--ease);
+}
+
+.scrollbar-mark:hover {
+  background: var(--accent-bright);
+  background-clip: content-box;
 }
 
 /*
@@ -530,7 +582,13 @@
    surface. Fixed to the window rather than to the page: the page runs on
    for several screens of rows, and a background sized to the page would
    have run out long before the scroll did. Held a step behind ordinary
-   content and taking no press, the same as the door's own. */
+   content and taking no press, the same as the door's own.
+
+   Quieter here than it is at the door, and that is the whole difference
+   between the two screens. The door is one card on an empty screen, so its
+   background can be looked at; this one has the library on it, and anything
+   back there strong enough to be seen as a shape is a shape drawn across
+   somebody's films. */
 .home-backdrop {
   position: fixed;
   inset: 0;
@@ -538,7 +596,23 @@
   overflow: hidden;
   pointer-events: none;
   opacity: 0;
-  animation: door-arrive-slowly 1100ms var(--ease) 200ms forwards;
+  animation: home-drift-arrive 1100ms var(--ease) 200ms forwards;
+}
+
+@keyframes home-drift-arrive {
+  to {
+    opacity: 0.62;
+  }
+}
+
+/* The two arcs stay at the door. They are a drawn edge rather than a wash,
+   which on an empty screen is what gives the light its direction, and here
+   is a long curve ruled clean across the banner and the rows alike: the one
+   piece of the drift that read as a line through the page rather than as
+   light behind it. The washes and the dust stay, because neither has an
+   edge anywhere for the eye to follow. */
+.home-backdrop .door-drift-arc {
+  display: none;
 }
 
 .section {
@@ -652,23 +726,31 @@
   overflow: hidden;
   isolation: isolate;
   background: var(--card-color);
-  border: 1px solid transparent;
   color: var(--text);
   text-decoration: none;
-  transition: transform var(--quick) var(--ease), border-color var(--quick) var(--ease),
-    box-shadow var(--quick) var(--ease);
+  /* The air just off the rim below, one layer of it: these stand several to
+     a row, so what the door's card gets in three widening blooms gets one
+     here. */
+  box-shadow: 0 0 22px -8px color-mix(in srgb, var(--accent) 45%, transparent);
+  transition: transform var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
 }
 
 /* The same ring the search field wears when it is being used: one way of
    saying "this is the thing you are on", everywhere. And the same growing as
    a card and as every button: one gesture for "this comes forward", not a
-   tile that nudges upwards while the posters below it grow. */
+   tile that nudges upwards while the posters below it grow.
+
+   Drawn as a ring outside the tile rather than as a border of its own: a
+   border would take a point off the picture all the way round, and that
+   point of tile colour showing past the rim is exactly what used to read as
+   a second, greyer rim around the first. */
 .band-tile:hover,
 .band-tile:focus-visible {
   transform: scale(1.035);
   z-index: 1;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 0 4px var(--accent-glow);
 }
 
 .band-picture {
@@ -681,16 +763,12 @@
 }
 
 /*
- * The same rim the door's card wears, at a fraction of it.
+ * The rim the door's card wears, on the ways in.
  *
- * These are the ways in, so they are the one set of tiles on the page worth
- * giving an edge of its own: a hairline of accent whose colour turns as it
- * goes round, which is what tells a lit edge from a border.
- *
- * It sits straight over the picture, which is never the same colour twice,
- * so every stop stays close to solid: a rim thinned enough to let much of
- * the picture through reads as red over a dark still and as a washed pink or
- * grey over a light one, which is the picture speaking, not the rim.
+ * The same drawing, stop for stop: one hairline of accent all the way round
+ * whose colour turns as it goes, which is what tells a lit edge from a
+ * border. It sits on the tile's own outside edge, where the door's sits on
+ * the card's, with nothing of the tile left showing past it.
  *
  * It goes out under the pointer: what says "this is the one you are on" is
  * the ring below, and two rims on one tile is one too many.
@@ -699,16 +777,16 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: calc(var(--radius-card) - 1px);
+  border-radius: inherit;
   padding: 1px;
   background: conic-gradient(
     from 128deg,
     color-mix(in srgb, var(--accent-bright) 92%, transparent),
-    color-mix(in srgb, var(--accent) 78%, transparent) 16%,
-    color-mix(in srgb, var(--accent-dim) 80%, transparent) 33%,
-    color-mix(in srgb, var(--accent-bright) 95%, transparent) 54%,
-    color-mix(in srgb, var(--accent) 78%, transparent) 74%,
-    color-mix(in srgb, var(--accent-bright) 90%, transparent)
+    color-mix(in srgb, var(--accent) 54%, transparent) 16%,
+    color-mix(in srgb, var(--accent-dim) 34%, transparent) 33%,
+    color-mix(in srgb, var(--accent-bright) 96%, transparent) 54%,
+    color-mix(in srgb, var(--accent) 52%, transparent) 74%,
+    color-mix(in srgb, var(--accent-bright) 86%, transparent)
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -3227,16 +3305,29 @@ button.seen-mark:not(.seen-mark-on):hover {
    banner is the picture, and a picture with a margin drawn round it is a
    picture in a frame. It is drawn outside the page's own column for exactly
    that, so nothing here has a width to undo. Rounded only underneath, where
-   it meets the page again.
-
-   Its own box runs a scrollbar's width short of the right edge, because the
-   box it is measured against already gave that width up to the bar. Widened
-   by exactly that and pulled back by the same, it reaches the edge the bar
-   sits in rather than stopping short of it. */
+   it meets the page again. */
 .hero {
+  /*
+   * How the picture gives way to the page under it.
+   *
+   * Not a line and not a short feather at the very edge either: it thins out
+   * over the whole of its last third, holding almost full strength at first
+   * and letting go faster the lower it gets, which is the shape light has
+   * when it falls off. Written once here because two layers wear it, the
+   * picture and the wash over it, and a fade the two disagreed about would
+   * be two fades.
+   */
+  --hero-fade: linear-gradient(
+    to bottom,
+    #000 66%,
+    color-mix(in srgb, #000 88%, transparent) 78%,
+    color-mix(in srgb, #000 56%, transparent) 87%,
+    color-mix(in srgb, #000 24%, transparent) 94%,
+    transparent 100%
+  );
+
   position: relative;
-  margin: 0 calc(-1 * var(--scrollbar-width)) 0 0;
-  width: calc(100% + var(--scrollbar-width));
+  margin: 0;
   /* Large enough to be the thing somebody meets, short enough that the first
      row under it is on the screen at the same time: a banner that fills the
      window is a banner that hides the library behind it. The height itself,
@@ -3250,23 +3341,18 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 /* Fades out into what the picture is standing on rather than stopping on a
-   line against it: the picture and the wash over it both go, evenly, over
-   the banner's own last stretch, and what shows through where they thin out
-   is the same drift the rows below are set on. The words and the two ways
-   through the banner are a separate layer and keep their own full strength
-   throughout: nothing here is meant to touch them, only the picture. */
+   line against it, and what shows through where it thins out is the same
+   drift the rows below are set on. The words and the two ways through the
+   banner are a separate layer and keep their own full strength throughout:
+   nothing here is meant to touch them, only the picture. */
 .hero-backdrop {
   position: absolute;
   inset: 0;
   opacity: 0;
   background: var(--card-color);
   transition: opacity 700ms var(--ease);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--gap-section)), transparent);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    #000 calc(100% - var(--gap-section)),
-    transparent
-  );
+  mask-image: var(--hero-fade);
+  -webkit-mask-image: var(--hero-fade);
 }
 
 .hero-backdrop-shown {
@@ -3283,9 +3369,10 @@ button.seen-mark:not(.seen-mark-on):hover {
 /* The words have to be readable over whatever picture is behind them, and a
    picture is never twice the same. Two washes rather than one: sideways for
    the words, upwards so the row under the banner is not cut off by a hard
-   edge. Faded out over the banner's own last stretch along with the picture
-   it sits on, the same distance and for the same reason: what was a solid
-   strip of colour ending on a line now thins out with the picture under it. */
+   edge. It thins out with the picture it sits on, over the same stretch and
+   by the same fade: a solid strip of colour ending on a line is the harder
+   edge of the two, and the two going together is what reads as one picture
+   giving way rather than as two layers ending at once. */
 .hero::after {
   content: "";
   position: absolute;
@@ -3293,12 +3380,8 @@ button.seen-mark:not(.seen-mark-on):hover {
   background:
     linear-gradient(to right, var(--surface-deep) 6%, transparent 62%),
     linear-gradient(to top, var(--surface-deep) 2%, transparent 42%);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--gap-section)), transparent);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    #000 calc(100% - var(--gap-section)),
-    transparent
-  );
+  mask-image: var(--hero-fade);
+  -webkit-mask-image: var(--hero-fade);
   pointer-events: none;
 }
 

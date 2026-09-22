@@ -84,10 +84,9 @@
   --gap-wide: 24px;
   --gap-section: 44px;
 
-  /* What the scrollbar below is set to. Named here so anything that has to
-     reach past its own box to run flush with the true edge of the window,
-     the scrollbar's own gutter included, says the same number rather than
-     guessing at what the scrollbar happens to be styled to. */
+  /* How wide a scrollbar is drawn, the browser's own below and the one the
+     library draws over its own page alike, so the two are never a point
+     apart from each other. */
   --scrollbar-width: 10px;
 
   /* The interface takes the screen it is given. A column of a fixed width
