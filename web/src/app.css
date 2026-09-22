@@ -81,34 +81,17 @@
 
 .brand {
   gap: 10px;
-  padding: 0 18px 0 9px;
+  padding: 0 12px 0 4px;
   font-weight: 700;
   font-size: 17px;
 }
 
-/* The one press that undoes whatever brought this page up. Square rather
-   than the width the brand takes, since it carries a single mark and no
-   name beside it, which is what makes the pill round instead of oblong. */
-.header-back {
-  justify-content: center;
-  width: var(--header-piece);
-  padding: 0;
-  color: var(--text-soft);
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
-}
-
-.header-back:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-/* The way back one page, and the way back to the front page: kept as one
-   group so the space between the two ends of the bar still falls in one
-   place rather than being split by whichever of the two happens to show. */
+/* The way back one page, and the way back to the front page: one bubble,
+   since both are ways out of wherever the page currently is. The back press
+   itself is drawn as a plain header-icon, the same as any other single mark
+   on the bar. */
 .header-start {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
+  padding-left: 5px;
 }
 
 /* The name of the server, and the way back to its front page: there is no
@@ -118,7 +101,6 @@
   font-family: "Melyxar Display", "Inter", sans-serif;
   font-size: 19px;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 

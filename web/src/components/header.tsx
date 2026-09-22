@@ -184,13 +184,13 @@ export function Header({ libraries }: { libraries: Library[] }) {
   return (
     <header className="header">
       <div className="header-inner">
-        <div className="header-start">
+        <div className="header-piece header-start">
           {/* Off the front page only: there is nowhere to come back from
               there, and the brand right next to it already leads home. */}
           {location.pathname !== "/" && (
             <button
               type="button"
-              className="header-piece header-back"
+              className="header-icon"
               onClick={() => navigate(-1)}
               title={t("nav.back")}
               aria-label={t("nav.back")}
@@ -198,7 +198,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
               <BackIcon size={20} />
             </button>
           )}
-          <Link className="header-piece brand" to="/">
+          <Link className="brand" to="/">
             {/* Decorative: the name is written right next to it, and an
                 image announced twice over is exactly what a screen reader
                 must not have to hear. */}
