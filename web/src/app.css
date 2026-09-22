@@ -222,16 +222,20 @@
     box-shadow var(--calm) var(--ease);
 }
 
+/* Open, the field is part of the bar rather than a box standing on it: no
+   wash of its own, no rim, nothing but the room it takes and the rule
+   between the words and what they are narrowed to. A box inside a piece of
+   glass is a piece of glass inside a piece of glass. */
 .search-open {
   gap: 4px;
-  background: color-mix(in srgb, var(--surface-deep) 55%, transparent);
-  box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.search-open:focus-within {
-  box-shadow:
-    inset 0 0 0 1px var(--accent),
-    0 0 0 3px var(--accent-glow);
+/* Where the cursor is, said with a line under the words rather than a ring
+   around them. Said at all, because the ring was the only thing saying it
+   and a field that answers the keyboard with nothing is a field nobody can
+   use without a pointer. */
+.search-open:focus-within input {
+  box-shadow: 0 1px 0 var(--accent);
 }
 
 /* The magnifier goes on carrying the accent it wears while the field is open,
@@ -341,11 +345,35 @@
    shared. */
 .header-account {
   margin-left: var(--gap-tight);
+  padding-left: var(--gap-tight);
 }
 
+/* A rule between who is here and everything that is not. The two ends of
+   this piece do different jobs, and a hairline says so where a gap of air
+   was only saying that the icons had run out. */
+.header-account::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 18%;
+  bottom: 18%;
+  width: 1px;
+  background: var(--border);
+}
+
+/* And no wash under the name, under the pointer or with the list open: the
+   piece it sits on is already glass, and a second one lit inside it is a
+   pill floating in a pill. What answers the pointer is the wording coming
+   up to full strength, as it does on every other name in this bar. */
 .header-account > .header-link {
   gap: 9px;
   padding: 3px 8px 3px 3px;
+}
+
+.header-account > .header-link:hover,
+.header-account > .header-link-on {
+  background: none;
+  color: var(--text);
 }
 
 .header-who {
@@ -434,9 +462,13 @@
   color: var(--text);
 }
 
+/* Dimmed once, not twice. It was a faint colour at a little over half
+   opacity, which on a dark still reads as off and over a bright one reads as
+   nothing at all: the bar is glass, so what is behind it is whatever is
+   playing. The colour alone tells it from the ones that work, and it
+   survives being held over a white sky. */
 .header-icon:disabled {
   color: var(--text-faint);
-  opacity: 0.55;
   cursor: not-allowed;
 }
 
