@@ -53,11 +53,11 @@ export interface Picture {
   height: number | null;
 }
 
-export type WorkKind = "movie" | "series" | "season" | "episode";
+export type WorkKind = "movie" | "series" | "season" | "episode" | "folder" | "video" | "photo";
 
 /** What a library holds, which is what the header's categories are built
     from: a kind with no library of it is a category that does not exist. */
-export type LibraryKind = "movies" | "series" | "anime" | "shows" | "music";
+export type LibraryKind = "movies" | "series" | "anime" | "shows" | "home_media" | "music";
 
 export type Seen = "not_started" | "in_progress" | "watched";
 
@@ -67,7 +67,9 @@ export interface Card {
   year: number | null;
   runtime_minutes: number | null;
   rating: number | null;
-  identification: "pending" | "identified" | "unidentified" | "manual";
+  /* "own" is what somebody filmed or photographed themselves: in no
+     catalogue, and waiting for none. */
+  identification: "pending" | "identified" | "unidentified" | "manual" | "own";
   /* Why the last look up failed, when one has run. Absent for a film nobody
      has looked up yet, which is itself the answer. */
   identification_note: IdentificationNote | null;
@@ -444,10 +446,11 @@ export interface Trailer {
   url: string | null;
 }
 
-/** One work hanging under another: a season of a series, an episode of a season. */
+/** One work hanging under another: a season of a series, an episode of a
+ *  season, what a folder of one's own holds. */
 export interface Child {
   id: string;
-  kind: "season" | "episode";
+  kind: "season" | "episode" | "folder" | "video" | "photo";
   /** The season number, the episode number. */
   number: number | null;
   /** The name it carries today. A page shows the number in the language it is
@@ -540,6 +543,10 @@ export interface Work {
    *  it. Absent for anything that is not an episode, and for the first
    *  episode of a series. */
   previous_episode: NextEpisode | null;
+  /** The photos before and after this one in its folder. Absent for anything
+   *  that is not a photo, and at either end of the folder. */
+  previous_photo: string | null;
+  next_photo: string | null;
 }
 
 export interface Job {

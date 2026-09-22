@@ -149,6 +149,19 @@ export function ShowsIcon(props: IconProps) {
   );
 }
 
+/** A photo of a hill under the sun, for what people filmed and photographed
+ *  themselves. */
+export function HomeMediaIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <path d="M15 8h.01" />
+      <path d="M3 16l5-5c.93-.9 2.07-.9 3 0l5 5" />
+      <path d="M14 14l1-1c.93-.9 2.07-.9 3 0l3 3" />
+    </Icon>
+  );
+}
+
 export function MusicIcon(props: IconProps) {
   return (
     <Icon {...props}>
@@ -174,6 +187,8 @@ export function KindIcon({ kind, ...props }: IconProps & { kind: LibraryKind }) 
       return <AnimeIcon {...props} />;
     case "shows":
       return <ShowsIcon {...props} />;
+    case "home_media":
+      return <HomeMediaIcon {...props} />;
     case "music":
       return <MusicIcon {...props} />;
     default:

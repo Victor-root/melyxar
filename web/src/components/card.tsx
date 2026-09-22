@@ -23,6 +23,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
+import { playsOnItsOwn } from "../works";
 import { useShownPicture } from "./picture";
 import { CardMenu } from "./cardmenu";
 import { IdentifyDialog } from "./identify";
@@ -106,7 +107,7 @@ export function Card({
   const favourite = marks.favouriteOf(card);
   /* A series is opened rather than played: what a play button on one would
      mean is the next episode, which is what the row of them is for. */
-  const playable = card.source !== null && card.kind !== "series";
+  const playable = playsOnItsOwn(card);
   const howFar =
     watched ??
     (card.resume_from_seconds !== null && card.runtime_minutes

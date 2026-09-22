@@ -5,6 +5,7 @@
 import type { Library } from "../api";
 import { Card } from "../components/card";
 import { Grid } from "../components/grid";
+import { cardShapeOf } from "../libraries";
 import { ORDERS, useBrowsing } from "../screens/browsing";
 import { useSettings } from "../settings";
 
@@ -14,6 +15,10 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
   const { order, descending, genre, decade, search, unidentified, initial, favourites } =
     narrowing;
   const library = libraries.find((entry) => entry.id === narrowing.library);
+  const shape = cardShapeOf(library?.kind ?? narrowing.kind);
+  /* What somebody filmed themselves is never waiting for a name, so there is
+     nothing to narrow to. */
+  const awaitsNames = library?.kind !== "home_media" && narrowing.kind !== "home_media";
 
   return (
     <main className="page">
@@ -88,13 +93,15 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
           </label>
         )}
 
-        <button
-          className={`toggle ${unidentified ? "toggle-on" : ""}`}
-          onClick={() => choose("unidentified", unidentified ? null : "true")}
-          aria-pressed={unidentified}
-        >
-          {t("library.filter.unidentified")}
-        </button>
+        {awaitsNames && (
+          <button
+            className={`toggle ${unidentified ? "toggle-on" : ""}`}
+            onClick={() => choose("unidentified", unidentified ? null : "true")}
+            aria-pressed={unidentified}
+          >
+            {t("library.filter.unidentified")}
+          </button>
+        )}
       </div>
 
       {failed && <p className="notice">{t("error.unreachable")}</p>}
@@ -106,9 +113,9 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
           to scroll through and too short to search by hand every time, and the
           letter is the one thing anybody remembers about a title. */}
       <div className="grid-with-letters">
-        <Grid onReachEnd={loadMore} hasMore={more}>
+        <Grid onReachEnd={loadMore} hasMore={more} shape={shape}>
           {cards.map((card) => (
-            <Card key={card.id} card={card} />
+            <Card key={card.id} card={card} shape={shape} />
           ))}
         </Grid>
 

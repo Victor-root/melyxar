@@ -25,6 +25,7 @@ import type { Card } from "../api";
 import { useAccount } from "../account";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
+import { isCatalogued, playsOnItsOwn } from "../works";
 import {
   CollectionIcon,
   DeleteIcon,
@@ -155,7 +156,8 @@ export function CardMenu({
   const seen = marks.seenOf(card);
   const favourite = marks.favouriteOf(card);
   const pinned = marks.pinnedOf(card) === true;
-  const playable = card.source !== null && card.kind !== "series";
+  const playable = playsOnItsOwn(card);
+  const catalogued = isCatalogued(card.identification);
 
   const entries: Entry[] = [
     {
@@ -198,7 +200,7 @@ export function CardMenu({
     {
       key: "edit_images",
       mark: <ImageIcon size={SHAPE} />,
-      allowed: account?.is_administrator === true,
+      allowed: account?.is_administrator === true && catalogued,
       act: onEditImages,
     },
     {
@@ -210,7 +212,7 @@ export function CardMenu({
     {
       key: "identify",
       mark: <IdentifyIcon size={SHAPE} />,
-      allowed: account?.is_administrator === true,
+      allowed: account?.is_administrator === true && catalogued,
       act: onIdentify,
     },
     {

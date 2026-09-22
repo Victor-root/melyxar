@@ -12,6 +12,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Child, Credit, Version, Work } from "../api";
 import { useTold } from "../asking";
+import { WayBackUp } from "../components/ancestry";
 import { IdentifyDialog } from "../components/identify";
 import {
   howMany,
@@ -27,6 +28,8 @@ import { useSettings } from "../settings";
 import { useShownPicture } from "../components/picture";
 import { Player } from "../player/player";
 import { TrailerPlayer } from "../player/trailer";
+import { isCatalogued, isNamed } from "../works";
+import { FolderView, PhotoView } from "./own";
 
 export function WorkPage() {
   const { id } = useParams();
@@ -96,6 +99,14 @@ export function WorkPage() {
      and it used to flash past them on the way to the film. */
   if (!work || openingToPlay) {
     return <main className="page" aria-busy="true" />;
+  }
+  /* What somebody filmed or photographed themselves has pages of its own: a
+     folder is what it holds, and a photo is looked at rather than played. */
+  if (work.kind === "folder") {
+    return <FolderView work={work} />;
+  }
+  if (work.kind === "photo") {
+    return <PhotoView work={work} />;
   }
 
   const { here, away } = onOffer;
@@ -184,17 +195,7 @@ export function WorkPage() {
         </div>
 
         <div className="work-body">
-          {/* The way back up, drawn before anything else, out of what came
-              with the page rather than out of a second question. */}
-          {work.ancestry.length > 0 && (
-            <nav className="work-ancestry">
-              {[...work.ancestry].reverse().map((up) => (
-                <Link key={up.id} to={`/work/${up.id}`} className="work-ancestor">
-                  {nameOfOne(up.kind, up.number, up.title, t) || up.title}
-                </Link>
-              ))}
-            </nav>
-          )}
+          <WayBackUp work={work} />
           <h1 className="work-title">{heading}</h1>
           {work.tagline && <p className="work-tagline">{work.tagline}</p>}
 
@@ -204,7 +205,7 @@ export function WorkPage() {
                 {fact}
               </span>
             ))}
-            {work.identification !== "identified" && work.identification !== "manual" && (
+            {!isNamed(work.identification) && (
               <span className="fact fact-warning">{t("work.unidentified")}</span>
             )}
           </div>
@@ -283,7 +284,8 @@ export function WorkPage() {
           </div>
           )}
 
-          <Synopsis text={work.overview} />
+          {/* A video of one's own has no synopsis to be missing. */}
+          {isCatalogued(work.identification) && <Synopsis text={work.overview} />}
 
           {holdsOthers && <CarryOn work={work} />}
 

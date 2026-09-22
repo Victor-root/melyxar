@@ -10,16 +10,19 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
+import type { CardShape } from "./card";
 
 interface GridProps {
   children: ReactNode;
+  /** The shape of the cards it holds, which sets how wide a column is. */
+  shape?: CardShape;
   /** Called when the viewer nears the end, to fetch what follows. */
   onReachEnd?: () => void;
   /** Whether there is anything left to fetch. */
   hasMore?: boolean;
 }
 
-export function Grid({ children, onReachEnd, hasMore }: GridProps) {
+export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: GridProps) {
   const grid = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
@@ -92,7 +95,7 @@ export function Grid({ children, onReachEnd, hasMore }: GridProps) {
 
   return (
     <>
-      <div className="grid" ref={grid} onKeyDown={onKeyDown}>
+      <div className={`grid grid-${shape}`} ref={grid} onKeyDown={onKeyDown}>
         {children}
       </div>
       <div ref={sentinel} aria-hidden="true" />

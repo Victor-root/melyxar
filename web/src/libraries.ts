@@ -17,12 +17,18 @@ import { createContext, useContext } from "react";
 import { api } from "./api";
 import { useAsked } from "./asking";
 import type { Library, LibraryKind } from "./api";
+import type { CardShape } from "./components/card";
 
 export interface Libraries {
   all: Library[];
   /** Told to look again now, after declaring one or taking one away. */
   refresh: () => void;
 }
+
+/** Every kind a library can be, in the order they are offered and read in:
+ *  the choice when one is declared, the categories of the bar at the top, the
+ *  kinds a search may be narrowed to. */
+export const KINDS: LibraryKind[] = ["movies", "series", "anime", "shows", "home_media", "music"];
 
 export const LibrariesContext = createContext<Libraries>({
   all: [],
@@ -97,6 +103,13 @@ export function movedOnTheHomePage(
   [swapped[from], swapped[to]] = [swapped[to], swapped[from]];
   let next = 0;
   return order.map((one) => (shown.includes(one) ? swapped[next++] : one));
+}
+
+/** How the cards of a kind are laid out: on their side for what somebody
+ *  filmed and photographed themselves, which is mostly wider than tall and
+ *  has no poster standing up; standing for everything else. */
+export function cardShapeOf(kind: LibraryKind | undefined): CardShape {
+  return kind === "home_media" ? "lying" : "standing";
 }
 
 /** How many works a category holds, over every library of that kind. */
