@@ -25,7 +25,8 @@
  * that is there and says when tells the truth about where this is going.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Link,
   NavLink,
@@ -366,13 +367,16 @@ export function Header({ libraries }: { libraries: Library[] }) {
               </>
             )}
 
-            {/* No engine behind this one yet either, and it says so here in
-                words rather than in what the mouse is told: there is room
-                for the sentence in a menu, and there was none on the bar. */}
-            <span className="header-menu-line header-menu-later" aria-disabled="true">
+            {/* No engine behind this one yet either. Greyed, and when it is
+                coming is what the mouse is told rather than a second run of
+                words down the side of the list. */}
+            <span
+              className="header-menu-line header-menu-later"
+              aria-disabled="true"
+              title={t("nav.later")}
+            >
               <ScreenCastIcon size={16} />
               {t("nav.cast")}
-              <span className="header-menu-when">{t("nav.later")}</span>
             </span>
 
             <NavLink to="/settings" className="header-menu-line">
@@ -494,6 +498,14 @@ function ScopeLine({
  *
  * Closes on a click anywhere else and on the escape key, which are the two
  * ways anybody ever tries to close one.
+ *
+ * The list is drawn at the end of the page rather than inside the bar, and
+ * placed against the window by hand. That is not a preference: the pieces
+ * of the bar are frosted glass, and an element that frosts what is behind
+ * it becomes the backdrop of everything inside it. A list that frosts the
+ * page from in there frosts the inside of its own piece, which is nothing
+ * at all, and comes out as clear glass over whatever film is playing
+ * underneath. Outside it, there is a page behind it to frost.
  */
 function Dropdown({
   label,
@@ -511,13 +523,37 @@ function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const holder = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  /** Where the list goes: under what opened it, and ending where it ends. */
+  const [under, setUnder] = useState({ top: 0, right: 0 });
+
+  /* Measured when it opens and again if the window changes shape. The bar it
+     hangs from is fixed to the window, so a page scrolled underneath moves
+     nothing here. */
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+    const place = () => {
+      const it = holder.current?.getBoundingClientRect();
+      if (it) {
+        setUnder({ top: it.bottom + 6, right: Math.max(window.innerWidth - it.right, 0) });
+      }
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
+    /* The list is no longer inside what opened it, so a press in it is a
+       press outside as far as the page is concerned: both are asked. */
     const elsewhere = (event: MouseEvent) => {
-      if (!holder.current?.contains(event.target as Node)) {
+      const on = event.target as Node;
+      if (!holder.current?.contains(on) && !list.current?.contains(on)) {
         setOpen(false);
       }
     };
@@ -554,11 +590,18 @@ function Dropdown({
         {label}
         <ChevronDownIcon size={15} />
       </button>
-      {open && (
-        <div className="header-menu-list" onClick={() => setOpen(false)}>
-          {children}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            className="header-menu-list"
+            ref={list}
+            style={{ top: under.top, right: under.right }}
+            onClick={() => setOpen(false)}
+          >
+            {children}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
