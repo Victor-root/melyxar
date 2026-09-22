@@ -72,6 +72,9 @@ argon2 = "0.6"
 # single request, segment of video included.
 sha2 = "0.11"
 getrandom = "0.4"
+# Reads which way up a photo is meant to be seen, which a camera writes into
+# the file rather than into its pixels.
+kamadak-exif = "0.6"
 
 [profile.release]
 opt-level = 3

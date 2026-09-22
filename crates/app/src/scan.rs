@@ -43,6 +43,9 @@ pub struct ScanReport {
     pub moved: usize,
     pub unchanged: usize,
     pub analysed: usize,
+    /// Videos and photos somebody filmed or took themselves given a picture
+    /// taken out of the file.
+    pub pictured: usize,
     /// Files the analyser could not read. Recorded rather than hidden: a file
     /// nobody can analyse is a file nobody will be able to play either.
     pub unreadable_files: usize,
@@ -75,6 +78,7 @@ impl ScanReport {
             || self.missing > 0
             || self.restored > 0
             || self.moved > 0
+            || self.pictured > 0
             || self.renamed > 0
             || self.merged > 0
     }
@@ -369,6 +373,10 @@ pub async fn scan_library(
     report.renamed = reread.renamed;
     report.merged = reread.merged;
     analyse_pending(state, library, handle, &mut report).await?;
+    // After the analysis, which is what says where in a video its picture is.
+    if library.kind == LibraryKind::HomeMedia {
+        report.pictured = crate::own::picture_what_has_none(state, library, handle).await?;
+    }
 
     // The two readings that go through every film from end to end are not part
     // of a scan, whether or not this library asks for them: they follow the
@@ -396,6 +404,7 @@ pub async fn scan_library(
         moved = report.moved,
         unchanged = report.unchanged,
         analysed = report.analysed,
+        pictured = report.pictured,
         extras = report.extras,
         subtitles = report.external_subtitles,
         cancelled = report.cancelled,
@@ -2968,6 +2977,76 @@ mod tests {
             crate::upkeep::start_what_is_waiting(&state, JobPriority::REQUESTED).await,
             0,
             "nothing is waiting, so no job that would end on the spot is started"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_video_and_a_photo_of_ones_own_are_pictured_out_of_themselves() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let media = directory.path().join("family");
+        std::fs::create_dir_all(media.join("Summer")).expect("the media folder");
+        let photo = media.join("Summer/beach.jpg");
+        let made = Command::new("ffmpeg")
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=640x480",
+                "-frames:v",
+                "1",
+            ])
+            .arg(&photo)
+            .output();
+        if !made.is_ok_and(|output| output.status.success())
+            || !write_real_video(&media.join("Summer/birthday.mp4"))
+        {
+            eprintln!("no media tool here, the pictures were not exercised");
+            return;
+        }
+
+        let (state, library) = state_of_kind(
+            directory.path(),
+            vec![("disk-one", media)],
+            false,
+            "home_media",
+        )
+        .await;
+        let report = scan(&state, &library).await;
+        assert_eq!(report.pictured, 2, "{report:?}");
+
+        for work in arrangement(&state, &library)
+            .await
+            .iter()
+            .filter(|work| work.kind != WorkKind::Folder)
+        {
+            let pictures = state
+                .database()
+                .images_of("work", &work.id.to_db_string())
+                .await
+                .expect("read");
+            assert!(!pictures.is_empty(), "{} has a picture", work.title);
+            assert!(pictures
+                .iter()
+                .all(|picture| picture.image_kind == "poster"));
+            assert!(pictures.iter().all(|picture| picture.width <= Some(640)));
+            for picture in &pictures {
+                assert!(state
+                    .config()
+                    .directories
+                    .images()
+                    .join(&picture.relative_path)
+                    .exists());
+            }
+        }
+
+        assert_eq!(
+            scan(&state, &library).await.pictured,
+            0,
+            "a file already pictured is not pictured again"
         );
     }
 

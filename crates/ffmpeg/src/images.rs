@@ -11,6 +11,8 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::process::Stdio;
 
+use melyxar_core::orientation::Orientation;
+use melyxar_core::time::Millis;
 use tokio::process::Command as TokioCommand;
 
 use crate::{FfmpegError, Result};
@@ -149,6 +151,90 @@ pub async fn average_colour(tool: &Path, source: &Path) -> Result<String> {
     })
 }
 
+/// Builds the taking of one picture, the right way up, out of a file somebody
+/// filmed or photographed themselves.
+///
+/// Out of a video, the picture at that moment, which the tool turns on its
+/// own when the video says it was filmed on its side. Out of a photo, the
+/// photo, turned the way its camera said: the tool is told not to turn it
+/// itself, so that no version of it that has learnt to read the camera's note
+/// turns it twice.
+///
+/// Written whole and without loss, since it is only what the sizes a card is
+/// shown at are made from.
+pub fn upright_picture_arguments(
+    source: &Path,
+    at: Option<Millis>,
+    orientation: Orientation,
+    destination: &Path,
+) -> Vec<OsString> {
+    let mut arguments = vec![
+        OsString::from("-hide_banner"),
+        OsString::from("-loglevel"),
+        OsString::from("error"),
+        OsString::from("-y"),
+    ];
+    match at {
+        Some(moment) => {
+            arguments.push(OsString::from("-ss"));
+            arguments.push(OsString::from(format!("{:.3}", moment.as_seconds_f64())));
+        }
+        None => arguments.push(OsString::from("-noautorotate")),
+    }
+    arguments.push(OsString::from("-i"));
+    arguments.push(source.as_os_str().to_os_string());
+    if let Some(turn) = turn_of(orientation) {
+        arguments.push(OsString::from("-vf"));
+        arguments.push(OsString::from(turn));
+    }
+    arguments.extend([
+        OsString::from("-frames:v"),
+        OsString::from("1"),
+        OsString::from("-c:v"),
+        OsString::from("png"),
+        destination.as_os_str().to_os_string(),
+    ]);
+    arguments
+}
+
+/// The filter that turns a photo the way its camera said.
+fn turn_of(orientation: Orientation) -> Option<&'static str> {
+    match orientation {
+        Orientation::AsStored => None,
+        Orientation::Mirrored => Some("hflip"),
+        Orientation::UpsideDown => Some("hflip,vflip"),
+        Orientation::MirroredUpsideDown => Some("vflip"),
+        Orientation::Transposed => Some("transpose=cclock_flip"),
+        Orientation::TurnedRight => Some("transpose=clock"),
+        Orientation::Transversed => Some("transpose=clock_flip"),
+        Orientation::TurnedLeft => Some("transpose=cclock"),
+    }
+}
+
+/// Takes one picture, the right way up, out of a video or a photo.
+pub async fn upright_picture(
+    tool: &Path,
+    source: &Path,
+    at: Option<Millis>,
+    orientation: Orientation,
+    destination: &Path,
+) -> Result<()> {
+    let output = TokioCommand::new(tool)
+        .args(upright_picture_arguments(
+            source,
+            at,
+            orientation,
+            destination,
+        ))
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+    if !output.status.success() {
+        return Err(FfmpegError::from_output("ffmpeg", &output));
+    }
+    Ok(())
+}
+
 /// Turns three bytes into the form a stylesheet takes.
 fn to_hex(pixel: &[u8]) -> Option<String> {
     let [red, green, blue] = pixel.get(..3)? else {
@@ -265,6 +351,48 @@ mod tests {
             line.ends_with('-'),
             "the pixel comes back on the output rather than through a file: {line}"
         );
+    }
+
+    #[test]
+    fn a_photo_is_turned_by_what_its_camera_said_and_never_twice() {
+        let photo = rendered(&upright_picture_arguments(
+            Path::new("/media/beach.jpg"),
+            None,
+            Orientation::TurnedRight,
+            Path::new("/cache/upright.png"),
+        ));
+        assert!(
+            photo.contains("-noautorotate -i /media/beach.jpg"),
+            "{photo}"
+        );
+        assert!(photo.contains("-vf transpose=clock"), "{photo}");
+
+        let untouched = rendered(&upright_picture_arguments(
+            Path::new("/media/beach.jpg"),
+            None,
+            Orientation::AsStored,
+            Path::new("/cache/upright.png"),
+        ));
+        assert!(!untouched.contains("-vf"), "{untouched}");
+    }
+
+    #[test]
+    fn a_video_gives_the_picture_at_the_moment_asked_turned_by_the_tool() {
+        let video = rendered(&upright_picture_arguments(
+            Path::new("/media/birthday.mp4"),
+            Some(Millis::new(12_500)),
+            Orientation::AsStored,
+            Path::new("/cache/upright.png"),
+        ));
+        assert!(
+            video.contains("-ss 12.500 -i /media/birthday.mp4"),
+            "{video}"
+        );
+        assert!(
+            !video.contains("-noautorotate"),
+            "a video filmed on its side is turned by the tool itself: {video}"
+        );
+        assert!(video.ends_with("-frames:v 1 -c:v png /cache/upright.png"));
     }
 
     #[test]

@@ -15,6 +15,7 @@ pub mod companion;
 pub mod episode;
 pub mod folders;
 pub mod naming;
+pub mod orientation;
 pub mod scan;
 pub mod sidecar;
 

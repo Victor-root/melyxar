@@ -5,12 +5,32 @@
 //! what was put in it. Both are written down as their own from the start:
 //! nothing will ever look them up, so nothing is waiting.
 
+use std::path::PathBuf;
+
 use melyxar_core::id::{LibraryId, WorkId};
+use melyxar_core::time::Millis;
 use melyxar_core::work::{IdentificationState, Work, WorkKind};
-use sqlx::AssertSqlSafe;
+use sqlx::{AssertSqlSafe, Row};
 
 use crate::catalogue::{insert_work, what_a_work_is, work_from_row, Placed};
-use crate::{Database, Result};
+use crate::convert::parse_id;
+use crate::{Database, DatabaseError, Result};
+
+/// A video or a photo whose card has no picture made the way pictures are
+/// made today, with what its picture is made from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnFileToPicture {
+    pub work_id: WorkId,
+    pub kind: WorkKind,
+    /// Where the file is, root included.
+    pub path: PathBuf,
+    /// How long a video runs, which says where its picture is taken.
+    pub duration: Option<Millis>,
+    /// What says which state of the file the picture was made from: where it
+    /// is, how large it is and when it last changed. A file changed on the
+    /// disk is pictured again.
+    pub made_from: String,
+}
 
 impl Database {
     /// The folder of that name inside another, or at the root of the
@@ -88,13 +108,268 @@ impl Database {
     }
 }
 
+impl Database {
+    /// The videos and photos of a library of home media whose card has no
+    /// picture made by `recipe`, the way pictures are prepared today.
+    ///
+    /// A video is only offered once it has been analysed, since where its
+    /// picture is taken depends on how long it runs. A photo is offered as
+    /// soon as it is found. A file that is not on the disk is not offered.
+    pub async fn own_files_to_picture(
+        &self,
+        library_id: LibraryId,
+        recipe: &str,
+    ) -> Result<Vec<OwnFileToPicture>> {
+        let rows = sqlx::query(
+            "SELECT w.id, w.kind, r.path AS root_path, s.relative_path, s.duration_ms,
+                    s.size_bytes, s.modified_at
+               FROM works w
+               JOIN media_sources s ON s.work_id = w.id
+               JOIN library_roots r ON r.id = s.root_id
+              WHERE w.library_id = ?
+                AND w.kind IN ('video', 'photo')
+                AND s.missing_since IS NULL
+                AND (w.kind = 'photo' OR s.analysed_at IS NOT NULL)
+                AND NOT EXISTS (
+                    SELECT 1 FROM images i
+                     WHERE i.owner_kind = 'work' AND i.owner_id = w.id
+                       AND i.image_kind = 'poster' AND i.fingerprint LIKE ?)
+              ORDER BY w.added_at",
+        )
+        .bind(library_id.to_db_string())
+        .bind(format!("{recipe}-%"))
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                let kind_text: String = row.try_get("kind")?;
+                let relative_path: String = row.try_get("relative_path")?;
+                let size_bytes: i64 = row.try_get("size_bytes")?;
+                let modified_at: String = row.try_get("modified_at")?;
+                Ok(OwnFileToPicture {
+                    work_id: parse_id(&row.try_get::<String, _>("id")?)?,
+                    kind: WorkKind::parse(&kind_text).ok_or_else(|| {
+                        DatabaseError::Corrupt(format!("work kind '{kind_text}'"))
+                    })?,
+                    path: PathBuf::from(row.try_get::<String, _>("root_path")?)
+                        .join(&relative_path),
+                    duration: row
+                        .try_get::<Option<i64>, _>("duration_ms")?
+                        .map(Millis::new),
+                    made_from: format!("{relative_path}|{size_bytes}|{modified_at}"),
+                })
+            })
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
+    use crate::catalogue::SourceAnalysis;
     use melyxar_core::library::LibraryKind;
+    use melyxar_core::time::now;
 
     use super::*;
+    use crate::images::StoredImage;
+
+    #[tokio::test]
+    async fn what_is_left_to_picture_is_each_file_without_a_picture_of_today() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Family",
+                LibraryKind::HomeMedia,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Family"))],
+            )
+            .await
+            .expect("library created");
+        let root = library.roots[0].id;
+        let a_file = |kind: WorkKind, name: &'static str| {
+            let database = &database;
+            async move {
+                let work = database
+                    .create_own_work(library.id, None, kind, name, name)
+                    .await
+                    .expect("written");
+                let source = database
+                    .insert_source(work.id, root, &PathBuf::from(name), 42, now())
+                    .await
+                    .expect("recorded");
+                (work.id, source)
+            }
+        };
+
+        let (photo, _) = a_file(WorkKind::Photo, "beach.jpg").await;
+        let (clip, clip_source) = a_file(WorkKind::Video, "birthday.mp4").await;
+        let (_, gone_source) = a_file(WorkKind::Photo, "gone.jpg").await;
+        database
+            .mark_source_missing(gone_source)
+            .await
+            .expect("marked");
+
+        let waiting = |recipe: &'static str| {
+            let database = &database;
+            async move {
+                database
+                    .own_files_to_picture(library.id, recipe)
+                    .await
+                    .expect("read")
+                    .into_iter()
+                    .map(|file| file.work_id)
+                    .collect::<Vec<_>>()
+            }
+        };
+        assert_eq!(
+            waiting("b5").await,
+            vec![photo],
+            "a video waits for its length to be known, and a file gone waits for nothing"
+        );
+
+        database
+            .store_analysis(
+                clip_source,
+                &SourceAnalysis {
+                    container: Some("mov,mp4".to_string()),
+                    duration: Some(Millis::new(60_000)),
+                    overall_bitrate: None,
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysed");
+        let listed = database
+            .own_files_to_picture(library.id, "b5")
+            .await
+            .expect("read");
+        let video = listed
+            .iter()
+            .find(|file| file.work_id == clip)
+            .expect("the video is offered once analysed");
+        assert_eq!(video.duration, Some(Millis::new(60_000)));
+        assert_eq!(video.path, PathBuf::from("/mnt/one/Family/birthday.mp4"));
+        assert!(video.made_from.starts_with("birthday.mp4|42|"));
+
+        database
+            .replace_images(
+                "work",
+                &photo.to_db_string(),
+                "poster",
+                &[StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: photo.to_db_string(),
+                    image_kind: "poster".to_string(),
+                    relative_path: "works/x/poster-400.webp".to_string(),
+                    width: Some(400),
+                    height: Some(300),
+                    fingerprint: "b5-abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("pictured");
+        assert_eq!(waiting("b5").await, vec![clip]);
+        assert_eq!(
+            waiting("b6").await.len(),
+            2,
+            "a picture made another way is made again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_folder_is_shown_with_the_first_picture_found_inside_it() {
+        let (database, library_id) = library().await;
+        let a_picture = |work: WorkId, name: &'static str| {
+            let database = &database;
+            async move {
+                database
+                    .replace_images(
+                        "work",
+                        &work.to_db_string(),
+                        "poster",
+                        &[StoredImage {
+                            owner_kind: "work".to_string(),
+                            owner_id: work.to_db_string(),
+                            image_kind: "poster".to_string(),
+                            relative_path: format!("works/{name}-400.webp"),
+                            width: Some(400),
+                            height: Some(300),
+                            fingerprint: name.to_string(),
+                            dominant_color: None,
+                        }],
+                    )
+                    .await
+                    .expect("pictured");
+            }
+        };
+        let a_photo = |folder: WorkId, name: &'static str| {
+            let database = &database;
+            async move {
+                database
+                    .create_own_work(library_id, Some(folder), WorkKind::Photo, name, name)
+                    .await
+                    .expect("written")
+                    .id
+            }
+        };
+
+        let summer = database
+            .own_folder(library_id, None, "Summer", "summer")
+            .await
+            .expect("written");
+        let deeper = database
+            .own_folder(library_id, Some(summer.id), "Beach", "beach")
+            .await
+            .expect("written");
+        let inside = a_photo(deeper.id, "a-sunset").await;
+        a_picture(inside, "sunset").await;
+        // Nearer the top than the sunset, and further down the alphabet: it
+        // still comes first, being in the folder itself.
+        let near = a_photo(summer.id, "z-harbour").await;
+        a_picture(near, "harbour").await;
+        // A photo with no picture yet lends nothing.
+        a_photo(summer.id, "b-unpictured").await;
+
+        let only_deep = database
+            .own_folder(library_id, None, "Winter", "winter")
+            .await
+            .expect("written");
+        let hidden = database
+            .own_folder(library_id, Some(only_deep.id), "Snow", "snow")
+            .await
+            .expect("written");
+        let snowman = a_photo(hidden.id, "snowman").await;
+        a_picture(snowman, "snowman").await;
+
+        let page = database
+            .browse_works(&crate::browse::BrowseRequest {
+                library_id: Some(library_id),
+                limit: 20,
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        let shown = |title: &str| {
+            page.cards
+                .iter()
+                .find(|card| card.title == title)
+                .expect("the folder is at the root")
+                .poster
+                .iter()
+                .map(|picture| picture.fingerprint.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(shown("Summer"), ["harbour"]);
+        assert_eq!(
+            shown("Winter"),
+            ["snowman"],
+            "a folder holding only folders shows what is further in"
+        );
+    }
 
     async fn library() -> (Database, LibraryId) {
         let database = Database::open_in_memory().await.expect("database opens");

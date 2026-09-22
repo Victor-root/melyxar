@@ -15,6 +15,8 @@ use std::sync::Arc;
 
 use melyxar_core::fingerprint;
 use melyxar_core::id::WorkId;
+use melyxar_core::orientation::Orientation;
+use melyxar_core::time::Millis;
 use melyxar_database::images::StoredImage;
 use melyxar_database::metadata::CreditedPerson;
 use melyxar_metadata::{Details, MetadataProvider, PictureKind};
@@ -192,22 +194,8 @@ async fn store(
             Ok(None) => {}
             Ok(Some(picture)) => {
                 prepared += 1;
-                // The card shows a colour before any picture arrives, and the
-                // poster is what a card shows, so it is the poster that gives
-                // the colour.
                 if kind == Kind::Poster {
-                    if let Some(colour) = picture.colour {
-                        if let Err(error) = state
-                            .database()
-                            .set_work_dominant_color(work_id, &colour)
-                            .await
-                        {
-                            tracing::warn!(
-                                error = %error,
-                                "the colour of a card could not be recorded"
-                            );
-                        }
-                    }
+                    remember_the_colour(state, work_id, picture.colour).await;
                 }
             }
             Err(error) => {
@@ -220,6 +208,81 @@ async fn store(
         }
     }
     prepared
+}
+
+/// Paints a card with the colour of its poster.
+///
+/// The card shows a colour before any picture arrives, and the poster is what
+/// a card shows, so it is the poster that gives the colour.
+async fn remember_the_colour(state: &AppState, work_id: WorkId, colour: Option<String>) {
+    let Some(colour) = colour else {
+        return;
+    };
+    if let Err(error) = state
+        .database()
+        .set_work_dominant_color(work_id, &colour)
+        .await
+    {
+        tracing::warn!(error = %error, "the colour of a card could not be recorded");
+    }
+}
+
+/// Prepares the picture of a file somebody filmed or photographed themselves,
+/// out of the file itself.
+///
+/// What it is made from is said by `made_from`, which changes whenever the
+/// file does, so a file already pictured is not pictured again. Answers
+/// whether a picture was made.
+pub(crate) async fn store_own_picture(
+    state: &AppState,
+    work_id: WorkId,
+    file: &Path,
+    at: Option<Millis>,
+    orientation: Orientation,
+    made_from: &str,
+) -> Result<bool> {
+    let Some(tools) = state.tools() else {
+        return Ok(false);
+    };
+    let kind = Kind::Poster;
+    let owner_id = work_id.to_db_string();
+    let fingerprint = stamp(made_from);
+    if state
+        .database()
+        .image_fingerprint(kind.owner_kind(), &owner_id, kind.as_str())
+        .await?
+        .as_deref()
+        == Some(fingerprint.as_str())
+    {
+        return Ok(false);
+    }
+
+    let folder = state
+        .config()
+        .directories
+        .images()
+        .join(kind.folder())
+        .join(&owner_id);
+    tokio::fs::create_dir_all(&folder).await?;
+    let original = folder.join(format!("{}-{fingerprint}.png", kind.as_str()));
+    melyxar_ffmpeg::images::upright_picture(&tools.ffmpeg, file, at, orientation, &original)
+        .await?;
+    let written = write_every_size(
+        state,
+        &tools.ffmpeg,
+        kind,
+        &owner_id,
+        &fingerprint,
+        &original,
+    )
+    .await;
+    tokio::fs::remove_file(&original).await.ok();
+
+    let Some(picture) = written? else {
+        return Ok(false);
+    };
+    remember_the_colour(state, work_id, picture.colour).await;
+    Ok(true)
 }
 
 /// Every picture the provider holds for one work, to be chosen among by hand.
@@ -458,24 +521,49 @@ async fn store_one(
         }
     };
 
-    let root = state.config().directories.images();
-    let folder = root.join(kind.folder()).join(owner_id);
+    let folder = state
+        .config()
+        .directories
+        .images()
+        .join(kind.folder())
+        .join(owner_id);
     tokio::fs::create_dir_all(&folder).await?;
 
     // The picture as it arrived is kept only while the sizes are made from it.
     let original = folder.join(format!("{}-{fingerprint}.source", kind.as_str()));
     tokio::fs::write(&original, &bytes).await?;
+    let written = write_every_size(state, tool, kind, owner_id, &fingerprint, &original).await;
+    tokio::fs::remove_file(&original).await.ok();
+    written
+}
+
+/// Writes one picture at every width the interface serves for its kind, and
+/// keeps them in place of the ones it had.
+///
+/// Answers with nothing when no size could be written. The picture itself is
+/// left where it is, for whoever made it to take away.
+async fn write_every_size(
+    state: &AppState,
+    tool: &Path,
+    kind: Kind,
+    owner_id: &str,
+    fingerprint: &str,
+    original: &Path,
+) -> Result<Option<Prepared>> {
+    let database = state.database();
+    let root = state.config().directories.images();
+    let folder = root.join(kind.folder()).join(owner_id);
 
     // Read only where it is used. A card is painted with the colour of its
     // poster; nothing anywhere shows the average colour of a backdrop or of a
     // face, and reading one costs a run of the tool per picture.
     let colour = match kind.carries_the_colour_of_its_work() {
-        true => melyxar_ffmpeg::images::average_colour(tool, &original)
+        true => melyxar_ffmpeg::images::average_colour(tool, original)
             .await
             .ok(),
         false => None,
     };
-    let source_size = source_dimensions(state, &original).await;
+    let source_size = source_dimensions(state, original).await;
 
     let names: Vec<(u32, String)> = widths_worth_writing(kind.widths(), source_size.map(|(w, _)| w))
         .iter()
@@ -496,7 +584,7 @@ async fn store_one(
         .collect();
 
     let mut prepared = Vec::new();
-    match melyxar_ffmpeg::images::resize(tool, &original, &borrowed).await {
+    match melyxar_ffmpeg::images::resize(tool, original, &borrowed).await {
         Ok(()) => {
             for (width, name) in &names {
                 prepared.push(StoredImage {
@@ -506,7 +594,7 @@ async fn store_one(
                     relative_path: format!("{}/{owner_id}/{name}", kind.folder()),
                     width: Some(*width as i32),
                     height: source_size.map(|(w, h)| scaled_height(*width, w, h)),
-                    fingerprint: fingerprint.clone(),
+                    fingerprint: fingerprint.to_string(),
                     dominant_color: colour.clone(),
                 });
             }
@@ -519,9 +607,6 @@ async fn store_one(
             );
         }
     }
-
-    // The picture as it arrived has done its work.
-    tokio::fs::remove_file(&original).await.ok();
 
     if prepared.is_empty() {
         return Ok(None);

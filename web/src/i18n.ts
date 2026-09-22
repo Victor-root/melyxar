@@ -325,6 +325,7 @@ const en: Dictionary = {
   "jobs.step.listening_for_openings": "Listening to each season for the titles its episodes share",
   "jobs.step.asking_the_provider": "Asking about the films",
   "jobs.step.filling_in_what_is_missing": "Filling in what is missing",
+  "jobs.step.picturing_own_files": "Taking pictures out of the files",
 
   "refresh.mode": "How much to go over",
   "refresh.new_and_updated_files": "New and updated files",
@@ -1004,6 +1005,7 @@ const fr: Dictionary = {
   "jobs.step.listening_for_openings": "Écoute de chaque saison pour trouver ce que ses épisodes ont en commun",
   "jobs.step.asking_the_provider": "Recherche des fiches",
   "jobs.step.filling_in_what_is_missing": "Complément des fiches",
+  "jobs.step.picturing_own_files": "Images tirées des fichiers",
 
   "refresh.mode": "Étendue",
   "refresh.new_and_updated_files": "Fichiers nouveaux et modifiés",

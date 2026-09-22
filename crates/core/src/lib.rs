@@ -14,6 +14,7 @@ pub mod journal;
 pub mod library;
 pub mod media;
 pub mod media_log;
+pub mod orientation;
 pub mod refresh;
 pub mod segments;
 pub mod text;

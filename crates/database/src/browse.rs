@@ -690,6 +690,63 @@ impl Database {
                 card.poster.push(image);
             }
         }
+        self.lend_pictures_to_folders(cards).await
+    }
+
+    /// Gives every folder card with no picture of its own the picture of the
+    /// first thing inside it that has one.
+    ///
+    /// First by depth, then by name: what sits in the folder itself before
+    /// what sits in a folder inside it, in the order the folder shows them.
+    /// Nothing is copied: the folder is shown the same picture, read at the
+    /// same moment, so it follows whatever becomes of that picture.
+    async fn lend_pictures_to_folders(&self, cards: &mut [WorkCard]) -> Result<()> {
+        let folders: Vec<String> = cards
+            .iter()
+            .filter(|card| card.kind == WorkKind::Folder && card.poster.is_empty())
+            .map(|card| card.id.to_db_string())
+            .collect();
+        if folders.is_empty() {
+            return Ok(());
+        }
+        let places = vec!["?"; folders.len()].join(", ");
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "WITH RECURSIVE inside(folder_id, work_id, depth) AS (
+                 SELECT parent_id, id, 1 FROM works WHERE parent_id IN ({places})
+                 UNION ALL
+                 SELECT inside.folder_id, works.id, inside.depth + 1
+                   FROM inside JOIN works ON works.parent_id = inside.work_id
+             ),
+             chosen AS (
+                 SELECT folder_id, work_id FROM (
+                     SELECT inside.folder_id, inside.work_id,
+                            row_number() OVER (PARTITION BY inside.folder_id
+                                               ORDER BY inside.depth, w.sort_title, w.id) AS rank
+                       FROM inside JOIN works w ON w.id = inside.work_id
+                      WHERE EXISTS (SELECT 1 FROM images p
+                                     WHERE p.owner_kind = 'work' AND p.owner_id = inside.work_id
+                                       AND p.image_kind = 'poster'))
+                  WHERE rank = 1
+             )
+             SELECT chosen.folder_id, {} FROM chosen
+               JOIN images ON images.owner_kind = 'work' AND images.owner_id = chosen.work_id
+                          AND images.image_kind = 'poster'
+              ORDER BY images.width DESC",
+            crate::images::WHAT_A_PICTURE_IS
+        )));
+        for folder in &folders {
+            query = query.bind(folder);
+        }
+        for row in query.fetch_all(self.reader()).await? {
+            let folder_id: String = row.try_get("folder_id")?;
+            let image = crate::images::image_from_row(&row)?;
+            if let Some(card) = cards
+                .iter_mut()
+                .find(|card| card.id.to_db_string() == folder_id)
+            {
+                card.poster.push(image);
+            }
+        }
         Ok(())
     }
 
@@ -707,7 +764,9 @@ impl Database {
     ///    this: wide, with the title written on it, since a lying card has no
     ///    room for the title under its picture. Its backdrop otherwise.
     /// 2. For an episode, its own picture, since what a scan stores for an
-    ///    episode is a still off the film and a still is already wide.
+    ///    episode is a still off the film and a still is already wide. The
+    ///    same for a video, a photo or a folder of one's own, whose picture
+    ///    was taken out of the file.
     /// 3. The thumb, then the backdrop, of the series two steps above it,
     ///    because an episode that nobody has a still for still belongs to
     ///    something that has a picture.
@@ -774,7 +833,13 @@ impl Database {
                 card.wide = wide.clone();
                 continue;
             }
-            if card.kind == WorkKind::Episode && !card.poster.is_empty() {
+            // So is what somebody filmed or photographed themselves, and a
+            // folder of it shows what it holds.
+            if matches!(
+                card.kind,
+                WorkKind::Episode | WorkKind::Video | WorkKind::Photo | WorkKind::Folder
+            ) && !card.poster.is_empty()
+            {
                 card.wide = card.poster.clone();
                 continue;
             }
