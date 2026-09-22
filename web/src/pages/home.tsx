@@ -111,47 +111,58 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
             any row of suggestions. */}
         <Band shelves={home.shelves} libraries={libraries} />
 
-        {/* What was left halfway. Lying down, because what tells two of these
-            apart is the still and the bar under it rather than the poster, and
-            each one says how much of it is left and where it sits in its
-            series: an episode title on its own is a title nobody placed. */}
-        {home.carry_on.length > 0 && (
-          <section className="section">
-            <RowHead mark={<ClockIcon size={18} />} title={t("home.carry_on")} />
-            <Row>
-              {home.carry_on.map((card) => (
-                <Card
-                  key={card.id}
-                  card={card}
-                  shape="lying"
-                  watched={howFarIn(card.position_seconds, card.runtime_minutes)}
-                  lead={card.series_title ?? undefined}
-                  note={whichEpisode(card, t)}
-                  trailing={whatIsLeft(card.position_seconds, card.runtime_minutes, t)}
-                />
-              ))}
-            </Row>
-          </section>
-        )}
+        {/* The two rows of what is already under way, side by side while
+            both are short enough to go on one line. They are two rows
+            either way, with a heading each; what they share is a line, and
+            only while there is room for one. The stylesheet decides, on the
+            width of the window it is being read in. */}
+        {(home.carry_on.length > 0 || home.up_next.length > 0) && (
+          <div className="rows-together">
+            {/* What was left halfway. Lying down, because what tells two of
+                these apart is the still and the bar under it rather than
+                the poster, and each one says how much of it is left and
+                where it sits in its series: an episode title on its own is
+                a title nobody placed. */}
+            {home.carry_on.length > 0 && (
+              <section className="section">
+                <RowHead mark={<ClockIcon size={18} />} title={t("home.carry_on")} />
+                <Row>
+                  {home.carry_on.map((card) => (
+                    <Card
+                      key={card.id}
+                      card={card}
+                      shape="lying"
+                      watched={howFarIn(card.position_seconds, card.runtime_minutes)}
+                      lead={card.series_title ?? undefined}
+                      note={whichEpisode(card, t)}
+                      trailing={whatIsLeft(card.position_seconds, card.runtime_minutes, t)}
+                    />
+                  ))}
+                </Row>
+              </section>
+            )}
 
-        {/* And what has not been started: the next episode of each series that
-            is waiting on one, under the name of the series rather than under
-            the episode's own, which nobody remembers. */}
-        {home.up_next.length > 0 && (
-          <section className="section">
-            <RowHead mark={<SparkIcon size={18} />} title={t("home.up_next")} />
-            <Row>
-              {home.up_next.map((card) => (
-                <Card
-                  key={card.id}
-                  card={card}
-                  shape="lying"
-                  lead={card.series_title}
-                  note={whichEpisode(card, t)}
-                />
-              ))}
-            </Row>
-          </section>
+            {/* And what has not been started: the next episode of each
+                series that is waiting on one, under the name of the series
+                rather than under the episode's own, which nobody
+                remembers. */}
+            {home.up_next.length > 0 && (
+              <section className="section">
+                <RowHead mark={<SparkIcon size={18} />} title={t("home.up_next")} />
+                <Row>
+                  {home.up_next.map((card) => (
+                    <Card
+                      key={card.id}
+                      card={card}
+                      shape="lying"
+                      lead={card.series_title}
+                      note={whichEpisode(card, t)}
+                    />
+                  ))}
+                </Row>
+              </section>
+            )}
+          </div>
         )}
 
         <section className="section">

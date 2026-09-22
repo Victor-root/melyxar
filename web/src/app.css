@@ -604,6 +604,38 @@
   margin-bottom: var(--gap-section);
 }
 
+/*
+ * Two rows that stand side by side when both are short enough to.
+ *
+ * What was left halfway and what is waiting on a next episode are often a
+ * card or two each, and a row of one card on a wide screen is one card and
+ * a field of background. Put next to each other they fill the line, and
+ * they stay two rows with a heading each: this is where they are drawn, not
+ * what they are.
+ *
+ * Nothing works out whether they fit. Each one is as wide as what it holds,
+ * and the line wraps when the two of them no longer go on it, which is the
+ * browser answering a question about its own window rather than this
+ * stylesheet guessing at it. Below the wrap each row is back to the whole
+ * width, so a row long enough to be put on its own is a row that scrolls,
+ * exactly as it did before.
+ */
+.rows-together {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-section);
+  margin-bottom: var(--gap-section);
+}
+
+.rows-together > .section {
+  /* As wide as it needs and no wider, until there is not the room, and then
+     as narrow as it is given: that second half is what lets a row hand its
+     overflow to its own scroll instead of pushing the page wide. */
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 .section-head {
   display: flex;
   align-items: baseline;
