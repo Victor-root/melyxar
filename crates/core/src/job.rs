@@ -139,11 +139,14 @@ pub enum JobStep {
     AskingTheProvider,
     /// Asking again about the films that have a name and are missing the rest.
     FillingInWhatIsMissing,
+    /// Taking the picture of each video and photo somebody filmed or took
+    /// themselves out of the file itself.
+    PicturingOwnFiles,
 }
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
@@ -153,6 +156,7 @@ impl JobStep {
         Self::ListeningForOpenings,
         Self::AskingTheProvider,
         Self::FillingInWhatIsMissing,
+        Self::PicturingOwnFiles,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -166,6 +170,7 @@ impl JobStep {
             Self::ListeningForOpenings => "listening_for_openings",
             Self::AskingTheProvider => "asking_the_provider",
             Self::FillingInWhatIsMissing => "filling_in_what_is_missing",
+            Self::PicturingOwnFiles => "picturing_own_files",
         }
     }
 
@@ -180,6 +185,7 @@ impl JobStep {
             "listening_for_openings" => Some(Self::ListeningForOpenings),
             "asking_the_provider" => Some(Self::AskingTheProvider),
             "filling_in_what_is_missing" => Some(Self::FillingInWhatIsMissing),
+            "picturing_own_files" => Some(Self::PicturingOwnFiles),
             _ => None,
         }
     }
