@@ -958,25 +958,28 @@
   overflow: hidden;
   isolation: isolate;
   background:
-    /* The light the fan leans away from, in at the top left. */
+    /* The light the fan leans away from, in at the top left. Its middle is
+       kept on the tile rather than off its corner: a pool whose heart is
+       outside the box shows only its own falloff, which is another way of
+       saying it shows nothing. */
     radial-gradient(
-      76% 58% at 13% 2%,
-      color-mix(in srgb, var(--accent) calc(11% * var(--band-force)), transparent),
-      transparent 70%
+      84% 68% at 17% 9%,
+      color-mix(in srgb, var(--accent) calc(30% * var(--band-force)), transparent),
+      transparent 72%
     ),
     /* Its answer from the far corner, in the work's own colour, so the panel
        is lit from two sides rather than washed evenly. */
     radial-gradient(
-      64% 54% at 94% 6%,
-      color-mix(in srgb, var(--tile-color) calc(20% * var(--band-force)), transparent),
-      transparent 72%
+      72% 62% at 89% 13%,
+      color-mix(in srgb, var(--tile-color) calc(52% * var(--band-force)), transparent),
+      transparent 74%
     ),
     /* And a low one behind the feet of the fan, which is what gives the
        posters something to stand against. */
     radial-gradient(
-      72% 44% at 50% 92%,
-      color-mix(in srgb, var(--accent-dim) calc(9% * var(--band-force)), transparent),
-      transparent 76%
+      78% 50% at 50% 97%,
+      color-mix(in srgb, var(--accent-dim) calc(24% * var(--band-force)), transparent),
+      transparent 78%
     ),
     linear-gradient(
       to bottom,
