@@ -439,6 +439,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
                         )}
                       </Link>
                     ))}
+                    <div className="quick-search-divider" aria-hidden="true" />
                     <Link
                       className="quick-search-all"
                       to={searchAddress(words, scope)}
