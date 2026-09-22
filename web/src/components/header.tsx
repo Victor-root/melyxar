@@ -195,7 +195,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
               title={t("nav.back")}
               aria-label={t("nav.back")}
             >
-              <BackIcon size={20} />
+              <BackIcon size={22} />
             </button>
           )}
           <Link className="brand" to="/">
