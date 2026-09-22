@@ -394,7 +394,15 @@ impl Database {
             sql.push_str(" AND w.decade = ?");
         }
         if request.search.is_some() {
-            sql.push_str(" AND w.sort_title LIKE ? ESCAPE '\\'");
+            // Both columns, because they disagree on the one word a search
+            // is most likely to open with. The sort title drops a leading
+            // article and its accents, which is what lets "ete" still find
+            // "Été"; but it drops that article whole, so a search that opens
+            // with it, as the title itself does, would ask for a word the
+            // sort title no longer has. "the big" over "The Big Bang Theory"
+            // is exactly this: the sort title is "big bang theory", and
+            // "the" is not in it at all.
+            sql.push_str(" AND (w.title LIKE ? ESCAPE '\\' OR w.sort_title LIKE ? ESCAPE '\\')");
         }
         if request.unidentified_only {
             sql.push_str(" AND w.identification IN ('pending', 'unidentified')");
@@ -469,7 +477,9 @@ impl Database {
             query = query.bind(decade);
         }
         if let Some(search) = &request.search {
-            query = query.bind(format!("%{}%", escape_for_like(search)));
+            let pattern = format!("%{}%", escape_for_like(search));
+            query = query.bind(pattern.clone());
+            query = query.bind(pattern);
         }
         // Bound where it sits in the statement, between the search and the
         // letter. A favourite nobody owns is nobody's, so a request asking for
@@ -1833,6 +1843,28 @@ mod tests {
             .await
             .expect("read");
         assert_eq!(page.cards.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_search_still_finds_a_title_by_its_own_leading_article() {
+        let (database, library_id) = library_of(&[
+            ("The Big Bang Theory", 2007, 7.8),
+            ("Amber Field", 2019, 8.1),
+        ])
+        .await;
+
+        // The sort title drops the leading article, so searching by it alone
+        // still has to fall back on the title itself: "big bang theory" has
+        // no "the" in it at all.
+        let page = database
+            .browse_works(&BrowseRequest {
+                library_id: Some(library_id),
+                search: Some("the big".to_string()),
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert_eq!(titles(&page), vec!["The Big Bang Theory"]);
     }
 
     #[tokio::test]

@@ -230,16 +230,6 @@
   gap: 4px;
 }
 
-/* Where the cursor is, said with a line under the words rather than a ring
-   around them. Said at all, because the ring was the only thing saying it
-   and a field that answers the keyboard with nothing is a field nobody can
-   use without a pointer. In the same ink as the words rather than the
-   accent: the accent marks a choice made, and no choice is made by putting
-   the cursor in a field. */
-.search-open:focus-within input {
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 35%, transparent);
-}
-
 /* The magnifier goes on carrying the accent it wears while the field is open,
    because from there on it is the button that sends the question. */
 .search-open .search-glass {
@@ -270,8 +260,14 @@
   opacity: 1;
 }
 
+/* No ring for a click, since the field is right there to see. A tab landing
+   on it is the one case with nothing else on screen saying where the cursor
+   went, and that case keeps a ring, tucked inside the pill rather than
+   drawn over its edge. */
 .search input:focus-visible {
-  outline: none;
+  outline: 2px solid var(--accent-bright);
+  outline-offset: -3px;
+  border-radius: 3px;
 }
 
 /* Left to the browser otherwise, which draws it at a strength that survives
@@ -367,15 +363,24 @@
   font-size: 14px;
 }
 
+/* A hairline of its own rather than a border on the link below it: a border
+   takes the link's own corner radius and rounds off at both ends, which on a
+   straight rule reads as a line that has been chewed. */
+.quick-search-divider {
+  margin: 4px 8px;
+  height: 1px;
+  background: var(--border);
+}
+
 .quick-search-all {
-  margin-top: 2px;
-  padding: 8px;
-  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
   border-radius: var(--radius-control);
   color: var(--accent-bright);
   font-size: 13px;
   font-weight: 600;
-  text-align: center;
 }
 
 .quick-search-all:hover {
