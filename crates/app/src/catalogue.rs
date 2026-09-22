@@ -86,6 +86,9 @@ pub struct Home {
 pub struct Shelf {
     pub kind: LibraryKind,
     pub cards: Vec<WorkCard>,
+    /// The newest works of that kind a provider or a person named, for the
+    /// fan of posters on the tile that leads to it.
+    pub fan: Vec<WorkCard>,
 }
 
 /// One of the few works the page opens on, and why it is there.
@@ -167,6 +170,9 @@ const IN_THE_HERO: i64 = 5;
 
 /// How many cards one kind's row holds.
 const ON_A_SHELF: i64 = 24;
+
+/// How many posters the tile of one kind fans out at its widest.
+const IN_A_FAN: i64 = 5;
 
 /// Every library this viewer may see, with what it holds and what the server
 /// can reach.
@@ -468,14 +474,23 @@ async fn the_shelves(state: &AppState, who: &User) -> Result<Vec<Shelf>> {
         if library.kind == LibraryKind::Music {
             continue;
         }
-        let page = browse(
+        let newest = BrowseRequest {
+            library_kind: Some(library.kind),
+            order: WorkOrder::AddedAt,
+            descending: true,
+            limit: ON_A_SHELF,
+            ..Default::default()
+        };
+        let page = browse(state, &newest, who).await?;
+        // Asked apart from the row: the newest arrivals of a kind are often
+        // files nobody has named yet, and a fan drawn from those alone is a
+        // fan of holes on a library full of posters.
+        let fan = browse(
             state,
             &BrowseRequest {
-                library_kind: Some(library.kind),
-                order: WorkOrder::AddedAt,
-                descending: true,
-                limit: ON_A_SHELF,
-                ..Default::default()
+                identified_only: true,
+                limit: IN_A_FAN,
+                ..newest
             },
             who,
         )
@@ -483,6 +498,7 @@ async fn the_shelves(state: &AppState, who: &User) -> Result<Vec<Shelf>> {
         shelves.push(Shelf {
             kind: library.kind,
             cards: page.cards,
+            fan: fan.cards,
         });
     }
 
@@ -800,6 +816,10 @@ mod tests {
             "a server with only films has one row, and no empty row of anime"
         );
         assert_eq!(page.shelves[0].cards.len(), 1);
+        assert!(
+            page.shelves[0].fan.is_empty(),
+            "a film nobody named is in the row and never in the fan"
+        );
     }
 
     #[tokio::test]

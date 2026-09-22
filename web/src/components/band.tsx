@@ -11,16 +11,17 @@
  * library rather than standing on one borrowed still: a still is one film
  * seen wide, and what a way in has to say is "this is a shelf of these".
  *
- * The posters are the ones the server already sent for the row of that kind
- * further down the page, in the order it sent them, which is the newest
- * first. So the same tile shows the same posters from one visit to the next,
- * and the browser is asked for no picture it is not already fetching anyway.
+ * The posters are the newest works of that kind somebody named, which the
+ * server sends apart from the row further down the page: the newest arrivals
+ * are often files nobody has named yet, and a fan drawn from those is a fan of
+ * holes on a library full of posters. Newest first, so the same tile shows
+ * the same posters from one visit to the next.
  *
  * What a library short of posters shows is said in three places rather than
  * left to chance: a work with none shows the letter it begins with, as every
  * other card here does; a library of fewer than five fans out however many
  * it has, in an arrangement written for that many rather than a full fan
- * with holes in it; and a library with nothing in it at all shows its own
+ * with holes in it; and a library with nothing named in it yet shows its own
  * mark, faint, where the posters will stand once there are any.
  */
 
@@ -137,13 +138,13 @@ function Water() {
 }
 
 /**
- * The works a tile fans out, out of everything the server sent for that kind.
+ * The works a tile fans out, out of the named ones the server sent for that
+ * kind.
  *
  * The newest first, which is the order it arrived in, and the ones that have
- * a poster ahead of the ones that have none: a library of three hundred films
- * whose newest arrivals have not been looked up yet still has a full fan to
- * show, and showing its newest holes instead would say the library is empty
- * when it is the opposite.
+ * a poster ahead of the ones that have none: a work can be named and still be
+ * waiting on its picture, and showing that hole ahead of a poster would say
+ * the library is emptier than it is.
  *
  * What is left over, on a library where nothing has a poster at all, is the
  * newest works with no poster, which the fan draws as the letter each one
@@ -159,17 +160,17 @@ export function fanOf(cards: Card[]): Card[] {
 function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
   const { t, language } = useSettings();
   const works = worksOfKind(shelf.kind, libraries);
-  const fan = fanOf(shelf.cards);
+  const fan = fanOf(shelf.fan);
 
   return (
     <Link
       className="band-tile"
       to={whereAKindLeads(shelf.kind, libraries)}
       style={{
-        /* A breath of the newest work's own colour in the panel behind the
+        /* A breath of the front poster's own colour in the panel behind the
            fan, so two tiles side by side are not the same dark rectangle
            twice. The stylesheet decides how much of it survives. */
-        ["--tile-color" as string]: shelf.cards[0]?.color ?? "var(--surface-raised)",
+        ["--tile-color" as string]: fan[0]?.color ?? "var(--surface-raised)",
       }}
     >
       {/* Decorative through and through: the tile is named in words right

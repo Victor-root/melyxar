@@ -150,6 +150,8 @@ pub struct BrowseRequest {
     pub search: Option<String>,
     /// Only the works nobody has managed to identify.
     pub unidentified_only: bool,
+    /// Only the works a provider or a person named.
+    pub identified_only: bool,
     /// Only the works this viewer marked. Needs a viewer, and answers nothing
     /// without one: a favourite belongs to somebody or it is not one.
     pub favourites_only: bool,
@@ -270,6 +272,7 @@ impl Default for BrowseRequest {
             decade: None,
             search: None,
             unidentified_only: false,
+            identified_only: false,
             favourites_only: false,
             library_kind: None,
             viewer: None,
@@ -406,6 +409,9 @@ impl Database {
         }
         if request.unidentified_only {
             sql.push_str(" AND w.identification IN ('pending', 'unidentified')");
+        }
+        if request.identified_only {
+            sql.push_str(" AND w.identification IN ('identified', 'manual')");
         }
         // Asked as a question about the work rather than joined onto it, so
         // its place among the bound values is the plain one: a join would sit
@@ -2004,6 +2010,25 @@ mod tests {
             .await
             .expect("read");
         assert_eq!(titles(&page), vec!["Unknown"]);
+    }
+
+    #[tokio::test]
+    async fn the_films_somebody_named_can_be_listed_on_their_own() {
+        let (database, library_id) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        database
+            .create_work(library_id, WorkKind::Movie, "Unknown", "unknown", None)
+            .await
+            .expect("work created");
+
+        let page = database
+            .browse_works(&BrowseRequest {
+                library_id: Some(library_id),
+                identified_only: true,
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        assert_eq!(titles(&page), vec!["Quiet Harbour"]);
     }
 
     #[tokio::test]
