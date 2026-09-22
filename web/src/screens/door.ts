@@ -12,7 +12,7 @@
  * is being held back have to be told different things.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Account, Branding } from "../api";
 import { refusalKey } from "../i18n";
@@ -26,6 +26,12 @@ export interface Refusal {
 export interface DoorScreen {
   /** A server nobody has set up asks for a first account. */
   brandNew: boolean;
+  /** The names this server offers, which may be none of them.
+   *
+   *  Empty for three different reasons that the screen has no business
+   *  telling apart: a server told not to offer them, everybody having asked
+   *  to be left off, and a server with no accounts at all. */
+  names: string[];
   /** What this server calls itself. */
   serverName: string;
   /** Sends what was typed. Never throws: what came of it is below.
@@ -44,7 +50,27 @@ export interface DoorScreen {
 export function useDoorScreen(branding: Branding, cameIn: (who: Account) => void): DoorScreen {
   const [asking, setAsking] = useState(false);
   const [refused, setRefused] = useState<Refusal | null>(null);
+  const [names, setNames] = useState<string[]>([]);
   const brandNew = !branding.setup_complete;
+
+  // Asked for once, and never on a server that has no accounts yet: the only
+  // answer there is an empty list, and the screen it draws asks for a first
+  // account rather than offering one.
+  useEffect(() => {
+    if (brandNew) {
+      return;
+    }
+    const controller = new AbortController();
+    api
+      .namesAtTheDoor(controller.signal)
+      .then((offered) => setNames(offered.names))
+      .catch(() => {
+        // A server that will not say is a server that offers nothing, which
+        // is the same screen as a server with nothing to offer. The field is
+        // there either way.
+      });
+    return () => controller.abort();
+  }, [brandNew]);
 
   const knock = useCallback(
     async (name: string, password: string, remember: boolean) => {
@@ -65,6 +91,7 @@ export function useDoorScreen(branding: Branding, cameIn: (who: Account) => void
 
   return {
     brandNew,
+    names,
     serverName: branding.server_name,
     knock,
     asking,

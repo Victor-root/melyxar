@@ -71,15 +71,17 @@ pub fn router() -> Router<AppState> {
 
 /// The addresses that answer without anybody signed in.
 ///
-/// Four of them, each for a reason that cannot be got round.
+/// Five of them, each for a reason that cannot be got round.
 ///
 /// A watchdog or a reverse proxy has to be able to ask whether this server is
 /// alive without holding an account. The sign in screen has to draw the name
 /// and the mark of the server before anybody has signed in, which is what the
-/// branding address is for and why it says nothing else. Signing in cannot
-/// itself require being signed in. And a server nobody has set up yet has no
-/// account to sign in as, so the one that makes the first account answers to
-/// whoever reaches a brand new server first, and shuts behind itself.
+/// branding address is for and why it says nothing else, and it offers the
+/// names on this server, which is the one deliberate disclosure here and is
+/// turned off from two places. Signing in cannot itself require being signed
+/// in. And a server nobody has set up yet has no account to sign in as, so the
+/// one that makes the first account answers to whoever reaches a brand new
+/// server first, and shuts behind itself.
 ///
 /// The interface's own files are open too, and are not in the list: they are
 /// the page that draws the sign in screen, and a page nobody can load is a
@@ -101,6 +103,7 @@ fn answers_to_anybody(path: &str) -> bool {
         path,
         "/api/v1/system/health"
             | "/api/v1/public/branding"
+            | "/api/v1/public/names"
             | "/api/v1/session"
             | "/api/v1/setup"
     )
@@ -631,10 +634,11 @@ mod tests {
     }
 
     #[test]
-    fn everything_is_closed_unless_it_is_one_of_the_four() {
+    fn everything_is_closed_unless_it_is_one_of_the_five() {
         for open in [
             "/api/v1/system/health",
             "/api/v1/public/branding",
+            "/api/v1/public/names",
             "/api/v1/session",
             "/api/v1/setup",
         ] {
@@ -650,6 +654,8 @@ mod tests {
             "/api/v1/system/journal",
             "/api/v1/system/diagnostics",
             "/api/v1/preferences",
+            "/api/v1/public",
+            "/api/v1/public/accounts",
             "/api/v1/stream/a-session/playlist.m3u8",
             "/api/v1/something/invented/tomorrow",
         ] {

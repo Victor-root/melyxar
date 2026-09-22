@@ -60,6 +60,8 @@ export function SettingsPage() {
 
       <Banner kept={kept} change={change} />
 
+      <TheDoor kept={kept} change={change} />
+
       <DeviceOptimization />
 
       <section className="settings-block">
@@ -313,13 +315,44 @@ export function SettingsPage() {
 }
 
 /**
- * How the interface looks and what language it speaks.
+ * What the sign in screen says about this account.
  *
- * Kept by the account rather than by this browser, so a choice made on one
- * machine is the same choice on the next. It used to live in the bar at the
- * top, where it took the room three categories now stand in; a setting
- * somebody changes twice a year does not belong on every screen.
+ * One switch, and it only ever takes something away: the screen offers the
+ * names on this server so that signing in is one press and a password, and
+ * this is how somebody steps out of that. Nothing else changes, least of all
+ * the ability to sign in.
  */
+function TheDoor({
+  kept,
+  change,
+}: {
+  kept: ViewerPreferences | null;
+  change: (changes: Partial<ViewerPreferences>) => void;
+}) {
+  const { t } = useSettings();
+
+  if (!kept) {
+    return null;
+  }
+
+  return (
+    <section className="settings-block">
+      <h2>{t("settings.door")}</h2>
+      <p className="settings-why">{t("settings.door_why")}</p>
+
+      <label className="settings-switch">
+        <input
+          type="checkbox"
+          checked={kept.hidden_at_the_door}
+          onChange={(event) => change({ hidden_at_the_door: event.target.checked })}
+        />
+        <span>{t("settings.door_hide_me")}</span>
+      </label>
+      <p className="settings-why">{t("settings.door_hide_me_why")}</p>
+    </section>
+  );
+}
+
 /**
  * How the banner of the home page is drawn.
  *
@@ -438,6 +471,14 @@ function shareOfThePictureKept(height: number): number {
   return Math.round(Math.min(1, height * (16 / 9)) * 100);
 }
 
+/**
+ * How the interface looks and what language it speaks.
+ *
+ * Kept by the account rather than by this browser, so a choice made on one
+ * machine is the same choice on the next. It used to live in the bar at the
+ * top, where it took the room three categories now stand in; a setting
+ * somebody changes twice a year does not belong on every screen.
+ */
 function Appearance() {
   const { t, language, setLanguage, theme, setTheme } = useSettings();
 

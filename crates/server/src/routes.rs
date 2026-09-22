@@ -38,6 +38,7 @@ pub fn router(state: AppState) -> Router {
             axum::routing::delete(forget_converted_subtitles),
         )
         .route("/api/v1/public/branding", get(public_branding))
+        .route("/api/v1/public/names", get(names_at_the_door))
         .merge(crate::account::router())
         .merge(crate::calibration::router())
         .merge(crate::catalogue::router())
@@ -284,4 +285,45 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
         login_background_style: settings.login_background.as_str(),
         setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,
     }))
+}
+
+/// The names the sign in screen offers, for whoever has not signed in yet.
+///
+/// A deliberate disclosure, and the only one on this server: it tells anybody
+/// who can reach it which names exist here. That is the trade the list is, and
+/// it buys back the thing it costs, because a screen that offers the names is
+/// a screen where signing in is one press and a password rather than
+/// remembering how you spelt your own name.
+///
+/// It is bounded twice over. An administrator turns the whole list off for the
+/// server, and each person turns themselves off for their own account, and
+/// either way this answers an empty list rather than a refusal: a screen that
+/// is told nothing simply shows no names, which is also what a brand new
+/// server with no accounts answers.
+///
+/// Names and nothing else. No identifier, no rights, no picture, nothing that
+/// says whether a name is an administrator: what is drawn is a row of names,
+/// and everything beyond that would be given away for no gain.
+#[derive(Debug, Serialize)]
+struct NamesAtTheDoor {
+    names: Vec<String>,
+}
+
+async fn names_at_the_door(State(state): State<AppState>) -> Result<Json<NamesAtTheDoor>> {
+    let settings = state
+        .database()
+        .server_settings()
+        .await
+        .map_err(|error| crate::error::ServerError::internal(error.to_string()))?;
+
+    if !settings.show_user_picker {
+        return Ok(Json(NamesAtTheDoor { names: Vec::new() }));
+    }
+
+    let names = state
+        .database()
+        .names_at_the_door()
+        .await
+        .map_err(|error| crate::error::ServerError::internal(error.to_string()))?;
+    Ok(Json(NamesAtTheDoor { names }))
 }

@@ -1,0 +1,12 @@
+-- Whether this account is left off the list the sign in screen offers.
+--
+-- The list is a deliberate disclosure: it says which names exist on this
+-- server to anybody who can reach it, which is what makes signing in one press
+-- and a password instead of remembering how you spelt your own name. The
+-- server-wide switch beside it turns the whole list off; this is the same
+-- choice made by one person for themselves.
+--
+-- Shown by default, because a household server is the ordinary case and a list
+-- with holes in it is of no use to anybody. Hidden, the account is still there
+-- and still signs in: the name is typed instead of pressed.
+ALTER TABLE user_preferences ADD COLUMN hidden_at_the_door INTEGER NOT NULL DEFAULT 0;

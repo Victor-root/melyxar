@@ -1038,6 +1038,9 @@ export interface ViewerPreferences {
   banner_at_random: boolean;
   /** Whether it takes the whole window, the height then deciding nothing. */
   banner_fills_the_screen: boolean;
+  /** Whether this account is left off the list the sign in screen offers.
+   *  Hidden, it still signs in: the name is typed rather than pressed. */
+  hidden_at_the_door: boolean;
   /** The languages the library really holds, which is what a picker offers. */
   audio_languages: string[];
   subtitle_languages: string[];
@@ -1268,6 +1271,13 @@ export const api = {
   /** What the server calls itself and the mark it was given. Answered without
    *  an account, which is what lets the door carry them. */
   branding: (signal?: AbortSignal) => get<Branding>("/api/v1/public/branding", signal),
+  /* The names this server offers on its sign in screen, which is the one
+     thing it says to somebody who has not signed in. Empty when the server
+     was told not to offer them, when everybody asked to be left off, and on a
+     brand new server that has no accounts yet: the screen draws no row rather
+     than telling the three apart. */
+  namesAtTheDoor: (signal?: AbortSignal) =>
+    get<{ names: string[] }>("/api/v1/public/names", signal),
   /* The door. Signing in answers the account, which is what the interface is
      drawn from; the session itself travels in a cookie the browser keeps and
      this interface never sees.

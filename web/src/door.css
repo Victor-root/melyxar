@@ -9,11 +9,11 @@
  * a server given another accent keeps this screen with it. Not one colour is
  * written down here as a colour.
  *
- * The whole screen is laid out as three rows against the right hand edge: what
- * this server is for at the top, the card in the middle, and the two quiet
- * lines at the foot. Everything to the left of them is background and is meant
- * to stay that way, which is what leaves the card the only thing on the screen
- * asking to be looked at.
+ * The whole screen is laid out as three rows down the middle: what this server
+ * is for at the top, the card under it, and the two quiet lines at the foot.
+ * Everything to either side of them is background and is meant to stay that
+ * way, which is what leaves the card the only thing on the screen asking to be
+ * looked at.
  */
 
 .door {
@@ -26,7 +26,7 @@
   position: relative;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  justify-items: end;
+  justify-items: center;
   align-items: start;
   gap: var(--gap-wide);
   padding: clamp(18px, 3vw, 40px) clamp(18px, 4vw, 64px);
@@ -68,11 +68,16 @@
   position: absolute;
   inset: 0;
   background:
+    radial-gradient(
+      58% 58% at 50% 50%,
+      color-mix(in srgb, var(--surface-deep) 78%, transparent),
+      color-mix(in srgb, var(--surface-deep) 34%, transparent) 62%,
+      color-mix(in srgb, var(--surface-deep) 18%, transparent)
+    ),
     linear-gradient(
-      to left,
-      var(--surface-deep) 6%,
-      color-mix(in srgb, var(--surface-deep) 55%, transparent) 46%,
-      color-mix(in srgb, var(--surface-deep) 25%, transparent)
+      to top,
+      var(--surface-deep) 2%,
+      transparent 40%
     );
 }
 
@@ -110,10 +115,10 @@
 }
 
 .door-drift-light-one {
-  left: -14%;
-  top: 4%;
-  width: 62%;
-  height: 74%;
+  left: -18%;
+  top: 2%;
+  width: 58%;
+  height: 72%;
   background: radial-gradient(
     circle at 50% 50%,
     color-mix(in srgb, var(--accent) 34%, transparent),
@@ -123,10 +128,10 @@
 }
 
 .door-drift-light-two {
-  left: 16%;
-  bottom: -26%;
-  width: 54%;
-  height: 62%;
+  right: -16%;
+  bottom: -24%;
+  width: 56%;
+  height: 66%;
   background: radial-gradient(
     circle at 50% 50%,
     color-mix(in srgb, var(--accent-bright) 26%, transparent),
@@ -136,10 +141,11 @@
 }
 
 /* The far one, dimmer and slower, which is what stops the other two reading
-   as a pair. */
+   as a pair. Low and towards the middle, so what it lights is under the card
+   rather than behind it. */
 .door-drift-light-three {
-  left: 40%;
-  top: 26%;
+  left: 30%;
+  bottom: -32%;
   width: 46%;
   height: 52%;
   background: radial-gradient(
@@ -184,13 +190,13 @@
   background-size: 17px 17px;
   opacity: 0.62;
   mask-image: radial-gradient(
-    58% 34% at 26% 52%,
+    46% 34% at 20% 52%,
     #000 0%,
     color-mix(in srgb, #000 45%, transparent) 46%,
     transparent 78%
   );
   -webkit-mask-image: radial-gradient(
-    58% 34% at 26% 52%,
+    46% 34% at 20% 52%,
     #000 0%,
     color-mix(in srgb, #000 45%, transparent) 46%,
     transparent 78%
@@ -205,13 +211,13 @@
   background-size: 29px 29px;
   opacity: 0.38;
   mask-image: radial-gradient(
-    50% 46% at 44% 26%,
+    44% 44% at 80% 34%,
     #000 0%,
     color-mix(in srgb, #000 40%, transparent) 42%,
     transparent 74%
   );
   -webkit-mask-image: radial-gradient(
-    50% 46% at 44% 26%,
+    44% 44% at 80% 34%,
     #000 0%,
     color-mix(in srgb, #000 40%, transparent) 42%,
     transparent 74%
@@ -250,10 +256,11 @@
 }
 
 .door-drift-arc-faint {
-  left: -16%;
-  top: -18%;
-  width: 70%;
-  height: 120%;
+  left: auto;
+  right: -22%;
+  top: -12%;
+  width: 72%;
+  height: 124%;
   border-color: color-mix(in srgb, var(--accent) 34%, transparent);
   box-shadow: none;
   opacity: 0.4;
@@ -472,6 +479,88 @@
   color: var(--text-soft);
   font-size: 13.5px;
   line-height: 1.5;
+}
+
+/*
+ * Who is on this server.
+ *
+ * Wrapped rather than scrolled: a household is a handful of names, and a row
+ * that scrolls sideways hides the very thing it is there to offer. A server
+ * with a great many accounts turns the whole list off, which is what that
+ * switch is for.
+ *
+ * Each one is a letter and a name rather than a face: nobody has a picture on
+ * this server yet, and a row of identical grey circles says less than a row of
+ * initials.
+ */
+.door-who {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.door-who-one {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 5px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-deep) 60%, transparent);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 550;
+  max-width: 100%;
+  transition:
+    border-color var(--quick) var(--ease),
+    background var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.door-who-one:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.door-who-one:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* The one whose name is in the field. Marked in the accent like everything
+   else that is current in this interface, so the card says who it is about to
+   let in. */
+.door-who-chosen,
+.door-who-chosen:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+
+.door-who-mark {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* A long name is cut rather than allowed to push the row into a column. */
+.door-who-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The labels are for whoever is not looking at the screen. What is on it is
@@ -873,15 +962,6 @@
   .door-slogan {
     white-space: normal;
     text-align: center;
-  }
-
-  .door-picture-wash {
-    background: linear-gradient(
-      to top,
-      var(--surface-deep) 4%,
-      color-mix(in srgb, var(--surface-deep) 62%, transparent) 50%,
-      color-mix(in srgb, var(--surface-deep) 38%, transparent)
-    );
   }
 
   .door-foot {

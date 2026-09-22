@@ -32,6 +32,15 @@ import { useDoorScreen } from "../screens/door";
 import { useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
 
+/** The letter a name is shown by, where there is no picture of anybody yet.
+ *
+ *  Taken with the whole of what the browser calls a character, so a name
+ *  starting with an accented letter or with something outside the alphabet is
+ *  not cut in half. */
+function firstLetterOf(name: string): string {
+  return [...name][0]?.toUpperCase() ?? "?";
+}
+
 /** The mark this project ships with, worn by a server that was given none. */
 const THE_MARK_WE_SHIP = "/melyxar-512.png";
 
@@ -57,6 +66,7 @@ export function Door({
      screen, so there is nothing to ask about. */
   const [twiceDiffers, setTwiceDiffers] = useState(false);
   const first = useRef<HTMLInputElement>(null);
+  const passwordField = useRef<HTMLInputElement>(null);
 
   // The cursor where the first word goes, on a screen whose only purpose is to
   // be typed into.
@@ -106,6 +116,32 @@ export function Door({
           {t(door.brandNew ? "door.first.invitation" : "door.invitation")}
         </p>
 
+        {/* Who is on this server, for whoever is not typing their own name for
+            the thousandth time. Pressing one fills the field rather than
+            replacing it: somebody who asked to be left off this list signs in
+            by typing, and the field they type into has to be the same one. */}
+        {door.names.length > 0 && (
+          <div className="door-who">
+            {door.names.map((offered) => (
+              <button
+                type="button"
+                key={offered}
+                className={`door-who-one${offered === name ? " door-who-chosen" : ""}`}
+                onClick={() => {
+                  typing(setName)(offered);
+                  passwordField.current?.focus();
+                }}
+                aria-pressed={offered === name}
+              >
+                <span className="door-who-mark" aria-hidden="true">
+                  {firstLetterOf(offered)}
+                </span>
+                <span className="door-who-name">{offered}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <label className="door-label" htmlFor="door-name">
           {t("door.name")}
         </label>
@@ -133,6 +169,7 @@ export function Door({
           <LockIcon className="door-box-mark" size={19} />
           <input
             id="door-password"
+            ref={passwordField}
             className="door-field"
             type={shown ? "text" : "password"}
             value={password}
