@@ -153,10 +153,6 @@ export function Door({
     <main className="door">
       <DoorBackground branding={branding} />
 
-      {/* What this server is for, in the corner it can be read from without
-          being in the way of the one thing on this screen to do. */}
-      <p className="door-slogan">{t("door.slogan")}</p>
-
       {/* How many cards go across is what this card is as wide as, so the
           count is handed to the drawing and the arithmetic stays in it. The
           width is the same on both views: a card that shrank the moment
@@ -438,6 +434,11 @@ export function Door({
             )}
           </>
         )}
+
+        {/* What this server is for, at the card's own foot rather than
+            floating above it: the last thing read on this screen, once
+            there is nothing left to press. */}
+        <p className="door-slogan">{t("door.slogan")}</p>
       </form>
 
       {/* The language is read from the browser and never asked about here:

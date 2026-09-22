@@ -9,11 +9,11 @@
  * a server given another accent keeps this screen with it. Not one colour is
  * written down here as a colour.
  *
- * The whole screen is laid out as three rows down the middle: what this server
- * is for at the top, the card under it, and the two quiet lines at the foot.
- * Everything to either side of them is background and is meant to stay that
- * way, which is what leaves the card the only thing on the screen asking to be
- * looked at.
+ * The whole screen is laid out as two rows down the middle: the card, and the
+ * two quiet lines at the foot. Everything to either side of them is background
+ * and is meant to stay that way, which is what leaves the card the only thing
+ * on the screen asking to be looked at. What this server is for travels
+ * inside the card itself, at its foot, rather than floating above it.
  */
 
 .door {
@@ -25,7 +25,7 @@
   overflow-x: hidden;
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: 1fr auto;
   justify-items: center;
   align-items: start;
   gap: var(--gap-wide);
@@ -375,30 +375,6 @@
   .door-shelf {
     display: none;
   }
-}
-
-/* ---------------------------------------------------------------------------
- * What this server is for
- * ------------------------------------------------------------------------ */
-
-/* In the top corner, above the card and clear of it. Small, in the quietest
-   colour that still reads: it is a thing said once, not a thing to be sold
-   with. Replaced by whatever an administrator writes in its place, the day
-   this server carries one of its own. */
-.door-slogan {
-  position: relative;
-  z-index: 1;
-  margin: 0;
-  padding: 7px 16px;
-  border-radius: var(--radius-pill);
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  background: color-mix(in srgb, var(--surface-raised) 45%, transparent);
-  backdrop-filter: blur(14px);
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--text-soft);
-  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1005,6 +981,27 @@
   background: var(--surface-hover);
 }
 
+/*
+ * What this server is for.
+ *
+ * At the card's own foot, under a hairline that separates it from whatever
+ * ends above it: the last thing pressed and the last thing read are not the
+ * same line. Small, in the quietest colour that still reads: it is a thing
+ * said once, not a thing to be sold with. Replaced by whatever an
+ * administrator writes in its place, the day this server carries one of its
+ * own.
+ */
+.door-slogan {
+  margin: 22px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-faint);
+}
+
 /* ---------------------------------------------------------------------------
  * The foot
  * ------------------------------------------------------------------------ */
@@ -1115,10 +1112,6 @@
   background: var(--surface);
 }
 
-:root[data-theme="light"] .door-slogan {
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
-}
-
 :root[data-theme="light"] .door-who-face {
   background: var(--surface-hover);
 }
@@ -1143,11 +1136,6 @@
   .door {
     justify-items: center;
     padding: clamp(14px, 4vw, 28px);
-  }
-
-  .door-slogan {
-    white-space: normal;
-    text-align: center;
   }
 
   .door-foot {
