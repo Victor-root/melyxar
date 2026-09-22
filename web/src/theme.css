@@ -91,7 +91,12 @@
      of it on a twenty eight inch panel, and the rows fill everything
      between. */
   --gutter: clamp(14px, 2.2vw, 56px);
-  --header-height: 60px;
+  /* The room the bar takes at the top of the screen: not the height of
+     anything drawn in it, but of the band it is drawn in. What is left over
+     around the pieces below is the air that tells them from the picture they
+     float on, and there has to be enough of it that they read as standing off
+     the top edge rather than stuck to it. */
+  --header-height: 76px;
 
   /* The bar is not a bar: it is a handful of glass pieces floating at the top
      of the screen, and this is how tall each of them stands inside the band
