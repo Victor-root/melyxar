@@ -2159,6 +2159,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_series_named_with_a_plural_its_provider_leaves_off_is_still_found() {
+        // Seen on a real collection: the folder wrote an `s` the provider's
+        // own title does not have, and the two were read as sharing one word.
+        let (_kept, state, library, work) = state_with_series("Les Harbours", None).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("42", "Les Harbour", Some(1989))],
+            vec![details("42", "Les Harbour", Some(1989))],
+        ));
+
+        let report = run(&state, &provider, &library).await;
+
+        assert_eq!(report.identified, 1);
+        let named = state
+            .database()
+            .work(work.id)
+            .await
+            .expect("read")
+            .expect("still there");
+        assert_eq!(named.title, "Les Harbour");
+    }
+
+    #[tokio::test]
     async fn anime_numbered_across_the_series_is_put_in_the_seasons_the_provider_counts() {
         let (_kept, state, library, series) =
             build_state("Amber Field", None, false, "anime", WorkKind::Series).await;

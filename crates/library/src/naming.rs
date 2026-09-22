@@ -948,16 +948,31 @@ fn number_of_a_roman_numeral(word: &str) -> Option<u8> {
 /// both ways on purpose: a title that holds every word of another and six more
 /// besides is a different title, and counting one way only would call them the
 /// same.
+///
+/// A word and the same word with an `s` on the end count as one word: the
+/// file says `Les Harbours` where the provider says `Les Harbour`, and read as
+/// two different words the only one left in common was `les`.
 pub fn how_alike(left: &[String], right: &[String]) -> f64 {
     if left.is_empty() || right.is_empty() {
         return 0.0;
     }
-    let left: BTreeSet<&String> = left.iter().collect();
-    let right: BTreeSet<&String> = right.iter().collect();
+    let left: BTreeSet<&str> = left.iter().map(|word| without_a_plural(word)).collect();
+    let right: BTreeSet<&str> = right.iter().map(|word| without_a_plural(word)).collect();
 
     let shared = left.intersection(&right).count() as f64;
     let between_them = left.union(&right).count() as f64;
     shared / between_them
+}
+
+/// A word without the `s` that makes it plural.
+///
+/// Only on a word long enough to still be a word without it, so `les` and
+/// `des` stay what they are.
+fn without_a_plural(word: &str) -> &str {
+    match word.strip_suffix('s') {
+        Some(single) if single.chars().count() >= 3 => single,
+        _ => word,
+    }
 }
 
 /// Whether one title is the other with more said after it.
@@ -1808,6 +1823,17 @@ mod tests {
         assert!(alike("Quiet Harbour", "Quiet Harbour The Making Of It All") < 0.5);
         assert_eq!(alike("Quiet Harbour", "Amber Field"), 0.0);
         assert_eq!(alike("", "Quiet Harbour"), 0.0);
+    }
+
+    #[test]
+    fn a_word_and_its_plural_are_one_word() {
+        // Seen on a real collection: the folder wrote the name of a series
+        // with an `s` its provider does not, and the two shared only `les`.
+        let alike =
+            |left: &str, right: &str| how_alike(&matchable_title(left), &matchable_title(right));
+        assert_eq!(alike("Les Harbours", "Les Harbour"), 1.0);
+        // A short word keeps its last letter.
+        assert!(alike("Les Harbour", "Le Harbour") < 1.0);
     }
 
     #[test]
