@@ -381,6 +381,46 @@
  * The card
  * ------------------------------------------------------------------------ */
 
+/* Holds the card and the halo behind it to exactly the same size and
+   position, without either one measuring the other: the halo is simply
+   another layer of this one box, and the card is the layer drawn over it. */
+.door-card-frame {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+}
+
+/*
+ * The glow behind the card.
+ *
+ * Two pools of the theme's own accent, blurred well past the card's edge so
+ * they read as light rather than as a shape, one brighter over the top
+ * corner the way a card would catch a light standing above it, the other
+ * fainter at the opposite foot. Always the accent an administrator has set:
+ * nothing here is a colour of its own, only the theme's, mixed lighter or
+ * fainter.
+ */
+.door-halo {
+  position: absolute;
+  z-index: 0;
+  inset: -46px;
+  border-radius: 46px;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      46% 40% at 22% 4%,
+      color-mix(in srgb, var(--accent-bright) 65%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      42% 38% at 82% 98%,
+      color-mix(in srgb, var(--accent-dim) 42%, transparent),
+      transparent 72%
+    );
+  filter: blur(38px);
+  opacity: 0.9;
+}
+
 .door-card {
   /* The tile one account is drawn on, and the room between two of them. Set
      here rather than on the tile itself, because the card's own width is
@@ -396,7 +436,6 @@
 
   position: relative;
   z-index: 1;
-  align-self: center;
   /* As wide as the accounts on it need, and never narrower than a sign in
      card should be. The count comes from the drawing, which is the only place
      that knows how many there are and how many it will put across. */
@@ -414,19 +453,31 @@
   flex-direction: column;
   padding: 34px 32px 30px;
   border-radius: 20px;
-  /* Glass rather than a solid panel: it stands over a background of its own
-     server's choosing, and a solid box on top of one is a box stuck to a
-     photograph. The wash is dark enough that the fields inside it hold their
-     contrast over anything behind. */
-  border: 1px solid color-mix(in srgb, var(--border-strong) 85%, transparent);
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  /* Glass over a gradient ring rather than a plain hairline: the border
+     itself is the theme's accent, brought round the whole edge of the card
+     rather than sitting flat, which is what makes it read as a lit trim
+     instead of an outline. A transparent border plus two background layers
+     is the only way that trim and the glass fill can both be see-through. */
+  border: 1px solid transparent;
+  background:
+    linear-gradient(
+        color-mix(in srgb, var(--surface) 80%, transparent),
+        color-mix(in srgb, var(--surface) 80%, transparent)
+      )
+      padding-box,
+    conic-gradient(
+        from 220deg,
+        color-mix(in srgb, var(--accent-bright) 95%, transparent),
+        color-mix(in srgb, var(--accent) 45%, transparent) 28%,
+        color-mix(in srgb, var(--border-strong) 55%, transparent) 52%,
+        color-mix(in srgb, var(--accent-dim) 65%, transparent) 78%,
+        color-mix(in srgb, var(--accent-bright) 95%, transparent)
+      )
+      border-box;
   backdrop-filter: blur(26px) saturate(125%);
-  /* Two shadows: one that seats it on the screen, and a hairline of accent
-     around it that ties it to the light behind. */
-  box-shadow:
-    var(--shadow-raised),
-    0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent),
-    0 0 60px color-mix(in srgb, var(--accent) 12%, transparent);
+  /* Seats it on the screen; the glow is the halo behind it rather than a
+     shadow layer here. */
+  box-shadow: var(--shadow-raised);
   animation: door-arrive var(--calm) var(--ease) both;
 }
 
@@ -1097,13 +1148,22 @@
 }
 
 /* Solid, and seated on the page by its shadow rather than by its glow: glass
-   over white is white. */
+   over white is white, and the gradient ring goes with it, back to a plain
+   hairline. */
 :root[data-theme="light"] .door-card {
+  border-color: color-mix(in srgb, var(--border-strong) 85%, transparent);
   background: var(--surface);
   backdrop-filter: none;
   box-shadow:
     var(--shadow-raised),
     0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* The halo reads at a fraction of what it reads on black, the same
+   correction the drift light above gets, for the same reason. */
+:root[data-theme="light"] .door-halo {
+  opacity: 0.35;
+  filter: blur(70px);
 }
 
 :root[data-theme="light"] .door-box {
