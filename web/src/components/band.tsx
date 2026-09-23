@@ -200,11 +200,13 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
           </span>
           <span className="band-halo" aria-hidden="true" />
           {/* What somebody filmed or photographed has no poster and never
-              will: it is wide, and it is theirs. So it is not stood up as a
-              fan on a polished floor but laid down as a pile of prints, the
-              way photos lie on a table. */}
+              will: it is wide, and it is theirs. So it is not a fan of
+              posters but a pile of prints, standing on the same water. */}
           {shelf.kind === "home_media" ? (
-            <Pile prints={fan.slice(0, IN_A_PILE)} />
+            <>
+              <Pile prints={fan.slice(0, IN_A_PILE)} mirror />
+              <Pile prints={fan.slice(0, IN_A_PILE)} />
+            </>
           ) : (
             <>
               <Fan fan={fan} mirror />
@@ -258,15 +260,19 @@ function Fan({ fan, mirror }: { fan: Card[]; mirror?: boolean }) {
 }
 
 /**
- * A pile of prints, for what somebody filmed or photographed themselves.
+ * A pile of prints, for what somebody filmed or photographed themselves,
+ * standing or reflected like the fan.
  *
  * Each one is the wide picture of the work where it has one, and the picture
- * taken from its file otherwise, cut to the shape of a print. The newest lies
- * on top.
+ * taken from its file otherwise, cut to the shape of a print. The newest is
+ * in front.
  */
-function Pile({ prints }: { prints: Card[] }) {
+function Pile({ prints, mirror }: { prints: Card[]; mirror?: boolean }) {
   return (
-    <span className={`band-pile band-pile-${prints.length}`} aria-hidden="true">
+    <span
+      className={`band-pile band-pile-${prints.length}${mirror ? " band-mirror" : ""}`}
+      aria-hidden="true"
+    >
       {prints.map((card) => (
         <Print key={card.id} card={card} />
       ))}
