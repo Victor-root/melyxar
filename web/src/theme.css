@@ -75,6 +75,17 @@
   --accent-contrast: #ffffff;
   --accent-glow: rgba(200, 30, 30, 0.35);
 
+  /* What a state is, apart from the accent: the accent says "active, press
+     here" and each account picks its own, so a failure must never borrow it.
+     Three words, each with the wash it is laid on. */
+  --ok: #34c77b;
+  --attention: #f2a93b;
+  --trouble: #f0555a;
+  --ok-wash: color-mix(in srgb, var(--ok) 14%, transparent);
+  --attention-wash: color-mix(in srgb, var(--attention) 14%, transparent);
+  --trouble-wash: color-mix(in srgb, var(--trouble) 14%, transparent);
+
+  --radius-panel: 14px;
   --radius-card: 10px;
   --radius-control: 8px;
   --radius-pill: 999px;
@@ -115,6 +126,11 @@
      night like everything else rather than stay black on a light theme. Each
      piece of the bar is mixed from it. */
   --header-glass: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+
+  /* The same glass, thicker, for the panels the administration and the
+     settings are laid out in: they hold text to be read for a while rather
+     than a few icons, so less of the painting behind comes through. */
+  --panel-glass: color-mix(in srgb, var(--surface-raised) 74%, transparent);
 
   /* How tall the banner of the home page is, and with it the grey block drawn
      in its place while the page loads, so the two can never drift apart and
@@ -240,6 +256,10 @@
   --text-faint: #7b8393;
 
   --accent-glow: rgba(200, 30, 30, 0.22);
+  /* Deeper on white, where the bright ones fade to pastel. */
+  --ok: #17904f;
+  --attention: #b86e00;
+  --trouble: #cf2f35;
   --shadow-card: 0 4px 14px rgba(20, 22, 27, 0.14);
   --shadow-raised: 0 12px 32px rgba(20, 22, 27, 0.18);
   --scrim: linear-gradient(to top, #f4f5f7 8%, rgba(244, 245, 247, 0.7) 45%, rgba(244, 245, 247, 0) 100%);

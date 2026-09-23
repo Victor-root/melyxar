@@ -762,6 +762,25 @@ export type PageSaw =
       after_ms: number;
     };
 
+/** What the summary of the administration says about the server. */
+export interface Overview {
+  server_name: string;
+  version: string;
+  started_at: string;
+  /** Whether the database runs the way it has to. */
+  database_ready: boolean;
+  media_tools: {
+    found: boolean;
+    version: string | null;
+    /** How the graphics card is reached, when one was proven to work. */
+    card: string | null;
+  };
+  accounts: number;
+  devices: number;
+  /** Devices used in the last day. */
+  devices_today: number;
+}
+
 export interface SystemInfo {
   server_name: string;
   version: string;
@@ -1157,6 +1176,7 @@ export function browseQuery(options: BrowseOptions): string {
 
 export const api = {
   system: (signal?: AbortSignal) => get<SystemInfo>("/api/v1/system/info", signal),
+  overview: (signal?: AbortSignal) => get<Overview>("/api/v1/system/overview", signal),
   libraries: (signal?: AbortSignal) => get<Library[]>("/api/v1/libraries", signal),
   filters: (library: string, signal?: AbortSignal) =>
     get<Filters>(`/api/v1/libraries/${library}/filters`, signal),

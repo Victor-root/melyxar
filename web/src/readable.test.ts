@@ -14,11 +14,13 @@ import {
   asLocalTime,
   asUtcMinutes,
   howLong,
+  howLongSince,
   insideTheRange,
   outOfAHundred,
   outOfTen,
   readableBitrate,
   readableSize,
+  releaseOf,
 } from "./readable";
 
 /** Standing in for the interface's own wording, so what is checked is the sum
@@ -131,5 +133,34 @@ describe("insideTheRange", () => {
 
   it("answers nothing for a field that holds no number", () => {
     expect(insideTheRange(Number.NaN, 10, 20)).toBeNull();
+  });
+});
+
+describe("howLongSince", () => {
+  const start = "2026-09-01T10:00:00Z";
+  const later = (minutes: number) => new Date(start).getTime() + minutes * 60_000;
+
+  it("says days and hours once a day has gone, and drops the minutes", () => {
+    expect(howLongSince(start, later(12 * 1440 + 4 * 60 + 37), said)).toBe(
+      'time.days_hours({"days":12,"hours":4})',
+    );
+  });
+
+  it("says hours and minutes within a day", () => {
+    expect(howLongSince(start, later(3 * 60 + 5), said)).toBe(
+      'time.hours_minutes({"hours":3,"minutes":5})',
+    );
+  });
+
+  it("says minutes alone within an hour, and never less than none", () => {
+    expect(howLongSince(start, later(8), said)).toBe('time.minutes({"minutes":8})');
+    expect(howLongSince(start, later(-3), said)).toBe('time.minutes({"minutes":0})');
+  });
+});
+
+describe("releaseOf", () => {
+  it("keeps the release and drops the commit it was built from", () => {
+    expect(releaseOf("0.1.0 (28a4bd86+edited)")).toBe("0.1.0");
+    expect(releaseOf("0.2.0")).toBe("0.2.0");
   });
 });

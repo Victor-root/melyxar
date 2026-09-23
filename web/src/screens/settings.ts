@@ -1,11 +1,6 @@
 /*
- * What the settings screen is driven by, and nothing about how it looks.
- *
- * Two kinds of setting sit here, and they are told apart on purpose. Some are
- * kept by the server and change what it does: the fold to stereo turns a copy
- * into a rebuild, and a preferred language decides which soundtrack starts.
- * The others are kept by this browser and only change what is drawn, which is
- * why they work without asking anyone.
+ * What the settings are driven by, the server's and somebody's own, and
+ * nothing about how they look.
  *
  * Every change is sent as it is made rather than gathered behind a save
  * button: there is nothing here that is only half true while being typed, and
@@ -17,122 +12,117 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import type { Library, LibraryWork, PlaybackSettings, ViewerPreferences } from "../api";
+import type { LibraryWork, PlaybackSettings, ViewerPreferences } from "../api";
 import { ApiError } from "../api";
 import { useAsked } from "../asking";
-import { useLibraries } from "../libraries";
 import { rememberAppearance, storedAppearance } from "../player/appearance";
 import type { Appearance } from "../player/appearance";
 
 /** What went wrong last, when something did. */
 export type Trouble = "unreachable" | "not_kept" | null;
 
-/** Everything the settings screen is handed to draw itself and be driven by. */
-export interface SettingsScreen {
-  /** What this viewer has decided, or nothing until the server has said. */
-  kept: ViewerPreferences | null;
-  change: (changes: Partial<ViewerPreferences>) => Promise<void>;
-  /** What the server does with every library. */
-  work: LibraryWork | null;
-  setWorkTo: (changes: Partial<LibraryWork>) => void;
-  /** Whether wide gamut colour is ever converted, everywhere on this server:
-      an administrator's own switch, not one browser's preference. */
-  playback: PlaybackSettings | null;
-  setPlaybackTo: (changes: Partial<PlaybackSettings>) => void;
-  /** How subtitles are dressed, kept by this browser alone. */
-  appearance: Appearance;
-  look: (changes: Partial<Appearance>) => void;
-  /** The one list the whole interface is drawn from, taken from the shell
-      rather than asked for again: this is the screen that changes them, and a
-      change nobody else saw would leave the bar at the top listing a library
-      that is no longer there. */
-  libraries: Library[];
-  readLibraries: () => void;
+function whyItWasNotKept(error: unknown): Trouble {
+  return error instanceof ApiError ? "not_kept" : "unreachable";
+}
+
+/** A group of settings the server keeps, and the way to change it. */
+export interface Kept<T> {
+  /** What the server holds, or nothing until it has said. */
+  kept: T | null;
+  setTo: (changes: Partial<T>) => void;
   /** What went wrong last, for the one line that says so. */
   failed: Trouble;
 }
 
-export function useSettingsScreen(): SettingsScreen {
+/**
+ * A group of settings the server keeps whole: read once, and written back
+ * whole with the change in it.
+ */
+export function useKept<T>(
+  read: (signal: AbortSignal) => Promise<T>,
+  write: (value: T) => Promise<T>,
+): Kept<T> {
+  const asked = useAsked(read);
+  const [kept, setKept] = useState<T | null>(null);
   const [failed, setFailed] = useState<Trouble>(null);
-  const [appearance, setAppearanceState] = useState<Appearance>(storedAppearance);
-  const { all: libraries, refresh: readLibraries } = useLibraries();
 
-  const preferences = useAsked((signal) => api.preferences(signal));
-  const libraryWork = useAsked((signal) => api.libraryWork(signal));
-  const playbackSettings = useAsked((signal) => api.playbackSettings(signal));
-
-  /* Held here rather than read straight out of the questions above, because
-     what is shown next is what the server kept, which is not always what was
-     asked for. */
-  const [kept, setKept] = useState<ViewerPreferences | null>(null);
-  const [work, setWork] = useState<LibraryWork | null>(null);
-  const [playback, setPlayback] = useState<PlaybackSettings | null>(null);
-
-  const fromTheServer = preferences.answer;
+  const answer = asked.answer;
   useEffect(() => {
-    if (fromTheServer) {
-      setKept(fromTheServer);
-      setFailed(null);
+    if (answer) {
+      setKept(answer);
     }
-  }, [fromTheServer]);
-  useEffect(() => {
-    if (libraryWork.answer) setWork(libraryWork.answer);
-  }, [libraryWork.answer]);
-  useEffect(() => {
-    if (playbackSettings.answer) setPlayback(playbackSettings.answer);
-  }, [playbackSettings.answer]);
+  }, [answer]);
 
-  const couldNotBeRead =
-    preferences.failure !== null || libraryWork.failure !== null || playbackSettings.failure !== null;
+  const couldNotBeRead = asked.failure !== null;
   useEffect(() => {
     if (couldNotBeRead) {
       setFailed("unreachable");
     }
   }, [couldNotBeRead]);
 
-  const whyItWasNotKept = (error: unknown): Trouble =>
-    error instanceof ApiError ? "not_kept" : "unreachable";
-
   /* Written out plainly rather than wrapped up and remembered: sending to the
      server from inside a state change would send it twice, since React runs a
-     state change twice over while it is being developed to catch exactly this.
-     Nothing here is watched by anything, so there is nothing to remember. */
-  const setWorkTo = (changes: Partial<LibraryWork>) => {
-    if (!work) {
+     state change twice over while it is being developed to catch exactly
+     this. */
+  const setTo = (changes: Partial<T>) => {
+    if (!kept) {
       return;
     }
-    const before = work;
-    const wanted = { ...work, ...changes };
-    setWork(wanted);
-    api
-      .setLibraryWork(wanted)
+    const before = kept;
+    const wanted = { ...kept, ...changes };
+    setKept(wanted);
+    write(wanted)
       .then((asKept) => {
-        setWork(asKept);
+        setKept(asKept);
         setFailed(null);
       })
       .catch((error) => {
         // Put back what the server still holds, rather than showing a setting
         // next to a server that never heard of it.
-        setWork(before);
+        setKept(before);
         setFailed(whyItWasNotKept(error));
       });
   };
 
-  const setPlaybackTo = (changes: Partial<PlaybackSettings>) => {
-    if (!playback) {
-      return;
+  return { kept, setTo, failed };
+}
+
+/** What the server does with every library. */
+export function useLibraryWork(): Kept<LibraryWork> {
+  return useKept(api.libraryWork, api.setLibraryWork);
+}
+
+/** Whether wide gamut colour is ever converted, everywhere on this server. */
+export function usePlaybackSettings(): Kept<PlaybackSettings> {
+  return useKept(api.playbackSettings, api.setPlaybackSettings);
+}
+
+/** What this viewer has decided, sent a change at a time. */
+export interface Preferences {
+  kept: ViewerPreferences | null;
+  change: (changes: Partial<ViewerPreferences>) => Promise<void>;
+  failed: Trouble;
+}
+
+export function usePreferences(): Preferences {
+  const asked = useAsked((signal) => api.preferences(signal));
+  const [kept, setKept] = useState<ViewerPreferences | null>(null);
+  const [failed, setFailed] = useState<Trouble>(null);
+
+  const answer = asked.answer;
+  useEffect(() => {
+    if (answer) {
+      setKept(answer);
+      setFailed(null);
     }
-    const before = playback;
-    const wanted = { ...playback, ...changes };
-    setPlayback(wanted);
-    api
-      .setPlaybackSettings(wanted)
-      .then(setPlayback)
-      .catch((error) => {
-        setPlayback(before);
-        setFailed(whyItWasNotKept(error));
-      });
-  };
+  }, [answer]);
+
+  const couldNotBeRead = asked.failure !== null;
+  useEffect(() => {
+    if (couldNotBeRead) {
+      setFailed("unreachable");
+    }
+  }, [couldNotBeRead]);
 
   const change = (changes: Partial<ViewerPreferences>): Promise<void> => {
     setKept((before) => (before ? { ...before, ...changes } : before));
@@ -145,23 +135,16 @@ export function useSettingsScreen(): SettingsScreen {
       .catch((error) => setFailed(whyItWasNotKept(error)));
   };
 
+  return { kept, change, failed };
+}
+
+/** How subtitles are dressed, kept by this browser alone. */
+export function useSubtitleLook(): [Appearance, (changes: Partial<Appearance>) => void] {
+  const [appearance, setAppearance] = useState<Appearance>(storedAppearance);
   const look = (changes: Partial<Appearance>) => {
     const next = { ...appearance, ...changes };
-    setAppearanceState(next);
+    setAppearance(next);
     rememberAppearance(next);
   };
-
-  return {
-    kept,
-    change,
-    work,
-    setWorkTo,
-    playback,
-    setPlaybackTo,
-    appearance,
-    look,
-    libraries,
-    readLibraries,
-    failed,
-  };
+  return [appearance, look];
 }

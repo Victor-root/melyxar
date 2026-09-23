@@ -47,18 +47,17 @@ import { Face } from "./face";
 import { headroomAt } from "../headroom";
 import type { Headroom } from "../headroom";
 import {
-  ActivityIcon,
   BackIcon,
   BellIcon,
   ChevronDownIcon,
   GearIcon,
   HeartIcon,
-  JournalIcon,
   KindIcon,
   LeaveIcon,
   RefreshIcon,
   ScreenCastIcon,
   SearchIcon,
+  SlidersIcon,
 } from "../icons";
 
 /**
@@ -136,7 +135,11 @@ export function Header({
      carries a search: landing on a page of results with the words hidden
      inside an icon is a page answering a question nobody can see. */
   const [looking, setLooking] = useState(() => (parameters.get("search") ?? "") !== "");
-  const out = useHeadroom(scrolling, headerHides);
+  /* Held in place on the pages laid out beside a list of sections: the list
+     is pinned under the bar, and a bar that slid away would leave a hole of
+     its own height over it. */
+  const sectioned = /^\/(admin|settings)(\/|$)/.test(location.pathname);
+  const out = useHeadroom(scrolling, headerHides && !sectioned);
   const field = useRef<HTMLInputElement>(null);
   const searchForm = useRef<HTMLFormElement>(null);
   const { jobs } = useRunning();
@@ -351,7 +354,7 @@ export function Header({
               a glance from any screen, and a glance is not something anybody
               should have to open a menu for. */}
           {administrator && jobs.length > 0 && (
-            <Link className="header-busy" to="/activity">
+            <Link className="header-busy" to="/admin/tasks">
               <span className="header-busy-mark" aria-hidden="true" />
               {t(`jobs.${jobs[0].kind}`)}
               {jobs[0].ratio !== null && ` ${outOfAHundred(jobs[0].ratio)} %`}
@@ -534,13 +537,9 @@ export function Header({
                       </button>
                     )
                   ))}
-                <NavLink to="/activity" className="header-menu-line">
-                  <ActivityIcon size={16} />
-                  {t("nav.jobs")}
-                </NavLink>
-                <NavLink to="/journal" className="header-menu-line">
-                  <JournalIcon size={16} />
-                  {t("nav.journal")}
+                <NavLink to="/admin" className="header-menu-line">
+                  <SlidersIcon size={16} />
+                  {t("nav.administration")}
                 </NavLink>
               </>
             )}

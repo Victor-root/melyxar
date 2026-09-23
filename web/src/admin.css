@@ -1,0 +1,1688 @@
+/*
+ * The administration and somebody's own settings: a list of sections down the
+ * side, and panels of glass on the library's own light.
+ *
+ * Built from the same material as the rest of the interface: the glass of the
+ * bar at the top, the accent where something is active or pressable, and the
+ * state colours only where a state is being said. Nothing here writes a
+ * colour of its own.
+ */
+
+/* --------------------------------------------------------------------------
+ * The page and its side list
+ * ----------------------------------------------------------------------- */
+
+.sectioned {
+  display: grid;
+  grid-template-columns: 256px minmax(0, 1fr);
+  gap: var(--gap-wide);
+  align-items: start;
+  padding: calc(var(--header-height) + var(--gap)) var(--gutter) var(--gap-section);
+}
+
+/* Held in view while the page runs on under it: the list is how anybody knows
+   where they are and where else they could be. */
+.side {
+  position: sticky;
+  top: calc(var(--header-height) + var(--gap));
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--header-height) - var(--gap) * 2);
+  padding: 10px;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border);
+  background: var(--panel-glass);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-card);
+}
+
+.side-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.side-list::-webkit-scrollbar {
+  display: none;
+}
+
+.side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.side-group-name {
+  padding: 0 12px 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.side-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 10px 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  color: var(--text-soft);
+  font-size: 14.5px;
+  font-weight: 550;
+  transition:
+    background var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.side-line svg {
+  flex: none;
+  color: var(--text-faint);
+  transition: color var(--quick) var(--ease);
+}
+
+.side-line-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-line:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.side-line:hover svg {
+  color: var(--text-soft);
+}
+
+/* Where somebody is, in the accent: washed from the edge the mark stands on,
+   rimmed, and the mark itself lit. */
+.side-line.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 24%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent)
+  );
+}
+
+.side-line.active svg {
+  color: var(--accent-bright);
+}
+
+.side-line.active::before {
+  content: "";
+  position: absolute;
+  left: -11px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.side-foot {
+  margin-top: var(--gap);
+  padding: var(--gap) 12px 4px;
+  border-top: 1px solid var(--border);
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.side-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectioned-page {
+  min-width: 0;
+  /* What the panels inside measure themselves against: the room the page
+     really has, once the side list has taken its share. */
+  container-type: inline-size;
+}
+
+/* On a narrow screen the list is a strip across the top, scrolled sideways,
+   and the page runs under it the whole width. */
+@media (max-width: 900px) {
+  .sectioned {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--gap);
+  }
+
+  .side {
+    position: static;
+    max-height: none;
+    padding: 6px;
+  }
+
+  .side-list {
+    flex-direction: row;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .side-group {
+    flex-direction: row;
+  }
+
+  .side-group-name,
+  .side-foot,
+  .side-line .soon {
+    display: none;
+  }
+
+  .side-line {
+    flex: none;
+    min-height: 38px;
+  }
+
+  .side-line.active::before {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * The head of a page
+ * ----------------------------------------------------------------------- */
+
+.page-head {
+  margin-bottom: var(--gap-wide);
+}
+
+.page-trail {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.page-trail [aria-current] {
+  color: var(--text-soft);
+}
+
+.page-head-line {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-head-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: radial-gradient(
+    circle at 30% 20%,
+    color-mix(in srgb, var(--accent) 38%, transparent),
+    color-mix(in srgb, var(--accent) 10%, transparent)
+  );
+  color: var(--accent-bright);
+  box-shadow: 0 0 24px -6px var(--accent-glow);
+}
+
+.page-head-words {
+  flex: 1 1 460px;
+  min-width: 0;
+}
+
+.page-head-words h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.page-head-words p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 14.5px;
+}
+
+.page-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+}
+
+/* --------------------------------------------------------------------------
+ * Panels
+ * ----------------------------------------------------------------------- */
+
+/* Panels side by side while each has room to breathe, one under the other
+   once they would not. */
+.panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  gap: calc(var(--gap) * 1.5);
+}
+
+/* The air between the blocks of a page, said once for every page rather than
+   by each pair of neighbours: blocks set side by side in a grid take their
+   spacing from the grid, and a margin on one of them there would lift it out
+   of line with the other. */
+.sectioned-page > :not(.page-head) + * {
+  margin-top: calc(var(--gap) * 1.5);
+}
+
+.panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 18px;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border);
+  background: var(--panel-glass);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-card);
+}
+
+/* A hairline of the accent along the top, strongest in the middle: the
+   same light the tiles of the home page are rimmed with, said once. */
+.panel::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 55%, transparent),
+    transparent
+  );
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.panel-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-bright);
+}
+
+.panel-words {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.panel-words h2 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.panel-words p {
+  margin: 2px 0 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.panel-action {
+  flex: none;
+  display: flex;
+  gap: var(--gap-tight);
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin-top: 16px;
+}
+
+/* A panel whose rows are settings: the rows keep their own air, and the
+   hairline between them is what separates them. */
+.panel-body:has(> .setting) {
+  gap: 0;
+  margin-top: 8px;
+}
+
+/* Drawn and not yet wired: all there, and plainly asleep. The mark goes
+   grey so the accent keeps meaning something that works. */
+.panel-soon .panel-mark {
+  border-color: var(--border);
+  background: var(--surface-hover);
+  color: var(--text-faint);
+}
+
+.panel-soon .panel-body {
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+}
+
+.panel-soon::before {
+  display: none;
+}
+
+/* The word saying so. */
+.soon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* A line in a panel that leads somewhere else, at its foot. */
+.panel-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: var(--gap);
+}
+
+/* A quiet button with a rim, for "go and see" at the foot of a panel. */
+.button-rim {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.button-rim:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+ * A setting on its line, and its controls
+ * ----------------------------------------------------------------------- */
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-wide);
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.setting:first-child {
+  border-top: 0;
+}
+
+.setting-words {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.setting-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 550;
+}
+
+.setting-why {
+  max-width: 68ch;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.setting-control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.setting-soon .setting-control {
+  opacity: 0.5;
+}
+
+@media (max-width: 640px) {
+  .setting {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--gap);
+  }
+}
+
+/* A switch: a track, and a knob that crosses it. */
+.toggle {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-hover);
+  transition:
+    background var(--calm) var(--ease),
+    border-color var(--calm) var(--ease),
+    box-shadow var(--calm) var(--ease);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-soft);
+  transition:
+    transform var(--calm) var(--ease),
+    background var(--calm) var(--ease);
+}
+
+.toggle[aria-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 12px -2px var(--accent-glow);
+}
+
+.toggle[aria-checked="true"] .toggle-knob {
+  transform: translateX(18px);
+  background: var(--accent-contrast);
+}
+
+.toggle:disabled,
+.picker:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* A field that opens a list. */
+.picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 200px;
+  max-width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  transition:
+    border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+.picker svg {
+  flex: none;
+  color: var(--text-soft);
+  transition: transform var(--calm) var(--ease);
+}
+
+.picker-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+}
+
+.picker-open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.picker-open svg {
+  transform: rotate(180deg);
+}
+
+.picker-list {
+  max-height: min(340px, 60vh);
+  overflow-y: auto;
+}
+
+.picker-list .header-menu-line {
+  justify-content: space-between;
+  gap: var(--gap-wide);
+}
+
+.picker-line-words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A field typed into: the picker's shape, and a cursor. */
+.field-line {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  transition:
+    border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+.field-line:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.field-line:disabled {
+  opacity: 0.45;
+}
+
+.field-number {
+  width: 96px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A line along which a number is chosen, filled in the accent up to it. */
+.slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slider input[type="range"] {
+  appearance: none;
+  width: 200px;
+  height: 6px;
+  margin: 0;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--filled),
+    var(--surface-hover) var(--filled)
+  );
+  cursor: pointer;
+}
+
+.slider input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid var(--accent);
+  background: var(--accent-contrast);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.slider input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 3px solid var(--accent);
+  background: var(--accent-contrast);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.slider input[type="range"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.slider-value {
+  min-width: 7ch;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* A refusal or a word from the server, said inside the panel it is about. */
+.panel-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--attention-wash);
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+.panel-notice-trouble {
+  background: var(--trouble-wash);
+}
+
+/* --------------------------------------------------------------------------
+ * Figures and states
+ * ----------------------------------------------------------------------- */
+
+.stat {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.stat-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+  color: var(--text-soft);
+}
+
+.stat-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stat-label {
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.stat-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stat-note {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  gap: var(--gap);
+}
+
+.state-ok {
+  color: var(--ok);
+}
+
+.state-attention {
+  color: var(--attention);
+}
+
+.state-trouble {
+  color: var(--trouble);
+}
+
+.state-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.state-pill.state-ok {
+  background: var(--ok-wash);
+}
+
+.state-pill.state-attention {
+  background: var(--attention-wash);
+}
+
+.state-pill.state-trouble {
+  background: var(--trouble-wash);
+}
+
+/* A bar that fills as work is done. */
+.meter {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+}
+
+.meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+  transition: width var(--calm) var(--ease);
+}
+
+/* A list of lines inside a panel, each on its own row with a hairline. */
+.lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 48px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.line:first-child {
+  border-top: 0;
+}
+
+.line-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+  color: var(--text-soft);
+}
+
+.line-words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.line-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-note {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-end {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.line-figure {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.empty-line {
+  margin: 0;
+  padding: var(--gap) 0;
+  color: var(--text-faint);
+  font-size: 13.5px;
+}
+
+/* --------------------------------------------------------------------------
+ * The summary
+ * ----------------------------------------------------------------------- */
+
+/* Three across on a wide screen, two on an ordinary one, one on a phone. */
+.overview-panels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(var(--gap) * 1.5);
+}
+
+.overview-panels > .panel-wide {
+  grid-column: 1 / -1;
+}
+
+@container (max-width: 1180px) {
+  .overview-panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 760px) {
+  .overview-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The server, across the top: who it is, and its facts in one row under it. */
+.server-strip {
+  gap: 18px;
+  padding: 20px 22px;
+}
+
+.server-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+/* The mark, lit from behind by the accent: the one place in the tools where
+   the server wears its own face. */
+.server-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: radial-gradient(
+    circle at 50% 40%,
+    color-mix(in srgb, var(--accent) 30%, transparent),
+    color-mix(in srgb, var(--surface-deep) 80%, transparent) 72%
+  );
+  box-shadow: 0 0 28px -6px var(--accent-glow);
+}
+
+.server-mark img {
+  width: 36px;
+  height: 36px;
+}
+
+.server-words {
+  display: flex;
+  flex: 1 1 200px;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.server-words h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.server-words p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13.5px;
+}
+
+.server-facts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+@container (max-width: 900px) {
+  .server-facts {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
+.fact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.fact-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+  color: var(--text-soft);
+}
+
+.fact-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fact-label,
+.stat-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fact-label {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.fact-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  font-size: 15.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-strip-go {
+  flex: none;
+  align-self: flex-start;
+}
+
+/* A line that stands for something not there yet. */
+.line-asleep {
+  opacity: 0.55;
+}
+
+/* A piece of work, its name and share over its bar. */
+.under-way {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.under-way-words {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.under-way-share {
+  margin-left: auto;
+  color: var(--accent-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@container (max-width: 520px) {
+  .stats-three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Settings gathered inside a panel that holds more than settings. */
+.settings-lines {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A sentence said inside a panel, between what it holds. */
+.panel-say {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.field-time {
+  width: 140px;
+}
+
+/* --------------------------------------------------------------------------
+ * The work of the server
+ * ----------------------------------------------------------------------- */
+
+.job-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.job-card-running {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.job-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.job-card-name {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.job-card-head .state-pill {
+  margin-left: auto;
+}
+
+.job-card-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.job-card-progress .meter {
+  flex: 1 1 auto;
+}
+
+.job-card-count {
+  color: var(--text-soft);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.job-card-doing {
+  color: var(--text-faint);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.job-card-reason {
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--trouble-wash);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------
+ * The journal
+ * ----------------------------------------------------------------------- */
+
+.journal-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.journal-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-soft);
+  transition:
+    border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+.journal-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.journal-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+/* Words to tick, each a pill: lit in the accent when it is in. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 550;
+  transition:
+    background var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.chip-on {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
+.chip-count {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-on .chip-count {
+  color: var(--accent-bright);
+}
+
+/* The lines themselves, set in a face whose letters all take the same room,
+   so that times, levels and words line up down the page. */
+.log {
+  max-height: 70vh;
+  overflow: auto;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-deep) 80%, transparent);
+  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.log-line {
+  display: grid;
+  grid-template-columns: auto 5ch 12ch minmax(0, 1fr);
+  gap: 12px;
+  padding: 3px 12px;
+}
+
+.log-line:nth-child(odd) {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+
+.log-at,
+.log-level {
+  color: var(--text-faint);
+}
+
+.log-level {
+  text-transform: uppercase;
+}
+
+.log-tag {
+  overflow: hidden;
+  color: var(--text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-said {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.log-warn .log-level,
+.log-warn .log-said {
+  color: var(--attention);
+}
+
+.log-error .log-level,
+.log-error .log-said {
+  color: var(--trouble);
+}
+
+.log-debug .log-said,
+.log-trace .log-said {
+  color: var(--text-soft);
+}
+
+/* The report, whole, in the journal's face. */
+.report-view {
+  margin: 0;
+  padding: 14px 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The sign between two counts that make one shape. */
+.setting-times {
+  color: var(--text-faint);
+}
+
+/* The outline of a table not filled yet. */
+.ghosts {
+  display: grid;
+  grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+  gap: 12px var(--gap-wide);
+  align-items: center;
+}
+
+.ghosts-head {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ghosts-cell {
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+}
+
+/* --------------------------------------------------------------------------
+ * Looking for a folder on the server's disk
+ * ----------------------------------------------------------------------- */
+
+.browse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: min(560px, 80vw);
+}
+
+.browse-where {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.browse-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.browse-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 50vh;
+  overflow-y: auto;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+}
+
+.browse-list .empty-line {
+  padding: var(--gap) 14px;
+}
+
+.browse-folder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+  transition: background var(--quick) var(--ease);
+}
+
+.browse-folder:first-child {
+  border-top: 0;
+}
+
+.browse-folder svg {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.browse-folder:hover {
+  background: var(--surface-hover);
+}
+
+.browse-folder:hover svg:first-child {
+  color: var(--accent-bright);
+}
+
+.browse-folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browse-folder-videos {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+/* --------------------------------------------------------------------------
+ * The libraries
+ * ----------------------------------------------------------------------- */
+
+.library-new {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.library-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.library-folders-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.line-path {
+  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.line-trouble {
+  color: var(--trouble);
+  white-space: normal;
+}
+
+/* A field that reads as text until it is used: the label of a folder is
+   named far more often than it is renamed. */
+.field-quiet {
+  height: 30px;
+  margin-left: -8px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  font-weight: 550;
+}
+
+.field-quiet:hover {
+  border-color: var(--border);
+}
+
+/* A button with no frame, for the small presses along a line. */
+.button-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-soft);
+}
+
+/* What takes something away, said in the colour of a break rather than in
+   the accent, which means "press here". */
+.button-danger {
+  border-color: color-mix(in srgb, var(--trouble) 45%, var(--border));
+  background: transparent;
+  color: var(--trouble);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: var(--trouble-wash);
+}
+
+.button-danger-full {
+  border-color: var(--trouble);
+  background: var(--trouble);
+  color: var(--surface-deep);
+}
+
+.button-danger-full:hover:not(:disabled) {
+  background: var(--trouble);
+}
+
+.removal-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in srgb, var(--trouble) 45%, transparent);
+  background: var(--trouble-wash);
+}
+
+.removal-ask {
+  margin: 0;
+  font-weight: 550;
+}
+
+.removal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
+}
+
+.panel-foot .button + .button {
+  margin-left: var(--gap-tight);
+}
+
+/* --------------------------------------------------------------------------
+ * Somebody's own settings
+ * ----------------------------------------------------------------------- */
+
+.panel-notice-ok {
+  background: var(--ok-wash);
+}
+
+/* The accents on offer: each a disc of its own colour, the chosen one ringed
+   and ticked. The colour of each is the one thing here that is not a token,
+   since it is the choice itself. */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  transition: transform var(--quick) var(--ease);
+}
+
+.swatch:hover {
+  transform: scale(1.1);
+}
+
+.swatch-on {
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--swatch);
+}
+
+/* Any other colour: a disc of every colour, which opens the machine's own
+   picker. Its field is laid over the disc and made clear, so the press lands
+   on the field and the disc is what is seen. */
+.swatch-own {
+  background: conic-gradient(
+    from 0deg,
+    hsl(0 80% 55%),
+    hsl(60 80% 55%),
+    hsl(120 80% 45%),
+    hsl(180 80% 45%),
+    hsl(240 80% 60%),
+    hsl(300 80% 55%),
+    hsl(360 80% 55%)
+  );
+}
+
+.swatch-own input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.profile-face {
+  width: 76px;
+  height: 76px;
+  font-size: 28px;
+}
+
+.profile-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-name {
+  font-size: 19px;
+  font-weight: 650;
+}
+
+.profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin-top: 6px;
+}
+
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 50px;
+  border-top: 1px solid var(--border);
+}
+
+.order-line:first-child {
+  border-top: 0;
+}
+
+.order-place {
+  width: 22px;
+  color: var(--accent-bright);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.order-name {
+  flex: 1 1 auto;
+  font-size: 14.5px;
+  font-weight: 550;
+}

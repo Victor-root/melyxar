@@ -504,15 +504,6 @@
   object-fit: cover;
 }
 
-/* Square with barely rounded corners, the way the picture is shown
-   everywhere. */
-.avatar-large {
-  width: 88px;
-  height: 88px;
-  border-radius: var(--radius-card);
-  font-size: 30px;
-}
-
 .cropper {
   display: grid;
   justify-items: center;
@@ -549,13 +540,6 @@
 .cropper-zoom input {
   flex: 1;
   accent-color: var(--accent);
-}
-
-.avatar-choice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gap-tight) var(--gap);
 }
 
 /* Who is here, at the end of the piece, and the way into everything that is
@@ -851,13 +835,8 @@
 /* A setting switched off by the one above it. Still readable, so that what it
    is set to can be seen before it is turned back on. */
 .choice input:disabled,
-.choice select:disabled,
-.settings-switch:has(input:disabled) {
+.choice select:disabled {
   opacity: 0.55;
-}
-
-.settings-switch:has(input:disabled) {
-  cursor: default;
 }
 
 /* --------------------------------------------------------------------------
@@ -1728,18 +1707,6 @@
   padding: var(--gap) 0;
 }
 
-/* The button and, when a browser refuses the clipboard, the report itself. */
-.report {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--gap-tight);
-}
-
-.report-open {
-  flex: 1 0 100%;
-}
-
 .report-text {
   width: 100%;
   min-width: 0;
@@ -1902,11 +1869,6 @@
   gap: var(--gap);
   align-items: center;
   margin-bottom: var(--gap-wide);
-}
-
-.control-group {
-  display: inline-flex;
-  gap: var(--gap-tight);
 }
 
 /* --------------------------------------------------------------------------
@@ -3004,49 +2966,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   cursor: pointer;
 }
 
-/* A short list put in order with a pair of arrows on each line. */
-.settings-order {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-tight);
-  max-width: 360px;
-  margin: var(--gap) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.settings-order li {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
-}
-
-.settings-order-name {
-  flex: 1;
-}
-
-.settings-order .button {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 8px;
-}
-
-/* A setting that is on or off, on a page whose other settings are pickers and
-   sliders: the same measurements, so the three line up down the block. */
-.settings-switch {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
-  margin-top: var(--gap);
-  cursor: pointer;
-}
-
-.settings-switch input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-}
-
 .identify-also input {
   width: 18px;
   height: 18px;
@@ -3364,23 +3283,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   text-decoration: underline;
 }
 
-
-/* --------------------------------------------------------------------------
- * Activity
- * ----------------------------------------------------------------------- */
-
-.job {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  flex-wrap: wrap;
-  padding: var(--gap) var(--gap-wide);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  margin-bottom: var(--gap-tight);
-}
-
 /* What is running, shown on a page that is otherwise about something else.
    Held to a readable width and laid out normally, because the block around it
    on the empty home page is centred. */
@@ -3391,213 +3293,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   max-width: 560px;
   margin: 0 auto;
   text-align: left;
-}
-
-.job-kind {
-  font-weight: 650;
-  min-width: 120px;
-}
-
-.job-state {
-  font-size: 13px;
-  color: var(--text-faint);
-}
-
-.job-failed .job-state {
-  color: var(--accent-bright);
-}
-
-/* Which pass the work is on. Reads louder than the state next to it: the
-   state hardly moves for an hour, and this is the line that says the server
-   is still doing something. */
-.job-step {
-  font-size: 13px;
-  color: var(--text-soft);
-}
-
-/* The file a pass is on right now, on a line of its own under the rest. A
-   film name is long enough to push the bar off the row, and shortening it to
-   fit alongside leaves two films of the same series reading the same. */
-.job-doing {
-  flex-basis: 100%;
-  font-size: 13px;
-  color: var(--text-soft);
-  overflow-wrap: anywhere;
-}
-
-.job-bar {
-  position: relative;
-  flex: 1 1 200px;
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-hover);
-  overflow: hidden;
-  min-width: 120px;
-}
-
-.job-bar-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: linear-gradient(to right, var(--accent-dim), var(--accent-bright));
-  transition: width var(--calm) var(--ease);
-}
-
-/* Where the work has got to, in numbers. On the line rather than floating
-   above it: hung eighteen pixels over the bar in the faintest grey there is,
-   it was the one thing on the screen nobody could read, and in the case where
-   there is no total it had no positioned parent at all and went wherever the
-   page took it. Figures of a fixed width so the count does not jitter as it
-   climbs. */
-.job-count {
-  font-size: 13px;
-  color: var(--text-soft);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.job-reason {
-  flex-basis: 100%;
-  font-size: 13px;
-  color: var(--accent-bright);
-}
-
-/* --------------------------------------------------------------------------
- * The upkeep
- *
- * Drawn like a job and deliberately quieter than one: these rows are work
- * that has not started, and a row shouting for attention next to a scan that
- * is really running would be read as the scan.
- * ----------------------------------------------------------------------- */
-
-.upkeep-line {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  flex-wrap: wrap;
-  padding: var(--gap-tight) var(--gap-wide);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  margin-bottom: var(--gap-tight);
-}
-
-.upkeep-what {
-  display: flex;
-  flex-direction: column;
-  min-width: 220px;
-}
-
-.upkeep-name {
-  font-weight: 650;
-}
-
-/* Which library this row is about. Under the name rather than beside it: on a
-   telephone the two side by side push everything else off the line. */
-.upkeep-library {
-  font-size: 13px;
-  color: var(--text-soft);
-}
-
-.upkeep-count {
-  font-size: 13px;
-  color: var(--text-soft);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  margin-right: auto;
-}
-
-.upkeep-note {
-  font-size: 13px;
-  color: var(--text-faint);
-}
-
-/* One library and what its scan does. The name first and the switches after
-   it, wrapping onto their own line where there is no room. */
-.library-options {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  flex-wrap: wrap;
-  margin-bottom: var(--gap-tight);
-}
-
-.library-options-name {
-  font-weight: 650;
-  min-width: 120px;
-}
-
-/* One library and everything about it: its settings on one line, its folders
-   on the next, and the folder picker under both when it is open. */
-.library-block {
-  padding: var(--gap) 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: var(--gap);
-}
-
-.library-block:last-of-type {
-  border-bottom: none;
-}
-
-.library-roots {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  flex-wrap: wrap;
-}
-
-.library-root {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gap-tight);
-  font-size: 13px;
-  color: var(--text-soft);
-}
-
-/* A folder the server cannot reach. Said beside the folder it is about, since
-   that is the only place the answer means anything. */
-.library-root-trouble {
-  color: var(--accent-bright);
-}
-
-/* The question put before something is taken away. Set apart from the block
-   that opened it, because saying yes here loses what the server learned about
-   a few hundred films. */
-.removal {
-  margin-top: var(--gap);
-  padding: var(--gap);
-  border: 1px solid var(--accent-bright);
-  border-radius: var(--radius-control);
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-tight);
-}
-
-/* The whole path of a folder, wherever it is the subject: while it is being
-   chosen for a new library, and beside the label of one already declared, on
-   the screen where roots are managed. */
-.library-root-path {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: var(--text-soft);
-  word-break: break-all;
-}
-
-/* A word that can be typed over. Drawn as text until it is touched, so a list
-   of names reads as a list of names rather than as a form. */
-.editable {
-  padding: 4px 8px;
-  border-radius: var(--radius-control);
-  border: 1px solid transparent;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  min-width: 8em;
-}
-
-.editable:hover,
-.editable:focus {
-  border-color: var(--border);
-  background: var(--surface);
 }
 
 .choice input[type="text"] {
@@ -3611,79 +3306,6 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 /* --------------------------------------------------------------------------
- * Looking around the server's disk
- *
- * The one screen where a path is the subject. It sits inside the block that
- * opened it rather than over the page: what is being filled in has to stay
- * readable while a folder is chosen for it.
- * ----------------------------------------------------------------------- */
-
-.picker {
-  margin: var(--gap) 0;
-  padding: var(--gap);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-}
-
-.picker-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gap);
-  margin-bottom: var(--gap-tight);
-}
-
-.picker-path {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: var(--text-soft);
-  overflow-wrap: anywhere;
-}
-
-.picker-actions {
-  display: flex;
-  gap: var(--gap-tight);
-  margin-bottom: var(--gap-tight);
-}
-
-/* Bounded on purpose: a folder of five hundred entries must not push the form
-   it belongs to off the screen. */
-.picker-list {
-  display: flex;
-  flex-direction: column;
-  max-height: 40vh;
-  overflow-y: auto;
-}
-
-.picker-folder {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--gap);
-  padding: 6px 8px;
-  border: none;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.picker-folder:hover,
-.picker-folder:focus-visible {
-  background: var(--surface-raised, var(--border));
-}
-
-.picker-folder-videos {
-  font-size: 12px;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* --------------------------------------------------------------------------
  * Foot of the page
  * ----------------------------------------------------------------------- */
 
@@ -3694,27 +3316,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   font-size: 12px;
 }
 
-
-/* --------------------------------------------------------------------------
- * The settings
- * ----------------------------------------------------------------------- */
-
-.settings-block {
-  margin-bottom: var(--gap-section);
-  padding-bottom: var(--gap-wide);
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-block:last-child {
-  border-bottom: none;
-}
-
-.settings-block h2 {
-  margin: 0 0 var(--gap-tight);
-  font-size: 17px;
-  font-weight: 650;
-}
-
 /* Why a setting exists, in one line. Faint on purpose: it answers a question
    somebody only asks once. */
 .settings-why {
@@ -3722,33 +3323,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--text-faint);
   font-size: 13px;
   max-width: 62ch;
-}
-
-.settings-value {
-  margin-left: var(--gap-tight);
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
-.device-status {
-  margin: 0 0 var(--gap);
-  font-size: 14px;
-  min-height: 1.2em;
-}
-
-/* A quieter action beside a button that matters more: undoing it, mostly. */
-.button-link {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--text-faint);
-  font-size: 13px;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.button-link:hover {
-  color: var(--text);
 }
 
 /* The reference film really playing, where it can really be seen.
@@ -4049,93 +3623,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   .brand-name {
     display: none;
   }
-}
-
-/* --------------------------------------------------------------------------
- * Journal
- * ----------------------------------------------------------------------- */
-
-/* A tag that is ticked. Filled rather than outlined, because what somebody
-   needs to see at a glance is which of a dozen buttons are on. */
-.button-on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.button-on:hover {
-  background: var(--accent-bright);
-}
-
-/* The box that narrows to a word. Sized like the buttons above it so the two
-   rows read as one control rather than as two ideas. */
-.field {
-  width: 100%;
-  padding: 9px 14px;
-  margin-bottom: var(--gap);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 14px;
-}
-
-.field:focus {
-  outline: 2px solid var(--accent-bright);
-  outline-offset: 1px;
-}
-
-.journal {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  overflow-x: auto;
-  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
-  font-size: 12.5px;
-  line-height: 1.6;
-}
-
-.journal-line {
-  display: flex;
-  gap: var(--gap);
-  padding: 2px var(--gap);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.journal-line:nth-child(odd) {
-  background: var(--surface-raised);
-}
-
-.journal-at {
-  color: var(--text-faint);
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-}
-
-/* The tag, held to one width so the messages line up and the eye can run
-   down the column rather than hunt for where each line really starts. */
-.journal-tag {
-  flex: 0 0 5.5rem;
-  color: var(--accent-bright);
-}
-
-.journal-said {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.journal-warn .journal-said {
-  color: var(--accent-bright);
-}
-
-.journal-error .journal-said {
-  color: var(--accent-bright);
-  font-weight: 600;
-}
-
-.journal-debug .journal-said {
-  color: var(--text-faint);
 }
 
 /* ---------------------------------------------------------------------------
@@ -4488,7 +3975,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--text-soft);
   font-size: 14px;
 }
-
 
 /* --------------------------------------------------------------------------
  * What the page opens on

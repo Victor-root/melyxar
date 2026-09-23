@@ -62,6 +62,34 @@ function wrapIntoADay(minutes: number): number {
 }
 
 /**
+ * The release a build belongs to, without the commit it was built from: what
+ * a person compares with a list of versions. The whole of it is still said
+ * where there is room, for whoever reports a problem.
+ */
+export function releaseOf(build: string): string {
+  return build.split(" (")[0];
+}
+
+/**
+ * How long ago an instant was, in the two largest units that say it: days and
+ * hours, hours and minutes, or minutes alone. A server up for twelve days is
+ * not up for seventeen thousand minutes, and the minutes of a twelve day run
+ * are noise.
+ */
+export function howLongSince(instant: string, now: number, t: Wording): string {
+  const minutes = Math.max(0, Math.floor((now - new Date(instant).getTime()) / 60_000));
+  const days = Math.floor(minutes / MINUTES_IN_A_DAY);
+  const hours = Math.floor((minutes % MINUTES_IN_A_DAY) / 60);
+  if (days > 0) {
+    return t("time.days_hours", { days, hours });
+  }
+  if (hours > 0) {
+    return t("time.hours_minutes", { hours, minutes: minutes % 60 });
+  }
+  return t("time.minutes", { minutes });
+}
+
+/**
  * An instant the server wrote, in the hour of whoever is reading it.
  *
  * The server keeps one clock and it is UTC, which is the only one it can read

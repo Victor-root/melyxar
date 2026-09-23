@@ -34,6 +34,20 @@ const STORED_HEADER_HIDES = "melyxar.header.hides";
 /** The red of the Melyxar theme, which needs none of the work below. */
 const THE_USUAL_ACCENT = "#c81e1e";
 
+/** The accents offered at a press, Melyxar's own first. Any other can still
+ *  be chosen by hand; these are the ones measured to read well on both
+ *  themes. */
+export const OFFERED_ACCENTS = [
+  THE_USUAL_ACCENT,
+  "#d9480f",
+  "#c2a100",
+  "#2f9e44",
+  "#0c8599",
+  "#1c7ed6",
+  "#6741d9",
+  "#c2255c",
+];
+
 /** What the banner measures when nobody has moved it, matching the
  *  stylesheet: a little under a third of the screen's width, cut an eighth of
  *  the way down. Held here as well so the banner is the right size on the
@@ -45,6 +59,9 @@ interface Settings {
   setLanguage: (language: Language) => void;
   theme: ThemeChoice;
   setTheme: (theme: ThemeChoice) => void;
+  /** The account's accent, a hash and six hexadecimal digits. */
+  accent: string;
+  setAccent: (accent: string) => void;
   /** How tall the banner is, as a share of the screen's width. */
   bannerHeight: number;
   setBannerHeight: (share: number) => void;
@@ -179,6 +196,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ theme_mode: next });
   }, []);
 
+  const setAccent = useCallback((chosen: string) => {
+    safeWrite(STORED_ACCENT, chosen);
+    setAccentState(chosen);
+    // A colour picked by hand is dragged across a field, answering at every
+    // step of the way.
+    tellTheServerOnceTheHandStops({ accent_color: chosen });
+  }, []);
+
   const setBannerHeight = useCallback((share: number) => {
     safeWrite(STORED_BANNER_HEIGHT, String(share));
     setBannerHeightState(share);
@@ -241,6 +266,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setLanguage,
       theme,
       setTheme,
+      accent,
+      setAccent,
       bannerHeight,
       setBannerHeight,
       bannerCut,
@@ -259,6 +286,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setLanguage,
       theme,
       setTheme,
+      accent,
+      setAccent,
       bannerHeight,
       setBannerHeight,
       bannerCut,

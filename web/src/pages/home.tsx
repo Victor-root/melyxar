@@ -75,7 +75,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
             {jobs.length > 0 ? (
               <>
                 <p>{t("home.scanning")}</p>
-                <Link className="button" to="/activity">
+                <Link className="button" to="/admin/tasks">
                   {t("nav.jobs")}
                 </Link>
               </>
