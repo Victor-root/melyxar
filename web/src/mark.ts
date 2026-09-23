@@ -10,6 +10,8 @@
  * logo comes out duller than the red it was drawn in.
  */
 
+import { safeWrite } from "./i18n";
+
 /** How much more saturated than the accent the logo is drawn. */
 const MADE_VIVID = 1.35;
 
@@ -18,6 +20,10 @@ const LIGHTNESS = 0.45;
 
 /** The relief the tab is drawn from: the tab is never larger than this. */
 const RELIEF = "/melyxar-shade-64.png";
+
+/** Where the last icon drawn for the tab is kept, for the page to put up
+ *  before the interface starts (see index.html). */
+const STORED_TAB = "melyxar.tab";
 
 /** The colour the logo is drawn in for an accent: its hue, made vivid. */
 export function vividOf(accent: string): string {
@@ -50,19 +56,19 @@ function fromHsl(hue: number, saturation: number, lightness: number): string {
   return `#${channel(0)}${channel(8)}${channel(4)}`;
 }
 
-/** The icons of the tab as the page was served with them, to go back to. */
-let served: Map<HTMLLinkElement, string> | null = null;
-
 /**
  * Draws the tab's icon in this colour, or puts back the one the page was
  * served with when there is none: the usual accent is the logo as drawn.
  */
 export async function markTheTab(colour: string | null): Promise<void> {
   const links = [...document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]')];
-  served ??= new Map(links.map((link) => [link, link.href]));
+  for (const link of links) {
+    link.dataset.served ??= link.getAttribute("href") ?? "";
+  }
   if (colour === null) {
-    for (const [link, href] of served) {
-      link.href = href;
+    safeWrite(STORED_TAB, "");
+    for (const link of links) {
+      link.href = link.dataset.served ?? link.href;
     }
     return;
   }
@@ -85,6 +91,7 @@ export async function markTheTab(colour: string | null): Promise<void> {
   drawing.globalCompositeOperation = "destination-in";
   drawing.drawImage(relief, 0, 0);
   const drawn = canvas.toDataURL("image/png");
+  safeWrite(STORED_TAB, drawn);
   for (const link of links) {
     link.href = drawn;
   }
