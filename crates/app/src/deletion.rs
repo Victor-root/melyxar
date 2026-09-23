@@ -1,4 +1,4 @@
-//! Deleting a work: out of the library, and off the disk when asked.
+//! Deleting works: out of the library, and off the disk when asked.
 //!
 //! See the decisions on deleting a work for what goes and why. The one rule
 //! that is never bent: only the files the library knows for this work are
@@ -63,40 +63,46 @@ impl From<melyxar_database::DatabaseError> for Trouble {
 
 type Result<T> = std::result::Result<T, Trouble>;
 
-/// What deleting a work would take with it, for somebody allowed to delete
-/// it. Asked just before the question is put, so the count somebody says yes
-/// to is the count that goes.
+/// What deleting these works would take with them, for somebody allowed to
+/// delete them. Asked just before the question is put, so the count somebody
+/// says yes to is the count that goes. A work already gone is left out; when
+/// none of them is there, there is nothing to ask about.
 pub async fn what_deleting_takes(
     state: &AppState,
     who: &User,
-    work_id: WorkId,
+    work_ids: &[WorkId],
 ) -> Result<WhatDeletingTakes> {
     may_delete(who, false)?;
-    crate::reach::may_read_the_work(state, who, work_id).await?;
-    state
-        .database()
-        .what_deleting_takes(work_id)
-        .await?
-        .ok_or_else(|| Trouble::Failed(melyxar_core::Error::not_found("work").into()))
+    let going = state.database().what_deleting_takes(work_ids).await?;
+    for &library_id in &going.library_ids {
+        crate::reach::may_read(who, library_id)?;
+    }
+    match going.works {
+        0 => Err(Trouble::Failed(melyxar_core::Error::not_found("work").into())),
+        _ => Ok(going),
+    }
 }
 
-/// Deletes a work and everything under it from the library, and its files
-/// from the disk when `from_the_disk` says so.
+/// Deletes these works and everything under them from the library, and
+/// their files from the disk when `from_the_disk` says so. All of them or
+/// none: every library and every disk is asked before anything goes.
 ///
-/// Off the disk first: when a file resists, the work stays in the library
+/// Off the disk first: when a file resists, the works stay in the library
 /// rather than leaving a file on the disk the library no longer knows. Kept
-/// on the disk, its copies are set aside so the scan does not bring them
+/// on the disk, their copies are set aside so the scan does not bring them
 /// back.
 pub async fn delete(
     state: &AppState,
     who: &User,
-    work_id: WorkId,
+    work_ids: &[WorkId],
     from_the_disk: bool,
 ) -> Result<Removed> {
-    let going = what_deleting_takes(state, who, work_id).await?;
+    let going = what_deleting_takes(state, who, work_ids).await?;
     may_delete(who, from_the_disk)?;
-    if crate::libraries::something_is_running_on(state, going.library_id).await? {
-        return Err(Trouble::Refused(Refused::SomethingIsRunning));
+    for &library_id in &going.library_ids {
+        if crate::libraries::something_is_running_on(state, library_id).await? {
+            return Err(Trouble::Refused(Refused::SomethingIsRunning));
+        }
     }
 
     if from_the_disk {
@@ -104,19 +110,22 @@ pub async fn delete(
     }
 
     let database = state.database();
-    let removed = database.delete_work(work_id, !from_the_disk).await?;
+    let removed = database.delete_works(work_ids, !from_the_disk).await?;
     let sheets = crate::libraries::forget_the_thumbnails_of(state, &going.sources).await;
     let pictures = crate::libraries::forget_the_pictures(state, &removed.swept.picture_paths).await;
-    database.bump_library_version(going.library_id).await?;
+    for &library_id in &going.library_ids {
+        database.bump_library_version(library_id).await?;
+    }
 
     tracing::info!(
         who = %who.name,
+        asked = work_ids.len(),
         works = removed.works,
         files = removed.files,
         off_the_disk = from_the_disk,
         pictures_deleted = pictures,
         thumbnail_sheets_deleted = sheets,
-        "a work was deleted"
+        "works were deleted"
     );
     Ok(removed)
 }

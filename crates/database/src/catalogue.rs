@@ -5973,7 +5973,7 @@ mod tests {
             .expect("analysis stored");
 
         database
-            .delete_work(work_id, false)
+            .delete_works(&[work_id], false)
             .await
             .expect("work removed");
 

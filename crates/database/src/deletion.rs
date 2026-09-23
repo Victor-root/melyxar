@@ -1,4 +1,4 @@
-//! Taking one work out of a library, and the files it stands for.
+//! Taking works out of a library, and the files they stand for.
 //!
 //! Everything a work carries follows it out through the schema: what hangs
 //! under it, its files as rows, what was watched of it, its favourites. What
@@ -17,11 +17,13 @@ use crate::convert::{parse_id, timestamp_to_text};
 use crate::libraries::{sweep_what_nothing_points_at, Removed};
 use crate::{Database, Result};
 
-/// Every work under this one and itself, as a statement other statements
-/// start from. Bound to the one identifier as `?1`.
+/// Every work under the ones asked for and themselves, each once, as a
+/// statement other statements start from. Bound to the identifiers as a JSON
+/// list in `?1`; one that is not there is not part of it.
 const THE_WHOLE_TREE: &str = "WITH RECURSIVE tree(id) AS (
-                                  SELECT ?1
-                                  UNION ALL
+                                  SELECT id FROM works
+                                   WHERE id IN (SELECT value FROM json_each(?1))
+                                  UNION
                                   SELECT works.id FROM works JOIN tree ON works.parent_id = tree.id
                               )";
 
@@ -54,12 +56,14 @@ impl FileOfAWork {
     }
 }
 
-/// What deleting a work would take with it.
+/// What deleting some works would take with them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WhatDeletingTakes {
-    pub library_id: LibraryId,
-    /// The work itself and everything under it: a film is one, a series is
-    /// itself, its seasons and their episodes.
+    /// The libraries they belong to, each once.
+    pub library_ids: Vec<LibraryId>,
+    /// The works themselves and everything under them, each once: a film is
+    /// one, a series is itself, its seasons and their episodes. Nought when
+    /// none of them is there.
     pub works: i64,
     /// Every file on the disk they stand for, copies first. A copy the last
     /// scan did not find is left out: there is nothing of it to delete.
@@ -69,19 +73,47 @@ pub struct WhatDeletingTakes {
     pub sources: Vec<MediaSourceId>,
 }
 
+/// One file of a library taken out of it while it stays on the disk.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetAsideFile {
+    pub root_id: LibraryRootId,
+    /// The folder of the library it sits under, as declared.
+    pub root_path: PathBuf,
+    /// Where it is under that folder.
+    pub relative_path: PathBuf,
+}
+
+impl SetAsideFile {
+    /// Where it is, folder of the library included.
+    pub fn path(&self) -> PathBuf {
+        self.root_path.join(&self.relative_path)
+    }
+}
+
+/// The works asked for, as the JSON list the statements above are bound to.
+fn listed(work_ids: &[WorkId]) -> String {
+    serde_json::Value::from(
+        work_ids
+            .iter()
+            .map(|id| id.to_db_string())
+            .collect::<Vec<_>>(),
+    )
+    .to_string()
+}
+
 impl Database {
-    /// What deleting this work would take with it, or nothing when there is
-    /// no such work.
-    pub async fn what_deleting_takes(&self, work_id: WorkId) -> Result<Option<WhatDeletingTakes>> {
-        let id = work_id.to_db_string();
-        let Some(library_id) =
-            sqlx::query_scalar::<_, String>("SELECT library_id FROM works WHERE id = ?")
-                .bind(&id)
-                .fetch_optional(self.reader())
-                .await?
-        else {
-            return Ok(None);
-        };
+    /// What deleting these works would take with them. A work asked for
+    /// twice, or asked for with the series it sits under, is counted once.
+    pub async fn what_deleting_takes(&self, work_ids: &[WorkId]) -> Result<WhatDeletingTakes> {
+        let id = listed(work_ids);
+        let library_ids: Vec<String> = sqlx::query_scalar(
+            "SELECT DISTINCT library_id FROM works
+              WHERE id IN (SELECT value FROM json_each(?))
+              ORDER BY library_id",
+        )
+        .bind(&id)
+        .fetch_all(self.reader())
+        .await?;
 
         let works: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "{THE_WHOLE_TREE} SELECT count(*) FROM tree"
@@ -138,28 +170,27 @@ impl Database {
             files.push(file_from_row(row, role)?);
         }
 
-        Ok(Some(WhatDeletingTakes {
-            library_id: parse_id(&library_id)?,
+        Ok(WhatDeletingTakes {
+            library_ids: library_ids
+                .iter()
+                .map(|id| parse_id(id))
+                .collect::<Result<_>>()?,
             works,
             files,
             sources,
-        }))
+        })
     }
 
-    /// Deletes a work and everything under it, and sweeps what nothing
-    /// points at any more.
+    /// Deletes these works and everything under them, and sweeps once what
+    /// nothing points at any more.
     ///
     /// With `set_aside`, the copies stay noted as taken out of the library,
     /// so the scan walks past them: they are still on the disk, and the
     /// person who removed them does not want them back. The picture paths in
     /// what comes back are for the caller to take out of the cache.
-    pub async fn delete_work(&self, work_id: WorkId, set_aside: bool) -> Result<Removed> {
-        let id = work_id.to_db_string();
-        let going = self.what_deleting_takes(work_id).await?;
-        let (works, files) = going
-            .as_ref()
-            .map(|going| (going.works, going.sources.len() as i64))
-            .unwrap_or_default();
+    pub async fn delete_works(&self, work_ids: &[WorkId], set_aside: bool) -> Result<Removed> {
+        let id = listed(work_ids);
+        let going = self.what_deleting_takes(work_ids).await?;
 
         let mut transaction = self.begin().await?;
         if set_aside {
@@ -174,16 +205,19 @@ impl Database {
             .execute(&mut *transaction)
             .await?;
         }
-        let parent: Option<String> = sqlx::query_scalar("SELECT parent_id FROM works WHERE id = ?")
-            .bind(&id)
-            .fetch_optional(&mut *transaction)
-            .await?
-            .flatten();
-        sqlx::query("DELETE FROM works WHERE id = ?")
+        let parents: Vec<String> = sqlx::query_scalar(
+            "SELECT DISTINCT parent_id FROM works
+              WHERE id IN (SELECT value FROM json_each(?)) AND parent_id IS NOT NULL",
+        )
+        .bind(&id)
+        .fetch_all(&mut *transaction)
+        .await?;
+        sqlx::query("DELETE FROM works WHERE id IN (SELECT value FROM json_each(?))")
             .bind(&id)
             .execute(&mut *transaction)
             .await?;
-        if let Some(parent) = parent {
+        // A parent deleted with its children is simply not there to count.
+        for parent in parents {
             sqlx::query(
                 "UPDATE works
                     SET child_count = (SELECT count(*) FROM works AS child
@@ -198,8 +232,8 @@ impl Database {
         transaction.commit().await?;
 
         Ok(Removed {
-            works,
-            files,
+            works: going.works,
+            files: going.sources.len() as i64,
             swept,
         })
     }
@@ -227,14 +261,60 @@ impl Database {
         .await?)
     }
 
-    /// Forgets that the files of a library were taken out of it, so the next
-    /// scan finds them again. Answers how many there were.
-    pub async fn take_back_set_aside(&self, library_id: LibraryId) -> Result<u64> {
-        Ok(sqlx::query(
-            "DELETE FROM set_aside_files
-              WHERE root_id IN (SELECT id FROM library_roots WHERE library_id = ?)",
+    /// The files of a library taken out of it while still on the disk, by
+    /// folder and path.
+    pub async fn set_aside_files(&self, library_id: LibraryId) -> Result<Vec<SetAsideFile>> {
+        let rows = sqlx::query(
+            "SELECT a.root_id, r.path AS root_path, a.relative_path
+               FROM set_aside_files a
+               JOIN library_roots r ON r.id = a.root_id
+              WHERE r.library_id = ?
+              ORDER BY a.relative_path, a.root_id",
         )
         .bind(library_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+        rows.iter()
+            .map(|row| {
+                Ok(SetAsideFile {
+                    root_id: parse_id(&row.try_get::<String, _>("root_id")?)?,
+                    root_path: PathBuf::from(row.try_get::<String, _>("root_path")?),
+                    relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
+                })
+            })
+            .collect()
+    }
+
+    /// Forgets that these files of a library were taken out of it, or all of
+    /// them when none is named, so the next scan finds them again. A file
+    /// named that belongs to another library is left as it is. Answers how
+    /// many were forgotten.
+    pub async fn take_back_set_aside(
+        &self,
+        library_id: LibraryId,
+        files: Option<&[(LibraryRootId, PathBuf)]>,
+    ) -> Result<u64> {
+        let named = files.map(|files| {
+            serde_json::Value::from(
+                files
+                    .iter()
+                    .map(|(root, path)| {
+                        serde_json::json!([root.to_db_string(), path.to_string_lossy()])
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .to_string()
+        });
+        Ok(sqlx::query(
+            "DELETE FROM set_aside_files
+              WHERE root_id IN (SELECT id FROM library_roots WHERE library_id = ?1)
+                AND (?2 IS NULL
+                     OR EXISTS (SELECT 1 FROM json_each(?2) AS named
+                                 WHERE named.value ->> 0 = set_aside_files.root_id
+                                   AND named.value ->> 1 = set_aside_files.relative_path))",
+        )
+        .bind(library_id.to_db_string())
+        .bind(named)
         .execute(self.writer())
         .await?
         .rows_affected())
@@ -252,6 +332,8 @@ fn file_from_row(row: &sqlx::sqlite::SqliteRow, role: FileRole) -> Result<FileOf
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use melyxar_core::library::LibraryKind;
     use melyxar_core::work::WorkKind;
 
@@ -349,11 +431,10 @@ mod tests {
         let world = a_series().await;
         let going = world
             .database
-            .what_deleting_takes(world.series)
+            .what_deleting_takes(&[world.series])
             .await
-            .expect("read")
-            .expect("the series exists");
-        assert_eq!(going.library_id, world.library_id);
+            .expect("read");
+        assert_eq!(going.library_ids, [world.library_id]);
         assert_eq!(going.works, 4, "the series, its season and two episodes");
         assert_eq!(going.sources.len(), 2);
         let files: Vec<(String, FileRole)> = going
@@ -396,20 +477,72 @@ mod tests {
             .expect("marked");
         let going = world
             .database
-            .what_deleting_takes(world.episodes[1])
+            .what_deleting_takes(&[world.episodes[1]])
             .await
-            .expect("read")
-            .expect("the episode exists");
+            .expect("read");
         assert_eq!(going.works, 1);
         assert!(going.files.is_empty());
         assert_eq!(going.sources.len(), 1, "the row goes all the same");
 
+        let going = world
+            .database
+            .what_deleting_takes(&[WorkId::new()])
+            .await
+            .expect("read");
+        assert_eq!(going.works, 0);
+        assert!(going.library_ids.is_empty());
+    }
+
+    #[tokio::test]
+    async fn works_asked_for_together_are_each_counted_once() {
+        let world = a_series().await;
+        let both = [world.series, world.episodes[0], world.series, WorkId::new()];
+        let going = world
+            .database
+            .what_deleting_takes(&both)
+            .await
+            .expect("read");
+        assert_eq!(going.works, 4, "an episode asked for with its series is in it");
+        assert_eq!(going.sources.len(), 2);
+        assert_eq!(going.files.len(), 4);
+        assert_eq!(going.library_ids, [world.library_id]);
+
+        let removed = world
+            .database
+            .delete_works(&both, true)
+            .await
+            .expect("deleted");
+        assert_eq!((removed.works, removed.files), (4, 2));
         assert!(world
             .database
-            .what_deleting_takes(WorkId::new())
+            .work(world.series)
             .await
             .expect("read")
             .is_none());
+        assert_eq!(
+            world
+                .database
+                .count_set_aside(world.library_id)
+                .await
+                .expect("read"),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn two_episodes_deleted_together_leave_their_season_counting_right() {
+        let world = a_series().await;
+        world
+            .database
+            .delete_works(&world.episodes, false)
+            .await
+            .expect("deleted");
+        let (left,): (i64,) = sqlx::query_as("SELECT child_count FROM works WHERE id = ?")
+            .bind(world.season.to_db_string())
+            .fetch_one(world.database.reader())
+            .await
+            .expect("read");
+        assert_eq!(left, 0);
     }
 
     #[tokio::test]
@@ -417,7 +550,7 @@ mod tests {
         let world = a_series().await;
         let removed = world
             .database
-            .delete_work(world.episodes[0], true)
+            .delete_works(&[world.episodes[0]], true)
             .await
             .expect("deleted");
         assert_eq!((removed.works, removed.files), (1, 1));
@@ -455,7 +588,7 @@ mod tests {
         // nothing left there to walk past.
         world
             .database
-            .delete_work(world.series, false)
+            .delete_works(&[world.series], false)
             .await
             .expect("deleted");
         assert!(world
@@ -476,7 +609,7 @@ mod tests {
         assert_eq!(
             world
                 .database
-                .take_back_set_aside(world.library_id)
+                .take_back_set_aside(world.library_id, None)
                 .await
                 .expect("taken back"),
             1
@@ -487,5 +620,70 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn set_aside_files_are_listed_and_taken_back_one_by_one() {
+        let world = a_series().await;
+        world
+            .database
+            .delete_works(&[world.series], true)
+            .await
+            .expect("deleted");
+        let listed = world
+            .database
+            .set_aside_files(world.library_id)
+            .await
+            .expect("read");
+        let paths: Vec<&Path> = listed.iter().map(|file| file.relative_path.as_path()).collect();
+        assert_eq!(
+            paths,
+            [
+                Path::new("Signal/Saison 1/Signal S01E01.mkv"),
+                Path::new("Signal/Saison 1/Signal S01E02.mkv"),
+            ]
+        );
+        assert!(listed.iter().all(|file| file.root_id == world.root_id));
+        assert_eq!(
+            listed[0].path(),
+            Path::new("/mnt/one/Series/Signal/Saison 1/Signal S01E01.mkv")
+        );
+
+        let elsewhere = world
+            .database
+            .create_library(
+                "Other",
+                LibraryKind::Series,
+                "fr",
+                &[("disk-two".to_string(), PathBuf::from("/mnt/two/Series"))],
+            )
+            .await
+            .expect("library created");
+        let first = (world.root_id, listed[0].relative_path.clone());
+        assert_eq!(
+            world
+                .database
+                .take_back_set_aside(elsewhere.id, Some(std::slice::from_ref(&first)))
+                .await
+                .expect("taken back"),
+            0,
+            "a file of another library is not this one's to take back"
+        );
+        assert_eq!(
+            world
+                .database
+                .take_back_set_aside(world.library_id, Some(&[first]))
+                .await
+                .expect("taken back"),
+            1
+        );
+        assert_eq!(
+            world
+                .database
+                .set_aside_paths(world.root_id)
+                .await
+                .expect("read"),
+            HashSet::from([PathBuf::from("Signal/Saison 1/Signal S01E02.mkv")])
+        );
     }
 }

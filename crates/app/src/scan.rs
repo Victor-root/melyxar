@@ -2194,7 +2194,7 @@ mod tests {
         };
 
         let quiet = film("Quiet Harbour").await.expect("scanned");
-        crate::deletion::delete(&state, &owner, quiet, false)
+        crate::deletion::delete(&state, &owner, &[quiet], false)
             .await
             .expect("taken out");
         assert!(media.join("Quiet Harbour (2019).mkv").exists());
@@ -2204,12 +2204,12 @@ mod tests {
         let viewer = a_viewer(&state).await;
         let amber = film("Amber Field").await.expect("scanned");
         assert!(
-            crate::deletion::delete(&state, &viewer, amber, true)
+            crate::deletion::delete(&state, &viewer, &[amber], true)
                 .await
                 .is_err(),
             "an account without the right deletes nothing"
         );
-        crate::deletion::delete(&state, &owner, amber, true)
+        crate::deletion::delete(&state, &owner, &[amber], true)
             .await
             .expect("deleted");
         assert!(
@@ -2221,7 +2221,7 @@ mod tests {
         assert_eq!(
             state
                 .database()
-                .take_back_set_aside(library.id)
+                .take_back_set_aside(library.id, None)
                 .await
                 .expect("taken back"),
             1

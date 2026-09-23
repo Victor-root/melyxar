@@ -1,6 +1,6 @@
-//! Deleting a work, out of the library and off the disk when asked.
+//! Deleting works, out of the library and off the disk when asked.
 
-use axum::extract::{Path, Query, State};
+use axum::extract::State;
 use axum::{Json, Router};
 use melyxar_app::deletion::FileRole;
 use melyxar_app::AppState;
@@ -13,17 +13,26 @@ use crate::error::{Result, ServerError};
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
-            "/api/v1/works/{id}/deletion",
-            axum::routing::get(what_deleting_takes),
+            "/api/v1/deletion/what-it-takes",
+            axum::routing::post(what_deleting_takes),
         )
-        .route("/api/v1/works/{id}", axum::routing::delete(delete))
+        .route("/api/v1/deletion", axum::routing::post(delete))
+}
+
+#[derive(Debug, Deserialize)]
+struct Asked {
+    /// The works to delete, each with everything under it.
+    works: Vec<String>,
+    /// Off the disk as well as out of the library.
+    #[serde(default)]
+    from_disk: bool,
 }
 
 #[derive(Debug, Serialize)]
 struct DeletionView {
-    /// The work and everything under it.
+    /// The works and everything under them, each once.
     works: i64,
-    /// Every file on the disk it stands for, copies first, by its whole path:
+    /// Every file on the disk they stand for, copies first, by its whole path:
     /// what somebody deleting off the disk says yes to.
     files: Vec<FileView>,
     /// Whether this account may also delete off the disk, so the choice is
@@ -38,13 +47,6 @@ struct FileView {
     role: &'static str,
 }
 
-#[derive(Debug, Deserialize)]
-struct How {
-    /// Off the disk as well as out of the library.
-    #[serde(default)]
-    from_disk: bool,
-}
-
 #[derive(Debug, Serialize)]
 struct DeletedView {
     works: i64,
@@ -54,9 +56,10 @@ struct DeletedView {
 async fn what_deleting_takes(
     State(state): State<AppState>,
     Viewer(who): Viewer,
-    Path(id): Path<String>,
+    Json(asked): Json<Asked>,
 ) -> Result<Json<DeletionView>> {
-    let going = melyxar_app::deletion::what_deleting_takes(&state, &who, work_id(&id)?).await?;
+    let going =
+        melyxar_app::deletion::what_deleting_takes(&state, &who, &work_ids(&asked.works)?).await?;
     Ok(Json(DeletionView {
         works: going.works,
         files: going
@@ -78,19 +81,24 @@ async fn what_deleting_takes(
 async fn delete(
     State(state): State<AppState>,
     Viewer(who): Viewer,
-    Path(id): Path<String>,
-    Query(how): Query<How>,
+    Json(asked): Json<Asked>,
 ) -> Result<Json<DeletedView>> {
-    let removed = melyxar_app::deletion::delete(&state, &who, work_id(&id)?, how.from_disk).await?;
+    let removed =
+        melyxar_app::deletion::delete(&state, &who, &work_ids(&asked.works)?, asked.from_disk)
+            .await?;
     Ok(Json(DeletedView {
         works: removed.works,
         files: removed.files,
     }))
 }
 
-fn work_id(id: &str) -> Result<WorkId> {
-    id.parse()
-        .map_err(|_| ServerError::invalid_input("not a work identifier"))
+fn work_ids(ids: &[String]) -> Result<Vec<WorkId>> {
+    ids.iter()
+        .map(|id| {
+            id.parse()
+                .map_err(|_| ServerError::invalid_input("not a work identifier"))
+        })
+        .collect()
 }
 
 #[cfg(test)]
