@@ -264,7 +264,8 @@ impl Database {
         Ok(result.rows_affected() > 0)
     }
 
-    /// Every library with its roots, ordered by name.
+    /// Every library with its roots, by kind in the order kinds are met, then
+    /// by name.
     pub async fn list_libraries(&self) -> Result<Vec<Library>> {
         let rows = sqlx::query(
             "SELECT id, name, kind, metadata_language,
@@ -293,6 +294,11 @@ impl Database {
                 roots: self.library_roots(id).await?,
             });
         }
+        libraries.sort_by_key(|library| {
+            LibraryKind::every()
+                .iter()
+                .position(|kind| *kind == library.kind)
+        });
         Ok(libraries)
     }
 
@@ -798,6 +804,37 @@ mod tests {
         assert_eq!(reloaded.len(), 1);
         assert_eq!(reloaded[0].roots.len(), 2);
         assert_eq!(reloaded[0].kind, LibraryKind::Movies);
+    }
+
+    #[tokio::test]
+    async fn libraries_are_listed_by_kind_and_then_by_name() {
+        let database = database().await;
+        for (name, kind) in [
+            ("Anime", LibraryKind::Anime),
+            ("Zoo films", LibraryKind::Movies),
+            ("Holidays", LibraryKind::HomeMedia),
+            ("Classic films", LibraryKind::Movies),
+            ("Shows", LibraryKind::Shows),
+            ("Series", LibraryKind::Series),
+        ] {
+            let folder = PathBuf::from(format!("/media/{name}"));
+            database
+                .create_library(name, kind, "en", &[(name.to_string(), folder)])
+                .await
+                .expect("library created");
+        }
+
+        let names: Vec<String> = database
+            .list_libraries()
+            .await
+            .expect("listed")
+            .into_iter()
+            .map(|library| library.name)
+            .collect();
+        assert_eq!(
+            names,
+            ["Classic films", "Zoo films", "Series", "Anime", "Holidays", "Shows"]
+        );
     }
 
     #[tokio::test]
