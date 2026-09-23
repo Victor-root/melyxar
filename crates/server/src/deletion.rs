@@ -38,6 +38,9 @@ struct DeletionView {
     /// Whether this account may also delete off the disk, so the choice is
     /// only offered to whoever may make it.
     may_delete_from_disk: bool,
+    /// Whether the server may write where those files are: off the disk is
+    /// offered only then.
+    disks_take_writes: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -75,6 +78,7 @@ async fn what_deleting_takes(
             })
             .collect(),
         may_delete_from_disk: who.permissions.may_delete_from_disk,
+        disks_take_writes: melyxar_app::deletion::disks_take_writes(&going.files).await,
     }))
 }
 

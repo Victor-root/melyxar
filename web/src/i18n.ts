@@ -485,6 +485,8 @@ const en: Dictionary = {
   "delete.library_only_why": "The files stay on the disk, and the next scan leaves them where they are.",
   "delete.from_disk": "From the library and the disk",
   "delete.from_disk_why": "These files are deleted for good:",
+  "delete.disk_read_only":
+    "Melyxar may only read this disk. Allowing it to write is done from the installation script.",
   "delete.no_file": "No file of it is on the disk at the moment.",
   "delete.more_files": "and {count} more",
   "delete.confirm": "Delete",
@@ -1448,6 +1450,8 @@ const fr: Dictionary = {
   "delete.library_only_why": "Les fichiers restent sur le disque, et le prochain scan les laisse où ils sont.",
   "delete.from_disk": "De la médiathèque et du disque",
   "delete.from_disk_why": "Ces fichiers sont supprimés pour de bon :",
+  "delete.disk_read_only":
+    "Melyxar ne peut que lire ce disque. L'autoriser à écrire se fait depuis le script d'installation.",
   "delete.no_file": "Aucun de ses fichiers n'est sur le disque en ce moment.",
   "delete.more_files": "et {count} de plus",
   "delete.confirm": "Supprimer",

@@ -122,6 +122,9 @@ enum Command {
         #[command(subcommand)]
         what: Account,
     },
+    /// Print every folder the libraries look in, one a line, for the
+    /// installer to open them for writing when asked to.
+    Folders,
     /// Print a starting configuration, for the installer.
     PrintDefaultConfig,
 }
@@ -255,11 +258,22 @@ async fn main() -> anyhow::Result<()> {
         } => listen(config, series.as_deref(), season).await,
         Command::Bench { what } => bench(config, what).await,
         Command::Account { what } => account(config, what).await,
+        Command::Folders => folders(config).await,
         Command::PrintDefaultConfig => unreachable!("handled above"),
     }
 }
 
 /// The accounts on this server, from a terminal on the machine itself.
+async fn folders(config: Config) -> anyhow::Result<()> {
+    let state = melyxar_app::startup::bring_up(config).await?;
+    for library in state.database().list_libraries().await? {
+        for root in library.roots {
+            println!("{}", root.path.display());
+        }
+    }
+    Ok(())
+}
+
 async fn account(config: Config, what: Account) -> anyhow::Result<()> {
     let state = melyxar_app::startup::bring_up(config).await?;
 

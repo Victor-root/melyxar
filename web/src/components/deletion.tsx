@@ -47,6 +47,9 @@ export function DeleteDialog({
 
   const answer = going.answer;
   const refused = told.failure ?? going.failure;
+  // Offered greyed when the server may not write there: it would only be
+  // refused after saying yes.
+  const diskShut = answer !== null && answer.files.length > 0 && !answer.disks_take_writes;
   const named = answer?.files.slice(0, FILES_NAMED) ?? [];
   const unnamed = (answer?.files.length ?? 0) - named.length;
 
@@ -86,16 +89,19 @@ export function DeleteDialog({
           </label>
 
           {answer.may_delete_from_disk && (
-            <label className="delete-choice">
+            <label className={`delete-choice${diskShut ? " delete-choice-shut" : ""}`}>
               <input
                 type="radio"
                 name="delete-how"
                 checked={fromDisk}
+                disabled={diskShut}
                 onChange={() => setFromDisk(true)}
               />
               <span>
                 <strong>{t("delete.from_disk")}</strong>
-                {answer.files.length === 0 ? (
+                {diskShut ? (
+                  <span className="settings-why">{t("delete.disk_read_only")}</span>
+                ) : answer.files.length === 0 ? (
                   <span className="settings-why">{t("delete.no_file")}</span>
                 ) : (
                   <>

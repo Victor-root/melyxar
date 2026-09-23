@@ -31,6 +31,8 @@ DATA_DIR="/var/lib/melyxar"
 CACHE_DIR="/var/cache/melyxar"
 BACKUP_DIR="${DATA_DIR}/backups"
 UNIT_FILE="/etc/systemd/system/melyxar.service"
+# Present only when the media folders were opened for writing.
+WRITES_FILE="/etc/systemd/system/melyxar.service.d/media-write.conf"
 SERVICE="melyxar"
 
 DEFAULT_PORT="2100"
@@ -139,6 +141,30 @@ en|prompt_accounts_password|The new password
 fr|prompt_accounts_password|Le nouveau mot de passe
 en|accounts_changed|The password was changed, and every device of that account was signed out.
 fr|accounts_changed|Le mot de passe a été changé, et tous les appareils de ce compte ont été déconnectés.
+en|menu_writes|Media folders: let Melyxar write to them, or keep them read only
+fr|menu_writes|Dossiers des médias : laisser Melyxar y écrire, ou les garder en lecture seule
+en|section_writes|Writing to the media folders
+fr|section_writes|Écriture dans les dossiers des médias
+en|writes_notice|By default Melyxar may only read your media. Allowing it to write is what lets "Delete from the disk" work. Every other folder of this machine stays closed to it.
+fr|writes_notice|Par défaut Melyxar ne peut que lire vos médias. L'autoriser à écrire est ce qui permet à « Supprimer aussi du disque » de fonctionner. Tous les autres dossiers de la machine lui restent fermés.
+en|writes_now_open|Now: Melyxar may write to the folders of the libraries.
+fr|writes_now_open|Actuellement : Melyxar peut écrire dans les dossiers des bibliothèques.
+en|writes_now_shut|Now: the media folders are read only for Melyxar.
+fr|writes_now_shut|Actuellement : les dossiers des médias sont en lecture seule pour Melyxar.
+en|prompt_writes_open|Let Melyxar write to the media folders?
+fr|prompt_writes_open|Laisser Melyxar écrire dans les dossiers des médias ?
+en|prompt_writes_shut|Put the media folders back to read only?
+fr|prompt_writes_shut|Remettre les dossiers des médias en lecture seule ?
+en|writes_no_folder|No library folder yet: declare a library first.
+fr|writes_no_folder|Aucun dossier de bibliothèque pour l'instant : déclarez d'abord une bibliothèque.
+en|writes_opened|Melyxar may now write to these folders.
+fr|writes_opened|Melyxar peut maintenant écrire dans ces dossiers.
+en|writes_shut|The media folders are read only again.
+fr|writes_shut|Les dossiers des médias sont de nouveau en lecture seule.
+en|writes_refused|still refused by the owner of the folder: give the melyxar account the right to write there.
+fr|writes_refused|toujours refusé par le propriétaire du dossier : donnez au compte melyxar le droit d'y écrire.
+en|step_writes|Opening the media folders for writing
+fr|step_writes|Ouverture des dossiers des médias en écriture
 en|menu_quit|Quit
 fr|menu_quit|Quitter
 en|prompt_choice|Your choice
@@ -1416,6 +1442,9 @@ action_update() {
   build_and_install
   # Only a new server needs a restart. A new interface alone is already being
   # served, and a film playing through the update is not cut.
+  if [[ -f "$WRITES_FILE" ]]; then
+    write_media_writes "$(library_folders)"
+  fi
   if [[ "$BUILT_ENGINE" -eq 1 ]]; then
     step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
     mark_installed engine
@@ -1542,6 +1571,78 @@ action_accounts() {
     runuser -u "$APP_USER" -- "$BINARY_PATH" --config "$CONFIG_FILE" account password "$name" ||
     die "$(tr_msg accounts_none)"
   success "$(tr_msg accounts_changed)"
+}
+
+# The folders of the libraries, one a line, as the server knows them.
+library_folders() {
+  runuser -u "$APP_USER" -- "$BINARY_PATH" --config "$CONFIG_FILE" folders 2>/dev/null
+}
+
+# Opens every folder of the libraries for writing, and only them. Written
+# again on each update, so a library declared since is opened as well. A
+# folder that is not there is skipped rather than stopping the server.
+write_media_writes() {
+  local folders="$1" line tmp
+  tmp="$(mktemp)"
+  {
+    echo "# Written by the installation script: Melyxar may write to its media."
+    echo "[Service]"
+    while IFS= read -r line; do
+      [[ -n "$line" ]] || continue
+      line="${line//\\/\\\\}"
+      line="${line//\"/\\\"}"
+      line="${line//%/%%}"
+      printf 'ReadWritePaths="-%s"\n' "$line"
+    done <<< "$folders"
+  } > "$tmp"
+  install -D -m 0644 "$tmp" "$WRITES_FILE"
+  rm -f "$tmp"
+  systemctl daemon-reload
+}
+
+action_writes() {
+  is_installed || die "$(tr_msg err_not_installed)"
+  section "$(tr_msg section_writes)"
+  info "$(tr_msg writes_notice)"
+  echo
+
+  if [[ -f "$WRITES_FILE" ]]; then
+    info "$(tr_msg writes_now_open)"
+    confirm_default_no "$(tr_msg prompt_writes_shut)" || { info "$(tr_msg cancelled)"; return 0; }
+    rm -f "$WRITES_FILE"
+    systemctl daemon-reload
+    step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+    success "$(tr_msg writes_shut)"
+    return 0
+  fi
+
+  info "$(tr_msg writes_now_shut)"
+  local folders
+  folders="$(library_folders)"
+  if [[ -z "$folders" ]]; then
+    warn "$(tr_msg writes_no_folder)"
+    return 0
+  fi
+  printf '%s\n' "$folders" | sed 's/^/  /'
+  echo
+  confirm_default_no "$(tr_msg prompt_writes_open)" || { info "$(tr_msg cancelled)"; return 0; }
+
+  step "$(tr_msg step_writes)" write_media_writes "$folders"
+  step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+
+  # The service may now write; whether the owner of each folder lets the
+  # melyxar account do so is a second, separate question, asked by trying.
+  local folder probe
+  while IFS= read -r folder; do
+    [[ -d "$folder" ]] || continue
+    probe="$folder/.melyxar-write-probe"
+    if runuser -u "$APP_USER" -- touch "$probe" 2>/dev/null; then
+      rm -f "$probe"
+    else
+      warn "$folder: $(tr_msg writes_refused)"
+    fi
+  done <<< "$folders"
+  success "$(tr_msg writes_opened)"
 }
 
 action_lines() {
@@ -1709,6 +1810,7 @@ menu() {
   printf "   %b7%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_bench)"
   printf "   %b8%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_accounts)"
   printf "   %b9%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_lines)"
+  printf "  %b10%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_writes)"
   printf "   %b0%b) %s\n" "${BOLD}${GRAY}" "${RESET}" "$(tr_msg menu_quit)"
   echo
 
@@ -1725,6 +1827,7 @@ menu() {
     7) action_bench ;;
     8) action_accounts ;;
     9) action_lines ;;
+    10) action_writes ;;
     0) exit 0 ;;
     *) die "$(tr_fmt err_bad_choice "$choice")" ;;
   esac
