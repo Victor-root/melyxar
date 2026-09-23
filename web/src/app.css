@@ -566,12 +566,13 @@
 .header-account > .header-link {
   gap: 9px;
   padding: 3px 8px 3px 3px;
+  color: var(--text);
 }
 
 .header-account > .header-link:hover,
 .header-account > .header-link-on {
   background: none;
-  color: var(--text);
+  color: var(--accent-bright);
 }
 
 .header-who {
@@ -651,18 +652,32 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  color: var(--text-soft);
+  color: var(--text);
   transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+/* Drawn at full strength with a heavier line than the icons of the page, and
+   lifted off the glass by a breath of shadow: the bar floats over whatever
+   picture is behind it, and a thin grey line over a busy still is a line
+   nobody finds. The room each one takes is the same, so the bar is not a
+   point taller for it. */
+.header-icon svg,
+.header-account > .header-link > svg {
+  stroke-width: 2.2;
+}
+
+:root[data-theme="dark"] .header-icon svg,
+:root[data-theme="dark"] .header-account > .header-link > svg {
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.5));
 }
 
 /* No wash, the same as the account's own name: the piece it sits on is
    already glass, and a wash lit inside it is a pill floating in a pill. What
-   answers the pointer is the icon coming up to full strength, which also
-   survives being held over a bright picture better than a patch of dark
-   ever did. */
+   answers the pointer is the icon taking the accent, which also survives
+   being held over a bright picture better than a patch of dark ever did. */
 .header-icon:hover:not(:disabled) {
   background: none;
-  color: var(--text);
+  color: var(--accent-bright);
 }
 
 /* Dimmed once, not twice. It was a faint colour at a little over half
