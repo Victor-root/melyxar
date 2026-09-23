@@ -1854,3 +1854,28 @@
   color: var(--text-faint);
   font-weight: 500;
 }
+
+/* What failed its check, each on its own line in the colour of a warning. */
+.server-worries {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.server-worries li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+.server-worries svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--attention);
+}

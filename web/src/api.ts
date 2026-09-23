@@ -774,12 +774,25 @@ export interface Overview {
     version: string | null;
     /** How the graphics card is reached, when one was proven to work. */
     card: string | null;
+    /** Whether that card still opens. */
+    card_opens: boolean;
   };
   accounts: number;
   devices: number;
   /** Devices used in the last day. */
   devices_today: number;
+  /** Everything that failed its check, each by name. Empty means all is well. */
+  worries: Worry[];
 }
+
+/** One thing that failed its check on the server. */
+export type Worry =
+  | { kind: "database_mode" }
+  | { kind: "database_refuses_writes" }
+  | { kind: "media_tools_missing" }
+  | { kind: "card_unreachable" }
+  | { kind: "folder_missing"; label: string }
+  | { kind: "disk_nearly_full"; folder: string; used: number };
 
 /** What the machine spent over one stretch of time. */
 export interface MeasurePoint {
