@@ -4721,3 +4721,69 @@ button.seen-mark:not(.seen-mark-on):hover {
     animation: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+ * The bell: what deserves an administrator's look
+ * ----------------------------------------------------------------------- */
+
+/* The count sits on the shoulder of the bell, in the colour of the worst of
+   what it counts. */
+.header-bell .header-icon {
+  position: relative;
+}
+
+.bell-count {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  color: var(--surface-deep);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.bell-count-attention {
+  background: var(--attention);
+}
+
+.bell-count-trouble {
+  background: var(--trouble);
+}
+
+/* Points are sentences, and a sentence cut short is a point half said. */
+.bell-list {
+  width: min(340px, calc(100vw - 24px));
+}
+
+.bell-title {
+  padding: 6px 10px 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.bell-none {
+  padding: 4px 10px 10px;
+  color: var(--text-soft);
+  font-size: 13.5px;
+}
+
+.bell-point {
+  align-items: flex-start;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.bell-point .state-dot {
+  margin-top: 6px;
+}

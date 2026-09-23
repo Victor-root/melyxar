@@ -4,8 +4,20 @@
  * whole; what has no engine yet says so.
  */
 
-import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
-import { DatabaseIcon, EnterIcon, RefreshIcon, ServerIcon, WarningIcon } from "../../icons";
+import { useEffect, useState } from "react";
+import { api } from "../../api";
+import { NumberField, PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
+import { useToast } from "../../components/toasts";
+import { refusalKey } from "../../i18n";
+import { refusalOf } from "../../asking";
+import {
+  DatabaseIcon,
+  EnterIcon,
+  HistoryIcon,
+  RefreshIcon,
+  ServerIcon,
+  WarningIcon,
+} from "../../icons";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
 
@@ -63,6 +75,8 @@ export function AdminSettings() {
           </Setting>
         </Panel>
 
+        <JournalPanel />
+
         <Panel icon={DatabaseIcon} title={t("admin.backups")} lead={t("admin.backups_lead")} soon>
           <Setting label={t("admin.backups_daily")} soon>
             <Toggle label={t("admin.backups_daily")} checked={false} onChange={() => {}} disabled />
@@ -70,5 +84,56 @@ export function AdminSettings() {
         </Panel>
       </div>
     </>
+  );
+}
+
+/** The fewest and the most days the activity journal may keep, as the
+ *  server holds it to. */
+const KEPT_DAYS = { min: 7, max: 3650 };
+
+/** How long the activity journal keeps what it writes. */
+function JournalPanel() {
+  const { t } = useSettings();
+  const toast = useToast();
+  const [days, setDays] = useState<number | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .activityKeptDays(controller.signal)
+      .then((kept) => setDays(kept.days))
+      .catch(() => {
+        // Left empty: the field says nothing rather than a number the server
+        // may not hold.
+      });
+    return () => controller.abort();
+  }, []);
+
+  const keep = (wanted: number) => {
+    const before = days;
+    setDays(wanted);
+    api
+      .keepActivityDays(wanted)
+      .then((kept) => setDays(kept.days))
+      .catch((error) => {
+        setDays(before);
+        toast({ state: "trouble", title: t("activity.kept_failed"), detail: t(refusalKey(refusalOf(error))) });
+      });
+  };
+
+  return (
+    <Panel icon={HistoryIcon} title={t("activity.title")} lead={t("activity.kept_lead")}>
+      <Setting label={t("activity.kept")} why={t("activity.kept_why")}>
+        {days !== null && (
+          <NumberField
+            label={t("activity.kept")}
+            value={days}
+            min={KEPT_DAYS.min}
+            max={KEPT_DAYS.max}
+            onPick={keep}
+          />
+        )}
+      </Setting>
+    </Panel>
   );
 }

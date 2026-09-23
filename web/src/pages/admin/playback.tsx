@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../../api";
-import type { Watched, WatchedDecision } from "../../api";
+import type { ActivityFamily, Watched, WatchedDecision } from "../../api";
 import { refusalOf } from "../../asking";
 import { PageHead, Panel, Stat } from "../../components/panel";
 import { useToast } from "../../components/toasts";
@@ -39,10 +39,13 @@ import {
 import { PauseIcon } from "../../player/icons";
 import { containerName } from "../../readable";
 import { useSettings } from "../../settings";
-import { Ghosts } from "./ghosts";
+import { ActivityJournal } from "./activity-list";
 import { countedOf, episodeOf, positionNow, shareWatched, useNowPlaying } from "./playing";
 
 type Wording = (key: string, values?: Record<string, string | number>) => string;
+
+/** The history below the list is the journal of what was watched. */
+const WATCHED: ActivityFamily[] = ["playback"];
 
 /** What becomes of the soundtrack, in the words the player's own panel uses. */
 const SOUND_DONE: Record<WatchedDecision["sound"], string> = {
@@ -72,8 +75,8 @@ export function AdminPlayback() {
           </div>
         )}
       </Panel>
-      <Panel icon={HistoryIcon} title={t("admin.history")} lead={t("admin.history_lead")} soon>
-        <Ghosts heads={["admin.col.when", "admin.col.who", "admin.col.work", "admin.col.way"]} />
+      <Panel icon={HistoryIcon} title={t("admin.history")} lead={t("admin.history_lead")}>
+        <ActivityJournal families={WATCHED} />
       </Panel>
     </>
   );

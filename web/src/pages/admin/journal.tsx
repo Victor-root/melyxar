@@ -9,12 +9,14 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import type { JournalLine } from "../../api";
+import { useSearchParams } from "react-router-dom";
+import type { ActivityFamily, JournalLine } from "../../api";
 import { PageHead, Panel } from "../../components/panel";
-import { JournalIcon, SearchIcon } from "../../icons";
+import { HistoryIcon, JournalIcon, SearchIcon } from "../../icons";
 import { timeOfDay } from "../../readable";
 import { useJournalScreen } from "../../screens/journal";
 import { useSettings } from "../../settings";
+import { ActivityJournal, FAMILIES } from "./activity-list";
 
 export function AdminJournal() {
   const { t } = useSettings();
@@ -48,6 +50,8 @@ export function AdminJournal() {
   return (
     <>
       <PageHead lead={t("journal.why")} />
+
+      <ActivityPanel />
 
       {/* On the panel they act on rather than beside the name of the page,
           where three of them left the name no room. */}
@@ -134,6 +138,54 @@ export function AdminJournal() {
         )}
       </Panel>
     </>
+  );
+}
+
+/**
+ * What people and the server did, narrowed to the families ticked. The
+ * families come from the address too, which is how a point to look at leads
+ * straight to the lines it counts.
+ */
+function ActivityPanel() {
+  const { t } = useSettings();
+  const [address, setAddress] = useSearchParams();
+  const ticked = (address.get("families") ?? "")
+    .split(",")
+    .filter((word): word is ActivityFamily => (FAMILIES as string[]).includes(word));
+
+  const tick = (family: ActivityFamily | null) => {
+    const next = new URLSearchParams(address);
+    if (family === null) {
+      next.delete("families");
+    } else {
+      next.set("families", family);
+    }
+    setAddress(next, { replace: true });
+  };
+
+  return (
+    <Panel icon={HistoryIcon} title={t("activity.title")} lead={t("activity.lead")}>
+      <div className="chips">
+        <button
+          className={`chip${ticked.length === 0 ? " chip-on" : ""}`}
+          aria-pressed={ticked.length === 0}
+          onClick={() => tick(null)}
+        >
+          {t("activity.family.all")}
+        </button>
+        {FAMILIES.map((family) => (
+          <button
+            key={family}
+            className={`chip${ticked.includes(family) ? " chip-on" : ""}`}
+            aria-pressed={ticked.includes(family)}
+            onClick={() => tick(family)}
+          >
+            {t(`activity.family.${family}`)}
+          </button>
+        ))}
+      </div>
+      <ActivityJournal families={ticked} />
+    </Panel>
   );
 }
 

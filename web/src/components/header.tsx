@@ -41,6 +41,8 @@ import { outOfAHundred } from "../readable";
 import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
+import { useAttention } from "../attention";
+import { sayPoint } from "../pages/admin/activity";
 import { KINDS } from "../libraries";
 import { useSettings } from "../settings";
 import { isSectioned } from "./sectioned";
@@ -58,6 +60,7 @@ import {
   MelyxarMark,
   RefreshIcon,
   ScreenCastIcon,
+  TickIcon,
   SearchIcon,
   SlidersIcon,
 } from "../icons";
@@ -467,18 +470,7 @@ export function Header({
               document.body,
             )}
 
-          {/* No engine behind it yet. Shown greyed and saying when rather
-              than left out: a function nobody can see is a function nobody
-              knows is coming. */}
-          <button
-            type="button"
-            className="header-icon"
-            disabled
-            title={t("nav.later")}
-            aria-label={`${t("nav.notifications")} (${t("nav.later")})`}
-          >
-            <BellIcon size={24} />
-          </button>
+          <Bell administrator={administrator} />
 
           <NavLink
             to="/favourites"
@@ -713,6 +705,8 @@ function Dropdown({
   label,
   className,
   reachable,
+  icon,
+  listClassName,
   children,
 }: {
   label: React.ReactNode;
@@ -721,6 +715,11 @@ function Dropdown({
   /** Whether what holds it is open. Folded away, the tab key passes it by
    *  and any list it had left hanging is shut. */
   reachable: boolean;
+  /** Opened by an icon of the bar rather than a word: drawn as the other
+   *  icons are, without the fold, and named for whoever cannot see it. */
+  icon?: string;
+  /** What the list is, for one that holds more than short lines. */
+  listClassName?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -784,18 +783,20 @@ function Dropdown({
     <div className={`header-menu${className ? ` ${className}` : ""}`} ref={holder}>
       <button
         type="button"
-        className={`header-link${open ? " header-link-on" : ""}`}
+        className={`${icon ? "header-icon" : "header-link"}${open ? " header-link-on" : ""}`}
         aria-expanded={open}
+        aria-label={icon}
+        title={icon}
         tabIndex={reachable ? undefined : -1}
         onClick={() => setOpen((was) => !was)}
       >
         {label}
-        <ChevronDownIcon size={15} />
+        {!icon && <ChevronDownIcon size={15} />}
       </button>
       {open &&
         createPortal(
           <div
-            className="header-menu-list"
+            className={`header-menu-list${listClassName ? ` ${listClassName}` : ""}`}
             ref={list}
             style={{ top: under.top, right: under.right }}
             onClick={() => setOpen(false)}
@@ -805,6 +806,70 @@ function Dropdown({
           document.body,
         )}
     </div>
+  );
+}
+
+/**
+ * What deserves a look, for an administrator: how many points, the worst of
+ * them in its colour, and the list itself on a press.
+ *
+ * For anybody else there is nothing behind it yet, and it stays greyed and
+ * saying so rather than left out: a function nobody can see is a function
+ * nobody knows is coming.
+ */
+function Bell({ administrator }: { administrator: boolean }) {
+  const { t, language } = useSettings();
+  const { points, markSeen } = useAttention();
+
+  if (!administrator) {
+    return (
+      <button
+        type="button"
+        className="header-icon"
+        disabled
+        title={t("nav.later")}
+        aria-label={`${t("nav.notifications")} (${t("nav.later")})`}
+      >
+        <BellIcon size={24} />
+      </button>
+    );
+  }
+
+  const shown = points ?? [];
+  const worst = shown.some((point) => point.state === "trouble") ? "trouble" : "attention";
+  return (
+    <Dropdown
+      className="header-bell"
+      icon={t("admin.watch")}
+      listClassName="bell-list"
+      reachable
+      label={
+        <>
+          <BellIcon size={24} />
+          {shown.length > 0 && (
+            <span className={`bell-count bell-count-${worst}`}>{shown.length}</span>
+          )}
+        </>
+      }
+    >
+      <span className="bell-title">{t("admin.watch")}</span>
+      {shown.length === 0 && <span className="bell-none">{t("attention.none")}</span>}
+      {shown.map((point, index) => {
+        const said = sayPoint(point, t, language);
+        return (
+          <Link key={index} to={said.to} className="header-menu-line bell-point">
+            <span className={`state-dot state-${point.state}`} aria-hidden="true" />
+            <span>{said.title}</span>
+          </Link>
+        );
+      })}
+      {shown.some((point) => point.may_be_seen) && (
+        <button type="button" className="header-menu-line" onClick={() => void markSeen()}>
+          <TickIcon size={16} />
+          {t("attention.mark_seen")}
+        </button>
+      )}
+    </Dropdown>
   );
 }
 
