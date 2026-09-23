@@ -74,6 +74,9 @@
   --accent-dim: #9b1616;
   --accent-contrast: #ffffff;
   --accent-glow: rgba(200, 30, 30, 0.35);
+  /* The colour the logo is drawn in: the accent's hue made as vivid as the
+     red the logo was drawn in (mark.ts works it out for any other accent). */
+  --mark-colour: #e50000;
 
   /* What a state is, apart from the accent: the accent says "active, press
      here" and each account picks its own, so a failure must never borrow it.

@@ -56,8 +56,11 @@ inchangée. L'écart moyen restant est d'environ douze niveaux sur 255,
 invisible à l'œil. Les versions rouges dont il part se refont depuis
 l'original, recadrées et marginées comme les autres tailles.
 
-Les icônes d'onglet et d'écran d'accueil gardent le rouge : le navigateur les
-affiche hors de la page, sans la couleur de personne.
+L'icône de l'onglet suit aussi : dès qu'un compte a choisi une autre couleur,
+la page la redessine de la même façon à partir du relief à 64 pixels et la met
+à la place des icônes rouges, qui restent celles du premier affichage et de
+la couleur par défaut. L'icône d'écran d'accueil garde le rouge : le téléphone
+la copie une fois pour toutes au moment où on l'épingle.
 
 ## Pourquoi des images fixes et pas un SVG
 
