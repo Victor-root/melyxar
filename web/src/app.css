@@ -58,12 +58,14 @@
   pointer-events: auto;
 }
 
-/* The accent itself, not a shade of it, and inset from both sides by a
-   border it does not paint: that is what leaves it a rounded bar with air
-   around it rather than a stripe stuck to the edge of the glass. */
+/* The accent itself, not a shade of it, set right against the edge of the
+   screen: a hair of page showing between the two read as a bar that missed
+   its place. Air is left on the page side only, by a border it does not
+   paint, which keeps it a rounded bar rather than a stripe. */
 .scrollbar-mark {
   width: 100%;
   border: 2px solid transparent;
+  border-right-width: 0;
   border-radius: var(--radius-pill);
   background: var(--accent);
   background-clip: content-box;
