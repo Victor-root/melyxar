@@ -15,6 +15,14 @@ export interface Account {
   may_download: boolean;
   may_delete: boolean;
   may_delete_from_disk: boolean;
+  /** Where the picture it chose is served, when it chose one. */
+  avatar: string | null;
+}
+
+/** A name the sign in screen offers, with its picture when it has one. */
+export interface NameAtTheDoor {
+  name: string;
+  avatar: string | null;
 }
 
 /**
@@ -837,8 +845,14 @@ async function exchange(
   try {
     response = await fetch(path, {
       method,
-      headers: body === undefined ? { accept } : { accept, "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      /* A file is sent as it is, under its own type: an image sent as the
+         characters of a JSON string would be three times its size and
+         nothing the server could read. */
+      headers:
+        body === undefined
+          ? { accept }
+          : { accept, "content-type": body instanceof Blob ? body.type : "application/json" },
+      body: body === undefined ? undefined : body instanceof Blob ? body : JSON.stringify(body),
       signal,
     });
   } catch (cause) {
@@ -1322,7 +1336,7 @@ export const api = {
      brand new server that has no accounts yet: the screen draws no row rather
      than telling the three apart. */
   namesAtTheDoor: (signal?: AbortSignal) =>
-    get<{ names: string[] }>("/api/v1/public/names", signal),
+    get<{ names: NameAtTheDoor[] }>("/api/v1/public/names", signal),
   /* The door. Signing in answers the account, which is what the interface is
      drawn from; the session itself travels in a cookie the browser keeps and
      this interface never sees.
@@ -1339,6 +1353,10 @@ export const api = {
   setUp: (name: string, password: string, remember: boolean) =>
     post<Account>("/api/v1/setup", { name, password, remember }),
   /* Changing it signs every other device out and keeps this one going. */
+  /* The picture of the account signed in, sent as the file chosen. Both
+     answer the account as it now is. */
+  setAvatar: (image: File) => put<Account>("/api/v1/me/avatar", image),
+  removeAvatar: () => remove<Account>("/api/v1/me/avatar"),
   changePassword: (current: string, wanted: string) =>
     put<Account>("/api/v1/me/password", { current, wanted }),
   setFavourite: (work: string, favourite: boolean) =>

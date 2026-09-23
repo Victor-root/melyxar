@@ -20,6 +20,14 @@ pub struct AvailableLanguages {
     pub subtitle: Vec<String>,
 }
 
+/// A name offered on the sign in screen, with its picture when it has one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NameAtTheDoor {
+    pub name: String,
+    /// Where its picture is, under the folder of pictures.
+    pub avatar_path: Option<String>,
+}
+
 /// Everything an account is made of, rights and preferences together.
 ///
 /// Written once: three reads load the same account, and a column added to one
@@ -180,9 +188,9 @@ impl Database {
     /// Accounts that asked to be left off are left off. They still sign in:
     /// the name is typed rather than pressed, and the screen keeps the field
     /// for exactly that.
-    pub async fn names_at_the_door(&self) -> Result<Vec<String>> {
-        let rows: Vec<(String,)> = sqlx::query_as(
-            "SELECT u.name
+    pub async fn names_at_the_door(&self) -> Result<Vec<NameAtTheDoor>> {
+        let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT u.name, u.avatar_path
              FROM users u
              JOIN user_preferences p ON p.user_id = u.id
              WHERE p.hidden_at_the_door = 0
@@ -190,7 +198,29 @@ impl Database {
         )
         .fetch_all(self.reader())
         .await?;
-        Ok(rows.into_iter().map(|(name,)| name).collect())
+        Ok(rows
+            .into_iter()
+            .map(|(name, avatar_path)| NameAtTheDoor { name, avatar_path })
+            .collect())
+    }
+
+    /// Gives an account its picture, or takes it away with nothing, and
+    /// answers the one it had so the caller can delete its file.
+    pub async fn set_avatar(&self, id: UserId, avatar_path: Option<&str>) -> Result<Option<String>> {
+        let mut transaction = self.begin().await?;
+        let before: Option<String> =
+            sqlx::query_scalar("SELECT avatar_path FROM users WHERE id = ?")
+                .bind(id.to_db_string())
+                .fetch_optional(&mut *transaction)
+                .await?
+                .flatten();
+        sqlx::query("UPDATE users SET avatar_path = ? WHERE id = ?")
+            .bind(avatar_path)
+            .bind(id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(before)
     }
 
     /// Every language the library actually holds, told apart by kind.
@@ -477,6 +507,45 @@ mod tests {
     /// off, which is the only thing that switch does: it is still an account,
     /// it still signs in, and nothing here says it exists.
     #[tokio::test]
+    async fn an_account_wears_the_picture_it_was_given_until_it_is_taken_away() {
+        let database = database().await;
+        let zoe = database
+            .create_user("Zoe", Some("a stored form"), &Permissions::viewer())
+            .await
+            .expect("account created");
+        let picture = format!("users/{}/avatar-one.webp", zoe.id);
+
+        assert_eq!(
+            database.set_avatar(zoe.id, Some(&picture)).await.expect("set"),
+            None
+        );
+        let (read, _) = database
+            .user_by_name("Zoe")
+            .await
+            .expect("lookup works")
+            .expect("account found");
+        assert_eq!(read.avatar_path.as_deref(), Some(picture.as_str()));
+        assert_eq!(
+            database.names_at_the_door().await.expect("read"),
+            vec![NameAtTheDoor {
+                name: "Zoe".to_string(),
+                avatar_path: Some(picture.clone()),
+            }],
+            "and the door shows it beside the name"
+        );
+
+        assert_eq!(
+            database.set_avatar(zoe.id, None).await.expect("taken away"),
+            Some(picture),
+            "the one it had is answered, for its file to be deleted"
+        );
+        assert_eq!(
+            database.names_at_the_door().await.expect("read")[0].avatar_path,
+            None
+        );
+    }
+
+    #[tokio::test]
     async fn the_door_offers_the_names_that_did_not_ask_to_be_left_off() {
         let database = database().await;
         for name in ["Zoe", "alice", "Marc"] {
@@ -486,8 +555,17 @@ mod tests {
                 .expect("account created");
         }
 
+        let names = || async {
+            database
+                .names_at_the_door()
+                .await
+                .expect("read")
+                .into_iter()
+                .map(|offered| offered.name)
+                .collect::<Vec<_>>()
+        };
         assert_eq!(
-            database.names_at_the_door().await.expect("read"),
+            names().await,
             vec!["alice", "Marc", "Zoe"],
             "in the order the screen draws them, and without regard to case"
         );
@@ -505,7 +583,7 @@ mod tests {
             .expect("saved");
 
         assert_eq!(
-            database.names_at_the_door().await.expect("read"),
+            names().await,
             vec!["alice", "Zoe"],
             "somebody who asked to be left off is left off"
         );

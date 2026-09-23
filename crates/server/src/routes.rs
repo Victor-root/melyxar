@@ -302,12 +302,20 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
 /// is told nothing simply shows no names, which is also what a brand new
 /// server with no accounts answers.
 ///
-/// Names and nothing else. No identifier, no rights, no picture, nothing that
-/// says whether a name is an administrator: what is drawn is a row of names,
-/// and everything beyond that would be given away for no gain.
+/// Names and their pictures, nothing else. No identifier, no rights, nothing
+/// that says whether a name is an administrator: what is drawn is a row of
+/// faces with a name under each, and everything beyond that would be given
+/// away for no gain.
 #[derive(Debug, Serialize)]
 struct NamesAtTheDoor {
-    names: Vec<String>,
+    names: Vec<NameAtTheDoor>,
+}
+
+#[derive(Debug, Serialize)]
+struct NameAtTheDoor {
+    name: String,
+    /// Where its picture is served, when it has one.
+    avatar: Option<String>,
 }
 
 async fn names_at_the_door(State(state): State<AppState>) -> Result<Json<NamesAtTheDoor>> {
@@ -326,5 +334,13 @@ async fn names_at_the_door(State(state): State<AppState>) -> Result<Json<NamesAt
         .names_at_the_door()
         .await
         .map_err(|error| crate::error::ServerError::internal(error.to_string()))?;
-    Ok(Json(NamesAtTheDoor { names }))
+    Ok(Json(NamesAtTheDoor {
+        names: names
+            .into_iter()
+            .map(|offered| NameAtTheDoor {
+                avatar: offered.avatar_path.as_deref().map(crate::images::face_url),
+                name: offered.name,
+            })
+            .collect(),
+    }))
 }

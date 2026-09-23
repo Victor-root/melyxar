@@ -13,6 +13,7 @@
  * saving.
  */
 
+import { useRef } from "react";
 import {
   appearanceClasses,
   BACKGROUNDS,
@@ -33,6 +34,11 @@ import { useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
 import type { LibraryKind, ViewerPreferences } from "../api";
 import { useMarks } from "../marks";
+import { useAccount } from "../account";
+import { api } from "../api";
+import type { Account } from "../api";
+import { refusalAbout, useTold } from "../asking";
+import { Face } from "../components/face";
 
 export function SettingsPage() {
   const { t, language } = useSettings();
@@ -57,6 +63,8 @@ export function SettingsPage() {
       </div>
 
       {failed && <p className="notice">{t(failed === "not_kept" ? "settings.not_kept" : "error.unreachable")}</p>}
+
+      <ProfilePicture />
 
       <Appearance />
 
@@ -356,6 +364,79 @@ function TheDoor({
     </section>
   );
 }
+
+/**
+ * The picture this account wears, in the header and on the sign in screen.
+ *
+ * Chosen from the files of the device in hand and sent as it is: the server
+ * turns it the right way up and cuts it square, so nothing is asked of
+ * anybody beyond picking a photo.
+ */
+function ProfilePicture() {
+  const { t } = useSettings();
+  const { account, cameIn } = useAccount();
+  const chooser = useRef<HTMLInputElement>(null);
+  // The account answered is the one every screen then draws from.
+  const told = useTold(async (change: () => Promise<Account>) => cameIn(await change()));
+
+  if (!account) {
+    return null;
+  }
+  const refused = told.failure;
+
+  return (
+    <section className="settings-block">
+      <h2>{t("settings.avatar")}</h2>
+      <p className="settings-why">{t("settings.avatar_why")}</p>
+      <div className="avatar-choice">
+        <Face className="avatar avatar-large" name={account.name} avatar={account.avatar} />
+        <input
+          ref={chooser}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          hidden
+          onChange={(event) => {
+            const image = event.target.files?.[0];
+            // Emptied, so choosing the same file again is still a choice.
+            event.target.value = "";
+            if (image) {
+              told.tell(() => api.setAvatar(image));
+            }
+          }}
+        />
+        <button
+          className="button button-small"
+          disabled={told.busy}
+          onClick={() => chooser.current?.click()}
+        >
+          {t(account.avatar ? "settings.avatar_change" : "settings.avatar_choose")}
+        </button>
+        {account.avatar && (
+          <button
+            className="button button-small"
+            disabled={told.busy}
+            onClick={() => told.tell(api.removeAvatar)}
+          >
+            {t("settings.avatar_remove")}
+          </button>
+        )}
+        {told.busy && <span className="settings-why">{t("settings.avatar_busy")}</span>}
+      </div>
+      {refused && (
+        <p className="notice">
+          {t(
+            refused.status === TOO_LARGE
+              ? "refused.avatar.too_large"
+              : refusalAbout(refused, "avatar"),
+          )}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** What the server answers a request carrying more than it takes. */
+const TOO_LARGE = 413;
 
 /**
  * The order the home page lays the kinds of library out in, its tiles and its

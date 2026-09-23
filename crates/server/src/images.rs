@@ -20,7 +20,15 @@ use std::path::{Component, Path, PathBuf};
 use crate::error::{Result, ServerError};
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/api/v1/images/{*path}", axum::routing::get(picture))
+    Router::new()
+        .route("/api/v1/images/{*path}", axum::routing::get(picture))
+        .route("/api/v1/public/faces/{*path}", axum::routing::get(face))
+}
+
+/// Where the picture of an account is served, from where it is kept. Open to
+/// anybody, so the sign in screen can show it beside the name.
+pub fn face_url(avatar_path: &str) -> String {
+    format!("/api/v1/public/faces/{avatar_path}")
 }
 
 /// How long a client may keep a picture.
@@ -31,17 +39,24 @@ pub fn router() -> Router<AppState> {
 const KEEP_FOR: &str = "public, max-age=31536000, immutable";
 
 async fn picture(State(state): State<AppState>, RoutePath(path): RoutePath<String>) -> Response {
-    match read(&state, &path).await {
+    match read(&state.config().directories.images(), &path).await {
         Ok(response) => response,
         Err(error) => error.into_response(),
     }
 }
 
-async fn read(state: &AppState, requested: &str) -> Result<Response> {
+async fn face(State(state): State<AppState>, RoutePath(path): RoutePath<String>) -> Response {
+    match read(&state.config().directories.avatars(), &path).await {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
+async fn read(folder: &Path, requested: &str) -> Result<Response> {
     let relative = safe_relative_path(requested)
         .ok_or_else(|| ServerError::invalid_input("that is not a picture path"))?;
 
-    let full_path = state.config().directories.images().join(&relative);
+    let full_path = folder.join(&relative);
     let bytes = tokio::fs::read(&full_path)
         .await
         .map_err(|_| ServerError::not_found("no picture there"))?;

@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
-import type { Account, Branding } from "../api";
+import type { Account, Branding, NameAtTheDoor } from "../api";
 import { refusalKey } from "../i18n";
 
 /** A refusal, worded and with whatever its wording needs. */
@@ -31,7 +31,7 @@ export interface DoorScreen {
    *  Empty for three different reasons that the screen has no business
    *  telling apart: a server told not to offer them, everybody having asked
    *  to be left off, and a server with no accounts at all. */
-  names: string[];
+  names: NameAtTheDoor[];
   /** What this server calls itself. */
   serverName: string;
   /** Sends what was typed. Never throws: what came of it is below.
@@ -50,7 +50,7 @@ export interface DoorScreen {
 export function useDoorScreen(branding: Branding, cameIn: (who: Account) => void): DoorScreen {
   const [asking, setAsking] = useState(false);
   const [refused, setRefused] = useState<Refusal | null>(null);
-  const [names, setNames] = useState<string[]>([]);
+  const [names, setNames] = useState<NameAtTheDoor[]>([]);
   const brandNew = !branding.setup_complete;
 
   // Asked for once, and never on a server that has no accounts yet: the only

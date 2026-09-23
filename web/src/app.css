@@ -467,6 +467,33 @@
   letter-spacing: 0.02em;
 }
 
+/* A picture of somebody in place of their initials: the round or rounded
+   frame it sits in stays the frame, and the picture fills it. */
+.face-picture {
+  overflow: hidden;
+  background: var(--surface-raised);
+}
+
+.face-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-large {
+  width: 72px;
+  height: 72px;
+  font-size: 26px;
+}
+
+.avatar-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight) var(--gap);
+}
+
 /* Who is here, at the end of the piece, and the way into everything that is
    theirs. The letters and the name go together more closely than any two
    icons do, so they keep their own air while the glass around them is

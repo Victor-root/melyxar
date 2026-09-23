@@ -151,6 +151,62 @@ pub async fn average_colour(tool: &Path, source: &Path) -> Result<String> {
     })
 }
 
+/// How many points across a profile picture is written: twice the largest
+/// round it is shown in, for a screen with fine pixels.
+pub const AVATAR_SIDE: u32 = 256;
+
+/// Builds the making of a profile picture out of whatever image somebody
+/// sent: turned the way its camera said, cut square around its middle, and
+/// brought down to one size. Never enlarged, since that invents nothing.
+pub fn avatar_arguments(
+    source: &Path,
+    orientation: Orientation,
+    destination: &Path,
+) -> Vec<OsString> {
+    let square =
+        format!("crop='min(iw,ih)':'min(iw,ih)',scale='min(iw,{AVATAR_SIDE})':-1:flags=lanczos");
+    let filter = match turn_of(orientation) {
+        Some(turn) => format!("{turn},{square}"),
+        None => square,
+    };
+    vec![
+        OsString::from("-hide_banner"),
+        OsString::from("-loglevel"),
+        OsString::from("error"),
+        OsString::from("-y"),
+        OsString::from("-noautorotate"),
+        OsString::from("-i"),
+        source.as_os_str().to_os_string(),
+        OsString::from("-vf"),
+        OsString::from(filter),
+        OsString::from("-frames:v"),
+        OsString::from("1"),
+        OsString::from("-c:v"),
+        OsString::from("libwebp"),
+        OsString::from("-quality"),
+        OsString::from(QUALITY.to_string()),
+        destination.as_os_str().to_os_string(),
+    ]
+}
+
+/// Makes a profile picture out of an image somebody sent.
+pub async fn avatar(
+    tool: &Path,
+    source: &Path,
+    orientation: Orientation,
+    destination: &Path,
+) -> Result<()> {
+    let output = TokioCommand::new(tool)
+        .args(avatar_arguments(source, orientation, destination))
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+    if !output.status.success() {
+        return Err(FfmpegError::from_output("ffmpeg", &output));
+    }
+    Ok(())
+}
+
 /// Builds the taking of one picture, the right way up, out of a file somebody
 /// filmed or photographed themselves.
 ///
@@ -393,6 +449,33 @@ mod tests {
             "a video filmed on its side is turned by the tool itself: {video}"
         );
         assert!(video.ends_with("-frames:v 1 -c:v png /cache/upright.png"));
+    }
+
+    #[test]
+    fn a_profile_picture_is_turned_then_cut_square_then_brought_down() {
+        let turned = rendered(&avatar_arguments(
+            Path::new("/data/sent.source"),
+            Orientation::TurnedLeft,
+            Path::new("/data/avatar.webp"),
+        ));
+        assert!(
+            turned.contains("-noautorotate -i /data/sent.source"),
+            "{turned}"
+        );
+        assert!(
+            turned.contains(
+                "-vf transpose=cclock,crop='min(iw,ih)':'min(iw,ih)',scale='min(iw,256)':-1"
+            ),
+            "turned before it is cut, or the square is taken from the wrong side: {turned}"
+        );
+        assert!(turned.ends_with("-c:v libwebp -quality 80 /data/avatar.webp"));
+
+        let upright = rendered(&avatar_arguments(
+            Path::new("/data/sent.source"),
+            Orientation::AsStored,
+            Path::new("/data/avatar.webp"),
+        ));
+        assert!(upright.contains("-vf crop="), "{upright}");
     }
 
     #[test]

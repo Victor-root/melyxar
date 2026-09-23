@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 pub mod accounts;
+pub mod avatars;
 pub mod bench;
 pub mod calibration;
 pub mod catalogue;
