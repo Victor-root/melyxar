@@ -91,7 +91,7 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
     <section className="panel server-strip">
       <div className="server-who">
         <span className="server-mark" aria-hidden="true">
-          <img src="/melyxar-64.png" alt="" />
+          <MelyxarMark size={36} />
         </span>
         <div className="server-words">
           <h2>{overview?.server_name ?? t("app.name")}</h2>

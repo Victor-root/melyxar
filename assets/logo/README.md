@@ -9,8 +9,8 @@ au navigateur. Ce qui est servi vit dans `web/public/` et en est dérivé.
 | Fichier | Taille | Où |
 |---|---|---|
 | `web/public/melyxar-1024.webp` | 1024 | L'écran de démarrage, où le logo est affiché grand |
-| `web/public/melyxar-512.png` | 512 | Le logo de l'application, pour tout usage général |
-| `web/public/melyxar-64.png` | 64 | La marque de l'en-tête, affichée à 26 pixels |
+| `web/public/melyxar-shade-512.png` | 512 | Le relief du logo, pour tout usage au-delà de 64 pixels (écran de connexion) |
+| `web/public/melyxar-shade-64.png` | 64 | Le relief du logo, pour la barre du haut et l'administration |
 | `web/public/apple-touch-icon.png` | 180 | Écran d'accueil sur téléphone et tablette |
 | `web/public/favicon-32.png` | 32 | Onglet du navigateur, écran dense |
 | `web/public/favicon-16.png` | 16 | Onglet du navigateur, écran ordinaire |
@@ -36,16 +36,34 @@ En WebP et non en PNG parce qu'à cette taille le PNG pèse 427 Ko pour un
 huit niveaux sur deux millièmes des pixels, et jamais sur le contour, que
 WebP restitue à l'identique.
 
+## Le logo dans la couleur d'accentuation
+
+Dans l'interface, le logo prend la couleur d'accentuation choisie par chaque
+compte. Ce qui est servi n'est donc pas le logo rouge mais son relief : une
+image en niveaux de gris qui ne garde que la lumière et l'ombre du ruban, avec
+la transparence d'origine. L'interface pose la couleur d'accentuation, la
+découpe à la forme du logo, et applique le relief par-dessus en lumière dure :
+un gris moyen laisse la couleur telle quelle, plus clair l'éclaircit, plus
+sombre l'assombrit.
+
+Le relief se tire de la version rouge recadrée, pixel par pixel : gris =
+0,55 × rouge + 0,9 × moyenne du vert et du bleu, plafonné au blanc, sur une
+échelle de 0 à 1, transparence inchangée. Le rouge vif du ruban tombe ainsi
+près du gris moyen, et ses reflets clairs au-dessus.
+
+Les icônes d'onglet et d'écran d'accueil gardent le rouge : le navigateur les
+affiche hors de la page, sans la couleur de personne.
+
 ## Pourquoi des images fixes et pas un SVG
 
 Les tailles auxquelles ce logo est affiché sont connues d'avance et il n'y en
-a que cinq, donc les tailler une fois vaut mieux que les recalculer à chaque
+a que six, donc les tailler une fois vaut mieux que les recalculer à chaque
 affichage. C'est la même règle que pour les affiches des films, décidée dans
 `docs/architecture/README.md`.
 
 ## Pour en refaire un jeu
 
-Remplacer l'original et régénérer les cinq tailles avec n'importe quel outil
+Remplacer l'original et régénérer les six fichiers ci-dessus (les deux reliefs se tirent de la version rouge à 512 et à 64 pixels, recadrée et marginée comme les autres) avec n'importe quel outil
 d'image, en gardant les marges ci-dessus. Aucune étape n'est automatisée : un
 logo change une fois tous les deux ans, et un script qu'on lance deux fois est
 un script que personne ne sait plus lancer.

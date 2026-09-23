@@ -647,18 +647,22 @@ export function TranscodeIcon(props: IconProps) {
   );
 }
 
-/** The mark of Melyxar itself, in its own colours: it is the one picture here
- *  that is the server's name rather than a drawing of something. */
+/** The mark of Melyxar, in the accent somebody chose.
+ *
+ *  Drawn from its relief alone, a grey picture of the logo's light and shade:
+ *  laid over the accent, cut to the logo's shape, it keeps every fold of the
+ *  ribbon in whatever colour the accent is. The larger copy is taken once the
+ *  small one would be blown up. */
 export function MelyxarMark({ size = 22, className }: IconProps) {
+  const relief = size > 64 ? "/melyxar-shade-512.png" : "/melyxar-shade-64.png";
   return (
-    <img
-      className={className}
-      src="/melyxar-64.png"
-      width={size}
-      height={size}
-      alt=""
+    <span
+      className={`melyxar-mark${className ? ` ${className}` : ""}`}
+      style={{ width: size, height: size, "--relief": `url(${relief})` } as React.CSSProperties}
       aria-hidden="true"
-    />
+    >
+      <img src={relief} alt="" />
+    </span>
   );
 }
 

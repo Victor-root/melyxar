@@ -34,6 +34,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   LockIcon,
+  MelyxarMark,
 } from "../icons";
 import { Face } from "../components/face";
 import { useDoorScreen } from "../screens/door";
@@ -48,9 +49,6 @@ import type { ThemeChoice } from "../settings";
 function firstLetterOf(name: string): string {
   return [...name][0]?.toUpperCase() ?? "?";
 }
-
-/** The mark this project ships with, worn by a server that was given none. */
-const THE_MARK_WE_SHIP = "/melyxar-512.png";
 
 /**
  * What the card is showing.
@@ -182,12 +180,13 @@ export function Door({
         )}
 
         <div className="door-crown">
-          <img
-            className="door-mark"
-            src={branding.logo_path ?? THE_MARK_WE_SHIP}
-            alt=""
-            aria-hidden="true"
-          />
+          {/* A mark of the administrator's own stays in its own colours; the
+              one Melyxar ships takes the accent, like the rest of the page. */}
+          {branding.logo_path ? (
+            <img className="door-mark" src={branding.logo_path} alt="" aria-hidden="true" />
+          ) : (
+            <MelyxarMark size={58} className="door-mark" />
+          )}
           <h1 className="door-name">{branding.server_name}</h1>
         </div>
 

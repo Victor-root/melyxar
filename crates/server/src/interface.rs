@@ -40,7 +40,7 @@ const ALWAYS_ASK: &str = "no-cache";
 /// Where the build puts what it names with a fingerprint.
 ///
 /// The rest of what is served is copied over from `web/public` under the name
-/// it was given, so `melyxar-64.png` today and `melyxar-64.png` tomorrow can
+/// it was given, so `melyxar-shade-64.png` today and `melyxar-shade-64.png` tomorrow can
 /// hold different pictures. Promising a browser it may keep such a file for a
 /// year means a logo that changes is never seen to change.
 const FINGERPRINTED: &str = "assets/";
@@ -232,7 +232,7 @@ mod tests {
         }
         for asked_again in [
             "index.html",
-            "melyxar-64.png",
+            "melyxar-shade-64.png",
             "favicon-32.png",
             "apple-touch-icon.png",
             "melyxar-1024.webp",
@@ -250,7 +250,7 @@ mod tests {
         std::fs::create_dir_all(folder.path().join("web/assets")).expect("folders");
         std::fs::write(folder.path().join("web/index.html"), "the page").expect("page");
         std::fs::write(folder.path().join("web/assets/index-abc123.js"), "the code").expect("code");
-        std::fs::write(folder.path().join("web/melyxar-64.png"), "the logo").expect("logo");
+        std::fs::write(folder.path().join("web/melyxar-shade-64.png"), "the logo").expect("logo");
         folder
     }
 
@@ -283,7 +283,7 @@ mod tests {
         );
         assert_eq!(headers[header::CACHE_CONTROL], KEEP_FOR);
 
-        let (_, headers, body) = answer(folder.path(), "/melyxar-64.png", &nothing).await;
+        let (_, headers, body) = answer(folder.path(), "/melyxar-shade-64.png", &nothing).await;
         assert_eq!(body, "the logo");
         assert_eq!(headers[header::CACHE_CONTROL], ALWAYS_ASK);
     }
