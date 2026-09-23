@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Watched, WatchedDecision } from "../../api";
-import { countedOf, episodeOf, shareWatched } from "./playing";
+import { countedOf, episodeOf, positionNow, shareWatched } from "./playing";
 
 function watched(changes: Partial<Watched> = {}): Watched {
   return {
     device: "d",
     user: "somebody",
     device_name: "a browser",
+    browser: null,
     work_id: "w",
     title: "Quiet Harbour",
     kind: "movie",
@@ -63,13 +64,26 @@ describe("countedOf", () => {
 
 describe("shareWatched", () => {
   it("is how far through the film its viewer is", () => {
-    expect(shareWatched(watched({ position_seconds: 1500, duration_seconds: 6000 }))).toBe(0.25);
+    expect(shareWatched(watched({ duration_seconds: 6000 }), 1500)).toBe(0.25);
   });
 
   it("stays inside the film and says nothing of a film of unknown length", () => {
-    expect(shareWatched(watched({ position_seconds: 7000, duration_seconds: 6000 }))).toBe(1);
-    expect(shareWatched(watched({ position_seconds: 10 }))).toBeNull();
-    expect(shareWatched(watched({ duration_seconds: 0 }))).toBeNull();
+    expect(shareWatched(watched({ duration_seconds: 6000 }), 7000)).toBe(1);
+    expect(shareWatched(watched(), 10)).toBeNull();
+    expect(shareWatched(watched({ duration_seconds: 0 }), 10)).toBeNull();
+  });
+});
+
+describe("positionNow", () => {
+  it("runs the clock of a film playing on from when the server spoke", () => {
+    const playing = watched({ position_seconds: 100, duration_seconds: 6000 });
+    expect(positionNow(playing, 5_000, 12_500)).toBe(107.5);
+  });
+
+  it("holds a paused film where it stands, and never runs past the end", () => {
+    expect(positionNow(watched({ position_seconds: 100, paused: true }), 0, 60_000)).toBe(100);
+    expect(positionNow(watched({ position_seconds: 5995, duration_seconds: 6000 }), 0, 60_000)).toBe(6000);
+    expect(positionNow(watched({ position_seconds: 50 }), 0, 60_000)).toBe(110);
   });
 });
 

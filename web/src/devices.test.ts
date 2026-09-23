@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deviceName, deviceSaid } from "./devices";
+import { brandOf, deviceName, deviceSaid } from "./devices";
 
 const WINDOWS_CHROME =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -40,5 +40,26 @@ describe("deviceName", () => {
 
   it("says it does not know rather than showing the line", () => {
     expect(deviceName("an unnamed device", t)).toBe("device.unknown");
+  });
+
+  it("takes the browser its page found over the one its line names", () => {
+    expect(deviceName(WINDOWS_CHROME, t, "Brave")).toBe("Brave on Windows");
+  });
+});
+
+describe("brandOf", () => {
+  it("finds the browser behind its engine and the brand every one of them makes up", () => {
+    expect(
+      brandOf([{ brand: "Brave" }, { brand: "Chromium" }, { brand: "Not=A?Brand" }]),
+    ).toBe("Brave");
+    expect(
+      brandOf([{ brand: "Not;A=Brand" }, { brand: "Google Chrome" }, { brand: "Chromium" }]),
+    ).toBe("Chrome");
+    expect(brandOf([{ brand: "Microsoft Edge" }, { brand: "Chromium" }])).toBe("Edge");
+  });
+
+  it("finds nothing where there is only the engine", () => {
+    expect(brandOf([{ brand: "Chromium" }, { brand: "Not_A Brand" }])).toBeNull();
+    expect(brandOf([])).toBeNull();
   });
 });

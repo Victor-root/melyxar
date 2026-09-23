@@ -1213,6 +1213,8 @@ export interface Watched {
   user: string;
   /** What the browser said it was when it signed in. */
   device_name: string;
+  /** The browser its page found, when it could tell better than the line. */
+  browser: string | null;
   work_id: string;
   title: string;
   kind: string;
@@ -1221,6 +1223,7 @@ export interface Watched {
   season: number | null;
   episode: number | null;
   picture: string | null;
+  /** Where the film had got to when the server sent this. */
   position_seconds: number;
   duration_seconds: number | null;
   started_at: string;
@@ -1458,8 +1461,10 @@ export const api = {
     audio_track_id: string | null;
     subtitle_track_id: string | null;
   }) => post<{ remembered: boolean }>("/api/v1/playback/tracks", body),
-  /* What is being watched right now, on every device. */
-  nowPlaying: (signal?: AbortSignal) => get<Watched[]>("/api/v1/system/playing", signal),
+  /* What is being watched right now, on every device, sent again by the
+     server the moment it changes: listen for "playing", and "failed" when it
+     could not be read. */
+  administrationLine: () => new EventSource("/api/v1/system/playing/live"),
   /* The player is told on its next word, and the server closes the
      conversion itself if it never obeys. */
   stopPlaying: (device: string) =>
@@ -1560,10 +1565,10 @@ export const api = {
       reported_at: new Date().toISOString(),
       leaving: true,
     }),
-  /* Also how the server knows the film is being watched, so the answer says
-     whether an administrator asked for it to stop. `leaving` is the last word
-     of a player leaving it. */
-  reportPosition: (work: string, seconds: number, leaving = false) =>
+  /* Also how the server knows where the film is and whether it stands
+     still, so the answer says whether an administrator asked for it to stop.
+     `leaving` is the last word of a player leaving it. */
+  reportPosition: (work: string, seconds: number, paused: boolean, leaving = false) =>
     post<{ kept: boolean; stop: boolean }>("/api/v1/playback/progress", {
       work_id: work,
       position_seconds: seconds,
@@ -1571,17 +1576,26 @@ export const api = {
       // fresher one is refused, so coming back online cannot undo progress
       // made elsewhere in the meantime.
       reported_at: new Date().toISOString(),
+      paused,
       leaving,
     }),
-  /* The same sign of life while the film is not anywhere worth remembering
-     yet: getting ready, or its first seconds. Null until the picture has
-     shown anything. */
-  stillPlaying: (work: string, seconds: number | null, leaving = false) =>
+  /* The same news while the film is not anywhere worth remembering yet:
+     getting ready, or its first seconds. Null until the picture has shown
+     anything. */
+  stillPlaying: (work: string, seconds: number | null, paused: boolean, leaving = false) =>
     post<{ stop: boolean }>("/api/v1/playback/watching", {
       work_id: work,
       position_seconds: seconds,
+      paused,
       leaving,
     }),
+  /* Held open by the player while it shows the film: its end tells the
+     server the player is gone, and the server sends "stop" down it the moment
+     an administrator asks. */
+  playerLine: (work: string) => new EventSource(`/api/v1/playback/watching/${work}/live`),
+  /* Which browser this is, as the page found by asking it. */
+  nameTheBrowser: (browser: string | null) =>
+    put<{ named: boolean }>("/api/v1/me/browser", { browser }),
   stillPlayingOnTheWayOut: (work: string, seconds: number | null) =>
     handOver("/api/v1/playback/watching", {
       work_id: work,

@@ -225,13 +225,13 @@ function Fact({
 function PlayingPanel() {
   const { t } = useSettings();
   const playing = useNowPlaying();
-  const watched = playing.answer ?? [];
+  const watched = playing.watched ?? [];
 
   return (
     <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")}>
-      <PlayingStats watched={playing.answer} />
+      <PlayingStats watched={playing.watched} />
       {watched.length === 0 ? (
-        <p className="empty-line">{playing.answer && t("admin.playing_none")}</p>
+        <p className="empty-line">{playing.watched && t("admin.playing_none")}</p>
       ) : (
         <div className="lines">
           {watched.map((one) => (
