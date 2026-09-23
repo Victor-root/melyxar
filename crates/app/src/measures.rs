@@ -66,7 +66,7 @@ pub struct Point {
 pub struct Measuring {
     machine: Machine,
     recent: Mutex<VecDeque<Point>>,
-    disks: Mutex<Vec<Disk>>,
+    disks: Mutex<Vec<DiskView>>,
     /// Whether the database refused the last minute it was handed: the one
     /// write this server makes every minute, whatever else it is doing, and
     /// so the one that says whether it still can.
@@ -106,7 +106,7 @@ impl Measuring {
     }
 
     /// The disks as they were at the last look.
-    pub(crate) fn disks(&self) -> Vec<Disk> {
+    pub(crate) fn disks(&self) -> Vec<DiskView> {
         self.disks.lock().unwrap_or_else(|held| held.into_inner()).clone()
     }
 
@@ -136,7 +136,7 @@ fn read_the_machine(sources: &Sources) -> Counters {
     Counters {
         taken: Instant::now(),
         processor: melyxar_system::processor_times(&read("stat")),
-        memory: melyxar_system::memory(&read("meminfo")),
+        memory: melyxar_system::read_memory(sources),
         load: melyxar_system::load(&read("loadavg")),
         traffic: melyxar_system::traffic(&read("net/dev")),
         card: melyxar_system::card::handles(sources),
@@ -151,7 +151,7 @@ fn point_between(before: &Counters, after: &Counters, has_a_card: bool, at: Time
         melyxar_system::traffic_rate(before.traffic, after.traffic, seconds).unwrap_or_default();
     let memory = after.memory.unwrap_or(Memory {
         total_bytes: 0,
-        available_bytes: 0,
+        used_bytes: 0,
     });
     Point {
         at,
@@ -159,7 +159,7 @@ fn point_between(before: &Counters, after: &Counters, has_a_card: bool, at: Time
             .processor
             .zip(after.processor)
             .and_then(|(was, is)| melyxar_system::busy_share(was, is)),
-        memory_used: memory.used_bytes(),
+        memory_used: memory.used_bytes,
         memory_total: memory.total_bytes,
         load: after.load,
         received,
@@ -252,25 +252,41 @@ fn folders_still_there(roots: &[(String, PathBuf)]) -> Vec<String> {
 /// libraries are still there: every folder a library looks in, and every
 /// folder the server writes to.
 async fn look_at_the_disks(state: &AppState) {
-    let roots: Vec<(String, PathBuf)> = match state.database().roots_with_access().await {
-        Ok(roots) => roots
-            .into_iter()
-            .map(|entry| (entry.root.label, entry.root.path))
-            .collect(),
+    let libraries = match state.database().list_libraries().await {
+        Ok(libraries) => libraries,
         Err(error) => {
             tracing::warn!(%error, "the folders of the libraries could not be read for their disks");
             Vec::new()
         }
     };
+    let roots: Vec<(String, PathBuf)> = libraries
+        .iter()
+        .flat_map(|library| library.roots.iter())
+        .map(|root| (root.label.clone(), root.path.clone()))
+        .collect();
+    // Each folder with the library it belongs to, the server's own with none.
     let directories = &state.config().directories;
-    let mut folders: Vec<PathBuf> = roots.iter().map(|(_, path)| path.clone()).collect();
-    folders.extend([
-        directories.data.clone(),
-        directories.cache.clone(),
-        directories.transcodes.clone(),
-    ]);
+    let owners: Vec<(PathBuf, Option<String>)> = libraries
+        .iter()
+        .flat_map(|library| {
+            library
+                .roots
+                .iter()
+                .map(|root| (root.path.clone(), Some(library.name.clone())))
+        })
+        .chain(
+            [&directories.data, &directories.cache, &directories.transcodes]
+                .into_iter()
+                .map(|folder| (folder.clone(), None)),
+        )
+        .collect();
     let looked = tokio::task::spawn_blocking(move || {
-        (melyxar_system::disks(&folders), folders_still_there(&roots))
+        let folders: Vec<PathBuf> = owners.iter().map(|(folder, _)| folder.clone()).collect();
+        let disks = melyxar_system::disks(&folders)
+            .into_iter()
+            .map(|disk| view_of(disk, &owners))
+            .collect();
+        (disks, folders_still_there(&roots))
     })
     .await;
     if let Ok((disks, missing)) = looked {
@@ -357,12 +373,44 @@ pub struct Live {
     pub disks: Vec<DiskView>,
 }
 
-/// One disk as a page shows it.
-#[derive(Debug, Clone, Serialize)]
+/// One disk as a page shows it: by where it is mounted, and by what it holds.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct DiskView {
-    pub folders: Vec<String>,
+    pub mount: String,
+    /// The libraries with a folder on it, by name, each once.
+    pub libraries: Vec<String>,
+    /// Whether the server keeps its own data, cache or conversions on it.
+    pub holds_the_server: bool,
     pub total_bytes: u64,
     pub available_bytes: u64,
+}
+
+impl DiskView {
+    /// How full it is, from nought to one.
+    pub(crate) fn used(&self) -> f64 {
+        1.0 - self.available_bytes as f64 / self.total_bytes.max(1) as f64
+    }
+}
+
+fn view_of(disk: Disk, owners: &[(PathBuf, Option<String>)]) -> DiskView {
+    let mut libraries: Vec<String> = Vec::new();
+    let mut holds_the_server = false;
+    for folder in &disk.folders {
+        for (_, owner) in owners.iter().filter(|(owned, _)| owned == folder) {
+            match owner {
+                Some(name) if !libraries.contains(name) => libraries.push(name.clone()),
+                Some(_) => {}
+                None => holds_the_server = true,
+            }
+        }
+    }
+    DiskView {
+        mount: disk.mount.display().to_string(),
+        libraries,
+        holds_the_server,
+        total_bytes: disk.total_bytes,
+        available_bytes: disk.available_bytes,
+    }
 }
 
 pub fn live(state: &AppState) -> Live {
@@ -376,21 +424,7 @@ pub fn live(state: &AppState) -> Live {
             .iter()
             .cloned()
             .collect(),
-        disks: measuring
-            .disks
-            .lock()
-            .unwrap_or_else(|held| held.into_inner())
-            .iter()
-            .map(|disk| DiskView {
-                folders: disk
-                    .folders
-                    .iter()
-                    .map(|folder| folder.display().to_string())
-                    .collect(),
-                total_bytes: disk.total_bytes,
-                available_bytes: disk.available_bytes,
-            })
-            .collect(),
+        disks: measuring.disks(),
     }
 }
 
@@ -480,6 +514,43 @@ mod tests {
     }
 
     #[test]
+    fn a_disk_says_which_libraries_and_whether_the_server_live_on_it() {
+        let owners = vec![
+            (PathBuf::from("/mnt/one/Films"), Some("Films".to_string())),
+            (PathBuf::from("/mnt/one/Series"), Some("Series".to_string())),
+            (PathBuf::from("/mnt/one/More films"), Some("Films".to_string())),
+            (PathBuf::from("/var/lib/melyxar"), None),
+        ];
+        let disk = Disk {
+            mount: PathBuf::from("/mnt/one"),
+            folders: vec![
+                PathBuf::from("/mnt/one/Films"),
+                PathBuf::from("/mnt/one/Series"),
+                PathBuf::from("/mnt/one/More films"),
+            ],
+            total_bytes: 1000,
+            available_bytes: 50,
+        };
+
+        let view = view_of(disk.clone(), &owners);
+        assert_eq!(view.mount, "/mnt/one");
+        assert_eq!(view.libraries, vec!["Films".to_string(), "Series".to_string()]);
+        assert!(!view.holds_the_server);
+        assert!((view.used() - 0.95).abs() < 1e-9);
+
+        let system = view_of(
+            Disk {
+                mount: PathBuf::from("/"),
+                folders: vec![PathBuf::from("/var/lib/melyxar")],
+                ..disk
+            },
+            &owners,
+        );
+        assert!(system.libraries.is_empty());
+        assert!(system.holds_the_server);
+    }
+
+    #[test]
     fn instants_are_cut_to_their_minute_and_their_hour() {
         let at = datetime!(2026-09-23 14:05:12.345 UTC);
         assert_eq!(start_of_the_minute(at), datetime!(2026-09-23 14:05 UTC));
@@ -501,7 +572,7 @@ mod tests {
         let after = Counters {
             taken: start + std::time::Duration::from_secs(2),
             processor: Some(ProcessorTimes { busy: 300, total: 1800 }),
-            memory: Some(Memory { total_bytes: 4000, available_bytes: 1000 }),
+            memory: Some(Memory { total_bytes: 4000, used_bytes: 3000 }),
             load: Some(0.5),
             traffic: Traffic { received: 4000, sent: 200 },
             card: Handles::default(),

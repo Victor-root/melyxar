@@ -8,8 +8,10 @@
 //!
 //! In a container, `/proc` already speaks for the container and not for the
 //! host: the processor share, the memory and the network are the ones given
-//! to Melyxar, which is exactly what is wanted. Whatever cannot be read is
-//! answered with nothing, never with a zero that would read as a measurement.
+//! to Melyxar, which is exactly what is wanted. The memory in use is taken
+//! from the container's own accounting, of which `/proc` only gives an
+//! estimate. Whatever cannot be read is answered with nothing, never with a
+//! zero that would read as a measurement.
 
 #![forbid(unsafe_code)]
 
@@ -109,19 +111,15 @@ pub fn processor_name(cpuinfo: &str) -> Option<String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Memory {
     pub total_bytes: u64,
-    /// What a program could still be given without anything being pushed out:
-    /// the kernel's own answer, which counts the room its caches would give
-    /// back. Free memory alone would read as a full machine within an hour of
-    /// starting, because a kernel keeps every free page busy caching files.
-    pub available_bytes: u64,
+    /// What is held and would not be given back. The files a kernel keeps in
+    /// memory to read them faster are left out: every free page ends up
+    /// caching one, and counted as used they would read as a full machine
+    /// within an hour of starting.
+    pub used_bytes: u64,
 }
 
-impl Memory {
-    pub fn used_bytes(&self) -> u64 {
-        self.total_bytes.saturating_sub(self.available_bytes)
-    }
-}
-
+/// The machine as `/proc/meminfo` has it: everything but what the kernel says
+/// a program could still be given, its caches counted as room.
 pub fn memory(meminfo: &str) -> Option<Memory> {
     let kilobytes = |name: &str| -> Option<u64> {
         meminfo
@@ -132,9 +130,39 @@ pub fn memory(meminfo: &str) -> Option<Memory> {
             .parse()
             .ok()
     };
+    let total_bytes = kilobytes("MemTotal")? * 1024;
     Some(Memory {
-        total_bytes: kilobytes("MemTotal")? * 1024,
-        available_bytes: kilobytes("MemAvailable")? * 1024,
+        total_bytes,
+        used_bytes: total_bytes.saturating_sub(kilobytes("MemAvailable")? * 1024),
+    })
+}
+
+/// What a container holds, as its control group is charged: everything, less
+/// the files it keeps in memory. It is the figure Proxmox shows for a
+/// container, where `/proc/meminfo` is only an estimate built from it.
+pub fn held_by_the_group(current: &str, stat: &str) -> Option<u64> {
+    let charged: u64 = current.trim().parse().ok()?;
+    let files: u64 = stat
+        .lines()
+        .find_map(|line| line.strip_prefix("file "))?
+        .trim()
+        .parse()
+        .ok()?;
+    Some(charged.saturating_sub(files))
+}
+
+/// The memory of the container Melyxar runs in, or of the machine when it
+/// runs in none: a machine's own control group is charged nothing.
+pub fn read_memory(sources: &Sources) -> Option<Memory> {
+    let memory = memory(&std::fs::read_to_string(sources.proc.join("meminfo")).ok()?)?;
+    let group = sources.sys.join("fs/cgroup");
+    let held = std::fs::read_to_string(group.join("memory.current"))
+        .ok()
+        .zip(std::fs::read_to_string(group.join("memory.stat")).ok())
+        .and_then(|(current, stat)| held_by_the_group(&current, &stat));
+    Some(Memory {
+        used_bytes: held.unwrap_or(memory.used_bytes),
+        ..memory
     })
 }
 
@@ -191,11 +219,26 @@ pub fn traffic_rate(before: Traffic, after: Traffic, seconds: f64) -> Option<(f6
 /// One disk, and how full it is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Disk {
+    /// Where it is mounted, which is the name its owner gave it.
+    pub mount: PathBuf,
     /// The folders asked about that live on it, in the order they were asked
-    /// about: a disk has no name a person would know, the folders on it do.
+    /// about.
     pub folders: Vec<PathBuf>,
     pub total_bytes: u64,
     pub available_bytes: u64,
+}
+
+/// The folder a disk is mounted on: the highest one above this folder still
+/// on the same disk. Asked of what the kernel holds about each folder, so no
+/// disk is read.
+fn mount_of(folder: &Path, device: u64) -> PathBuf {
+    folder
+        .ancestors()
+        .skip(1)
+        .take_while(|above| std::fs::metadata(above).is_ok_and(|metadata| metadata.dev() == device))
+        .last()
+        .unwrap_or(folder)
+        .to_path_buf()
 }
 
 /// How full the disks under these folders are, each disk once however many of
@@ -220,6 +263,7 @@ pub fn disks(folders: &[PathBuf]) -> Vec<Disk> {
         by_device.insert(
             device,
             Disk {
+                mount: mount_of(folder, device),
                 folders: vec![folder.clone()],
                 total_bytes: space.f_blocks * space.f_frsize,
                 available_bytes: space.f_bavail * space.f_frsize,
@@ -316,7 +360,43 @@ mod tests {
                        MemAvailable:   12288000 kB\nBuffers: 1 kB\n";
         let memory = memory(meminfo).expect("read");
         assert_eq!(memory.total_bytes, 16_384_000 * 1024);
-        assert_eq!(memory.used_bytes(), 4_096_000 * 1024);
+        assert_eq!(memory.used_bytes, 4_096_000 * 1024);
+    }
+
+    #[test]
+    fn a_container_holds_what_it_is_charged_less_the_files_it_caches() {
+        let stat = "anon 60198912\nfile 3090280448\nkernel 78594048\nfile_mapped 1024\n";
+        assert_eq!(held_by_the_group("3229483008\n", stat), Some(139_202_560));
+        assert_eq!(held_by_the_group("max\n", stat), None);
+        assert_eq!(held_by_the_group("3229483008\n", "anon 1\n"), None);
+    }
+
+    #[test]
+    fn a_container_is_read_from_its_group_and_a_machine_from_meminfo() {
+        let proc = tempfile::tempdir().expect("folder");
+        std::fs::write(
+            proc.path().join("meminfo"),
+            "MemTotal: 8388608 kB\nMemAvailable: 8310890 kB\n",
+        )
+        .expect("meminfo");
+        let sys = tempfile::tempdir().expect("folder");
+        let sources = Sources {
+            proc: proc.path().to_path_buf(),
+            sys: sys.path().to_path_buf(),
+        };
+        assert_eq!(
+            read_memory(&sources),
+            Some(Memory {
+                total_bytes: 8_388_608 * 1024,
+                used_bytes: 77_718 * 1024
+            })
+        );
+
+        let group = sys.path().join("fs/cgroup");
+        std::fs::create_dir_all(&group).expect("group");
+        std::fs::write(group.join("memory.current"), "3000\n").expect("current");
+        std::fs::write(group.join("memory.stat"), "anon 800\nfile 2000\n").expect("stat");
+        assert_eq!(read_memory(&sources).map(|memory| memory.used_bytes), Some(1000));
     }
 
     #[test]
@@ -361,6 +441,25 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].folders, vec![one, two]);
         assert!(found[0].total_bytes >= found[0].available_bytes);
+    }
+
+    #[test]
+    fn a_disk_is_named_by_the_folder_it_is_mounted_on() {
+        let here = tempfile::tempdir().expect("folder");
+        let deep = here.path().join("films/of/one/kind");
+        std::fs::create_dir_all(&deep).expect("folders");
+
+        let found = disks(std::slice::from_ref(&deep));
+        let mount = &found[0].mount;
+        assert!(deep.starts_with(mount), "the mount is above the folder");
+        assert_eq!(
+            &disks(&[here.path().to_path_buf()])[0].mount,
+            mount,
+            "every folder of one disk names the same mount"
+        );
+        let mount_device = std::fs::metadata(mount).expect("mount").dev();
+        let above = mount.parent().map(|above| std::fs::metadata(above).expect("above").dev());
+        assert!(above.is_none_or(|device| device != mount_device), "nothing above the mount is on the disk");
     }
 
     #[test]

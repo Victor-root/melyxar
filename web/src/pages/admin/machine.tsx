@@ -12,7 +12,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "../../api";
-import type { LiveMeasures, MeasuredOver, MeasurePoint } from "../../api";
+import type { LiveMeasures, MeasuredDisk, MeasuredOver, MeasurePoint } from "../../api";
 import { useAsked } from "../../asking";
 import { Panel, Picker } from "../../components/panel";
 import { Sparkline } from "../../components/sparkline";
@@ -28,6 +28,7 @@ import type { IconProps } from "../../icons";
 import { amountOfData, networkRate, percentOf } from "../../readable";
 import { safeRead, safeWrite } from "../../i18n";
 import { useSettings } from "../../settings";
+import { diskName, fullness, usedShare } from "./disks";
 
 /** How often the live figures are read. */
 const LIVE_EVERY_MS = 2_000;
@@ -95,9 +96,65 @@ export function SystemPanel({ card }: { card: string | null }) {
       {live.failure && !live.answer ? (
         <p className="panel-notice panel-notice-trouble">{t("admin.measures_unreachable")}</p>
       ) : (
-        <Gauges live={live.answer} points={points} reach={reach} card={card} />
+        <>
+          <Gauges live={live.answer} points={points} reach={reach} card={card} />
+          {live.answer && live.answer.disks.length > 0 && <Disks disks={live.answer.disks} />}
+        </>
       )}
     </Panel>
+  );
+}
+
+/** Every disk the server uses, each by its name and what it holds. */
+function Disks({ disks }: { disks: MeasuredDisk[] }) {
+  const { t, language } = useSettings();
+  return (
+    <section className="disks">
+      <h3 className="disks-title">{t("admin.disks")}</h3>
+      <div className="lines">
+        {disks.map((disk) => {
+          const used = usedShare(disk);
+          const state = fullness(used);
+          const holds = [...disk.libraries, ...(disk.holds_the_server ? [t("admin.disk_server")] : [])];
+          return (
+            <div key={disk.mount} className="line disk-line" title={disk.mount}>
+              <span className={`line-mark${state ? ` state-${state}` : ""}`} aria-hidden="true">
+                <DiskIcon size={18} />
+              </span>
+              <span className="line-words">
+                <span className="line-name">{diskName(disk.mount) ?? t("admin.disk_system")}</span>
+                <span className="line-note">{holds.join(" · ")}</span>
+              </span>
+              <span className="disk-line-meter">
+                <Meter used={used} />
+              </span>
+              <span className="disk-line-figures">
+                <span className={`line-figure${state ? ` state-${state}` : ""}`}>{percentOf(used, language)}</span>
+                <span className="line-note">
+                  {t("admin.disk_free", {
+                    free: amountOfData(disk.available_bytes, language),
+                    total: amountOfData(disk.total_bytes, language),
+                  })}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** How full something is, in the colour of its state once it runs short. */
+function Meter({ used }: { used: number }) {
+  const state = fullness(used);
+  return (
+    <span className="meter">
+      <span
+        className={`meter-fill${state ? ` meter-fill-${state}` : ""}`}
+        style={{ width: `${Math.round(used * 100)}%` }}
+      />
+    </span>
   );
 }
 
@@ -178,25 +235,11 @@ function Gauges({
             : undefined
         }
         curve={
-          <div className="disk-meters">
-            {disks.map((disk) => {
-              const used = disk.total_bytes > 0 ? (disk.total_bytes - disk.available_bytes) / disk.total_bytes : 0;
-              return (
-                <div
-                  key={disk.folders.join("|")}
-                  className="disk-meter"
-                  title={`${disk.folders.join("\n")}\n${amountOfData(disk.available_bytes, language)} ${t("admin.free")}`}
-                >
-                  <span className="meter">
-                    <span
-                      className={`meter-fill${used > 0.9 ? " meter-fill-trouble" : used > 0.8 ? " meter-fill-attention" : ""}`}
-                      style={{ width: `${Math.round(used * 100)}%` }}
-                    />
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          storageTotal > 0 ? (
+            <span className="gauge-meter">
+              <Meter used={storageUsed / storageTotal} />
+            </span>
+          ) : undefined
         }
       />
 
