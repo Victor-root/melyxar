@@ -1044,12 +1044,19 @@
    out over the page: two kinds are two tiles next to each other, not one at
    each end of a line. They wrap rather than scroll, since there are never
    more than a handful and a band that scrolls sideways hides the very thing
-   it is there to offer. */
+   it is there to offer.
+
+   Painted on a layer of its own, once, and only moved while the page
+   scrolls. Painted with the page, the water, the blurred shadows of the
+   leaning posters and the painted panels were all drawn again each time a
+   piece of the page came back into view, and the page stuttered for as long
+   as the band was on screen. */
 .band {
   display: flex;
   flex-wrap: wrap;
   gap: calc(var(--gap) * 1.5);
   margin-bottom: var(--gap-section);
+  will-change: transform;
 }
 
 /* The same size and the same shape it has always had, wide picture or no
