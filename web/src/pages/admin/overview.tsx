@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
-import type { Job, Library, Overview } from "../../api";
+import type { Job, Library, Overview, Worry } from "../../api";
 import { useAsked } from "../../asking";
 import { PageHead, Panel, Soon, Stat, StatePill } from "../../components/panel";
 import type { State } from "../../components/panel";
@@ -32,7 +32,8 @@ import {
   WarningIcon,
 } from "../../icons";
 import { useLibraries } from "../../libraries";
-import { howLongSince, howMany, outOfAHundred, releaseOf } from "../../readable";
+import { howLongSince, howMany, outOfAHundred, percentOf, releaseOf } from "../../readable";
+import type { Wording } from "../../readable";
 import { useRunning } from "../../running";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
@@ -79,13 +80,11 @@ function useMinute(): number {
  * handful of facts every other answer rests on.
  */
 function ServerStrip({ overview, unreachable }: { overview: Overview | null; unreachable: boolean }) {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
   const now = useMinute();
 
-  const worries = overview
-    ? [!overview.database_ready, !overview.media_tools.found].filter(Boolean).length
-    : 0;
-  const state: State = unreachable ? "trouble" : worries > 0 ? "attention" : "ok";
+  const worries = overview?.worries ?? [];
+  const state: State = unreachable ? "trouble" : worries.length > 0 ? "attention" : "ok";
 
   return (
     <section className="panel server-strip">
@@ -101,10 +100,22 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
           <p>
             {unreachable
               ? t("admin.unreachable_why")
-              : worries > 0
-                ? howMany(worries, "admin.worries", t)
+              : worries.length > 0
+                ? howMany(worries.length, "admin.worries", t)
                 : t("admin.all_fine")}
           </p>
+          {/* Each point that failed its check, by name: a count alone sends
+              somebody hunting for what it counts. */}
+          {!unreachable && worries.length > 0 && (
+            <ul className="server-worries">
+              {worries.map((worry, index) => (
+                <li key={index}>
+                  <WarningIcon size={15} />
+                  {sayWorry(worry, t, language)}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <Link className="button button-small button-rim server-strip-go" to="/admin/diagnostics">
           {t("admin.see_diagnostics")}
@@ -128,7 +139,7 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
           icon={DatabaseIcon}
           label={t("admin.database")}
           value={overview && t(overview.database_ready ? "admin.ready" : "admin.to_check")}
-          state={overview ? (overview.database_ready ? "ok" : "attention") : undefined}
+          state={overview ? (overview.database_ready ? "ok" : "trouble") : undefined}
         />
         <Fact
           icon={TranscodeIcon}
@@ -142,14 +153,39 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
           value={
             overview &&
             (overview.media_tools.card
-              ? overview.media_tools.card.toUpperCase()
+              ? overview.media_tools.card_opens
+                ? overview.media_tools.card.toUpperCase()
+                : t("admin.card_closed")
               : t("admin.card_unused"))
           }
-          state={overview ? (overview.media_tools.card ? "ok" : "attention") : undefined}
+          state={
+            overview
+              ? overview.media_tools.card
+                ? overview.media_tools.card_opens
+                  ? "ok"
+                  : "trouble"
+                : "attention"
+              : undefined
+          }
         />
       </div>
     </section>
   );
+}
+
+/** One point that failed its check, said as what to go and look at. */
+function sayWorry(worry: Worry, t: Wording, language: string): string {
+  switch (worry.kind) {
+    case "folder_missing":
+      return t("admin.worry.folder_missing", { label: worry.label });
+    case "disk_nearly_full":
+      return t("admin.worry.disk_nearly_full", {
+        folder: worry.folder,
+        share: percentOf(worry.used, language),
+      });
+    default:
+      return t(`admin.worry.${worry.kind}`);
+  }
 }
 
 function Fact({
