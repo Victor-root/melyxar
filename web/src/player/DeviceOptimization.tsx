@@ -10,6 +10,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { Panel, Setting } from "../components/panel";
+import { DeviceIcon } from "../icons";
 import { useSettings } from "../settings";
 import {
   resetCalibration,
@@ -87,23 +89,26 @@ export function DeviceOptimization() {
   };
 
   return (
-    <section className="settings-block">
-      <h2>{t("settings.device")}</h2>
-      <p className="settings-why">{t("settings.device_why")}</p>
-
-      <p className="device-status">
-        {status === "running" && progress
-          ? t("settings.device_running", {
-              codec: progress.codec.toUpperCase(),
-              height: progress.height,
-            })
-          : status !== "checking" &&
-            t(optimized ? "settings.device_optimized" : "settings.device_not_optimized")}
-      </p>
-
-      <div className="controls">
+    <Panel icon={DeviceIcon} title={t("settings.device")} lead={t("settings.device_why")}>
+      <Setting
+        label={
+          status === "running" && progress
+            ? t("settings.device_running", {
+                codec: progress.codec.toUpperCase(),
+                height: progress.height,
+              })
+            : status === "checking"
+              ? ""
+              : t(optimized ? "settings.device_optimized" : "settings.device_not_optimized")
+        }
+      >
+        {hasStored && status !== "running" && status !== "checking" && (
+          <button className="button button-small button-quiet" onClick={reset}>
+            {t("settings.device_reset")}
+          </button>
+        )}
         <button
-          className="button button-small"
+          className="button button-small button-accent"
           onClick={() => {
             setProgress(null);
             setStatus("running");
@@ -112,16 +117,11 @@ export function DeviceOptimization() {
         >
           {t("settings.device_optimize")}
         </button>
-        {hasStored && status !== "running" && status !== "checking" && (
-          <button className="button-link" onClick={reset}>
-            {t("settings.device_reset")}
-          </button>
-        )}
-      </div>
+      </Setting>
 
       {status === "running" && (
         <video ref={testing} className="device-test" muted playsInline aria-hidden="true" />
       )}
-    </section>
+    </Panel>
   );
 }

@@ -11,7 +11,9 @@
 import { useState } from "react";
 import { api } from "../api";
 import { refusalAbout, useAsked } from "../asking";
+import { ChevronRightIcon, ChevronUpIcon, FolderIcon } from "../icons";
 import { useSettings } from "../settings";
+import { Modal } from "./modal";
 
 export function FolderPicker({
   onPick,
@@ -33,61 +35,70 @@ export function FolderPicker({
   const refused = failure && refusalAbout(failure, "library");
 
   return (
-    <div className="picker">
-      <div className="picker-head">
-        {/* The folder being looked in, whole. This is the one screen where a
-            path is the subject rather than something to keep out of sight. */}
-        <span className="picker-path">{listing?.path ?? ""}</span>
-        <button className="button button-small" onClick={onClose}>
-          {t("folders.close")}
-        </button>
-      </div>
-
-      {refused && <p className="notice">{t(refused)}</p>}
-
-      <div className="picker-actions">
-        <button
-          className="button button-small"
-          disabled={!listing?.parent || busy}
-          onClick={() => setAsking(listing?.parent ?? null)}
-        >
-          {t("folders.up")}
-        </button>
-        <button
-          className="button button-small button-accent"
-          disabled={!listing || busy}
-          onClick={() => listing && onPick(listing.path)}
-        >
-          {t("folders.choose")}
-        </button>
-      </div>
-
-      {busy && <p className="notice notice-faint">{t("folders.looking")}</p>}
-
-      {listing && !busy && listing.folders.length === 0 && (
-        <p className="notice notice-faint">{t("folders.none")}</p>
-      )}
-
-      <div className="picker-list">
-        {listing?.folders.map((folder) => (
-          <button
-            key={folder.path}
-            className="picker-folder"
-            onClick={() => setAsking(folder.path)}
-          >
-            <span className="picker-folder-name">{folder.name}</span>
-            {folder.videos > 0 && (
-              <span className="picker-folder-videos">
-                {folder.more_videos
-                  ? t("folders.videos_more", { count: folder.videos })
-                  : t("folders.videos", { count: folder.videos })}
-              </span>
-            )}
+    <Modal
+      title={t("folders.title")}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="button" onClick={onClose}>
+            {t("settings.cancel")}
           </button>
-        ))}
-      </div>
+          <button
+            className="button button-accent"
+            disabled={!listing || busy}
+            onClick={() => listing && onPick(listing.path)}
+          >
+            {t("folders.choose")}
+          </button>
+        </>
+      }
+    >
+      <div className="browse">
+        <div className="browse-where">
+          <button
+            className="button button-small"
+            disabled={!listing?.parent || busy}
+            onClick={() => setAsking(listing?.parent ?? null)}
+            title={t("folders.up")}
+          >
+            <ChevronUpIcon size={16} />
+            {t("folders.up")}
+          </button>
+          {/* The folder being looked in, whole. This is the one screen where a
+              path is the subject rather than something to keep out of sight. */}
+          <span className="browse-path">{listing?.path ?? ""}</span>
+        </div>
 
-      {listing?.cut_short && <p className="notice notice-faint">{t("folders.cut_short")}</p>}
-    </div>
+        {refused && <p className="panel-notice panel-notice-trouble">{t(refused)}</p>}
+
+        <div className="browse-list" aria-busy={busy}>
+          {busy && <p className="empty-line">{t("folders.looking")}</p>}
+          {listing && !busy && listing.folders.length === 0 && (
+            <p className="empty-line">{t("folders.none")}</p>
+          )}
+          {!busy &&
+            listing?.folders.map((folder) => (
+              <button
+                key={folder.path}
+                className="browse-folder"
+                onClick={() => setAsking(folder.path)}
+              >
+                <FolderIcon size={18} />
+                <span className="browse-folder-name">{folder.name}</span>
+                {folder.videos > 0 && (
+                  <span className="browse-folder-videos">
+                    {folder.more_videos
+                      ? t("folders.videos_more", { count: folder.videos })
+                      : t("folders.videos", { count: folder.videos })}
+                  </span>
+                )}
+                <ChevronRightIcon size={16} />
+              </button>
+            ))}
+        </div>
+
+        {listing?.cut_short && <p className="panel-say">{t("folders.cut_short")}</p>}
+      </div>
+    </Modal>
   );
 }

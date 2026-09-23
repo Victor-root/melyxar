@@ -340,15 +340,6 @@ export function GearIcon(props: IconProps) {
   );
 }
 
-/** A trace with a beat in it, for what the server is doing. */
-export function ActivityIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M3 12.6h3.8L9.4 5.8l4.4 12.6 2.5-5.8H21" />
-    </Icon>
-  );
-}
-
 /** Lines on a page, for the journal. */
 export function JournalIcon(props: IconProps) {
   return (
@@ -601,6 +592,275 @@ export function AccountAddIcon(props: IconProps) {
       <circle cx="9.8" cy="8.2" r="3.6" />
       <path d="M3.6 19.4a6.4 6.4 0 0 1 12.4-2.2" />
       <path d="M18.4 14.6v5.2M21 17.2h-5.2" />
+    </Icon>
+  );
+}
+
+/* -------------------------------------------------------------------------
+ * The administration
+ * ---------------------------------------------------------------------- */
+
+/** Three bars of rising height, for the summary. */
+export function SummaryIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5.4 19.2v-6M12 19.2V5.2M18.6 19.2v-9.6" />
+    </Icon>
+  );
+}
+
+/** A folder, for the libraries. */
+export function FolderIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.6 7.2a1.8 1.8 0 0 1 1.8-1.8h4l2 2.2h7.2a1.8 1.8 0 0 1 1.8 1.8v7.8a1.8 1.8 0 0 1-1.8 1.8H5.4a1.8 1.8 0 0 1-1.8-1.8Z" />
+    </Icon>
+  );
+}
+
+/** A label with its hole, for what is known about the works. */
+export function TagIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.8 12.6V5.4a1.6 1.6 0 0 1 1.6-1.6h7.2l7.6 7.6a1.6 1.6 0 0 1 0 2.3l-6.9 6.9a1.6 1.6 0 0 1-2.3 0Z" />
+      <circle cx="8.4" cy="8.4" r="1.4" />
+    </Icon>
+  );
+}
+
+/** A play mark in a ring, for what is being watched. */
+export function PlaybackIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="m10.2 8.8 5 3.2-5 3.2Z" />
+    </Icon>
+  );
+}
+
+/** Two arrows passing each other, for a film made into another. */
+export function TranscodeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.4 8.6h14l-3.4-3.4M19.6 15.4h-14l3.4 3.4" />
+    </Icon>
+  );
+}
+
+/** Two people, for the accounts. */
+export function PeopleIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="9.2" cy="8.4" r="3.2" />
+      <path d="M3.4 19.2a5.8 5.8 0 0 1 11.6 0" />
+      <path d="M15.4 5.4a3.2 3.2 0 0 1 0 6M17.6 14a5.8 5.8 0 0 1 3 5.2" />
+    </Icon>
+  );
+}
+
+/** A screen on its foot, for the devices. */
+export function DeviceIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.4" y="4.6" width="17.2" height="11.6" rx="1.8" />
+      <path d="M9 19.6h6M12 16.2v3.4" />
+    </Icon>
+  );
+}
+
+/** Ticked lines, for the work the server does on its own. */
+export function TasksIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m4 6.6 1.6 1.6 2.8-2.8M4 13.4l1.6 1.6 2.8-2.8" />
+      <path d="M11.6 7h8.4M11.6 13.8h8.4M11.6 19h8.4" />
+    </Icon>
+  );
+}
+
+/** A shield, for who may come in. */
+export function ShieldIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3.4 19 6v5.6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6Z" />
+      <path d="m9.2 12 2 2 3.8-3.8" />
+    </Icon>
+  );
+}
+
+/** A trace across a card, for what the server says about itself. */
+export function DiagnosticsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.4" y="4.4" width="17.2" height="15.2" rx="2" />
+      <path d="M6.6 12.4h2.6l1.8-3.6 2.4 6.4 1.6-2.8h2.4" />
+    </Icon>
+  );
+}
+
+/** A box seen from its corner, for the server itself. */
+export function ServerIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m12 3.4 7.6 4.2v8.8L12 20.6l-7.6-4.2V7.6Z" />
+      <path d="m4.4 7.6 7.6 4.2 7.6-4.2M12 11.8v8.8" />
+    </Icon>
+  );
+}
+
+/** A clock face, for how long and how long ago. */
+export function ClockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M12 7.4V12l3 1.8" />
+    </Icon>
+  );
+}
+
+/** Stacked discs, for the database. */
+export function DatabaseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <ellipse cx="12" cy="6" rx="7" ry="2.6" />
+      <path d="M5 6v12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6" />
+      <path d="M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6" />
+    </Icon>
+  );
+}
+
+/** A chip with its pins, for the processor. */
+export function ChipIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="6.4" y="6.4" width="11.2" height="11.2" rx="1.6" />
+      <rect x="9.6" y="9.6" width="4.8" height="4.8" rx="0.6" />
+      <path d="M9.6 3.6v2.8M14.4 3.6v2.8M9.6 17.6v2.8M14.4 17.6v2.8M3.6 9.6h2.8M3.6 14.4h2.8M17.6 9.6h2.8M17.6 14.4h2.8" />
+    </Icon>
+  );
+}
+
+/** A strip of memory with its contacts. */
+export function MemoryIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.4" y="7" width="17.2" height="8.6" rx="1.4" />
+      <path d="M7.4 10v2.6M11 10v2.6M14.6 10v2.6M6.4 15.6v2.2M10 15.6v2.2M14 15.6v2.2M17.6 15.6v2.2" />
+    </Icon>
+  );
+}
+
+/** A drive, for the disks. */
+export function DiskIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 13.4 6.6 5.8A1.8 1.8 0 0 1 8.3 4.6h7.4a1.8 1.8 0 0 1 1.7 1.2l2.6 7.6" />
+      <rect x="4" y="13.4" width="16" height="6" rx="1.8" />
+      <path d="M16.2 16.4h.01" strokeWidth={2.6} />
+    </Icon>
+  );
+}
+
+/** Up and down, for what passes over the network. */
+export function NetworkIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M8 19.4V4.8L4.6 8.2M16 4.6v14.6l3.4-3.4" />
+    </Icon>
+  );
+}
+
+/** A graphics card with its fan. */
+export function GraphicsCardIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.4 5.4v14" />
+      <rect x="3.4" y="7" width="17.2" height="9.6" rx="1.4" />
+      <circle cx="10.4" cy="11.8" r="2.6" />
+      <path d="M15.6 10.2h2.2M15.6 13.4h2.2M6.4 16.6v2.2M9.4 16.6v2.2" />
+    </Icon>
+  );
+}
+
+/** A triangle with a mark in it, for what needs a look. */
+export function WarningIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M10.4 4.6a1.8 1.8 0 0 1 3.2 0l7 12.4a1.8 1.8 0 0 1-1.6 2.7H5a1.8 1.8 0 0 1-1.6-2.7Z" />
+      <path d="M12 9.6v3.8M12 16.6h.01" />
+    </Icon>
+  );
+}
+
+/** A clock with an arrow running back round it, for what happened lately. */
+export function HistoryIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.2 12a7.8 7.8 0 1 0 2.3-5.5L4.2 8.8" />
+      <path d="M4.2 4.6v4.2h4.2M12 8v4l2.8 1.6" />
+    </Icon>
+  );
+}
+
+/** An arrow leaving to the right, for "go and see". */
+export function ArrowRightIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.8 12h14.4M13.8 6.6l5.4 5.4-5.4 5.4" />
+    </Icon>
+  );
+}
+
+/** A face with its shoulders in a frame, for somebody's profile. */
+export function ProfileIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.6" y="3.6" width="16.8" height="16.8" rx="3" />
+      <circle cx="12" cy="10" r="3" />
+      <path d="M7 18.2a5.4 5.4 0 0 1 10 0" />
+    </Icon>
+  );
+}
+
+/** A brush over a drop, for how the interface looks. */
+export function PaletteIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3.6a8.4 8.4 0 0 0 0 16.8c1 0 1.6-.7 1.6-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.6-.4-1 0-.8.7-1.5 1.5-1.5h1.9a4.2 4.2 0 0 0 4.2-4.2c0-4.1-3.8-7.5-8.4-7.5Z" />
+      <circle cx="7.6" cy="11.4" r="1" />
+      <circle cx="10" cy="7.6" r="1" />
+      <circle cx="14.4" cy="7.6" r="1" />
+    </Icon>
+  );
+}
+
+/** A house, for the front page. */
+export function HomeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 10.6 12 4l8 6.6V19a1.4 1.4 0 0 1-1.4 1.4H5.4A1.4 1.4 0 0 1 4 19Z" />
+      <path d="M9.6 20.4v-5.6h4.8v5.6" />
+    </Icon>
+  );
+}
+
+/** Sliders, for the settings of the server as a whole. */
+export function SlidersIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.4 7h9.2M17.8 7h1.8M4.4 17h1.8M10.4 17h9.2" />
+      <circle cx="15.7" cy="7" r="2.1" />
+      <circle cx="8.3" cy="17" r="2.1" />
+    </Icon>
+  );
+}
+
+/** A tick in a disc, for what is fine. */
+export function OkIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="m8.4 12.2 2.4 2.4 4.8-4.8" />
     </Icon>
   );
 }

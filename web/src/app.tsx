@@ -16,9 +16,24 @@ import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { SearchPage } from "./pages/search";
 import { WorkPage } from "./pages/work";
-import { ActivityPage } from "./pages/activity";
-import { JournalPage } from "./pages/journal";
-import { SettingsPage } from "./pages/settings";
+import { AdminLayout } from "./pages/admin/layout";
+import { AdminOverview } from "./pages/admin/overview";
+import { AdminLibraries } from "./pages/admin/libraries";
+import { AdminMetadata } from "./pages/admin/metadata";
+import { AdminPlayback } from "./pages/admin/playback";
+import { AdminTranscoding } from "./pages/admin/transcoding";
+import { AdminUsers } from "./pages/admin/users";
+import { AdminDevices } from "./pages/admin/devices";
+import { AdminSecurity } from "./pages/admin/security";
+import { AdminTasks } from "./pages/admin/tasks";
+import { AdminJournal } from "./pages/admin/journal";
+import { AdminDiagnostics } from "./pages/admin/diagnostics";
+import { AdminSettings } from "./pages/admin/settings";
+import { MySettingsLayout } from "./pages/settings/layout";
+import { MyProfile } from "./pages/settings/profile";
+import { MyAppearance } from "./pages/settings/appearance";
+import { MyHomePage } from "./pages/settings/home";
+import { MyPlayback } from "./pages/settings/playback";
 import { Door } from "./pages/door";
 import { LibrariesContext, useWatchedLibraries } from "./libraries";
 import { RunningContext, useWatchedWork } from "./running";
@@ -108,9 +123,26 @@ function TheLibrary() {
                   library rather than a library of its own. */}
               <Route path="/favourites" element={<LibraryPage libraries={libraries.all} />} />
               <Route path="/work/:id" element={<WorkPage />} />
-              <Route path="/activity" element={<ActivityPage libraries={libraries.all} />} />
-              <Route path="/journal" element={<JournalPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminOverview />} />
+                <Route path="libraries" element={<AdminLibraries />} />
+                <Route path="metadata" element={<AdminMetadata />} />
+                <Route path="playback" element={<AdminPlayback />} />
+                <Route path="transcoding" element={<AdminTranscoding />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="devices" element={<AdminDevices />} />
+                <Route path="security" element={<AdminSecurity />} />
+                <Route path="tasks" element={<AdminTasks />} />
+                <Route path="journal" element={<AdminJournal />} />
+                <Route path="diagnostics" element={<AdminDiagnostics />} />
+                <Route path="settings" element={<AdminSettings />} />
+              </Route>
+              <Route path="/settings" element={<MySettingsLayout />}>
+                <Route index element={<MyProfile />} />
+                <Route path="appearance" element={<MyAppearance />} />
+                <Route path="home" element={<MyHomePage />} />
+                <Route path="playback" element={<MyPlayback />} />
+              </Route>
               <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
             </Routes>
             <footer className="footer">

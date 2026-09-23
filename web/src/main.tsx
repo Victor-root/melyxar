@@ -6,6 +6,7 @@ import { SettingsProvider } from "./settings";
 import "./theme.css";
 import "./app.css";
 import "./door.css";
+import "./admin.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
