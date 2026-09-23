@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import type { Job, Library, Overview, Worry } from "../../api";
@@ -25,12 +25,13 @@ import {
   GraphicsCardIcon,
   HistoryIcon,
   KindIcon,
+  MelyxarMark,
   PeopleIcon,
   PlaybackIcon,
-  ServerIcon,
   TasksIcon,
   WarningIcon,
 } from "../../icons";
+import type { IconProps } from "../../icons";
 import { useLibraries } from "../../libraries";
 import { howLongSince, howMany, outOfAHundred, percentOf, releaseOf } from "../../readable";
 import type { Wording } from "../../readable";
@@ -125,7 +126,7 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
 
       <div className="server-facts">
         <Fact
-          icon={ServerIcon}
+          icon={MelyxarMark}
           label={t("admin.version")}
           value={overview && releaseOf(overview.version)}
           title={overview?.version}
@@ -195,7 +196,7 @@ function Fact({
   state,
   title,
 }: {
-  icon: typeof ServerIcon;
+  icon: ComponentType<IconProps>;
   label: string;
   value: ReactNode;
   state?: State;

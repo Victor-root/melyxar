@@ -647,6 +647,21 @@ export function TranscodeIcon(props: IconProps) {
   );
 }
 
+/** The mark of Melyxar itself, in its own colours: it is the one picture here
+ *  that is the server's name rather than a drawing of something. */
+export function MelyxarMark({ size = 22, className }: IconProps) {
+  return (
+    <img
+      className={className}
+      src="/melyxar-64.png"
+      width={size}
+      height={size}
+      alt=""
+      aria-hidden="true"
+    />
+  );
+}
+
 /** The mark of FFmpeg, the tool every film goes through, in the colour of
  *  whatever it sits in rather than its own green. */
 export function FfmpegIcon(props: IconProps) {
