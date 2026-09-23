@@ -2667,6 +2667,43 @@ button.seen-mark:not(.seen-mark-on):hover {
   overflow: hidden;
 }
 
+/* The two ways a work can be deleted, each with what it means under it. */
+.delete-choices {
+  display: grid;
+  gap: var(--gap);
+  margin-top: var(--gap);
+}
+
+.delete-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--gap-tight);
+  align-items: start;
+  cursor: pointer;
+}
+
+.delete-choice > input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.delete-choice > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Whole paths, which are long: they wrap rather than push the panel wide. */
+.delete-files {
+  margin: 4px 0 0;
+  padding-left: 1.1em;
+  font-size: 13px;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
 .identify-also {
   display: flex;
   align-items: center;
@@ -4022,6 +4059,12 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 .own-photo-head .work-ancestry {
   margin: 0;
+}
+
+/* The one action on a photo sits at the far end of the line, away from its
+   name. */
+.own-photo-head > .button {
+  margin-left: auto;
 }
 
 .own-photo-title {

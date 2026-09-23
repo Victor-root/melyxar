@@ -15,6 +15,7 @@ import type { Library, WouldGo } from "../api";
 import { FolderPicker } from "./folders";
 import { languageName, METADATA_LANGUAGES } from "../languages";
 import { KINDS } from "../libraries";
+import { howMany } from "../readable";
 import {
   useDeclaring,
   useLibraryEditing,
@@ -32,7 +33,7 @@ export function LibraryEditor({
   onChanged: () => void;
 }) {
   const { t, language } = useSettings();
-  const { refused, outcome, report, settle, addFolderTo, rename, renameFolder, refuse } =
+  const { refused, outcome, report, settle, addFolderTo, rename, renameFolder, takeBack, refuse } =
     useLibraryEditing(onChanged);
   const [adding, setAdding] = useState(false);
   /* Which library is being given another folder, when one is. */
@@ -146,6 +147,17 @@ export function LibraryEditor({
               {t("settings.remove_library")}
             </button>
           </div>
+
+          {/* What was taken out of it and left on the disk is walked past by
+              every scan; this is the way to change one's mind. */}
+          {library.set_aside > 0 && (
+            <div className="controls">
+              <span className="settings-why">{howMany(library.set_aside, "library.set_aside", t)}</span>
+              <button className="button button-small" onClick={() => takeBack(library)}>
+                {t("library.take_back")}
+              </button>
+            </div>
+          )}
 
           {addingTo === library.id && (
             <FolderPicker

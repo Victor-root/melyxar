@@ -30,6 +30,9 @@ interface Mark {
       about this until somebody says it here: a card does not arrive saying
       whether it is on the front page. */
   pinned?: boolean;
+  /** Deleted from here. Nothing draws it again: a card that stays in a grid
+      after its work has gone is a card that fails when it is pressed. */
+  gone?: boolean;
 }
 
 interface Marks {
@@ -39,6 +42,11 @@ interface Marks {
   /** Whether this work was put on the front page from this page, and nothing
       at all when nobody has said. */
   pinnedOf: (card: Card) => boolean | undefined;
+  /** Whether this work was deleted from this page. */
+  goneOf: (id: string) => boolean;
+  /** Says a work was deleted, everywhere at once. The server has already
+      done it: this is what was answered, not what was hoped for. */
+  setGone: (id: string) => void;
   /** Says it, everywhere at once, and tells the server. */
   setWatched: (card: Card, watched: boolean) => void;
   setFavourite: (card: Card, favourite: boolean) => void;
@@ -102,18 +110,30 @@ export function MarksProvider({ children }: { children: ReactNode }) {
     [said, say, rowsHaveMoved],
   );
 
+  /* What stood around a deleted work is the server's to redraw: a series
+     that lost its last episode, a folder that lost a photo. */
+  const setGone = useCallback(
+    (id: string) => {
+      say(id, { gone: true });
+      rowsHaveMoved();
+    },
+    [say, rowsHaveMoved],
+  );
+
   const value = useMemo<Marks>(
     () => ({
       seenOf: (card) => said[card.id]?.seen ?? card.seen,
       favouriteOf: (card) => said[card.id]?.favourite ?? card.favourite,
       pinnedOf: (card) => said[card.id]?.pinned,
+      goneOf: (id) => said[id]?.gone === true,
       setWatched,
       setFavourite,
       setPinned,
+      setGone,
       rowsMoved,
       rowsHaveMoved,
     }),
-    [said, setWatched, setFavourite, setPinned, rowsMoved, rowsHaveMoved],
+    [said, setWatched, setFavourite, setPinned, setGone, rowsMoved, rowsHaveMoved],
   );
 
   return <MarksContext.Provider value={value}>{children}</MarksContext.Provider>;

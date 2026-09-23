@@ -27,6 +27,7 @@ import { playsOnItsOwn } from "../works";
 import { useShownPicture } from "./picture";
 import { CardMenu } from "./cardmenu";
 import { IdentifyDialog } from "./identify";
+import { DeleteDialog } from "./deletion";
 import { PicturesDialog } from "./pictures";
 import { SeenMark } from "./seen";
 import { HeartIcon, MoreIcon, PlayIcon } from "../icons";
@@ -101,6 +102,7 @@ export function Card({
      one of its lines is pressed. */
   const [identifying, setIdentifying] = useState(false);
   const [choosingPictures, setChoosingPictures] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const unknown = card.identification === "unidentified" || card.identification === "pending";
   const seen = marks.seenOf(card);
@@ -113,6 +115,10 @@ export function Card({
     (card.resume_from_seconds !== null && card.runtime_minutes
       ? card.resume_from_seconds / (card.runtime_minutes * 60)
       : undefined);
+
+  if (marks.goneOf(card.id)) {
+    return null;
+  }
 
   const stop = (doing: () => void) => (event: React.MouseEvent) => {
     // The card is one big link; everything drawn on top of it has to say so.
@@ -250,6 +256,7 @@ export function Card({
           openedBy={kebab.current}
           onIdentify={() => setIdentifying(true)}
           onEditImages={() => setChoosingPictures(true)}
+          onDelete={() => setDeleting(true)}
           onClose={() => setMenuFrom(null)}
         />
       )}
@@ -270,6 +277,18 @@ export function Card({
           workId={card.id}
           onClose={() => setChoosingPictures(false)}
           onChanged={() => marks.rowsHaveMoved()}
+        />
+      )}
+
+      {deleting && (
+        <DeleteDialog
+          workId={card.id}
+          title={card.title}
+          onClose={() => setDeleting(false)}
+          onDeleted={() => {
+            setDeleting(false);
+            marks.setGone(card.id);
+          }}
         />
       )}
     </article>
