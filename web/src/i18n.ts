@@ -34,6 +34,7 @@ const en: Dictionary = {
   "settings.banner": "The banner of the home page",
   "settings.banner_why":
     "Its height decides how much of the picture behind it you see: those pictures are wider than they are tall, so a short banner throws most of each one away and no placing can save what is left.",
+  "settings.banner_shown": "Show the banner",
   "settings.banner_height": "Height",
   "settings.banner_cut": "Where the picture is cut",
   "settings.banner_cut_why":
@@ -785,6 +786,7 @@ const fr: Dictionary = {
   "settings.banner": "La bannière de l'accueil",
   "settings.banner_why":
     "Sa hauteur décide de la part de l'image que vous voyez : ces images sont bien plus larges que hautes, donc une bannière basse en jette la majeure partie, et aucun placement ne peut rattraper ce qu'il en reste.",
+  "settings.banner_shown": "Afficher la bannière",
   "settings.banner_height": "Hauteur",
   "settings.banner_cut": "Où l'image est coupée",
   "settings.banner_cut_why":

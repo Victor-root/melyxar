@@ -1081,6 +1081,8 @@ export interface ViewerPreferences {
   banner_cut: number;
   /** Whether the banner draws a fresh handful every time the page opens. */
   banner_at_random: boolean;
+  /** Whether the home page opens on its banner at all. */
+  banner_shown: boolean;
   /** Whether it takes the whole window, the height then deciding nothing. */
   banner_fills_the_screen: boolean;
   /** Whether the bar at the top slides away while a page is read down. */

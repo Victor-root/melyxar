@@ -851,8 +851,13 @@
 /* A setting switched off by the one above it. Still readable, so that what it
    is set to can be seen before it is turned back on. */
 .choice input:disabled,
-.choice select:disabled {
+.choice select:disabled,
+.settings-switch:has(input:disabled) {
   opacity: 0.55;
+}
+
+.settings-switch:has(input:disabled) {
+  cursor: default;
 }
 
 /* --------------------------------------------------------------------------

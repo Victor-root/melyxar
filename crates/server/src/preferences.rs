@@ -50,6 +50,8 @@ struct PreferencesView {
     /// Where a band is cut out of that picture, nought at its top and one at
     /// its foot.
     banner_cut: f64,
+    /// Whether the home page opens on its banner at all.
+    banner_shown: bool,
     /// Whether the banner draws a fresh handful every time the page opens.
     banner_at_random: bool,
     /// Whether it takes the whole window, the height then deciding nothing.
@@ -91,6 +93,8 @@ struct PreferencesBody {
     banner_height: Option<f64>,
     #[serde(default)]
     banner_cut: Option<f64>,
+    #[serde(default)]
+    banner_shown: Option<bool>,
     #[serde(default)]
     banner_at_random: Option<bool>,
     #[serde(default)]
@@ -166,6 +170,9 @@ async fn write(
     if let Some(cut) = body.banner_cut {
         chosen.banner_cut = cut;
     }
+    if let Some(shown) = body.banner_shown {
+        chosen.banner_shown = shown;
+    }
     if let Some(at_random) = body.banner_at_random {
         chosen.banner_at_random = at_random;
     }
@@ -215,6 +222,7 @@ async fn view(state: &AppState, chosen: Preferences) -> Result<Json<PreferencesV
             melyxar_core::user::MAX_BANNER_HEIGHT,
         ],
         banner_cut: chosen.banner_cut,
+        banner_shown: chosen.banner_shown,
         banner_at_random: chosen.banner_at_random,
         banner_fills_the_screen: chosen.banner_fills_the_screen,
         header_hides_on_scroll: chosen.header_hides_on_scroll,

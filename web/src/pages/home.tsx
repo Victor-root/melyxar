@@ -363,11 +363,12 @@ function whatIsLeft(
  * which is what stops everything jumping into place when it arrives.
  */
 function HomeSkeleton() {
+  const { bannerShown } = useSettings();
   return (
     <>
       <div className="home-backdrop drift" aria-hidden="true" />
       <main className="page page-home" aria-busy="true">
-        <div className="skeleton skeleton-hero" />
+        {bannerShown && <div className="skeleton skeleton-hero" />}
         {[0, 1].map((row) => (
           <section className="section" key={row}>
             <div className="skeleton skeleton-heading" />
