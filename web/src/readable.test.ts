@@ -11,13 +11,16 @@
 import { describe, expect, it } from "vitest";
 import type { Wording } from "./readable";
 import {
+  amountOfData,
   asLocalTime,
   asUtcMinutes,
   howLong,
   howLongSince,
   insideTheRange,
+  networkRate,
   outOfAHundred,
   outOfTen,
+  percentOf,
   readableBitrate,
   readableSize,
   releaseOf,
@@ -162,5 +165,33 @@ describe("releaseOf", () => {
   it("keeps the release and drops the commit it was built from", () => {
     expect(releaseOf("0.1.0 (28a4bd86+edited)")).toBe("0.1.0");
     expect(releaseOf("0.2.0")).toBe("0.2.0");
+  });
+});
+
+describe("amountOfData", () => {
+  it("writes the units and the decimal mark of the language spoken", () => {
+    expect(amountOfData(6_200_000_000, "en")).toBe("6.2\u00a0GB");
+    expect(amountOfData(6_200_000_000, "fr")).toBe("6,2\u00a0Go");
+    expect(amountOfData(2_400_000_000_000, "fr")).toBe("2,4\u00a0To");
+  });
+
+  it("keeps no decimal where it would only be noise", () => {
+    expect(amountOfData(512, "en")).toBe("512\u00a0B");
+    expect(amountOfData(125_400_000, "en")).toBe("125\u00a0MB");
+  });
+});
+
+describe("networkRate", () => {
+  it("counts in bits a second, as a connection is sold", () => {
+    expect(networkRate(15_625_000, "en")).toBe("125\u00a0Mb/s");
+    expect(networkRate(1_500_000, "fr")).toBe("12,0\u00a0Mb/s");
+    expect(networkRate(0, "en")).toBe("0\u00a0b/s");
+  });
+});
+
+describe("percentOf", () => {
+  it("rounds a share to a whole percentage", () => {
+    expect(percentOf(0.184, "en")).toBe("18%");
+    expect(percentOf(0.184, "fr")).toBe("18\u00a0%");
   });
 });

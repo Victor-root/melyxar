@@ -236,8 +236,8 @@ Reste à faire :
 
 Commencé : l'interface d'administration est refaite de zéro, dans son propre espace avec une barre latérale, et les réglages personnels sont séparés de ceux du serveur (voir le README des décisions). Il réunit le tableau de bord du jalon 7 et l'écran d'administration de celui-ci. Cinq lots, chacun essayé dans le LXC avant le suivant :
 
-1. **Le cadre** : barre latérale et ses douze sections, « Mes réglages » séparés, les écrans qui existent déjà redessinés et rangés à leur place, et un premier Résumé avec ce que le serveur sait déjà dire. Ce qui n'est pas encore branché est dessiné, éteint et marqué « Bientôt ».
-2. **Les mesures du système** : processeur, mémoire, disques, réseau, charge, température quand le conteneur la voit, carte graphique, avec leur historique en base et leurs courbes.
+1. **Fait. Le cadre** : barre latérale et ses douze sections, « Mes réglages » séparés, les écrans qui existent déjà redessinés et rangés à leur place, et un premier Résumé avec ce que le serveur sait déjà dire. Ce qui n'est pas encore branché est dessiné, éteint et marqué « Bientôt ».
+2. **Fait. Les mesures du système** : processeur, mémoire, disques, réseau, charge, température quand le conteneur la voit, carte graphique, avec leur historique en base et leurs courbes. Reste à voir dans le LXC ce que le conteneur laisse lire de la température et de la carte.
 3. **Lecture et Transcodage** : les lectures en cours, lecture directe comprise, avec leur décision, et le détail d'une lecture.
 4. **Le journal d'activité**, les alertes « À surveiller » et la cloche de la barre du haut.
 5. **Utilisateurs et Appareils** : gestion des comptes, déconnexion d'un appareil, une seule session par navigateur.
