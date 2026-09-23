@@ -13,6 +13,7 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use melyxar_core::time::Timestamp;
@@ -66,6 +67,13 @@ pub struct Measuring {
     machine: Machine,
     recent: Mutex<VecDeque<Point>>,
     disks: Mutex<Vec<Disk>>,
+    /// Whether the database refused the last minute it was handed: the one
+    /// write this server makes every minute, whatever else it is doing, and
+    /// so the one that says whether it still can.
+    writes_refused: AtomicBool,
+    /// The folders of the libraries that were not there at the last look,
+    /// by the label somebody gave them.
+    missing_folders: Mutex<Vec<String>>,
 }
 
 impl Measuring {
@@ -79,7 +87,27 @@ impl Measuring {
             },
             recent: Mutex::new(VecDeque::with_capacity(KEPT_IN_MEMORY)),
             disks: Mutex::new(Vec::new()),
+            writes_refused: AtomicBool::new(false),
+            missing_folders: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Whether the database refused the last minute of measures.
+    pub(crate) fn writes_refused(&self) -> bool {
+        self.writes_refused.load(Ordering::Relaxed)
+    }
+
+    /// The folders of the libraries not found at the last look.
+    pub(crate) fn missing_folders(&self) -> Vec<String> {
+        self.missing_folders
+            .lock()
+            .unwrap_or_else(|held| held.into_inner())
+            .clone()
+    }
+
+    /// The disks as they were at the last look.
+    pub(crate) fn disks(&self) -> Vec<Disk> {
+        self.disks.lock().unwrap_or_else(|held| held.into_inner()).clone()
     }
 
     fn remember(&self, point: Point) {
@@ -204,29 +232,51 @@ fn as_point(measure: Measure) -> Point {
     }
 }
 
-/// The folders whose disks are worth watching: every folder a library looks
-/// in, and every folder the server writes to.
-async fn folders_to_watch(state: &AppState) -> Vec<PathBuf> {
-    let directories = &state.config().directories;
-    let mut folders = match state.database().roots_with_access().await {
-        Ok(roots) => roots.into_iter().map(|entry| entry.root.path).collect(),
+/// The folders of the libraries, by label, and whether each is still there.
+///
+/// Asked of what the kernel already holds about the folder rather than of its
+/// contents: a folder whose disk went away is gone from the tree, and finding
+/// that out reads nothing from any disk, so a sleeping one is left asleep.
+fn folders_still_there(roots: &[(String, PathBuf)]) -> Vec<String> {
+    roots
+        .iter()
+        .filter(|(_, path)| {
+            path != std::path::Path::new(melyxar_database::synthetic::BENCH_ROOT)
+                && !std::fs::metadata(path).is_ok_and(|metadata| metadata.is_dir())
+        })
+        .map(|(label, _)| label.clone())
+        .collect()
+}
+
+/// Looks at every disk worth watching, and at whether the folders of the
+/// libraries are still there: every folder a library looks in, and every
+/// folder the server writes to.
+async fn look_at_the_disks(state: &AppState) {
+    let roots: Vec<(String, PathBuf)> = match state.database().roots_with_access().await {
+        Ok(roots) => roots
+            .into_iter()
+            .map(|entry| (entry.root.label, entry.root.path))
+            .collect(),
         Err(error) => {
             tracing::warn!(%error, "the folders of the libraries could not be read for their disks");
             Vec::new()
         }
     };
+    let directories = &state.config().directories;
+    let mut folders: Vec<PathBuf> = roots.iter().map(|(_, path)| path.clone()).collect();
     folders.extend([
         directories.data.clone(),
         directories.cache.clone(),
         directories.transcodes.clone(),
     ]);
-    folders
-}
-
-async fn look_at_the_disks(state: &AppState) {
-    let folders = folders_to_watch(state).await;
-    if let Ok(disks) = tokio::task::spawn_blocking(move || melyxar_system::disks(&folders)).await {
-        *state.measuring().disks.lock().unwrap_or_else(|held| held.into_inner()) = disks;
+    let looked = tokio::task::spawn_blocking(move || {
+        (melyxar_system::disks(&folders), folders_still_there(&roots))
+    })
+    .await;
+    if let Ok((disks, missing)) = looked {
+        let measuring = state.measuring();
+        *measuring.disks.lock().unwrap_or_else(|held| held.into_inner()) = disks;
+        *measuring.missing_folders.lock().unwrap_or_else(|held| held.into_inner()) = missing;
     }
 }
 
@@ -267,10 +317,15 @@ pub fn keep_measuring(state: &AppState) -> tokio::task::JoinHandle<()> {
 
             let started = start_of_the_minute(now);
             if started != this_minute {
-                if let Some(kept) = average(&minute, this_minute)
-                    && let Err(error) = state.database().keep_measure(Span::Minute, &as_measure(&kept)).await
-                {
-                    tracing::warn!(%error, "a minute of measures could not be written down");
+                if let Some(kept) = average(&minute, this_minute) {
+                    let written = state.database().keep_measure(Span::Minute, &as_measure(&kept)).await;
+                    if let Err(error) = &written {
+                        tracing::warn!(%error, "a minute of measures could not be written down");
+                    }
+                    state
+                        .measuring()
+                        .writes_refused
+                        .store(written.is_err(), Ordering::Relaxed);
                 }
                 minute.clear();
                 this_minute = started;
@@ -408,6 +463,20 @@ mod tests {
         assert_eq!(kept.temperature, Some(40.0), "not dragged down by the points without one");
         assert_eq!(kept.card, None);
         assert_eq!(average(&[], at), None);
+    }
+
+    #[test]
+    fn a_folder_of_a_library_that_went_away_is_named() {
+        let here = tempfile::tempdir().expect("folder");
+        let roots = vec![
+            ("still here".to_string(), here.path().to_path_buf()),
+            ("gone".to_string(), here.path().join("unplugged")),
+            (
+                "invented".to_string(),
+                PathBuf::from(melyxar_database::synthetic::BENCH_ROOT),
+            ),
+        ];
+        assert_eq!(folders_still_there(&roots), vec!["gone".to_string()]);
     }
 
     #[test]
