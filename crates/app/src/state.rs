@@ -47,6 +47,8 @@ struct Inner {
     /// forgotten them, which is the right way round for somebody who locked
     /// themselves out and rebooted it.
     wrong_answers: crate::accounts::WrongAnswers,
+    /// When this server came up, for how long it has been running.
+    started_at: melyxar_core::time::Timestamp,
 }
 
 impl AppState {
@@ -85,6 +87,7 @@ impl AppState {
                 capabilities,
                 counts: crate::counted::Counts::default(),
                 wrong_answers: crate::accounts::WrongAnswers::default(),
+                started_at: melyxar_core::time::now(),
             }),
         }
     }
@@ -95,6 +98,10 @@ impl AppState {
 
     pub fn database(&self) -> &Database {
         &self.inner.database
+    }
+
+    pub fn started_at(&self) -> melyxar_core::time::Timestamp {
+        self.inner.started_at
     }
 
     pub fn jobs(&self) -> &JobRunner {

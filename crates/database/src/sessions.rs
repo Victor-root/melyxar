@@ -107,6 +107,14 @@ pub struct SignedIn {
     pub remembered: Remembered,
 }
 
+/// The devices signed in to this server, counted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeviceCounts {
+    pub signed_in: i64,
+    /// Those used since the moment asked about.
+    pub used_lately: i64,
+}
+
 impl Database {
     /// Writes down that somebody signed in, and from what.
     ///
@@ -226,6 +234,25 @@ impl Database {
             .execute(self.writer())
             .await?;
         Ok(done.rows_affected())
+    }
+
+    /// How many devices are signed in, and how many of those were used since
+    /// the moment given.
+    ///
+    /// Read from the last use as written down, which trails the real one by up
+    /// to an hour (see the note at the top of this file): near enough to say
+    /// who was about today.
+    pub async fn device_counts(&self, used_since: Timestamp) -> Result<DeviceCounts> {
+        let (signed_in, used_lately): (i64, i64) = sqlx::query_as(
+            "SELECT count(*), count(CASE WHEN last_seen_at >= ? THEN 1 END) FROM devices",
+        )
+        .bind(timestamp_to_text(used_since))
+        .fetch_one(self.reader())
+        .await?;
+        Ok(DeviceCounts {
+            signed_in,
+            used_lately,
+        })
     }
 
     /// Sets, changes or takes away the stored form of an account's password.
@@ -610,6 +637,36 @@ mod tests {
             .await
             .expect("read")
             .is_some());
+    }
+
+    /// A device used the day before is still signed in, and is not counted as
+    /// used today.
+    #[tokio::test]
+    async fn devices_are_counted_with_those_used_lately_apart() {
+        let (database, user_id) = a_server_with_one_account().await;
+        let yesterday = A_MOMENT - time::Duration::days(1);
+        for (name, fingerprint, at) in [
+            ("a television", "one", yesterday),
+            ("a browser", "two", A_MOMENT),
+            ("a phone", "three", A_MOMENT),
+        ] {
+            database
+                .open_session(user_id, name, fingerprint, Remembered::Yes, at)
+                .await
+                .expect("session opened");
+        }
+
+        let counted = database
+            .device_counts(A_MOMENT - time::Duration::hours(12))
+            .await
+            .expect("counted");
+        assert_eq!(
+            counted,
+            DeviceCounts {
+                signed_in: 3,
+                used_lately: 2
+            }
+        );
     }
 
     #[tokio::test]
