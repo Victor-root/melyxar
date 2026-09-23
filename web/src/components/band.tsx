@@ -28,7 +28,7 @@
 import { Link } from "react-router-dom";
 import type { Card, Home, Library } from "../api";
 import { useShownPicture } from "./picture";
-import { whereAKindLeads, worksOfKind } from "../libraries";
+import { whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { ChevronRightIcon, KindIcon } from "../icons";
 
@@ -165,8 +165,7 @@ export function fanOf(cards: Card[]): Card[] {
 }
 
 function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
-  const { t, language } = useSettings();
-  const works = worksOfKind(shelf.kind, libraries);
+  const { t } = useSettings();
   const fan = fanOf(shelf.fan);
 
   return (
@@ -224,11 +223,6 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
         <span className="band-name">
           <KindIcon kind={shelf.kind} size={17} />
           {t(`kind.${shelf.kind}`)}
-        </span>
-        {/* Grouped the way the language groups thousands: eighty three
-            thousand written as one run of figures is a figure nobody reads. */}
-        <span className="band-count">
-          {t("home.band.count", { count: works.toLocaleString(language) })}
         </span>
       </span>
       <span className="band-arrow" aria-hidden="true">

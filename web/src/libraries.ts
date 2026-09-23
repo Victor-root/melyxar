@@ -111,8 +111,3 @@ export function movedOnTheHomePage(
 export function cardShapeOf(kind: LibraryKind | undefined): CardShape {
   return kind === "home_media" ? "lying" : "standing";
 }
-
-/** How many works a category holds, over every library of that kind. */
-export function worksOfKind(kind: LibraryKind, libraries: Library[]): number {
-  return librariesOfKind(kind, libraries).reduce((total, library) => total + library.works, 0);
-}
