@@ -12,8 +12,10 @@ import { Link, useNavigate } from "react-router-dom";
 import type { Child, Work } from "../api";
 import { WayBackUp } from "../components/ancestry";
 import { DeleteButton } from "../components/deletion";
+import { SelectMark, Selecting, useChoosingPress } from "../components/selection";
 import { useShownPicture } from "../components/picture";
 import { ChevronLeftIcon, ChevronRightIcon, HomeMediaIcon } from "../icons";
+import { useMarks } from "../marks";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 
@@ -21,23 +23,27 @@ import { useSettings } from "../settings";
 export function FolderView({ work }: { work: Work }) {
   const { t } = useSettings();
   const navigate = useNavigate();
+  const marks = useMarks();
+  const children = work.children.filter((child) => !marks.goneOf(child.id));
 
   return (
     <main className="page own-folder">
       <WayBackUp work={work} />
       <div className="section-head">
         <h1>{work.title}</h1>
-        <span className="count">{howMany(work.children.length, "own.item_count", t)}</span>
+        <span className="count">{howMany(children.length, "own.item_count", t)}</span>
         <DeleteButton workId={work.id} title={work.title} onDeleted={() => navigate(-1)} />
       </div>
-      {work.children.length === 0 ? (
+      {children.length === 0 ? (
         <p className="notice">{t("own.empty")}</p>
       ) : (
-        <div className="own-grid">
-          {work.children.map((child) => (
-            <OwnTile key={child.id} child={child} />
-          ))}
-        </div>
+        <Selecting items={children}>
+          <div className="own-grid">
+            {children.map((child) => (
+              <OwnTile key={child.id} child={child} />
+            ))}
+          </div>
+        </Selecting>
       )}
     </main>
   );
@@ -49,43 +55,54 @@ function OwnTile({ child }: { child: Child }) {
   const { t } = useSettings();
   const { picture, itDidNotLoad } = useShownPicture(child.poster);
   const to = child.kind === "video" && child.playable ? `/work/${child.id}?play` : `/work/${child.id}`;
+  const choosing = useChoosingPress(child.id);
 
   return (
-    <Link
-      to={to}
-      className={`own-tile own-tile-${child.kind}`}
-      style={{ ["--card-color" as string]: child.color ?? "var(--surface)" }}
+    <div
+      className={`own-cell${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " own-chosen" : ""}`}
     >
-      <div className="own-picture">
-        {picture ? (
-          <img
-            src={picture.src}
-            srcSet={picture.srcSet}
-            sizes="(max-width: 800px) 45vw, 280px"
-            alt=""
-            loading="lazy"
-            onError={itDidNotLoad}
-          />
-        ) : (
-          <div className="own-picture-empty" aria-hidden="true">
-            <HomeMediaIcon size={32} />
-          </div>
+      <Link
+        to={to}
+        className={`own-tile own-tile-${child.kind}`}
+        style={{ ["--card-color" as string]: child.color ?? "var(--surface)" }}
+        onClick={choosing.onClick}
+      >
+        <div className="own-picture">
+          {picture ? (
+            <img
+              src={picture.src}
+              srcSet={picture.srcSet}
+              sizes="(max-width: 800px) 45vw, 280px"
+              alt=""
+              loading="lazy"
+              onError={itDidNotLoad}
+            />
+          ) : (
+            <div className="own-picture-empty" aria-hidden="true">
+              <HomeMediaIcon size={32} />
+            </div>
+          )}
+          {child.kind === "folder" && (
+            <span className="own-badge">{howMany(child.child_count, "own.item_count", t)}</span>
+          )}
+          {child.kind === "video" && (
+            <span className="own-badge">
+              <span className="play-mark" aria-hidden="true" />
+              {child.runtime_minutes ? t("work.minutes", { count: child.runtime_minutes }) : ""}
+            </span>
+          )}
+        </div>
+        <span className="own-name">{child.title}</span>
+        {!child.playable && child.kind !== "folder" && (
+          <span className="own-missing">{t("work.not_on_disk")}</span>
         )}
-        {child.kind === "folder" && (
-          <span className="own-badge">{howMany(child.child_count, "own.item_count", t)}</span>
-        )}
-        {child.kind === "video" && (
-          <span className="own-badge">
-            <span className="play-mark" aria-hidden="true" />
-            {child.runtime_minutes ? t("work.minutes", { count: child.runtime_minutes }) : ""}
-          </span>
-        )}
+      </Link>
+      {/* Beside the link rather than in it, laid over the corner of the
+          picture: a button inside a link is a press that goes two ways. */}
+      <div className="own-select">
+        <SelectMark id={child.id} />
       </div>
-      <span className="own-name">{child.title}</span>
-      {!child.playable && child.kind !== "folder" && (
-        <span className="own-missing">{t("work.not_on_disk")}</span>
-      )}
-    </Link>
+    </div>
   );
 }
 

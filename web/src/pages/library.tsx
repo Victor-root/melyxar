@@ -5,6 +5,7 @@
 import type { Library } from "../api";
 import { Card } from "../components/card";
 import { Grid } from "../components/grid";
+import { Selecting } from "../components/selection";
 import { cardShapeOf } from "../libraries";
 import { ORDERS, useBrowsing } from "../screens/browsing";
 import { useSettings } from "../settings";
@@ -113,11 +114,13 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
           to scroll through and too short to search by hand every time, and the
           letter is the one thing anybody remembers about a title. */}
       <div className="grid-with-letters">
-        <Grid onReachEnd={loadMore} hasMore={more} shape={shape}>
-          {cards.map((card) => (
-            <Card key={card.id} card={card} shape={shape} />
-          ))}
-        </Grid>
+        <Selecting items={cards}>
+          <Grid onReachEnd={loadMore} hasMore={more} shape={shape}>
+            {cards.map((card) => (
+              <Card key={card.id} card={card} shape={shape} />
+            ))}
+          </Grid>
+        </Selecting>
 
         {/* Only the letters the library really has: a letter leading to an
             empty grid reads as a fault. One letter alone is no choice. */}

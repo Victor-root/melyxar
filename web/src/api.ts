@@ -209,12 +209,22 @@ export interface WouldGo {
 
 /** What deleting a work would take with it. */
 export interface Deletion {
-  /** The work and everything under it. */
+  /** The works and everything under them, each once. */
   works: number;
   /** Every file of it on the disk, copies first, by its whole path. */
   files: { path: string; role: "copy" | "subtitle" | "extra" }[];
   /** Whether this account may delete off the disk as well. */
   may_delete_from_disk: boolean;
+}
+
+/** A file taken out of a library while it stays on the disk. */
+export interface SetAsideFile {
+  /** The folder of the library it sits under, and its path under it: what
+      names it when it is taken back. */
+  root: string;
+  relative_path: string;
+  /** Its whole path, for a person to read. */
+  path: string;
 }
 
 /** One folder of the server's disk, as the picker shows it. */
@@ -1201,12 +1211,18 @@ export const api = {
   whatRemovingTakes: (library: string, signal?: AbortSignal) =>
     get<WouldGo>(`/api/v1/libraries/${library}/removal`, signal),
   removeLibrary: (library: string) => remove<WouldGo>(`/api/v1/libraries/${library}`),
-  takeBackSetAside: (library: string) =>
-    remove<{ files: number }>(`/api/v1/libraries/${library}/set-aside`),
-  whatDeletingTakes: (work: string, signal?: AbortSignal) =>
-    get<Deletion>(`/api/v1/works/${work}/deletion`, signal),
-  deleteWork: (work: string, fromDisk: boolean) =>
-    remove<WouldGo>(`/api/v1/works/${work}?from_disk=${fromDisk}`),
+  setAsideFiles: (library: string, signal?: AbortSignal) =>
+    get<SetAsideFile[]>(`/api/v1/libraries/${library}/set-aside`, signal),
+  /* Nothing named takes every one of them back. The library is scanned
+     straight after, so they come back without anybody asking for it. */
+  takeBackSetAside: (library: string, files: SetAsideFile[] | null) =>
+    post<{ files: number }>(`/api/v1/libraries/${library}/set-aside/take-back`, {
+      files: files?.map(({ root, relative_path }) => ({ root, relative_path })) ?? null,
+    }),
+  whatDeletingTakes: (works: string[], signal?: AbortSignal) =>
+    post<Deletion>("/api/v1/deletion/what-it-takes", { works }, signal),
+  deleteWorks: (works: string[], fromDisk: boolean) =>
+    post<WouldGo>("/api/v1/deletion", { works, from_disk: fromDisk }),
   whatRemovingAFolderTakes: (library: string, root: string, signal?: AbortSignal) =>
     get<WouldGo>(`/api/v1/libraries/${library}/roots/${root}/removal`, signal),
   removeRoot: (library: string, root: string) =>

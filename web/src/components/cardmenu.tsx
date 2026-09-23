@@ -26,6 +26,7 @@ import { useAccount } from "../account";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 import { isCatalogued, playsOnItsOwn } from "../works";
+import { useSelection } from "./selection";
 import {
   CollectionIcon,
   DeleteIcon,
@@ -99,6 +100,7 @@ export function CardMenu({
   const navigate = useNavigate();
   const { account } = useAccount();
   const marks = useMarks();
+  const selection = useSelection();
   const holder = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
 
@@ -188,7 +190,12 @@ export function CardMenu({
       mark: <TickIcon size={SHAPE} />,
       act: () => marks.setWatched(card, seen !== "watched"),
     },
-    { key: "select", mark: <SelectIcon size={SHAPE} />, later: true },
+    {
+      key: "select",
+      mark: <SelectIcon size={SHAPE} />,
+      allowed: selection !== null,
+      act: () => selection?.press(card.id, false),
+    },
     {
       key: "download",
       mark: <DownloadIcon size={SHAPE} />,
