@@ -248,6 +248,32 @@ pub async fn who_holds(state: &AppState, token: &str) -> Result<Option<SignedIn>
 }
 
 /// Signs one device out, and says whether there was one to sign out.
+/// The longest name a page may give its browser. Every real one is a word
+/// or two.
+pub const LONGEST_BROWSER_NAME: usize = 40;
+
+/// Writes down which browser a device is, as its own page found, when that
+/// is news. A page says it every time it opens, and saying the same again
+/// writes nothing.
+pub async fn name_the_browser(
+    state: &AppState,
+    device: melyxar_core::id::DeviceId,
+    known: Option<&str>,
+    said: Option<&str>,
+) -> Result<()> {
+    let said = said.map(str::trim).filter(|name| !name.is_empty());
+    if said.is_some_and(|name| name.chars().count() > LONGEST_BROWSER_NAME) {
+        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "a browser is not called anything that long",
+        )));
+    }
+    if said == known {
+        return Ok(());
+    }
+    state.database().name_the_browser(device, said).await?;
+    Ok(())
+}
+
 pub async fn sign_out(state: &AppState, token: &str) -> Result<bool> {
     Ok(state
         .database()

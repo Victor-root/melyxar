@@ -5,10 +5,13 @@
 //! than what this hears. See the decisions on what is being watched.
 //!
 //! A watch is born when a player asks how to play a film, which is the one
-//! moment every road through the player shares, plain file included. It is
-//! kept up to date by the position the player already sends every ten
-//! seconds, said to be paused when that position stops moving, and it ends
-//! when the player says it is leaving or has not been heard for a while.
+//! moment every road through the player shares, plain file included. The
+//! player says at once when it pauses, starts again or jumps, and where it is
+//! every ten seconds; in between, the clock of a film that is not paused runs
+//! on by itself. It lives while its player holds its live line open, which no
+//! hidden tab slows down, and it ends when the player says it is leaving, a
+//! short while after that line drops without a word, or after a long silence
+//! from a player that never opened one.
 //!
 //! A film left is remembered for as long as a silent one would have been
 //! kept: a player leaving sends its last word while an earlier one may still
@@ -21,17 +24,23 @@ use std::time::{Duration, Instant};
 use melyxar_core::id::{DeviceId, SessionId, UserId, WorkId};
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::WorkKind;
+use tokio::sync::watch;
 
 use crate::playback::{PlayPlan, Producing};
 use crate::{AppState, Result};
 
-/// How long a player may go unheard before its film is taken as stopped. It
-/// speaks every ten seconds, so this is several missed in a row.
+/// How long a player that never opened its line may go unheard before its
+/// film is taken as stopped. It speaks every ten seconds, so this is several
+/// missed in a row.
 const SILENT_FOR: Duration = Duration::from_secs(40);
 
-/// How long a position may stand still before the film is said to be paused.
-/// Longer than one beat of the player, so one beat is never enough.
-const PAUSED_AFTER: Duration = Duration::from_secs(15);
+/// How long a film is kept once its player's line dropped without a word:
+/// long enough for a line cut by the network to be tied again.
+const REJOIN_WITHIN: Duration = Duration::from_secs(10);
+
+/// How far a position may differ from where the clock alone would have put
+/// it before it counts as a jump worth telling at once.
+const JUMPED_BY: Millis = Millis::new(3_000);
 
 /// How long a player is given to obey a stop before the server closes what
 /// it can close itself.
@@ -45,10 +54,13 @@ pub struct Viewer {
     pub device: DeviceId,
     /// What the browser said it was when it signed in.
     pub device_name: String,
+    /// The browser the page itself found, when it could tell better than
+    /// the line above.
+    pub browser: Option<String>,
 }
 
 /// One film playing on one device.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Watch {
     viewer: Viewer,
     work: WorkId,
@@ -57,18 +69,81 @@ struct Watch {
     plan: Option<Arc<PlayPlan>>,
     /// The session converting it, when one is.
     session: Option<SessionId>,
+    /// Where the player last said it was, and when that was heard.
     position: Millis,
+    position_at: Instant,
+    paused: bool,
     started_at: Timestamp,
     heard_at: Instant,
-    moved_at: Instant,
+    /// How many live lines its player holds open. While there is one, the
+    /// film is being watched however long the player keeps quiet.
+    lines: u32,
+    /// How long it may go unheard with no line open.
+    quiet_for: Duration,
     /// When an administrator asked for it to stop, when one did.
     stop_asked_at: Option<Instant>,
+    /// What the live line waits on to be told to stop.
+    stop: watch::Sender<bool>,
+}
+
+impl Watch {
+    fn new(viewer: Viewer, work: WorkId, position: Millis, now: Instant, at: Timestamp) -> Self {
+        Self {
+            viewer,
+            work,
+            plan: None,
+            session: None,
+            position,
+            position_at: now,
+            paused: false,
+            started_at: at,
+            heard_at: now,
+            lines: 0,
+            quiet_for: SILENT_FOR,
+            stop_asked_at: None,
+            stop: watch::channel(false).0,
+        }
+    }
+
+    /// Where the film has got to by now: where it was said to be, plus the
+    /// time since when it is playing, never past its end.
+    fn position_by(&self, now: Instant) -> Millis {
+        if self.paused {
+            return self.position;
+        }
+        let ran = i64::try_from(now.duration_since(self.position_at).as_millis()).unwrap_or(i64::MAX);
+        let reached = Millis::new(self.position.get().saturating_add(ran));
+        match self.plan.as_ref().and_then(|plan| plan.duration) {
+            Some(length) if reached > length => length,
+            _ => reached,
+        }
+    }
+
+    fn alive(&self, now: Instant) -> bool {
+        self.lines > 0 || now.duration_since(self.heard_at) < self.quiet_for
+    }
 }
 
 /// What is being watched, held for the whole server.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Watching {
     held: Mutex<Held>,
+    /// Moved on whenever something an administrator sees changes, for the
+    /// administration's live line to send the list again at once.
+    changed: watch::Sender<u64>,
+    /// Set once the server is stopping: every live line ends, or the server
+    /// would wait for them for ever before it could stop.
+    closing: watch::Sender<bool>,
+}
+
+impl Default for Watching {
+    fn default() -> Self {
+        Self {
+            held: Mutex::default(),
+            changed: watch::channel(0).0,
+            closing: watch::channel(false).0,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -111,9 +186,38 @@ struct Seen {
     stopping: bool,
 }
 
+/// What a live line waits on: the word to stop. Its end is the end of the
+/// line, for whatever reason it ends.
+pub struct Line {
+    pub stop: watch::Receiver<bool>,
+    /// Set when the server is stopping, which ends the line without a word:
+    /// the player ties it again once the server is back.
+    pub closing: watch::Receiver<bool>,
+    _held: Holding,
+}
+
+/// Counts a line as open for as long as it lives.
+struct Holding {
+    state: AppState,
+    device: DeviceId,
+    work: WorkId,
+}
+
+impl Drop for Holding {
+    fn drop(&mut self) {
+        self.state
+            .watching()
+            .line_closed(self.device, self.work, Instant::now());
+    }
+}
+
 impl Watching {
     fn held(&self) -> std::sync::MutexGuard<'_, Held> {
         self.held.lock().unwrap_or_else(|held| held.into_inner())
+    }
+
+    fn tell(&self) {
+        self.changed.send_modify(|count| *count = count.wrapping_add(1));
     }
 
     /// A player asked how to play a film: a watch starts, or the one already
@@ -122,30 +226,30 @@ impl Watching {
     fn starting(&self, viewer: Viewer, plan: Arc<PlayPlan>, now: Instant, at: Timestamp) {
         let mut held = self.held();
         held.left.remove(&viewer.device);
-        let carried_on = held
-            .playing
-            .get(&viewer.device)
-            .filter(|watch| watch.work == plan.work_id)
-            .map(|watch| (watch.position, watch.started_at, watch.session));
-        let (position, started_at, session) = carried_on.unwrap_or((
-            plan.resume_from.unwrap_or(Millis::ZERO),
-            at,
-            None,
-        ));
-        held.playing.insert(
-            viewer.device,
-            Watch {
-                work: plan.work_id,
-                viewer,
-                plan: Some(plan),
-                session,
-                position,
-                started_at,
-                heard_at: now,
-                moved_at: now,
-                stop_asked_at: None,
-            },
-        );
+        let device = viewer.device;
+        let work = plan.work_id;
+        match held.playing.get_mut(&device) {
+            Some(watch) if watch.work == work => {
+                watch.viewer = viewer;
+                watch.plan = Some(plan);
+                watch.heard_at = now;
+            }
+            _ => {
+                let mut watch = Watch::new(
+                    viewer,
+                    work,
+                    plan.resume_from.unwrap_or(Millis::ZERO),
+                    now,
+                    at,
+                );
+                // Nothing plays until the picture does.
+                watch.paused = true;
+                watch.plan = Some(plan);
+                held.playing.insert(device, watch);
+            }
+        }
+        drop(held);
+        self.tell();
     }
 
     fn session_opened(&self, device: DeviceId, session: SessionId, now: Instant) {
@@ -153,15 +257,18 @@ impl Watching {
             watch.session = Some(session);
             watch.heard_at = now;
         }
+        self.tell();
     }
 
-    /// A player said it still has a film open, and where it is when it has
-    /// got anywhere yet. Answers whether it has been asked to stop.
+    /// A player said it still has a film open, where it is when it has got
+    /// anywhere yet, and whether it is paused when it says. Answers whether
+    /// it has been asked to stop.
     fn heard(
         &self,
         viewer: Viewer,
         work: WorkId,
         position: Option<Millis>,
+        paused: Option<bool>,
         now: Instant,
         at: Timestamp,
     ) -> bool {
@@ -169,47 +276,97 @@ impl Watching {
         if held.just_left(viewer.device, work, now) {
             return false;
         }
-        match held.playing.get_mut(&viewer.device) {
+        let (stop, changed) = match held.playing.get_mut(&viewer.device) {
             Some(watch) if watch.work == work => {
-                if let Some(position) = position.filter(|&moved| moved != watch.position) {
+                let expected = watch.position_by(now);
+                let mut changed = false;
+                if let Some(position) = position {
+                    changed |= position.get().abs_diff(expected.get()) > JUMPED_BY.get().unsigned_abs();
                     watch.position = position;
-                    watch.moved_at = now;
+                } else {
+                    watch.position = expected;
+                }
+                watch.position_at = now;
+                if let Some(paused) = paused {
+                    changed |= watch.paused != paused;
+                    watch.paused = paused;
                 }
                 watch.heard_at = now;
-                watch.stop_asked_at.is_some()
+                (watch.stop_asked_at.is_some(), changed)
             }
             _ => {
-                held.playing.insert(
-                    viewer.device,
-                    Watch {
-                        viewer,
-                        work,
-                        plan: None,
-                        session: None,
-                        position: position.unwrap_or(Millis::ZERO),
-                        started_at: at,
-                        heard_at: now,
-                        moved_at: now,
-                        stop_asked_at: None,
-                    },
-                );
-                false
+                let mut watch = Watch::new(viewer, work, position.unwrap_or(Millis::ZERO), now, at);
+                watch.paused = paused.unwrap_or(false);
+                held.playing.insert(watch.viewer.device, watch);
+                (false, true)
             }
+        };
+        drop(held);
+        if changed {
+            self.tell();
         }
+        stop
     }
 
     /// A player said it is leaving this film.
     fn gone(&self, device: DeviceId, work: WorkId, now: Instant) {
-        self.held().leave(device, work, now);
+        let left = self.held().leave(device, work, now);
+        if left.is_some() {
+            self.tell();
+        }
     }
 
-    /// Marks the film on this device to be stopped, and says whose it is and
-    /// which it is, for closing it if the player never obeys.
+    /// A player opened its live line for this film. Refused when its device
+    /// is playing another film, which is a player left behind by a newer one.
+    fn line_opened(&self, viewer: Viewer, work: WorkId, now: Instant, at: Timestamp) -> Option<watch::Receiver<bool>> {
+        let mut held = self.held();
+        if held.just_left(viewer.device, work, now) {
+            return None;
+        }
+        let device = viewer.device;
+        let fresh = !held.playing.contains_key(&device);
+        let watch = held
+            .playing
+            .entry(device)
+            .or_insert_with(|| Watch::new(viewer, work, Millis::ZERO, now, at));
+        if watch.work != work {
+            return None;
+        }
+        watch.lines += 1;
+        watch.quiet_for = SILENT_FOR;
+        watch.heard_at = now;
+        let stop = watch.stop.subscribe();
+        drop(held);
+        if fresh {
+            self.tell();
+        }
+        Some(stop)
+    }
+
+    /// A live line ended. The last one gone without a word, the film is kept
+    /// only as long as a line cut by the network takes to be tied again.
+    fn line_closed(&self, device: DeviceId, work: WorkId, now: Instant) {
+        if let Some(watch) = self.held().playing.get_mut(&device).filter(|watch| watch.work == work) {
+            watch.lines = watch.lines.saturating_sub(1);
+            if watch.lines == 0 {
+                watch.heard_at = now;
+                watch.quiet_for = REJOIN_WITHIN;
+            }
+        }
+    }
+
+    /// Marks the film on this device to be stopped, tells its live line, and
+    /// says whose it is and which it is, for closing it if the player never
+    /// obeys.
     fn ask_to_stop(&self, device: DeviceId, now: Instant) -> Option<(UserId, WorkId)> {
         let mut held = self.held();
         let watch = held.playing.get_mut(&device)?;
         watch.stop_asked_at.get_or_insert(now);
-        Some((watch.viewer.user, watch.work))
+        watch.stop.send_replace(true);
+        let whose = (watch.viewer.user, watch.work);
+        drop(held);
+        self.tell();
+        Some(whose)
     }
 
     /// Forgets this film on this device if it was asked to stop and is still
@@ -220,18 +377,23 @@ impl Watching {
             .playing
             .get(&device)
             .is_some_and(|watch| watch.work == work && watch.stop_asked_at.is_some());
-        disobeyed
+        let session = disobeyed
             .then(|| held.leave(device, work, now))
             .flatten()
-            .map(|watch| watch.session)
+            .map(|watch| watch.session);
+        drop(held);
+        if session.is_some() {
+            self.tell();
+        }
+        session
     }
 
-    /// Everything playing, oldest first, once the players gone quiet are let
-    /// go.
+    /// Everything playing, oldest first, once the players gone are let go.
     fn now_playing(&self, now: Instant) -> Vec<Seen> {
         let mut held = self.held();
-        held.playing
-            .retain(|_, watch| now.duration_since(watch.heard_at) < SILENT_FOR);
+        let before = held.playing.len();
+        held.playing.retain(|_, watch| watch.alive(now));
+        let let_go = held.playing.len() != before;
         held.left
             .retain(|_, &mut (_, at)| now.duration_since(at) < SILENT_FOR);
         let mut seen: Vec<Seen> = held
@@ -242,12 +404,16 @@ impl Watching {
                 work: watch.work,
                 plan: watch.plan.clone(),
                 session: watch.session,
-                position: watch.position,
+                position: watch.position_by(now),
                 started_at: watch.started_at,
-                paused: now.duration_since(watch.moved_at) >= PAUSED_AFTER,
+                paused: watch.paused,
                 stopping: watch.stop_asked_at.is_some(),
             })
             .collect();
+        drop(held);
+        if let_go {
+            self.tell();
+        }
         seen.sort_by_key(|one| one.started_at);
         seen
     }
@@ -270,13 +436,21 @@ pub fn session_opened(state: &AppState, device: DeviceId, session: SessionId) {
         .session_opened(device, session, Instant::now());
 }
 
-/// A player said it still has a film open, and where it is when it has got
-/// anywhere yet. Answers whether it has been asked to stop.
-pub fn heard(state: &AppState, viewer: Viewer, work: WorkId, position: Option<Millis>) -> bool {
+/// A player said it still has a film open, where it is when it has got
+/// anywhere yet, and whether it is paused when it says. Answers whether it
+/// has been asked to stop.
+pub fn heard(
+    state: &AppState,
+    viewer: Viewer,
+    work: WorkId,
+    position: Option<Millis>,
+    paused: Option<bool>,
+) -> bool {
     state.watching().heard(
         viewer,
         work,
         position,
+        paused,
         Instant::now(),
         melyxar_core::time::now(),
     )
@@ -285,6 +459,40 @@ pub fn heard(state: &AppState, viewer: Viewer, work: WorkId, position: Option<Mi
 /// A player said it is leaving this film.
 pub fn gone(state: &AppState, device: DeviceId, work: WorkId) {
     state.watching().gone(device, work, Instant::now());
+}
+
+/// A player opened its live line for this film. Absent when its device is
+/// playing another film or has just left this one.
+pub fn line(state: &AppState, viewer: Viewer, work: WorkId) -> Option<Line> {
+    let device = viewer.device;
+    let stop = state
+        .watching()
+        .line_opened(viewer, work, Instant::now(), melyxar_core::time::now())?;
+    Some(Line {
+        stop,
+        closing: closing(state),
+        _held: Holding {
+            state: state.clone(),
+            device,
+            work,
+        },
+    })
+}
+
+/// What the administration's live line waits on: moved on whenever what it
+/// shows changes.
+pub fn changes(state: &AppState) -> watch::Receiver<u64> {
+    state.watching().changed.subscribe()
+}
+
+/// Set when the server is stopping, for every live line to end.
+pub fn closing(state: &AppState) -> watch::Receiver<bool> {
+    state.watching().closing.subscribe()
+}
+
+/// Ends every live line, for the server to be able to stop.
+pub fn close_every_line(state: &AppState) {
+    state.watching().closing.send_replace(true);
 }
 
 /// Asks the player on this device to stop, and closes what the server can
@@ -318,6 +526,8 @@ pub struct Watched {
     pub device: DeviceId,
     pub user_name: String,
     pub device_name: String,
+    /// The browser the page found, when it could tell.
+    pub browser: Option<String>,
     pub work: WorkId,
     pub title: String,
     pub kind: WorkKind,
@@ -377,6 +587,7 @@ pub async fn now_playing(state: &AppState) -> Result<Vec<Watched>> {
             device: seen.viewer.device,
             user_name: seen.viewer.user_name,
             device_name: seen.viewer.device_name,
+            browser: seen.viewer.browser,
             work: work.id,
             year: work.release_year.or(series.and_then(|up| up.release_year)),
             episode: (work.kind == WorkKind::Episode).then_some(work.ordinal).flatten(),
@@ -434,6 +645,7 @@ mod tests {
             user_name: "somebody".to_string(),
             device,
             device_name: "a browser".to_string(),
+            browser: None,
         }
     }
 
@@ -479,56 +691,110 @@ mod tests {
         Some(Millis::from_seconds_f64(value))
     }
 
+    fn secs(value: u64) -> Duration {
+        Duration::from_secs(value)
+    }
+
     #[test]
-    fn a_film_starts_where_it_resumes_and_follows_its_player() {
+    fn a_film_starts_paused_where_it_resumes_and_its_clock_runs_once_it_plays() {
         let watching = Watching::default();
         let device = DeviceId::new();
         let work = WorkId::new();
         let start = Instant::now();
         watching.starting(viewer(device), plan_for(work, seconds(60.0)), start, at());
 
-        let seen = watching.now_playing(start);
-        assert_eq!(seen.len(), 1);
+        let seen = watching.now_playing(start + secs(5));
         assert_eq!(seen[0].position, Millis::from_seconds_f64(60.0));
-        assert!(seen[0].plan.is_some());
+        assert!(seen[0].paused, "nothing plays until the picture does");
 
-        let later = start + Duration::from_secs(10);
-        assert!(!watching.heard(viewer(device), work, seconds(70.0), later, at()));
-        assert_eq!(watching.now_playing(later)[0].position, Millis::from_seconds_f64(70.0));
+        watching.heard(viewer(device), work, seconds(60.0), Some(false), start + secs(5), at());
+        let seen = watching.now_playing(start + secs(12));
+        assert!(!seen[0].paused);
+        assert_eq!(seen[0].position, Millis::from_seconds_f64(67.0), "the clock ran on its own");
     }
 
     #[test]
-    fn a_player_that_has_not_got_anywhere_yet_keeps_its_film_where_it_resumes() {
-        let watching = Watching::default();
-        let device = DeviceId::new();
-        let work = WorkId::new();
-        let start = Instant::now();
-        watching.starting(viewer(device), plan_for(work, seconds(600.0)), start, at());
-        let later = start + Duration::from_secs(30);
-        watching.heard(viewer(device), work, None, later, at());
-
-        let seen = watching.now_playing(later + Duration::from_secs(30));
-        assert_eq!(seen.len(), 1, "still preparing is still there");
-        assert_eq!(seen[0].position, Millis::from_seconds_f64(600.0));
-    }
-
-    #[test]
-    fn a_position_that_stands_still_is_a_pause() {
+    fn a_pause_is_what_the_player_says_and_stops_the_clock() {
         let watching = Watching::default();
         let device = DeviceId::new();
         let work = WorkId::new();
         let start = Instant::now();
         watching.starting(viewer(device), plan_for(work, None), start, at());
-        let position = seconds(30.0);
-        watching.heard(viewer(device), work, position, start + Duration::from_secs(10), at());
-        assert!(!watching.now_playing(start + Duration::from_secs(20))[0].paused, "one beat is not a pause");
-        watching.heard(viewer(device), work, position, start + Duration::from_secs(20), at());
-        watching.heard(viewer(device), work, position, start + Duration::from_secs(30), at());
-        assert!(watching.now_playing(start + Duration::from_secs(30))[0].paused);
+        let _line = watching.line_opened(viewer(device), work, start, at());
+        watching.heard(viewer(device), work, seconds(0.0), Some(false), start, at());
+        watching.heard(viewer(device), work, seconds(30.0), Some(true), start + secs(30), at());
+
+        let seen = watching.now_playing(start + secs(90));
+        assert!(seen[0].paused);
+        assert_eq!(seen[0].position, Millis::from_seconds_f64(30.0));
+
+        watching.heard(viewer(device), work, None, None, start + secs(100), at());
+        assert!(watching.now_playing(start + secs(100))[0].paused, "a word without the flag keeps it");
     }
 
     #[test]
-    fn a_player_gone_quiet_or_gone_is_let_go() {
+    fn the_clock_never_runs_past_the_end() {
+        let watching = Watching::default();
+        let device = DeviceId::new();
+        let work = WorkId::new();
+        let start = Instant::now();
+        watching.starting(viewer(device), plan_for(work, None), start, at());
+        watching.heard(viewer(device), work, seconds(5990.0), Some(false), start, at());
+        let _line = watching.line_opened(viewer(device), work, start, at());
+        assert_eq!(
+            watching.now_playing(start + secs(60))[0].position,
+            Millis::from_seconds_f64(6000.0)
+        );
+    }
+
+    #[test]
+    fn a_film_whose_line_is_open_is_kept_however_quiet_its_player() {
+        let watching = Watching::default();
+        let device = DeviceId::new();
+        let work = WorkId::new();
+        let start = Instant::now();
+        watching.starting(viewer(device), plan_for(work, None), start, at());
+        let line = watching.line_opened(viewer(device), work, start, at());
+        assert!(line.is_some());
+
+        let much_later = start + SILENT_FOR * 10;
+        let seen = watching.now_playing(much_later);
+        assert_eq!(seen.len(), 1, "a hidden tab is still watching");
+        assert!(seen[0].plan.is_some(), "and keeps what was decided for it");
+
+        watching.line_closed(device, work, much_later);
+        assert_eq!(watching.now_playing(much_later + REJOIN_WITHIN / 2).len(), 1, "time to tie it again");
+        assert!(watching.now_playing(much_later + REJOIN_WITHIN).is_empty());
+    }
+
+    #[test]
+    fn a_line_tied_again_in_time_keeps_the_film() {
+        let watching = Watching::default();
+        let device = DeviceId::new();
+        let work = WorkId::new();
+        let start = Instant::now();
+        watching.starting(viewer(device), plan_for(work, None), start, at());
+        watching.line_opened(viewer(device), work, start, at());
+        watching.line_closed(device, work, start);
+        watching.line_opened(viewer(device), work, start + secs(3), at());
+        assert_eq!(watching.now_playing(start + SILENT_FOR * 3).len(), 1);
+    }
+
+    #[test]
+    fn a_line_for_another_film_than_the_one_playing_is_refused() {
+        let watching = Watching::default();
+        let device = DeviceId::new();
+        let start = Instant::now();
+        let (old, new) = (WorkId::new(), WorkId::new());
+        watching.starting(viewer(device), plan_for(new, None), start, at());
+        assert!(watching.line_opened(viewer(device), old, start, at()).is_none());
+
+        watching.gone(device, new, start);
+        assert!(watching.line_opened(viewer(device), new, start, at()).is_none(), "nor one just left");
+    }
+
+    #[test]
+    fn a_player_that_never_opened_a_line_is_let_go_after_a_long_silence() {
         let watching = Watching::default();
         let start = Instant::now();
         let quiet = DeviceId::new();
@@ -552,7 +818,7 @@ mod tests {
         let start = Instant::now();
         watching.starting(viewer(device), plan_for(work, None), start, at());
         watching.gone(device, work, start);
-        assert!(!watching.heard(viewer(device), work, seconds(40.0), start, at()));
+        assert!(!watching.heard(viewer(device), work, seconds(40.0), None, start, at()));
         assert!(watching.now_playing(start).is_empty());
 
         watching.starting(viewer(device), plan_for(work, None), start, at());
@@ -566,7 +832,7 @@ mod tests {
         let work = WorkId::new();
         let start = Instant::now();
         watching.starting(viewer(device), plan_for(work, None), start, at());
-        watching.heard(viewer(device), work, seconds(500.0), start, at());
+        watching.heard(viewer(device), work, seconds(500.0), Some(true), start, at());
         watching.starting(viewer(device), plan_for(work, None), start, at());
         assert_eq!(watching.now_playing(start)[0].position, Millis::from_seconds_f64(500.0));
 
@@ -584,14 +850,14 @@ mod tests {
         let device = DeviceId::new();
         let work = WorkId::new();
         let start = Instant::now();
-        watching.heard(viewer(device), work, seconds(12.0), start, at());
+        watching.heard(viewer(device), work, seconds(12.0), Some(false), start, at());
         let seen = watching.now_playing(start);
         assert_eq!(seen.len(), 1);
         assert!(seen[0].plan.is_none());
     }
 
     #[test]
-    fn a_stop_is_told_to_the_player_and_kept_for_one_that_never_obeys() {
+    fn a_stop_reaches_the_line_at_once_and_the_next_word_too() {
         let watching = Watching::default();
         let device = DeviceId::new();
         let work = WorkId::new();
@@ -600,14 +866,17 @@ mod tests {
         let session = SessionId::new();
         watching.starting(who.clone(), plan_for(work, None), start, at());
         watching.session_opened(device, session, start);
+        let line = watching.line_opened(who.clone(), work, start, at()).expect("a line");
+        assert!(!*line.borrow());
 
         assert_eq!(watching.ask_to_stop(device, start), Some((who.user, work)));
+        assert!(*line.borrow(), "told on the line");
         assert!(watching.now_playing(start)[0].stopping);
-        assert!(watching.heard(who.clone(), work, None, start, at()), "told on its next beat");
+        assert!(watching.heard(who.clone(), work, None, None, start, at()), "and on its next word");
 
         assert_eq!(watching.never_obeyed(device, work, start), Some(Some(session)));
         assert!(watching.now_playing(start).is_empty());
-        assert!(!watching.heard(who, work, seconds(90.0), start, at()));
+        assert!(!watching.heard(who, work, seconds(90.0), None, start, at()));
         assert!(watching.now_playing(start).is_empty(), "closed, and not brought back by its player");
         assert!(watching.ask_to_stop(DeviceId::new(), start).is_none(), "nothing plays there");
     }
@@ -628,5 +897,31 @@ mod tests {
             watching.never_obeyed(device, work, start).is_none(),
             "started again since, and not asked to stop"
         );
+    }
+
+    #[test]
+    fn the_administration_is_told_of_a_pause_a_jump_or_a_departure_and_not_of_a_steady_clock() {
+        let watching = Watching::default();
+        let device = DeviceId::new();
+        let work = WorkId::new();
+        let start = Instant::now();
+        let mut told = watching.changed.subscribe();
+        watching.starting(viewer(device), plan_for(work, None), start, at());
+        watching.heard(viewer(device), work, seconds(0.0), Some(false), start, at());
+        told.mark_unchanged();
+
+        watching.heard(viewer(device), work, seconds(10.0), Some(false), start + secs(10), at());
+        assert!(!told.has_changed().unwrap(), "where the clock said it would be");
+
+        watching.heard(viewer(device), work, seconds(10.0), Some(true), start + secs(10), at());
+        assert!(told.has_changed().unwrap(), "a pause");
+        told.mark_unchanged();
+
+        watching.heard(viewer(device), work, seconds(900.0), Some(true), start + secs(11), at());
+        assert!(told.has_changed().unwrap(), "a jump");
+        told.mark_unchanged();
+
+        watching.gone(device, work, start + secs(12));
+        assert!(told.has_changed().unwrap(), "a departure");
     }
 }
