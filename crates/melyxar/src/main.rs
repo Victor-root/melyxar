@@ -460,6 +460,15 @@ async fn serve(config: Config) -> anyhow::Result<()> {
              Run the doctor command for details"
         );
     }
+    // Said once here rather than on every page asked for: the server runs
+    // without it, but nobody can open a page until the installer puts it back.
+    let interface = &state.config().directories.interface;
+    if !interface.join("index.html").is_file() {
+        tracing::warn!(
+            folder = %interface.display(),
+            "the interface is not installed in its folder: the pages will not open until it is"
+        );
+    }
 
     // Only the server does these, and only before it serves anything: what
     // they close belongs to a run that is over, and nothing of this run exists

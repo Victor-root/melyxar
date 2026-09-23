@@ -8,10 +8,10 @@
 *.db-wal
 *.db-shm
 
-# Dependencies of the interface, and its build output. The server embeds
-# this at compile time; the update script rebuilds it from source every
-# time, so keeping the result here as well would just be a second copy that
-# a source only change could leave stale.
+# Dependencies of the interface, and its build output. The update script
+# builds it from source and puts it in the folder the server reads it from,
+# so keeping the result here as well would just be a second copy that a
+# source only change could leave stale.
 /web/node_modules
 /web/dist
 

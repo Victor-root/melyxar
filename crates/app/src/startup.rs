@@ -448,6 +448,7 @@ mod tests {
             data: directory.join("data"),
             cache: directory.join("cache"),
             transcodes: directory.join("cache/transcodes"),
+            ..Default::default()
         };
         std::fs::create_dir_all(directory.join("films")).expect("folder created");
         config
@@ -864,6 +865,7 @@ mod tests {
                 data: directory.path().join("data"),
                 cache: directory.path().join("cache"),
                 transcodes: directory.path().join("cache/transcodes"),
+                ..Default::default()
             },
             ..Config::default()
         };

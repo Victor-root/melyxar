@@ -59,7 +59,6 @@ tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.7", features = ["fs", "trace", "compression-gzip"] }
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
-rust-embed = { version = "8", features = ["interpolate-folder-path"] }
 # Its TLS options were renamed at 0.13: what was "rustls-tls" is now "rustls",
 # and the roots are no longer chosen by a feature at all, the platform's own
 # store being verified against by default. "query" and "form" became features

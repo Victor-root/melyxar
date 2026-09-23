@@ -188,6 +188,7 @@ async fn a_server(directory: &Path, root: PathBuf) -> (AppState, Library) {
             data: directory.join("data"),
             cache: directory.join("cache"),
             transcodes: directory.join("cache/transcodes"),
+            ..Default::default()
         },
         libraries: vec![LibraryConfig {
             name: "Series".into(),

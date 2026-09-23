@@ -49,11 +49,11 @@ pub enum AccessMode {
     },
 }
 
-/// Where everything is written.
+/// Where everything is written, and where the interface is read from.
 ///
-/// Three separate directories on purpose: what must be backed up, what can be
-/// regenerated, and what is throwaway. None of them ever sits inside a media
-/// folder, because media disks may be mounted read only.
+/// Three separate directories are written on purpose: what must be backed
+/// up, what can be regenerated, and what is throwaway. None of them ever sits
+/// inside a media folder, because media disks may be mounted read only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Directories {
     /// Database, uploaded branding files. Backed up.
@@ -63,6 +63,16 @@ pub struct Directories {
     /// Segments produced while streaming. Throwaway, quota applies, and a
     /// memory backed filesystem suits it well.
     pub transcodes: PathBuf,
+    /// The built interface, which the server only reads. Put there by the
+    /// installer, and served from the next request on: a new interface needs
+    /// no restart. Filled in when absent, so a file written before it existed
+    /// still starts the server.
+    #[serde(default = "default_interface")]
+    pub interface: PathBuf,
+}
+
+fn default_interface() -> PathBuf {
+    PathBuf::from("/usr/local/share/melyxar/web")
 }
 
 impl Default for Directories {
@@ -71,6 +81,7 @@ impl Default for Directories {
             data: PathBuf::from("/var/lib/melyxar"),
             cache: PathBuf::from("/var/cache/melyxar"),
             transcodes: PathBuf::from("/var/cache/melyxar/transcodes"),
+            interface: default_interface(),
         }
     }
 }
@@ -577,6 +588,22 @@ mod tests {
         assert!(directories.database_file().starts_with(&directories.data));
         assert!(directories.uploads().starts_with(&directories.data));
         assert!(directories.images().starts_with(&directories.cache));
+    }
+
+    #[test]
+    fn a_file_written_before_the_interface_had_a_folder_still_starts_the_server() {
+        let config = Config::parse(
+            r#"
+            port = 2100
+
+            [directories]
+            data = "/srv/melyxar/data"
+            cache = "/srv/melyxar/cache"
+            transcodes = "/srv/melyxar/cache/transcodes"
+        "#,
+        )
+        .expect("valid configuration");
+        assert_eq!(config.directories.interface, default_interface());
     }
 
     #[test]

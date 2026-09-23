@@ -75,13 +75,13 @@ async fn read(folder: &Path, requested: &str) -> Result<Response> {
         .into_response())
 }
 
-/// Turns what was asked for into a path inside the picture folder, or nothing.
+/// Turns what was asked for into a path inside a folder, or nothing.
 ///
 /// Every part has to be a plain name. That rules out walking upwards, starting
 /// from the root of the disk, and the Windows oddities, rather than trying to
 /// recognise the shapes an attacker might use: a list of forbidden shapes is
-/// always one shape short.
-fn safe_relative_path(requested: &str) -> Option<PathBuf> {
+/// always one shape short. The interface is read through it too.
+pub(crate) fn safe_relative_path(requested: &str) -> Option<PathBuf> {
     if requested.is_empty() || requested.contains('\0') {
         return None;
     }

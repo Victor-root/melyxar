@@ -720,6 +720,7 @@ mod tests {
                 data: directory.join("data"),
                 cache: directory.join("cache"),
                 transcodes: directory.join("cache/transcodes"),
+                ..Default::default()
             },
             ..Config::default()
         };
