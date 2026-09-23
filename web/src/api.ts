@@ -1206,6 +1206,43 @@ export interface Producing {
   speed: number;
 }
 
+/** One line of the activity journal. What it says beyond its columns is in
+ *  `details`, whose fields depend on `kind`. */
+export interface ActivityLine {
+  id: string;
+  at: string;
+  kind: string;
+  level: "information" | "attention" | "trouble";
+  user_id: string | null;
+  work_id: string | null;
+  /** What the browser said it was. */
+  device: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface ActivityPage {
+  lines: ActivityLine[];
+  /** Whether there are older lines than these. */
+  more: boolean;
+}
+
+/** The families the journal is read by. */
+export type ActivityFamily = "access" | "playback" | "library" | "server";
+
+/** One thing deserving a look. `point` says which; the rest depends on it,
+ *  a worry of the summary carrying its own `kind` and what it names. */
+export interface AttentionPoint {
+  point: "worry" | "refused_sign_ins" | "failed_tasks" | "falling_behind" | "unidentified";
+  state: "attention" | "trouble";
+  /** Whether marking it as seen quiets it. */
+  may_be_seen: boolean;
+  count?: number;
+  kind?: string;
+  label?: string;
+  mount?: string;
+  used?: number;
+}
+
 /** One film playing on one device, as the administration follows it. */
 export interface Watched {
   /** What a stop is asked of. */
@@ -1461,6 +1498,30 @@ export const api = {
     audio_track_id: string | null;
     subtitle_track_id: string | null;
   }) => post<{ remembered: boolean }>("/api/v1/playback/tracks", body),
+  /* The activity journal, newest first, of the families asked for or of all
+     of them, after the last line already shown when one is given. */
+  activity: (
+    families: ActivityFamily[],
+    before: string | null,
+    signal?: AbortSignal,
+    most?: number,
+  ) => {
+    const asked = new URLSearchParams();
+    if (families.length > 0) asked.set("families", families.join(","));
+    if (before) asked.set("before", before);
+    if (most) asked.set("most", String(most));
+    return get<ActivityPage>(`/api/v1/system/activity?${asked.toString()}`, signal);
+  },
+  activityKeptDays: (signal?: AbortSignal) =>
+    get<{ days: number }>("/api/v1/system/activity/kept", signal),
+  keepActivityDays: (days: number) =>
+    put<{ days: number }>("/api/v1/system/activity/kept", { days }),
+  /* What deserves a look, for the administrator asking. */
+  attention: (signal?: AbortSignal) =>
+    get<{ points: AttentionPoint[] }>("/api/v1/system/attention", signal),
+  /* Quiets every point that can be, and answers what is left. */
+  markAttentionSeen: () =>
+    post<{ points: AttentionPoint[] }>("/api/v1/system/attention/seen"),
   /* What is being watched right now, on every device, sent again by the
      server the moment it changes: listen for "playing", and "failed" when it
      could not be read. */

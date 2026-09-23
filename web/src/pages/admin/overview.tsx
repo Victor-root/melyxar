@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
-import type { Job, Library, Overview, Worry } from "../../api";
+import type { ActivityFamily, Job, Library, Overview } from "../../api";
 import { useAsked } from "../../asking";
 import { PageHead, Panel, Soon, Stat, StatePill } from "../../components/panel";
 import type { State } from "../../components/panel";
@@ -33,14 +33,22 @@ import {
 } from "../../icons";
 import type { IconProps } from "../../icons";
 import { useLibraries } from "../../libraries";
-import { howLongSince, howMany, outOfAHundred, percentOf, releaseOf } from "../../readable";
-import type { Wording } from "../../readable";
+import { howLongSince, howMany, outOfAHundred, releaseOf } from "../../readable";
 import { useRunning } from "../../running";
+import { useAttention } from "../../attention";
 import { useSettings } from "../../settings";
+import { sayPoint, sayWorry } from "./activity";
+import { ActivityLines, useActivity } from "./activity-list";
 import { useOverview } from "./layout";
 import { SystemPanel } from "./machine";
 import { MethodPill, PlayingStats, WatchedWords } from "./playback";
 import { useNowPlaying } from "./playing";
+
+/** Every family of the journal, for the lines of the summary. */
+const EVERY_FAMILY: ActivityFamily[] = [];
+
+/** How many of the latest lines the summary shows. */
+const RECENT_LINES = 6;
 
 /** How often the time the server has been up is written again. */
 const A_MINUTE_MS = 60_000;
@@ -174,21 +182,6 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
       </div>
     </section>
   );
-}
-
-/** One point that failed its check, said as what to go and look at. */
-function sayWorry(worry: Worry, t: Wording, language: string): string {
-  switch (worry.kind) {
-    case "folder_missing":
-      return t("admin.worry.folder_missing", { label: worry.label });
-    case "disk_nearly_full":
-      return t("admin.worry.disk_nearly_full", {
-        mount: worry.mount,
-        share: percentOf(worry.used, language),
-      });
-    default:
-      return t(`admin.worry.${worry.kind}`);
-  }
 }
 
 function Fact({
@@ -384,23 +377,43 @@ function TasksPanel() {
   );
 }
 
-/** What deserves a look, gathered from everywhere. */
+/** What deserves a look, gathered from everywhere, each leading to where it
+ *  is put right. The same points as the bell, and quieted with it. */
 function WatchPanel() {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
+  const { points, markSeen } = useAttention();
+  const shown = points ?? [];
+
   return (
-    <Panel icon={WarningIcon} title={t("admin.watch")} lead={t("admin.watch_lead")} soon>
+    <Panel icon={WarningIcon} title={t("admin.watch")} lead={t("admin.watch_lead")}>
+      {points !== null && shown.length === 0 && (
+        <p className="empty-line">{t("attention.none")}</p>
+      )}
       <div className="lines">
-        {["disk", "sign_in", "identify"].map((example) => (
-          <div className="line" key={example}>
-            <span className="line-mark state-attention" aria-hidden="true">
-              <WarningIcon size={18} />
-            </span>
-            <span className="line-words">
-              <span className="line-name">{t(`admin.watch_example.${example}`)}</span>
-            </span>
-          </div>
-        ))}
+        {shown.map((point, index) => {
+          const said = sayPoint(point, t, language);
+          return (
+            <Link className="line line-link" to={said.to} key={index}>
+              <span className={`line-mark state-${point.state}`} aria-hidden="true">
+                <WarningIcon size={18} />
+              </span>
+              <span className="line-words">
+                <span className="line-name">{said.title}</span>
+              </span>
+              <span className="line-end">
+                <ArrowRightIcon size={15} />
+              </span>
+            </Link>
+          );
+        })}
       </div>
+      {shown.some((point) => point.may_be_seen) && (
+        <div className="panel-foot">
+          <button className="button button-small" onClick={() => void markSeen()}>
+            {t("attention.mark_seen")}
+          </button>
+        </div>
+      )}
     </Panel>
   );
 }
@@ -435,25 +448,20 @@ function PeoplePanel({ overview }: { overview: Overview | null }) {
 /** What happened lately, across the whole server. */
 function RecentPanel() {
   const { t } = useSettings();
+  const { lines } = useActivity(EVERY_FAMILY, RECENT_LINES);
   return (
     <Panel
       icon={HistoryIcon}
       title={t("admin.recent")}
       lead={t("admin.recent_lead")}
-      soon
       className="panel-wide"
     >
-      <div className="lines">
-        {["sign_in", "scan", "started"].map((example) => (
-          <div className="line" key={example}>
-            <span className="line-mark" aria-hidden="true">
-              <HistoryIcon size={18} />
-            </span>
-            <span className="line-words">
-              <span className="line-name">{t(`admin.recent_example.${example}`)}</span>
-            </span>
-          </div>
-        ))}
+      <ActivityLines lines={lines} />
+      <div className="panel-foot">
+        <Link className="button button-small button-accent" to="/admin/journal">
+          {t("activity.see_journal")}
+          <ArrowRightIcon size={15} />
+        </Link>
       </div>
     </Panel>
   );
