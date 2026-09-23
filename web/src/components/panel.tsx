@@ -304,7 +304,12 @@ export function Picker<T extends string>({
   );
 }
 
-/** A number chosen along a line, with what it comes to said beside it. */
+/**
+ * A number chosen along a line, with what it comes to said beside it.
+ *
+ * Drawn like the sound of the player, a rail filled in the accent and a
+ * handle that stands up under a hand, because they are the same gesture.
+ */
 export function Slider({
   value,
   min,
@@ -325,21 +330,26 @@ export function Slider({
   shown: string;
   disabled?: boolean;
 }) {
-  // How far along the line is filled, for the part drawn in the accent.
-  const filled = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  // How far along the line the handle stands, as a bare share: the
+  // stylesheet works out where its middle really is, as the player does.
+  const share = max > min ? (value - min) / (max - min) : 0;
   return (
     <span className="slider">
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        aria-label={label}
-        style={{ ["--filled" as string]: `${filled}%` }}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
+      <span className="slider-rail" style={{ ["--share" as string]: `${share}` }}>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          disabled={disabled}
+          aria-label={label}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+        <span className="slider-said" aria-hidden="true">
+          {shown}
+        </span>
+      </span>
       <span className="slider-value">{shown}</span>
     </span>
   );

@@ -9,7 +9,7 @@
  */
 
 import { PageHead, Panel, Picker, Setting, Slider } from "../../components/panel";
-import { PlayIcon, SubtitlesIcon, TranscodeIcon } from "../../icons";
+import { LanguagesIcon, SoundIcon, SubtitlesIcon } from "../../icons";
 import { languageName } from "../../languages";
 import {
   appearanceClasses,
@@ -41,7 +41,7 @@ export function MyPlayback() {
 
       {kept && (
         <div className="panels">
-          <Panel icon={TranscodeIcon} title={t("settings.sound")} lead={t("settings.sound_why")}>
+          <Panel icon={SoundIcon} title={t("settings.sound")} lead={t("settings.sound_why")}>
             <Setting
               label={t("settings.downmix")}
               why={t(`downmix.${kept.downmix_method}_why`)}
@@ -66,7 +66,7 @@ export function MyPlayback() {
             </Setting>
           </Panel>
 
-          <Panel icon={PlayIcon} title={t("settings.languages")} lead={t("settings.languages_why")}>
+          <Panel icon={LanguagesIcon} title={t("settings.languages")} lead={t("settings.languages_why")}>
             <Setting label={t("work.audio")}>
               <Picker
                 label={t("work.audio")}

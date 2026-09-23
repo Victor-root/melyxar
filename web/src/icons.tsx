@@ -638,11 +638,23 @@ export function PlaybackIcon(props: IconProps) {
   );
 }
 
-/** Two arrows passing each other, for a film made into another. */
-export function TranscodeIcon(props: IconProps) {
+/** A speaker, and a double arrow for the channels its sound is spread
+ *  across. */
+export function SoundIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M4.4 8.6h14l-3.4-3.4M19.6 15.4h-14l3.4 3.4" />
+      <path d="M3.4 9.6h2.8l4.4-3.8v12.4l-4.4-3.8H3.4Z" />
+      <path d="M14.2 12h6.8M16.4 9.8 14.2 12l2.2 2.2M18.8 9.8 21 12l-2.2 2.2" />
+    </Icon>
+  );
+}
+
+/** A character beside a letter, for what is said in which language. */
+export function LanguagesIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 5h7M9 3v2c0 4.4-2.2 8-5 8M5 9c0 2.1 3 3.9 6.7 4" />
+      <path d="M12 20l4-9 4 9M19.1 18h-6.2" />
     </Icon>
   );
 }
