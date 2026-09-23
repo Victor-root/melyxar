@@ -191,6 +191,8 @@ export interface Library {
       Changing it asks the provider about every film again. */
   metadata_language: string;
   roots: Root[];
+  /** How many of its files were taken out of it and left on the disk. */
+  set_aside: number;
 }
 
 /**
@@ -203,6 +205,16 @@ export interface Library {
 export interface WouldGo {
   works: number;
   files: number;
+}
+
+/** What deleting a work would take with it. */
+export interface Deletion {
+  /** The work and everything under it. */
+  works: number;
+  /** Every file of it on the disk, copies first, by its whole path. */
+  files: { path: string; role: "copy" | "subtitle" | "extra" }[];
+  /** Whether this account may delete off the disk as well. */
+  may_delete_from_disk: boolean;
 }
 
 /** One folder of the server's disk, as the picker shows it. */
@@ -1189,6 +1201,12 @@ export const api = {
   whatRemovingTakes: (library: string, signal?: AbortSignal) =>
     get<WouldGo>(`/api/v1/libraries/${library}/removal`, signal),
   removeLibrary: (library: string) => remove<WouldGo>(`/api/v1/libraries/${library}`),
+  takeBackSetAside: (library: string) =>
+    remove<{ files: number }>(`/api/v1/libraries/${library}/set-aside`),
+  whatDeletingTakes: (work: string, signal?: AbortSignal) =>
+    get<Deletion>(`/api/v1/works/${work}/deletion`, signal),
+  deleteWork: (work: string, fromDisk: boolean) =>
+    remove<WouldGo>(`/api/v1/works/${work}?from_disk=${fromDisk}`),
   whatRemovingAFolderTakes: (library: string, root: string, signal?: AbortSignal) =>
     get<WouldGo>(`/api/v1/libraries/${library}/roots/${root}/removal`, signal),
   removeRoot: (library: string, root: string) =>

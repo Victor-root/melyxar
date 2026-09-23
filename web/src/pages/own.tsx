@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Child, Work } from "../api";
 import { WayBackUp } from "../components/ancestry";
+import { DeleteButton } from "../components/deletion";
 import { useShownPicture } from "../components/picture";
 import { ChevronLeftIcon, ChevronRightIcon, HomeMediaIcon } from "../icons";
 import { howMany } from "../readable";
@@ -19,6 +20,7 @@ import { useSettings } from "../settings";
 /** A folder of one's own: its folders first, then its videos and photos. */
 export function FolderView({ work }: { work: Work }) {
   const { t } = useSettings();
+  const navigate = useNavigate();
 
   return (
     <main className="page own-folder">
@@ -26,6 +28,7 @@ export function FolderView({ work }: { work: Work }) {
       <div className="section-head">
         <h1>{work.title}</h1>
         <span className="count">{howMany(work.children.length, "own.item_count", t)}</span>
+        <DeleteButton workId={work.id} title={work.title} onDeleted={() => navigate(-1)} />
       </div>
       {work.children.length === 0 ? (
         <p className="notice">{t("own.empty")}</p>
@@ -102,6 +105,10 @@ export function PhotoView({ work }: { work: Work }) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // Not while a panel is open over the photo: its arrows are its own.
+      if (event.target instanceof Element && event.target.closest("[role=dialog]")) {
+        return;
+      }
       const towards = event.key === "ArrowLeft" ? previous : event.key === "ArrowRight" ? next : null;
       if (towards) {
         navigate(`/work/${towards}`, { replace: true });
@@ -116,6 +123,20 @@ export function PhotoView({ work }: { work: Work }) {
       <div className="own-photo-head">
         <WayBackUp work={work} />
         <h1 className="own-photo-title">{work.title}</h1>
+        {/* Gone, the photo gives way to the one after it, or the one before,
+            and to its folder when it was the last. */}
+        <DeleteButton
+          workId={work.id}
+          title={work.title}
+          onDeleted={() => {
+            const instead = next ?? previous;
+            if (instead) {
+              navigate(`/work/${instead}`, { replace: true });
+            } else {
+              navigate(-1);
+            }
+          }}
+        />
       </div>
       <div className="own-photo-stage">
         {missing ? (

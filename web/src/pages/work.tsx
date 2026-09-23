@@ -13,6 +13,7 @@ import { api } from "../api";
 import type { Child, Credit, Version, Work } from "../api";
 import { useTold } from "../asking";
 import { WayBackUp } from "../components/ancestry";
+import { DeleteButton } from "../components/deletion";
 import { IdentifyDialog } from "../components/identify";
 import {
   howMany,
@@ -235,6 +236,8 @@ export function WorkPage() {
               )}
             </>
           )}
+
+          {id && <DeleteButton workId={id} title={work.title} onDeleted={() => navigate(-1)} />}
 
           {!holdsOthers && (
           <div className="work-actions">

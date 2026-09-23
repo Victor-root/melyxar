@@ -71,6 +71,7 @@ export function CardMenu({
   openedBy,
   onIdentify,
   onEditImages,
+  onDelete,
   onClose,
 }: {
   card: Card;
@@ -89,6 +90,9 @@ export function CardMenu({
   /** Opens the panel that chooses the pictures this work wears, for the same
       reason as the one above. */
   onEditImages: () => void;
+  /** Opens the question put before this work is deleted, for the same
+      reason again. */
+  onDelete: () => void;
   onClose: () => void;
 }) {
   const { t } = useSettings();
@@ -241,7 +245,7 @@ export function CardMenu({
       key: "delete",
       mark: <DeleteIcon size={SHAPE} />,
       allowed: account?.may_delete === true,
-      later: true,
+      act: onDelete,
     },
   ];
 
