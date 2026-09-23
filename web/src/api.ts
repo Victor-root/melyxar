@@ -1355,7 +1355,7 @@ export const api = {
   /* Changing it signs every other device out and keeps this one going. */
   /* The picture of the account signed in, sent as the file chosen. Both
      answer the account as it now is. */
-  setAvatar: (image: File) => put<Account>("/api/v1/me/avatar", image),
+  setAvatar: (image: Blob) => put<Account>("/api/v1/me/avatar", image),
   removeAvatar: () => remove<Account>("/api/v1/me/avatar"),
   changePassword: (current: string, wanted: string) =>
     put<Account>("/api/v1/me/password", { current, wanted }),

@@ -535,14 +535,14 @@
  * on being chosen read as two different things rather than as the same one
  * twice. What the press changes is the screen, not the face.
  *
- * Rounded further than a card of the library is. Those are pictures, where a
- * large radius eats the corners of what is drawn; this is a plain tile, and
- * at a hundred points a soft corner is what tells it from a button.
+ * Square with the corners of a card of the library, the way Emby draws its
+ * accounts: it holds the picture somebody chose, and a large radius eats the
+ * corners of a picture.
  */
 .door-who-face {
   width: var(--door-tile);
   height: var(--door-tile);
-  border-radius: 24px;
+  border-radius: var(--radius-card);
   background: linear-gradient(150deg, var(--accent-bright), var(--accent-dim));
   color: var(--accent-contrast);
   font-size: 38px;
@@ -684,7 +684,7 @@
   flex: 0 0 auto;
   width: 88px;
   height: 88px;
-  border-radius: 22px;
+  border-radius: var(--radius-card);
   background: linear-gradient(150deg, var(--accent-bright), var(--accent-dim));
   color: var(--accent-contrast);
   font-size: 34px;

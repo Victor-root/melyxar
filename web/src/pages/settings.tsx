@@ -13,7 +13,7 @@
  * saving.
  */
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   appearanceClasses,
   BACKGROUNDS,
@@ -38,6 +38,7 @@ import { useAccount } from "../account";
 import { api } from "../api";
 import type { Account } from "../api";
 import { refusalAbout, useTold } from "../asking";
+import { Cropper } from "../components/cropper";
 import { Face } from "../components/face";
 
 export function SettingsPage() {
@@ -368,14 +369,14 @@ function TheDoor({
 /**
  * The picture this account wears, in the header and on the sign in screen.
  *
- * Chosen from the files of the device in hand and sent as it is: the server
- * turns it the right way up and cuts it square, so nothing is asked of
- * anybody beyond picking a photo.
+ * Chosen from the files of the device in hand, then framed by hand: pulled
+ * around and brought closer inside the square it will be shown in.
  */
 function ProfilePicture() {
   const { t } = useSettings();
   const { account, cameIn } = useAccount();
   const chooser = useRef<HTMLInputElement>(null);
+  const [framing, setFraming] = useState<File | null>(null);
   // The account answered is the one every screen then draws from.
   const told = useTold(async (change: () => Promise<Account>) => cameIn(await change()));
 
@@ -400,7 +401,7 @@ function ProfilePicture() {
             // Emptied, so choosing the same file again is still a choice.
             event.target.value = "";
             if (image) {
-              told.tell(() => api.setAvatar(image));
+              setFraming(image);
             }
           }}
         />
@@ -430,6 +431,16 @@ function ProfilePicture() {
               : refusalAbout(refused, "avatar"),
           )}
         </p>
+      )}
+      {framing && (
+        <Cropper
+          image={framing}
+          onClose={() => setFraming(null)}
+          onFramed={(square) => {
+            setFraming(null);
+            told.tell(() => api.setAvatar(square));
+          }}
+        />
       )}
     </section>
   );

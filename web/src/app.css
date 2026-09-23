@@ -481,10 +481,55 @@
   object-fit: cover;
 }
 
+/* Square with barely rounded corners, the way the picture is shown
+   everywhere but in the header, where it stays a round beside the name. */
 .avatar-large {
-  width: 72px;
-  height: 72px;
-  font-size: 26px;
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-card);
+  font-size: 30px;
+}
+
+.cropper {
+  display: grid;
+  justify-items: center;
+  gap: var(--gap);
+}
+
+/* The square the picture will be. Pulled by a finger as well as a mouse, so
+   the page is told not to scroll under it. */
+.cropper-frame {
+  position: relative;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: var(--surface-deep);
+  box-shadow: 0 0 0 1px var(--border-strong);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.cropper-frame:active {
+  cursor: grabbing;
+}
+
+.cropper-frame img {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+}
+
+.cropper-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  width: min(260px, 100%);
+}
+
+.cropper-zoom input {
+  flex: 1;
+  accent-color: var(--accent);
 }
 
 .avatar-choice {
