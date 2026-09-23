@@ -44,6 +44,8 @@ import { useAccount } from "../account";
 import { KINDS } from "../libraries";
 import { useSettings } from "../settings";
 import { Face } from "./face";
+import { headroomAt } from "../headroom";
+import type { Headroom } from "../headroom";
 import {
   ActivityIcon,
   BackIcon,
@@ -115,8 +117,15 @@ function categoriesOf(libraries: Library[]): Category[] {
   })).filter((category) => category.libraries.length > 0);
 }
 
-export function Header({ libraries }: { libraries: Library[] }) {
-  const { t } = useSettings();
+export function Header({
+  libraries,
+  scrolling,
+}: {
+  libraries: Library[];
+  /** The box the page scrolls in, which is what the bar steps aside for. */
+  scrolling: React.RefObject<HTMLDivElement | null>;
+}) {
+  const { t, headerHides } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
   const [parameters] = useSearchParams();
@@ -127,6 +136,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
      carries a search: landing on a page of results with the words hidden
      inside an icon is a page answering a question nobody can see. */
   const [looking, setLooking] = useState(() => (parameters.get("search") ?? "") !== "");
+  const out = useHeadroom(scrolling, headerHides);
   const field = useRef<HTMLInputElement>(null);
   const searchForm = useRef<HTMLFormElement>(null);
   const { jobs } = useRunning();
@@ -305,7 +315,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
   const administrator = account?.is_administrator === true;
 
   return (
-    <header className="header">
+    <header className={`header${out || looking ? "" : " header-away"}`}>
       <div className="header-inner">
         <div className="header-piece header-start">
           {/* Off the front page only: there is nowhere to come back from
@@ -805,3 +815,46 @@ function Dropdown({
  * apart at the size this is drawn.
  */
 
+/**
+ * Whether the bar is out, as the page is scrolled, for an account that asked
+ * it to step aside; always, for one that did not.
+ *
+ * Read once a frame at most, whatever the wheel sends: the page can report
+ * its place many times between two frames, and only the last one is drawn.
+ */
+function useHeadroom(
+  scrolling: React.RefObject<HTMLDivElement | null>,
+  stepsAside: boolean,
+): boolean {
+  const [out, setOut] = useState(true);
+
+  useEffect(() => {
+    const box = scrolling.current;
+    if (!stepsAside || !box) {
+      setOut(true);
+      return;
+    }
+    // Where the top of the page ends: while the bar still stands over the
+    // first of it, it stays.
+    const top = parseFloat(getComputedStyle(box).getPropertyValue("--header-height")) || 0;
+    let bar: Headroom = { shown: true, turnedAt: box.scrollTop };
+    let asked = 0;
+    const read = () => {
+      asked = 0;
+      bar = headroomAt(bar, box.scrollTop, top);
+      setOut(bar.shown);
+    };
+    const soon = () => {
+      if (!asked) {
+        asked = requestAnimationFrame(read);
+      }
+    };
+    box.addEventListener("scroll", soon, { passive: true });
+    return () => {
+      box.removeEventListener("scroll", soon);
+      cancelAnimationFrame(asked);
+    };
+  }, [scrolling, stepsAside]);
+
+  return out;
+}

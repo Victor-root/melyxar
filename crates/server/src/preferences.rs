@@ -54,6 +54,8 @@ struct PreferencesView {
     banner_at_random: bool,
     /// Whether it takes the whole window, the height then deciding nothing.
     banner_fills_the_screen: bool,
+    /// Whether the bar at the top slides away while a page is read down.
+    header_hides_on_scroll: bool,
     /// Whether this account is left off the list the sign in screen offers.
     hidden_at_the_door: bool,
     /// Every kind of library, in the order the home page lays them out.
@@ -93,6 +95,8 @@ struct PreferencesBody {
     banner_at_random: Option<bool>,
     #[serde(default)]
     banner_fills_the_screen: Option<bool>,
+    #[serde(default)]
+    header_hides_on_scroll: Option<bool>,
     #[serde(default)]
     hidden_at_the_door: Option<bool>,
     #[serde(default)]
@@ -168,6 +172,9 @@ async fn write(
     if let Some(fills) = body.banner_fills_the_screen {
         chosen.banner_fills_the_screen = fills;
     }
+    if let Some(hides) = body.header_hides_on_scroll {
+        chosen.header_hides_on_scroll = hides;
+    }
     if let Some(hidden) = body.hidden_at_the_door {
         chosen.hidden_at_the_door = hidden;
     }
@@ -210,6 +217,7 @@ async fn view(state: &AppState, chosen: Preferences) -> Result<Json<PreferencesV
         banner_cut: chosen.banner_cut,
         banner_at_random: chosen.banner_at_random,
         banner_fills_the_screen: chosen.banner_fills_the_screen,
+        header_hides_on_scroll: chosen.header_hides_on_scroll,
         hidden_at_the_door: chosen.hidden_at_the_door,
         home_order: chosen.home_order.iter().map(|kind| kind.as_str()).collect(),
         downmix_methods: DownmixMethod::every()
