@@ -69,7 +69,7 @@ pub enum Worry {
     /// A folder of a library is not where it was.
     FolderMissing { label: String },
     /// A disk the server uses is nearly full.
-    DiskNearlyFull { folder: String, used: f64 },
+    DiskNearlyFull { mount: String, used: f64 },
 }
 
 /// Whether a tool is still a file this server may run.
@@ -136,13 +136,9 @@ pub async fn collect(state: &AppState) -> Result<Overview> {
             .map(|label| Worry::FolderMissing { label }),
     );
     worries.extend(measuring.disks().into_iter().filter_map(|disk| {
-        let used = 1.0 - disk.available_bytes as f64 / disk.total_bytes.max(1) as f64;
-        (disk.total_bytes > 0 && used >= NEARLY_FULL).then(|| Worry::DiskNearlyFull {
-            folder: disk
-                .folders
-                .first()
-                .map(|folder| folder.display().to_string())
-                .unwrap_or_default(),
+        let used = disk.used();
+        (disk.total_bytes > 0 && used >= NEARLY_FULL).then_some(Worry::DiskNearlyFull {
+            mount: disk.mount,
             used,
         })
     }));

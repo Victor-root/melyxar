@@ -1818,17 +1818,18 @@
   transform: translateX(calc(-100% - 8px));
 }
 
-/* A disk each, how full it is: past four fifths it asks for a look, past
-   nine tenths it is in trouble. */
-.disk-meters {
+/* A bar in place of a curve, set on the floor the curves stand on. */
+.gauge-meter {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  gap: 6px;
   height: 44px;
   margin-top: 6px;
+  padding-bottom: 4px;
 }
 
+/* How full something is: past four fifths it asks for an eye, past nine
+   tenths for a look. */
 .meter-fill-attention {
   background: var(--attention);
   box-shadow: none;
@@ -1837,6 +1838,66 @@
 .meter-fill-trouble {
   background: var(--trouble);
   box-shadow: none;
+}
+
+/* Every disk under the figures, a line each: its name and what it holds, how
+   full it is, and what room is left. */
+.disks {
+  container-type: inline-size;
+  margin-top: calc(var(--gap) * 1.5);
+}
+
+.disks-title {
+  margin: 0 0 4px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.disk-line .line-words {
+  flex: 0 1 220px;
+}
+
+.disk-line-meter {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.disk-line-figures {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 150px;
+  font-variant-numeric: tabular-nums;
+}
+
+.disk-line-figures .line-figure {
+  font-size: 14px;
+}
+
+/* Too narrow for the bar between the words and the figures: it goes under
+   both, the whole width. */
+@container (max-width: 520px) {
+  .disk-line {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .disk-line .line-words {
+    flex: 1 1 0;
+  }
+
+  .disk-line-meter {
+    flex-basis: 100%;
+    order: 1;
+  }
+
+  .disk-line-figures {
+    min-width: 0;
+  }
 }
 
 .network-figures {

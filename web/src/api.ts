@@ -792,7 +792,7 @@ export type Worry =
   | { kind: "media_tools_missing" }
   | { kind: "card_unreachable" }
   | { kind: "folder_missing"; label: string }
-  | { kind: "disk_nearly_full"; folder: string; used: number };
+  | { kind: "disk_nearly_full"; mount: string; used: number };
 
 /** What the machine spent over one stretch of time. */
 export interface MeasurePoint {
@@ -816,7 +816,18 @@ export interface LiveMeasures {
   machine: { processor: string | null; threads: number };
   /** The last ten minutes, a point every two seconds. */
   recent: MeasurePoint[];
-  disks: { folders: string[]; total_bytes: number; available_bytes: number }[];
+  disks: MeasuredDisk[];
+}
+
+/** One disk, by where it is mounted and by what it holds. */
+export interface MeasuredDisk {
+  mount: string;
+  /** The libraries with a folder on it, by name. */
+  libraries: string[];
+  /** Whether the server keeps its own data, cache or conversions on it. */
+  holds_the_server: boolean;
+  total_bytes: number;
+  available_bytes: number;
 }
 
 /** How far back the curves reach. */

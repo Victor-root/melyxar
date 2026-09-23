@@ -180,7 +180,7 @@ function sayWorry(worry: Worry, t: Wording, language: string): string {
       return t("admin.worry.folder_missing", { label: worry.label });
     case "disk_nearly_full":
       return t("admin.worry.disk_nearly_full", {
-        folder: worry.folder,
+        mount: worry.mount,
         share: percentOf(worry.used, language),
       });
     default:
