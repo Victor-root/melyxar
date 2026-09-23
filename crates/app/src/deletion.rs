@@ -98,7 +98,7 @@ pub async fn delete(
     who: &User,
     work_ids: &[WorkId],
     from_the_disk: bool,
-) -> Result<Removed> {
+) -> Result<Deleted> {
     let going = what_deleting_takes(state, who, work_ids).await?;
     may_delete(who, from_the_disk)?;
     for &library_id in &going.library_ids {
@@ -107,9 +107,10 @@ pub async fn delete(
         }
     }
 
-    if from_the_disk {
-        delete_off_the_disk(&going.files).await?;
-    }
+    let off_the_disk = match from_the_disk {
+        true => Some(delete_off_the_disk(&going.files).await?),
+        false => None,
+    };
 
     let database = state.database();
     let removed = database.delete_works(work_ids, !from_the_disk).await?;
@@ -129,7 +130,19 @@ pub async fn delete(
         thumbnail_sheets_deleted = sheets,
         "works were deleted"
     );
-    Ok(removed)
+    Ok(Deleted {
+        removed,
+        off_the_disk,
+    })
+}
+
+/// What a deletion did.
+#[derive(Debug)]
+pub struct Deleted {
+    pub removed: Removed,
+    /// How many files were found gone from the disk once it was done, when
+    /// the disk was asked to lose them.
+    pub off_the_disk: Option<usize>,
 }
 
 /// Whether this account may delete, and off the disk when that is asked.
@@ -160,8 +173,9 @@ pub async fn disks_take_writes(files: &[FileOfAWork]) -> bool {
     .unwrap_or(false)
 }
 
-/// Deletes these files, then every folder that deleting them emptied.
-async fn delete_off_the_disk(files: &[FileOfAWork]) -> Result<()> {
+/// Deletes these files, then every folder that deleting them emptied, and
+/// answers how many are now gone from the disk.
+async fn delete_off_the_disk(files: &[FileOfAWork]) -> Result<usize> {
     // Every disk is asked first, so that one that cannot be written to
     // refuses the whole deletion before a single file has gone.
     if !disks_take_writes(files).await {
@@ -169,26 +183,36 @@ async fn delete_off_the_disk(files: &[FileOfAWork]) -> Result<()> {
     }
 
     let files = files.to_vec();
-    let resisted = tokio::task::spawn_blocking(move || delete_every_one(&files))
+    let tally = tokio::task::spawn_blocking(move || delete_every_one(&files))
         .await
-        .unwrap_or(1);
-    match resisted {
-        0 => Ok(()),
+        .unwrap_or(Tally { gone: 0, resisted: 1 });
+    match tally.resisted {
+        0 => Ok(tally.gone),
         _ => Err(Trouble::Refused(Refused::FilesResisted)),
     }
 }
 
-/// Deletes each file, and answers how many could not be deleted. A file
-/// already gone is not one of them.
-fn delete_every_one(files: &[FileOfAWork]) -> usize {
-    let mut resisted = 0;
+/// What became of the files a deletion was asked to take off the disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Tally {
+    /// Looked for once it was done, and not found.
+    gone: usize,
+    /// Still there, or never touched.
+    resisted: usize,
+}
+
+/// Deletes each file, then looks for it again: a file counts as gone only
+/// once the disk no longer has it, whatever the deletion answered. A file
+/// already gone before is gone.
+fn delete_every_one(files: &[FileOfAWork]) -> Tally {
+    let mut tally = Tally { gone: 0, resisted: 0 };
     for file in files {
         if !stays_inside(&file.relative_path) {
             tracing::warn!(
                 file = %file.relative_path.display(),
                 "a file named outside the folder of its library was left alone"
             );
-            resisted += 1;
+            tally.resisted += 1;
             continue;
         }
         let path = file.path();
@@ -200,11 +224,17 @@ fn delete_every_one(files: &[FileOfAWork]) -> usize {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => {
                 tracing::warn!(file = %path.display(), %error, "a file could not be deleted");
-                resisted += 1;
+            }
+        }
+        match std::fs::symlink_metadata(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => tally.gone += 1,
+            _ => {
+                tracing::warn!(file = %path.display(), "a file is still on the disk after its deletion");
+                tally.resisted += 1;
             }
         }
     }
-    resisted
+    tally
 }
 
 /// Whether a path under the folder of a library stays under it: nothing but
@@ -262,10 +292,14 @@ mod tests {
             role: melyxar_database::deletion::FileRole::Copy,
         };
 
-        assert_eq!(delete_every_one(&[file("e1.mkv")]), 0);
+        assert_eq!(delete_every_one(&[file("e1.mkv")]), Tally { gone: 1, resisted: 0 });
         assert!(season.exists(), "a folder still holding a file stays");
 
-        assert_eq!(delete_every_one(&[file("e2.mkv"), file("gone.mkv")]), 0);
+        assert_eq!(
+            delete_every_one(&[file("e2.mkv"), file("gone.mkv")]),
+            Tally { gone: 2, resisted: 0 },
+            "a file already gone is gone"
+        );
         assert!(!season.exists(), "the season it emptied goes");
         assert!(
             root.join("Signal").exists(),
