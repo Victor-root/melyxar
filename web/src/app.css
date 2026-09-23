@@ -880,8 +880,11 @@
 /* The band sits almost against the foot of the banner: the two are read as
    one block, here is what you were watching and here is where to go next.
    The bar's room is not kept here either, since the banner above already
-   ran the whole way up behind it. */
-.page-home {
+   ran the whole way up behind it. Without a banner, turned off or with
+   nothing complete enough to stand in it, the page keeps the room every
+   other page keeps, or the band would start under the bar. */
+.hero + .page-home,
+.page-home:has(> .skeleton-hero) {
   padding-top: var(--gap-tight);
 }
 
