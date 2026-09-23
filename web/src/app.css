@@ -459,7 +459,9 @@
   flex: 0 0 auto;
   width: 34px;
   height: 34px;
-  border-radius: 50%;
+  /* Square like everywhere else it is shown, its corners rounded in step
+     with how small it is here. */
+  border-radius: 7px;
   background: var(--accent);
   color: var(--accent-contrast);
   font-size: 13px;
@@ -467,8 +469,8 @@
   letter-spacing: 0.02em;
 }
 
-/* A picture of somebody in place of their initials: the round or rounded
-   frame it sits in stays the frame, and the picture fills it. */
+/* A picture of somebody in place of their initials: the frame it sits in
+   stays the frame, and the picture fills it. */
 .face-picture {
   overflow: hidden;
   background: var(--surface-raised);
@@ -482,7 +484,7 @@
 }
 
 /* Square with barely rounded corners, the way the picture is shown
-   everywhere but in the header, where it stays a round beside the name. */
+   everywhere. */
 .avatar-large {
   width: 88px;
   height: 88px;
