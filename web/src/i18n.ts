@@ -467,6 +467,26 @@ const en: Dictionary = {
   "refused.library.name_needed": "A library needs a name.",
   "refused.library.name_too_long": "That name is too long to sit in a menu.",
   "refused.library.name_taken": "A library of that name is already here.",
+  "refused.deletion.something_is_running":
+    "Something is at work on this library. Wait for it to end, or stop it from the Activity page, and ask again.",
+  "refused.deletion.disk_not_writable":
+    "The disk holding these files cannot be written to, so nothing was deleted.",
+  "refused.deletion.files_resisted":
+    "Some files could not be deleted off the disk. It stays in the library, and the next scan will see what is really gone.",
+  "delete.title": "Delete {title}",
+  "delete.what_goes": "Takes {count} items out of the library, with what was watched of them.",
+  "delete.what_goes_one": "Takes it out of the library, with what was watched of it.",
+  "delete.library_only": "Only from the library",
+  "delete.library_only_why": "The files stay on the disk, and the next scan leaves them where they are.",
+  "delete.from_disk": "From the library and the disk",
+  "delete.from_disk_why": "These files are deleted for good:",
+  "delete.no_file": "No file of it is on the disk at the moment.",
+  "delete.more_files": "and {count} more",
+  "delete.confirm": "Delete",
+  "delete.busy": "Deleting...",
+  "library.set_aside": "{count} files taken out of this library stay on the disk.",
+  "library.set_aside_one": "1 file taken out of this library stays on the disk.",
+  "library.take_back": "Take them back at the next scan",
   "refused.library.something_is_running":
     "Something is at work on this library. Wait for it to end, or stop it from the Activity page, and ask again.",
   "refused.library.unknown_kind": "This server has no library of that kind.",
@@ -1155,6 +1175,26 @@ const fr: Dictionary = {
   "refused.library.name_needed": "Une bibliothèque a besoin d'un nom.",
   "refused.library.name_too_long": "Ce nom est trop long pour tenir dans un menu.",
   "refused.library.name_taken": "Une bibliothèque porte déjà ce nom.",
+  "refused.deletion.something_is_running":
+    "Quelque chose travaille sur cette bibliothèque. Attendez la fin, ou arrêtez-le depuis la page Activité, puis redemandez.",
+  "refused.deletion.disk_not_writable":
+    "Le disque qui porte ces fichiers n'accepte pas l'écriture, rien n'a donc été supprimé.",
+  "refused.deletion.files_resisted":
+    "Certains fichiers n'ont pas pu être supprimés du disque. L'élément reste dans la médiathèque, et le prochain scan verra ce qui a vraiment disparu.",
+  "delete.title": "Supprimer {title}",
+  "delete.what_goes": "Retire {count} éléments de la médiathèque, avec ce qui en a été vu.",
+  "delete.what_goes_one": "Le retire de la médiathèque, avec ce qui en a été vu.",
+  "delete.library_only": "De la médiathèque seulement",
+  "delete.library_only_why": "Les fichiers restent sur le disque, et le prochain scan les laisse où ils sont.",
+  "delete.from_disk": "De la médiathèque et du disque",
+  "delete.from_disk_why": "Ces fichiers sont supprimés pour de bon :",
+  "delete.no_file": "Aucun de ses fichiers n'est sur le disque en ce moment.",
+  "delete.more_files": "et {count} de plus",
+  "delete.confirm": "Supprimer",
+  "delete.busy": "Suppression...",
+  "library.set_aside": "{count} fichiers retirés de cette bibliothèque restent sur le disque.",
+  "library.set_aside_one": "1 fichier retiré de cette bibliothèque reste sur le disque.",
+  "library.take_back": "Les reprendre au prochain scan",
   "refused.library.something_is_running":
     "Quelque chose travaille sur cette bibliothèque. Attendez la fin, ou arrêtez-le depuis la page Activité, puis redemandez.",
   "refused.library.unknown_kind": "Ce serveur n'a pas de bibliothèque de ce type.",

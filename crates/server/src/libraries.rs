@@ -44,6 +44,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/libraries/{id}/roots/{root}/removal",
             axum::routing::get(what_removing_a_folder_takes),
         )
+        .route(
+            "/api/v1/libraries/{id}/set-aside",
+            axum::routing::delete(take_back_set_aside),
+        )
 }
 
 #[derive(Debug, Deserialize)]
@@ -326,6 +330,24 @@ async fn remove(
             .await?
             .into(),
     ))
+}
+
+#[derive(Debug, Serialize)]
+struct TakenBackView {
+    /// How many files the next scan will find again.
+    files: u64,
+}
+
+/// Forgets that files were taken out of a library, so its next scan finds
+/// them again.
+async fn take_back_set_aside(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    UrlPath(id): UrlPath<String>,
+) -> Result<Json<TakenBackView>> {
+    Ok(Json(TakenBackView {
+        files: melyxar_app::libraries::take_back_set_aside(&state, library_id(&id)?).await?,
+    }))
 }
 
 /// Takes one folder away from a library. No file on the disk is touched.

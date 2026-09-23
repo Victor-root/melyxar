@@ -334,6 +334,22 @@ pub async fn remove_root(
     Ok(went)
 }
 
+/// Forgets that files of this library were taken out of it, so the next scan
+/// finds them again. Answers how many there were.
+pub async fn take_back_set_aside(state: &AppState, library_id: LibraryId) -> Result<u64> {
+    let library = library_by_id(state, library_id).await?;
+    let taken_back = state.database().take_back_set_aside(library_id).await?;
+    if taken_back > 0 {
+        state.database().bump_library_version(library_id).await?;
+        tracing::info!(
+            library = library.name,
+            files = taken_back,
+            "files taken out of a library will be found again by its next scan"
+        );
+    }
+    Ok(taken_back)
+}
+
 /// Says what a removal took with it, in the one shape both removals use.
 ///
 /// A library and one of its folders leave behind the same nine counts, and a
@@ -366,13 +382,24 @@ fn tell_what_went(
 /// Refuses while this library has work under way.
 ///
 /// Taking a library out from under a scan makes it fail, and a job that fails
-/// for a reason nobody can read is worse than a button that waits. Every kind
-/// of work this server does to a library is asked about, rather than the scan
-/// alone: the readings of the upkeep are just as much in the middle of it.
+/// for a reason nobody can read is worse than a button that waits.
 async fn refuse_while_something_is_running_on(
     state: &AppState,
     library_id: LibraryId,
 ) -> Result<()> {
+    match something_is_running_on(state, library_id).await? {
+        true => Err(Trouble::Refused(Refused::SomethingIsRunning)),
+        false => Ok(()),
+    }
+}
+
+/// Whether this library has work under way. Every kind of work this server
+/// does to a library is asked about, rather than the scan alone: the readings
+/// of the upkeep are just as much in the middle of it.
+pub(crate) async fn something_is_running_on(
+    state: &AppState,
+    library_id: LibraryId,
+) -> std::result::Result<bool, melyxar_database::DatabaseError> {
     let target = library_id.to_string();
     for kind in [
         melyxar_core::job::JobKind::ScanLibrary,
@@ -385,10 +412,10 @@ async fn refuse_while_something_is_running_on(
             .has_unfinished_job(kind, Some(&target))
             .await?
         {
-            return Err(Trouble::Refused(Refused::SomethingIsRunning));
+            return Ok(true);
         }
     }
-    Ok(())
+    Ok(false)
 }
 
 /// Throws away the sheets of thumbnails of files that are no longer known.
@@ -432,7 +459,7 @@ pub(crate) async fn forget_the_thumbnails_of(state: &AppState, sources: &[MediaS
 /// empty folders.
 ///
 /// Never a failure of the removal, for the same reason as the sheets above.
-async fn forget_the_pictures(state: &AppState, paths: &[String]) -> usize {
+pub(crate) async fn forget_the_pictures(state: &AppState, paths: &[String]) -> usize {
     let root = state.config().directories.images();
     let mut gone = 0;
     let mut folders: Vec<std::path::PathBuf> = Vec::new();

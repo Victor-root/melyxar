@@ -13,6 +13,7 @@ pub mod bench;
 pub mod calibration;
 pub mod catalogue;
 pub mod counted;
+pub mod deletion;
 pub mod detail;
 pub mod diagnostics;
 pub mod episodes;

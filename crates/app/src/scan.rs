@@ -466,7 +466,14 @@ async fn record_changes(
         .map(|source| (source.relative_path.as_path(), source))
         .collect();
 
-    for file in &changes.added {
+    // What somebody took out of the library and left on the disk is walked
+    // past: they said they do not want it here.
+    let set_aside = database.set_aside_paths(root_id).await?;
+    for file in changes
+        .added
+        .iter()
+        .filter(|file| !set_aside.contains(&file.relative_path))
+    {
         let work_id = work_for(state, library, &file.relative_path, signs).await?;
         database
             .insert_source(
@@ -2152,6 +2159,77 @@ mod tests {
                 .map(|episode| (episode.absolute_number, episode.season, episode.ordinal))
                 .collect::<Vec<_>>(),
             [(1, 1, 1), (29, 2, 1)]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_taken_out_of_the_library_stays_out_and_one_deleted_leaves_the_disk() {
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Quiet Harbour (2019).mkv", b"x");
+        write(&media, "Boxset/Amber Field (2020).mkv", b"x");
+        write(&media, "Boxset/Amber Field (2020).fr.srt", b"x");
+        let (state, library) =
+            state_with_roots(directory.path(), vec![("disk-one", media.clone())]).await;
+        scan(&state, &library).await;
+        let owner = state
+            .database()
+            .create_user(
+                "Owner",
+                None,
+                &melyxar_core::user::Permissions::administrator(),
+            )
+            .await
+            .expect("account created");
+        let film = |title: &'static str| {
+            let state = state.clone();
+            let library = library.clone();
+            async move {
+                arrangement(&state, &library)
+                    .await
+                    .into_iter()
+                    .find(|work| work.title == title)
+                    .map(|work| work.id)
+            }
+        };
+
+        let quiet = film("Quiet Harbour").await.expect("scanned");
+        crate::deletion::delete(&state, &owner, quiet, false)
+            .await
+            .expect("taken out");
+        assert!(media.join("Quiet Harbour (2019).mkv").exists());
+        assert_eq!(scan(&state, &library).await.added, 0, "it stays out");
+        assert!(film("Quiet Harbour").await.is_none());
+
+        let viewer = a_viewer(&state).await;
+        let amber = film("Amber Field").await.expect("scanned");
+        assert!(
+            crate::deletion::delete(&state, &viewer, amber, true)
+                .await
+                .is_err(),
+            "an account without the right deletes nothing"
+        );
+        crate::deletion::delete(&state, &owner, amber, true)
+            .await
+            .expect("deleted");
+        assert!(
+            !media.join("Boxset").exists(),
+            "the file, its subtitle and the emptied folder"
+        );
+        assert!(film("Amber Field").await.is_none());
+
+        assert_eq!(
+            state
+                .database()
+                .take_back_set_aside(library.id)
+                .await
+                .expect("taken back"),
+            1
+        );
+        assert_eq!(
+            scan(&state, &library).await.added,
+            1,
+            "and it comes back when asked"
         );
     }
 
