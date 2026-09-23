@@ -341,7 +341,8 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
 ///
 /// Then what an administrator put there, then what has just arrived, then
 /// what the server offers. Each source is asked only for what the ones before
-/// it left room for, and nothing appears twice. What people filmed and
+/// it left room for, and nothing appears twice. A work missing any of what
+/// the banner draws is passed over for the next one. What people filmed and
 /// photographed themselves never stands there: the banner is a poster wall.
 async fn the_hero(
     state: &AppState,
@@ -350,119 +351,141 @@ async fn the_hero(
     carry_on: &[WorkToCarryOn],
     recently_added: &WorkPage,
 ) -> Result<Vec<HeroItem>> {
-    let mut hero: Vec<HeroItem> = Vec::with_capacity(IN_THE_HERO as usize);
-    let mut already: std::collections::HashSet<WorkId> = std::collections::HashSet::new();
-
-    let mut take = |card: &WorkCard,
-                    because: Because,
-                    episode_of: Option<EpisodePlace>,
-                    hero: &mut Vec<HeroItem>| {
-        if hero.len() < IN_THE_HERO as usize
-            && !card.kind.is_home_media()
-            && already.insert(card.id)
-        {
-            hero.push(HeroItem {
-                card: card.clone(),
-                because,
-                dressed: Dressed::default(),
-                episode_of,
-            });
-        }
-    };
-
+    let database = state.database();
     // Read before anything is let in, because what it holds is kept for it.
     // Filling the banner with what was left halfway and only then looking at
     // this is how "put on the front page" came to do nothing at all: somebody
     // watching five things at once has a full banner before the question is
     // ever asked, and that is the normal state of a server in use.
-    let pinned = state
-        .database()
-        .pinned_works(who.id, granted, IN_THE_HERO)
-        .await?;
-    let room_for_the_rest = (IN_THE_HERO as usize).saturating_sub(pinned.len());
+    let pinned = database.pinned_works(who.id, granted, IN_THE_HERO).await?;
 
     // A banner somebody asked to be different every time is filled from a
     // draw instead of from what was left halfway and what has just arrived.
     // What an administrator put there still comes first: a choice made
     // deliberately is not something a shuffle undoes.
-    let drawn = match who.preferences.banner_at_random {
-        true => {
-            state
-                .database()
-                .works_at_random(who.id, granted, IN_THE_HERO)
-                .await?
-        }
+    let random = who.preferences.banner_at_random;
+    let drawn = match random {
+        true => database.works_at_random(who.id, granted, IN_THE_HERO).await?,
         false => Vec::new(),
     };
+    let suggested = database.suggestions(who.id, granted, IN_THE_HERO).await?;
 
-    for entry in carry_on {
-        if who.preferences.banner_at_random || hero.len() >= room_for_the_rest {
-            break;
-        }
-        let place = entry.series_id.zip(entry.series_title.clone()).map(
-            |(series_id, series_title)| EpisodePlace {
-                series_id,
-                series_title,
-                season_number: entry.season_number,
-                episode_number: entry.episode_number,
-            },
-        );
-        take(&entry.card, Because::Started, place, &mut hero);
-    }
-    for card in &pinned {
-        take(card, Because::Pinned, None, &mut hero);
-    }
-    for card in &drawn {
-        take(card, Because::Suggested, None, &mut hero);
-    }
-    if !who.preferences.banner_at_random {
-        for card in &recently_added.cards {
-            take(card, Because::New, None, &mut hero);
-        }
-    }
-    if hero.len() < IN_THE_HERO as usize {
-        for card in state
-            .database()
-            .suggestions(who.id, granted, IN_THE_HERO)
-            .await?
-        {
-            take(&card, Because::Suggested, None, &mut hero);
-        }
-    }
-
-    // Dressed once the five are known, in one set of questions for the lot:
-    // asking per work would be five more round trips to draw one banner. The
-    // series of an episode is asked for in the same breath, since that is
-    // where an episode's wide picture and drawn title come from.
-    let named: Vec<WorkId> = hero
+    let started: Vec<(&WorkCard, Option<EpisodePlace>)> = carry_on
         .iter()
-        .flat_map(|entry| {
-            std::iter::once(entry.card.id)
-                .chain(entry.episode_of.as_ref().map(|place| place.series_id))
+        .filter(|_| !random)
+        .map(|entry| {
+            let place = entry.series_id.zip(entry.series_title.clone()).map(
+                |(series_id, series_title)| EpisodePlace {
+                    series_id,
+                    series_title,
+                    season_number: entry.season_number,
+                    episode_number: entry.episode_number,
+                },
+            );
+            (&entry.card, place)
         })
         .collect();
-    let dressed = state
-        .database()
+    let new: &[WorkCard] = match random {
+        true => &[],
+        false => &recently_added.cards,
+    };
+
+    // Every candidate dressed at once, in one set of questions: asking per
+    // work would be a round trip each to draw one banner. The series of an
+    // episode is asked for in the same breath, since that is where an
+    // episode's wide picture and drawn title come from.
+    let named: Vec<WorkId> = started
+        .iter()
+        .flat_map(|(card, place)| {
+            std::iter::once(card.id).chain(place.as_ref().map(|place| place.series_id))
+        })
+        .chain(
+            pinned
+                .iter()
+                .chain(&drawn)
+                .chain(new)
+                .chain(&suggested)
+                .map(|card| card.id),
+        )
+        .collect();
+    let dressed = database
         .dressed_large(&named, &who.preferences.interface_language)
         .await?;
-    for entry in &mut hero {
-        entry.dressed = dressed.get(&entry.card.id).cloned().unwrap_or_default();
+
+    let mut already: std::collections::HashSet<WorkId> = std::collections::HashSet::new();
+    let mut take = |card: &WorkCard,
+                    because: Because,
+                    episode_of: Option<EpisodePlace>,
+                    room: usize,
+                    hero: &mut Vec<HeroItem>| {
+        if hero.len() >= room || card.kind.is_home_media() || already.contains(&card.id) {
+            return;
+        }
+        let mut worn = dressed.get(&card.id).cloned().unwrap_or_default();
         // An episode carries a thumbnail, which is not a banner, and no drawn
-        // title at all. Both come from the series above it.
-        if let Some(from) = entry
-            .episode_of
+        // title at all. Both come from the series above it, and so do the
+        // words it lacks.
+        if let Some(from) = episode_of
             .as_ref()
             .and_then(|place| dressed.get(&place.series_id))
         {
-            if entry.dressed.backdrop.is_empty() {
-                entry.dressed.backdrop = from.backdrop.clone();
+            if worn.backdrop.is_empty() {
+                worn.backdrop = from.backdrop.clone();
             }
-            if entry.dressed.logo.is_empty() {
-                entry.dressed.logo = from.logo.clone();
+            if worn.logo.is_empty() {
+                worn.logo = from.logo.clone();
+            }
+            if worn.overview.is_none() {
+                worn.overview = from.overview.clone();
+            }
+            if worn.genres.is_empty() {
+                worn.genres = from.genres.clone();
             }
         }
+        if !dressed_in_full(&worn) {
+            return;
+        }
+        already.insert(card.id);
+        hero.push(HeroItem {
+            card: card.clone(),
+            because,
+            dressed: worn,
+            episode_of,
+        });
+    };
+
+    let whole = IN_THE_HERO as usize;
+    let mut kept_for_the_pinned: Vec<HeroItem> = Vec::with_capacity(whole);
+    for card in &pinned {
+        take(card, Because::Pinned, None, whole, &mut kept_for_the_pinned);
+    }
+    let mut hero: Vec<HeroItem> = Vec::with_capacity(whole);
+    let room_for_the_rest = whole - kept_for_the_pinned.len();
+    for (card, place) in started {
+        take(card, Because::Started, place, room_for_the_rest, &mut hero);
+    }
+    hero.append(&mut kept_for_the_pinned);
+    for card in drawn.iter().chain(new) {
+        let because = match random {
+            true => Because::Suggested,
+            false => Because::New,
+        };
+        take(card, because, None, whole, &mut hero);
+    }
+    for card in &suggested {
+        take(card, Because::Suggested, None, whole, &mut hero);
     }
     Ok(hero)
+}
+
+/// Whether a work has everything the banner draws: a wide picture, its drawn
+/// title, a paragraph and its genres. One without them is a large empty block
+/// at the top of the page, and the next one is shown instead.
+fn dressed_in_full(dressed: &Dressed) -> bool {
+    !dressed.backdrop.is_empty()
+        && !dressed.logo.is_empty()
+        && dressed.overview.is_some()
+        && !dressed.genres.is_empty()
 }
 
 /// One row per kind of library this server really holds, in the order this
@@ -564,7 +587,7 @@ mod tests {
             .expect("declared");
 
         for title in titles {
-            database
+            let work = database
                 .create_work(
                     library.id,
                     WorkKind::Movie,
@@ -574,6 +597,7 @@ mod tests {
                 )
                 .await
                 .expect("work created");
+            dress_in_full(&database, work.id).await;
         }
 
         // A home page shows what somebody left halfway, so there has to be a
@@ -589,6 +613,67 @@ mod tests {
 
         let state = AppState::new(config, database, None, None);
         (directory, state, library.id, viewer)
+    }
+
+    /// Gives a work everything the banner draws: a wide picture, a drawn
+    /// title, a paragraph and a genre.
+    async fn dress_in_full(database: &Database, work: WorkId) {
+        let id = work.to_db_string();
+        for kind in ["backdrop", "logo"] {
+            sqlx::query(
+                "INSERT INTO images (id, owner_kind, owner_id, image_kind, relative_path,
+                                     width, height, fingerprint, created_at)
+                 VALUES (?, 'work', ?, ?, ?, 1280, 720, 'f', '2026-01-01T00:00:00Z')",
+            )
+            .bind(format!("{id}-{kind}"))
+            .bind(&id)
+            .bind(kind)
+            .bind(format!("{id}/{kind}.jpg"))
+            .execute(database.writer())
+            .await
+            .expect("picture");
+        }
+        sqlx::query(
+            "INSERT INTO work_translations (work_id, language, overview)
+             VALUES (?, 'fr', 'Un paragraphe.')",
+        )
+        .bind(&id)
+        .execute(database.writer())
+        .await
+        .expect("words");
+        sqlx::query("INSERT OR IGNORE INTO genres (id, name) VALUES ('drame', 'Drame')")
+            .execute(database.writer())
+            .await
+            .expect("genre");
+        sqlx::query("INSERT INTO work_genres (work_id, genre_id) VALUES (?, 'drame')")
+            .bind(&id)
+            .execute(database.writer())
+            .await
+            .expect("genre of the work");
+    }
+
+    #[tokio::test]
+    async fn a_work_missing_what_the_banner_draws_is_passed_over() {
+        let (_directory, state, library_id, viewer) = state_with_films(&["Quiet Harbour"]).await;
+        state
+            .database()
+            .create_work(library_id, WorkKind::Movie, "Amber Field", "amber field", Some(2020))
+            .await
+            .expect("work created");
+
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert_eq!(
+            page.recently_added.cards[0].title, "Amber Field",
+            "the newest of the two"
+        );
+        assert_eq!(
+            page.hero
+                .iter()
+                .map(|entry| entry.card.title.as_str())
+                .collect::<Vec<_>>(),
+            ["Quiet Harbour"],
+            "and still not in the banner, having nothing to draw there"
+        );
     }
 
     #[tokio::test]
