@@ -130,11 +130,27 @@
   padding: 0 5px;
   border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  background: var(--header-tint), var(--header-glass);
+  background: var(--header-glass);
   backdrop-filter: blur(18px);
+  position: relative;
+  /* So the painting inside stays behind the icons and never behind the
+     page. */
+  isolation: isolate;
   box-shadow:
     var(--shadow-card),
     0 0 14px 2px var(--accent-glow);
+}
+
+/* The painting of the home page and the door, laid inside each piece of the
+   bar: the same pools of accent and the same dust, drawn to the size of the
+   piece, so the bar is lit by the same light as the page under it. */
+.header-drift {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .brand {
