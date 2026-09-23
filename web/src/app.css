@@ -678,6 +678,10 @@
 /* A word that opens a short list under it. */
 .header-menu {
   position: relative;
+  /* A box of its own rather than a line of text: set on a line, the button
+     sat on its baseline with the room for the letters' tails left under it,
+     which lifted the picture of the account off the middle of the bar. */
+  display: flex;
 }
 
 .header-link-on {
