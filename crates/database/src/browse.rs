@@ -167,6 +167,10 @@ pub struct BrowseRequest {
     /// Asking by kind is what lets one row hold them all without the caller
     /// having to know which libraries exist.
     pub library_kind: Option<LibraryKind>,
+    /// Only the works of libraries a catalogue describes, leaving out what
+    /// people filmed and photographed themselves: among films and series, a
+    /// video of one's own is a stranger, and it has a row of its own.
+    pub catalogued_only: bool,
     /// Who is looking, when somebody is. Named, the page comes back with what
     /// this account has made of each card: where they are in it, whether they
     /// marked it, what is left of a series. Absent, the cards carry the work's
@@ -280,6 +284,7 @@ impl Default for BrowseRequest {
             identified_only: false,
             favourites_only: false,
             library_kind: None,
+            catalogued_only: false,
             viewer: None,
         }
     }
@@ -435,6 +440,12 @@ impl Database {
             sql.push_str(
                 " AND EXISTS (SELECT 1 FROM libraries lib
                                WHERE lib.id = w.library_id AND lib.kind = ?)",
+            );
+        }
+        if request.catalogued_only {
+            sql.push_str(
+                " AND NOT EXISTS (SELECT 1 FROM libraries lib
+                                   WHERE lib.id = w.library_id AND lib.kind = 'home_media')",
             );
         }
         match request.initial {

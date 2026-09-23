@@ -362,6 +362,7 @@ async fn works(
         identified_only: false,
         favourites_only: params.favourites,
         library_kind: params.kind,
+        catalogued_only: false,
         // A letter nobody could mean is refused rather than quietly ignored:
         // a grid that answers everything to a narrowing looks broken.
         initial: params
