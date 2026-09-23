@@ -93,92 +93,92 @@ load_i18n() {
     [[ -z "${lang:-}" || -z "${key:-}" ]] && continue
     I18N["$lang:$key"]="$text"
   done <<'I18N_DATA'
-en|app_name|Melyxar media server install, update and management
-fr|app_name|Installation, mise à jour et gestion du serveur multimédia Melyxar
+en|app_name|Melyxar server installation and management
+fr|app_name|Installation et gestion du serveur Melyxar
 en|err_need_root|Run this script as root.
-fr|err_need_root|Exécutez ce script en root.
+fr|err_need_root|Exécutez ce script avec les droits root.
 en|err_command_output|Command output:
 fr|err_command_output|Sortie de la commande :
-en|verbose_on|Verbose: every command shows its own output as it runs.
-fr|verbose_on|Mode détaillé : chaque commande affiche sa sortie au fur et à mesure.
-en|err_aborted|Stopped at line %s. Nothing else was changed.
-fr|err_aborted|Arrêt à la ligne %s. Rien d'autre n'a été modifié.
+en|verbose_on|Detailed output enabled. Each command will display its output.
+fr|verbose_on|Affichage détaillé activé. La sortie de chaque commande sera affichée.
+en|err_aborted|Operation stopped at line %s. Review the output above to identify any completed steps.
+fr|err_aborted|Opération interrompue à la ligne %s. Consultez la sortie ci-dessus pour identifier les étapes déjà effectuées.
 en|err_missing_command|Missing command: %s
 fr|err_missing_command|Commande manquante : %s
-en|hint_yes_default|Enter=yes / no
-fr|hint_yes_default|Entrée=oui / non
-en|hint_no_default|yes / Enter=no
-fr|hint_no_default|oui / Entrée=non
-en|menu_title|What do you want to do?
-fr|menu_title|Que voulez-vous faire ?
+en|hint_yes_default|Enter = yes / no
+fr|hint_yes_default|Entrée = oui / non
+en|hint_no_default|yes / Enter = no
+fr|hint_no_default|oui / Entrée = non
+en|menu_title|Choose an action
+fr|menu_title|Choisissez une action
 en|menu_install|Install Melyxar
 fr|menu_install|Installer Melyxar
-en|menu_update|Update to the latest version
-fr|menu_update|Mettre à jour vers la dernière version
-en|menu_status|Show the server report
-fr|menu_status|Afficher le rapport du serveur
+en|menu_update|Update Melyxar
+fr|menu_update|Mettre Melyxar à jour
+en|menu_status|Show server status
+fr|menu_status|Afficher l’état du serveur
 en|menu_backup|Back up the database now
-fr|menu_backup|Sauvegarder la base maintenant
+fr|menu_backup|Sauvegarder la base de données
 en|menu_restore|Restore from a backup
 fr|menu_restore|Restaurer depuis une sauvegarde
 en|menu_uninstall|Uninstall
 fr|menu_uninstall|Désinstaller
-en|menu_bench|Measure the speed on a large library
-fr|menu_bench|Mesurer la vitesse sur une grosse bibliothèque
+en|menu_bench|Benchmark a large library
+fr|menu_bench|Tester les performances d’une grande bibliothèque
 en|menu_lines|Count the lines of code
 fr|menu_lines|Compter les lignes de code
-en|menu_accounts|Accounts: see them, or put a password back
-fr|menu_accounts|Comptes : les voir, ou remettre un mot de passe
+en|menu_accounts|View accounts or reset a password
+fr|menu_accounts|Voir les comptes ou réinitialiser un mot de passe
 en|section_accounts|Accounts
 fr|section_accounts|Comptes
-en|accounts_notice|The way back in for somebody locked out of their own server. It asks for no password of its own, because whoever has a terminal here can read the database anyway.
-fr|accounts_notice|Le moyen de rentrer pour quelqu'un enfermé dehors de son propre serveur. Il ne demande aucun mot de passe, parce que qui a un terminal ici peut de toute façon lire la base.
-en|accounts_none|No account yet: open this server in a browser to set it up.
-fr|accounts_none|Aucun compte pour l'instant : ouvrez ce serveur dans un navigateur pour le configurer.
-en|prompt_accounts_which|Whose password to put back, or nothing to leave them alone
-fr|prompt_accounts_which|De qui remettre le mot de passe, ou rien pour n'y pas toucher
-en|prompt_accounts_password|The new password
-fr|prompt_accounts_password|Le nouveau mot de passe
-en|accounts_changed|The password was changed, and every device of that account was signed out.
-fr|accounts_changed|Le mot de passe a été changé, et tous les appareils de ce compte ont été déconnectés.
-en|menu_writes|Media folders: let Melyxar write to them, or keep them read only
-fr|menu_writes|Dossiers des médias : laisser Melyxar y écrire, ou les garder en lecture seule
-en|section_writes|Writing to the media folders
-fr|section_writes|Écriture dans les dossiers des médias
-en|writes_notice|By default Melyxar may only read your media. Allowing it to write is what lets "Delete from the disk" work. Every other folder of this machine stays closed to it.
-fr|writes_notice|Par défaut Melyxar ne peut que lire vos médias. L'autoriser à écrire est ce qui permet à « Supprimer aussi du disque » de fonctionner. Tous les autres dossiers de la machine lui restent fermés.
-en|writes_half_open|Writing was already allowed on Melyxar's side, but %s folders still refuse it.
-fr|writes_half_open|L'écriture est déjà autorisée côté Melyxar, mais %s dossiers la refusent encore.
-en|writes_now_shut|Now: the media folders are read only for Melyxar.
-fr|writes_now_shut|Actuellement : les dossiers des médias sont en lecture seule pour Melyxar.
-en|prompt_writes_open|Let Melyxar write to the media folders?
-fr|prompt_writes_open|Laisser Melyxar écrire dans les dossiers des médias ?
-en|prompt_writes_shut|Put the media folders back to read only?
-fr|prompt_writes_shut|Remettre les dossiers des médias en lecture seule ?
-en|writes_no_folder|No library folder yet: declare a library first.
-fr|writes_no_folder|Aucun dossier de bibliothèque pour l'instant : déclarez d'abord une bibliothèque.
-en|writes_opened|Melyxar may now write to these folders.
+en|accounts_notice|Reset the password of an existing account from this server. Root access is required; no additional password is requested.
+fr|accounts_notice|Réinitialisez le mot de passe d’un compte depuis ce serveur. Les droits root sont nécessaires ; aucun autre mot de passe n’est demandé.
+en|accounts_none|No account exists yet. Open Melyxar in a browser to create the first one.
+fr|accounts_none|Aucun compte n’existe encore. Ouvrez Melyxar dans un navigateur pour créer le premier compte.
+en|prompt_accounts_which|Account to reset (leave empty to cancel)
+fr|prompt_accounts_which|Compte à réinitialiser (laisser vide pour annuler)
+en|prompt_accounts_password|New password
+fr|prompt_accounts_password|Nouveau mot de passe
+en|accounts_changed|Password updated. All devices signed in to this account have been signed out.
+fr|accounts_changed|Mot de passe modifié. Tous les appareils connectés à ce compte ont été déconnectés.
+en|menu_writes|Manage write access to media folders
+fr|menu_writes|Gérer l’accès en écriture aux dossiers multimédias
+en|section_writes|Media folder write access
+fr|section_writes|Accès en écriture aux dossiers multimédias
+en|writes_notice|Melyxar has read-only access to media by default. Grant write access to enable deletion of media files from disk. Access to other folders is unchanged.
+fr|writes_notice|Melyxar accède aux médias en lecture seule par défaut. Autorisez l’écriture pour permettre la suppression des fichiers du disque. L’accès aux autres dossiers reste inchangé.
+en|writes_half_open|Write access is enabled in Melyxar, but %s folders still deny it.
+fr|writes_half_open|L’écriture est autorisée dans Melyxar, mais %s dossiers refusent encore l’accès.
+en|writes_now_shut|Melyxar currently has read-only access to media folders.
+fr|writes_now_shut|Melyxar dispose actuellement d’un accès en lecture seule aux dossiers multimédias.
+en|prompt_writes_open|Allow Melyxar to write to media folders?
+fr|prompt_writes_open|Autoriser Melyxar à écrire dans les dossiers multimédias ?
+en|prompt_writes_shut|Restore read-only access to media folders?
+fr|prompt_writes_shut|Rétablir l’accès en lecture seule aux dossiers multimédias ?
+en|writes_no_folder|No media folder is configured. Add a library first.
+fr|writes_no_folder|Aucun dossier multimédia n’est configuré. Ajoutez d’abord une bibliothèque.
+en|writes_opened|Melyxar now has write access to these folders.
 fr|writes_opened|Melyxar peut maintenant écrire dans ces dossiers.
-en|writes_shut|The media folders are read only again.
-fr|writes_shut|Les dossiers des médias sont de nouveau en lecture seule.
-en|writes_all_fine|Every media folder lets Melyxar write.
-fr|writes_all_fine|Tous les dossiers des médias laissent Melyxar écrire.
-en|writes_group_offer|These folders already let their group write (group %s). Adding the melyxar account to that group is all it takes: no folder, owner or permission is changed.
-fr|writes_group_offer|Ces dossiers laissent déjà leur groupe écrire (groupe %s). Il suffit d'ajouter le compte melyxar à ce groupe : aucun dossier, propriétaire ou droit n'est modifié.
-en|prompt_writes_group|Add melyxar to that group?
-fr|prompt_writes_group|Ajouter melyxar à ce groupe ?
-en|step_writes_group|Adding melyxar to the group %s
+en|writes_shut|Melyxar now has read-only access to media folders.
+fr|writes_shut|Melyxar dispose désormais d’un accès en lecture seule aux dossiers multimédias.
+en|writes_all_fine|Melyxar can write to every media folder.
+fr|writes_all_fine|Melyxar peut écrire dans tous les dossiers multimédias.
+en|writes_group_offer|These folders grant write access to group %s. Adding the melyxar account to that group does not change folder ownership or permissions.
+fr|writes_group_offer|Ces dossiers accordent l’écriture au groupe %s. Ajouter le compte melyxar à ce groupe ne modifie ni les propriétaires ni les droits des dossiers.
+en|prompt_writes_group|Add the melyxar account to this group?
+fr|prompt_writes_group|Ajouter le compte melyxar à ce groupe ?
+en|step_writes_group|Adding melyxar to group %s
 fr|step_writes_group|Ajout de melyxar au groupe %s
-en|writes_unmapped|%s belongs to a group this container cannot see: it can only be opened from the Proxmox host.
-fr|writes_unmapped|%s appartient à un groupe que ce conteneur ne voit pas : il ne peut être ouvert que depuis l'hôte Proxmox.
-en|writes_group_shut|%s: even its group may not write there (owner %s, group %s, rights %s). Nothing was changed on it.
-fr|writes_group_shut|%s : même son groupe n'a pas le droit d'y écrire (propriétaire %s, groupe %s, droits %s). Rien n'y a été modifié.
-en|writes_partly|%s of the %s refusing folders now let Melyxar write.
-fr|writes_partly|%s des %s dossiers qui refusaient laissent maintenant Melyxar écrire.
-en|writes_still_refused|%s still refuses Melyxar.
-fr|writes_still_refused|%s refuse encore Melyxar.
-en|step_writes|Opening the media folders for writing
-fr|step_writes|Ouverture des dossiers des médias en écriture
+en|writes_unmapped|%s belongs to a group unavailable in this container. Configure access on the Proxmox host.
+fr|writes_unmapped|%s appartient à un groupe inaccessible depuis ce conteneur. Configurez l’accès sur l’hôte Proxmox.
+en|writes_group_shut|%s: group write access is denied (owner %s, group %s, permissions %s). No changes were made to this folder.
+fr|writes_group_shut|%s : le groupe ne dispose pas de l’accès en écriture (propriétaire %s, groupe %s, droits %s). Ce dossier n’a pas été modifié.
+en|writes_partly|Write access enabled for %s of %s folders that denied it.
+fr|writes_partly|Accès en écriture activé pour %s des %s dossiers qui le refusaient.
+en|writes_still_refused|%s still denies write access to Melyxar.
+fr|writes_still_refused|%s refuse toujours l’accès en écriture à Melyxar.
+en|step_writes|Enabling write access to media folders
+fr|step_writes|Activation de l’accès en écriture aux dossiers multimédias
 en|menu_quit|Quit
 fr|menu_quit|Quitter
 en|prompt_choice|Your choice
@@ -187,88 +187,88 @@ en|err_bad_choice|Unknown choice: %s
 fr|err_bad_choice|Choix inconnu : %s
 en|section_checks|Checking the system
 fr|section_checks|Vérification du système
-en|check_debian_ok|Debian based system detected
+en|check_debian_ok|Debian-based system detected
 fr|check_debian_ok|Système basé sur Debian détecté
-en|check_debian_warn|This script targets a Debian based system. Continuing anyway.
-fr|check_debian_warn|Ce script vise un système basé sur Debian. On continue quand même.
+en|check_debian_warn|This script is designed for Debian-based systems. Continuing anyway.
+fr|check_debian_warn|Ce script est conçu pour les systèmes basés sur Debian. Poursuite malgré cet avertissement.
 en|check_container|Running inside a container
 fr|check_container|Exécution dans un conteneur
 en|check_memory|Memory available: %s MB
 fr|check_memory|Mémoire disponible : %s Mo
-en|warn_memory_low|Building needs roughly 6 to 8 GB at its peak. With less, the build may be killed.
-fr|warn_memory_low|La compilation demande environ 6 à 8 Go au pic. En dessous, elle peut être tuée.
+en|warn_memory_low|Building may require 6 to 8 GB of memory. The process may fail if less is available.
+fr|warn_memory_low|La compilation peut nécessiter 6 à 8 Go de mémoire. Elle risque d’échouer si la mémoire disponible est insuffisante.
 en|check_disk|Free space on the system disk: %s GB
 fr|check_disk|Espace libre sur le disque système : %s Go
-en|warn_disk_low|Building needs roughly 20 GB for its intermediate files.
-fr|warn_disk_low|La compilation demande environ 20 Go pour ses fichiers intermédiaires.
+en|warn_disk_low|Building requires approximately 20 GB of free space for temporary files.
+fr|warn_disk_low|La compilation nécessite environ 20 Go d’espace libre pour les fichiers temporaires.
 en|check_port_free|Port %s is free
 fr|check_port_free|Le port %s est libre
-en|check_port_busy|Port %s is already in use by something else
-fr|check_port_busy|Le port %s est déjà utilisé par autre chose
-en|check_ffmpeg_ok|Media tools found: %s
-fr|check_ffmpeg_ok|Outils média trouvés : %s
+en|check_port_busy|Port %s is already in use
+fr|check_port_busy|Le port %s est déjà utilisé
+en|check_ffmpeg_ok|Media tools available: %s
+fr|check_ffmpeg_ok|Outils multimédias disponibles : %s
 en|check_ffmpeg_missing|Media tools not found. They will be installed.
-fr|check_ffmpeg_missing|Outils média absents. Ils seront installés.
-en|check_dri_ok|Graphics device visible, hardware acceleration is possible
-fr|check_dri_ok|Périphérique graphique visible, l'accélération matérielle est possible
-en|check_dri_missing|No graphics device visible
-fr|check_dri_missing|Aucun périphérique graphique visible
-en|dri_title|Hardware acceleration needs a device
-fr|dri_title|L'accélération matérielle a besoin d'un périphérique
-en|dri_line1|Melyxar can use a graphics card to transcode, which costs far less
-fr|dri_line1|Melyxar peut utiliser une carte graphique pour transcoder, ce qui coûte bien
-en|dri_line2|processor time than doing it in software.
-fr|dri_line2|moins de temps processeur que de le faire en logiciel.
-en|dri_line3|In an unprivileged container the device has to be passed from the host.
-fr|dri_line3|Dans un conteneur non privilégié, le périphérique doit être passé depuis l'hôte.
-en|dri_line4|This is done on the host, not inside the container.
-fr|dri_line4|Cette action se fait sur l'hôte, pas dans le conteneur.
+fr|check_ffmpeg_missing|Outils multimédias absents. Ils seront installés.
+en|check_dri_ok|Graphics device detected. Hardware acceleration may be available.
+fr|check_dri_ok|Périphérique graphique détecté. L’accélération matérielle pourrait être disponible.
+en|check_dri_missing|No graphics device detected
+fr|check_dri_missing|Aucun périphérique graphique détecté
+en|dri_title|Graphics device required for hardware acceleration
+fr|dri_title|Périphérique graphique nécessaire à l’accélération matérielle
+en|dri_line1|A GPU can accelerate video transcoding.
+fr|dri_line1|Une carte graphique peut accélérer le transcodage vidéo.
+en|dri_line2|This reduces CPU use compared with software transcoding.
+fr|dri_line2|Elle réduit l’utilisation du processeur par rapport au transcodage logiciel.
+en|dri_line3|For an unprivileged container, pass the graphics device through from the host.
+fr|dri_line3|Dans un conteneur non privilégié, le périphérique graphique doit être transmis depuis l’hôte.
+en|dri_line4|Configure this on the host, outside the container.
+fr|dri_line4|Effectuez cette configuration sur l’hôte, hors du conteneur.
 en|dri_commands|Commands to run on the Proxmox host:
-fr|dri_commands|Commandes à lancer sur le host Proxmox :
-en|dri_replace|Replace <CTID> with the container id.
-fr|dri_replace|Remplacez <CTID> par l'identifiant du conteneur.
-en|dri_later|You can install now and pass the device later.
-fr|dri_later|Vous pouvez installer maintenant et passer le périphérique plus tard.
-en|section_packages|Installing what is needed
+fr|dri_commands|Commandes à exécuter sur l’hôte Proxmox :
+en|dri_replace|Replace <CTID> with the container ID.
+fr|dri_replace|Remplacez <CTID> par l’identifiant du conteneur.
+en|dri_later|You can complete installation now and configure the graphics device later.
+fr|dri_later|Vous pouvez terminer l’installation maintenant et configurer le périphérique graphique plus tard.
+en|section_packages|Installing dependencies
 fr|section_packages|Installation des dépendances
-en|step_apt_update|Refreshing the package lists
-fr|step_apt_update|Rafraîchissement de la liste des paquets
-en|step_apt_install|Installing build tools and media tools
-fr|step_apt_install|Installation des outils de compilation et des outils média
+en|step_apt_update|Updating package lists
+fr|step_apt_update|Mise à jour de la liste des paquets
+en|step_apt_install|Installing build and media tools
+fr|step_apt_install|Installation des outils de compilation et multimédias
 en|step_rust|Installing the Rust toolchain
 fr|step_rust|Installation de la chaîne d'outils Rust
 en|step_node|Installing Node.js %s
 fr|step_node|Installation de Node.js %s
-en|step_node_distribution|Installing the distribution's Node.js
-fr|step_node_distribution|Installation du Node.js de la distribution
-en|node_present|Node.js already current: %s
-fr|node_present|Node.js déjà à jour : %s
-en|node_arch_unknown|Unknown processor type: %s. Node.js cannot be fetched for it.
-fr|node_arch_unknown|Type de processeur inconnu : %s. Node.js ne peut pas être téléchargé pour lui.
-en|node_unreachable|nodejs.org could not be reached.
-fr|node_unreachable|nodejs.org est injoignable.
-en|node_bad_sum|What arrived does not match the published checksum and was thrown away.
-fr|node_bad_sum|Ce qui est arrivé ne correspond pas à l'empreinte publiée et a été jeté.
-en|node_unpack_failed|The archive could not be unpacked. Nothing was replaced.
-fr|node_unpack_failed|L'archive n'a pas pu être décompressée. Rien n'a été remplacé.
+en|step_node_distribution|Installing Node.js from distribution packages
+fr|step_node_distribution|Installation de Node.js depuis les paquets de la distribution
+en|node_present|Node.js is up to date: %s
+fr|node_present|Node.js est à jour : %s
+en|node_arch_unknown|Unsupported processor architecture: %s. Node.js cannot be downloaded.
+fr|node_arch_unknown|Architecture de processeur non prise en charge : %s. Impossible de télécharger Node.js.
+en|node_unreachable|Could not reach nodejs.org.
+fr|node_unreachable|Impossible de joindre nodejs.org.
+en|node_bad_sum|The downloaded archive failed checksum verification and was discarded.
+fr|node_bad_sum|L’archive téléchargée ne correspond pas à la somme de contrôle publiée et a été supprimée.
+en|node_unpack_failed|Could not extract the archive. The existing installation was preserved.
+fr|node_unpack_failed|Impossible d’extraire l’archive. L’installation existante a été conservée.
 en|node_installed|Node.js %s installed
 fr|node_installed|Node.js %s installé
-en|node_kept|The Node.js already installed is kept: %s
-fr|node_kept|Le Node.js déjà installé est conservé : %s
-en|node_fallback|Node.js is taken from the distribution instead. It is older than the interface's own tools ask for, which is what the warnings during the build are about.
-fr|node_fallback|Node.js est pris dans la distribution à la place. Il est plus ancien que ce que demandent les outils de l'interface, et c'est de là que viennent les avertissements pendant la compilation.
-en|step_npm_install|Installing the interface's own dependencies
-fr|step_npm_install|Installation des dépendances propres à l'interface
+en|node_kept|Keeping the installed Node.js version: %s
+fr|node_kept|Version de Node.js déjà installée conservée : %s
+en|node_fallback|Using the distribution’s Node.js package instead. It may be older than the version required by the web build tools, which can produce warnings during compilation.
+fr|node_fallback|Utilisation de la version de Node.js fournie par Debian. Elle peut être plus ancienne que celle requise par les outils de compilation web, d’où d’éventuels avertissements.
+en|step_npm_install|Installing web dependencies
+fr|step_npm_install|Installation des dépendances web
 en|step_npm_build|Building the web interface
 fr|step_npm_build|Compilation de l'interface web
 en|rust_present|Rust toolchain already present: %s
 fr|rust_present|Chaîne d'outils Rust déjà présente : %s
-en|rust_long|A couple of hundred megabytes over one connection. Several minutes is ordinary; the bar underneath is the installer's own.
-fr|rust_long|Deux cents mégaoctets et quelques en une seule connexion. Plusieurs minutes, c'est normal ; la barre en dessous est celle de l'installateur.
-en|rust_unreachable|rustup could not be reached. Check this container's network, then choose this entry again.
-fr|rust_unreachable|rustup est injoignable. Vérifiez le réseau de ce conteneur, puis relancez cette entrée.
-en|rust_too_long|The toolchain did not arrive within %s minutes and was stopped. Choose this entry again: it starts over from nothing and keeps nothing half written.
-fr|rust_too_long|La chaîne d'outils n'est pas arrivée en %s minutes et a été arrêtée. Relancez cette entrée : elle repart de zéro et ne garde rien d'écrit à moitié.
+en|rust_long|The Rust toolchain download is several hundred megabytes and may take a few minutes. Progress appears below.
+fr|rust_long|Le téléchargement des outils Rust représente plusieurs centaines de mégaoctets et peut durer quelques minutes. La progression s’affiche ci-dessous.
+en|rust_unreachable|Could not reach rustup. Check the container’s network connection and try again.
+fr|rust_unreachable|Impossible de joindre rustup. Vérifiez la connexion réseau du conteneur, puis réessayez.
+en|rust_too_long|Rust toolchain download timed out after %s minutes. Retry this action; the incomplete download will be discarded.
+fr|rust_too_long|Le téléchargement des outils Rust a dépassé le délai de %s minutes. Relancez cette action ; le téléchargement incomplet sera supprimé.
 en|section_account|Preparing the system account and folders
 fr|section_account|Préparation du compte système et des dossiers
 en|step_user|Creating the system account
@@ -277,116 +277,116 @@ en|user_present|System account already present
 fr|user_present|Compte système déjà présent
 en|step_dirs|Creating the folders
 fr|step_dirs|Création des dossiers
-en|section_source|Getting the source
-fr|section_source|Récupération des sources
-en|step_clone|Cloning the repository, with its full history
-fr|step_clone|Clonage du dépôt, avec tout son historique
+en|section_source|Retrieving source code
+fr|section_source|Récupération du code source
+en|step_clone|Cloning the complete repository
+fr|step_clone|Clonage du dépôt complet
 en|step_pull|Fetching the latest changes
 fr|step_pull|Récupération des dernières modifications
-en|step_unshallow|Completing a partial copy of the repository into a full one
-fr|step_unshallow|Complétion d'une copie partielle du dépôt en copie complète
-en|section_update_diff|What is about to change
-fr|section_update_diff|Ce qui va changer
-en|update_diff_up_to_date|Already at the latest version. Nothing to update.
-fr|update_diff_up_to_date|Déjà à la dernière version. Rien à mettre à jour.
-en|section_lines|Lines of code
-fr|section_lines|Lignes de code
-en|step_fetch_main|Fetching the %s branch as well
-fr|step_fetch_main|Récupération de la branche %s également
+en|step_unshallow|Completing the repository history
+fr|step_unshallow|Récupération de l’historique complet du dépôt
+en|section_update_diff|Pending changes
+fr|section_update_diff|Modifications à installer
+en|update_diff_up_to_date|Already up to date.
+fr|update_diff_up_to_date|Déjà à jour.
+en|section_lines|Code statistics
+fr|section_lines|Statistiques du code
+en|step_fetch_main|Fetching branch %s
+fr|step_fetch_main|Récupération de la branche %s
 en|lines_on|%s: %s lines
 fr|lines_on|%s : %s lignes
-en|lines_ahead|%s is %s lines longer than %s
+en|lines_ahead|%s has %s more lines than %s
 fr|lines_ahead|%s compte %s lignes de plus que %s
-en|lines_behind|%s is %s lines shorter than %s
+en|lines_behind|%s has %s fewer lines than %s
 fr|lines_behind|%s compte %s lignes de moins que %s
-en|lines_same|%s and %s are the same length
-fr|lines_same|%s et %s font la même longueur
-en|lines_changed|%s lines added, %s removed across %s files
-fr|lines_changed|%s lignes ajoutées, %s supprimées sur %s fichiers
-en|section_bench|Bench
-fr|section_bench|Banc d'essai
-en|bench_notice|A library of invented works is written beside your own, the pages somebody browsing would ask for are timed on it, and it is removed again. Your own films are never touched and no file is written to a disk.
-fr|bench_notice|Une bibliothèque d'œuvres inventées est écrite à côté de la vôtre, les pages qu'un spectateur ouvrirait sont chronométrées dessus, puis elle est retirée. Vos propres films ne sont jamais touchés et aucun fichier n'est écrit sur un disque.
-en|bench_takes|Counting on about five minutes in all, and about a gigabyte in the database while it lasts.
-fr|bench_takes|Comptez environ cinq minutes en tout, et à peu près un gigaoctet dans la base le temps que ça dure.
-en|prompt_bench_works|How many works to invent
-fr|prompt_bench_works|Combien d'œuvres inventer
-en|prompt_bench_account|Which account to measure as
-fr|prompt_bench_account|Avec quel compte mesurer
-en|prompt_bench_password|Its password
-fr|prompt_bench_password|Son mot de passe
-en|bench_signs_in|This server answers nothing to somebody who is not signed in, so the measuring signs in the way a browser does.
-fr|bench_signs_in|Ce serveur ne répond rien à qui n'est pas connecté, donc la mesure se connecte comme le ferait un navigateur.
-en|err_bench_account|An account is needed to measure as.
-fr|err_bench_account|Il faut un compte pour mesurer.
-en|err_bench_works|That is not a number of works: %s
-fr|err_bench_works|Ce n'est pas un nombre d'œuvres : %s
-en|bench_needs_server|The server has to be running to be measured. Start it first.
-fr|bench_needs_server|Le serveur doit tourner pour être mesuré. Démarrez-le d'abord.
-en|step_bench_clear|Taking away what an earlier run may have left
-fr|step_bench_clear|Retrait de ce qu'un essai précédent aurait laissé
-en|step_bench_fill|Inventing the library
-fr|step_bench_fill|Invention de la bibliothèque
-en|bench_measuring|Measuring. The table below says what each page took and what it was allowed.
-fr|bench_measuring|Mesure en cours. Le tableau ci-dessous dit ce qu'a pris chaque page et ce à quoi elle avait droit.
-en|step_bench_empty|Removing the invented library
-fr|step_bench_empty|Retrait de la bibliothèque inventée
-en|bench_held|Every budget is held at this size.
-fr|bench_held|Tous les budgets sont tenus à cette taille.
-en|bench_missed|A budget was missed. The table above names which page, and by how much.
-fr|bench_missed|Un budget est dépassé. Le tableau ci-dessus dit quelle page, et de combien.
-en|lines_counted|Counted without the lock files and the images.
-fr|lines_counted|Compté sans les fichiers de verrouillage et les images.
+en|lines_same|%s and %s have the same number of lines
+fr|lines_same|%s et %s ont le même nombre de lignes
+en|lines_changed|%s lines added and %s removed in %s files
+fr|lines_changed|%s lignes ajoutées et %s supprimées dans %s fichiers
+en|section_bench|Performance benchmark
+fr|section_bench|Test de performances
+en|bench_notice|The benchmark creates a temporary library of generated titles in the database, measures typical browsing requests, then removes the test data. Your media files are not modified.
+fr|bench_notice|Le test crée temporairement une bibliothèque de titres générés dans la base de données, mesure des requêtes de navigation courantes, puis supprime ces données. Vos fichiers multimédias ne sont pas modifiés.
+en|bench_takes|Allow about five minutes. The temporary data may use roughly 1 GB in the database.
+fr|bench_takes|Prévoyez environ cinq minutes. Les données temporaires peuvent occuper près de 1 Go dans la base de données.
+en|prompt_bench_works|Number of titles to generate
+fr|prompt_bench_works|Nombre de titres à générer
+en|prompt_bench_account|Account used for the benchmark
+fr|prompt_bench_account|Compte utilisé pour le test
+en|prompt_bench_password|Account password
+fr|prompt_bench_password|Mot de passe du compte
+en|bench_signs_in|The benchmark signs in like a browser to measure authenticated requests.
+fr|bench_signs_in|Le test se connecte comme un navigateur pour mesurer les requêtes authentifiées.
+en|err_bench_account|Select an account for the benchmark.
+fr|err_bench_account|Sélectionnez un compte pour le test.
+en|err_bench_works|Invalid number of titles: %s
+fr|err_bench_works|Nombre de titres invalide : %s
+en|bench_needs_server|The server must be running to measure its performance. Start it first.
+fr|bench_needs_server|Le serveur doit être en cours d’exécution pour mesurer ses performances. Démarrez-le d’abord.
+en|step_bench_clear|Clearing data from an earlier benchmark
+fr|step_bench_clear|Suppression des données d’un test précédent
+en|step_bench_fill|Generating the test library
+fr|step_bench_fill|Génération de la bibliothèque de test
+en|bench_measuring|Measuring performance. The table below compares each request with its target time.
+fr|bench_measuring|Mesure des performances en cours. Le tableau ci-dessous compare chaque requête à son temps cible.
+en|step_bench_empty|Removing the test library
+fr|step_bench_empty|Suppression de la bibliothèque de test
+en|bench_held|All performance targets were met at this library size.
+fr|bench_held|Tous les objectifs de performance ont été atteints pour cette taille de bibliothèque.
+en|bench_missed|At least one performance target was missed. See the table above for details.
+fr|bench_missed|Au moins un objectif de performance n’a pas été atteint. Consultez le tableau ci-dessus.
+en|lines_counted|Lockfiles and images are excluded from the count.
+fr|lines_counted|Les fichiers de verrouillage et les images sont exclus du décompte.
 en|section_build|Building
 fr|section_build|Compilation
-en|build_notice|This takes 5 to 10 minutes the first time and 1 to 2 minutes afterwards.
-fr|build_notice|Cela prend 5 à 10 minutes la première fois, puis 1 à 2 minutes ensuite.
-en|build_nice|The build runs at the highest priority, for the fastest rebuild while this is still being developed.
-fr|build_nice|La compilation tourne à la priorité la plus haute, pour aller le plus vite possible tant que c'est en plein développement.
-en|build_nice_denied|This container is not allowed to raise a priority, so the build runs at the usual one. Nothing else changes.
-fr|build_nice_denied|Ce conteneur n'a pas le droit d'augmenter une priorité, la compilation tourne donc à la priorité normale. Rien d'autre ne change.
+en|build_notice|The first build usually takes 5 to 10 minutes. Later builds usually take 1 to 2 minutes.
+fr|build_notice|La première compilation prend généralement 5 à 10 minutes, puis 1 à 2 minutes pour les suivantes.
+en|build_nice|Building at high priority to reduce compilation time.
+fr|build_nice|Compilation avec une priorité élevée pour réduire sa durée.
+en|build_nice_denied|This container cannot raise process priority. Building at normal priority.
+fr|build_nice_denied|Ce conteneur ne permet pas d’augmenter la priorité du processus. Compilation à la priorité normale.
 en|step_build|Building the server
 fr|step_build|Compilation du serveur
-en|step_install_binary|Installing the binary
-fr|step_install_binary|Installation du binaire
-en|step_install_interface|Putting the interface in place
-fr|step_install_interface|Mise en place de l'interface
-en|build_nothing|Nothing to rebuild: the server and the interface already match the source.
-fr|build_nothing|Rien à reconstruire : le serveur et l'interface correspondent déjà aux sources.
-en|build_interface_only|Only the interface changed: it is rebuilt and put in place while the server keeps running, with no restart.
-fr|build_interface_only|Seule l'interface a changé : elle est reconstruite et mise en place pendant que le serveur continue de tourner, sans redémarrage.
-en|build_engine_only|Only the server changed: the interface is left as it is.
-fr|build_engine_only|Seul le serveur a changé : l'interface reste telle quelle.
+en|step_install_binary|Installing the server executable
+fr|step_install_binary|Installation de l’exécutable du serveur
+en|step_install_interface|Deploying the web interface
+fr|step_install_interface|Déploiement de l’interface web
+en|build_nothing|Server and web interface are already up to date. No build needed.
+fr|build_nothing|Le serveur et l’interface web sont déjà à jour. Aucune compilation nécessaire.
+en|build_interface_only|Only the web interface changed. It will be rebuilt and deployed without restarting the server.
+fr|build_interface_only|Seule l’interface web a changé. Elle sera recompilée et déployée sans redémarrer le serveur.
+en|build_engine_only|Only the server changed. The web interface will remain unchanged.
+fr|build_engine_only|Seul le serveur a changé. L’interface web restera inchangée.
 en|section_config|Configuration
 fr|section_config|Configuration
-en|config_present|A configuration file already exists and was left untouched
-fr|config_present|Un fichier de configuration existe déjà et n'a pas été touché
-en|step_config|Writing the starting configuration
-fr|step_config|Écriture de la configuration de départ
-en|prompt_port|Which port should Melyxar listen on
-fr|prompt_port|Sur quel port Melyxar doit-il écouter
-en|prompt_add_library|Add a library now
-fr|prompt_add_library|Ajouter une bibliothèque maintenant
+en|config_present|Existing configuration file preserved
+fr|config_present|Fichier de configuration existant conservé
+en|step_config|Writing the initial configuration
+fr|step_config|Écriture de la configuration initiale
+en|prompt_port|Port for the Melyxar server
+fr|prompt_port|Port du serveur Melyxar
+en|prompt_add_library|Add a library now?
+fr|prompt_add_library|Ajouter une bibliothèque maintenant ?
 en|prompt_library_name|Library name
 fr|prompt_library_name|Nom de la bibliothèque
-en|prompt_library_kind|Library kind (movies, series, anime, shows, home_media, music)
+en|prompt_library_kind|Library type (movies, series, anime, shows, home_media, music)
 fr|prompt_library_kind|Type de bibliothèque (movies, series, anime, shows, home_media, music)
-en|prompt_root_path|Folder holding the media (empty to stop adding)
-fr|prompt_root_path|Dossier contenant les médias (vide pour arrêter d'ajouter)
-en|prompt_root_label|Short label for this folder, shown in logs instead of the path
-fr|prompt_root_label|Libellé court pour ce dossier, affiché dans les journaux au lieu du chemin
+en|prompt_root_path|Media folder path (leave empty to finish)
+fr|prompt_root_path|Chemin du dossier multimédia (laisser vide pour terminer)
+en|prompt_root_label|Short folder label shown in logs
+fr|prompt_root_label|Libellé court du dossier affiché dans les journaux
 en|root_added|Folder added: %s
 fr|root_added|Dossier ajouté : %s
-en|root_missing|That folder does not exist. Add it anyway?
-fr|root_missing|Ce dossier n'existe pas. L'ajouter quand même ?
-en|root_unreadable|That folder exists but cannot be read by the server account.
-fr|root_unreadable|Ce dossier existe mais ne peut pas être lu par le compte du serveur.
-en|root_not_absolute|A folder has to be given in full, starting with a slash.
-fr|root_not_absolute|Un dossier doit être donné en entier, en commençant par une barre oblique.
-en|err_bad_kind|Unknown kind. Pick one of: movies, series, anime, shows, home_media, music.
-fr|err_bad_kind|Type inconnu. Choisissez parmi : movies, series, anime, shows, home_media, music.
-en|library_without_root|No folder was given, so the library was not written. You can add it later from the interface.
-fr|library_without_root|Aucun dossier n'a été donné, la bibliothèque n'a donc pas été écrite. Vous pourrez l'ajouter plus tard depuis l'interface.
+en|root_missing|This folder does not exist. Add it anyway?
+fr|root_missing|Ce dossier n’existe pas. L’ajouter quand même ?
+en|root_unreadable|This folder exists, but the server account cannot read it.
+fr|root_unreadable|Ce dossier existe, mais le compte du serveur ne peut pas le lire.
+en|root_not_absolute|Enter an absolute folder path starting with /.
+fr|root_not_absolute|Saisissez un chemin absolu commençant par /.
+en|err_bad_kind|Unsupported library type. Choose: movies, series, anime, shows, home_media or music.
+fr|err_bad_kind|Type de bibliothèque non pris en charge. Choisissez : movies, series, anime, shows, home_media ou music.
+en|library_without_root|No folder was provided, so the library was not created. You can add it later from the web interface.
+fr|library_without_root|Aucun dossier n’a été indiqué ; la bibliothèque n’a pas été créée. Vous pourrez l’ajouter depuis l’interface web.
 en|section_service|Service
 fr|section_service|Service
 en|step_unit|Installing the service file
@@ -397,56 +397,56 @@ en|step_restart|Restarting the service
 fr|step_restart|Redémarrage du service
 en|step_stop|Stopping the service
 fr|step_stop|Arrêt du service
-en|section_done|Done
-fr|section_done|Terminé
+en|section_done|Ready
+fr|section_done|Prêt
 en|done_title|Melyxar is running
-fr|done_title|Melyxar tourne
-en|done_open|Open it at:
-fr|done_open|Ouvrez-le à l'adresse :
+fr|done_title|Melyxar est en cours d’exécution
+en|done_open|Open Melyxar at:
+fr|done_open|Ouvrez Melyxar à l’adresse :
 en|done_config|Configuration file:
 fr|done_config|Fichier de configuration :
-en|done_logs|Follow the logs with:
-fr|done_logs|Suivez les journaux avec :
-en|done_report|Run the report with:
-fr|done_report|Lancez le rapport avec :
-en|done_again|Run this script again, always the published version, with:
-fr|done_again|Relancez ce script, toujours dans sa version publiée, avec :
+en|done_logs|View live logs with:
+fr|done_logs|Consultez le journal en direct avec :
+en|done_report|View server status with:
+fr|done_report|Consultez l’état du serveur avec :
+en|done_again|Run the latest published version of this script with:
+fr|done_again|Lancez la dernière version publiée de ce script avec :
 en|section_backup|Backup
 fr|section_backup|Sauvegarde
-en|step_backup|Copying the database
-fr|step_backup|Copie de la base
-en|backup_done|Backup written to %s
-fr|backup_done|Sauvegarde écrite dans %s
-en|backup_none|No database to back up yet
-fr|backup_none|Aucune base à sauvegarder pour l'instant
+en|step_backup|Backing up the database
+fr|step_backup|Sauvegarde de la base de données
+en|backup_done|Database backup saved to %s
+fr|backup_done|Sauvegarde de la base de données enregistrée dans %s
+en|backup_none|No database is available to back up yet
+fr|backup_none|Aucune base de données disponible à sauvegarder pour le moment
 en|section_restore|Restore
 fr|section_restore|Restauration
 en|restore_none|No backup found in %s
 fr|restore_none|Aucune sauvegarde trouvée dans %s
-en|restore_pick|Which backup should be restored
-fr|restore_pick|Quelle sauvegarde faut-il restaurer
-en|restore_confirm|This replaces the current database. A copy of it is kept first. Continue?
-fr|restore_confirm|Cela remplace la base actuelle. Une copie est gardée avant. Continuer ?
-en|step_restore|Putting the backup back in place
-fr|step_restore|Remise en place de la sauvegarde
-en|restore_done|Restored. The current database was kept as %s
-fr|restore_done|Restauré. La base actuelle a été gardée sous %s
-en|restore_done_fresh|Restored. There was no database to keep aside.
-fr|restore_done_fresh|Restauré. Il n'y avait aucune base à mettre de côté.
+en|restore_pick|Select a backup to restore
+fr|restore_pick|Sélectionnez la sauvegarde à restaurer
+en|restore_confirm|This will replace the current database. A copy of it will be kept first. Continue?
+fr|restore_confirm|La base de données actuelle sera remplacée. Une copie en sera d’abord conservée. Continuer ?
+en|step_restore|Restoring the database backup
+fr|step_restore|Restauration de la sauvegarde de la base de données
+en|restore_done|Database restored. The previous version was saved to %s
+fr|restore_done|Base de données restaurée. La version précédente a été enregistrée dans %s
+en|restore_done_fresh|Database restored. No previous database was available to preserve.
+fr|restore_done_fresh|Base de données restaurée. Aucune version précédente n’était disponible à conserver.
 en|section_uninstall|Uninstall
 fr|section_uninstall|Désinstallation
-en|uninstall_confirm|Remove the service, the binary and the sources?
-fr|uninstall_confirm|Supprimer le service, le binaire et les sources ?
-en|uninstall_keep_data|Your library data and configuration are kept. Remove them too?
-fr|uninstall_keep_data|Vos données de bibliothèque et la configuration sont gardées. Les supprimer aussi ?
-en|uninstall_data_kept|Data kept in %s and configuration in %s
-fr|uninstall_data_kept|Données gardées dans %s et configuration dans %s
-en|uninstall_done|Melyxar was removed
-fr|uninstall_done|Melyxar a été supprimé
-en|err_not_installed|Melyxar is not installed yet. Choose install first.
-fr|err_not_installed|Melyxar n'est pas encore installé. Choisissez d'abord l'installation.
-en|err_no_terminal|There is no terminal to ask on. Name the action: install, update, status, backup, restore, uninstall.
-fr|err_no_terminal|Aucun terminal pour poser les questions. Indiquez l'action : install, update, status, backup, restore, uninstall.
+en|uninstall_confirm|Remove the Melyxar service, executable and source code?
+fr|uninstall_confirm|Supprimer le service Melyxar, l’exécutable et le code source ?
+en|uninstall_keep_data|Library data and configuration can be preserved. Remove them as well?
+fr|uninstall_keep_data|Les données des bibliothèques et la configuration peuvent être conservées. Les supprimer également ?
+en|uninstall_data_kept|Data preserved in %s; configuration preserved in %s
+fr|uninstall_data_kept|Données conservées dans %s ; configuration conservée dans %s
+en|uninstall_done|Melyxar uninstalled
+fr|uninstall_done|Melyxar désinstallé
+en|err_not_installed|Melyxar is not installed. Install it first.
+fr|err_not_installed|Melyxar n’est pas installé. Lancez d’abord l’installation.
+en|err_no_terminal|No interactive terminal is available. Specify an action: install, update, status, backup, restore or uninstall.
+fr|err_no_terminal|Aucun terminal interactif disponible. Indiquez une action : install, update, status, backup, restore ou uninstall.
 en|cancelled|Cancelled
 fr|cancelled|Annulé
 I18N_DATA
