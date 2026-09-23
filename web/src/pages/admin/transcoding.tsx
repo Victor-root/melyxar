@@ -5,10 +5,10 @@
 
 import { NumberField, PageHead, Panel, Setting, Stat, Toggle } from "../../components/panel";
 import {
+  FfmpegIcon,
   GraphicsCardIcon,
   ImageIcon,
   PlaybackIcon,
-  TranscodeIcon,
 } from "../../icons";
 import { useLibraryWork, usePlaybackSettings } from "../../screens/settings";
 import { useSettings } from "../../settings";
@@ -35,7 +35,7 @@ export function AdminTranscoding() {
         <Panel icon={GraphicsCardIcon} title={t("admin.card")} lead={t("admin.card_lead")}>
           <div className="stats">
             <Stat
-              icon={TranscodeIcon}
+              icon={FfmpegIcon}
               label={t("admin.media_tools")}
               value={overview ? t(overview.media_tools.found ? "admin.found" : "admin.missing") : "–"}
               note={overview?.media_tools.version ?? undefined}
