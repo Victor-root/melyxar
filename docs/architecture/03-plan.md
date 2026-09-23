@@ -330,6 +330,7 @@ Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
 - Normalisation audio : c'est la vraie réponse au niveau sonore, et le gain de repliage appliqué aujourd'hui à toutes les pistes tient la place en attendant. Mesure de sonie au scan, application au gain à la lecture, modes morceau et album, compression de plage dynamique pour les films.
 - Clients natifs : un projet Android, base commune (API, session, cache, lecteur), interface télévision d'abord, interface téléphone ensuite.
 - Émissions : type de bibliothèque à part entière (documentaires et programmes de télévision), réutilisant le modèle série, saison, épisode.
+- Versions numérotées et **mise à jour depuis l'interface**. Une fois la mise à jour terminée, chaque page ouverte doit se recharger d'elle-même : sans cela, un onglet resté ouvert garde l'ancienne interface, qui peut réclamer au serveur des fichiers ou des réponses qui n'existent plus. Le script garde aujourd'hui les fichiers de l'interface précédente pour une mise à jour, ce qui couvre le cas le plus courant, pas tous.
 - Import ponctuel de l'historique de visionnage et des favoris depuis une installation Jellyfin existante.
 - Recherche et téléchargement de sous-titres en ligne, sur demande explicite.
 - Contrôle à distance d'une session de lecture depuis un autre appareil, sans priorité.
