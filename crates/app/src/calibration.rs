@@ -353,6 +353,7 @@ mod tests {
                 data: directory.path().join("data"),
                 cache: directory.path().join("cache"),
                 transcodes: directory.path().join("cache/transcodes"),
+                ..Default::default()
             },
             libraries: vec![LibraryConfig {
                 name: "Films".into(),
