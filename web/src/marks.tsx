@@ -44,9 +44,9 @@ interface Marks {
   pinnedOf: (card: Card) => boolean | undefined;
   /** Whether this work was deleted from this page. */
   goneOf: (id: string) => boolean;
-  /** Says a work was deleted, everywhere at once. The server has already
+  /** Says works were deleted, everywhere at once. The server has already
       done it: this is what was answered, not what was hoped for. */
-  setGone: (id: string) => void;
+  setGone: (ids: string[]) => void;
   /** Says it, everywhere at once, and tells the server. */
   setWatched: (card: Card, watched: boolean) => void;
   setFavourite: (card: Card, favourite: boolean) => void;
@@ -113,11 +113,17 @@ export function MarksProvider({ children }: { children: ReactNode }) {
   /* What stood around a deleted work is the server's to redraw: a series
      that lost its last episode, a folder that lost a photo. */
   const setGone = useCallback(
-    (id: string) => {
-      say(id, { gone: true });
+    (ids: string[]) => {
+      setSaid((before) => {
+        const after = { ...before };
+        for (const id of ids) {
+          after[id] = { ...before[id], gone: true };
+        }
+        return after;
+      });
       rowsHaveMoved();
     },
-    [say, rowsHaveMoved],
+    [rowsHaveMoved],
   );
 
   const value = useMemo<Marks>(

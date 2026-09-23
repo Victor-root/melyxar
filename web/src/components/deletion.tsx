@@ -1,12 +1,13 @@
 /*
- * The question put before a work is deleted: out of the library only, or off
+ * The question put before works are deleted: out of the library only, or off
  * the disk as well.
  *
  * What goes is counted by the server the moment the question appears, and
  * the files that would leave the disk are named: a film and a series of two
  * hundred episodes are deleted from the same button, and nobody should find
  * out which after saying yes. Off the disk is offered only to an account
- * allowed to do it, and is never what the panel starts on.
+ * allowed to do it, and is never what the panel starts on. One work or forty
+ * chosen together are the same question, asked once.
  */
 
 import { useState } from "react";
@@ -17,27 +18,30 @@ import { useMarks } from "../marks";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
+import type { Choosable } from "./selection";
 
 /** How many files are named before the rest are only counted. */
 const FILES_NAMED = 8;
 
 export function DeleteDialog({
-  workId,
-  title,
+  works,
   onClose,
   onDeleted,
 }: {
-  workId: string;
-  title: string;
+  works: Choosable[];
   onClose: () => void;
-  /** Said once the work is gone, so whoever showed it can move on. */
+  /** Said once they are gone, every card of them already taken away, so
+      whoever showed them can move on. */
   onDeleted: () => void;
 }) {
   const { t } = useSettings();
-  const going = useAsked((signal) => api.whatDeletingTakes(workId, signal), [workId]);
+  const marks = useMarks();
+  const ids = works.map((work) => work.id);
+  const going = useAsked((signal) => api.whatDeletingTakes(ids, signal), [ids.join()]);
   const [fromDisk, setFromDisk] = useState(false);
   const told = useTold(async () => {
-    await api.deleteWork(workId, fromDisk);
+    await api.deleteWorks(ids, fromDisk);
+    marks.setGone(ids);
     onDeleted();
   });
 
@@ -48,7 +52,11 @@ export function DeleteDialog({
 
   return (
     <Modal
-      title={t("delete.title", { title })}
+      title={
+        works.length === 1
+          ? t("delete.title", { title: works[0].title })
+          : t("delete.title_many", { count: works.length })
+      }
       onClose={onClose}
       footer={
         <button
@@ -125,7 +133,6 @@ export function DeleteButton({
 }) {
   const { t } = useSettings();
   const { account } = useAccount();
-  const marks = useMarks();
   const [asking, setAsking] = useState(false);
 
   if (!account?.may_delete) {
@@ -138,12 +145,10 @@ export function DeleteButton({
       </button>
       {asking && (
         <DeleteDialog
-          workId={workId}
-          title={title}
+          works={[{ id: workId, title }]}
           onClose={() => setAsking(false)}
           onDeleted={() => {
             setAsking(false);
-            marks.setGone(workId);
             onDeleted();
           }}
         />

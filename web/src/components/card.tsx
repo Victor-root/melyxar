@@ -29,6 +29,7 @@ import { CardMenu } from "./cardmenu";
 import { IdentifyDialog } from "./identify";
 import { DeleteDialog } from "./deletion";
 import { PicturesDialog } from "./pictures";
+import { SelectMark, useChoosingPress } from "./selection";
 import { SeenMark } from "./seen";
 import { HeartIcon, MoreIcon, PlayIcon } from "../icons";
 
@@ -103,6 +104,7 @@ export function Card({
   const [identifying, setIdentifying] = useState(false);
   const [choosingPictures, setChoosingPictures] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const choosing = useChoosingPress(card.id);
 
   const unknown = card.identification === "unidentified" || card.identification === "pending";
   const seen = marks.seenOf(card);
@@ -129,7 +131,7 @@ export function Card({
 
   return (
     <article
-      className={`card card-${shape}`}
+      className={`card card-${shape}${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " card-chosen" : ""}`}
       data-card
       style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
     >
@@ -159,6 +161,7 @@ export function Card({
           to={`/work/${card.id}`}
           title={card.title}
           draggable={false}
+          onClick={choosing.onClick}
         >
           <span className="visually-hidden">{card.title}</span>
         </Link>
@@ -227,6 +230,8 @@ export function Card({
           </div>
         </div>
 
+        <SelectMark id={card.id} />
+
         {/* How far in this film already is, drawn on the picture itself: it is
             the one thing that tells two cards of a row apart at a glance. */}
         {howFar !== undefined && howFar > 0 && (
@@ -282,13 +287,9 @@ export function Card({
 
       {deleting && (
         <DeleteDialog
-          workId={card.id}
-          title={card.title}
+          works={[card]}
           onClose={() => setDeleting(false)}
-          onDeleted={() => {
-            setDeleting(false);
-            marks.setGone(card.id);
-          }}
+          onDeleted={() => setDeleting(false)}
         />
       )}
     </article>

@@ -50,8 +50,6 @@ export interface LibraryEditing {
   addFolderTo: (library: string, path: string) => Promise<void>;
   rename: (library: Library, name: string) => Promise<void>;
   renameFolder: (library: Library, root: string, label: string) => Promise<void>;
-  /** Lets the next scan find again the files taken out of a library. */
-  takeBack: (library: Library) => Promise<void>;
   /** Said by a part of the form that refuses something on its own. */
   refuse: (key: string) => void;
 }
@@ -118,16 +116,6 @@ export function useLibraryEditing(onChanged: () => void): LibraryEditing {
     }
   };
 
-  const takeBack = async (library: Library) => {
-    setRefused(null);
-    try {
-      await api.takeBackSetAside(library.id);
-    } catch (error) {
-      setRefused(refusal(error));
-    }
-    onChanged();
-  };
-
   return {
     refused,
     outcome,
@@ -136,7 +124,6 @@ export function useLibraryEditing(onChanged: () => void): LibraryEditing {
     addFolderTo,
     rename,
     renameFolder,
-    takeBack,
     refuse: setRefused,
   };
 }

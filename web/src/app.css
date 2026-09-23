@@ -2057,6 +2057,86 @@ button.seen-mark:not(.seen-mark-on):hover {
   gap: 6px;
 }
 
+/* The round mark that chooses a card, at the corner the other marks leave
+   free. Under the pointer only, until something is chosen: from then on
+   every card wears it, since every press is now a choice. */
+.select-mark {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-deep) 70%, transparent);
+  border: 2px solid color-mix(in srgb, var(--text) 70%, transparent);
+  color: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--quick) var(--ease), background var(--quick) var(--ease);
+}
+
+.card:hover .select-mark,
+.card:focus-within .select-mark,
+.own-cell:hover .select-mark,
+.own-cell:focus-within .select-mark,
+.selecting .select-mark {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.select-mark:hover {
+  color: var(--text-soft);
+}
+
+.select-mark-on,
+.select-mark-on:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* A chosen card is ringed, so a grid of them reads at a glance. */
+.card-chosen .card-picture,
+.own-chosen .own-picture {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+/* While choosing, a press chooses: the button that would play instead is
+   taken away rather than left to be pressed by mistake. */
+.selecting .card-play {
+  display: none;
+}
+
+/* What can be done with the chosen cards, at the foot of the window. */
+.selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--gap-wide);
+  z-index: 30;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-tight);
+  max-width: calc(100vw - 32px);
+  padding: 8px 10px 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+  animation: card-menu-arrive var(--quick) var(--ease) both;
+}
+
+.selection-count {
+  margin-right: 6px;
+  font-weight: 600;
+}
+
 /* Drawn on the picture itself: it is the one thing that tells two cards of a
    row apart at a glance. Above the hover layer, since how far in something is
    does not stop being true under the pointer. */
@@ -2701,6 +2781,18 @@ button.seen-mark:not(.seen-mark-on):hover {
   padding-left: 1.1em;
   font-size: 13px;
   color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+/* The files of a library taken out of it, one per line: whole paths, which
+   wrap rather than push the panel wide. */
+.set-aside-files {
+  display: grid;
+  gap: var(--gap-tight);
+  margin: var(--gap) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
   overflow-wrap: anywhere;
 }
 
@@ -3962,6 +4054,20 @@ button.seen-mark:not(.seen-mark-on):hover {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--gap-wide) var(--gap);
+}
+
+/* A tile and the mark that chooses it, laid over the corner of its picture
+   from beside the link rather than from inside it. */
+.own-cell {
+  position: relative;
+  min-width: 0;
+}
+
+.own-select {
+  position: absolute;
+  inset: 0 0 auto;
+  aspect-ratio: 16 / 9;
+  pointer-events: none;
 }
 
 .own-tile {

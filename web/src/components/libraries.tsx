@@ -11,9 +11,13 @@
  */
 
 import { useState } from "react";
-import type { Library, WouldGo } from "../api";
+import { api } from "../api";
+import type { Library, SetAsideFile, WouldGo } from "../api";
+import { useAsked, useTold } from "../asking";
 import { FolderPicker } from "./folders";
+import { Modal } from "./modal";
 import { languageName, METADATA_LANGUAGES } from "../languages";
+import { refusalKey } from "../i18n";
 import { KINDS } from "../libraries";
 import { howMany } from "../readable";
 import {
@@ -33,7 +37,7 @@ export function LibraryEditor({
   onChanged: () => void;
 }) {
   const { t, language } = useSettings();
-  const { refused, outcome, report, settle, addFolderTo, rename, renameFolder, takeBack, refuse } =
+  const { refused, outcome, report, settle, addFolderTo, rename, renameFolder, refuse } =
     useLibraryEditing(onChanged);
   const [adding, setAdding] = useState(false);
   /* Which library is being given another folder, when one is. */
@@ -41,6 +45,8 @@ export function LibraryEditor({
   /* What the question of taking something away is being put about, when it is.
      A folder when one is named, the whole library otherwise. */
   const [removing, setRemoving] = useState<{ library: string; root?: string } | null>(null);
+  /* Which library's set aside files are being looked through, when one is. */
+  const [takingBack, setTakingBack] = useState<Library | null>(null);
 
   const said =
     outcome === null
@@ -153,7 +159,7 @@ export function LibraryEditor({
           {library.set_aside > 0 && (
             <div className="controls">
               <span className="settings-why">{howMany(library.set_aside, "library.set_aside", t)}</span>
-              <button className="button button-small" onClick={() => takeBack(library)}>
+              <button className="button button-small" onClick={() => setTakingBack(library)}>
                 {t("library.take_back")}
               </button>
             </div>
@@ -200,7 +206,96 @@ export function LibraryEditor({
           {t("settings.add_library")}
         </button>
       )}
+
+      {takingBack && (
+        <SetAsideDialog
+          library={takingBack}
+          onClose={() => setTakingBack(null)}
+          onTakenBack={() => {
+            setTakingBack(null);
+            onChanged();
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * The files taken out of a library and left on the disk, one per line, to
+ * take back the ones chosen or all of them. The library is scanned straight
+ * after, so what is taken back is in the grid a moment later.
+ */
+function SetAsideDialog({
+  library,
+  onClose,
+  onTakenBack,
+}: {
+  library: Library;
+  onClose: () => void;
+  onTakenBack: () => void;
+}) {
+  const { t } = useSettings();
+  const listed = useAsked((signal) => api.setAsideFiles(library.id, signal), [library.id]);
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
+  const told = useTold(async (files: SetAsideFile[] | null) => {
+    await api.takeBackSetAside(library.id, files);
+    onTakenBack();
+  });
+
+  const files = listed.answer ?? [];
+  const keyOf = (file: SetAsideFile) => `${file.root}/${file.relative_path}`;
+  const picked = files.filter((file) => chosen.has(keyOf(file)));
+  const refused = told.failure ?? listed.failure;
+
+  return (
+    <Modal
+      title={t("set_aside.title", { name: library.name })}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            className="button"
+            disabled={files.length === 0 || told.busy}
+            onClick={() => told.tell(null)}
+          >
+            {t("set_aside.take_back_all")}
+          </button>
+          <button
+            className="button button-accent"
+            disabled={picked.length === 0 || told.busy}
+            onClick={() => told.tell(picked)}
+          >
+            {howMany(picked.length, "set_aside.take_back_chosen", t)}
+          </button>
+        </>
+      }
+    >
+      <p className="settings-why">{t("set_aside.why")}</p>
+      <ul className="set-aside-files">
+        {files.map((file) => (
+          <li key={keyOf(file)}>
+            <label className="delete-choice">
+              <input
+                type="checkbox"
+                checked={chosen.has(keyOf(file))}
+                onChange={() =>
+                  setChosen((before) => {
+                    const after = new Set(before);
+                    if (!after.delete(keyOf(file))) {
+                      after.add(keyOf(file));
+                    }
+                    return after;
+                  })
+                }
+              />
+              <span>{file.path}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      {refused && <p className="notice">{t(refusalKey(refused.code))}</p>}
+    </Modal>
   );
 }
 
