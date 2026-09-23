@@ -337,6 +337,7 @@ export function usePlayback({
   workId,
   fromTheStart,
   onEnded,
+  onStopped,
 }: {
   sourceId: string;
   workId: string;
@@ -345,6 +346,8 @@ export function usePlayback({
    *  something else on after it. Never told when the viewer asked for it to
    *  repeat, because the browser then never reaches an end at all. */
   onEnded?: () => void;
+  /** Told once when an administrator asked for this film to stop. */
+  onStopped?: () => void;
 }): Playback {
   const video = useRef<HTMLVideoElement>(null);
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
@@ -497,6 +500,11 @@ export function usePlayback({
      for it would tear the element's own down and put them back mid film. */
   const reachedTheEnd = useRef(onEnded);
   reachedTheEnd.current = onEnded;
+  /* Kept in a hand for the same reason, and emptied once told: the answer
+     saying so can come back more than once before the player is gone. */
+  const toldToStop = useRef(onStopped);
+  toldToStop.current = onStopped;
+  const stopHeard = useRef(false);
   /* Where the picture picks up once it is ready, and null when it starts
      where it is. Applied on loadedmetadata: set any earlier it is ignored
      without a word, and the film starts from the beginning. */
@@ -533,6 +541,9 @@ export function usePlayback({
             audio_track_id: audioId,
             subtitle_track_id: subtitleId,
             preferred_video_codec: requestedCodec(codec),
+            // This is the player about to show the film, which is what makes
+            // it one being watched.
+            watching: true,
           },
           controller.signal,
         ),
@@ -1217,16 +1228,33 @@ export function usePlayback({
     [wereRead, neverCame, cueChanged],
   );
 
-  const report = useCallback(() => {
-    const seconds = lastPosition.current;
-    if (seconds < WORTH_REPORTING) {
-      return;
-    }
-    api.reportPosition(workId, seconds).catch(() => {
-      // A position that could not be sent is not worth troubling a viewer
-      // with: the next one carries the same news, and the film keeps playing.
-    });
-  }, [workId]);
+  /* Sent whatever the position, because it is also how the server knows the
+     film is being watched: a position worth remembering, or below that only
+     that the player is still here, getting the film ready or in its first
+     seconds. The answer says whether an administrator asked it to stop. */
+  const tellTheServer = useCallback(
+    (leaving: boolean) => {
+      const seconds = lastPosition.current;
+      const said =
+        seconds >= WORTH_REPORTING
+          ? api.reportPosition(workId, seconds, leaving)
+          : api.stillPlaying(workId, seconds > 0 ? seconds : null, leaving);
+      said
+        .then((answer) => {
+          if (answer.stop && !stopHeard.current) {
+            stopHeard.current = true;
+            toldToStop.current?.();
+          }
+        })
+        .catch(() => {
+          // A position that could not be sent is not worth troubling a viewer
+          // with: the next one carries the same news, and the film keeps
+          // playing.
+        });
+    },
+    [workId],
+  );
+  const report = useCallback(() => tellTheServer(false), [tellTheServer]);
 
   /* Closing the tab is how most films are left, and a request started then is
      usually dropped. Both of these are handed to the browser to deliver on its
@@ -1239,6 +1267,8 @@ export function usePlayback({
     const seconds = lastPosition.current;
     if (seconds >= WORTH_REPORTING) {
       api.reportPositionOnTheWayOut(workId, seconds);
+    } else {
+      api.stillPlayingOnTheWayOut(workId, seconds > 0 ? seconds : null);
     }
     if (session.current) {
       api.closeSession(session.current);
@@ -1260,9 +1290,9 @@ export function usePlayback({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("pagehide", onTheWayOut);
-      report();
+      tellTheServer(true);
     };
-  }, [report, onTheWayOut]);
+  }, [report, tellTheServer, onTheWayOut]);
 
   /* Remembered as it is chosen, not on the way in: what a player opens with
      is what the viewer left it on, and writing that back would be a decision

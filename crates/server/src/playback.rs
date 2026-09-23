@@ -43,8 +43,8 @@ pub fn router() -> Router<AppState> {
             axum::routing::post(remember_tracks),
         )
         .route(
-            "/api/v1/playback/stopped",
-            axum::routing::post(stopped_watching),
+            "/api/v1/playback/watching",
+            axum::routing::post(still_playing),
         )
         // What is being watched right now, for the administration.
         .route("/api/v1/system/playing", axum::routing::get(now_playing))
@@ -956,6 +956,9 @@ struct ProgressBody {
     /// cannot make the point go backwards.
     #[serde(default, with = "time::serde::rfc3339::option")]
     reported_at: Option<Timestamp>,
+    /// The last word of a player leaving the film.
+    #[serde(default)]
+    leaving: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -984,24 +987,54 @@ async fn record_progress(
         body.reported_at.unwrap_or_else(melyxar_core::time::now),
     )
     .await?;
-    let stop = melyxar_app::watching::heard(&state, watcher, work_id, position);
+    let stop = heard_from(&state, watcher, work_id, Some(position), body.leaving);
 
     Ok(Json(ProgressView { kept, stop }))
 }
 
+/// A player saying it still has a film open, before it has anywhere worth
+/// remembering: getting the film ready, or its first seconds.
 #[derive(Debug, Deserialize)]
-struct StoppedBody {
+struct StillPlayingBody {
     work_id: String,
+    /// Absent until the picture has shown anything.
+    #[serde(default)]
+    position_seconds: Option<f64>,
+    #[serde(default)]
+    leaving: bool,
 }
 
-/// A player leaving a film: it is no longer being watched.
-async fn stopped_watching(
+async fn still_playing(
     State(state): State<AppState>,
     Watcher(watcher): Watcher,
-    Json(body): Json<StoppedBody>,
+    Json(body): Json<StillPlayingBody>,
 ) -> Result<Json<serde_json::Value>> {
-    melyxar_app::watching::gone(&state, watcher.device, parse_work(&body.work_id)?);
-    Ok(Json(serde_json::json!({ "gone": true })))
+    let stop = heard_from(
+        &state,
+        watcher,
+        parse_work(&body.work_id)?,
+        body.position_seconds
+            .filter(|seconds| seconds.is_finite())
+            .map(Millis::from_seconds_f64),
+        body.leaving,
+    );
+    Ok(Json(serde_json::json!({ "stop": stop })))
+}
+
+/// What a player said about the film it has open. Answers whether it has
+/// been asked to stop.
+fn heard_from(
+    state: &AppState,
+    watcher: melyxar_app::watching::Viewer,
+    work: melyxar_core::id::WorkId,
+    position: Option<Millis>,
+    leaving: bool,
+) -> bool {
+    if leaving {
+        melyxar_app::watching::gone(state, watcher.device, work);
+        return false;
+    }
+    melyxar_app::watching::heard(state, watcher, work, position)
 }
 
 // ---------------------------------------------------------------------------

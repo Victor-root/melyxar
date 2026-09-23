@@ -20,6 +20,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { PlaybackTrack, Work } from "../api";
+import { useToast } from "../components/toasts";
 import { useSettings } from "../settings";
 import { appearanceClasses, rememberAppearance, storedAppearance } from "./appearance";
 import type { Appearance } from "./appearance";
@@ -92,7 +93,20 @@ export function Player({
 }) {
   const { t, language } = useSettings();
   const title = work.title;
-  const playback = usePlayback({ sourceId, workId: work.id, fromTheStart, onEnded });
+  const toast = useToast();
+  /* Left the way the viewer would leave it, and said why: a film that simply
+     vanishes looks like a fault. */
+  const stoppedByAnAdministrator = () => {
+    toast({ state: "attention", title: t("player.stopped_by_administrator") });
+    onClose();
+  };
+  const playback = usePlayback({
+    sourceId,
+    workId: work.id,
+    fromTheStart,
+    onEnded,
+    onStopped: stoppedByAnAdministrator,
+  });
   const {
     video,
     plan,

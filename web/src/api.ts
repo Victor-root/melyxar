@@ -993,6 +993,12 @@ async function send<T>(
   return (await exchange(path, "application/json", method, body, signal)).json() as Promise<T>;
 }
 
+/** Handed to the browser to deliver while the page goes away: a request
+ *  started as a tab closes is usually dropped, and this one is not. */
+function handOver(path: string, body: unknown): void {
+  navigator.sendBeacon?.(path, new Blob([JSON.stringify(body)], { type: "application/json" }));
+}
+
 export interface PlaybackTrack {
   id: string;
   language: string | null;
@@ -1497,25 +1503,40 @@ export const api = {
    * A request started as a tab closes is usually dropped; this one is not,
    * which is what keeps the position of a film someone simply closed.
    */
-  reportPositionOnTheWayOut: (work: string, seconds: number) => {
-    const body = JSON.stringify({
+  reportPositionOnTheWayOut: (work: string, seconds: number) =>
+    handOver("/api/v1/playback/progress", {
       work_id: work,
       position_seconds: seconds,
       reported_at: new Date().toISOString(),
-    });
-    navigator.sendBeacon?.(
-      "/api/v1/playback/progress",
-      new Blob([body], { type: "application/json" }),
-    );
-  },
-  reportPosition: (work: string, seconds: number) =>
-    post<{ kept: boolean }>("/api/v1/playback/progress", {
+      leaving: true,
+    }),
+  /* Also how the server knows the film is being watched, so the answer says
+     whether an administrator asked for it to stop. `leaving` is the last word
+     of a player leaving it. */
+  reportPosition: (work: string, seconds: number, leaving = false) =>
+    post<{ kept: boolean; stop: boolean }>("/api/v1/playback/progress", {
       work_id: work,
       position_seconds: seconds,
       // The instant this client measured it. A report that arrives after a
       // fresher one is refused, so coming back online cannot undo progress
       // made elsewhere in the meantime.
       reported_at: new Date().toISOString(),
+      leaving,
+    }),
+  /* The same sign of life while the film is not anywhere worth remembering
+     yet: getting ready, or its first seconds. Null until the picture has
+     shown anything. */
+  stillPlaying: (work: string, seconds: number | null, leaving = false) =>
+    post<{ stop: boolean }>("/api/v1/playback/watching", {
+      work_id: work,
+      position_seconds: seconds,
+      leaving,
+    }),
+  stillPlayingOnTheWayOut: (work: string, seconds: number | null) =>
+    handOver("/api/v1/playback/watching", {
+      work_id: work,
+      position_seconds: seconds,
+      leaving: true,
     }),
   /* Opens a session against the reference film, rebuilt into one codec at one
      height, for a calibration to watch and measure. Nameless: the same
