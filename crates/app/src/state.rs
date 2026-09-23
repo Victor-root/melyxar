@@ -53,6 +53,8 @@ struct Inner {
     measuring: crate::measures::Measuring,
     /// What is being watched right now, device by device.
     watching: crate::watching::Watching,
+    /// Where the activity journal is written.
+    journal: crate::activity::Journal,
 }
 
 impl AppState {
@@ -72,6 +74,8 @@ impl AppState {
             }
         });
 
+        let journal = crate::activity::Journal::new(database.clone());
+
         let sessions = tools.clone().map(|tools| {
             Arc::new(Sessions::new(
                 config.directories.transcodes.clone(),
@@ -84,9 +88,9 @@ impl AppState {
             inner: Arc::new(Inner {
                 jobs: JobRunner::new(database.clone()).telling({
                     // Every task over is a line of the activity journal.
-                    let database = database.clone();
+                    let journal = journal.clone();
                     move |finished| {
-                        let database = database.clone();
+                        let journal = journal.clone();
                         tokio::spawn(async move {
                             let ended = crate::activity::TaskEnded {
                                 kind: finished.kind,
@@ -95,11 +99,11 @@ impl AppState {
                                 target: finished.target_id,
                                 took: finished.took,
                             };
-                            crate::activity::write(&database, crate::activity::Event::TaskEnded(ended))
-                                .await;
+                            journal.write(crate::activity::Event::TaskEnded(ended)).await;
                         });
                     }
                 }),
+                journal,
                 provider,
                 sessions,
                 config,
@@ -129,6 +133,10 @@ impl AppState {
 
     pub(crate) fn measuring(&self) -> &crate::measures::Measuring {
         &self.inner.measuring
+    }
+
+    pub(crate) fn journal(&self) -> &crate::activity::Journal {
+        &self.inner.journal
     }
 
     pub(crate) fn watching(&self) -> &crate::watching::Watching {

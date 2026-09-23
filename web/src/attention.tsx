@@ -4,8 +4,10 @@
  * The bell of the bar and the panel of the summary show the same points, and
  * marking them as seen in one quiets both at once: held here, beside the
  * rest of what is shared, rather than asked for twice and out of step. Asked
- * again every thirty seconds and whenever the page comes back into view.
- * Nobody but an administrator asks at all.
+ * again the moment a line of the journal is written, since refusals and
+ * failed tasks are counted from it, whenever the page comes back into view,
+ * and every thirty seconds for what changes without a line, such as a disk
+ * filling. Nobody but an administrator asks at all.
  */
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
@@ -13,6 +15,7 @@ import type { ReactNode } from "react";
 import { useAccount } from "./account";
 import { api } from "./api";
 import type { AttentionPoint } from "./api";
+import { useJournalNews } from "./live";
 
 /** How often the points are asked for again. */
 const LOOKED_AT_EVERY_MS = 30_000;
@@ -39,6 +42,9 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
   const [points, setPoints] = useState<AttentionPoint[] | null>(null);
 
   const look = useCallback(() => {
+    if (!administrator) {
+      return;
+    }
     api
       .attention()
       .then((answer) => setPoints(answer.points))
@@ -46,25 +52,19 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
         // The last points stay: a question that failed once says nothing
         // about whether they are still true.
       });
-  }, []);
+  }, [administrator]);
+  // A refusal or a failed task counted the moment it is written, and
+  // everything looked at again whenever the line opens, the page having
+  // come back into view.
+  useJournalNews(look);
 
   useEffect(() => {
     if (!administrator) {
       setPoints(null);
       return;
     }
-    look();
     const timer = window.setInterval(look, LOOKED_AT_EVERY_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        look();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
+    return () => window.clearInterval(timer);
   }, [administrator, look]);
 
   const markSeen = useCallback(async () => {

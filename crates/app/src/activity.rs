@@ -310,38 +310,74 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
     })
 }
 
-/// Writes one line, straight to the database: for whatever has the
-/// database and not the whole server, such as the runner of the tasks.
-pub async fn write(database: &Database, event: Event) {
-    let written = async {
-        let line = line_of(database, event).await?;
-        let details = line.details.to_string();
-        database
-            .record_activity(&NewActivity {
-                at: melyxar_core::time::now(),
-                kind: line.kind,
-                user_id: line.user,
-                work_id: line.work,
-                device_name: line.device.as_deref(),
-                details: Some(&details),
-            })
-            .await?;
-        Ok::<_, crate::AppError>(())
-    };
-    if let Err(error) = written.await {
-        tracing::warn!(%error, "a line of the activity journal could not be written");
+/// Where lines are written, and what is told each time one is: the
+/// administration's live line, so a page shows it the moment it is written.
+///
+/// Its own handle rather than the whole server, for what writes lines and is
+/// built before the server is, such as the runner of the tasks.
+#[derive(Clone)]
+pub struct Journal {
+    database: Database,
+    written: std::sync::Arc<tokio::sync::watch::Sender<u64>>,
+}
+
+impl Journal {
+    pub fn new(database: Database) -> Self {
+        Self {
+            database,
+            written: std::sync::Arc::new(tokio::sync::watch::channel(0).0),
+        }
     }
+
+    /// Writes one line, and tells whoever follows the journal.
+    pub async fn write(&self, event: Event) {
+        match write_line(&self.database, event).await {
+            Ok(()) => self
+                .written
+                .send_modify(|count| *count = count.wrapping_add(1)),
+            Err(error) => {
+                tracing::warn!(%error, "a line of the activity journal could not be written");
+            }
+        }
+    }
+
+    /// Moved on every time a line is written.
+    pub fn written(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.written.subscribe()
+    }
+}
+
+async fn write_line(database: &Database, event: Event) -> Result<()> {
+    let line = line_of(database, event).await?;
+    let details = line.details.to_string();
+    database
+        .record_activity(&NewActivity {
+            at: melyxar_core::time::now(),
+            kind: line.kind,
+            user_id: line.user,
+            work_id: line.work,
+            device_name: line.device.as_deref(),
+            details: Some(&details),
+        })
+        .await?;
+    Ok(())
 }
 
 /// Writes one line.
 pub async fn record(state: &AppState, event: Event) {
-    write(state.database(), event).await;
+    state.journal().write(event).await;
 }
 
 /// Writes one line without waiting for it, from somewhere that cannot wait.
 pub fn record_later(state: &AppState, event: Event) {
-    let database = state.database().clone();
-    tokio::spawn(async move { write(&database, event).await });
+    let journal = state.journal().clone();
+    tokio::spawn(async move { journal.write(event).await });
+}
+
+/// Moved on every time a line is written, for the administration's live
+/// line.
+pub fn written(state: &AppState) -> tokio::sync::watch::Receiver<u64> {
+    state.journal().written()
 }
 
 /// The words of the titles about to be deleted, for the line that says so.
@@ -549,6 +585,15 @@ mod tests {
         assert_eq!(line.details["method"], "direct_play");
 
         assert_eq!(page(&state, &[], None, 10).await.expect("read").len(), 3);
+    }
+
+    #[tokio::test]
+    async fn every_line_written_is_told_to_whoever_follows_the_journal() {
+        let (_held, state) = a_server().await;
+        let followed = written(&state);
+        assert!(!followed.has_changed().expect("open"));
+        record(&state, Event::ServerStarted).await;
+        assert!(followed.has_changed().expect("open"), "told at once");
     }
 
     #[tokio::test]

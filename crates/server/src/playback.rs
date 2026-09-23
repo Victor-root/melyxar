@@ -53,12 +53,6 @@ pub fn router() -> Router<AppState> {
             "/api/v1/playback/watching/{work}/live",
             axum::routing::get(player_line),
         )
-        // What is being watched right now, for the administration, sent
-        // again the moment it changes.
-        .route(
-            "/api/v1/system/playing/live",
-            axum::routing::get(administration_line),
-        )
         .route(
             "/api/v1/system/playing/{device}/stop",
             axum::routing::post(stop_playing),
@@ -1090,44 +1084,9 @@ async fn player_line(
     Ok(live(Sse::new(told).keep_alive(KeepAlive::default())))
 }
 
-/// How often the administration is sent the list again when nothing else
-/// changed, which is how the speed of a conversion keeps moving.
-const RESENT_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
-
-/// What is being watched, sent at once and again every time it changes.
-async fn administration_line(_: Administrator, State(state): State<AppState>) -> Response {
-    let changes = melyxar_app::watching::changes(&state);
-    let closing = melyxar_app::watching::closing(&state);
-    let sent = futures_util::stream::unfold(
-        (state, changes, closing, true),
-        |(state, mut changes, mut closing, first)| async move {
-            if !first {
-                // Either news, or the beat: whichever comes first.
-                tokio::select! {
-                    moved = changes.changed() => moved.ok()?,
-                    () = tokio::time::sleep(RESENT_EVERY) => {}
-                    _ = closing.wait_for(|closed| *closed) => return None,
-                }
-            }
-            changes.borrow_and_update();
-            let event = match watched_views(&state).await {
-                Ok(views) => Event::default().event("playing").json_data(views),
-                // Said to the page, which keeps what it last showed and says
-                // the list could not be read; why is in the journal.
-                Err(error) => {
-                    tracing::warn!(%error, "what is being watched could not be read");
-                    Ok(Event::default().event("failed").data("failed"))
-                }
-            };
-            Some((event, (state, changes, closing, false)))
-        },
-    );
-    live(Sse::new(sent).keep_alive(KeepAlive::default()))
-}
-
 /// A live line as it leaves: never kept by anything on the way, and never
 /// held back by a proxy until it ends, which for these is never.
-fn live(line: impl IntoResponse) -> Response {
+pub(crate) fn live(line: impl IntoResponse) -> Response {
     let mut response = line.into_response();
     let headers = response.headers_mut();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -1141,7 +1100,7 @@ fn live(line: impl IntoResponse) -> Response {
 
 /// One film playing on one device.
 #[derive(Debug, Serialize)]
-struct WatchedView {
+pub(crate) struct WatchedView {
     /// What a stop is asked of.
     device: String,
     user: String,
@@ -1211,7 +1170,7 @@ fn decision_view(plan: &PlayPlan) -> DecisionView {
 }
 
 /// Everything being watched, as the administration shows it.
-async fn watched_views(state: &AppState) -> melyxar_app::Result<Vec<WatchedView>> {
+pub(crate) async fn watched_views(state: &AppState) -> melyxar_app::Result<Vec<WatchedView>> {
     let watched = melyxar_app::watching::now_playing(state).await?;
     Ok(watched
             .into_iter()

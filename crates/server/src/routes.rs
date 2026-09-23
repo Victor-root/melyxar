@@ -50,6 +50,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::images::router())
         .merge(crate::jobs::router())
         .merge(crate::libraries::router())
+        .merge(crate::live::router())
         .merge(crate::deletion::router())
         .merge(crate::pictures::router())
         .merge(crate::page::router())
