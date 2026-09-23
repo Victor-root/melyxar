@@ -223,6 +223,8 @@ export interface Deletion {
   files: { path: string; role: "copy" | "subtitle" | "extra" }[];
   /** Whether this account may delete off the disk as well. */
   may_delete_from_disk: boolean;
+  /** Whether the server may write where those files are, tried just now. */
+  disks_take_writes: boolean;
 }
 
 /** A file taken out of a library while it stays on the disk. */

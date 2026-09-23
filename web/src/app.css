@@ -2944,6 +2944,12 @@ button.seen-mark:not(.seen-mark-on):hover {
   min-width: 0;
 }
 
+/* Offered but shut: the server may not write to that disk. */
+.delete-choice-shut {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Whole paths, which are long: they wrap rather than push the panel wide. */
 .delete-files {
   margin: 4px 0 0;

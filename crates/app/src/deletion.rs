@@ -144,20 +144,28 @@ fn may_delete(who: &User, from_the_disk: bool) -> Result<()> {
     }
 }
 
+/// Whether the server may write to every folder these files sit under,
+/// found out by trying, now: what the question offers and what the deletion
+/// refuses are the same answer.
+pub async fn disks_take_writes(files: &[FileOfAWork]) -> bool {
+    let mut roots: Vec<PathBuf> = files.iter().map(|file| file.root_path.clone()).collect();
+    roots.sort();
+    roots.dedup();
+    tokio::task::spawn_blocking(move || {
+        roots
+            .iter()
+            .all(|root| melyxar_library::check_root_access(root) == RootAccess::ReadWrite)
+    })
+    .await
+    .unwrap_or(false)
+}
+
 /// Deletes these files, then every folder that deleting them emptied.
 async fn delete_off_the_disk(files: &[FileOfAWork]) -> Result<()> {
     // Every disk is asked first, so that one that cannot be written to
     // refuses the whole deletion before a single file has gone.
-    let mut roots: Vec<PathBuf> = files.iter().map(|file| file.root_path.clone()).collect();
-    roots.sort();
-    roots.dedup();
-    for root in roots {
-        let access = tokio::task::spawn_blocking(move || melyxar_library::check_root_access(&root))
-            .await
-            .unwrap_or(RootAccess::Unreadable);
-        if access != RootAccess::ReadWrite {
-            return Err(Trouble::Refused(Refused::DiskNotWritable));
-        }
+    if !disks_take_writes(files).await {
+        return Err(Trouble::Refused(Refused::DiskNotWritable));
     }
 
     let files = files.to_vec();
