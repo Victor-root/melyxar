@@ -130,27 +130,21 @@
   padding: 0 5px;
   border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  background: var(--header-glass);
+  /* A glow of the accent behind the icons, brightest in the middle of the
+     piece and gone before its ends, over the glass the bar has always been.
+     Follows the accent somebody chose. */
+  background:
+    radial-gradient(
+      70% 130% at 50% 50%,
+      color-mix(in srgb, var(--accent) 34%, transparent),
+      color-mix(in srgb, var(--accent-dim) 12%, transparent) 55%,
+      transparent 80%
+    ),
+    var(--header-glass);
   backdrop-filter: blur(18px);
-  position: relative;
-  /* So the painting inside stays behind the icons and never behind the
-     page. */
-  isolation: isolate;
   box-shadow:
     var(--shadow-card),
     0 0 14px 2px var(--accent-glow);
-}
-
-/* The painting of the home page and the door, laid inside each piece of the
-   bar: the same pools of accent and the same dust, drawn to the size of the
-   piece, so the bar is lit by the same light as the page under it. */
-.header-drift {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  overflow: hidden;
-  pointer-events: none;
 }
 
 .brand {
