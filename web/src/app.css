@@ -1447,6 +1447,79 @@
   --open: 1;
 }
 
+/*
+ * The pile of prints the way in to what somebody filmed themselves is made
+ * of, in place of a fan of posters.
+ *
+ * Wide pictures with the pale border of a photo print, lying at small angles
+ * one over the other, the newest on top. Laid out against the tile like the
+ * fan, and spread a little further under the pointer the same way.
+ */
+.band-pile {
+  --open: 0;
+
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.band-print {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  height: 44%;
+  aspect-ratio: 16 / 9;
+  border: 3px solid #f2eee6;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--card-color);
+  transform:
+    translate(calc(-50% + var(--shift, 0%)), calc(-50% + var(--drop, 0%)))
+    rotate(var(--lean, 0deg));
+  box-shadow: var(--shadow-card);
+  transition: transform var(--calm) var(--ease);
+}
+
+.band-print img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The newest, on top and square to the eye, carrying the air of the accent
+   the fan's front poster does. */
+.band-pile > :nth-child(1) {
+  z-index: 3;
+  --lean: calc(-2deg - 1deg * var(--open));
+  --drop: calc(6% - 4% * var(--open));
+  box-shadow:
+    var(--shadow-raised),
+    0 0 34px -8px var(--accent-glow);
+}
+
+/* The two under it, pushed out to either side and turned the other way. */
+.band-pile-2 > :nth-child(2),
+.band-pile-3 > :nth-child(2) {
+  z-index: 2;
+  --shift: calc(-34% - 10% * var(--open));
+  --drop: -8%;
+  --lean: calc(-11deg - 3deg * var(--open));
+}
+
+.band-pile-3 > :nth-child(3) {
+  z-index: 1;
+  --shift: calc(34% + 10% * var(--open));
+  --drop: -12%;
+  --lean: calc(9deg + 3deg * var(--open));
+}
+
+.band-tile:hover .band-pile,
+.band-tile:focus-visible .band-pile {
+  --open: 1;
+}
+
 /* Light added to a white surface is not light. The painting behind the fan
    is therefore turned down rather than drawn again, which is the whole of
    what the other theme has to say about it. */
