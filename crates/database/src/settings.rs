@@ -254,6 +254,19 @@ impl Database {
         Ok(())
     }
 
+    /// How many days the activity journal keeps, on its own for the same
+    /// reason as the switch above.
+    pub async fn set_activity_retention_days(&self, days: i64) -> Result<()> {
+        sqlx::query(
+            "UPDATE server_settings SET activity_retention_days = ?, updated_at = ? WHERE id = 1",
+        )
+        .bind(days)
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
     /// Replaces what the server does with a library, and nothing else.
     ///
     /// A call of its own rather than a full save, for the same reason as
@@ -325,6 +338,23 @@ impl Database {
 mod tests {
     use super::*;
     use melyxar_core::user::DEFAULT_ACCENT_COLOR;
+
+    #[tokio::test]
+    async fn how_long_the_activity_journal_keeps_is_written_on_its_own() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(
+            database.server_settings().await.expect("read").activity_retention_days,
+            180
+        );
+        database
+            .set_activity_retention_days(30)
+            .await
+            .expect("written");
+        assert_eq!(
+            database.server_settings().await.expect("read").activity_retention_days,
+            30
+        );
+    }
 
     #[tokio::test]
     async fn a_fresh_server_starts_with_usable_defaults() {

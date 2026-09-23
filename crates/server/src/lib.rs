@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 pub mod account;
+pub mod activity;
 pub mod calibration;
 pub mod catalogue;
 pub mod deletion;

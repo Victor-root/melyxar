@@ -82,7 +82,24 @@ impl AppState {
 
         Self {
             inner: Arc::new(Inner {
-                jobs: JobRunner::new(database.clone()),
+                jobs: JobRunner::new(database.clone()).telling({
+                    // Every task over is a line of the activity journal.
+                    let database = database.clone();
+                    move |finished| {
+                        let database = database.clone();
+                        tokio::spawn(async move {
+                            let ended = crate::activity::TaskEnded {
+                                kind: finished.kind,
+                                state: finished.state,
+                                reason: finished.reason,
+                                target: finished.target_id,
+                                took: finished.took,
+                            };
+                            crate::activity::write(&database, crate::activity::Event::TaskEnded(ended))
+                                .await;
+                        });
+                    }
+                }),
                 provider,
                 sessions,
                 config,

@@ -146,6 +146,12 @@ define_id!(
     PlaybackClientId
 );
 
+define_id!(
+    /// Identifies one line of the activity journal. Ordered by when it was
+    /// written, which is the order the journal is read in.
+    ActivityId
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
