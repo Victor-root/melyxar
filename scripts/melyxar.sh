@@ -18,6 +18,13 @@ APP_USER="melyxar"
 APP_GROUP="melyxar"
 SOURCE_DIR="/opt/melyxar/source"
 BINARY_PATH="/usr/local/bin/melyxar"
+# Where the server reads the interface from, which is its own default: the
+# server only reads it, and serves what is put there from the next request.
+INTERFACE_DIR="/usr/local/share/melyxar/web"
+# The commit each part was last installed from, and the files the interface
+# in place is made of. Written only once a part is in place, so an update
+# that stopped halfway is redone rather than taken for done.
+INSTALLED_DIR="/opt/melyxar/installed"
 CONFIG_DIR="/etc/melyxar"
 CONFIG_FILE="${CONFIG_DIR}/melyxar.toml"
 DATA_DIR="/var/lib/melyxar"
@@ -302,6 +309,14 @@ en|step_build|Building the server
 fr|step_build|Compilation du serveur
 en|step_install_binary|Installing the binary
 fr|step_install_binary|Installation du binaire
+en|step_install_interface|Putting the interface in place
+fr|step_install_interface|Mise en place de l'interface
+en|build_nothing|Nothing to rebuild: the server and the interface already match the source.
+fr|build_nothing|Rien à reconstruire : le serveur et l'interface correspondent déjà aux sources.
+en|build_interface_only|Only the interface changed: it is rebuilt and put in place while the server keeps running, with no restart.
+fr|build_interface_only|Seule l'interface a changé : elle est reconstruite et mise en place pendant que le serveur continue de tourner, sans redémarrage.
+en|build_engine_only|Only the server changed: the interface is left as it is.
+fr|build_engine_only|Seul le serveur a changé : l'interface reste telle quelle.
 en|section_config|Configuration
 fr|section_config|Configuration
 en|config_present|A configuration file already exists and was left untouched
@@ -996,39 +1011,170 @@ fetch_source() {
   fi
 }
 
+# ── What changed ──────────────────────────────────────────────────────────────
+# Each part is rebuilt only when something it is made from changed since it
+# was last installed. The interface is made from web/ alone; the server from
+# everything else, apart from what neither is built from. Leaving a folder
+# out of the server wrongly would install a stale server, so the list names
+# what is left out rather than what is in: a folder added one day is counted
+# as the server's until somebody says otherwise.
+INTERFACE_SOURCES=(web)
+ENGINE_SOURCES=(. ':(exclude)web' ':(exclude)docs' ':(exclude)scripts'
+  ':(exclude)README.md' ':(exclude)CLAUDE.md' ':(exclude)LICENSE')
+
+# Whether a part is still the one the source would build now.
+part_is_current() {
+  local part="$1"
+  shift
+  local record="${INSTALLED_DIR}/${part}"
+  [[ -f "$record" ]] || return 1
+  local installed
+  installed="$(<"$record")"
+  # A commit the source no longer holds says nothing about what changed.
+  git -C "$SOURCE_DIR" cat-file -e "${installed}^{commit}" 2>/dev/null || return 1
+  git -C "$SOURCE_DIR" diff --quiet "$installed" HEAD -- "$@"
+}
+
+mark_installed() {
+  mkdir -p "$INSTALLED_DIR"
+  git -C "$SOURCE_DIR" rev-parse HEAD > "${INSTALLED_DIR}/$1"
+}
+
+# Set by the build for whoever runs it next: what it put in place.
+BUILT_ENGINE=0
+
 build_and_install() {
   section "$(tr_msg section_build)"
-  info "$(tr_msg build_notice)"
 
   export PATH="/root/.cargo/bin:${PATH}"
 
-  # Asked for, not assumed. Raising a priority needs a capability an
-  # unprivileged container is not given, even as root inside it, and `nice`
-  # then prints a refusal in the middle of the build and carries on at the
-  # normal priority anyway. Trying it on something that does nothing tells us
-  # which of the two messages to print, and leaves the build itself clean.
-  local priority=()
-  if nice -n -20 true 2>/dev/null; then
-    priority=(nice -n -20)
-    info "$(tr_msg build_nice)"
-  else
-    info "$(tr_msg build_nice_denied)"
+  local engine_needed=1
+  local interface_needed=1
+  if [[ -x "$BINARY_PATH" ]] && part_is_current engine "${ENGINE_SOURCES[@]}"; then
+    engine_needed=0
+  fi
+  if [[ -f "${INTERFACE_DIR}/index.html" ]] && part_is_current interface "${INTERFACE_SOURCES[@]}"; then
+    interface_needed=0
   fi
 
-  # The server embeds the interface at compile time, straight out of
-  # web/dist: it has to exist and be current before cargo ever runs.
-  step "$(tr_msg step_npm_install)" npm --prefix "${SOURCE_DIR}/web" ci
-  step "$(tr_msg step_npm_build)" npm --prefix "${SOURCE_DIR}/web" run build
+  if [[ "$engine_needed" -eq 0 && "$interface_needed" -eq 0 ]]; then
+    success "$(tr_msg build_nothing)"
+    return 0
+  fi
+  if [[ "$engine_needed" -eq 0 ]]; then
+    info "$(tr_msg build_interface_only)"
+  elif [[ "$interface_needed" -eq 0 ]]; then
+    info "$(tr_msg build_engine_only)"
+  fi
 
-  # Highest priority the processor allows, when this machine allows it at
-  # all: this is still in active development, and waiting on a rebuild costs
-  # more right now than a film playing at the same moment would.
-  step "$(tr_msg step_build)" "${priority[@]}" cargo build --release --locked \
-    --manifest-path "${SOURCE_DIR}/Cargo.toml"
+  # Built before the server, and put in place after it: an interface put in
+  # place first would be served for the minutes the server takes to build, to
+  # a server that does not know yet what it asks for.
+  if [[ "$interface_needed" -eq 1 ]]; then
+    step "$(tr_msg step_npm_install)" npm --prefix "${SOURCE_DIR}/web" ci
+    step "$(tr_msg step_npm_build)" npm --prefix "${SOURCE_DIR}/web" run build
+  fi
 
-  step "$(tr_msg step_install_binary)" bash -c "
-    install -m 0755 '${SOURCE_DIR}/target/release/melyxar' '$BINARY_PATH'
-  "
+  if [[ "$engine_needed" -eq 1 ]]; then
+    info "$(tr_msg build_notice)"
+
+    # Asked for, not assumed. Raising a priority needs a capability an
+    # unprivileged container is not given, even as root inside it, and `nice`
+    # then prints a refusal in the middle of the build and carries on at the
+    # normal priority anyway. Trying it on something that does nothing tells us
+    # which of the two messages to print, and leaves the build itself clean.
+    local priority=()
+    if nice -n -20 true 2>/dev/null; then
+      priority=(nice -n -20)
+      info "$(tr_msg build_nice)"
+    else
+      info "$(tr_msg build_nice_denied)"
+    fi
+
+    # Highest priority the processor allows, when this machine allows it at
+    # all: this is still in active development, and waiting on a rebuild costs
+    # more right now than a film playing at the same moment would.
+    step "$(tr_msg step_build)" "${priority[@]}" cargo build --release --locked \
+      --manifest-path "${SOURCE_DIR}/Cargo.toml"
+
+    step "$(tr_msg step_install_binary)" bash -c "
+      install -m 0755 '${SOURCE_DIR}/target/release/melyxar' '$BINARY_PATH'
+    "
+    BUILT_ENGINE=1
+  fi
+
+  if [[ "$interface_needed" -eq 1 ]]; then
+    step "$(tr_msg step_install_interface)" install_interface
+    # In place is live: the server reads it from the next request on.
+    mark_installed interface
+  fi
+}
+
+# Puts the built interface where the server reads it, while it serves.
+#
+# Each file is swapped in whole by a rename, never written over in place, so
+# a file asked for in the middle of it is either the old one or the new one.
+# The page goes last, so it never names a file that is not there yet. A file
+# the update did not change is left alone with its date, which is what tells
+# a browser it has not changed. The files of the interface before this one
+# are kept one update more, for a tab still open on it that asks for the
+# player only when somebody presses play.
+install_interface() {
+  local built="${SOURCE_DIR}/web/dist"
+  # Beside the folder rather than in /tmp: a rename only swaps a file whole
+  # within one file system.
+  local staged="${INTERFACE_DIR}.incoming"
+  local listed="${INSTALLED_DIR}/interface-files"
+
+  [[ -f "${built}/index.html" ]] || return 1
+  rm -rf "$staged" || return 1
+  mkdir -p "$INTERFACE_DIR" "$INSTALLED_DIR" || return 1
+  cp -R "$built" "$staged" || return 1
+  chmod -R u=rwX,go=rX "$staged" || return 1
+
+  local name
+  while IFS= read -r -d '' name; do
+    name="${name#./}"
+    if [[ "$name" != "index.html" ]]; then
+      swap_in "$staged" "$name" || return 1
+    fi
+  done < <(cd "$staged" && find . -type f -print0)
+  swap_in "$staged" index.html || return 1
+
+  # What this interface and the one before it are made of is kept, anything
+  # older goes.
+  local now kept
+  now="$(mktemp)"
+  kept="$(mktemp)"
+  (cd "$built" && find . -type f) | sed 's|^\./||' > "$now" || return 1
+  cat "$now" > "$kept"
+  if [[ -f "$listed" ]]; then
+    cat "$listed" >> "$kept"
+  fi
+  while IFS= read -r -d '' name; do
+    name="${name#./}"
+    if ! grep -Fxq -- "$name" "$kept"; then
+      rm -f "${INTERFACE_DIR}/${name}" || return 1
+    fi
+  done < <(cd "$INTERFACE_DIR" && find . -type f -print0)
+  find "$INTERFACE_DIR" -mindepth 1 -type d -empty -delete || return 1
+
+  mv -f "$now" "$listed" || return 1
+  chmod 0644 "$listed"
+  rm -f "$kept"
+  rm -rf "$staged"
+}
+
+# One file of the staged interface put in place, unless it is already there.
+swap_in() {
+  local staged="$1"
+  local name="$2"
+  local target="${INTERFACE_DIR}/${name}"
+  if [[ -f "$target" ]] && cmp -s "${staged}/${name}" "$target"; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$target")" || return 1
+  mv -f "${staged}/${name}" "$target"
 }
 
 write_configuration() {
@@ -1204,6 +1350,7 @@ action_install() {
   build_and_install
   write_configuration
   install_service
+  mark_installed engine
   show_done
 }
 
@@ -1267,7 +1414,12 @@ action_update() {
   show_update_diff "$before" "$after"
 
   build_and_install
-  step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+  # Only a new server needs a restart. A new interface alone is already being
+  # served, and a film playing through the update is not cut.
+  if [[ "$BUILT_ENGINE" -eq 1 ]]; then
+    step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+    mark_installed engine
+  fi
   show_done
 }
 
@@ -1530,7 +1682,7 @@ action_uninstall() {
   fi
 
   rm -f "$BINARY_PATH"
-  rm -rf "$SOURCE_DIR"
+  rm -rf "$SOURCE_DIR" "$INSTALLED_DIR" "$(dirname "$INTERFACE_DIR")"
 
   if confirm_default_no "$(tr_msg uninstall_keep_data)"; then
     rm -rf "$DATA_DIR" "$CACHE_DIR" "$CONFIG_DIR"
