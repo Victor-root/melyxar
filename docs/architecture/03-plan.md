@@ -232,6 +232,16 @@ Reste à faire :
 
 État : en cours. Les comptes existent pour de vrai ; il reste l'écran d'administration et le reste de la personnalisation.
 
+### Chantier de l'administration
+
+Commencé : l'interface d'administration est refaite de zéro, dans son propre espace avec une barre latérale, et les réglages personnels sont séparés de ceux du serveur (voir le README des décisions). Il réunit le tableau de bord du jalon 7 et l'écran d'administration de celui-ci. Cinq lots, chacun essayé dans le LXC avant le suivant :
+
+1. **Le cadre** : barre latérale et ses douze sections, « Mes réglages » séparés, les écrans qui existent déjà redessinés et rangés à leur place, et un premier Résumé avec ce que le serveur sait déjà dire. Ce qui n'est pas encore branché est dessiné, éteint et marqué « Bientôt ».
+2. **Les mesures du système** : processeur, mémoire, disques, réseau, charge, température quand le conteneur la voit, carte graphique, avec leur historique en base et leurs courbes.
+3. **Lecture et Transcodage** : les lectures en cours, lecture directe comprise, avec leur décision, et le détail d'une lecture.
+4. **Le journal d'activité**, les alertes « À surveiller » et la cloche de la barre du haut.
+5. **Utilisateurs et Appareils** : gestion des comptes, déconnexion d'un appareil, une seule session par navigateur.
+
 ### Comptes, connexion et droits
 
 Fait : la crate `auth` (mots de passe hachés par une fonction lente et gourmande en mémoire, jetons de session tirés au hasard) ; les sessions rangées dans la table des appareils, sans date de fin, vivantes tant qu'elles servent, trente jours sans usage et périmées, avec leur dernier usage réécrit au plus une fois par heure ; un portier unique par lequel tout passe, fermé sauf pour quatre adresses ; le cookie fermé aux scripts, limité au site, exigeant le chiffrement seulement quand le serveur en sert ; les gestionnaires qui déclarent ce dont ils ont besoin, compte ou administrateur, le compilateur refusant qu'ils lisent un compte non demandé ; le journal, le diagnostic, l'explorateur de dossiers, les travaux et la gestion des médiathèques passés en administrateur ; le frein après dix mots de passe erronés d'affilée ; la page de connexion et l'assistant de premier démarrage, où la personne choisit son nom ; les médiathèques autorisées appliquées partout, avec la règle dite à voix haute plutôt que lue dans une absence de lignes ; la langue, le thème et la couleur d'accentuation rattachés au compte ; les commandes de terminal pour lister, créer, limiter, retirer un compte et y remettre un mot de passe, plus l'entrée de menu qui va avec.
