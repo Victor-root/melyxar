@@ -34,6 +34,7 @@ pub mod state;
 pub mod subtitles;
 pub mod thumbnails;
 pub mod upkeep;
+pub mod watching;
 
 pub use state::AppState;
 

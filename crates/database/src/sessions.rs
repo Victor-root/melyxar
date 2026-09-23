@@ -101,6 +101,9 @@ pub struct SignedIn {
     /// Which device this is, so one can be signed out without touching the
     /// others.
     pub device: DeviceId,
+    /// What that device was called when it signed in: what the browser said
+    /// it was, which is what a page turns into "Chrome on Windows".
+    pub device_name: String,
     /// What this browser was told about keeping its session. Carried so that
     /// a token handed to the same browser again is kept exactly as long as
     /// the one it replaces, rather than quietly becoming a longer one.
@@ -168,7 +171,7 @@ impl Database {
         // included, so it is the one place where a second round trip would be
         // paid for over and over.
         let Some(row) = sqlx::query(AssertSqlSafe(crate::users::reading_accounts(
-            ", d.id AS device_id, d.last_seen_at, d.remembered",
+            ", d.id AS device_id, d.name AS device_name, d.last_seen_at, d.remembered",
             "JOIN devices d ON d.user_id = u.id
              WHERE d.token_hash = ?",
         )))
@@ -194,6 +197,7 @@ impl Database {
         Ok(Some(SignedIn {
             user: crate::users::build_user(&row, &allowed)?,
             device,
+            device_name: row.try_get("device_name")?,
             remembered: Remembered::from_int(row.try_get("remembered")?),
         }))
     }
@@ -303,6 +307,7 @@ mod tests {
             .expect("somebody is behind that token");
 
         assert_eq!(signed_in.device, device);
+        assert_eq!(signed_in.device_name, "a browser");
         assert_eq!(signed_in.user.id, user_id);
         assert_eq!(signed_in.user.name, "victor");
         // The rights and the preferences come with it, because every request

@@ -11,14 +11,15 @@
 //! to the last ten minutes fetches the last ten minutes. Writing that by hand
 //! would mean writing an entire specification by hand.
 
-use crate::identifiers::{parse_source, parse_track, parse_work};
+use crate::identifiers::{parse_device, parse_source, parse_track, parse_work};
 use axum::body::Body;
 use axum::extract::{Path as RoutePath, State};
 use axum::http::{header, HeaderValue, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::playback::{
-    ClientProfile, PlayPlan, PlayRequest, Preparation, Session, SEGMENT_DURATION,
+    ClientProfile, PlayPlan, PlayRequest, Preparation, Producing, Session, StreamAction,
+    SubtitleDelivery, SEGMENT_DURATION,
 };
 use melyxar_app::AppState;
 use melyxar_core::id::MediaSourceId;
@@ -27,7 +28,7 @@ use melyxar_core::time::{Millis, Timestamp};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
-use crate::account::Viewer;
+use crate::account::{Administrator, Viewer, Watcher};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -40,6 +41,16 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/playback/tracks",
             axum::routing::post(remember_tracks),
+        )
+        .route(
+            "/api/v1/playback/stopped",
+            axum::routing::post(stopped_watching),
+        )
+        // What is being watched right now, for the administration.
+        .route("/api/v1/system/playing", axum::routing::get(now_playing))
+        .route(
+            "/api/v1/system/playing/{device}/stop",
+            axum::routing::post(stop_playing),
         )
         .route(
             "/api/v1/playback/{id}/session",
@@ -94,6 +105,10 @@ struct PlanBody {
     /// negotiation.
     #[serde(default)]
     preferred_video_codec: Option<String>,
+    /// Sent by a player about to show the film, rather than by a page asking
+    /// only where it would resume: what is being watched starts here.
+    #[serde(default)]
+    watching: bool,
 }
 
 impl PlanBody {
@@ -305,15 +320,20 @@ struct TrackView {
 async fn plan(
     State(state): State<AppState>,
     Viewer(who): Viewer,
+    Watcher(watcher): Watcher,
     RoutePath(id): RoutePath<String>,
     body: Option<Json<PlanBody>>,
 ) -> Result<Json<PlanView>> {
     let source_id = parse_source(&id)?;
     let body = body.map(|Json(body)| body).unwrap_or_default();
+    let watching = body.watching;
 
     let request = body.asked_for(source_id)?;
 
     let plan = melyxar_app::playback::plan(&state, &who, &request).await?;
+    if watching {
+        melyxar_app::watching::starting(&state, watcher, &plan);
+    }
     Ok(Json(plan_view(&plan)))
 }
 
@@ -372,12 +392,7 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
         chosen_subtitle_id: chosen(plan.decision.subtitle_stream_index, true),
         method: plan.decision.method.as_str(),
         expensive: plan.decision.method.is_expensive(),
-        reasons: plan
-            .decision
-            .reasons
-            .iter()
-            .map(|reason| serde_json::to_value(reason).unwrap_or(serde_json::Value::Null))
-            .collect(),
+        reasons: reasons_of(plan),
         duration_minutes: plan.duration.map(whole_minutes),
         // Seconds rather than milliseconds: it is what a player is set to.
         resume_from_seconds: plan.resume_from.map(|position| position.as_seconds_f64()),
@@ -413,17 +428,30 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
             })
             .collect(),
         favourite: plan.favourite,
-        rebuild: plan.rebuild.as_ref().map(|rebuild| RebuildView {
-            by: match rebuild.on_a_card() {
-                true => "card",
-                false => "processor",
-            },
-            codec: rebuild.codec.clone(),
-            height: rebuild.height,
-            bitrate: rebuild.bitrate,
-        }),
+        rebuild: rebuild_view(plan),
         film: film_view(plan),
     }
+}
+
+/// Every reason behind the answer, as codes a page turns into sentences.
+fn reasons_of(plan: &PlayPlan) -> Vec<serde_json::Value> {
+    plan.decision
+        .reasons
+        .iter()
+        .map(|reason| serde_json::to_value(reason).unwrap_or(serde_json::Value::Null))
+        .collect()
+}
+
+fn rebuild_view(plan: &PlayPlan) -> Option<RebuildView> {
+    plan.rebuild.as_ref().map(|rebuild| RebuildView {
+        by: match rebuild.on_a_card() {
+            true => "card",
+            false => "processor",
+        },
+        codec: rebuild.codec.clone(),
+        height: rebuild.height,
+        bitrate: rebuild.bitrate,
+    })
 }
 
 /// What the file holds, beside what is being made of it.
@@ -632,6 +660,7 @@ struct SessionView {
 async fn open_session(
     State(state): State<AppState>,
     Viewer(who): Viewer,
+    Watcher(watcher): Watcher,
     RoutePath(id): RoutePath<String>,
     body: Option<Json<OpenBody>>,
 ) -> Result<Json<SessionView>> {
@@ -654,6 +683,11 @@ async fn open_session(
             .map(melyxar_core::time::Millis::from_seconds_f64),
     )
     .await?;
+    // A session is only ever opened to be watched, whatever the plan before
+    // it said.
+    let device = watcher.device;
+    melyxar_app::watching::starting(&state, watcher, &plan);
+    melyxar_app::watching::session_opened(&state, device, session.id);
     Ok(Json(SessionView {
         id: session.id.to_string(),
         playlist_url: format!("/api/v1/stream/{}/playlist.m3u8", session.id),
@@ -759,10 +793,14 @@ fn preparation_view(seen: &Preparation) -> PreparationView {
         step: seen.step.as_str(),
         ready_seconds: of(seen.ready),
         wanted_seconds: of(seen.wanted),
-        producing: seen.producing.map(|working| ProducingView {
-            pictures_a_second: working.pictures_a_second,
-            speed: working.speed,
-        }),
+        producing: seen.producing.map(producing_view),
+    }
+}
+
+fn producing_view(working: Producing) -> ProducingView {
+    ProducingView {
+        pictures_a_second: working.pictures_a_second,
+        speed: working.speed,
     }
 }
 
@@ -924,25 +962,169 @@ struct ProgressBody {
 struct ProgressView {
     /// False when a fresher report was already here, which is not a failure.
     kept: bool,
+    /// An administrator asked this film to stop: the player leaves it and
+    /// says why.
+    stop: bool,
 }
 
 async fn record_progress(
     State(state): State<AppState>,
     Viewer(who): Viewer,
+    Watcher(watcher): Watcher,
     Json(body): Json<ProgressBody>,
 ) -> Result<Json<ProgressView>> {
     let work_id = parse_work(&body.work_id)?;
+    let position = Millis::from_seconds_f64(body.position_seconds);
 
     let kept = melyxar_app::playback::record_position(
         &state,
         &who,
         work_id,
-        Millis::from_seconds_f64(body.position_seconds),
+        position,
         body.reported_at.unwrap_or_else(melyxar_core::time::now),
     )
     .await?;
+    let stop = melyxar_app::watching::heard(&state, watcher, work_id, position);
 
-    Ok(Json(ProgressView { kept }))
+    Ok(Json(ProgressView { kept, stop }))
+}
+
+#[derive(Debug, Deserialize)]
+struct StoppedBody {
+    work_id: String,
+}
+
+/// A player leaving a film: it is no longer being watched.
+async fn stopped_watching(
+    State(state): State<AppState>,
+    Watcher(watcher): Watcher,
+    Json(body): Json<StoppedBody>,
+) -> Result<Json<serde_json::Value>> {
+    melyxar_app::watching::gone(&state, watcher.device, parse_work(&body.work_id)?);
+    Ok(Json(serde_json::json!({ "gone": true })))
+}
+
+// ---------------------------------------------------------------------------
+// What is being watched, for the administration
+// ---------------------------------------------------------------------------
+
+/// One film playing on one device.
+#[derive(Debug, Serialize)]
+struct WatchedView {
+    /// What a stop is asked of.
+    device: String,
+    user: String,
+    /// What the browser said it was when it signed in, which a page makes
+    /// readable.
+    device_name: String,
+    work_id: String,
+    title: String,
+    kind: &'static str,
+    year: Option<i32>,
+    series: Option<String>,
+    season: Option<i32>,
+    episode: Option<i32>,
+    picture: Option<String>,
+    position_seconds: f64,
+    duration_seconds: Option<f64>,
+    started_at: String,
+    paused: bool,
+    /// Asked to stop, and not stopped yet.
+    stopping: bool,
+    /// How hard the machine is working on it, while a conversion runs.
+    producing: Option<ProducingView>,
+    /// What was decided for it. Absent for a player heard before its plan,
+    /// which is one carrying on across a restart of the server.
+    decision: Option<DecisionView>,
+}
+
+/// What was decided for a film being watched, the file beside it.
+#[derive(Debug, Serialize)]
+struct DecisionView {
+    method: &'static str,
+    expensive: bool,
+    reasons: Vec<serde_json::Value>,
+    film: FilmView,
+    rebuild: Option<RebuildView>,
+    /// How the card is driven, when one rebuilds the picture: vaapi, qsv...
+    ///
+    /// Said here and not to a viewer: this is a fact about the machine, and
+    /// the administration is where it is read.
+    card_way: Option<&'static str>,
+    /// Whether that card reads the film as well as writing it.
+    card_reads_the_film: bool,
+    sound: StreamAction,
+    subtitles: SubtitleDelivery,
+    tone_map: bool,
+}
+
+fn decision_view(plan: &PlayPlan) -> DecisionView {
+    let card = plan.rebuild.as_ref().and_then(|rebuild| rebuild.card.as_ref());
+    DecisionView {
+        method: plan.decision.method.as_str(),
+        expensive: plan.decision.method.is_expensive(),
+        reasons: reasons_of(plan),
+        film: film_view(plan),
+        rebuild: rebuild_view(plan),
+        card_way: card.map(|card| card.way.as_str()),
+        card_reads_the_film: plan
+            .rebuild
+            .as_ref()
+            .is_some_and(|rebuild| rebuild.on_a_card() && rebuild.reads_the_film),
+        sound: plan.decision.audio,
+        subtitles: plan.decision.subtitles,
+        tone_map: plan.decision.tone_map,
+    }
+}
+
+async fn now_playing(
+    _: Administrator,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<WatchedView>>> {
+    let watched = melyxar_app::watching::now_playing(&state).await?;
+    Ok(Json(
+        watched
+            .into_iter()
+            .map(|one| WatchedView {
+                device: one.device.to_string(),
+                user: one.user_name,
+                device_name: one.device_name,
+                work_id: one.work.to_string(),
+                title: one.title,
+                kind: one.kind.as_str(),
+                year: one.year,
+                series: one.series,
+                season: one.season,
+                episode: one.episode,
+                picture: one
+                    .picture
+                    .map(|path| format!("/api/v1/images/{path}")),
+                position_seconds: one.position.as_seconds_f64(),
+                duration_seconds: one
+                    .plan
+                    .as_ref()
+                    .and_then(|plan| plan.duration)
+                    .map(|duration| duration.as_seconds_f64()),
+                started_at: melyxar_core::time::to_text(one.started_at),
+                paused: one.paused,
+                stopping: one.stopping,
+                producing: one.producing.map(producing_view),
+                decision: one.plan.as_deref().map(decision_view),
+            })
+            .collect(),
+    ))
+}
+
+/// Asks the film playing on a device to stop.
+async fn stop_playing(
+    _: Administrator,
+    State(state): State<AppState>,
+    RoutePath(device): RoutePath<String>,
+) -> Result<Json<serde_json::Value>> {
+    if !melyxar_app::watching::stop(&state, parse_device(&device)?) {
+        return Err(ServerError::not_found("nothing is playing on that device"));
+    }
+    Ok(Json(serde_json::json!({ "stopping": true })))
 }
 
 #[derive(Debug, Deserialize)]

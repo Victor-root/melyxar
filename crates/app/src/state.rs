@@ -51,6 +51,8 @@ struct Inner {
     started_at: melyxar_core::time::Timestamp,
     /// What the machine spent lately, read on a steady beat.
     measuring: crate::measures::Measuring,
+    /// What is being watched right now, device by device.
+    watching: crate::watching::Watching,
 }
 
 impl AppState {
@@ -91,6 +93,7 @@ impl AppState {
                 wrong_answers: crate::accounts::WrongAnswers::default(),
                 started_at: melyxar_core::time::now(),
                 measuring: crate::measures::Measuring::new(),
+                watching: crate::watching::Watching::default(),
             }),
         }
     }
@@ -109,6 +112,10 @@ impl AppState {
 
     pub(crate) fn measuring(&self) -> &crate::measures::Measuring {
         &self.inner.measuring
+    }
+
+    pub(crate) fn watching(&self) -> &crate::watching::Watching {
+        &self.inner.watching
     }
 
     pub fn jobs(&self) -> &JobRunner {
