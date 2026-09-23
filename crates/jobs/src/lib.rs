@@ -187,11 +187,25 @@ impl JobHandle {
     }
 }
 
+/// A job over, as whoever is told of it hears it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finished {
+    pub kind: JobKind,
+    pub state: JobState,
+    pub reason: Option<String>,
+    pub target_id: Option<String>,
+    pub took: Duration,
+}
+
+/// Told of every job once it is over.
+type Listener = Arc<dyn Fn(Finished) + Send + Sync>;
+
 /// Starts background work and keeps track of what is running.
 #[derive(Clone)]
 pub struct JobRunner {
     database: Database,
     running: Arc<Mutex<HashMap<JobId, watch::Sender<bool>>>>,
+    told: Option<Listener>,
 }
 
 impl JobRunner {
@@ -199,7 +213,14 @@ impl JobRunner {
         Self {
             database,
             running: Arc::new(Mutex::new(HashMap::new())),
+            told: None,
         }
+    }
+
+    /// The same, telling someone of every job once it is over.
+    pub fn telling(mut self, listener: impl Fn(Finished) + Send + Sync + 'static) -> Self {
+        self.told = Some(Arc::new(listener));
+        self
     }
 
     /// Closes whatever a previous run left hanging, and says what it was.
@@ -267,7 +288,9 @@ impl JobRunner {
 
         let database = self.database.clone();
         let running = Arc::clone(&self.running);
+        let told = self.told.clone();
         let id = job.id;
+        let started = Instant::now();
 
         let completion = tokio::spawn(async move {
             if let Err(error) = database.mark_job_running(id).await {
@@ -291,11 +314,20 @@ impl JobRunner {
             }
             match state {
                 JobState::Failed => {
-                    tracing::warn!(job = %id, kind = kind.as_str(), reason = reason.unwrap_or_default(), "job failed")
+                    tracing::warn!(job = %id, kind = kind.as_str(), reason = reason.as_deref().unwrap_or_default(), "job failed")
                 }
                 _ => {
                     tracing::info!(job = %id, kind = kind.as_str(), state = state.as_str(), "job finished")
                 }
+            }
+            if let Some(told) = told {
+                told(Finished {
+                    kind,
+                    state,
+                    reason,
+                    target_id: job.target_id,
+                    took: started.elapsed(),
+                });
             }
 
             running

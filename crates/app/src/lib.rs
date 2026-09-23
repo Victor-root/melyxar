@@ -9,6 +9,8 @@
 #![forbid(unsafe_code)]
 
 pub mod accounts;
+pub mod activity;
+pub mod attention;
 pub mod avatars;
 pub mod bench;
 pub mod calibration;

@@ -457,6 +457,9 @@ pub fn keep_the_upkeep_running(state: &AppState) -> tokio::task::JoinHandle<()> 
 
         let mut last_run = melyxar_core::time::now();
         let mut last_sweep = forget_the_sessions_nobody_uses(&state).await;
+        // The activity journal on the same beat: the same kind of
+        // housekeeping, owed whatever the library is set to do.
+        crate::activity::forget_the_old(&state).await;
         loop {
             tokio::time::sleep(LOOK_AT_THE_CLOCK_EVERY).await;
 
@@ -465,6 +468,7 @@ pub fn keep_the_upkeep_running(state: &AppState) -> tokio::task::JoinHandle<()> 
             // thumbnails.
             if melyxar_core::time::now() - last_sweep >= FORGET_UNUSED_SESSIONS_EVERY {
                 last_sweep = forget_the_sessions_nobody_uses(&state).await;
+                crate::activity::forget_the_old(&state).await;
             }
 
             let Ok(work) = state.database().library_work().await else {

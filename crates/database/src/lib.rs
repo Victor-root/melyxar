@@ -13,6 +13,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod activity;
 pub mod browse;
 pub mod calibration;
 pub mod catalogue;

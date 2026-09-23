@@ -505,6 +505,9 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     // server has anybody to show them to.
     let measuring = melyxar_app::measures::keep_measuring(&state);
 
+    // The players gone quiet are let go, and what they watched written down.
+    let watching = melyxar_app::watching::keep_swept(&state);
+
     // A scan of a whole collection runs for hours, so an update in the middle
     // of one must not mean starting it over by hand, or worse, forgetting to.
     let cut_short = melyxar_app::startup::close_what_a_previous_run_left(&state)
@@ -512,6 +515,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .context("closing what a previous run left")?;
     melyxar_app::startup::take_up_again_what_a_restart_cut_short(&state, &cut_short).await;
 
+    melyxar_app::activity::record(&state, melyxar_app::activity::Event::ServerStarted).await;
     melyxar_server::serve(address, state.clone(), shutdown_signal())
         .await
         .context("serving")?;
@@ -521,6 +525,9 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     sweeper.abort();
     upkeep.abort();
     measuring.abort();
+    watching.abort();
+    melyxar_app::watching::end_everything(&state).await;
+    melyxar_app::activity::record(&state, melyxar_app::activity::Event::ServerStopped).await;
     melyxar_app::playback::close_every_session(&state).await;
     state.database().close().await;
 

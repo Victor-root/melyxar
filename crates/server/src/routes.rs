@@ -43,6 +43,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/public/branding", get(public_branding))
         .route("/api/v1/public/names", get(names_at_the_door))
         .merge(crate::account::router())
+        .merge(crate::activity::router())
         .merge(crate::calibration::router())
         .merge(crate::catalogue::router())
         .merge(crate::general::router())

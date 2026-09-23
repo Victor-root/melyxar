@@ -20,7 +20,12 @@ use melyxar_core::id::UserId;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::user::{Permissions, User};
 
+use crate::activity::{record, Event};
 use crate::{AppError, AppState, Result};
+
+/// How much of a name typed at the door is written down when it was refused:
+/// anything can be typed there, and a journal is not where it goes whole.
+const LONGEST_NAME_WRITTEN: usize = 64;
 
 /// The fewest characters a password may hold, for whoever has to say so.
 ///
@@ -201,12 +206,23 @@ pub async fn sign_in(
     device_name: &str,
     remembered: Remembered,
 ) -> Result<SignedInOrNot> {
+    let refused = || {
+        record(
+            state,
+            Event::SignInRefused {
+                name: name.chars().take(LONGEST_NAME_WRITTEN).collect(),
+                device: device_name.to_string(),
+            },
+        )
+    };
     let Some((user, stored)) = state.database().user_by_name(name).await? else {
+        refused().await;
         return Ok(SignedInOrNot::NotAPair);
     };
     // An account waiting for its first password is not an account anybody can
     // sign into. It is the state a server sits in before the wizard has run.
     let Some(stored) = stored else {
+        refused().await;
         return Ok(SignedInOrNot::NotAPair);
     };
 
@@ -215,6 +231,15 @@ pub async fn sign_in(
     // and not doing it is the whole point of holding an account back.
     if let Some(left) = state.wrong_answers().held_back(user.id, at) {
         tracing::warn!(account = %user.name, "held back after too many wrong passwords");
+        record(
+            state,
+            Event::SignInHeldBack {
+                user: user.id,
+                user_name: user.name.clone(),
+                device: device_name.to_string(),
+            },
+        )
+        .await;
         return Ok(SignedInOrNot::HeldBack {
             seconds: left.whole_seconds().max(1),
         });
@@ -223,6 +248,7 @@ pub async fn sign_in(
     if !password_matches(password, &stored) {
         state.wrong_answers().one_more(user.id, at);
         tracing::info!(account = %user.name, "refused a sign in");
+        refused().await;
         return Ok(SignedInOrNot::NotAPair);
     }
     state.wrong_answers().forget(user.id);
@@ -233,6 +259,15 @@ pub async fn sign_in(
         .open_session(user.id, device_name, &token.fingerprint(), remembered, now())
         .await?;
     tracing::info!(account = %user.name, device = device_name, "signed in");
+    record(
+        state,
+        Event::SignedIn {
+            user: user.id,
+            user_name: user.name.clone(),
+            device: device_name.to_string(),
+        },
+    )
+    .await;
 
     Ok(SignedInOrNot::Opened(Box::new(OpenedSession { token, user })))
 }
@@ -247,7 +282,6 @@ pub async fn who_holds(state: &AppState, token: &str) -> Result<Option<SignedIn>
         .await?)
 }
 
-/// Signs one device out, and says whether there was one to sign out.
 /// The longest name a page may give its browser. Every real one is a word
 /// or two.
 pub const LONGEST_BROWSER_NAME: usize = 40;
@@ -274,11 +308,25 @@ pub async fn name_the_browser(
     Ok(())
 }
 
+/// Signs one device out, and says whether there was one to sign out.
 pub async fn sign_out(state: &AppState, token: &str) -> Result<bool> {
-    Ok(state
+    let holder = who_holds(state, token).await?;
+    let closed = state
         .database()
         .close_session(&fingerprint_of(token))
-        .await?)
+        .await?;
+    if let Some(holder) = holder.filter(|_| closed) {
+        record(
+            state,
+            Event::SignedOut {
+                user: holder.user.id,
+                user_name: holder.user.name,
+                device: holder.device_name,
+            },
+        )
+        .await;
+    }
+    Ok(closed)
 }
 
 /// Changes somebody's password, and signs every device of theirs out.
@@ -321,6 +369,14 @@ pub async fn change_password(
     state.database().set_password(who.id, Some(&hashed)).await?;
     let closed = state.database().close_every_session_of(who.id).await?;
     tracing::info!(account = %who.name, closed, "changed a password and signed every device out");
+    record(
+        state,
+        Event::PasswordChanged {
+            user: who.id,
+            user_name: who.name.clone(),
+        },
+    )
+    .await;
 
     let token = SessionToken::new().map_err(|error| Trouble::Failed(AppError::Auth(error)))?;
     state
@@ -372,6 +428,14 @@ pub async fn create_the_first_account(
         ))));
     };
     tracing::info!(account = %user.name, "created the first account");
+    record(
+        state,
+        Event::AccountCreated {
+            user: user.id,
+            user_name: user.name.clone(),
+        },
+    )
+    .await;
     Ok(user)
 }
 
@@ -401,6 +465,14 @@ pub async fn create_account(
         administrator = permissions.is_administrator,
         "made an account"
     );
+    record(
+        state,
+        Event::AccountCreated {
+            user: user.id,
+            user_name: user.name.clone(),
+        },
+    )
+    .await;
     Ok(user)
 }
 
@@ -424,6 +496,7 @@ pub async fn remove_account(state: &AppState, name: &str) -> Result<bool> {
     state.database().delete_user(user.id).await?;
     crate::avatars::forget_every_one_of(state, user.id).await;
     tracing::warn!(account = %user.name, "took an account away");
+    record(state, Event::AccountRemoved { user_name: user.name }).await;
     Ok(true)
 }
 
@@ -476,6 +549,14 @@ pub async fn set_a_password(
         closed,
         "a password was set from the terminal and every device signed out"
     );
+    record(
+        state,
+        Event::PasswordChanged {
+            user: user.id,
+            user_name: user.name,
+        },
+    )
+    .await;
     Ok(true)
 }
 

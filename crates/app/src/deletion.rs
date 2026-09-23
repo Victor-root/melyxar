@@ -107,6 +107,9 @@ pub async fn delete(
         }
     }
 
+    // Named before they go, for the line that says they went.
+    let titles = crate::activity::titles_of(state, work_ids).await?;
+
     let off_the_disk = match from_the_disk {
         true => Some(delete_off_the_disk(&going.files).await?),
         false => None,
@@ -130,6 +133,17 @@ pub async fn delete(
         thumbnail_sheets_deleted = sheets,
         "works were deleted"
     );
+    crate::activity::record(
+        state,
+        crate::activity::Event::WorksDeleted {
+            user: who.id,
+            user_name: who.name.clone(),
+            titles,
+            works: removed.works,
+            from_the_disk,
+        },
+    )
+    .await;
     Ok(Deleted {
         removed,
         off_the_disk,
