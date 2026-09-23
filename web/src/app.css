@@ -1053,6 +1053,11 @@
      further down, for the reason the door's own painting gives: light added
      to a white surface is not light, and the accent on white is pink. */
   --band-force: 1;
+  /* Where what the tile shows stands, as a share of its height from its top.
+     Said once because everything has to agree on it: the feet of the
+     posters and of the prints, the line their reflection is folded about,
+     and where that reflection is cut off. */
+  --ground: 69%;
 
   position: relative;
   display: flex;
@@ -1143,11 +1148,6 @@
  */
 .band-posters {
   --open: 0;
-  /* Where the posters stand, as a share of the tile's height from its top.
-     Said once because three things have to agree on it: the posters' own
-     feet, the line the reflection is folded about, and where that reflection
-     is cut off. */
-  --ground: 69%;
 
   position: absolute;
   inset: 0;
@@ -1451,9 +1451,10 @@
  * The pile of prints the way in to what somebody filmed themselves is made
  * of, in place of a fan of posters.
  *
- * Wide pictures with the pale border of a photo print, lying at small angles
- * one over the other, the newest on top. Laid out against the tile like the
- * fan, and spread a little further under the pointer the same way.
+ * Wide pictures with the pale border of a photo print, the newest in front
+ * and square to the eye, the two behind it pushed out to either side and
+ * turned. They stand on the same line the posters do, so the same water
+ * gives them back, and they take the height the fan takes.
  */
 .band-pile {
   --open: 0;
@@ -1467,15 +1468,17 @@
 .band-print {
   position: absolute;
   left: 50%;
-  top: 34%;
-  height: 44%;
+  bottom: calc(100% - var(--ground));
+  height: 52%;
   aspect-ratio: 16 / 9;
   border: 3px solid #f2eee6;
   border-radius: 3px;
   overflow: hidden;
   background: var(--card-color);
+  transform-origin: bottom center;
   transform:
-    translate(calc(-50% + var(--shift, 0%)), calc(-50% + var(--drop, 0%)))
+    translateX(calc(-50% + var(--shift, 0%)))
+    translateY(var(--lift, 0%))
     rotate(var(--lean, 0deg));
   box-shadow: var(--shadow-card);
   transition: transform var(--calm) var(--ease);
@@ -1488,31 +1491,34 @@
   object-fit: cover;
 }
 
-/* The newest, on top and square to the eye, carrying the air of the accent
-   the fan's front poster does. */
 .band-pile > :nth-child(1) {
   z-index: 3;
   --lean: calc(-2deg - 1deg * var(--open));
-  --drop: calc(6% - 4% * var(--open));
+  --lift: calc(-4% * var(--open));
   box-shadow:
     var(--shadow-raised),
     0 0 34px -8px var(--accent-glow);
 }
 
-/* The two under it, pushed out to either side and turned the other way. */
 .band-pile-2 > :nth-child(2),
 .band-pile-3 > :nth-child(2) {
   z-index: 2;
-  --shift: calc(-34% - 10% * var(--open));
-  --drop: -8%;
-  --lean: calc(-11deg - 3deg * var(--open));
+  height: 46%;
+  --shift: calc(-42% - 8% * var(--open));
+  --lift: -6%;
+  --lean: calc(-9deg - 3deg * var(--open));
 }
 
 .band-pile-3 > :nth-child(3) {
   z-index: 1;
-  --shift: calc(34% + 10% * var(--open));
-  --drop: -12%;
-  --lean: calc(9deg + 3deg * var(--open));
+  height: 44%;
+  --shift: calc(44% + 8% * var(--open));
+  --lift: -10%;
+  --lean: calc(8deg + 3deg * var(--open));
+}
+
+.band-mirror .band-print {
+  box-shadow: none;
 }
 
 .band-tile:hover .band-pile,
