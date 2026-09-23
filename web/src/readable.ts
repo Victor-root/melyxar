@@ -298,6 +298,49 @@ export function readableSize(bytes: number): string {
   return unit === 0 ? `${value} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
 }
 
+/** The units of an amount of data, in each language the interface speaks. */
+const DATA_UNITS: Record<string, string[]> = {
+  en: ["B", "kB", "MB", "GB", "TB"],
+  fr: ["o", "ko", "Mo", "Go", "To"],
+};
+
+/**
+ * An amount of data in the units and with the decimal mark of the language
+ * spoken: "6.2 GB" to one reader, "6,2 Go" to another.
+ */
+export function amountOfData(bytes: number, language: string): string {
+  const units = DATA_UNITS[language] ?? DATA_UNITS.en;
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  const digits = unit === 0 || value >= 100 ? 0 : 1;
+  return `${value.toLocaleString(language, { maximumFractionDigits: digits, minimumFractionDigits: digits })}\u00a0${units[unit]}`;
+}
+
+/**
+ * How fast data passes over the network, in bits a second, which is how every
+ * connection is sold and so the number anybody can compare with their own.
+ */
+export function networkRate(bytesPerSecond: number, language: string): string {
+  const units = ["b/s", "kb/s", "Mb/s", "Gb/s"];
+  let value = bytesPerSecond * 8;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  const digits = unit === 0 || value >= 100 ? 0 : 1;
+  return `${value.toLocaleString(language, { maximumFractionDigits: digits, minimumFractionDigits: digits })}\u00a0${units[unit]}`;
+}
+
+/** A share from nought to one as a whole percentage, the way the language writes one. */
+export function percentOf(share: number, language: string): string {
+  return share.toLocaleString(language, { style: "percent", maximumFractionDigits: 0 });
+}
+
 /**
  * A number a field handed back, brought inside what the server will keep.
  *

@@ -781,6 +781,34 @@ export interface Overview {
   devices_today: number;
 }
 
+/** What the machine spent over one stretch of time. */
+export interface MeasurePoint {
+  at: string;
+  /** Shares from nought to one. */
+  processor: number | null;
+  memory_used: number;
+  memory_total: number;
+  load: number | null;
+  /** Bytes a second. */
+  received: number;
+  sent: number;
+  /** Nothing when the server has no card to measure. */
+  card: number | null;
+  /** Degrees, when the machine lets them be read. */
+  temperature: number | null;
+}
+
+/** The live figures, and the disks under every folder the server uses. */
+export interface LiveMeasures {
+  machine: { processor: string | null; threads: number };
+  /** The last ten minutes, a point every two seconds. */
+  recent: MeasurePoint[];
+  disks: { folders: string[]; total_bytes: number; available_bytes: number }[];
+}
+
+/** How far back the curves reach. */
+export type MeasuredOver = "hour" | "day" | "week" | "month" | "year";
+
 export interface SystemInfo {
   server_name: string;
   version: string;
@@ -1177,6 +1205,9 @@ export function browseQuery(options: BrowseOptions): string {
 export const api = {
   system: (signal?: AbortSignal) => get<SystemInfo>("/api/v1/system/info", signal),
   overview: (signal?: AbortSignal) => get<Overview>("/api/v1/system/overview", signal),
+  measures: (signal?: AbortSignal) => get<LiveMeasures>("/api/v1/system/measures", signal),
+  measuresOver: (over: MeasuredOver, signal?: AbortSignal) =>
+    get<MeasurePoint[]>(`/api/v1/system/measures/history?over=${over}`, signal),
   libraries: (signal?: AbortSignal) => get<Library[]>("/api/v1/libraries", signal),
   filters: (library: string, signal?: AbortSignal) =>
     get<Filters>(`/api/v1/libraries/${library}/filters`, signal),

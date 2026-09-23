@@ -17,17 +17,13 @@ import { PageHead, Panel, Soon, Stat, StatePill } from "../../components/panel";
 import type { State } from "../../components/panel";
 import {
   ArrowRightIcon,
-  ChipIcon,
   ClockIcon,
   DatabaseIcon,
   DeviceIcon,
-  DiskIcon,
   FolderIcon,
   GraphicsCardIcon,
   HistoryIcon,
   KindIcon,
-  MemoryIcon,
-  NetworkIcon,
   PeopleIcon,
   PlaybackIcon,
   ServerIcon,
@@ -40,6 +36,7 @@ import { howLongSince, howMany, outOfAHundred, releaseOf } from "../../readable"
 import { useRunning } from "../../running";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
+import { SystemPanel } from "./machine";
 
 /** How often the time the server has been up is written again. */
 const A_MINUTE_MS = 60_000;
@@ -55,7 +52,7 @@ export function AdminOverview() {
       <ServerStrip overview={overview.answer} unreachable={overview.failure !== null} />
 
       <div className="overview-panels">
-        <SystemPanel />
+        <SystemPanel card={overview.answer?.media_tools.card ?? null} />
         <PlayingPanel />
         <LibrariesPanel />
         <TasksPanel />
@@ -182,23 +179,6 @@ function Fact({
         </span>
       </span>
     </div>
-  );
-}
-
-/** What the machine is spending, measured in the next part of this work. */
-function SystemPanel() {
-  const { t } = useSettings();
-  return (
-    <Panel icon={ChipIcon} title={t("admin.system")} lead={t("admin.system_lead")} soon>
-      <div className="stats">
-        <Stat icon={ChipIcon} label={t("admin.cpu")} value="–" />
-        <Stat icon={MemoryIcon} label={t("admin.memory")} value="–" />
-        <Stat icon={DiskIcon} label={t("admin.storage")} value="–" />
-        <Stat icon={NetworkIcon} label={t("admin.network")} value="–" />
-        <Stat icon={GraphicsCardIcon} label={t("admin.card")} value="–" />
-        <Stat icon={ClockIcon} label={t("admin.load")} value="–" />
-      </div>
-    </Panel>
   );
 }
 
