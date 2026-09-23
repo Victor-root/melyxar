@@ -9,6 +9,8 @@
 //! Every one of these is an administrator's to do, and says so through the one
 //! check that exists for it.
 
+use std::path::PathBuf;
+
 use axum::extract::{Path as UrlPath, Query, State};
 use axum::{Json, Router};
 use melyxar_app::AppState;
@@ -46,7 +48,11 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/v1/libraries/{id}/set-aside",
-            axum::routing::delete(take_back_set_aside),
+            axum::routing::get(set_aside_files),
+        )
+        .route(
+            "/api/v1/libraries/{id}/set-aside/take-back",
+            axum::routing::post(take_back_set_aside),
         )
 }
 
@@ -333,20 +339,75 @@ async fn remove(
 }
 
 #[derive(Debug, Serialize)]
+struct SetAsideView {
+    root: String,
+    relative_path: String,
+    /// The whole path, for a person to read.
+    path: String,
+}
+
+/// The files taken out of a library while they stay on the disk.
+async fn set_aside_files(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    UrlPath(id): UrlPath<String>,
+) -> Result<Json<Vec<SetAsideView>>> {
+    let files = melyxar_app::libraries::set_aside_files(&state, library_id(&id)?).await?;
+    Ok(Json(
+        files
+            .iter()
+            .map(|file| SetAsideView {
+                root: file.root_id.to_string(),
+                relative_path: file.relative_path.to_string_lossy().into_owned(),
+                path: file.path().to_string_lossy().into_owned(),
+            })
+            .collect(),
+    ))
+}
+
+/// One file set aside, as it was listed: its folder and its path under it.
+#[derive(Debug, Deserialize)]
+struct SetAsideNamed {
+    root: String,
+    relative_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TakeBack {
+    /// The files to take back; all of them when left out.
+    files: Option<Vec<SetAsideNamed>>,
+}
+
+#[derive(Debug, Serialize)]
 struct TakenBackView {
-    /// How many files the next scan will find again.
+    /// How many files the scan it starts will find again.
     files: u64,
 }
 
-/// Forgets that files were taken out of a library, so its next scan finds
-/// them again.
+/// Forgets that files were taken out of a library, and scans it so they
+/// come back.
 async fn take_back_set_aside(
     State(state): State<AppState>,
     _: crate::account::Administrator,
     UrlPath(id): UrlPath<String>,
+    Json(asked): Json<TakeBack>,
 ) -> Result<Json<TakenBackView>> {
+    let files = asked
+        .files
+        .map(|files| {
+            files
+                .into_iter()
+                .map(|file| Ok((root_id(&file.root)?, PathBuf::from(file.relative_path))))
+                .collect::<Result<Vec<_>>>()
+        })
+        .transpose()?;
     Ok(Json(TakenBackView {
-        files: melyxar_app::libraries::take_back_set_aside(&state, library_id(&id)?).await?,
+        files: melyxar_app::libraries::take_back_set_aside(
+            &state,
+            library_id(&id)?,
+            files.as_deref(),
+        )
+        .await?,
     }))
 }
 

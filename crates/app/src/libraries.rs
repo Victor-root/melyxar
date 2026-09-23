@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 
 use melyxar_core::id::{LibraryId, LibraryRootId, MediaSourceId};
 use melyxar_core::library::{Library, LibraryKind, LibraryRoot, RootAccess};
+pub use melyxar_database::deletion::SetAsideFile;
 pub use melyxar_database::libraries::{Removed, WouldGo};
 
 use crate::{AppError, AppState};
@@ -334,17 +335,46 @@ pub async fn remove_root(
     Ok(went)
 }
 
-/// Forgets that files of this library were taken out of it, so the next scan
-/// finds them again. Answers how many there were.
-pub async fn take_back_set_aside(state: &AppState, library_id: LibraryId) -> Result<u64> {
+/// The files of this library taken out of it while they stay on the disk.
+pub async fn set_aside_files(state: &AppState, library_id: LibraryId) -> Result<Vec<SetAsideFile>> {
+    library_by_id(state, library_id).await?;
+    Ok(state.database().set_aside_files(library_id).await?)
+}
+
+/// Forgets that these files of this library were taken out of it, or all of
+/// them when none is named, and scans the library so they come back at once.
+/// Answers how many were taken back.
+pub async fn take_back_set_aside(
+    state: &AppState,
+    library_id: LibraryId,
+    files: Option<&[(LibraryRootId, PathBuf)]>,
+) -> Result<u64> {
     let library = library_by_id(state, library_id).await?;
-    let taken_back = state.database().take_back_set_aside(library_id).await?;
-    if taken_back > 0 {
-        state.database().bump_library_version(library_id).await?;
-        tracing::info!(
+    let taken_back = state
+        .database()
+        .take_back_set_aside(library_id, files)
+        .await?;
+    if taken_back == 0 {
+        return Ok(0);
+    }
+    state.database().bump_library_version(library_id).await?;
+    tracing::info!(
+        library = library.name,
+        files = taken_back,
+        "files taken out of a library were taken back"
+    );
+    if let Err(error) = crate::scan::start_scan_and_identification(
+        state,
+        library.clone(),
+        melyxar_core::job::JobPriority::REQUESTED,
+        melyxar_core::refresh::RefreshMode::default(),
+    )
+    .await
+    {
+        tracing::warn!(
             library = library.name,
-            files = taken_back,
-            "files taken out of a library will be found again by its next scan"
+            %error,
+            "the scan that brings them back would not start; the next one will"
         );
     }
     Ok(taken_back)
