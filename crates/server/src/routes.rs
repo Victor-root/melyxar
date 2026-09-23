@@ -23,6 +23,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/v1/system/info", get(system_info))
         .route("/api/v1/system/health", get(health))
+        .route("/api/v1/system/overview", get(overview))
         .route("/api/v1/system/diagnostics", get(diagnostics))
         .route("/api/v1/system/diagnostics/text", get(diagnostics_text))
         // One name, two verbs: reading what was said and forgetting it are the
@@ -109,6 +110,13 @@ async fn system_info(State(state): State<AppState>) -> Result<Json<SystemInfo>> 
 /// Minimal liveness answer, for a reverse proxy or a watchdog.
 async fn health() -> &'static str {
     "ok"
+}
+
+async fn overview(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+) -> Result<Json<melyxar_app::overview::Overview>> {
+    Ok(Json(melyxar_app::overview::collect(&state).await?))
 }
 
 async fn diagnostics(
