@@ -49,6 +49,8 @@ struct Inner {
     wrong_answers: crate::accounts::WrongAnswers,
     /// When this server came up, for how long it has been running.
     started_at: melyxar_core::time::Timestamp,
+    /// What the machine spent lately, read on a steady beat.
+    measuring: crate::measures::Measuring,
 }
 
 impl AppState {
@@ -88,6 +90,7 @@ impl AppState {
                 counts: crate::counted::Counts::default(),
                 wrong_answers: crate::accounts::WrongAnswers::default(),
                 started_at: melyxar_core::time::now(),
+                measuring: crate::measures::Measuring::new(),
             }),
         }
     }
@@ -102,6 +105,10 @@ impl AppState {
 
     pub fn started_at(&self) -> melyxar_core::time::Timestamp {
         self.inner.started_at
+    }
+
+    pub(crate) fn measuring(&self) -> &crate::measures::Measuring {
+        &self.inner.measuring
     }
 
     pub fn jobs(&self) -> &JobRunner {

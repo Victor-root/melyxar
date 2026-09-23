@@ -21,6 +21,7 @@ melyxar-metadata = { workspace = true }
 melyxar-playback = { workspace = true }
 melyxar-sound = { workspace = true }
 melyxar-streaming = { workspace = true }
+melyxar-system = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

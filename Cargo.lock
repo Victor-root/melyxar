@@ -1264,6 +1264,7 @@ dependencies = [
  "melyxar-playback",
  "melyxar-sound",
  "melyxar-streaming",
+ "melyxar-system",
  "serde",
  "serde_json",
  "sqlx",

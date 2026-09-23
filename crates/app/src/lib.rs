@@ -21,6 +21,7 @@ pub mod episodes;
 pub mod identify;
 pub mod images;
 pub mod libraries;
+pub mod measures;
 pub mod openings;
 pub mod overview;
 mod own;
