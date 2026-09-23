@@ -446,6 +446,9 @@ fn install_logging(config: &Config, wants_the_detail: bool) {
                 // Every line carries when it happened, which is what makes a
                 // pasted log usable.
                 .with_timer(tracing_subscriber::fmt::time::uptime())
+                // Beside what a command answers rather than inside it: the
+                // installer reads the answer and leaves the log out.
+                .with_writer(std::io::stderr)
                 // The level belongs to the console copy alone. What the screen
                 // keeps is decided next, and deliberately not by this.
                 .with_filter(filter),
