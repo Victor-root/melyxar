@@ -600,6 +600,7 @@ const en: Dictionary = {
   "credit.composer": "Composer",
 
   "player.close": "Back",
+  "player.stopped_by_administrator": "An administrator stopped this playback",
   "player.play": "Play",
   "player.pause": "Pause",
   "player.position": "Playback position",
@@ -1574,6 +1575,7 @@ const fr: Dictionary = {
   "credit.composer": "Musique",
 
   "player.close": "Retour",
+  "player.stopped_by_administrator": "Un administrateur a arrêté cette lecture",
   "player.play": "Lire",
   "player.pause": "Pause",
   "player.position": "Position de lecture",
