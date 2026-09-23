@@ -7,7 +7,7 @@
  * another screen shows here on its own.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api";
 import type { Watched, WatchedDecision } from "../../api";
 import { refusalOf } from "../../asking";
@@ -40,7 +40,7 @@ import { PauseIcon } from "../../player/icons";
 import { containerName } from "../../readable";
 import { useSettings } from "../../settings";
 import { Ghosts } from "./ghosts";
-import { countedOf, episodeOf, shareWatched, useNowPlaying } from "./playing";
+import { countedOf, episodeOf, positionNow, shareWatched, useNowPlaying } from "./playing";
 
 type Wording = (key: string, values?: Record<string, string | number>) => string;
 
@@ -54,21 +54,20 @@ const SOUND_DONE: Record<WatchedDecision["sound"], string> = {
 export function AdminPlayback() {
   const { t } = useSettings();
   const playing = useNowPlaying();
-  const watched = playing.answer ?? [];
+  const watched = playing.watched ?? [];
 
   return (
     <>
       <PageHead lead={t("admin.playback_lead")} />
       <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")}>
-        <PlayingStats watched={playing.answer} />
-        {playing.failure ? (
-          <p className="empty-line">{t(refusalKey(refusalOf(playing.failure)))}</p>
-        ) : watched.length === 0 ? (
-          <p className="empty-line">{playing.answer && t("admin.playing_none")}</p>
+        <PlayingStats watched={playing.watched} />
+        {playing.cut && <p className="panel-notice">{t("error.unreachable")}</p>}
+        {watched.length === 0 ? (
+          <p className="empty-line">{playing.watched && t("admin.playing_none")}</p>
         ) : (
           <div className="watches">
             {watched.map((one) => (
-              <WatchCard key={one.device} watched={one} onStopAsked={playing.look} />
+              <WatchCard key={one.device} watched={one} heardAt={playing.heardAt} />
             ))}
           </div>
         )}
@@ -125,19 +124,42 @@ export function WatchedWords({ watched }: { watched: Watched }) {
         <PeopleIcon size={14} />
         <span>{watched.user}</span>
         <DeviceIcon size={14} />
-        <span title={watched.device_name}>{deviceName(watched.device_name, t)}</span>
+        <span title={watched.device_name}>
+          {deviceName(watched.device_name, t, watched.browser)}
+        </span>
       </span>
     </span>
   );
 }
 
-function WatchCard({ watched, onStopAsked }: { watched: Watched; onStopAsked: () => void }) {
+/** How often the clock of a film playing is written again. */
+const A_SECOND_MS = 1_000;
+
+/** The time now, moved on every second while something runs on it. */
+function useRunningClock(running: boolean): number {
+  const [now, setNow] = useState(() => performance.now());
+  useEffect(() => {
+    setNow(performance.now());
+    if (!running) {
+      return;
+    }
+    const timer = window.setInterval(() => setNow(performance.now()), A_SECOND_MS);
+    return () => window.clearInterval(timer);
+  }, [running]);
+  return now;
+}
+
+function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) {
   const { t } = useSettings();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState(false);
   const [sending, setSending] = useState(false);
-  const share = shareWatched(watched);
+  // Between two words from the server, the clock of a film playing runs on
+  // by itself rather than jumping every ten seconds.
+  const now = useRunningClock(!watched.paused);
+  const position = positionNow(watched, heardAt, Math.max(now, heardAt));
+  const share = shareWatched(watched, position);
   const { decision, producing } = watched;
   const Placeholder = watched.series === null ? FilmIcon : SeriesIcon;
 
@@ -160,7 +182,6 @@ function WatchCard({ watched, onStopAsked }: { watched: Watched; onStopAsked: ()
     } finally {
       setSending(false);
       setAsking(false);
-      onStopAsked();
     }
   };
 
@@ -190,7 +211,7 @@ function WatchCard({ watched, onStopAsked }: { watched: Watched; onStopAsked: ()
               />
             </span>
             <span className="watch-time">
-              {asClock(watched.position_seconds)}
+              {asClock(position)}
               {watched.duration_seconds !== null && ` / ${asClock(watched.duration_seconds)}`}
             </span>
           </div>

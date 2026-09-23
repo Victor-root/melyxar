@@ -1228,22 +1228,43 @@ export function usePlayback({
     [wereRead, neverCame, cueChanged],
   );
 
-  /* Sent whatever the position, because it is also how the server knows the
-     film is being watched: a position worth remembering, or below that only
-     that the player is still here, getting the film ready or in its first
-     seconds. The answer says whether an administrator asked it to stop. */
+  /* An administrator asked for this film to stop, heard on the live line or
+     in an answer, whichever came first. Told to whoever opened the player
+     once. */
+  const heardToStop = useCallback(() => {
+    if (!stopHeard.current) {
+      stopHeard.current = true;
+      toldToStop.current?.();
+    }
+  }, []);
+
+  /* Held open for as long as the film is: its end is how the server knows
+     the player is gone, however it went, and it is how the server says stop
+     the moment it is asked. A browser ties it again by itself when the
+     network drops it. */
+  useEffect(() => {
+    const line = api.playerLine(workId);
+    line.addEventListener("stop", heardToStop);
+    return () => line.close();
+  }, [workId, heardToStop]);
+
+  /* Sent whatever the position, because it is also how the server knows
+     where the film is and whether it stands still: a position worth
+     remembering, or below that only that the player is still here, getting
+     the film ready or in its first seconds. The answer says whether an
+     administrator asked it to stop. */
   const tellTheServer = useCallback(
     (leaving: boolean) => {
       const seconds = lastPosition.current;
+      const paused = video.current?.paused ?? true;
       const said =
         seconds >= WORTH_REPORTING
-          ? api.reportPosition(workId, seconds, leaving)
-          : api.stillPlaying(workId, seconds > 0 ? seconds : null, leaving);
+          ? api.reportPosition(workId, seconds, paused, leaving)
+          : api.stillPlaying(workId, seconds > 0 ? seconds : null, paused, leaving);
       said
         .then((answer) => {
-          if (answer.stop && !stopHeard.current) {
-            stopHeard.current = true;
-            toldToStop.current?.();
+          if (answer.stop) {
+            heardToStop();
           }
         })
         .catch(() => {
@@ -1252,7 +1273,7 @@ export function usePlayback({
           // playing.
         });
     },
-    [workId],
+    [workId, heardToStop],
   );
   const report = useCallback(() => tellTheServer(false), [tellTheServer]);
 
@@ -1451,7 +1472,11 @@ export function usePlayback({
       report();
       reachedTheEnd.current?.();
     };
+    // Said the moment it happens rather than on the next beat: somebody
+    // following the film elsewhere sees it pause, start again or jump at once.
     element.addEventListener("pause", report);
+    element.addEventListener("playing", report);
+    element.addEventListener("seeked", report);
     element.addEventListener("ended", finished);
     element.addEventListener("error", refused);
     return () => {
@@ -1461,6 +1486,8 @@ export function usePlayback({
       element.removeEventListener("volumechange", remember);
       element.removeEventListener("loadedmetadata", onPictureReady);
       element.removeEventListener("pause", report);
+      element.removeEventListener("playing", report);
+      element.removeEventListener("seeked", report);
       element.removeEventListener("ended", finished);
       element.removeEventListener("error", refused);
     };

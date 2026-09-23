@@ -15,6 +15,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api, whenTheDoorCloses } from "./api";
 import type { Account, Branding } from "./api";
+import { foundBrowser } from "./devices";
 
 export interface Who {
   /** The account, or nothing when nobody is signed in. */
@@ -52,6 +53,21 @@ export function useWhoIsThere(): Who {
       .catch(() => setStillAsking(false));
     return () => controller.abort();
   }, []);
+
+  // Which browser this really is, said once somebody is signed in on it: the
+  // line a browser sends about itself cannot tell every one apart.
+  const signedIn = account?.id ?? null;
+  useEffect(() => {
+    if (signedIn === null) {
+      return;
+    }
+    foundBrowser()
+      .then((browser) => api.nameTheBrowser(browser))
+      .catch(() => {
+        // The name of a browser is shown and never decided from: missing,
+        // the line the browser sends stands in for it.
+      });
+  }, [signedIn]);
 
   // What the door needs, asked for only once there is a door to draw.
   useEffect(() => {
