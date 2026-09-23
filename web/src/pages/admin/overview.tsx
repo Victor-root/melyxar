@@ -39,6 +39,8 @@ import { useRunning } from "../../running";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
 import { SystemPanel } from "./machine";
+import { MethodPill, PlayingStats, WatchedWords } from "./playback";
+import { useNowPlaying } from "./playing";
 
 /** How often the time the server has been up is written again. */
 const A_MINUTE_MS = 60_000;
@@ -222,14 +224,32 @@ function Fact({
 /** Who is watching what, and how it reaches them. */
 function PlayingPanel() {
   const { t } = useSettings();
+  const playing = useNowPlaying();
+  const watched = playing.answer ?? [];
+
   return (
-    <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")} soon>
-      <div className="stats">
-        <Stat icon={PlaybackIcon} label={t("admin.playing_count")} value="–" />
-        <Stat icon={GraphicsCardIcon} label={t("admin.transcoding_count")} value="–" />
-        <Stat icon={DeviceIcon} label={t("admin.direct_count")} value="–" />
+    <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")}>
+      <PlayingStats watched={playing.answer} />
+      {watched.length === 0 ? (
+        <p className="empty-line">{playing.answer && t("admin.playing_none")}</p>
+      ) : (
+        <div className="lines">
+          {watched.map((one) => (
+            <div className="line watch-line" key={one.device}>
+              <WatchedWords watched={one} />
+              <span className="line-end">
+                <MethodPill decision={one.decision} />
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="panel-foot">
+        <Link className="button button-small button-accent" to="/admin/playback">
+          {t("admin.see_playback")}
+          <ArrowRightIcon size={15} />
+        </Link>
       </div>
-      <p className="empty-line">{t("admin.playing_empty")}</p>
     </Panel>
   );
 }

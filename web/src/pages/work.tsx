@@ -16,6 +16,7 @@ import { WayBackUp } from "../components/ancestry";
 import { DeleteButton } from "../components/deletion";
 import { IdentifyDialog } from "../components/identify";
 import {
+  containerName,
   howMany,
   nameOfOne,
   numberOfOne,
@@ -560,7 +561,9 @@ function VersionDetails({
       <p className="version-line">
         <span className="version-summary">{version.summary}</span>
         <span className="version-size">{readableSize(version.size_bytes)}</span>
-        {version.container && <span className="version-size">{version.container}</span>}
+        {version.container && (
+          <span className="version-size">{containerName(version.container)}</span>
+        )}
         {version.chapters > 0 && (
           <span className="version-size">{t("work.chapters", { count: version.chapters })}</span>
         )}

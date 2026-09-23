@@ -50,7 +50,7 @@ const SECTIONS: SectionGroup[] = [
   {
     label: "admin.group.playback",
     sections: [
-      { path: "playback", icon: PlaybackIcon, label: "admin.playback", soon: true },
+      { path: "playback", icon: PlaybackIcon, label: "admin.playback" },
       { path: "transcoding", icon: GraphicsCardIcon, label: "admin.transcoding" },
     ],
   },

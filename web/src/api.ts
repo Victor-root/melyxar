@@ -1206,6 +1206,50 @@ export interface Producing {
   speed: number;
 }
 
+/** One film playing on one device, as the administration follows it. */
+export interface Watched {
+  /** What a stop is asked of. */
+  device: string;
+  user: string;
+  /** What the browser said it was when it signed in. */
+  device_name: string;
+  work_id: string;
+  title: string;
+  kind: string;
+  year: number | null;
+  series: string | null;
+  season: number | null;
+  episode: number | null;
+  picture: string | null;
+  position_seconds: number;
+  duration_seconds: number | null;
+  started_at: string;
+  paused: boolean;
+  /** Asked to stop, and not stopped yet. */
+  stopping: boolean;
+  /** How hard the machine works on it, while a conversion runs. */
+  producing: Producing | null;
+  /** What was decided for it. Absent for a player heard before its plan,
+   *  which is one carrying on across a restart of the server. */
+  decision: WatchedDecision | null;
+}
+
+export interface WatchedDecision {
+  /** direct_play, remux, transcode_audio or full_transcode. */
+  method: string;
+  expensive: boolean;
+  reasons: { code: string; [key: string]: unknown }[];
+  film: FilmHolds;
+  rebuild: PictureRebuild | null;
+  /** How the card is driven when one rebuilds the picture: vaapi, qsv... */
+  card_way: string | null;
+  /** Whether that card reads the film as well as writing it. */
+  card_reads_the_film: boolean;
+  sound: "copy" | "transcode" | "drop";
+  subtitles: "none" | "external" | "burn_in";
+  tone_map: boolean;
+}
+
 export interface BrowseOptions {
   library?: string;
   order?: string;
@@ -1414,6 +1458,12 @@ export const api = {
     audio_track_id: string | null;
     subtitle_track_id: string | null;
   }) => post<{ remembered: boolean }>("/api/v1/playback/tracks", body),
+  /* What is being watched right now, on every device. */
+  nowPlaying: (signal?: AbortSignal) => get<Watched[]>("/api/v1/system/playing", signal),
+  /* The player is told on its next word, and the server closes the
+     conversion itself if it never obeys. */
+  stopPlaying: (device: string) =>
+    post<{ stopping: boolean }>(`/api/v1/system/playing/${device}/stop`),
   plan: (source: string, body: unknown, signal?: AbortSignal) =>
     post<PlaybackPlan>(`/api/v1/playback/${source}/plan`, body, signal),
   /**
