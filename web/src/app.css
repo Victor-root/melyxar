@@ -130,16 +130,11 @@
   padding: 0 5px;
   border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  /* A glow of the accent behind the icons, brightest in the middle of the
-     piece and gone before its ends, over the glass the bar has always been.
-     Follows the accent somebody chose. */
+  /* A glow of the accent over the whole piece, even from end to end, laid on
+     the glass the bar has always been. Follows the accent somebody chose. */
+  --header-glow: color-mix(in srgb, var(--accent) 34%, transparent);
   background:
-    radial-gradient(
-      70% 130% at 50% 50%,
-      color-mix(in srgb, var(--accent) 34%, transparent),
-      color-mix(in srgb, var(--accent-dim) 12%, transparent) 55%,
-      transparent 80%
-    ),
+    linear-gradient(var(--header-glow), var(--header-glow)),
     var(--header-glass);
   backdrop-filter: blur(18px);
   box-shadow:
