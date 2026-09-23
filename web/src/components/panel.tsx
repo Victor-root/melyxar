@@ -142,13 +142,13 @@ export function Toggle({
     <button
       type="button"
       role="switch"
-      className="toggle"
+      className="switch"
       aria-checked={checked}
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
     >
-      <span className="toggle-knob" aria-hidden="true" />
+      <span className="switch-knob" aria-hidden="true" />
     </button>
   );
 }

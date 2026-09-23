@@ -274,18 +274,23 @@
     height: 46px;
   }
 
+  /* The name keeps room to be read beside whatever the page offers. */
   .page-head-words {
     flex: 0 1 auto;
+    min-width: 260px;
   }
 
   .page-head-words h1 {
     font-size: 24px;
   }
 
+  /* Two lines at most, which the band holds under the name. */
   .page-head-words p {
+    display: -webkit-box;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.35;
   }
 
   .page-head-actions {
@@ -344,8 +349,11 @@
   );
 }
 
+/* The buttons of a panel go under its name, to the right, once the two no
+   longer fit side by side. */
 .panel-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 12px;
 }
@@ -363,7 +371,7 @@
 }
 
 .panel-words {
-  flex: 1 1 auto;
+  flex: 1 1 220px;
   min-width: 0;
 }
 
@@ -385,9 +393,13 @@
 }
 
 .panel-action {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--gap-tight);
+  max-width: 100%;
+  margin-left: auto;
 }
 
 .panel-body {
@@ -451,11 +463,15 @@
  * A setting on its line, and its controls
  * ----------------------------------------------------------------------- */
 
+/* The words take the room they need to read as sentences, and the control
+   goes under them, to the right, once both no longer fit on one line: a
+   long explanation squeezed into a column a word wide is not read. */
 .setting {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--gap-wide);
+  gap: var(--gap) var(--gap-wide);
   padding: 14px 0;
   border-top: 1px solid var(--border);
 }
@@ -466,6 +482,7 @@
 
 .setting-words {
   display: flex;
+  flex: 1 1 300px;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
@@ -487,10 +504,14 @@
 }
 
 .setting-control {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: var(--gap-tight);
+  max-width: 100%;
+  margin-left: auto;
 }
 
 .setting-soon .setting-control {
@@ -506,7 +527,7 @@
 }
 
 /* A switch: a track, and a knob that crosses it. */
-.toggle {
+.switch {
   position: relative;
   flex: none;
   width: 44px;
@@ -520,7 +541,7 @@
     box-shadow var(--calm) var(--ease);
 }
 
-.toggle-knob {
+.switch-knob {
   position: absolute;
   top: 3px;
   left: 3px;
@@ -533,18 +554,18 @@
     background var(--calm) var(--ease);
 }
 
-.toggle[aria-checked="true"] {
+.switch[aria-checked="true"] {
   border-color: var(--accent);
   background: var(--accent);
   box-shadow: 0 0 12px -2px var(--accent-glow);
 }
 
-.toggle[aria-checked="true"] .toggle-knob {
+.switch[aria-checked="true"] .switch-knob {
   transform: translateX(18px);
   background: var(--accent-contrast);
 }
 
-.toggle:disabled,
+.switch:disabled,
 .picker:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -841,8 +862,11 @@
   flex-direction: column;
 }
 
+/* The name keeps room to be read, and what stands at the end goes under it,
+   to the right, once both no longer fit. */
 .line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--gap);
   min-height: 48px;
@@ -867,7 +891,7 @@
 
 .line-words {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 140px;
   flex-direction: column;
   min-width: 0;
 }
@@ -889,8 +913,12 @@
 }
 
 .line-end {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  margin-left: auto;
   align-items: center;
   gap: var(--gap-tight);
   color: var(--text-soft);

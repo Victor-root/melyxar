@@ -47,9 +47,15 @@ export function AdminJournal() {
 
   return (
     <>
-      <PageHead
-        lead={t("journal.why")}
-        actions={
+      <PageHead lead={t("journal.why")} />
+
+      {/* On the panel they act on rather than beside the name of the page,
+          where three of them left the name no room. */}
+      <Panel
+        icon={JournalIcon}
+        title={t("admin.journal_lines")}
+        className="journal-panel"
+        action={
           <>
             <button className="button button-accent" onClick={copy}>
               {copied ? t("journal.copied") : t("journal.copy")}
@@ -74,9 +80,7 @@ export function AdminJournal() {
             </button>
           </>
         }
-      />
-
-      <Panel icon={JournalIcon} title={t("admin.journal_lines")} className="journal-panel">
+      >
         <div className="journal-filters">
           <label className="journal-search">
             <SearchIcon size={18} />
