@@ -62,6 +62,17 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/v1/me", axum::routing::get(me))
         .route("/api/v1/me/password", axum::routing::put(change_password))
+        .route(
+            "/api/v1/me/avatar",
+            axum::routing::put(choose_avatar)
+                .delete(remove_avatar)
+                // A photo straight off a phone is larger than what any other
+                // request is allowed to carry. Past this, the answer is the
+                // plain "too large" of the protocol, which the interface words.
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    melyxar_app::avatars::LARGEST,
+                )),
+        )
         .route("/api/v1/setup", axum::routing::post(set_this_server_up))
 }
 
@@ -99,14 +110,17 @@ fn answers_to_anybody(path: &str) -> bool {
     {
         return true;
     }
-    matches!(
-        path,
-        "/api/v1/system/health"
-            | "/api/v1/public/branding"
-            | "/api/v1/public/names"
-            | "/api/v1/session"
-            | "/api/v1/setup"
-    )
+    // The pictures of the accounts, which the sign in screen shows beside
+    // their names.
+    path.starts_with("/api/v1/public/faces/")
+        || matches!(
+            path,
+            "/api/v1/system/health"
+                | "/api/v1/public/branding"
+                | "/api/v1/public/names"
+                | "/api/v1/session"
+                | "/api/v1/setup"
+        )
 }
 
 /// Turns the cookie on a request into the account behind it.
@@ -338,6 +352,8 @@ struct AccountView {
     may_download: bool,
     may_delete: bool,
     may_delete_from_disk: bool,
+    /// Where its picture is served, when it has one.
+    avatar: Option<String>,
 }
 
 impl From<&User> for AccountView {
@@ -349,6 +365,7 @@ impl From<&User> for AccountView {
             may_download: user.permissions.may_download,
             may_delete: user.permissions.may_delete,
             may_delete_from_disk: user.permissions.may_delete_from_disk,
+            avatar: user.avatar_path.as_deref().map(crate::images::face_url),
         }
     }
 }
@@ -402,6 +419,26 @@ async fn sign_out(State(state): State<AppState>, headers: HeaderMap) -> Result<R
 
 async fn me(Viewer(user): Viewer) -> Json<AccountView> {
     Json(AccountView::from(&user))
+}
+
+/// Makes the image sent the picture of this account, and answers the account
+/// wearing it.
+async fn choose_avatar(
+    State(state): State<AppState>,
+    Viewer(mut user): Viewer,
+    image: axum::body::Bytes,
+) -> Result<Json<AccountView>> {
+    user.avatar_path = Some(melyxar_app::avatars::set(&state, user.id, &image).await?);
+    Ok(Json(AccountView::from(&user)))
+}
+
+async fn remove_avatar(
+    State(state): State<AppState>,
+    Viewer(mut user): Viewer,
+) -> Result<Json<AccountView>> {
+    melyxar_app::avatars::remove(&state, user.id).await?;
+    user.avatar_path = None;
+    Ok(Json(AccountView::from(&user)))
 }
 
 #[derive(Debug, Deserialize)]
@@ -563,6 +600,25 @@ mod tests {
         let _ = router();
     }
 
+    /// A refusal the interface has no words for reaches the screen as its
+    /// key, in front of somebody who has just chosen a photo.
+    #[test]
+    fn every_reason_a_picture_is_refused_for_has_words_in_both_languages() {
+        let words = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/i18n.ts"),
+        )
+        .expect("the words of the interface");
+
+        for refused in melyxar_app::avatars::Refused::ALL {
+            let key = format!("refused.avatar.{}", refused.as_str());
+            assert_eq!(
+                words.matches(&format!("\"{key}\":")).count(),
+                2,
+                "{key} needs a sentence in English and one in French"
+            );
+        }
+    }
+
     #[test]
     fn the_token_is_picked_out_of_whatever_else_the_cookie_carries() {
         let mut headers = HeaderMap::new();
@@ -639,6 +695,7 @@ mod tests {
             "/api/v1/system/health",
             "/api/v1/public/branding",
             "/api/v1/public/names",
+            "/api/v1/public/faces/an-account/avatar-abc.webp",
             "/api/v1/session",
             "/api/v1/setup",
         ] {

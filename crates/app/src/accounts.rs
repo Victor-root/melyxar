@@ -378,7 +378,7 @@ pub async fn create_account(
     Ok(user)
 }
 
-/// Takes an account away, with everything of theirs.
+/// Takes an account away, with everything of theirs, its picture included.
 ///
 /// Refuses the last administrator. A server with nobody who may manage it
 /// cannot be put right from any screen it serves, and nothing in it would
@@ -396,6 +396,7 @@ pub async fn remove_account(state: &AppState, name: &str) -> Result<bool> {
         )));
     }
     state.database().delete_user(user.id).await?;
+    crate::avatars::forget_every_one_of(state, user.id).await;
     tracing::warn!(account = %user.name, "took an account away");
     Ok(true)
 }

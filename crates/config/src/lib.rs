@@ -87,6 +87,13 @@ impl Directories {
         self.data.join("uploads")
     }
 
+    /// Directory holding the picture each account chose for itself. In the
+    /// data directory: it is made from an image nobody kept, so it cannot be
+    /// made again.
+    pub fn avatars(&self) -> PathBuf {
+        self.data.join("avatars")
+    }
+
     /// Directory holding generated images.
     pub fn images(&self) -> PathBuf {
         self.cache.join("images")

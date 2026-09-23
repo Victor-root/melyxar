@@ -164,6 +164,15 @@ impl From<melyxar_app::deletion::Trouble> for ServerError {
     }
 }
 
+impl From<melyxar_app::avatars::Trouble> for ServerError {
+    fn from(trouble: melyxar_app::avatars::Trouble) -> Self {
+        match trouble {
+            melyxar_app::avatars::Trouble::Refused(refused) => Self::refused(refused.as_str()),
+            melyxar_app::avatars::Trouble::Failed(error) => Self::from(error),
+        }
+    }
+}
+
 impl From<melyxar_app::accounts::Trouble> for ServerError {
     /// A refusal carries the word saying which thing to put right, and the
     /// rule it broke where there is one: the shortest a password may be lives

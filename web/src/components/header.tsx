@@ -43,6 +43,7 @@ import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
 import { KINDS } from "../libraries";
 import { useSettings } from "../settings";
+import { Face } from "./face";
 import {
   ActivityIcon,
   BackIcon,
@@ -492,9 +493,11 @@ export function Header({ libraries }: { libraries: Library[] }) {
             reachable
             label={
               <>
-                <span className="avatar" aria-hidden="true">
-                  {initialsOf(account?.name ?? t("nav.account"))}
-                </span>
+                <Face
+                  className="avatar"
+                  name={account?.name ?? t("nav.account")}
+                  avatar={account?.avatar ?? null}
+                />
                 <span className="header-who">{account?.name ?? t("nav.account")}</span>
               </>
             }
@@ -801,11 +804,4 @@ function Dropdown({
  * for a name in two parts, one otherwise, which is what tells two accounts
  * apart at the size this is drawn.
  */
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  const letters = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : parts[0].slice(0, 1);
-  return letters.toLocaleUpperCase();
-}
+

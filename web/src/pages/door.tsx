@@ -35,11 +35,12 @@ import {
   EyeOffIcon,
   LockIcon,
 } from "../icons";
+import { Face } from "../components/face";
 import { useDoorScreen } from "../screens/door";
 import { useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
 
-/** The letter a name is shown by, where there is no picture of anybody yet.
+/** The letter a name is shown by, where it has no picture.
  *
  *  Taken with the whole of what the browser calls a character, so a name
  *  starting with an accented letter or with something outside the alphabet is
@@ -211,17 +212,20 @@ export function Door({
               {door.names.map((offered) => (
                 <button
                   type="button"
-                  key={offered}
+                  key={offered.name}
                   className="door-who-one"
-                  onClick={() => turnTo({ the: "form", forWhom: offered })}
+                  onClick={() => turnTo({ the: "form", forWhom: offered.name })}
                   /* A name too long for the card is cut on it, so the whole
                      of it has to be readable from somewhere. */
-                  title={offered}
+                  title={offered.name}
                 >
-                  <span className="door-face door-who-face" aria-hidden="true">
-                    {firstLetterOf(offered)}
-                  </span>
-                  <span className="door-who-name">{offered}</span>
+                  <Face
+                    className="door-face door-who-face"
+                    name={offered.name}
+                    avatar={offered.avatar}
+                    letters={firstLetterOf(offered.name)}
+                  />
+                  <span className="door-who-name">{offered.name}</span>
                 </button>
               ))}
             </div>
@@ -245,9 +249,12 @@ export function Door({
             left on the card is the one thing left to do. */}
         {forWhom !== null && (
           <div className="door-forwhom">
-            <span className="door-face door-forwhom-face" aria-hidden="true">
-              {firstLetterOf(forWhom)}
-            </span>
+            <Face
+              className="door-face door-forwhom-face"
+              name={forWhom}
+              avatar={door.names.find((offered) => offered.name === forWhom)?.avatar ?? null}
+              letters={firstLetterOf(forWhom)}
+            />
             <span className="door-forwhom-name">{forWhom}</span>
             {/* Out of sight and genuinely there: a password keeper fills the
                 entry it recognises by the name beside it, and a card with no
