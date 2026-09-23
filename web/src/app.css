@@ -1754,6 +1754,7 @@
 
 .card {
   position: relative;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -2233,6 +2234,9 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 .card-title {
   min-width: 0;
+  /* A file name is often one long word with no space in it. Unbroken, it
+     stretched its card past its neighbours, and the picture with it. */
+  overflow-wrap: anywhere;
   font-size: 14px;
   font-weight: 550;
   line-height: 1.3;

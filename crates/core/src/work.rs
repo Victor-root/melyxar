@@ -152,6 +152,12 @@ impl WorkKind {
     pub fn is_playable(self) -> bool {
         matches!(self, Self::Movie | Self::Episode | Self::Song | Self::Video)
     }
+
+    /// Whether this is something somebody filmed or photographed themselves,
+    /// which is never put before everybody the way a film is.
+    pub fn is_home_media(self) -> bool {
+        matches!(self, Self::Folder | Self::Video | Self::Photo)
+    }
 }
 
 /// A work as stored: the common trunk only. Domain specific metadata, such as

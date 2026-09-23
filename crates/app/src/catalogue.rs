@@ -301,6 +301,9 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
             order: WorkOrder::AddedAt,
             descending: true,
             limit: RECENTLY_ADDED,
+            // Every library at once is films and series, and what people
+            // filmed themselves waits in its own row, lying down as it should.
+            catalogued_only: library_id.is_none(),
             ..Default::default()
         },
         who,
@@ -338,7 +341,8 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
 ///
 /// Then what an administrator put there, then what has just arrived, then
 /// what the server offers. Each source is asked only for what the ones before
-/// it left room for, and nothing appears twice.
+/// it left room for, and nothing appears twice. What people filmed and
+/// photographed themselves never stands there: the banner is a poster wall.
 async fn the_hero(
     state: &AppState,
     who: &User,
@@ -353,7 +357,10 @@ async fn the_hero(
                     because: Because,
                     episode_of: Option<EpisodePlace>,
                     hero: &mut Vec<HeroItem>| {
-        if hero.len() < IN_THE_HERO as usize && already.insert(card.id) {
+        if hero.len() < IN_THE_HERO as usize
+            && !card.kind.is_home_media()
+            && already.insert(card.id)
+        {
             hero.push(HeroItem {
                 card: card.clone(),
                 because,
@@ -959,6 +966,51 @@ mod tests {
             vec!["Drame", "Thriller"]
         );
         assert_eq!(offered.decades, vec![(2010, 1)]);
+    }
+
+    #[tokio::test]
+    async fn what_people_filmed_themselves_keeps_to_its_own_row() {
+        let (directory, state, _, viewer) = state_with_films(&["Quiet Harbour"]).await;
+        let own = state
+            .database()
+            .create_library(
+                "Family",
+                LibraryKind::HomeMedia,
+                "fr",
+                &[("disk-one".to_string(), directory.path().join("family"))],
+            )
+            .await
+            .expect("library created");
+        state
+            .database()
+            .create_work(own.id, WorkKind::Video, "Beach Day", "beach day", None)
+            .await
+            .expect("work created");
+
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert_eq!(
+            page.recently_added
+                .cards
+                .iter()
+                .map(|card| card.title.as_str())
+                .collect::<Vec<_>>(),
+            ["Quiet Harbour"],
+            "the row of every library is films and series"
+        );
+        assert!(
+            page.hero.iter().all(|entry| entry.card.title != "Beach Day"),
+            "and the banner never shows a video of one's own"
+        );
+        assert!(
+            page.shelves
+                .iter()
+                .any(|shelf| shelf.kind == LibraryKind::HomeMedia && shelf.cards.len() == 1),
+            "which has a row of its own"
+        );
+
+        let family = home(&state, Some(own.id), &viewer).await.expect("read");
+        assert_eq!(family.recently_added.cards.len(), 1, "and its own page");
+        assert!(family.hero.is_empty());
     }
 
     #[tokio::test]
