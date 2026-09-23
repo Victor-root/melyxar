@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { api } from "./api";
 import { AttentionProvider } from "./attention";
+import { AdministrationLine } from "./live";
 import { Header } from "./components/header";
 import { isSectioned } from "./components/sectioned";
 import { ScrollBar } from "./components/scrollbar";
@@ -112,6 +113,7 @@ function TheLibrary() {
     <RunningContext.Provider value={running}>
       <LibrariesContext.Provider value={libraries}>
         <Toasts>
+        <AdministrationLine>
         <AttentionProvider>
         {/* The bar stands over the page rather than beside it, so the page
             can be scrolled up behind it and read faintly through the glass.
@@ -165,6 +167,7 @@ function TheLibrary() {
           <ScrollBar holder={scrolling} />
         </div>
         </AttentionProvider>
+        </AdministrationLine>
         </Toasts>
       </LibrariesContext.Provider>
     </RunningContext.Provider>

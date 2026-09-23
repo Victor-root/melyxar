@@ -19,6 +19,7 @@ pub mod images;
 pub mod interface;
 pub mod jobs;
 pub mod libraries;
+pub mod live;
 pub mod page;
 pub mod pictures;
 pub mod playback;

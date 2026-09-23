@@ -1522,10 +1522,11 @@ export const api = {
   /* Quiets every point that can be, and answers what is left. */
   markAttentionSeen: () =>
     post<{ points: AttentionPoint[] }>("/api/v1/system/attention/seen"),
-  /* What is being watched right now, on every device, sent again by the
-     server the moment it changes: listen for "playing", and "failed" when it
-     could not be read. */
-  administrationLine: () => new EventSource("/api/v1/system/playing/live"),
+  /* The administration's live line: "activity" whenever a line of the
+     journal is written and, when asked for, "playing" with what is being
+     watched whenever it changes, and "failed" when it could not be read. */
+  administrationLine: (playing: boolean) =>
+    new EventSource(`/api/v1/system/live${playing ? "?playing=true" : ""}`),
   /* The player is told on its next word, and the server closes the
      conversion itself if it never obeys. */
   stopPlaying: (device: string) =>

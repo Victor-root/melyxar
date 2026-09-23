@@ -1,18 +1,17 @@
 /*
  * What is being watched right now, as the administration follows it.
  *
- * Sent by the server the moment anything changes, a film started, paused,
- * moved or left, and every two seconds for the speed of a conversion: nobody
- * reloads anything. The line is closed while the page is hidden, since it
- * holds one of the few connections a browser opens to this server. Shared by
- * the summary and the page of its own, so both count the same way.
+ * Sent by the server on the administration's live line the moment anything
+ * changes, a film started, paused, moved or left, and every two seconds for
+ * the speed of a conversion: nobody reloads anything. Shared by the summary
+ * and the page of its own, so both count the same way.
  */
 
-import { useEffect, useState } from "react";
-import { api } from "../../api";
+import { useState } from "react";
 import type { Watched } from "../../api";
+import { usePlayingNews } from "../../live";
 
-/** What the administration's line last brought, and when it did. */
+/** What the line last brought, and when it did. */
 export interface NowPlaying {
   /** Nothing until the first word. */
   watched: Watched[] | null;
@@ -26,39 +25,13 @@ export interface NowPlaying {
 
 export function useNowPlaying(): NowPlaying {
   const [now, setNow] = useState<NowPlaying>({ watched: null, heardAt: 0, cut: false });
-
-  useEffect(() => {
-    let line: EventSource | null = null;
-    const open = () => {
-      line = api.administrationLine();
-      line.addEventListener("playing", (event) => {
-        const watched = JSON.parse((event as MessageEvent<string>).data) as Watched[];
-        setNow({ watched, heardAt: performance.now(), cut: false });
-      });
-      line.addEventListener("failed", () => setNow((was) => ({ ...was, cut: true })));
-      line.onerror = () => setNow((was) => ({ ...was, cut: true }));
-    };
-    const close = () => {
-      line?.close();
-      line = null;
-    };
-    const followVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        close();
-      } else if (line === null) {
-        open();
-      }
-    };
-    if (document.visibilityState !== "hidden") {
-      open();
-    }
-    document.addEventListener("visibilitychange", followVisibility);
-    return () => {
-      document.removeEventListener("visibilitychange", followVisibility);
-      close();
-    };
-  }, []);
-
+  usePlayingNews((news) =>
+    setNow((was) =>
+      "cut" in news
+        ? { ...was, cut: true }
+        : { watched: news.watched, heardAt: performance.now(), cut: false },
+    ),
+  );
   return now;
 }
 
