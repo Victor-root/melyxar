@@ -78,7 +78,9 @@ pub async fn what_deleting_takes(
         crate::reach::may_read(who, library_id)?;
     }
     match going.works {
-        0 => Err(Trouble::Failed(melyxar_core::Error::not_found("work").into())),
+        0 => Err(Trouble::Failed(
+            melyxar_core::Error::not_found("work").into(),
+        )),
         _ => Ok(going),
     }
 }

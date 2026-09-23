@@ -502,7 +502,10 @@ mod tests {
             .what_deleting_takes(&both)
             .await
             .expect("read");
-        assert_eq!(going.works, 4, "an episode asked for with its series is in it");
+        assert_eq!(
+            going.works, 4,
+            "an episode asked for with its series is in it"
+        );
         assert_eq!(going.sources.len(), 2);
         assert_eq!(going.files.len(), 4);
         assert_eq!(going.library_ids, [world.library_id]);
@@ -635,7 +638,10 @@ mod tests {
             .set_aside_files(world.library_id)
             .await
             .expect("read");
-        let paths: Vec<&Path> = listed.iter().map(|file| file.relative_path.as_path()).collect();
+        let paths: Vec<&Path> = listed
+            .iter()
+            .map(|file| file.relative_path.as_path())
+            .collect();
         assert_eq!(
             paths,
             [
