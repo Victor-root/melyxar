@@ -20,6 +20,7 @@ import { api } from "./api";
 import type { ViewerPreferences } from "./api";
 import { initialLanguage, rememberLanguage, safeRead, safeWrite, translate } from "./i18n";
 import type { Language } from "./i18n";
+import { markTheTab, vividOf } from "./mark";
 
 export type ThemeChoice = "dark" | "light" | "system";
 
@@ -152,11 +153,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       delete root.dataset.accent;
       root.style.removeProperty("--accent");
       root.style.removeProperty("--accent-contrast");
+      root.style.removeProperty("--mark-colour");
+      void markTheTab(null);
       return;
     }
     root.dataset.accent = "chosen";
     root.style.setProperty("--accent", accent);
     root.style.setProperty("--accent-contrast", readableOn(accent));
+    // The logo too, on the page and in the tab of the browser.
+    const vivid = vividOf(accent);
+    root.style.setProperty("--mark-colour", vivid);
+    void markTheTab(vivid);
   }, [accent]);
 
   // The banner writes two numbers onto the document, the way the accent
