@@ -372,7 +372,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
               aria-label={t("nav.search")}
               aria-expanded={looking}
             >
-              <SearchIcon size={20} />
+              <SearchIcon size={22} />
             </button>
             <input
               ref={field}
@@ -462,7 +462,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
             title={t("nav.later")}
             aria-label={`${t("nav.notifications")} (${t("nav.later")})`}
           >
-            <BellIcon size={22} />
+            <BellIcon size={24} />
           </button>
 
           <NavLink
@@ -471,7 +471,7 @@ export function Header({ libraries }: { libraries: Library[] }) {
             title={t("nav.favourites")}
             aria-label={t("nav.favourites")}
           >
-            <HeartIcon size={22} filled={false} />
+            <HeartIcon size={24} filled={false} />
           </NavLink>
 
           {/*
