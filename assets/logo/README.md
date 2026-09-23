@@ -41,15 +41,20 @@ WebP restitue à l'identique.
 Dans l'interface, le logo prend la couleur d'accentuation choisie par chaque
 compte. Ce qui est servi n'est donc pas le logo rouge mais son relief : une
 image en niveaux de gris qui ne garde que la lumière et l'ombre du ruban, avec
-la transparence d'origine. L'interface pose la couleur d'accentuation, la
-découpe à la forme du logo, et applique le relief par-dessus en lumière dure :
-un gris moyen laisse la couleur telle quelle, plus clair l'éclaircit, plus
-sombre l'assombrit.
+la transparence d'origine. L'interface pose une couleur vive tirée de
+l'accentuation (sa teinte, sa saturation poussée de 35 %, une luminosité de
+45 %), la découpe à la forme du logo, et applique le relief par-dessus en
+lumière dure : un gris moyen laisse la couleur telle quelle, plus clair
+l'éclaircit, plus sombre l'assombrit.
 
-Le relief se tire de la version rouge recadrée, pixel par pixel : gris =
-0,55 × rouge + 0,9 × moyenne du vert et du bleu, plafonné au blanc, sur une
-échelle de 0 à 1, transparence inchangée. Le rouge vif du ruban tombe ainsi
-près du gris moyen, et ses reflets clairs au-dessus.
+Le relief est calculé pour rendre le logo d'origine le plus fidèlement
+possible avec l'accentuation par défaut, qui donne le rouge pur à 45 % de
+luminosité : pour chaque pixel de la version rouge recadrée, on garde le gris
+dont le résultat en lumière dure sur ce rouge est le plus proche du pixel
+d'origine (écart pondéré rouge 0,5, vert 1, bleu 0,6), transparence
+inchangée. L'écart moyen restant est d'environ douze niveaux sur 255,
+invisible à l'œil. Les versions rouges dont il part se refont depuis
+l'original, recadrées et marginées comme les autres tailles.
 
 Les icônes d'onglet et d'écran d'accueil gardent le rouge : le navigateur les
 affiche hors de la page, sans la couleur de personne.
