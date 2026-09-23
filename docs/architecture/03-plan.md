@@ -79,7 +79,7 @@ Vérifié dans l'environnement de travail : une affiche réelle est préparée e
 
 État : en cours. On peut parcourir la bibliothèque dans un navigateur, ouvrir une fiche et chercher un titre ; ce qui reste demande un compte connecté ou du travail de fond qui n'existe pas encore.
 
-Fait : les routes de navigation (cartes paginées par curseur, fiche, images, filtres), le tri par titre, date d'ajout, année, note et durée, les filtres par genre, décennie et « à identifier », la recherche, la page d'accueil avec les derniers ajouts, la fiche complète avec sélecteur de version, distribution en visages, équipe, saga et bandes annonces, la page des tâches, les deux langues, les deux thèmes, et l'interface embarquée dans le binaire.
+Fait : les routes de navigation (cartes paginées par curseur, fiche, images, filtres), le tri par titre, date d'ajout, année, note et durée, les filtres par genre, décennie et « à identifier », la recherche, la page d'accueil avec les derniers ajouts, la fiche complète avec sélecteur de version, distribution en visages, équipe, saga et bandes annonces, la page des tâches, les deux langues, les deux thèmes, et l'interface embarquée dans le binaire (servie depuis son propre dossier depuis, voir le README des décisions).
 
 Reste : la liste « à voir plus tard » et les favoris (le compte connecté qu'ils attendaient existe désormais), les films similaires, la correction manuelle depuis l'interface, la spécification OpenAPI et le canal temps réel.
 
