@@ -321,7 +321,12 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
     let counted = crate::reach::counted_for(state, who, library_id).await?;
 
     Ok(Home {
-        hero: the_hero(state, who, granted, &carry_on, &recently_added).await?,
+        // Not drawn and so not worked out: dressing its candidates is the
+        // dearest part of the page, and nobody would see the result.
+        hero: match who.preferences.banner_shown {
+            true => the_hero(state, who, granted, &carry_on, &recently_added).await?,
+            false => Vec::new(),
+        },
         carry_on,
         up_next,
         shelves: the_shelves(state, who).await?,
@@ -950,6 +955,18 @@ mod tests {
         .normalised();
         let page = home(&state, None, &viewer).await.expect("read");
         assert_eq!(kinds(&page), vec![LibraryKind::Anime, LibraryKind::Movies]);
+    }
+
+    #[tokio::test]
+    async fn a_banner_turned_off_is_not_drawn_but_the_rows_still_are() {
+        let (_directory, state, _library_id, mut viewer) =
+            state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
+        assert!(!home(&state, None, &viewer).await.expect("read").hero.is_empty());
+
+        viewer.preferences.banner_shown = false;
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert!(page.hero.is_empty());
+        assert_eq!(page.recently_added.cards.len(), 3);
     }
 
     #[tokio::test]

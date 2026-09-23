@@ -28,6 +28,7 @@ const STORED_ACCENT = "melyxar.accent";
 const STORED_BANNER_HEIGHT = "melyxar.banner.height";
 const STORED_BANNER_CUT = "melyxar.banner.cut";
 const STORED_BANNER_WHOLE = "melyxar.banner.whole";
+const STORED_BANNER_SHOWN = "melyxar.banner.shown";
 const STORED_HEADER_HIDES = "melyxar.header.hides";
 
 /** The red of the Melyxar theme, which needs none of the work below. */
@@ -55,6 +56,9 @@ interface Settings {
       nothing left to decide. */
   bannerFillsTheScreen: boolean;
   setBannerFillsTheScreen: (whole: boolean) => void;
+  /** Whether the home page opens on its banner at all. */
+  bannerShown: boolean;
+  setBannerShown: (shown: boolean) => void;
   /** Whether the bar at the top slides away while a page is read down, and
       comes back at the first move up. */
   headerHides: boolean;
@@ -94,6 +98,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
   const [bannerFillsTheScreen, setBannerFillsState] = useState(
     () => safeRead(STORED_BANNER_WHOLE) === "yes",
+  );
+  const [bannerShown, setBannerShownState] = useState(
+    () => safeRead(STORED_BANNER_SHOWN) !== "no",
   );
   const [headerHides, setHeaderHidesState] = useState(
     () => safeRead(STORED_HEADER_HIDES) !== "no",
@@ -190,6 +197,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ banner_fills_the_screen: whole });
   }, []);
 
+  const setBannerShown = useCallback((shown: boolean) => {
+    safeWrite(STORED_BANNER_SHOWN, shown ? "yes" : "no");
+    setBannerShownState(shown);
+    tellTheServer({ banner_shown: shown });
+  }, []);
+
   const setHeaderHides = useCallback((hides: boolean) => {
     safeWrite(STORED_HEADER_HIDES, hides ? "yes" : "no");
     setHeaderHidesState(hides);
@@ -216,6 +229,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setBannerCutState(chosen.banner_cut);
     safeWrite(STORED_BANNER_WHOLE, chosen.banner_fills_the_screen ? "yes" : "no");
     setBannerFillsState(chosen.banner_fills_the_screen);
+    safeWrite(STORED_BANNER_SHOWN, chosen.banner_shown ? "yes" : "no");
+    setBannerShownState(chosen.banner_shown);
     safeWrite(STORED_HEADER_HIDES, chosen.header_hides_on_scroll ? "yes" : "no");
     setHeaderHidesState(chosen.header_hides_on_scroll);
   }, []);
@@ -232,6 +247,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerCut,
       bannerFillsTheScreen,
       setBannerFillsTheScreen,
+      bannerShown,
+      setBannerShown,
       headerHides,
       setHeaderHides,
       adopt,
@@ -248,6 +265,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerCut,
       bannerFillsTheScreen,
       setBannerFillsTheScreen,
+      bannerShown,
+      setBannerShown,
       headerHides,
       setHeaderHides,
       adopt,

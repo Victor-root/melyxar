@@ -278,6 +278,9 @@ pub struct Preferences {
     /// Where a band is cut out of a picture taller than the band, between
     /// nought at its top and one at its foot.
     pub banner_cut: f64,
+    /// Whether the home page opens on its banner at all. Hidden, the page
+    /// starts with its rows, and the other banner settings wait unused.
+    pub banner_shown: bool,
     /// Whether the banner draws a fresh handful every time the page is
     /// opened, in place of what was left halfway and what has just arrived.
     pub banner_at_random: bool,
@@ -312,6 +315,7 @@ impl Default for Preferences {
             downmix_gain: DEFAULT_DOWNMIX_GAIN,
             banner_height: DEFAULT_BANNER_HEIGHT,
             banner_cut: DEFAULT_BANNER_CUT,
+            banner_shown: true,
             banner_at_random: false,
             banner_fills_the_screen: false,
             header_hides_on_scroll: true,

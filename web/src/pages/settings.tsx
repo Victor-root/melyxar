@@ -544,12 +544,28 @@ function Banner({
     setBannerCut,
     bannerFillsTheScreen,
     setBannerFillsTheScreen,
+    bannerShown,
+    setBannerShown,
   } = useSettings();
   const marks = useMarks();
 
   return (
     <section className="settings-block">
       <h2>{t("settings.banner")}</h2>
+
+      <label className="settings-switch">
+        <input
+          type="checkbox"
+          checked={bannerShown}
+          onChange={(event) => {
+            setBannerShown(event.target.checked);
+            // The server leaves the banner out of the page it sends, so the
+            // page is read again to lose it or to get it back.
+            marks.rowsHaveMoved();
+          }}
+        />
+        <span>{t("settings.banner_shown")}</span>
+      </label>
       <p className="settings-why">{t("settings.banner_why")}</p>
 
       <div className="controls">
@@ -571,7 +587,7 @@ function Banner({
             /* Nothing left for it to decide while the banner takes the whole
                window, and still readable, so what it is set to can be seen
                before it is turned back on. */
-            disabled={bannerFillsTheScreen}
+            disabled={!bannerShown || bannerFillsTheScreen}
             onChange={(event) => setBannerHeight(Number(event.target.value))}
           />
         </label>
@@ -587,6 +603,7 @@ function Banner({
             max={1}
             step={0.01}
             value={bannerCut}
+            disabled={!bannerShown}
             onChange={(event) => setBannerCut(Number(event.target.value))}
           />
         </label>
@@ -597,6 +614,7 @@ function Banner({
         <input
           type="checkbox"
           checked={bannerFillsTheScreen}
+          disabled={!bannerShown}
           onChange={(event) => setBannerFillsTheScreen(event.target.checked)}
         />
         <span>{t("settings.banner_whole")}</span>
@@ -608,6 +626,7 @@ function Banner({
           <input
             type="checkbox"
             checked={kept.banner_at_random}
+            disabled={!bannerShown}
             onChange={(event) => {
               change({ banner_at_random: event.target.checked });
               // The banner is part of the page this changes, so the page is

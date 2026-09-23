@@ -40,8 +40,8 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
      p.theme_mode, p.accent_color, p.custom_css, p.volume,
      p.downmix_method, p.downmix_gain,
-     p.banner_height, p.banner_cut, p.banner_at_random, p.banner_fills_the_screen,
-     p.header_hides_on_scroll,
+     p.banner_height, p.banner_cut, p.banner_shown, p.banner_at_random,
+     p.banner_fills_the_screen, p.header_hides_on_scroll,
      p.hidden_at_the_door, p.home_order";
 
 /// The read of an account, with whatever else the caller needs alongside and
@@ -322,7 +322,7 @@ impl Database {
                 interface_language = ?, preferred_audio_language = ?,
                 preferred_subtitle_language = ?, theme_mode = ?, accent_color = ?,
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
-                banner_height = ?, banner_cut = ?, banner_at_random = ?,
+                banner_height = ?, banner_cut = ?, banner_shown = ?, banner_at_random = ?,
                 banner_fills_the_screen = ?, header_hides_on_scroll = ?,
                 hidden_at_the_door = ?, home_order = ?
              WHERE user_id = ?",
@@ -338,6 +338,7 @@ impl Database {
         .bind(preferences.downmix_gain)
         .bind(preferences.banner_height)
         .bind(preferences.banner_cut)
+        .bind(preferences.banner_shown)
         .bind(preferences.banner_at_random)
         .bind(preferences.banner_fills_the_screen)
         .bind(preferences.header_hides_on_scroll)
@@ -403,10 +404,10 @@ async fn write_an_account(
     sqlx::query(
         "INSERT INTO user_preferences (user_id, interface_language, theme_mode, accent_color,
                                        volume, downmix_method, downmix_gain,
-                                       banner_height, banner_cut, banner_at_random,
+                                       banner_height, banner_cut, banner_shown, banner_at_random,
                                        banner_fills_the_screen, header_hides_on_scroll,
                                        hidden_at_the_door, home_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -417,6 +418,7 @@ async fn write_an_account(
     .bind(preferences.downmix_gain)
     .bind(preferences.banner_height)
     .bind(preferences.banner_cut)
+    .bind(preferences.banner_shown)
     .bind(preferences.banner_at_random)
     .bind(preferences.banner_fills_the_screen)
     .bind(preferences.header_hides_on_scroll)
@@ -484,6 +486,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             downmix_gain: row.try_get("downmix_gain")?,
             banner_height: row.try_get("banner_height")?,
             banner_cut: row.try_get("banner_cut")?,
+            banner_shown: row.try_get("banner_shown")?,
             banner_at_random: row.try_get("banner_at_random")?,
             banner_fills_the_screen: row.try_get("banner_fills_the_screen")?,
             header_hides_on_scroll: row.try_get("header_hides_on_scroll")?,
@@ -864,6 +867,7 @@ mod tests {
             theme_mode: ThemeMode::Dark,
             banner_height: 9.0,
             banner_cut: 0.6,
+            banner_shown: false,
             banner_at_random: true,
             banner_fills_the_screen: true,
             header_hides_on_scroll: false,
@@ -890,6 +894,7 @@ mod tests {
         // And what was already inside its range travels untouched, which is
         // what says the three really made the round trip through the row.
         assert_eq!(loaded.preferences.banner_cut, 0.6);
+        assert!(!loaded.preferences.banner_shown);
         assert!(loaded.preferences.banner_at_random);
         assert!(loaded.preferences.banner_fills_the_screen);
         assert!(!loaded.preferences.header_hides_on_scroll);
