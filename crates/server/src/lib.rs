@@ -85,7 +85,13 @@ pub async fn serve(
 ) -> std::io::Result<()> {
     let listener = tokio::net::TcpListener::bind(address).await?;
     tracing::info!(%address, "listening");
+    let closing = state.clone();
     axum::serve(listener, build(state))
-        .with_graceful_shutdown(shutdown)
+        .with_graceful_shutdown(async move {
+            shutdown.await;
+            // A live line never ends on its own, and a stopping server waits
+            // for every answer it started.
+            melyxar_app::watching::close_every_line(&closing);
+        })
         .await
 }

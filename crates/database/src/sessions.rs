@@ -104,6 +104,8 @@ pub struct SignedIn {
     /// What that device was called when it signed in: what the browser said
     /// it was, which is what a page turns into "Chrome on Windows".
     pub device_name: String,
+    /// The browser that device is, as its own page found, when it has said.
+    pub device_browser: Option<String>,
     /// What this browser was told about keeping its session. Carried so that
     /// a token handed to the same browser again is kept exactly as long as
     /// the one it replaces, rather than quietly becoming a longer one.
@@ -171,7 +173,8 @@ impl Database {
         // included, so it is the one place where a second round trip would be
         // paid for over and over.
         let Some(row) = sqlx::query(AssertSqlSafe(crate::users::reading_accounts(
-            ", d.id AS device_id, d.name AS device_name, d.last_seen_at, d.remembered",
+            ", d.id AS device_id, d.name AS device_name, d.browser AS device_browser, \
+             d.last_seen_at, d.remembered",
             "JOIN devices d ON d.user_id = u.id
              WHERE d.token_hash = ?",
         )))
@@ -198,8 +201,19 @@ impl Database {
             user: crate::users::build_user(&row, &allowed)?,
             device,
             device_name: row.try_get("device_name")?,
+            device_browser: row.try_get("device_browser")?,
             remembered: Remembered::from_int(row.try_get("remembered")?),
         }))
+    }
+
+    /// Writes down which browser a device is, as its own page found.
+    pub async fn name_the_browser(&self, device: DeviceId, browser: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE devices SET browser = ? WHERE id = ?")
+            .bind(browser)
+            .bind(device.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
     }
 
     /// Signs one device out, and says whether there was one to sign out.
@@ -308,12 +322,51 @@ mod tests {
 
         assert_eq!(signed_in.device, device);
         assert_eq!(signed_in.device_name, "a browser");
+        assert_eq!(signed_in.device_browser, None, "until its page says");
         assert_eq!(signed_in.user.id, user_id);
         assert_eq!(signed_in.user.name, "victor");
         // The rights and the preferences come with it, because every request
         // that asks who is there asks in order to decide something.
         assert!(signed_in.user.permissions.is_administrator);
         assert_eq!(signed_in.user.preferences.accent_color, "#c81e1e");
+    }
+
+    #[tokio::test]
+    async fn the_browser_a_page_found_comes_back_with_its_device_and_no_other() {
+        let (database, user_id) = a_server_with_one_account().await;
+        let device = database
+            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
+            .await
+            .expect("session opened");
+        database
+            .open_session(user_id, "a browser", "another fingerprint", Remembered::Yes, A_MOMENT)
+            .await
+            .expect("second session opened");
+
+        database
+            .name_the_browser(device, Some("Brave"))
+            .await
+            .expect("written");
+        let named = database
+            .session_holder("one fingerprint", A_MOMENT)
+            .await
+            .expect("read")
+            .expect("signed in");
+        assert_eq!(named.device_browser.as_deref(), Some("Brave"));
+        let other = database
+            .session_holder("another fingerprint", A_MOMENT)
+            .await
+            .expect("read")
+            .expect("signed in");
+        assert_eq!(other.device_browser, None);
+
+        database.name_the_browser(device, None).await.expect("taken back");
+        let unnamed = database
+            .session_holder("one fingerprint", A_MOMENT)
+            .await
+            .expect("read")
+            .expect("signed in");
+        assert_eq!(unnamed.device_browser, None);
     }
 
     /// What somebody said about the machine they are on comes back with them.

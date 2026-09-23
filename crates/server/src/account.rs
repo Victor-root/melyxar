@@ -62,6 +62,7 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/v1/me", axum::routing::get(me))
         .route("/api/v1/me/password", axum::routing::put(change_password))
+        .route("/api/v1/me/browser", axum::routing::put(name_the_browser))
         .route(
             "/api/v1/me/avatar",
             axum::routing::put(choose_avatar)
@@ -220,6 +221,7 @@ impl<S: Send + Sync> FromRequestParts<S> for Watcher {
                     user_name: holder.user.name.clone(),
                     device: holder.device,
                     device_name: holder.device_name.clone(),
+                    browser: holder.device_browser.clone(),
                 })
             })
             .ok_or_else(|| ServerError::unauthenticated("nobody is signed in"))
@@ -499,6 +501,30 @@ async fn change_password(
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct BrowserBody {
+    /// Absent when the page could tell nothing the line of its browser does
+    /// not already say.
+    browser: Option<String>,
+}
+
+/// Which browser this device is, as its own page found: the line a browser
+/// sends about itself cannot tell every one apart.
+async fn name_the_browser(
+    State(state): State<AppState>,
+    Watcher(watcher): Watcher,
+    Json(body): Json<BrowserBody>,
+) -> Result<Json<serde_json::Value>> {
+    melyxar_app::accounts::name_the_browser(
+        &state,
+        watcher.device,
+        watcher.browser.as_deref(),
+        body.browser.as_deref(),
+    )
+    .await?;
+    Ok(Json(serde_json::json!({ "named": true })))
+}
+
 /// Makes the first account of a brand new server, and signs it in.
 ///
 /// Signs it in straight away because the alternative is to hand somebody a
@@ -571,6 +597,7 @@ mod tests {
             user,
             device: DeviceId::new(),
             device_name: "a browser".to_string(),
+            device_browser: None,
             remembered: Remembered::Yes,
         });
         request.into_parts().0

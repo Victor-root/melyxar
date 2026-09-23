@@ -15,6 +15,7 @@ use crate::identifiers::{parse_device, parse_source, parse_track, parse_work};
 use axum::body::Body;
 use axum::extract::{Path as RoutePath, State};
 use axum::http::{header, HeaderValue, Request, StatusCode};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::playback::{
@@ -46,8 +47,18 @@ pub fn router() -> Router<AppState> {
             "/api/v1/playback/watching",
             axum::routing::post(still_playing),
         )
-        // What is being watched right now, for the administration.
-        .route("/api/v1/system/playing", axum::routing::get(now_playing))
+        // The live line a player holds open while it shows a film: how the
+        // server knows it is still there, and how it is told to stop.
+        .route(
+            "/api/v1/playback/watching/{work}/live",
+            axum::routing::get(player_line),
+        )
+        // What is being watched right now, for the administration, sent
+        // again the moment it changes.
+        .route(
+            "/api/v1/system/playing/live",
+            axum::routing::get(administration_line),
+        )
         .route(
             "/api/v1/system/playing/{device}/stop",
             axum::routing::post(stop_playing),
@@ -956,6 +967,9 @@ struct ProgressBody {
     /// cannot make the point go backwards.
     #[serde(default, with = "time::serde::rfc3339::option")]
     reported_at: Option<Timestamp>,
+    /// Whether the film stands still, said by a player whenever it changes.
+    #[serde(default)]
+    paused: Option<bool>,
     /// The last word of a player leaving the film.
     #[serde(default)]
     leaving: bool,
@@ -987,7 +1001,14 @@ async fn record_progress(
         body.reported_at.unwrap_or_else(melyxar_core::time::now),
     )
     .await?;
-    let stop = heard_from(&state, watcher, work_id, Some(position), body.leaving);
+    let stop = heard_from(
+        &state,
+        watcher,
+        work_id,
+        Some(position),
+        body.paused,
+        body.leaving,
+    );
 
     Ok(Json(ProgressView { kept, stop }))
 }
@@ -1000,6 +1021,8 @@ struct StillPlayingBody {
     /// Absent until the picture has shown anything.
     #[serde(default)]
     position_seconds: Option<f64>,
+    #[serde(default)]
+    paused: Option<bool>,
     #[serde(default)]
     leaving: bool,
 }
@@ -1016,6 +1039,7 @@ async fn still_playing(
         body.position_seconds
             .filter(|seconds| seconds.is_finite())
             .map(Millis::from_seconds_f64),
+        body.paused,
         body.leaving,
     );
     Ok(Json(serde_json::json!({ "stop": stop })))
@@ -1028,13 +1052,87 @@ fn heard_from(
     watcher: melyxar_app::watching::Viewer,
     work: melyxar_core::id::WorkId,
     position: Option<Millis>,
+    paused: Option<bool>,
     leaving: bool,
 ) -> bool {
     if leaving {
         melyxar_app::watching::gone(state, watcher.device, work);
         return false;
     }
-    melyxar_app::watching::heard(state, watcher, work, position)
+    melyxar_app::watching::heard(state, watcher, work, position, paused)
+}
+
+/// Kept open by a player while it shows a film. Says "stop" the moment an
+/// administrator asks, and its end, however it ends, is the player gone.
+///
+/// Refused for a film its device is no longer playing: a player left behind
+/// by a newer one is told so, and a browser stops trying a line refused.
+async fn player_line(
+    State(state): State<AppState>,
+    Watcher(watcher): Watcher,
+    RoutePath(work): RoutePath<String>,
+) -> Result<Response> {
+    let line = melyxar_app::watching::line(&state, watcher, parse_work(&work)?)
+        .ok_or_else(|| ServerError::not_found("that film is not playing on this device"))?;
+    let told = futures_util::stream::unfold(Some(line), |line| async move {
+        let mut line = line?;
+        // Asked before this line opened, or while it waited.
+        while !*line.stop.borrow_and_update() {
+            tokio::select! {
+                // The watch is gone, and the line with it.
+                moved = line.stop.changed() => moved.ok()?,
+                _ = line.closing.wait_for(|closed| *closed) => return None,
+            }
+        }
+        let stop = Event::default().event("stop").data("stop");
+        Some((Ok::<_, std::convert::Infallible>(stop), None))
+    });
+    Ok(live(Sse::new(told).keep_alive(KeepAlive::default())))
+}
+
+/// How often the administration is sent the list again when nothing else
+/// changed, which is how the speed of a conversion keeps moving.
+const RESENT_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What is being watched, sent at once and again every time it changes.
+async fn administration_line(_: Administrator, State(state): State<AppState>) -> Response {
+    let changes = melyxar_app::watching::changes(&state);
+    let closing = melyxar_app::watching::closing(&state);
+    let sent = futures_util::stream::unfold(
+        (state, changes, closing, true),
+        |(state, mut changes, mut closing, first)| async move {
+            if !first {
+                // Either news, or the beat: whichever comes first.
+                tokio::select! {
+                    moved = changes.changed() => moved.ok()?,
+                    () = tokio::time::sleep(RESENT_EVERY) => {}
+                    _ = closing.wait_for(|closed| *closed) => return None,
+                }
+            }
+            changes.borrow_and_update();
+            let event = match watched_views(&state).await {
+                Ok(views) => Event::default().event("playing").json_data(views),
+                // Said to the page, which keeps what it last showed and says
+                // the list could not be read; why is in the journal.
+                Err(error) => {
+                    tracing::warn!(%error, "what is being watched could not be read");
+                    Ok(Event::default().event("failed").data("failed"))
+                }
+            };
+            Some((event, (state, changes, closing, false)))
+        },
+    );
+    live(Sse::new(sent).keep_alive(KeepAlive::default()))
+}
+
+/// A live line as it leaves: never kept by anything on the way, and never
+/// held back by a proxy until it ends, which for these is never.
+fn live(line: impl IntoResponse) -> Response {
+    let mut response = line.into_response();
+    let headers = response.headers_mut();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    headers.insert("x-accel-buffering", HeaderValue::from_static("no"));
+    response
 }
 
 // ---------------------------------------------------------------------------
@@ -1050,6 +1148,8 @@ struct WatchedView {
     /// What the browser said it was when it signed in, which a page makes
     /// readable.
     device_name: String,
+    /// The browser the page itself found, when it could tell better.
+    browser: Option<String>,
     work_id: String,
     title: String,
     kind: &'static str,
@@ -1110,18 +1210,16 @@ fn decision_view(plan: &PlayPlan) -> DecisionView {
     }
 }
 
-async fn now_playing(
-    _: Administrator,
-    State(state): State<AppState>,
-) -> Result<Json<Vec<WatchedView>>> {
-    let watched = melyxar_app::watching::now_playing(&state).await?;
-    Ok(Json(
-        watched
+/// Everything being watched, as the administration shows it.
+async fn watched_views(state: &AppState) -> melyxar_app::Result<Vec<WatchedView>> {
+    let watched = melyxar_app::watching::now_playing(state).await?;
+    Ok(watched
             .into_iter()
             .map(|one| WatchedView {
                 device: one.device.to_string(),
                 user: one.user_name,
                 device_name: one.device_name,
+                browser: one.browser,
                 work_id: one.work.to_string(),
                 title: one.title,
                 kind: one.kind.as_str(),
@@ -1144,8 +1242,7 @@ async fn now_playing(
                 producing: one.producing.map(producing_view),
                 decision: one.plan.as_deref().map(decision_view),
             })
-            .collect(),
-    ))
+            .collect())
 }
 
 /// Asks the film playing on a device to stop.
