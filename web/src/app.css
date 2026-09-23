@@ -1744,6 +1744,63 @@
 }
 
 /* --------------------------------------------------------------------------
+ * One choice among several
+ * ----------------------------------------------------------------------- */
+
+/* Drawn here rather than left to the browser, whose own disc wears its own
+   colours: a ring that fills with a dot of the accent once chosen. */
+input[type="radio"] {
+  appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+input[type="radio"]::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-contrast);
+  transform: scale(0);
+  transition: transform var(--quick) var(--ease);
+}
+
+input[type="radio"]:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+input[type="radio"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+input[type="radio"]:checked::before {
+  transform: scale(1);
+}
+
+input[type="radio"]:focus-visible {
+  outline: none;
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim), 0 0 10px var(--accent-glow);
+}
+
+input[type="radio"]:disabled {
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
  * Buttons and pills
  * ----------------------------------------------------------------------- */
 
@@ -2933,9 +2990,6 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 .delete-choice > input {
   margin-top: 3px;
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
 }
 
 .delete-choice > span {
