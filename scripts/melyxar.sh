@@ -161,10 +161,22 @@ en|writes_opened|Melyxar may now write to these folders.
 fr|writes_opened|Melyxar peut maintenant écrire dans ces dossiers.
 en|writes_shut|The media folders are read only again.
 fr|writes_shut|Les dossiers des médias sont de nouveau en lecture seule.
-en|writes_refused|still refused by the owner of the folder: give the melyxar account the right to write there.
-fr|writes_refused|toujours refusé par le propriétaire du dossier : donnez au compte melyxar le droit d'y écrire.
-en|writes_account|The service now lets Melyxar write, but these folders still refuse it. Inside this container the melyxar account is user %s, group %s.
-fr|writes_account|Le service laisse maintenant Melyxar écrire, mais ces dossiers le refusent encore. Dans ce conteneur, le compte melyxar est l'utilisateur %s, groupe %s.
+en|writes_all_fine|Every media folder lets Melyxar write.
+fr|writes_all_fine|Tous les dossiers des médias laissent Melyxar écrire.
+en|writes_group_offer|These folders already let their group write (group %s). Adding the melyxar account to that group is all it takes: no folder, owner or permission is changed.
+fr|writes_group_offer|Ces dossiers laissent déjà leur groupe écrire (groupe %s). Il suffit d'ajouter le compte melyxar à ce groupe : aucun dossier, propriétaire ou droit n'est modifié.
+en|prompt_writes_group|Add melyxar to that group?
+fr|prompt_writes_group|Ajouter melyxar à ce groupe ?
+en|step_writes_group|Adding melyxar to the group %s
+fr|step_writes_group|Ajout de melyxar au groupe %s
+en|writes_unmapped|%s belongs to a group this container cannot see: it can only be opened from the Proxmox host.
+fr|writes_unmapped|%s appartient à un groupe que ce conteneur ne voit pas : il ne peut être ouvert que depuis l'hôte Proxmox.
+en|writes_group_shut|%s: even its group may not write there (owner %s, group %s, rights %s). Nothing was changed on it.
+fr|writes_group_shut|%s : même son groupe n'a pas le droit d'y écrire (propriétaire %s, groupe %s, droits %s). Rien n'y a été modifié.
+en|writes_partly|%s of the %s refusing folders now let Melyxar write.
+fr|writes_partly|%s des %s dossiers qui refusaient laissent maintenant Melyxar écrire.
+en|writes_still_refused|%s still refuses Melyxar.
+fr|writes_still_refused|%s refuse encore Melyxar.
 en|step_writes|Opening the media folders for writing
 fr|step_writes|Ouverture des dossiers des médias en écriture
 en|menu_quit|Quit
@@ -1604,14 +1616,113 @@ write_media_writes() {
   systemctl daemon-reload
 }
 
+# Whether the melyxar account itself may write in a folder, by trying, the
+# way the server does. Asked of the account alone, outside the service: what
+# the service allows is the other half, handled by the drop-in.
+account_may_write() {
+  local probe="$1/.melyxar-write-probe"
+  if runuser -u "$APP_USER" -- touch "$probe" 2>/dev/null; then
+    rm -f "$probe"
+    return 0
+  fi
+  return 1
+}
+
+# The folders the melyxar account may not write in, one a line.
+folders_refusing() {
+  local folder
+  while IFS= read -r folder; do
+    [[ -d "$folder" ]] || continue
+    account_may_write "$folder" || printf '%s\n' "$folder"
+  done <<< "$1"
+}
+
+# A name for a group number the container has no name for yet.
+name_for_group() {
+  local gid="$1" name
+  name="$(getent group "$gid" | cut -d: -f1)"
+  if [[ -z "$name" ]]; then
+    name="medias"
+    getent group "$name" >/dev/null && name="medias-$gid"
+    groupadd -g "$gid" "$name"
+  fi
+  printf '%s' "$name"
+}
+
+# Makes every refusing folder writable for Melyxar where that needs nothing
+# but joining a group that already has the right: no owner, no permission of
+# any folder is ever changed. What cannot be settled that way is said, folder
+# by folder, with the reason.
+settle_refusals() {
+  local refused="$1" folder gid mode gids=() explained=0
+  while IFS= read -r folder; do
+    [[ -n "$folder" ]] || continue
+    gid="$(stat -c '%g' "$folder")"
+    mode="$(stat -c '%a' "$folder")"
+    if [[ "$gid" -eq 65534 ]]; then
+      # Owned by a group the container cannot see: only the Proxmox host
+      # can open it, by mapping that group into the container.
+      warn "$(tr_fmt writes_unmapped "$folder")"
+      explained=1
+    elif (( (8#$mode & 8#020) != 0 )) && ! id -G "$APP_USER" | tr ' ' '\n' | grep -qx "$gid"; then
+      [[ " ${gids[*]} " == *" $gid "* ]] || gids+=("$gid")
+    else
+      warn "$(tr_fmt writes_group_shut "$folder" "$(stat -c '%U' "$folder")" "$(stat -c '%G' "$folder")" "$(stat -c '%A' "$folder")")"
+      explained=1
+    fi
+  done <<< "$refused"
+
+  if [[ "${#gids[@]}" -gt 0 ]]; then
+    info "$(tr_fmt writes_group_offer "$(IFS=,; echo "${gids[*]}")")"
+    if confirm_default_yes "$(tr_msg prompt_writes_group)"; then
+      for gid in "${gids[@]}"; do
+        local name
+        name="$(name_for_group "$gid")"
+        step "$(tr_fmt step_writes_group "$name")" usermod -aG "$name" "$APP_USER"
+      done
+      # The service takes its groups when it starts.
+      step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+    fi
+  fi
+
+  local still
+  still="$(folders_refusing "$refused")"
+  if [[ -z "$still" ]]; then
+    success "$(tr_msg writes_opened)"
+    return 0
+  fi
+  if [[ "$explained" -eq 0 ]]; then
+    while IFS= read -r folder; do
+      warn "$(tr_fmt writes_still_refused "$folder")"
+    done <<< "$still"
+  fi
+  local before after
+  before="$(grep -c . <<< "$refused")"
+  after="$(grep -c . <<< "$still")"
+  if [[ "$after" -lt "$before" ]]; then
+    info "$(tr_fmt writes_partly "$((before - after))" "$before")"
+  fi
+}
+
 action_writes() {
   is_installed || die "$(tr_msg err_not_installed)"
   section "$(tr_msg section_writes)"
   info "$(tr_msg writes_notice)"
   echo
 
+  local folders refused
+  folders="$(library_folders)"
+
   if [[ -f "$WRITES_FILE" ]]; then
     info "$(tr_msg writes_now_open)"
+    # Open but refused somewhere: what is asked for is to finish opening it,
+    # not to close it.
+    refused="$(folders_refusing "$folders")"
+    if [[ -n "$refused" ]]; then
+      settle_refusals "$refused"
+      return 0
+    fi
+    success "$(tr_msg writes_all_fine)"
     confirm_default_no "$(tr_msg prompt_writes_shut)" || { info "$(tr_msg cancelled)"; return 0; }
     rm -f "$WRITES_FILE"
     systemctl daemon-reload
@@ -1621,8 +1732,6 @@ action_writes() {
   fi
 
   info "$(tr_msg writes_now_shut)"
-  local folders
-  folders="$(library_folders)"
   if [[ -z "$folders" ]]; then
     warn "$(tr_msg writes_no_folder)"
     return 0
@@ -1634,24 +1743,11 @@ action_writes() {
   step "$(tr_msg step_writes)" write_media_writes
   step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
 
-  # The service may now write; whether the owner of each folder lets the
-  # melyxar account do so is a second, separate question, asked by trying.
-  # Each refusal names who owns the folder, which is what fixing it needs.
-  local folder probe refused=0
-  while IFS= read -r folder; do
-    [[ -d "$folder" ]] || continue
-    probe="$folder/.melyxar-write-probe"
-    if runuser -u "$APP_USER" -- touch "$probe" 2>/dev/null; then
-      rm -f "$probe"
-    else
-      refused=$((refused + 1))
-      warn "$folder ($(stat -c '%U:%G %A' "$folder")): $(tr_msg writes_refused)"
-    fi
-  done <<< "$folders"
-  if [[ "$refused" -eq 0 ]]; then
+  refused="$(folders_refusing "$folders")"
+  if [[ -z "$refused" ]]; then
     success "$(tr_msg writes_opened)"
   else
-    info "$(tr_fmt writes_account "$(id -u "$APP_USER")" "$(id -g "$APP_USER")")"
+    settle_refusals "$refused"
   fi
 }
 
