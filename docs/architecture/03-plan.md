@@ -238,7 +238,7 @@ Commencé : l'interface d'administration est refaite de zéro, dans son propre e
 
 1. **Fait. Le cadre** : barre latérale et ses douze sections, « Mes réglages » séparés, les écrans qui existent déjà redessinés et rangés à leur place, et un premier Résumé avec ce que le serveur sait déjà dire. Ce qui n'est pas encore branché est dessiné, éteint et marqué « Bientôt ».
 2. **Fait. Les mesures du système** : processeur, mémoire, disques, réseau, charge, température quand le conteneur la voit, carte graphique, avec leur historique en base et leurs courbes. Reste à voir dans le LXC ce que le conteneur laisse lire de la température et de la carte.
-3. **Lecture et Transcodage** : les lectures en cours, lecture directe comprise, avec leur décision, et le détail d'une lecture.
+3. **Fait. Lecture et Transcodage** : les lectures en cours sur chaque appareil, lecture directe comprise, suivies toutes les deux secondes : qui, quoi, où en est le film, en pause ou non, la méthode et ses raisons, ce que contient le fichier et ce qui en est refait, par la carte graphique ou le processeur, et la vitesse de conversion. Le détail d'une lecture se déplie sous sa carte. Un administrateur peut arrêter une lecture : le lecteur quitte le film et dit pourquoi, et la conversion est fermée par le serveur si le lecteur n'obéit pas. Le panneau « Activité en cours » du Résumé compte les lectures, les transcodages et les lectures directes. L'historique des lectures viendra avec le journal d'activité.
 4. **Le journal d'activité**, les alertes « À surveiller » et la cloche de la barre du haut.
 5. **Utilisateurs et Appareils** : gestion des comptes, déconnexion d'un appareil, une seule session par navigateur.
 

@@ -2009,3 +2009,297 @@
   margin-top: 2px;
   color: var(--attention);
 }
+
+/* --------------------------------------------------------------------------
+ * What is being watched
+ * ----------------------------------------------------------------------- */
+
+/* Two cards across once each has room for its picture beside its words,
+   one under the other before that. */
+.watches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+  gap: var(--gap);
+  margin-top: var(--gap);
+}
+
+.watch {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  transition: opacity var(--calm) var(--ease);
+  /* What its picture decides against: the card's own width, not the page's. */
+  container-type: inline-size;
+}
+
+/* Asked to stop: still there until its player answers, and plainly on its
+   way out. */
+.watch-stopping {
+  opacity: 0.6;
+}
+
+.watch-main {
+  display: flex;
+  min-width: 0;
+}
+
+.watch-picture {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 184px;
+  aspect-ratio: 16 / 9;
+  align-self: flex-start;
+  margin: 12px 0 12px 12px;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+  color: var(--text-faint);
+}
+
+.watch-picture img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Whether the film is moving, over the corner of its picture. */
+.watch-moving {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface-deep) 78%, transparent);
+  color: var(--text-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+}
+
+.watch-moving-on {
+  color: var(--accent-bright);
+}
+
+.watch-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.watch-words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.watch-over,
+.watch-title,
+.watch-who span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watch-over {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.watch-title {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.watch-who {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-top: 2px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.watch-who svg {
+  flex: none;
+  color: var(--text-faint);
+}
+
+/* The name of an account is short and kept whole; what the device is
+   gives way first. */
+.watch-who svg + span {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.watch-who svg:first-child + span {
+  flex: none;
+  max-width: 50%;
+}
+
+.watch-who span + svg {
+  margin-left: 6px;
+}
+
+/* How the film reaches its viewer. Rebuilt is the accent, because it is
+   the machine at work; played as it is, the colour of all being well. */
+.method-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  color: var(--text-soft);
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.method-rebuilt {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+}
+
+.method-direct {
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  background: var(--ok-wash);
+  color: var(--ok);
+}
+
+.watch-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.watch-progress .meter {
+  flex: 1 1 auto;
+}
+
+.watch-time {
+  flex: none;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.watch-why {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.watch-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px var(--gap);
+  margin-top: auto;
+}
+
+.watch-speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Producing the film more slowly than it plays: the picture will stop. */
+.watch-speed-behind,
+.watch-behind {
+  color: var(--attention);
+}
+
+.watch-stop-word {
+  color: var(--trouble);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.watch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
+  margin-left: auto;
+}
+
+/* What the file holds beside what is made of it, under the card. */
+.watch-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: var(--gap) var(--gap-wide);
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-deep) 35%, transparent);
+}
+
+.watch-details-across {
+  grid-column: 1 / -1;
+}
+
+.watch-details h4 {
+  margin: 0 0 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.watch-details dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.watch-details dt {
+  color: var(--text-soft);
+}
+
+.watch-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The same film on one line of the summary. */
+.watch-line .watch-words {
+  flex: 1 1 160px;
+}
+
+/* A narrow card puts its picture above its words, across the whole card. */
+@container (max-width: 460px) {
+  .watch-main {
+    flex-direction: column;
+  }
+
+  .watch-picture {
+    width: auto;
+    margin: 12px 12px 0;
+    align-self: stretch;
+  }
+}

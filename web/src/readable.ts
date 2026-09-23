@@ -271,6 +271,22 @@ function soundName(sound: string | null): string | null {
   return SOUND_NAMES[sound.toLowerCase()] ?? sound;
 }
 
+/* The analyser names a container by every format that shares it. What
+   somebody calls it is the extension its files carry. */
+const CONTAINER_NAMES: Record<string, string> = {
+  matroska: "MKV",
+  mov: "MP4",
+  mpegts: "MPEG-TS",
+  mpeg: "MPEG-PS",
+  asf: "WMV",
+};
+
+/** A container as somebody calls it rather than as the analyser does. */
+export function containerName(format: string): string {
+  const first = format.split(",")[0].trim();
+  return CONTAINER_NAMES[first] ?? first.toUpperCase();
+}
+
 /** What a film is rated, on the scale the provider uses. */
 export function outOfTen(rating: number): string {
   return `${rating.toFixed(1)} / 10`;

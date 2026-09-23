@@ -14,6 +14,7 @@ import {
   amountOfData,
   asLocalTime,
   asUtcMinutes,
+  containerName,
   howLong,
   howLongSince,
   insideTheRange,
@@ -197,5 +198,18 @@ describe("percentOf", () => {
   it("rounds a share to a whole percentage", () => {
     expect(percentOf(0.184, "en")).toBe("18%");
     expect(percentOf(0.184, "fr")).toBe("18\u00a0%");
+  });
+});
+
+describe("containerName", () => {
+  it("calls a container by the extension its files carry", () => {
+    expect(containerName("matroska,webm")).toBe("MKV");
+    expect(containerName("mov,mp4,m4a,3gp,3g2,mj2")).toBe("MP4");
+    expect(containerName("mpegts")).toBe("MPEG-TS");
+  });
+
+  it("keeps the analyser's first name for one it has no other name for", () => {
+    expect(containerName("avi")).toBe("AVI");
+    expect(containerName("flv")).toBe("FLV");
   });
 });

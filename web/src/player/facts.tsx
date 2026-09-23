@@ -16,13 +16,22 @@ import { useEffect, useState } from "react";
 
 import { api } from "../api";
 import type { CalibrationEntry, PlaybackPlan, Producing } from "../api";
+import { containerName } from "../readable";
 import { storedCalibration } from "./calibration";
+import {
+  asRate,
+  asSize,
+  asWork,
+  KEEPING_UP,
+  pictureDone,
+  pictureHeld,
+  reasonsSaid,
+  soundDone,
+  soundHeld,
+} from "./describe";
 
 /** How often what the browser says is read again. */
 const LOOK_EVERY_MS = 1_000;
-
-/** Below this the machine is producing the film more slowly than it plays. */
-const KEEPING_UP = 1;
 
 /** What the browser says about the picture it is showing. */
 interface WhatTheBrowserSays {
@@ -53,39 +62,6 @@ function readTheElement(element: HTMLVideoElement): WhatTheBrowserSays {
     dropped: quality ? quality.droppedVideoFrames : 0,
     heldTo,
   };
-}
-
-/** A rate in bits per second, as somebody reads one. */
-function asRate(bits: number | null): string | null {
-  if (bits === null || bits <= 0) {
-    return null;
-  }
-  return bits >= 1_000_000
-    ? `${(bits / 1_000_000).toFixed(bits >= 10_000_000 ? 0 : 1)} Mb/s`
-    : `${Math.round(bits / 1_000)} kb/s`;
-}
-
-/** How the tool's work reads, when it is doing any.
- *
- * Pictures a second only when the tool is making pictures: a film whose
- * picture is carried over untouched is repackaged rather than drawn, and the
- * tool answers nothing at all when asked how many a second it is drawing. The
- * speed stands on its own there, and it is the number that matters anyway.
- */
-function asWork(
-  working: Producing,
-  t: (key: string, values?: Record<string, string | number>) => string,
-): string {
-  const speed = working.speed >= 10 ? Math.round(working.speed) : working.speed.toFixed(2);
-  return working.pictures_a_second > 0
-    ? t("facts.working_at", { pictures: working.pictures_a_second.toFixed(1), speed })
-    : t("facts.working_speed", { speed });
-}
-
-/** A size in bytes, as somebody reads one. */
-function asSize(bytes: number): string {
-  const giga = bytes / 1_000_000_000;
-  return giga >= 1 ? `${giga.toFixed(1)} GB` : `${Math.round(bytes / 1_000_000)} MB`;
 }
 
 /** One line of the panel: a name and what it is, or nothing at all. */
@@ -204,14 +180,7 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
         <section className="facts-block facts-block-across">
           <h3>{t("facts.stream")}</h3>
           <Line name={t("facts.method")} is={t(`playback.${plan.method}`)} />
-          <Line
-            name={t("facts.why")}
-            is={
-              plan.reasons.length > 0
-                ? plan.reasons.map((reason) => t(`reason.${reason.code}`)).join(" · ")
-                : null
-            }
-          />
+          <Line name={t("facts.why")} is={reasonsSaid(plan.reasons, t)} />
           {/* The one number here that can be bad news, and the reason the
               maintainer asked for this panel: a machine producing the film
               more slowly than it plays will stop the picture, and nothing
@@ -226,36 +195,9 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
         {picture && (
           <section className="facts-block">
             <h3>{t("facts.picture")}</h3>
-            <Line
-              name={t("facts.held")}
-              is={[
-                picture.codec.toUpperCase(),
-                picture.profile,
-                `${picture.width}x${picture.height}`,
-                picture.bit_depth ? `${picture.bit_depth} bit` : null,
-                picture.hdr ? t(`facts.hdr.${picture.hdr}`) : null,
-                picture.frame_rate ? `${picture.frame_rate.toFixed(3)} fps` : null,
-                asRate(picture.bitrate),
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            />
+            <Line name={t("facts.held")} is={pictureHeld(picture, t)} />
             <Line name={t("facts.frame")} is={frame} />
-            <Line
-              name={t("facts.done")}
-              is={
-                rebuild
-                  ? [
-                      t(`player.rebuilt_by.${rebuild.by}`),
-                      rebuild.codec.toUpperCase(),
-                      rebuild.height !== null ? `${rebuild.height}p` : null,
-                      asRate(rebuild.bitrate),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")
-                  : t("facts.carried_over")
-              }
-            />
+            <Line name={t("facts.done")} is={pictureDone(rebuild, t)} />
             {says && (
               <>
                 <Line name={t("facts.arrived")} is={`${says.across}x${says.down}`} />
@@ -285,31 +227,14 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
         {sound && (
           <section className="facts-block">
             <h3>{t("facts.sound")}</h3>
-            <Line
-              name={t("facts.held")}
-              is={[
-                sound.codec.toUpperCase(),
-                sound.channel_layout ?? t("facts.channels", { count: sound.channels }),
-                sound.sample_rate ? `${(sound.sample_rate / 1000).toFixed(1)} kHz` : null,
-                asRate(sound.bitrate),
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            />
-            <Line
-              name={t("facts.done")}
-              is={
-                plan.method === "full_transcode" || plan.method === "transcode_audio"
-                  ? t("facts.rebuilt_sound")
-                  : t("facts.carried_over")
-              }
-            />
+            <Line name={t("facts.held")} is={soundHeld(sound, t)} />
+            <Line name={t("facts.done")} is={soundDone(plan.method, t)} />
           </section>
         )}
 
         <section className="facts-block">
           <h3>{t("facts.file")}</h3>
-          <Line name={t("facts.container")} is={film.container} />
+          <Line name={t("facts.container")} is={film.container && containerName(film.container)} />
           <Line name={t("facts.size")} is={asSize(film.size_bytes)} />
           <Line name={t("facts.rate")} is={asRate(film.overall_bitrate)} />
         </section>
