@@ -55,6 +55,7 @@ import {
   HeartIcon,
   KindIcon,
   LeaveIcon,
+  MelyxarMark,
   RefreshIcon,
   ScreenCastIcon,
   SearchIcon,
@@ -339,7 +340,7 @@ export function Header({
             {/* Decorative: the name is written right next to it, and an
                 image announced twice over is exactly what a screen reader
                 must not have to hear. */}
-            <img className="brand-mark" src="/melyxar-64.png" alt="" aria-hidden="true" />
+            <MelyxarMark size={28} />
             <span className="brand-name">{t("app.name")}</span>
           </Link>
         </div>
