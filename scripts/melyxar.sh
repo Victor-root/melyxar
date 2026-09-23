@@ -163,6 +163,8 @@ en|writes_shut|The media folders are read only again.
 fr|writes_shut|Les dossiers des médias sont de nouveau en lecture seule.
 en|writes_refused|still refused by the owner of the folder: give the melyxar account the right to write there.
 fr|writes_refused|toujours refusé par le propriétaire du dossier : donnez au compte melyxar le droit d'y écrire.
+en|writes_account|The service now lets Melyxar write, but these folders still refuse it. Inside this container the melyxar account is user %s, group %s.
+fr|writes_account|Le service laisse maintenant Melyxar écrire, mais ces dossiers le refusent encore. Dans ce conteneur, le compte melyxar est l'utilisateur %s, groupe %s.
 en|step_writes|Opening the media folders for writing
 fr|step_writes|Ouverture des dossiers des médias en écriture
 en|menu_quit|Quit
@@ -1443,7 +1445,7 @@ action_update() {
   # Only a new server needs a restart. A new interface alone is already being
   # served, and a film playing through the update is not cut.
   if [[ -f "$WRITES_FILE" ]]; then
-    write_media_writes "$(library_folders)"
+    write_media_writes
   fi
   if [[ "$BUILT_ENGINE" -eq 1 ]]; then
     step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
@@ -1573,7 +1575,8 @@ action_accounts() {
   success "$(tr_msg accounts_changed)"
 }
 
-# The folders of the libraries, one a line, as the server knows them.
+# The folders of the libraries, one a line, as the server knows them. The
+# server's log goes elsewhere and is left out.
 library_folders() {
   runuser -u "$APP_USER" -- "$BINARY_PATH" --config "$CONFIG_FILE" folders 2>/dev/null
 }
@@ -1582,7 +1585,8 @@ library_folders() {
 # again on each update, so a library declared since is opened as well. A
 # folder that is not there is skipped rather than stopping the server.
 write_media_writes() {
-  local folders="$1" line tmp
+  local folders line tmp
+  folders="$(library_folders)"
   tmp="$(mktemp)"
   {
     echo "# Written by the installation script: Melyxar may write to its media."
@@ -1627,22 +1631,28 @@ action_writes() {
   echo
   confirm_default_no "$(tr_msg prompt_writes_open)" || { info "$(tr_msg cancelled)"; return 0; }
 
-  step "$(tr_msg step_writes)" write_media_writes "$folders"
+  step "$(tr_msg step_writes)" write_media_writes
   step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
 
   # The service may now write; whether the owner of each folder lets the
   # melyxar account do so is a second, separate question, asked by trying.
-  local folder probe
+  # Each refusal names who owns the folder, which is what fixing it needs.
+  local folder probe refused=0
   while IFS= read -r folder; do
     [[ -d "$folder" ]] || continue
     probe="$folder/.melyxar-write-probe"
     if runuser -u "$APP_USER" -- touch "$probe" 2>/dev/null; then
       rm -f "$probe"
     else
-      warn "$folder: $(tr_msg writes_refused)"
+      refused=$((refused + 1))
+      warn "$folder ($(stat -c '%U:%G %A' "$folder")): $(tr_msg writes_refused)"
     fi
   done <<< "$folders"
-  success "$(tr_msg writes_opened)"
+  if [[ "$refused" -eq 0 ]]; then
+    success "$(tr_msg writes_opened)"
+  else
+    info "$(tr_fmt writes_account "$(id -u "$APP_USER")" "$(id -g "$APP_USER")")"
+  fi
 }
 
 action_lines() {
