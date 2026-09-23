@@ -170,14 +170,18 @@ describe("releaseOf", () => {
 
 describe("amountOfData", () => {
   it("writes the units and the decimal mark of the language spoken", () => {
-    expect(amountOfData(6_200_000_000, "en")).toBe("6.2\u00a0GB");
-    expect(amountOfData(6_200_000_000, "fr")).toBe("6,2\u00a0Go");
-    expect(amountOfData(2_400_000_000_000, "fr")).toBe("2,4\u00a0To");
+    expect(amountOfData(6.2 * 1024 ** 3, "en")).toBe("6.2\u00a0GB");
+    expect(amountOfData(6.2 * 1024 ** 3, "fr")).toBe("6,2\u00a0Go");
+    expect(amountOfData(2.4 * 1024 ** 4, "fr")).toBe("2,4\u00a0To");
+  });
+
+  it("counts by 1024, so a container given 8192 MB holds 8 GB", () => {
+    expect(amountOfData(8192 * 1024 ** 2, "fr")).toBe("8\u00a0Go");
   });
 
   it("keeps no decimal where it would only be noise", () => {
     expect(amountOfData(512, "en")).toBe("512\u00a0B");
-    expect(amountOfData(125_400_000, "en")).toBe("125\u00a0MB");
+    expect(amountOfData(125.4 * 1024 ** 2, "en")).toBe("125\u00a0MB");
   });
 });
 

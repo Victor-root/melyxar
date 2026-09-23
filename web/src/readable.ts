@@ -305,19 +305,22 @@ const DATA_UNITS: Record<string, string[]> = {
 };
 
 /**
- * An amount of data in the units and with the decimal mark of the language
- * spoken: "6.2 GB" to one reader, "6,2 Go" to another.
+ * An amount of memory or disk in the units and with the decimal mark of the
+ * language spoken: "6.2 GB" to one reader, "6,2 Go" to another.
+ *
+ * Counted by 1024, as Proxmox and Windows count, so a container given
+ * 8192 MB reads 8 GB here as it does everywhere else its owner looks.
  */
 export function amountOfData(bytes: number, language: string): string {
   const units = DATA_UNITS[language] ?? DATA_UNITS.en;
   let value = bytes;
   let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
     unit += 1;
   }
   const digits = unit === 0 || value >= 100 ? 0 : 1;
-  return `${value.toLocaleString(language, { maximumFractionDigits: digits, minimumFractionDigits: digits })}\u00a0${units[unit]}`;
+  return `${value.toLocaleString(language, { maximumFractionDigits: digits })}\u00a0${units[unit]}`;
 }
 
 /**
