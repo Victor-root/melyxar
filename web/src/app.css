@@ -1091,7 +1091,9 @@
      same small ones with a field of background beside them. */
   max-width: clamp(220px, 20vw, 340px);
   aspect-ratio: 16 / 9;
-  padding: var(--gap);
+  /* Less at the foot, so the name and its arrow sit low, clear of the
+     reflection above them. */
+  padding: var(--gap) var(--gap) calc(var(--gap) - 5px);
   border-radius: var(--radius-card);
   overflow: hidden;
   isolation: isolate;
@@ -1645,13 +1647,12 @@
   );
 }
 
-/* A touch below the foot of the arrow, into the tile's own margin: the name
-   is the one word the tile has, so it sits where the eye ends up, and the
-   disc keeps its place. */
+/* Standing on the same floor as the arrow, its foot level with the foot of
+   the disc: the name is the one word the tile has, so it sits where the eye
+   ends up. */
 .band-words {
   display: flex;
   align-items: flex-end;
-  margin-bottom: -5px;
   min-width: 0;
   min-height: 30px;
   flex: 1 1 auto;
