@@ -1637,14 +1637,16 @@ folders_refusing() {
   done <<< "$1"
 }
 
-# A name for a group number the container has no name for yet.
+# A name for a group number the container has no name for yet: one that
+# says it was made for Melyxar, so nobody later wonders where it came from.
+# Not "melyxar" itself, which is already the account's own group.
 name_for_group() {
   local gid="$1" name
   # Nothing found is an answer here, not a failure.
   name="$(getent group "$gid" | cut -d: -f1 || true)"
   if [[ -z "$name" ]]; then
-    name="medias"
-    getent group "$name" >/dev/null && name="medias-$gid"
+    name="melyxar-medias"
+    getent group "$name" >/dev/null && name="melyxar-medias-$gid"
     groupadd -g "$gid" "$name"
   fi
   printf '%s' "$name"
