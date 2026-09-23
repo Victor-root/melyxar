@@ -36,8 +36,8 @@ impl LibraryKind {
             Self::Movies,
             Self::Series,
             Self::Anime,
-            Self::Shows,
             Self::HomeMedia,
+            Self::Shows,
             Self::Music,
         ]
     }

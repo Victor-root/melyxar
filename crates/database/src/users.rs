@@ -904,8 +904,8 @@ mod tests {
                 LibraryKind::Anime,
                 LibraryKind::Movies,
                 LibraryKind::Series,
-                LibraryKind::Shows,
                 LibraryKind::HomeMedia,
+                LibraryKind::Shows,
                 LibraryKind::Music,
             ]
         );
