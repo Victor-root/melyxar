@@ -99,6 +99,11 @@ pub fn tag_of(module: &str) -> &'static str {
 /// One line the server said.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Line {
+    /// Written as a date and a time a browser reads, rather than as the list
+    /// of numbers the type is kept in: the interface cut the time of day out
+    /// of it by position, and got nothing out of a list, so no line of the
+    /// journal screen ever showed when it was said.
+    #[serde(with = "time::serde::rfc3339")]
     pub at: Timestamp,
     /// error, warn, info, debug or trace.
     pub level: &'static str,
@@ -258,6 +263,22 @@ mod tests {
         assert_eq!(tag_of("melyxar_ffmpeg::command"), "ffmpeg");
         assert_eq!(tag_of("melyxar_server::playback"), "playback");
         assert_eq!(tag_of("melyxar_server::works"), "http");
+    }
+
+    /// A browser reads the time of a line from the text of it, so the time
+    /// has to travel as a date and a time and not as the numbers it is kept
+    /// in.
+    #[test]
+    fn a_line_says_when_it_was_said_in_a_form_a_browser_reads() {
+        let line = Line {
+            at: time::macros::datetime!(2026-09-23 14:05:09 UTC),
+            level: "info",
+            tag: "scan",
+            module: "melyxar_app::scan".to_string(),
+            message: "scanned".to_string(),
+        };
+        let sent = serde_json::to_value(&line).expect("serialised");
+        assert_eq!(sent["at"], "2026-09-23T14:05:09Z");
     }
 
     #[test]

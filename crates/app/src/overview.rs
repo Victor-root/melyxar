@@ -24,7 +24,6 @@ pub struct Overview {
     /// Whether the database runs the way it has to: readers never waiting on
     /// the one writer.
     pub database_ready: bool,
-    pub database_bytes: i64,
     pub media_tools: MediaTools,
     pub accounts: i64,
     pub devices: i64,
@@ -55,7 +54,6 @@ pub async fn collect(state: &AppState) -> Result<Overview> {
         version: melyxar_core::BUILD,
         started_at: state.started_at(),
         database_ready: journal_mode.eq_ignore_ascii_case("wal"),
-        database_bytes: database.size_bytes().await?,
         media_tools: MediaTools {
             found: state.tools().is_some(),
             version: capabilities.map(|capabilities| capabilities.version.clone()),
