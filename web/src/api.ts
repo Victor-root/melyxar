@@ -1083,6 +1083,8 @@ export interface ViewerPreferences {
   banner_at_random: boolean;
   /** Whether it takes the whole window, the height then deciding nothing. */
   banner_fills_the_screen: boolean;
+  /** Whether the bar at the top slides away while a page is read down. */
+  header_hides_on_scroll: boolean;
   /** Whether this account is left off the list the sign in screen offers.
    *  Hidden, it still signs in: the name is typed rather than pressed. */
   hidden_at_the_door: boolean;

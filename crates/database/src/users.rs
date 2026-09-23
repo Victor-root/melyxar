@@ -41,6 +41,7 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.theme_mode, p.accent_color, p.custom_css, p.volume,
      p.downmix_method, p.downmix_gain,
      p.banner_height, p.banner_cut, p.banner_at_random, p.banner_fills_the_screen,
+     p.header_hides_on_scroll,
      p.hidden_at_the_door, p.home_order";
 
 /// The read of an account, with whatever else the caller needs alongside and
@@ -322,7 +323,8 @@ impl Database {
                 preferred_subtitle_language = ?, theme_mode = ?, accent_color = ?,
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
                 banner_height = ?, banner_cut = ?, banner_at_random = ?,
-                banner_fills_the_screen = ?, hidden_at_the_door = ?, home_order = ?
+                banner_fills_the_screen = ?, header_hides_on_scroll = ?,
+                hidden_at_the_door = ?, home_order = ?
              WHERE user_id = ?",
         )
         .bind(&preferences.interface_language)
@@ -338,6 +340,7 @@ impl Database {
         .bind(preferences.banner_cut)
         .bind(preferences.banner_at_random)
         .bind(preferences.banner_fills_the_screen)
+        .bind(preferences.header_hides_on_scroll)
         .bind(preferences.hidden_at_the_door)
         .bind(written_order(&preferences.home_order))
         .bind(id.to_db_string())
@@ -401,9 +404,9 @@ async fn write_an_account(
         "INSERT INTO user_preferences (user_id, interface_language, theme_mode, accent_color,
                                        volume, downmix_method, downmix_gain,
                                        banner_height, banner_cut, banner_at_random,
-                                       banner_fills_the_screen, hidden_at_the_door,
-                                       home_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       banner_fills_the_screen, header_hides_on_scroll,
+                                       hidden_at_the_door, home_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -416,6 +419,7 @@ async fn write_an_account(
     .bind(preferences.banner_cut)
     .bind(preferences.banner_at_random)
     .bind(preferences.banner_fills_the_screen)
+    .bind(preferences.header_hides_on_scroll)
     .bind(preferences.hidden_at_the_door)
     .bind(written_order(&preferences.home_order))
     .execute(&mut **transaction)
@@ -482,6 +486,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             banner_cut: row.try_get("banner_cut")?,
             banner_at_random: row.try_get("banner_at_random")?,
             banner_fills_the_screen: row.try_get("banner_fills_the_screen")?,
+            header_hides_on_scroll: row.try_get("header_hides_on_scroll")?,
             hidden_at_the_door: row.try_get("hidden_at_the_door")?,
             home_order: read_order(&row.try_get::<String, _>("home_order")?),
         }
@@ -861,6 +866,7 @@ mod tests {
             banner_cut: 0.6,
             banner_at_random: true,
             banner_fills_the_screen: true,
+            header_hides_on_scroll: false,
             home_order: vec![LibraryKind::Anime, LibraryKind::Movies],
             ..Preferences::default()
         };
@@ -886,6 +892,7 @@ mod tests {
         assert_eq!(loaded.preferences.banner_cut, 0.6);
         assert!(loaded.preferences.banner_at_random);
         assert!(loaded.preferences.banner_fills_the_screen);
+        assert!(!loaded.preferences.header_hides_on_scroll);
         assert_eq!(
             loaded.preferences.home_order,
             vec![

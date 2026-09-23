@@ -284,6 +284,9 @@ pub struct Preferences {
     /// Whether the banner takes the whole window, the height above then
     /// having nothing left to decide.
     pub banner_fills_the_screen: bool,
+    /// Whether the bar at the top slides away while a page is read down, and
+    /// comes back at the first move up.
+    pub header_hides_on_scroll: bool,
     /// Whether this account is left off the list the sign in screen offers.
     ///
     /// The list is a deliberate disclosure, and this is the same choice made
@@ -311,6 +314,7 @@ impl Default for Preferences {
             banner_cut: DEFAULT_BANNER_CUT,
             banner_at_random: false,
             banner_fills_the_screen: false,
+            header_hides_on_scroll: true,
             // Shown by default: a household server is the ordinary case, and a
             // list with holes in it is of no use to anybody.
             hidden_at_the_door: false,

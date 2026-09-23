@@ -98,7 +98,7 @@ function TheLibrary() {
             it is the bar's own fixed position, in app.css, that lifts it out
             of the page. */}
         <div className="shell">
-          <Header libraries={libraries.all} />
+          <Header libraries={libraries.all} scrolling={scrolling} />
           <div className="shell-scroll" ref={scrolling}>
             <Routes>
               <Route path="/" element={<HomePage libraries={libraries.all} />} />

@@ -28,6 +28,7 @@ const STORED_ACCENT = "melyxar.accent";
 const STORED_BANNER_HEIGHT = "melyxar.banner.height";
 const STORED_BANNER_CUT = "melyxar.banner.cut";
 const STORED_BANNER_WHOLE = "melyxar.banner.whole";
+const STORED_HEADER_HIDES = "melyxar.header.hides";
 
 /** The red of the Melyxar theme, which needs none of the work below. */
 const THE_USUAL_ACCENT = "#c81e1e";
@@ -54,6 +55,10 @@ interface Settings {
       nothing left to decide. */
   bannerFillsTheScreen: boolean;
   setBannerFillsTheScreen: (whole: boolean) => void;
+  /** Whether the bar at the top slides away while a page is read down, and
+      comes back at the first move up. */
+  headerHides: boolean;
+  setHeaderHides: (hides: boolean) => void;
   /** What the account chose, once the server has said. */
   adopt: (chosen: ViewerPreferences) => void;
   /** The wording of one key, in the language in force. */
@@ -89,6 +94,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
   const [bannerFillsTheScreen, setBannerFillsState] = useState(
     () => safeRead(STORED_BANNER_WHOLE) === "yes",
+  );
+  const [headerHides, setHeaderHidesState] = useState(
+    () => safeRead(STORED_HEADER_HIDES) !== "no",
   );
 
   // The theme is put on the document rather than passed down, so a stylesheet
@@ -182,6 +190,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ banner_fills_the_screen: whole });
   }, []);
 
+  const setHeaderHides = useCallback((hides: boolean) => {
+    safeWrite(STORED_HEADER_HIDES, hides ? "yes" : "no");
+    setHeaderHidesState(hides);
+    tellTheServer({ header_hides_on_scroll: hides });
+  }, []);
+
   const adopt = useCallback((chosen: ViewerPreferences) => {
     const language = chosen.interface_language === "fr" ? "fr" : "en";
     rememberLanguage(language);
@@ -202,6 +216,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setBannerCutState(chosen.banner_cut);
     safeWrite(STORED_BANNER_WHOLE, chosen.banner_fills_the_screen ? "yes" : "no");
     setBannerFillsState(chosen.banner_fills_the_screen);
+    safeWrite(STORED_HEADER_HIDES, chosen.header_hides_on_scroll ? "yes" : "no");
+    setHeaderHidesState(chosen.header_hides_on_scroll);
   }, []);
 
   const value = useMemo<Settings>(
@@ -216,6 +232,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerCut,
       bannerFillsTheScreen,
       setBannerFillsTheScreen,
+      headerHides,
+      setHeaderHides,
       adopt,
       t: (key, values) => translate(language, key, values),
     }),
@@ -230,6 +248,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerCut,
       bannerFillsTheScreen,
       setBannerFillsTheScreen,
+      headerHides,
+      setHeaderHides,
       adopt,
     ],
   );

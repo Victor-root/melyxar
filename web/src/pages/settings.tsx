@@ -647,7 +647,8 @@ function shareOfThePictureKept(height: number): number {
  * somebody changes twice a year does not belong on every screen.
  */
 function Appearance() {
-  const { t, language, setLanguage, theme, setTheme } = useSettings();
+  const { t, language, setLanguage, theme, setTheme, headerHides, setHeaderHides } =
+    useSettings();
 
   return (
     <section className="settings-block">
@@ -675,6 +676,16 @@ function Appearance() {
           ]}
         />
       </div>
+
+      <label className="settings-switch">
+        <input
+          type="checkbox"
+          checked={headerHides}
+          onChange={(event) => setHeaderHides(event.target.checked)}
+        />
+        <span>{t("settings.header_hides")}</span>
+      </label>
+      <p className="settings-why">{t("settings.header_hides_why")}</p>
     </section>
   );
 }

@@ -96,6 +96,20 @@
   right: 0;
   z-index: 20;
   pointer-events: none;
+  transition: transform var(--calm) var(--ease);
+}
+
+/* Stepped aside while a page is read down: slid up past the top of the
+   window, the glow around its pieces with it. Never while somebody is using
+   it, which is what holding a focus inside it says. */
+.header-away:not(:focus-within) {
+  transform: translateY(calc(-100% - 24px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header {
+    transition: none;
+  }
 }
 
 /* The name at one end, everything else at the other, and the page in between:
