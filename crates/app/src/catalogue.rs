@@ -30,6 +30,9 @@ pub struct LibrarySummary {
     /// The language its films are described in, for the same screen.
     pub metadata_language: String,
     pub roots: Vec<RootSummary>,
+    /// How many of its files were taken out of it and left on the disk, which
+    /// the same screen offers to take back.
+    pub set_aside: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,6 +194,7 @@ pub async fn libraries(state: &AppState, who: &User) -> Result<Vec<LibrarySummar
         summaries.push(LibrarySummary {
             works: crate::counted::counted(state, Some(library.id)).await?.browsable,
             version: database.library_version(library.id).await?,
+            set_aside: database.count_set_aside(library.id).await?,
             roots: library
                 .roots
                 .iter()

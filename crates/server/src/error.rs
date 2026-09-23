@@ -130,21 +130,36 @@ impl IntoResponse for ServerError {
     }
 }
 
+impl ServerError {
+    /// A refusal carrying the word saying which thing to put right, in the
+    /// details every client already reads.
+    fn refused(reason: &'static str) -> Self {
+        Self {
+            status: StatusCode::BAD_REQUEST,
+            body: ApiError::with_details(
+                ErrorCode::InvalidInput,
+                serde_json::json!({ "reason": reason }),
+            ),
+            detail: format!("refused: {reason}"),
+        }
+    }
+}
+
 impl From<melyxar_app::libraries::Trouble> for ServerError {
-    /// A refusal carries the word saying which thing to put right, in the
-    /// details every client already reads. A failure of the server itself is
-    /// the other arm, and stays what it was.
+    /// A failure of the server itself is the other arm, and stays what it was.
     fn from(trouble: melyxar_app::libraries::Trouble) -> Self {
         match trouble {
-            melyxar_app::libraries::Trouble::Refused(refused) => Self {
-                status: StatusCode::BAD_REQUEST,
-                body: ApiError::with_details(
-                    ErrorCode::InvalidInput,
-                    serde_json::json!({ "reason": refused.as_str() }),
-                ),
-                detail: format!("refused: {}", refused.as_str()),
-            },
+            melyxar_app::libraries::Trouble::Refused(refused) => Self::refused(refused.as_str()),
             melyxar_app::libraries::Trouble::Failed(error) => Self::from(error),
+        }
+    }
+}
+
+impl From<melyxar_app::deletion::Trouble> for ServerError {
+    fn from(trouble: melyxar_app::deletion::Trouble) -> Self {
+        match trouble {
+            melyxar_app::deletion::Trouble::Refused(refused) => Self::refused(refused.as_str()),
+            melyxar_app::deletion::Trouble::Failed(error) => Self::from(error),
         }
     }
 }

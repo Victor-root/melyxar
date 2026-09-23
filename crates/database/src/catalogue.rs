@@ -853,18 +853,6 @@ impl Database {
         Ok(row.0)
     }
 
-    /// Removes a work along with everything hanging from it.
-    ///
-    /// Only ever called by the caller that created a work and then found no
-    /// file to attach to it. A scan never reaches for this.
-    pub async fn delete_work(&self, id: WorkId) -> Result<()> {
-        sqlx::query("DELETE FROM works WHERE id = ?")
-            .bind(id.to_db_string())
-            .execute(self.writer())
-            .await?;
-        Ok(())
-    }
-
     /// Every file recorded under one root, in path order.
     ///
     /// This is the side of the comparison a scan starts from, so it stays as
@@ -5984,7 +5972,10 @@ mod tests {
             .await
             .expect("analysis stored");
 
-        database.delete_work(work_id).await.expect("work removed");
+        database
+            .delete_work(work_id, false)
+            .await
+            .expect("work removed");
 
         assert!(database
             .sources_of_root(root_id)

@@ -10,6 +10,7 @@
 pub mod account;
 pub mod calibration;
 pub mod catalogue;
+pub mod deletion;
 pub mod error;
 pub mod general;
 pub(crate) mod identifiers;

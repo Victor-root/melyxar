@@ -74,7 +74,7 @@ pub struct Swept {
 /// Bounded by what is left rather than by what went, which is what makes it
 /// safe to run after any removal: a person credited by one remaining film is
 /// not somebody this sweep can reach, whatever else has just been taken away.
-async fn sweep_what_nothing_points_at(
+pub(crate) async fn sweep_what_nothing_points_at(
     transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
 ) -> Result<Swept> {
     let people = sqlx::query(

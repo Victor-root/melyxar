@@ -148,6 +148,8 @@ struct LibraryView {
     /// The language its films are described in, as a two letter code.
     metadata_language: String,
     roots: Vec<RootView>,
+    /// How many of its files were taken out of it and left on the disk.
+    set_aside: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -183,6 +185,7 @@ async fn libraries(
                 key_frames_during_scan: library.options.key_frames_during_scan,
                 thumbnails_during_scan: library.options.thumbnails_during_scan,
                 metadata_language: library.metadata_language,
+                set_aside: library.set_aside,
                 roots: library
                     .roots
                     .into_iter()
