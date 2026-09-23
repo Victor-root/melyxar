@@ -484,6 +484,10 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     // scan from a terminal is over in minutes.
     let upkeep = melyxar_app::upkeep::keep_the_upkeep_running(&state);
 
+    // What the machine spends, for the curves of the administration. Only a
+    // server has anybody to show them to.
+    let measuring = melyxar_app::measures::keep_measuring(&state);
+
     // A scan of a whole collection runs for hours, so an update in the middle
     // of one must not mean starting it over by hand, or worse, forgetting to.
     let cut_short = melyxar_app::startup::close_what_a_previous_run_left(&state)
@@ -499,6 +503,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     // closing them all is the last thing left to do.
     sweeper.abort();
     upkeep.abort();
+    measuring.abort();
     melyxar_app::playback::close_every_session(&state).await;
     state.database().close().await;
 

@@ -24,6 +24,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/system/info", get(system_info))
         .route("/api/v1/system/health", get(health))
         .route("/api/v1/system/overview", get(overview))
+        .route("/api/v1/system/measures", get(measures))
+        .route("/api/v1/system/measures/history", get(measures_history))
         .route("/api/v1/system/diagnostics", get(diagnostics))
         .route("/api/v1/system/diagnostics/text", get(diagnostics_text))
         // One name, two verbs: reading what was said and forgetting it are the
@@ -117,6 +119,26 @@ async fn overview(
     State(state): State<AppState>,
 ) -> Result<Json<melyxar_app::overview::Overview>> {
     Ok(Json(melyxar_app::overview::collect(&state).await?))
+}
+
+async fn measures(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+) -> Json<melyxar_app::measures::Live> {
+    Json(melyxar_app::measures::live(&state))
+}
+
+#[derive(Debug, Deserialize)]
+struct HistoryAsked {
+    over: melyxar_app::measures::Over,
+}
+
+async fn measures_history(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+    Query(asked): Query<HistoryAsked>,
+) -> Result<Json<Vec<melyxar_app::measures::Point>>> {
+    Ok(Json(melyxar_app::measures::history(&state, asked.over).await?))
 }
 
 async fn diagnostics(
