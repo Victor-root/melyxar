@@ -8,9 +8,10 @@
  */
 
 import { useEffect, useRef } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { api } from "./api";
 import { Header } from "./components/header";
+import { isSectioned } from "./components/sectioned";
 import { ScrollBar } from "./components/scrollbar";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
@@ -95,6 +96,7 @@ function TheLibrary() {
   /* The box the whole library scrolls in, held so the bar drawn over it can
      read where it stands. */
   const scrolling = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
   // Watched here, where the bar that starts the work and the pages that show
   // what it produced can both read it.
@@ -145,9 +147,13 @@ function TheLibrary() {
               </Route>
               <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
             </Routes>
-            <footer className="footer">
-              <span>{t("attribution.tmdb")}</span>
-            </footer>
+            {/* Owed wherever the provider's pictures and words are shown,
+                which the tools and somebody's own settings are not. */}
+            {!isSectioned(location.pathname) && (
+              <footer className="footer">
+                <span>{t("attribution.tmdb")}</span>
+              </footer>
+            )}
           </div>
 
           {/* Outside the box it belongs to, because a bar drawn inside it

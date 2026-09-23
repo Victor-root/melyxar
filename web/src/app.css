@@ -1125,6 +1125,7 @@
    a second, greyer rim around the first. */
 .band-tile:hover,
 .band-tile:focus-visible {
+  outline: none;
   transform: scale(1.035);
   z-index: 1;
   box-shadow:
@@ -1795,6 +1796,11 @@
    pseudo-class longer and paints the accent button grey. */
 .button-accent:hover:not(:disabled) {
   background: var(--accent);
+}
+
+/* The ring in the accent would vanish on a button filled with it. */
+.button-accent:focus-visible {
+  outline-color: var(--accent-contrast);
 }
 
 .button-large {
@@ -2805,8 +2811,8 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 .identify-field input:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
 }
 
 .identify-heading {

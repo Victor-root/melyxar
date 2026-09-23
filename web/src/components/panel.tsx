@@ -19,23 +19,18 @@ import { useSettings } from "../settings";
 import { useSection } from "./sectioned";
 
 /**
- * The head of a page: where it sits, what it is, and what it is for.
+ * The head of a page: what it is, and what it is for.
  *
  * The icon and the name come from the section the page is drawn in, so the
  * side bar and the head of the page can never name a page two ways.
  */
 export function PageHead({ lead, actions }: { lead: string; actions?: ReactNode }) {
   const { t } = useSettings();
-  const { place, section } = useSection();
+  const section = useSection();
   const SectionIcon = section.icon;
 
   return (
     <header className="page-head">
-      <nav className="page-trail" aria-label={t("admin.trail")}>
-        <span>{t(place)}</span>
-        <span aria-hidden="true">/</span>
-        <span aria-current="page">{t(section.label)}</span>
-      </nav>
       <div className="page-head-line">
         <span className="page-head-mark" aria-hidden="true">
           <SectionIcon size={24} />

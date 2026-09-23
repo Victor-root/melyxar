@@ -202,18 +202,6 @@
   margin-bottom: var(--gap-wide);
 }
 
-.page-trail {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-  color: var(--text-faint);
-  font-size: 12.5px;
-}
-
-.page-trail [aria-current] {
-  color: var(--text-soft);
-}
-
 .page-head-line {
   display: flex;
   align-items: center;
@@ -261,6 +249,49 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--gap-tight);
+}
+
+/* On a wide screen the head of the page rises into the band of the bar at
+   the top, between its two pieces, and the first block of the page starts
+   level with the side list: the band was room nothing used. Kept clear of
+   the piece at the right end, which is as wide as the account it names. */
+@media (min-width: 1280px) {
+  .page-head {
+    display: flex;
+    align-items: center;
+    height: var(--header-height);
+    max-width: calc(100% - 360px);
+    margin: calc(-1 * (var(--header-height) + var(--gap))) 0 var(--gap);
+  }
+
+  .page-head-line {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .page-head-mark {
+    width: 46px;
+    height: 46px;
+  }
+
+  .page-head-words {
+    flex: 0 1 auto;
+  }
+
+  .page-head-words h1 {
+    font-size: 24px;
+  }
+
+  .page-head-words p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page-head-actions {
+    flex: none;
+    flex-wrap: nowrap;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -416,16 +447,6 @@
   padding-top: var(--gap);
 }
 
-/* A quiet button with a rim, for "go and see" at the foot of a panel. */
-.button-rim {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-}
-
-.button-rim:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
 /* --------------------------------------------------------------------------
  * A setting on its line, and its controls
  * ----------------------------------------------------------------------- */
@@ -566,8 +587,8 @@
 }
 
 .picker-open {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
 }
 
 .picker-open svg {
@@ -607,8 +628,9 @@
 }
 
 .field-line:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  outline: none;
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
 }
 
 .field-line:disabled {
@@ -1077,7 +1099,22 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* Three across a panel leave a label little room beside its mark: the mark
+   goes above, and the words have the whole width of the tile. */
+.stats-three .stat {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stats-three .stat-label {
+  white-space: normal;
+}
+
 @container (max-width: 520px) {
+  .stats-three .stat {
+    flex-direction: row;
+  }
+
   .stats-three {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1192,8 +1229,8 @@
 }
 
 .journal-search:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
 }
 
 .journal-search input {
@@ -1910,10 +1947,19 @@
   color: var(--text-soft);
 }
 
+/* Each arrow in the colour of its own line on the curve, which makes it the
+   legend of the curve as well. */
 .network-way {
   margin-right: 2px;
-  color: var(--text-faint);
   font-weight: 500;
+}
+
+.network-way-out {
+  color: var(--accent-bright);
+}
+
+.network-way-in {
+  color: var(--text-faint);
 }
 
 /* What failed its check, each on its own line in the colour of a warning. */

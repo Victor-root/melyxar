@@ -28,7 +28,7 @@ export interface Libraries {
 /** Every kind a library can be, in the order they are offered and read in:
  *  the choice when one is declared, the categories of the bar at the top, the
  *  kinds a search may be narrowed to. */
-export const KINDS: LibraryKind[] = ["movies", "series", "anime", "shows", "home_media", "music"];
+export const KINDS: LibraryKind[] = ["movies", "series", "anime", "home_media", "shows", "music"];
 
 export const LibrariesContext = createContext<Libraries>({
   all: [],

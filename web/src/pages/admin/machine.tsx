@@ -250,11 +250,11 @@ function Gauges({
           now ? (
             <span className="network-figures">
               <span>
-                <span className="network-way">↑</span>
+                <span className="network-way network-way-out">↑</span>
                 {networkRate(now.sent, language)}
               </span>
               <span className="network-in">
-                <span className="network-way">↓</span>
+                <span className="network-way network-way-in">↓</span>
                 {networkRate(now.received, language)}
               </span>
             </span>

@@ -623,8 +623,8 @@
 
 .door-by-hand:focus-visible {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
 }
 
 /*
@@ -751,12 +751,11 @@
   border-color: var(--border-strong);
 }
 
-/* The ring is drawn on the box itself rather than around it: on a field that
-   fills its row, an outline sitting outside is cut off by the card's edge. */
+/* The ring is the box's own rim: the field inside draws none of its own. */
 .door-box:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-bright);
   background: color-mix(in srgb, var(--surface-deep) 88%, transparent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow: var(--focus-rim);
 }
 
 /* Quiet until the field it belongs to is the one being typed into, which is
