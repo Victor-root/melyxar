@@ -115,6 +115,15 @@
      night like everything else rather than stay black on a light theme. Each
      piece of the bar is mixed from it. */
   --header-glass: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+  /* A wash of the accent laid over that glass, strongest at the left and
+     gone before the right: enough to colour the bar, never enough to compete
+     with what is on it. Follows the accent somebody chose. */
+  --header-tint: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--accent-dim) 8%, transparent) 55%,
+    transparent
+  );
 
   /* How tall the banner of the home page is, and with it the grey block drawn
      in its place while the page loads, so the two can never drift apart and

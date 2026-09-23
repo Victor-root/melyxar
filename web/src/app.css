@@ -130,7 +130,7 @@
   padding: 0 5px;
   border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  background: var(--header-glass);
+  background: var(--header-tint), var(--header-glass);
   backdrop-filter: blur(18px);
   box-shadow:
     var(--shadow-card),
