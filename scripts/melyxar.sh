@@ -1640,7 +1640,8 @@ folders_refusing() {
 # A name for a group number the container has no name for yet.
 name_for_group() {
   local gid="$1" name
-  name="$(getent group "$gid" | cut -d: -f1)"
+  # Nothing found is an answer here, not a failure.
+  name="$(getent group "$gid" | cut -d: -f1 || true)"
   if [[ -z "$name" ]]; then
     name="medias"
     getent group "$name" >/dev/null && name="medias-$gid"
@@ -1697,8 +1698,8 @@ settle_refusals() {
     done <<< "$still"
   fi
   local before after
-  before="$(grep -c . <<< "$refused")"
-  after="$(grep -c . <<< "$still")"
+  before="$(grep -c . <<< "$refused" || true)"
+  after="$(grep -c . <<< "$still" || true)"
   if [[ "$after" -lt "$before" ]]; then
     info "$(tr_fmt writes_partly "$((before - after))" "$before")"
   fi
