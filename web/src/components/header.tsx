@@ -308,7 +308,6 @@ export function Header({ libraries }: { libraries: Library[] }) {
     <header className="header">
       <div className="header-inner">
         <div className="header-piece header-start">
-          <span className="header-drift drift" aria-hidden="true" />
           {/* Off the front page only: there is nowhere to come back from
               there, and the brand right next to it already leads home. */}
           {location.pathname !== "/" && (
@@ -336,7 +335,6 @@ export function Header({ libraries }: { libraries: Library[] }) {
             and there is only one: this end is what you press, the other is
             where you are. */}
         <div className="header-piece header-side">
-          <span className="header-drift drift" aria-hidden="true" />
           {/* What the server is doing, and only while it is doing it. It is
               the one thing here that is news rather than a way to somewhere:
               a scan that started ten minutes ago and is still going is worth
