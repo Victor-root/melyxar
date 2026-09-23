@@ -663,49 +663,161 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* A line along which a number is chosen, filled in the accent up to it. */
+/* A line along which a number is chosen, filled in the accent up to it: the
+   player's sound, drawn in the theme's colours rather than over a picture. */
 .slider {
+  --slider-rail: 8px;
+  --slider-rail-hovered: 11px;
+  --slider-handle-across: 7px;
+  --slider-handle-down: 16px;
+  --slider-handle-grow: 1.5;
   display: inline-flex;
   align-items: center;
   gap: 12px;
 }
 
-.slider input[type="range"] {
-  appearance: none;
-  width: 200px;
-  height: 6px;
-  margin: 0;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(
-    to right,
-    var(--accent) var(--filled),
-    var(--surface-hover) var(--filled)
+/* Where the middle of the handle stands, worked out here where the share
+   is known: a browser keeps its handle inside the rail at both ends. */
+.slider-rail {
+  --slider-handle-middle: calc(
+    var(--slider-handle-across) / 2 + var(--share, 0) * (100% - var(--slider-handle-across))
   );
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 200px;
+  height: 28px;
+}
+
+.slider-rail::before,
+.slider-rail::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  height: var(--slider-rail);
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+  transition: height var(--quick) var(--ease);
+}
+
+.slider-rail::before {
+  width: 100%;
+  background: var(--surface-hover);
+}
+
+/* Stops exactly at the middle of the handle, so the two never drift apart
+   towards either end. */
+.slider-rail::after {
+  width: var(--slider-handle-middle);
+  background: var(--accent);
+}
+
+.slider-rail:hover::before,
+.slider-rail:hover::after,
+.slider-rail:has(input:focus-visible)::before,
+.slider-rail:has(input:focus-visible)::after {
+  height: var(--slider-rail-hovered);
+}
+
+/* Above the two pieces drawn behind it, or the accent runs over the handle. */
+.slider-rail input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
   cursor: pointer;
 }
 
-.slider input[type="range"]::-webkit-slider-thumb {
+/* A setting already chosen is a line; the handle stands up under a hand. */
+.slider-rail input::-webkit-slider-thumb {
   appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 3px solid var(--accent);
-  background: var(--accent-contrast);
-  box-shadow: 0 0 10px var(--accent-glow);
+  -webkit-appearance: none;
+  width: var(--slider-handle-across);
+  height: var(--slider-handle-down);
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+  transform: scaleY(0.55);
+  transition:
+    transform var(--calm) var(--ease),
+    background var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
 }
 
-.slider input[type="range"]::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 3px solid var(--accent);
-  background: var(--accent-contrast);
-  box-shadow: 0 0 10px var(--accent-glow);
+.slider-rail input::-moz-range-thumb {
+  width: var(--slider-handle-across);
+  height: var(--slider-handle-down);
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+  transform: scaleY(0.55);
+  transition:
+    transform var(--calm) var(--ease),
+    background var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
 }
 
-.slider input[type="range"]:disabled {
-  opacity: 0.45;
+.slider-rail:hover input::-webkit-slider-thumb,
+.slider-rail input:focus-visible::-webkit-slider-thumb {
+  transform: scaleY(var(--slider-handle-grow));
+  background: var(--text);
+  box-shadow: var(--shadow-card);
+}
+
+.slider-rail:hover input::-moz-range-thumb,
+.slider-rail input:focus-visible::-moz-range-thumb {
+  transform: scaleY(var(--slider-handle-grow));
+  background: var(--text);
+  box-shadow: var(--shadow-card);
+}
+
+.slider-rail input:disabled {
   cursor: not-allowed;
+}
+
+.slider-rail:has(input:disabled) {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* What it comes to, standing over the handle while a hand is on it. */
+.slider-said {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: var(--slider-handle-middle);
+  z-index: 2;
+  transform: translateX(-50%) scale(0.86);
+  transform-origin: bottom center;
+  min-width: 40px;
+  padding: 7px 11px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity var(--quick) var(--ease),
+    transform var(--quick) var(--ease);
+}
+
+.slider-rail:hover .slider-said,
+.slider-rail input:focus-visible ~ .slider-said {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
 .slider-value {

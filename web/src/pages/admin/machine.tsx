@@ -189,6 +189,18 @@ function Gauges({
         label={t("admin.cpu")}
         value={share(now?.processor)}
         note={live?.machine.processor ?? undefined}
+        more={
+          [
+            live ? t("admin.threads", { threads: live.machine.threads }) : null,
+            now?.temperature !== null && now?.temperature !== undefined
+              ? t("admin.temperature", {
+                  degrees: now.temperature.toLocaleString(language, { maximumFractionDigits: 0 }),
+                })
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined
+        }
         curve={
           <Sparkline
             label={t("admin.cpu")}
@@ -304,18 +316,7 @@ function Gauges({
             ? "–"
             : now.load.toLocaleString(language, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
         }
-        note={
-          [
-            live ? t("admin.load_of", { threads: live.machine.threads }) : null,
-            now?.temperature !== null && now?.temperature !== undefined
-              ? t("admin.temperature", {
-                  degrees: now.temperature.toLocaleString(language, { maximumFractionDigits: 0 }),
-                })
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" · ") || undefined
-        }
+        note={t("admin.load_note")}
         curve={
           <Sparkline
             label={t("admin.load")}
@@ -336,12 +337,15 @@ function Gauge({
   label,
   value,
   note,
+  more,
   curve,
 }: {
   icon: (props: IconProps) => ReactNode;
   label: string;
   value: ReactNode;
   note?: string;
+  /** A second line under the first, for a figure with two things to say. */
+  more?: string;
   curve?: ReactNode;
 }) {
   return (
@@ -356,6 +360,11 @@ function Gauge({
           {note && (
             <span className="stat-note" title={note}>
               {note}
+            </span>
+          )}
+          {more && (
+            <span className="stat-note" title={more}>
+              {more}
             </span>
           )}
         </span>
