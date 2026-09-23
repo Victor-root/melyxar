@@ -13,6 +13,7 @@ import { api } from "./api";
 import { Header } from "./components/header";
 import { isSectioned } from "./components/sectioned";
 import { ScrollBar } from "./components/scrollbar";
+import { Toasts } from "./components/toasts";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { SearchPage } from "./pages/search";
@@ -109,6 +110,7 @@ function TheLibrary() {
   return (
     <RunningContext.Provider value={running}>
       <LibrariesContext.Provider value={libraries}>
+        <Toasts>
         {/* The bar stands over the page rather than beside it, so the page
             can be scrolled up behind it and read faintly through the glass.
             Where the two sit in the markup does not decide that on its own;
@@ -160,6 +162,7 @@ function TheLibrary() {
               would be cut off at the same edge everything else is. */}
           <ScrollBar holder={scrolling} />
         </div>
+        </Toasts>
       </LibrariesContext.Provider>
     </RunningContext.Provider>
   );

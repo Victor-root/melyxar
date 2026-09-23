@@ -18,6 +18,7 @@ import { useMarks } from "../marks";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
+import { useToast } from "./toasts";
 import type { Choosable } from "./selection";
 
 /** How many files are named before the rest are only counted. */
@@ -39,14 +40,38 @@ export function DeleteDialog({
   const ids = works.map((work) => work.id);
   const going = useAsked((signal) => api.whatDeletingTakes(ids, signal), [ids.join()]);
   const [fromDisk, setFromDisk] = useState(false);
+  const toast = useToast();
+  // What came of it is said in the corner once the panel has closed, the
+  // files looked for on the disk afterwards rather than taken on trust.
   const told = useTold(async () => {
-    await api.deleteWorks(ids, fromDisk);
-    marks.setGone(ids);
-    onDeleted();
+    try {
+      const done = await api.deleteWorks(ids, fromDisk);
+      marks.setGone(ids);
+      toast(
+        done.off_the_disk === null
+          ? { state: "ok", title: t("delete.done_library"), detail: t("delete.done_library_why") }
+          : {
+              state: "ok",
+              title: t("delete.done_disk"),
+              detail:
+                done.off_the_disk === 0
+                  ? t("delete.done_disk_none")
+                  : howMany(done.off_the_disk, "delete.done_disk_checked", t),
+            },
+      );
+      onDeleted();
+    } catch (error) {
+      toast({
+        state: "trouble",
+        title: t("delete.failed"),
+        detail: t(refusalAbout(error, "deletion")),
+      });
+      onClose();
+    }
   });
 
   const answer = going.answer;
-  const refused = told.failure ?? going.failure;
+  const refused = going.failure;
   // Offered greyed when the server may not write there: it would only be
   // refused after saying yes.
   const diskShut = answer !== null && answer.files.length > 0 && !answer.disks_take_writes;

@@ -215,6 +215,15 @@ export interface WouldGo {
   files: number;
 }
 
+/** What a deletion did. */
+export interface Deleted {
+  works: number;
+  files: number;
+  /** Files looked for on the disk once deleted and not found, when the disk
+      was asked to lose them. */
+  off_the_disk: number | null;
+}
+
 /** What deleting a work would take with it. */
 export interface Deletion {
   /** The works and everything under them, each once. */
@@ -1317,7 +1326,7 @@ export const api = {
   whatDeletingTakes: (works: string[], signal?: AbortSignal) =>
     post<Deletion>("/api/v1/deletion/what-it-takes", { works }, signal),
   deleteWorks: (works: string[], fromDisk: boolean) =>
-    post<WouldGo>("/api/v1/deletion", { works, from_disk: fromDisk }),
+    post<Deleted>("/api/v1/deletion", { works, from_disk: fromDisk }),
   whatRemovingAFolderTakes: (library: string, root: string, signal?: AbortSignal) =>
     get<WouldGo>(`/api/v1/libraries/${library}/roots/${root}/removal`, signal),
   removeRoot: (library: string, root: string) =>

@@ -54,6 +54,9 @@ struct FileView {
 struct DeletedView {
     works: i64,
     files: i64,
+    /// Files looked for on the disk once deleted and not found, when the disk
+    /// was asked to lose them.
+    off_the_disk: Option<usize>,
 }
 
 async fn what_deleting_takes(
@@ -87,12 +90,13 @@ async fn delete(
     Viewer(who): Viewer,
     Json(asked): Json<Asked>,
 ) -> Result<Json<DeletedView>> {
-    let removed =
+    let deleted =
         melyxar_app::deletion::delete(&state, &who, &work_ids(&asked.works)?, asked.from_disk)
             .await?;
     Ok(Json(DeletedView {
-        works: removed.works,
-        files: removed.files,
+        works: deleted.removed.works,
+        files: deleted.removed.files,
+        off_the_disk: deleted.off_the_disk,
     }))
 }
 

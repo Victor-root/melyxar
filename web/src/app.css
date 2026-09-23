@@ -4592,3 +4592,118 @@ button.seen-mark:not(.seen-mark-on):hover {
 .pictures-offered-logo .pictures-frame {
   aspect-ratio: 16 / 9;
 }
+
+/* --------------------------------------------------------------------------
+ * A word in the corner about what an action did
+ * ----------------------------------------------------------------------- */
+
+/* Stacked from the bottom right, over everything, panels included: a word
+   said as a panel closes has to outlive it. */
+.toasts {
+  position: fixed;
+  right: var(--gutter);
+  bottom: var(--gutter);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--gap);
+  width: min(400px, calc(100vw - 2 * var(--gutter)));
+  pointer-events: none;
+}
+
+/* The glass of the panels, rimmed on its left edge in the colour of what it
+   says. */
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 12px 14px 14px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--toast-state);
+  background: var(--panel-glass);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-card);
+  animation: toast-in var(--calm) var(--ease);
+}
+
+.toast-ok {
+  --toast-state: var(--ok);
+  --toast-wash: var(--ok-wash);
+}
+
+.toast-attention {
+  --toast-state: var(--attention);
+  --toast-wash: var(--attention-wash);
+}
+
+.toast-trouble {
+  --toast-state: var(--trouble);
+  --toast-wash: var(--trouble-wash);
+}
+
+.toast-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--toast-wash);
+  color: var(--toast-state);
+}
+
+.toast-words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 5px;
+  font-size: 13.5px;
+}
+
+.toast-words strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.toast-words span {
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    background var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.toast-close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
