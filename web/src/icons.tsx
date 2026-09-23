@@ -647,6 +647,21 @@ export function TranscodeIcon(props: IconProps) {
   );
 }
 
+/** The mark of FFmpeg, the tool every film goes through, in the colour of
+ *  whatever it sits in rather than its own green. */
+export function FfmpegIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path
+        transform="translate(2.2 2.35) scale(0.3165)"
+        fill="currentColor"
+        stroke="none"
+        d="m23.808 3.106-12.804 14.933v6.319l19.018-21.778 30.485-2.58-44.687 47.006 5.894.34 32.454-33.446v31.748l-3.63 3.411 9.221.545v8.799l-28.786-2.438 14.624-14.228v-7.06l-20.876 20.76-24.721-2.093 39.798-43.302-6.603.39-28.74 31.885v-27.091l2.704-3.255-6.648.393v-7.286z"
+      />
+    </Icon>
+  );
+}
+
 /** Two people, for the accounts. */
 export function PeopleIcon(props: IconProps) {
   return (

@@ -20,6 +20,7 @@ import {
   ClockIcon,
   DatabaseIcon,
   DeviceIcon,
+  FfmpegIcon,
   FolderIcon,
   GraphicsCardIcon,
   HistoryIcon,
@@ -28,7 +29,6 @@ import {
   PlaybackIcon,
   ServerIcon,
   TasksIcon,
-  TranscodeIcon,
   WarningIcon,
 } from "../../icons";
 import { useLibraries } from "../../libraries";
@@ -142,7 +142,7 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
           state={overview ? (overview.database_ready ? "ok" : "trouble") : undefined}
         />
         <Fact
-          icon={TranscodeIcon}
+          icon={FfmpegIcon}
           label={t("admin.media_tools")}
           value={overview && t(overview.media_tools.found ? "admin.found" : "admin.missing")}
           state={overview ? (overview.media_tools.found ? "ok" : "trouble") : undefined}
