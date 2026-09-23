@@ -58,6 +58,13 @@ const IN_A_FAN = 5;
  */
 const ROOM_FOR_A_POSTER = "(max-width: 900px) 22vw, 130px";
 
+/** How many prints the tile of what somebody filmed themselves lays out: a
+ *  pile of three reads as a pile, and more only covers one another. */
+const IN_A_PILE = 3;
+
+/** How much room one print of the pile has: a little under half the tile. */
+const ROOM_FOR_A_PRINT = "(max-width: 900px) 40vw, 180px";
+
 /** What the water's filter is called. The stylesheet asks for it by this
  *  same name, which is the one thing here that has to be said in both
  *  places: a name that disagrees with itself is a floor that quietly stops
@@ -192,8 +199,18 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
             <KindIcon kind={shelf.kind} />
           </span>
           <span className="band-halo" aria-hidden="true" />
-          <Fan fan={fan} mirror />
-          <Fan fan={fan} />
+          {/* What somebody filmed or photographed has no poster and never
+              will: it is wide, and it is theirs. So it is not stood up as a
+              fan on a polished floor but laid down as a pile of prints, the
+              way photos lie on a table. */}
+          {shelf.kind === "home_media" ? (
+            <Pile prints={fan.slice(0, IN_A_PILE)} />
+          ) : (
+            <>
+              <Fan fan={fan} mirror />
+              <Fan fan={fan} />
+            </>
+          )}
         </>
       ) : (
         <span className="band-mark" aria-hidden="true">
@@ -236,6 +253,51 @@ function Fan({ fan, mirror }: { fan: Card[]; mirror?: boolean }) {
       {fan.map((card) => (
         <FanPoster key={card.id} card={card} />
       ))}
+    </span>
+  );
+}
+
+/**
+ * A pile of prints, for what somebody filmed or photographed themselves.
+ *
+ * Each one is the wide picture of the work where it has one, and the picture
+ * taken from its file otherwise, cut to the shape of a print. The newest lies
+ * on top.
+ */
+function Pile({ prints }: { prints: Card[] }) {
+  return (
+    <span className={`band-pile band-pile-${prints.length}`} aria-hidden="true">
+      {prints.map((card) => (
+        <Print key={card.id} card={card} />
+      ))}
+    </span>
+  );
+}
+
+function Print({ card }: { card: Card }) {
+  const { picture, itDidNotLoad } = useShownPicture(
+    card.wide.length > 0 ? card.wide : card.poster,
+  );
+
+  return (
+    <span
+      className="band-print"
+      style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
+    >
+      {picture ? (
+        <img
+          src={picture.src}
+          srcSet={picture.srcSet}
+          sizes={ROOM_FOR_A_PRINT}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={itDidNotLoad}
+        />
+      ) : (
+        <span className="band-poster-initial">{card.title.slice(0, 1)}</span>
+      )}
     </span>
   );
 }
