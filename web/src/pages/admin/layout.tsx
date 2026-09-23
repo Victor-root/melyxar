@@ -22,6 +22,7 @@ import {
   DeviceIcon,
   DiagnosticsIcon,
   FolderIcon,
+  GraphicsCardIcon,
   JournalIcon,
   PeopleIcon,
   PlaybackIcon,
@@ -30,7 +31,6 @@ import {
   SummaryIcon,
   TagIcon,
   TasksIcon,
-  TranscodeIcon,
 } from "../../icons";
 import { releaseOf } from "../../readable";
 import { useSettings } from "../../settings";
@@ -51,7 +51,7 @@ const SECTIONS: SectionGroup[] = [
     label: "admin.group.playback",
     sections: [
       { path: "playback", icon: PlaybackIcon, label: "admin.playback", soon: true },
-      { path: "transcoding", icon: TranscodeIcon, label: "admin.transcoding" },
+      { path: "transcoding", icon: GraphicsCardIcon, label: "admin.transcoding" },
     ],
   },
   {

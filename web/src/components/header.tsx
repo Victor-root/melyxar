@@ -43,6 +43,7 @@ import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
 import { KINDS } from "../libraries";
 import { useSettings } from "../settings";
+import { isSectioned } from "./sectioned";
 import { Face } from "./face";
 import { headroomAt } from "../headroom";
 import type { Headroom } from "../headroom";
@@ -138,7 +139,7 @@ export function Header({
   /* Held in place on the pages laid out beside a list of sections: the list
      is pinned under the bar, and a bar that slid away would leave a hole of
      its own height over it. */
-  const sectioned = /^\/(admin|settings)(\/|$)/.test(location.pathname);
+  const sectioned = isSectioned(location.pathname);
   const out = useHeadroom(scrolling, headerHides && !sectioned);
   const field = useRef<HTMLInputElement>(null);
   const searchForm = useRef<HTMLFormElement>(null);

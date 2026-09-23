@@ -89,6 +89,8 @@
   --radius-card: 10px;
   --radius-control: 8px;
   --radius-pill: 999px;
+  /* The rim of a control that has the focus, laid inside its border. */
+  --focus-rim: inset 0 0 0 1px var(--accent-bright);
 
   --gap-tight: 6px;
   --gap: 12px;
@@ -347,15 +349,19 @@ body {
  * One focus ring for the whole interface, visible on every surface. Keyboard
  * navigation was asked for from the start, and an interface that hides where
  * the focus is cannot be used without a mouse.
+ *
+ * Drawn on the edge of the thing itself, over its own rim and in its own
+ * shape, never as a second frame around it. A control that draws its focus
+ * itself does it the same way: its rim in the accent, thickened inwards by
+ * `--focus-rim`.
  */
 :focus {
   outline: none;
 }
 
 :focus-visible {
-  outline: 3px solid var(--accent-bright);
-  outline-offset: 3px;
-  border-radius: var(--radius-control);
+  outline: 2px solid var(--accent-bright);
+  outline-offset: -2px;
 }
 
 a {

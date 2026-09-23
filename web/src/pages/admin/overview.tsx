@@ -117,7 +117,7 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
             </ul>
           )}
         </div>
-        <Link className="button button-small button-rim server-strip-go" to="/admin/diagnostics">
+        <Link className="button button-small button-accent server-strip-go" to="/admin/diagnostics">
           {t("admin.see_diagnostics")}
           <ArrowRightIcon size={15} />
         </Link>
@@ -225,7 +225,7 @@ function PlayingPanel() {
     <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")} soon>
       <div className="stats">
         <Stat icon={PlaybackIcon} label={t("admin.playing_count")} value="–" />
-        <Stat icon={TranscodeIcon} label={t("admin.transcoding_count")} value="–" />
+        <Stat icon={GraphicsCardIcon} label={t("admin.transcoding_count")} value="–" />
         <Stat icon={DeviceIcon} label={t("admin.direct_count")} value="–" />
       </div>
       <p className="empty-line">{t("admin.playing_empty")}</p>
@@ -266,7 +266,7 @@ function LibrariesPanel() {
       {scanning && <WorkUnderWay job={scanning} />}
 
       <div className="panel-foot">
-        <Link className="button button-small button-rim" to="/admin/libraries">
+        <Link className="button button-small button-accent" to="/admin/libraries">
           {t("admin.manage_libraries")}
           <ArrowRightIcon size={15} />
         </Link>
@@ -354,7 +354,7 @@ function TasksPanel() {
       </div>
 
       <div className="panel-foot">
-        <Link className="button button-small button-rim" to="/admin/tasks">
+        <Link className="button button-small button-accent" to="/admin/tasks">
           {t("admin.see_tasks")}
           <ArrowRightIcon size={15} />
         </Link>
@@ -402,7 +402,7 @@ function PeoplePanel({ overview }: { overview: Overview | null }) {
         />
       </div>
       <div className="panel-foot">
-        <Link className="button button-small button-rim" to="/admin/users">
+        <Link className="button button-small button-accent" to="/admin/users">
           {t("admin.see_users")}
           <ArrowRightIcon size={15} />
         </Link>

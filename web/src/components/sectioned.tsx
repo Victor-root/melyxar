@@ -32,21 +32,20 @@ export interface SectionGroup {
   sections: Section[];
 }
 
-interface Where {
-  /** The key of the name of the whole place, for the head of every page. */
-  place: string;
-  section: Section;
+/** Whether an address is one of the pages laid out beside a list of sections. */
+export function isSectioned(pathname: string): boolean {
+  return /^\/(admin|settings)(\/|$)/.test(pathname);
 }
 
-const WhereContext = createContext<Where | null>(null);
+const SectionContext = createContext<Section | null>(null);
 
 /** The section a page is drawn in. */
-export function useSection(): Where {
-  const where = useContext(WhereContext);
-  if (!where) {
+export function useSection(): Section {
+  const section = useContext(SectionContext);
+  if (!section) {
     throw new Error("a page head has to be drawn inside a sectioned page");
   }
-  return where;
+  return section;
 }
 
 export function Sectioned({
@@ -103,9 +102,9 @@ export function Sectioned({
       </aside>
 
       <main className="sectioned-page">
-        <WhereContext.Provider value={{ place, section: here }}>
+        <SectionContext.Provider value={here}>
           <Outlet />
-        </WhereContext.Provider>
+        </SectionContext.Provider>
       </main>
     </div>
   );
