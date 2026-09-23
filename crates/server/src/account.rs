@@ -184,6 +184,10 @@ pub(crate) struct Viewer(pub User);
 /// beside it.
 pub(crate) struct Administrator;
 
+/// Whoever is signed in, and the device they are on: who is watching, for
+/// the list of what is being watched.
+pub(crate) struct Watcher(pub melyxar_app::watching::Viewer);
+
 /// What the browser behind this request was told about keeping its session.
 ///
 /// For the one handler that hands the same browser a new token: it has to be
@@ -199,6 +203,25 @@ impl<S: Send + Sync> FromRequestParts<S> for Viewer {
             .extensions
             .get::<SignedIn>()
             .map(|holder| Self(holder.user.clone()))
+            .ok_or_else(|| ServerError::unauthenticated("nobody is signed in"))
+    }
+}
+
+impl<S: Send + Sync> FromRequestParts<S> for Watcher {
+    type Rejection = ServerError;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self> {
+        parts
+            .extensions
+            .get::<SignedIn>()
+            .map(|holder| {
+                Self(melyxar_app::watching::Viewer {
+                    user: holder.user.id,
+                    user_name: holder.user.name.clone(),
+                    device: holder.device,
+                    device_name: holder.device_name.clone(),
+                })
+            })
             .ok_or_else(|| ServerError::unauthenticated("nobody is signed in"))
     }
 }
@@ -547,6 +570,7 @@ mod tests {
         request.extensions_mut().insert(SignedIn {
             user,
             device: DeviceId::new(),
+            device_name: "a browser".to_string(),
             remembered: Remembered::Yes,
         });
         request.into_parts().0

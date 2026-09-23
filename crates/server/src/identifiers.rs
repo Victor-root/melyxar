@@ -4,7 +4,7 @@
 //! when one of them is not an identifier at all. Written once per kind here,
 //! so the wording a client sees does not depend on which route it knocked at.
 
-use melyxar_core::id::{LibraryId, MediaSourceId, PlaybackClientId, TrackId, WorkId};
+use melyxar_core::id::{DeviceId, LibraryId, MediaSourceId, PlaybackClientId, TrackId, WorkId};
 
 use crate::error::Result;
 use crate::ServerError;
@@ -34,4 +34,8 @@ pub(crate) fn parse_track(value: &str) -> Result<TrackId> {
 
 pub(crate) fn parse_client(value: &str) -> Result<PlaybackClientId> {
     parse(value, "client")
+}
+
+pub(crate) fn parse_device(value: &str) -> Result<DeviceId> {
+    parse(value, "device")
 }
