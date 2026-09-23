@@ -147,8 +147,8 @@ en|section_writes|Writing to the media folders
 fr|section_writes|Écriture dans les dossiers des médias
 en|writes_notice|By default Melyxar may only read your media. Allowing it to write is what lets "Delete from the disk" work. Every other folder of this machine stays closed to it.
 fr|writes_notice|Par défaut Melyxar ne peut que lire vos médias. L'autoriser à écrire est ce qui permet à « Supprimer aussi du disque » de fonctionner. Tous les autres dossiers de la machine lui restent fermés.
-en|writes_now_open|Now: Melyxar may write to the folders of the libraries.
-fr|writes_now_open|Actuellement : Melyxar peut écrire dans les dossiers des bibliothèques.
+en|writes_half_open|Writing was already allowed on Melyxar's side, but %s folders still refuse it.
+fr|writes_half_open|L'écriture est déjà autorisée côté Melyxar, mais %s dossiers la refusent encore.
 en|writes_now_shut|Now: the media folders are read only for Melyxar.
 fr|writes_now_shut|Actuellement : les dossiers des médias sont en lecture seule pour Melyxar.
 en|prompt_writes_open|Let Melyxar write to the media folders?
@@ -1717,11 +1717,12 @@ action_writes() {
   folders="$(library_folders)"
 
   if [[ -f "$WRITES_FILE" ]]; then
-    info "$(tr_msg writes_now_open)"
-    # Open but refused somewhere: what is asked for is to finish opening it,
-    # not to close it.
+    # Open on the service's side but refused somewhere: what is asked for is
+    # to finish opening it, not to close it. Said only once it was tried, so
+    # the screen never claims a right the folders still refuse.
     refused="$(folders_refusing "$folders")"
     if [[ -n "$refused" ]]; then
+      info "$(tr_fmt writes_half_open "$(grep -c . <<< "$refused" || true)")"
       settle_refusals "$refused"
       return 0
     fi
