@@ -10,6 +10,21 @@
          agrandit la petite, ce qui se voit. -->
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <!-- L'icône dans la couleur choisie, redessinée la dernière fois et gardée
+         par ce navigateur : posée ici, avant que le navigateur ne demande
+         l'icône, elle évite de voir passer la rouge pendant que l'interface
+         démarre. La rouge reste notée pour pouvoir y revenir. -->
+    <script>
+      try {
+        const drawn = localStorage.getItem("melyxar.tab");
+        if (drawn) {
+          for (const link of document.querySelectorAll('link[rel="icon"]')) {
+            link.dataset.served = link.getAttribute("href");
+            link.href = drawn;
+          }
+        }
+      } catch {}
+    </script>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
   <body>
