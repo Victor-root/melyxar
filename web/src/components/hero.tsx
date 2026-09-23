@@ -240,10 +240,14 @@ export function Hero({ items }: { items: HeroItem[] }) {
 
         <div className="hero-buttons">
           <HeroPlay item={shown} />
-          <Link className="button button-large" to={`/work/${shown.id}`}>
-            <InfoIcon size={24} />
-            {t("home.hero.open")}
-          </Link>
+          {/* A second way to the page only beside a button that plays: when
+              the first one already opens it, two buttons would say the same. */}
+          {opensThePage(shown) || (
+            <Link className="button button-large" to={`/work/${shown.id}`}>
+              <InfoIcon size={24} />
+              {t("home.hero.open")}
+            </Link>
+          )}
         </div>
 
         {/* How far in it already is, under the buttons that carry on with it. */}
@@ -395,13 +399,19 @@ function HeroTitle({ item }: { item: HeroItem }) {
   );
 }
 
+/** Whether the first button opens the page of the work rather than playing
+ *  it: a series is opened, and so is a work with nothing on the disk. */
+function opensThePage(item: HeroItem): boolean {
+  return item.source === null || item.kind === "series";
+}
+
 /** Carry on, or start: what the button says comes from why the server put
  *  this work here, so the two never disagree. */
 function HeroPlay({ item }: { item: HeroItem }) {
   const { t } = useSettings();
   const navigate = useNavigate();
 
-  if (item.source === null || item.kind === "series") {
+  if (opensThePage(item)) {
     return (
       <Link className="button button-accent button-large" to={`/work/${item.id}`}>
         <PlayIcon size={30} />

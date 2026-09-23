@@ -91,7 +91,12 @@ export function Sectioned({
                   >
                     <SectionIcon size={20} />
                     <span className="side-line-name">{t(section.label)}</span>
-                    {section.soon && <span className="soon">{t("admin.soon")}</span>}
+                    {/* The short word: the list is narrow, and the name beside it has to stay whole. */}
+                    {section.soon && (
+                      <span className="soon" title={t("admin.soon")}>
+                        {t("admin.soon_short")}
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}
