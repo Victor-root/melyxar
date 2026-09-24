@@ -47,6 +47,25 @@ export interface ManagedAccount {
   last_seen_at: string | null;
 }
 
+/** One device signed in to this server, as a list of them shows it. */
+export interface SignedInDevice {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_avatar: string | null;
+  /** What the browser said it was when it signed in. */
+  name: string;
+  /** The browser its page found, when it could tell better than the line. */
+  browser: string | null;
+  /** False for a session that ends when the browser is closed. */
+  remembered: boolean;
+  signed_in_at: string;
+  /** Up to an hour behind the real last use. */
+  last_seen_at: string;
+  /** Whether this is the device the list is being looked at from. */
+  is_this_one: boolean;
+}
+
 /** A name the sign in screen offers, with its picture when it has one. */
 export interface NameAtTheDoor {
   name: string;
@@ -1620,15 +1639,16 @@ export const api = {
 
      Remembering is the one thing about that cookie somebody chooses: said
      yes, the browser keeps it and the machine stays signed in; said no, the
-     browser drops it the moment it closes. */
-  signIn: (name: string, password: string, remember: boolean) =>
-    post<Account>("/api/v1/session", { name, password, remember }),
+     browser drops it the moment it closes. The client is what this browser
+     calls itself, so a session it already held for the account is replaced. */
+  signIn: (name: string, password: string, remember: boolean, client: string) =>
+    post<Account>("/api/v1/session", { name, password, remember, client }),
   signOut: () => remove<{ signed_out: boolean }>("/api/v1/session"),
   me: (signal?: AbortSignal) => get<Account>("/api/v1/me", signal),
   /* The first account of a brand new server, which is an administrator and is
      signed in straight away. Refused once there is one. */
-  setUp: (name: string, password: string, remember: boolean) =>
-    post<Account>("/api/v1/setup", { name, password, remember }),
+  setUp: (name: string, password: string, remember: boolean, client: string) =>
+    post<Account>("/api/v1/setup", { name, password, remember, client }),
   /* The picture of the account signed in, sent as the file chosen. Both
      answer the account as it now is. */
   setAvatar: (image: Blob) => put<Account>("/api/v1/me/avatar", image),
@@ -1651,6 +1671,14 @@ export const api = {
     remove<{ signed_out: number }>(`/api/v1/accounts/${account}/sessions`),
   removeAccount: (account: string) =>
     remove<{ removed: boolean }>(`/api/v1/accounts/${account}`),
+  /* Every device of every account, for the administration; one's own for
+     everybody. Signing one out stops whatever it was playing. */
+  devices: (signal?: AbortSignal) => get<SignedInDevice[]>("/api/v1/devices", signal),
+  signOutDevice: (device: string) =>
+    remove<{ signed_out: boolean }>(`/api/v1/devices/${device}`),
+  myDevices: (signal?: AbortSignal) => get<SignedInDevice[]>("/api/v1/me/devices", signal),
+  signOutMyDevice: (device: string) =>
+    remove<{ signed_out: boolean }>(`/api/v1/me/devices/${device}`),
   setFavourite: (work: string, favourite: boolean) =>
     put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
   /* On a season or a series this marks every episode below it, which is what

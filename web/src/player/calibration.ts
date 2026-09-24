@@ -30,7 +30,7 @@
 
 import { api } from "../api";
 import { AUTOMATIC, CODECS } from "./codec";
-import { deviceIdentity } from "./deviceIdentity";
+import { deviceIdentity } from "../deviceIdentity";
 
 /**
  * Which recipe of the measurement produced a stored row.

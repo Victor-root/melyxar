@@ -1,17 +1,20 @@
 /*
- * Who this account is: the picture it wears, its name, its password, and
- * whether the door offers its name.
+ * Who this account is: the picture it wears, its name, its password, whether
+ * the door offers its name, and the devices it is signed in on.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
-import type { Account } from "../../api";
+import type { Account, SignedInDevice } from "../../api";
 import { useAccount } from "../../account";
-import { refusalAbout, useTold } from "../../asking";
+import { refusalAbout, useAsked, useTold } from "../../asking";
+import type { Asked } from "../../asking";
 import { Cropper } from "../../components/cropper";
+import { DeviceLines } from "../../components/device-lines";
 import { Face } from "../../components/face";
 import { PageHead, Panel, Setting, Toggle } from "../../components/panel";
-import { AccountIcon, EnterIcon, LockIcon, ProfileIcon } from "../../icons";
+import { AccountIcon, DeviceIcon, EnterIcon, LockIcon, ProfileIcon } from "../../icons";
+import { useJournalNews } from "../../live";
 import { usePreferences } from "../../screens/settings";
 import { useSettings } from "../../settings";
 
@@ -21,9 +24,14 @@ const TOO_LARGE = 413;
 /** What the server answers when the current password is not the one typed. */
 const NOT_THE_CURRENT_ONE = 401;
 
+/** How often one's own devices are looked at again, for a sign in made on
+ *  another one while this page stays open. */
+const DEVICES_LOOKED_AT_EVERY_MS = 30_000;
+
 export function MyProfile() {
   const { t } = useSettings();
   const preferences = usePreferences();
+  const devices = useMyDevices();
 
   return (
     <>
@@ -31,7 +39,7 @@ export function MyProfile() {
       <ProfilePicture />
       <div className="panels">
         <Name />
-        <Password />
+        <Password onChanged={devices.look} />
         {preferences.kept && (
           <Panel icon={EnterIcon} title={t("settings.door")} lead={t("settings.door_why")}>
             <Setting label={t("settings.door_hide_me")} why={t("settings.door_hide_me_why")}>
@@ -44,6 +52,7 @@ export function MyProfile() {
           </Panel>
         )}
       </div>
+      <MyDevices devices={devices} />
     </>
   );
 }
@@ -197,7 +206,7 @@ function Name() {
  * Changing the password, which signs every other device out: somebody changes
  * it because they think somebody else knows it.
  */
-function Password() {
+function Password({ onChanged }: { onChanged: () => void }) {
   const { t } = useSettings();
   const { cameIn } = useAccount();
   const [current, setCurrent] = useState("");
@@ -206,6 +215,7 @@ function Password() {
   const [done, setDone] = useState(false);
   const told = useTold(async () => {
     cameIn(await api.changePassword(current, wanted));
+    onChanged();
     setCurrent("");
     setWanted("");
     setAgain("");
@@ -273,6 +283,42 @@ function Password() {
           </button>
         </div>
       </form>
+    </Panel>
+  );
+}
+
+/**
+ * The devices this account is signed in on.
+ *
+ * Looked at again on a beat, since nobody but an administrator hears the
+ * journal as it is written, and at once for one who does.
+ */
+function useMyDevices(): Asked<SignedInDevice[]> {
+  const devices = useAsked((signal) => api.myDevices(signal));
+  const { look } = devices;
+  useJournalNews(look);
+  useEffect(() => {
+    const beat = window.setInterval(look, DEVICES_LOOKED_AT_EVERY_MS);
+    return () => window.clearInterval(beat);
+  }, [look]);
+  return devices;
+}
+
+/** Each device signed out alone: a phone lost, a computer lent, without
+ *  asking anybody. */
+function MyDevices({ devices }: { devices: Asked<SignedInDevice[]> }) {
+  const { t } = useSettings();
+  return (
+    <Panel icon={DeviceIcon} title={t("me.devices")} lead={t("me.devices_lead")}>
+      {devices.failure && <p className="panel-notice panel-notice-trouble">{t("error.unreachable")}</p>}
+      {devices.answer && (
+        <DeviceLines
+          devices={devices.answer}
+          withAccount={false}
+          signOut={api.signOutMyDevice}
+          onSignedOut={devices.look}
+        />
+      )}
     </Panel>
   );
 }

@@ -19,10 +19,12 @@ import { useAsked, useTold } from "../../asking";
 import { Face } from "../../components/face";
 import { Modal } from "../../components/modal";
 import { Editable, PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
+import { lastSeen } from "../../devices";
 import { AccountAddIcon, KindIcon, LockIcon, PeopleIcon } from "../../icons";
 import type { IconProps } from "../../icons";
 import { useLibraries } from "../../libraries";
-import { howLongSince, howMany } from "../../readable";
+import { useJournalNews } from "../../live";
+import { howMany } from "../../readable";
 import type { Wording } from "../../readable";
 import { useSettings } from "../../settings";
 import { AN_ORDINARY_ACCOUNT, granting, MOST_STREAMS_OFFERED, reachOf, settled } from "./rights";
@@ -30,6 +32,9 @@ import { AN_ORDINARY_ACCOUNT, granting, MOST_STREAMS_OFFERED, reachOf, settled }
 export function AdminUsers() {
   const { t } = useSettings();
   const accounts = useAsked((signal) => api.accounts(signal));
+  // Where each account is signed in moves with every sign in and sign out,
+  // and each of them is a line of the journal.
+  useJournalNews(accounts.look);
   const { all: libraries } = useLibraries();
   const [adding, setAdding] = useState(false);
   /* What was just done, said once at the head of the page. */
@@ -119,19 +124,9 @@ function leadOf(account: ManagedAccount, libraries: Library[], t: Wording): stri
   const where =
     account.devices === 0 || account.last_seen_at === null
       ? t("users.nowhere")
-      : `${howMany(account.devices, "users.devices", t)} · ${lastSeen(account.last_seen_at, t)}`;
+      : `${howMany(account.devices, "users.devices", t)} · ${lastSeen(account.last_seen_at, Date.now(), t)}`;
   return `${role} · ${where}`;
 }
-
-/** When an account was last about: just now, or how long ago. */
-function lastSeen(instant: string, t: Wording): string {
-  const now = Date.now();
-  return now - new Date(instant).getTime() < A_MINUTE_MS
-    ? t("users.active_now")
-    : t("users.last_seen", { when: howLongSince(instant, now, t) });
-}
-
-const A_MINUTE_MS = 60_000;
 
 function AccountPanel({
   account,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { brandOf, deviceName, deviceSaid } from "./devices";
+import type { SignedInDevice } from "./api";
+import { aboutDevice, brandOf, deviceName, deviceSaid, lastSeen } from "./devices";
 
 const WINDOWS_CHROME =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -61,5 +62,48 @@ describe("brandOf", () => {
   it("finds nothing where there is only the engine", () => {
     expect(brandOf([{ brand: "Chromium" }, { brand: "Not_A Brand" }])).toBeNull();
     expect(brandOf([])).toBeNull();
+  });
+});
+
+/** Standing in for the wording, so what is checked is what goes into it. */
+const worded = (key: string, values?: Record<string, string | number>) =>
+  values ? `${key}(${Object.values(values).join("|")})` : key;
+
+const NOW = Date.parse("2026-03-10T12:00:00Z");
+
+describe("lastSeen", () => {
+  it("says just now within the minute, and how long ago after it", () => {
+    expect(lastSeen("2026-03-10T11:59:30Z", NOW, worded)).toBe("device.active_now");
+    expect(lastSeen("2026-03-10T11:55:00Z", NOW, worded)).toBe("device.last_seen(time.minutes(5))");
+  });
+});
+
+describe("aboutDevice", () => {
+  const device: SignedInDevice = {
+    id: "d",
+    user_id: "u",
+    user_name: "somebody",
+    user_avatar: null,
+    name: WINDOWS_CHROME,
+    browser: null,
+    remembered: false,
+    signed_in_at: "2026-03-01T09:00:00Z",
+    last_seen_at: "2026-03-10T10:00:00Z",
+    is_this_one: false,
+  };
+
+  it("says whose it is only when asked, and that it ends with the browser when it does", () => {
+    expect(aboutDevice(device, true, NOW, "en", worded)).toMatch(
+      /^somebody · device\.signed_in_on\(.*2026.*\) · device\.last_seen\(time\.hours_minutes\(2\|0\)\) · device\.until_closed$/,
+    );
+    expect(aboutDevice({ ...device, remembered: true }, false, NOW, "en", worded)).toMatch(
+      /^device\.signed_in_on\(.*\) · device\.last_seen\(time\.hours_minutes\(2\|0\)\)$/,
+    );
+  });
+
+  it("says the device looked from is in use now, whatever was last written down", () => {
+    expect(aboutDevice({ ...device, is_this_one: true }, false, NOW, "en", worded)).toMatch(
+      / · device\.active_now · device\.until_closed$/,
+    );
   });
 });

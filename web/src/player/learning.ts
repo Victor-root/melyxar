@@ -21,7 +21,7 @@
 
 import { api } from "../api";
 import { CALIBRATION_VERSION } from "./calibration";
-import { deviceIdentity } from "./deviceIdentity";
+import { deviceIdentity } from "../deviceIdentity";
 import { forgetMeasuredCapabilities } from "./profile";
 
 /** How often what the browser did is read again. */
