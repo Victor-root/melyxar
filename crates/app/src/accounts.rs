@@ -835,6 +835,36 @@ pub async fn sign_out_my_device(
     signed_out(state, who, found).await
 }
 
+/// Signs every one of one's own devices out but the one asking: the tidy
+/// after a lost phone, or after sessions nobody holds any more.
+///
+/// Answers how many were signed out; nothing is written in the journal when
+/// there were none.
+pub async fn sign_out_my_other_devices(
+    state: &AppState,
+    who: &User,
+    kept: melyxar_core::id::DeviceId,
+) -> Result<usize> {
+    let closed = state.database().close_other_devices(who.id, kept).await?;
+    if closed.is_empty() {
+        return Ok(0);
+    }
+    for device in &closed {
+        crate::watching::stop(state, *device);
+    }
+    tracing::warn!(account = %who.name, closed = closed.len(), "signed out every other device");
+    record(
+        state,
+        Event::OtherDevicesSignedOut {
+            user: who.id,
+            user_name: who.name.clone(),
+            count: closed.len(),
+        },
+    )
+    .await;
+    Ok(closed.len())
+}
+
 /// Signs this device out, stops what it was playing, and says so in the
 /// journal.
 async fn signed_out(state: &AppState, acting: &User, found: Option<SignedInDevice>) -> Result<()> {
@@ -1741,6 +1771,58 @@ mod tests {
             .expect("read");
         assert_eq!(written[0].kind, "device_signed_out");
         assert_eq!(written[0].device_name.as_deref(), Some("a laptop"));
+    }
+
+    /// The kind of the line written last in the journal.
+    async fn last_line(state: &AppState) -> String {
+        state
+            .database()
+            .activity_page(&[], None, 1)
+            .await
+            .expect("read")[0]
+            .kind
+            .clone()
+    }
+
+    #[tokio::test]
+    async fn every_other_device_is_signed_out_and_the_one_asking_stays() {
+        let (_directory, state, admin, zoe) = an_administrator_and_somebody().await;
+        let laptop = a_session(&state, "zoe", "amber field road", "a laptop")
+            .await
+            .expect("signed in");
+        let asking = devices_of(&state, &zoe.user)
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|device| device.name == "a laptop")
+            .expect("the laptop")
+            .id;
+
+        assert_eq!(
+            sign_out_my_other_devices(&state, &zoe.user, asking)
+                .await
+                .expect("signed out"),
+            1
+        );
+        assert!(who_holds(&state, zoe.token.as_text())
+            .await
+            .expect("asked")
+            .is_none());
+        assert!(who_holds(&state, laptop.token.as_text())
+            .await
+            .expect("asked")
+            .is_some());
+        assert_eq!(devices_of(&state, &admin).await.expect("read").len(), 1);
+        assert_eq!(last_line(&state).await, "other_devices_signed_out");
+
+        // Nothing left to sign out, and nothing written about it.
+        assert_eq!(
+            sign_out_my_other_devices(&state, &zoe.user, asking)
+                .await
+                .expect("asked"),
+            0
+        );
+        assert_eq!(last_line(&state).await, "other_devices_signed_out");
     }
 
     #[tokio::test]

@@ -53,6 +53,9 @@ pub enum Event {
     RightsChanged { user: UserId, user_name: String, by: String },
     /// An administrator signed every device of an account out.
     SignedOutEverywhere { user: UserId, user_name: String, by: String },
+    /// An account signed out every one of its devices but the one it asked
+    /// from.
+    OtherDevicesSignedOut { user: UserId, user_name: String, count: usize },
     /// One device was signed out, by its owner or by an administrator.
     DeviceSignedOut {
         user: UserId,
@@ -139,6 +142,7 @@ impl Category {
                 RIGHTS_CHANGED,
                 SIGNED_OUT_EVERYWHERE,
                 DEVICE_SIGNED_OUT,
+                OTHER_DEVICES_SIGNED_OUT,
             ],
             Self::Playback => &[WATCHED],
             Self::Library => &[TASK_FINISHED, TASK_FAILED, TASK_STOPPED, WORKS_DELETED],
@@ -160,6 +164,7 @@ const ACCOUNT_RENAMED: &str = "account_renamed";
 const RIGHTS_CHANGED: &str = "rights_changed";
 const SIGNED_OUT_EVERYWHERE: &str = "signed_out_everywhere";
 const DEVICE_SIGNED_OUT: &str = "device_signed_out";
+const OTHER_DEVICES_SIGNED_OUT: &str = "other_devices_signed_out";
 const WATCHED: &str = "watched";
 const TASK_FINISHED: &str = "task_finished";
 pub(crate) const TASK_FAILED: &str = "task_failed";
@@ -338,6 +343,16 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
             Some(user),
             Some(device),
             json!({ "user_name": user_name, "browser": browser, "by": by }),
+        ),
+        Event::OtherDevicesSignedOut {
+            user,
+            user_name,
+            count,
+        } => line(
+            OTHER_DEVICES_SIGNED_OUT,
+            Some(user),
+            None,
+            json!({ "user_name": user_name, "count": count }),
         ),
         Event::Watched(viewing) => {
             let mut details = what_was_watched(database, viewing.work).await?;
