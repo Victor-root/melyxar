@@ -98,6 +98,11 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
         title: t(`activity.${line.kind}`, { user }),
         note: t("activity.by", { name: text(details, "by") ?? t("activity.someone") }),
       };
+    case "device_signed_out":
+      return {
+        title: t("activity.device_signed_out", { user }),
+        note: joined([device, t("activity.by", { name: text(details, "by") ?? t("activity.someone") })]),
+      };
     case "account_renamed":
       return {
         title: t("activity.account_renamed", {

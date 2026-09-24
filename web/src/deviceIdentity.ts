@@ -1,11 +1,13 @@
 /*
- * Naming this browser installation for its own calibration, and nothing else.
+ * Naming this browser installation, for its calibration and its session.
  *
  * Not an account, not a login, not a right to anything: a value made up once
- * and kept, so that what is measured on this machine is never handed to
- * another one that happens to sign in under the same name. Lost the moment
- * storage is cleared, which is the right answer: a machine that forgot who it
- * was calibrates again rather than borrowing a stranger's answer.
+ * and kept. What is measured on this machine is never handed to another one
+ * that happens to sign in under the same name, and signing in again here
+ * replaces the session this account already held here rather than adding a
+ * second one. Lost the moment storage is cleared, which is the right answer:
+ * a machine that forgot who it was calibrates again rather than borrowing a
+ * stranger's answer, and signs in as a new device.
  */
 
 const REMEMBERED = "melyxar.playback_client_id";

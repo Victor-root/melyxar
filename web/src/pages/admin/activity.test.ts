@@ -105,6 +105,18 @@ describe("sayLine", () => {
     );
   });
 
+  it("says which device of whom was signed out, and by whom", () => {
+    expect(
+      sayLine(
+        line("device_signed_out", { user_name: "somebody", browser: "Brave", by: "victor" }, WINDOWS_CHROME),
+        t,
+      ),
+    ).toEqual({
+      title: "activity.device_signed_out(somebody)",
+      note: "device.on(Brave|Windows) · activity.by(victor)",
+    });
+  });
+
   it("says the name an account had and the one it has now", () => {
     expect(
       sayLine(line("account_renamed", { user_name: "somebody else", previous_name: "somebody" }), t).title,

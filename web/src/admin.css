@@ -1663,6 +1663,28 @@
   border: none;
 }
 
+/* A device's line wears the face of its account where others wear a mark. */
+.line-mark-face {
+  overflow: hidden;
+}
+
+/* The device the list is looked at from, said beside its name. */
+.device-here {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  margin-left: var(--gap-tight);
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+  font-size: 10.5px;
+  font-weight: 650;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
 /* The libraries granted one by one, under the switch that says it is not
    all of them. */
 .account-libraries {

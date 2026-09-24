@@ -9,6 +9,10 @@
  * only the page can ask them what they really are.
  */
 
+import type { SignedInDevice } from "./api";
+import { howLongSince, readableDate } from "./readable";
+import type { Wording } from "./readable";
+
 /** The browser and the system it runs on, each when they could be told. */
 export interface DeviceSaid {
   browser: string | null;
@@ -82,11 +86,7 @@ export async function foundBrowser(): Promise<string | null> {
 
 /** The name a list shows for a device: the browser its page found when it
  *  found one, otherwise the one its line names. */
-export function deviceName(
-  line: string,
-  t: (key: string, values?: Record<string, string | number>) => string,
-  found: string | null = null,
-): string {
+export function deviceName(line: string, t: Wording, found: string | null = null): string {
   const said = deviceSaid(line);
   const browser = found ?? said.browser;
   const system = said.system;
@@ -94,4 +94,40 @@ export function deviceName(
     return t("device.on", { browser, system });
   }
   return browser ?? system ?? t("device.unknown");
+}
+
+const A_MINUTE_MS = 60_000;
+
+/** When a device or an account was last about: just now, or how long ago. */
+export function lastSeen(instant: string, now: number, t: Wording): string {
+  return now - new Date(instant).getTime() < A_MINUTE_MS
+    ? t("device.active_now")
+    : t("device.last_seen", { when: howLongSince(instant, now, t) });
+}
+
+/**
+ * What a list says under a device: whose it is when the list holds more than
+ * one account's, when it signed in, when it was last used, and whether its
+ * session ends with the browser.
+ *
+ * The device the list is looked at from is in use this very moment, whatever
+ * the server last wrote down: it writes the last use at most once an hour.
+ */
+export function aboutDevice(
+  device: SignedInDevice,
+  withAccount: boolean,
+  now: number,
+  language: string,
+  t: Wording,
+): string {
+  return [
+    withAccount ? device.user_name : null,
+    t("device.signed_in_on", {
+      date: readableDate(device.signed_in_at, language) ?? device.signed_in_at,
+    }),
+    device.is_this_one ? t("device.active_now") : lastSeen(device.last_seen_at, now, t),
+    device.remembered ? null : t("device.until_closed"),
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
 }

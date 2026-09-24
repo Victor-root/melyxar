@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Account, Branding, NameAtTheDoor } from "../api";
+import { deviceIdentity } from "../deviceIdentity";
 import { refusalKey } from "../i18n";
 
 /** A refusal, worded and with whatever its wording needs. */
@@ -78,8 +79,8 @@ export function useDoorScreen(branding: Branding, cameIn: (who: Account) => void
       setRefused(null);
       try {
         const who = brandNew
-          ? await api.setUp(name, password, remember)
-          : await api.signIn(name, password, remember);
+          ? await api.setUp(name, password, remember, deviceIdentity())
+          : await api.signIn(name, password, remember, deviceIdentity());
         cameIn(who);
       } catch (error) {
         setRefused(whatTheServerSaid(error));
