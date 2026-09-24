@@ -341,21 +341,6 @@
   flex-direction: column;
   padding: 6px;
   border-radius: var(--radius-card);
-  /* Dressed as the pieces of the bar are, rim and glow of the accent, and
-     over a denser glass than theirs: a list is read line by line rather than
-     at a glance, and at the bar's own thinness a bright picture behind it
-     washed its words out. */
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  --header-glow: color-mix(in srgb, var(--accent) 14%, transparent);
-  background:
-    linear-gradient(var(--header-glow), var(--header-glow)),
-    color-mix(in srgb, var(--surface-raised) 90%, transparent);
-  color: var(--text);
-  backdrop-filter: blur(18px);
-  box-shadow:
-    var(--shadow-raised),
-    0 0 14px 2px var(--accent-glow);
-  animation: header-menu-arrive var(--quick) var(--ease) both;
 }
 
 .quick-search-line {
@@ -749,11 +734,23 @@
   flex-direction: column;
   padding: 6px;
   border-radius: var(--radius-card);
-  border: 1px solid var(--border);
-  background: var(--header-glass);
+}
+
+/* Every list the bar drops, dressed as the pieces of the bar are, rim and
+   glow of the accent, and solid rather than glass: a list is read line by
+   line rather than at a glance, and a bright picture showing through washed
+   its words out. */
+.header-menu-list,
+.quick-search {
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  --header-glow: color-mix(in srgb, var(--accent) 14%, transparent);
+  background:
+    linear-gradient(var(--header-glow), var(--header-glow)),
+    var(--surface-raised);
   color: var(--text);
-  backdrop-filter: blur(18px);
-  box-shadow: var(--shadow-raised);
+  box-shadow:
+    var(--shadow-raised),
+    0 0 14px 2px var(--accent-glow);
   animation: header-menu-arrive var(--quick) var(--ease) both;
 }
 
@@ -4822,7 +4819,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .bell-title {
-  color: var(--text-faint);
+  color: var(--text-soft);
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.06em;
