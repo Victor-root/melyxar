@@ -1078,10 +1078,10 @@
   }
 }
 
-/* The server, across the top: who it is, and its facts in one row under it. */
-.server-strip {
+/* The server, a panel as square as the others: who it is, then its facts two
+   by two under it. */
+.server-panel {
   gap: 18px;
-  padding: 20px 22px;
 }
 
 .server-who {
@@ -1134,14 +1134,13 @@
 
 .server-facts {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--gap);
 }
 
-@container (max-width: 900px) {
-  .server-facts {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  }
+/* A fact left alone on the last line takes the whole of it. */
+.server-facts > .fact:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .fact {
@@ -1193,11 +1192,6 @@
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.server-strip-go {
-  flex: none;
-  align-self: flex-start;
 }
 
 /* A line that stands for something not there yet. */
@@ -2396,11 +2390,6 @@
 .watch-details dd {
   margin: 0;
   overflow-wrap: anywhere;
-}
-
-/* The same film on one line of the summary. */
-.watch-line .watch-words {
-  flex: 1 1 160px;
 }
 
 /* A narrow card puts its picture above its words, across the whole card. */

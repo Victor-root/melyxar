@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { api } from "../../api";
 import type { ActivityFamily, Watched, WatchedDecision } from "../../api";
 import { refusalOf } from "../../asking";
@@ -56,25 +57,11 @@ const SOUND_DONE: Record<WatchedDecision["sound"], string> = {
 
 export function AdminPlayback() {
   const { t } = useSettings();
-  const playing = useNowPlaying();
-  const watched = playing.watched ?? [];
 
   return (
     <>
       <PageHead lead={t("admin.playback_lead")} />
-      <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")}>
-        <PlayingStats watched={playing.watched} />
-        {playing.cut && <p className="panel-notice">{t("error.unreachable")}</p>}
-        {watched.length === 0 ? (
-          <p className="empty-line">{playing.watched && t("admin.playing_none")}</p>
-        ) : (
-          <div className="watches">
-            {watched.map((one) => (
-              <WatchCard key={one.device} watched={one} heardAt={playing.heardAt} />
-            ))}
-          </div>
-        )}
-      </Panel>
+      <PlayingPanel />
       <Panel icon={HistoryIcon} title={t("admin.history")} lead={t("admin.history_lead")}>
         <ActivityJournal families={WATCHED} />
       </Panel>
@@ -82,8 +69,35 @@ export function AdminPlayback() {
   );
 }
 
+/**
+ * Every film playing, a card each, with the figures of them all above. The
+ * same panel here and on the summary, which adds its way here at the foot.
+ */
+export function PlayingPanel({ children }: { children?: ReactNode }) {
+  const { t } = useSettings();
+  const playing = useNowPlaying();
+  const watched = playing.watched ?? [];
+
+  return (
+    <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")}>
+      <PlayingStats watched={playing.watched} />
+      {playing.cut && <p className="panel-notice">{t("error.unreachable")}</p>}
+      {watched.length === 0 ? (
+        <p className="empty-line">{playing.watched && t("admin.playing_none")}</p>
+      ) : (
+        <div className="watches">
+          {watched.map((one) => (
+            <WatchCard key={one.device} watched={one} heardAt={playing.heardAt} />
+          ))}
+        </div>
+      )}
+      {children}
+    </Panel>
+  );
+}
+
 /** The three figures of what is playing. A dash until the first answer. */
-export function PlayingStats({ watched }: { watched: Watched[] | null }) {
+function PlayingStats({ watched }: { watched: Watched[] | null }) {
   const { t, language } = useSettings();
   const counted = watched && countedOf(watched);
   const count = (value: number | undefined) =>
@@ -103,7 +117,7 @@ export function PlayingStats({ watched }: { watched: Watched[] | null }) {
 }
 
 /** How the film reaches its viewer, in a word. */
-export function MethodPill({ decision }: { decision: WatchedDecision | null }) {
+function MethodPill({ decision }: { decision: WatchedDecision | null }) {
   const { t } = useSettings();
   if (!decision) {
     return <span className="method-pill">{t("method.unknown")}</span>;
@@ -116,7 +130,7 @@ export function MethodPill({ decision }: { decision: WatchedDecision | null }) {
 }
 
 /** What is playing, how far it has got, and whether it is moving. */
-export function WatchedWords({ watched }: { watched: Watched }) {
+function WatchedWords({ watched }: { watched: Watched }) {
   const { t } = useSettings();
   const over = episodeOf(watched, t) ?? (watched.year !== null ? String(watched.year) : null);
   return (
