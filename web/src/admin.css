@@ -2014,11 +2014,14 @@
 }
 
 /* What is playing and, beside it past a hairline, what just happened. One
-   above the other once there is no room for both side by side. */
+   above the other once there is no room for both side by side.
+
+   Half each, the hairline dead in the middle: the air either side of it is
+   the same, and is padding rather than a gap between the columns, which
+   would push the line off the middle. */
 .playing-split {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: calc(var(--gap) * 1.5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .playing-now {
@@ -2026,6 +2029,7 @@
   flex-direction: column;
   gap: var(--gap);
   min-width: 0;
+  padding-right: calc(var(--gap) * 1.5);
 }
 
 .playing-beside {
@@ -2039,7 +2043,12 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .playing-now {
+    padding-right: 0;
+  }
+
   .playing-beside {
+    margin-top: var(--gap);
     padding: var(--gap) 0 0;
     border-left: none;
     border-top: 1px solid var(--border);
