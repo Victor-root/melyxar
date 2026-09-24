@@ -5,7 +5,7 @@
 //! line says beyond its columns is a JSON object this crate does not look
 //! inside: the layer above writes it and reads it back.
 
-use melyxar_core::id::{ActivityId, UserId, WorkId};
+use melyxar_core::id::{ActivityId, DeviceId, UserId, WorkId};
 use melyxar_core::time::Timestamp;
 use sqlx::{AssertSqlSafe, Row};
 
@@ -61,6 +61,26 @@ impl Database {
         .execute(self.writer())
         .await?;
         Ok(id)
+    }
+
+    /// Gives the line of one device's sign in the browser its page found, and
+    /// answers how many lines that changed.
+    pub async fn name_the_browser_of_a_sign_in(
+        &self,
+        kind: &str,
+        device: DeviceId,
+        browser: &str,
+    ) -> Result<u64> {
+        let done = sqlx::query(
+            "UPDATE activity_log SET details = json_set(details, '$.browser', ?)
+             WHERE kind = ? AND json_extract(details, '$.device_id') = ?",
+        )
+        .bind(browser)
+        .bind(kind)
+        .bind(device.to_db_string())
+        .execute(self.writer())
+        .await?;
+        Ok(done.rows_affected())
     }
 
     /// The latest lines, newest first, of the kinds asked about or of every
@@ -192,6 +212,46 @@ mod tests {
             device_name: None,
             details: None,
         }
+    }
+
+    #[tokio::test]
+    async fn the_line_of_a_sign_in_is_given_the_browser_of_its_own_device_only() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let here = DeviceId::new();
+        let elsewhere = DeviceId::new();
+        for device in [here, elsewhere] {
+            let details = serde_json::json!({ "device_id": device.to_db_string() }).to_string();
+            database
+                .record_activity(&NewActivity {
+                    details: Some(&details),
+                    ..line(NOON, "signed_in")
+                })
+                .await
+                .expect("written");
+        }
+
+        assert_eq!(
+            database
+                .name_the_browser_of_a_sign_in("signed_in", here, "Brave")
+                .await
+                .expect("named"),
+            1
+        );
+        let page = database.activity_page(&[], None, 10).await.expect("read");
+        let browser_of = |device: DeviceId| {
+            page.iter()
+                .find(|line| {
+                    line.details
+                        .as_deref()
+                        .is_some_and(|details| details.contains(&device.to_db_string()))
+                })
+                .and_then(|line| {
+                    serde_json::from_str::<serde_json::Value>(line.details.as_deref()?).ok()
+                })
+                .map(|details| details["browser"].clone())
+        };
+        assert_eq!(browser_of(here), Some(serde_json::json!("Brave")));
+        assert_eq!(browser_of(elsewhere), Some(serde_json::Value::Null));
     }
 
     #[tokio::test]

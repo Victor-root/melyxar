@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use melyxar_core::id::{ActivityId, UserId, WorkId};
+use melyxar_core::id::{ActivityId, DeviceId, UserId, WorkId};
 use melyxar_core::job::{JobKind, JobState};
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::WorkKind;
@@ -26,13 +26,25 @@ const TITLES_NAMED: usize = 5;
 pub enum Event {
     ServerStarted,
     ServerStopped,
-    SignedIn { user: UserId, user_name: String, device: String },
+    /// The device is named here so its line can be told later which browser
+    /// it really is: the page says so only once it is signed in.
+    SignedIn {
+        user: UserId,
+        user_name: String,
+        device: String,
+        device_id: DeviceId,
+    },
     /// A name and a password that were not a pair. The name is what was
     /// typed, which may be nobody's.
     SignInRefused { name: String, device: String },
     /// An account held back after too many wrong passwords.
     SignInHeldBack { user: UserId, user_name: String, device: String },
-    SignedOut { user: UserId, user_name: String, device: String },
+    SignedOut {
+        user: UserId,
+        user_name: String,
+        device: String,
+        browser: Option<String>,
+    },
     PasswordChanged { user: UserId, user_name: String },
     AccountCreated { user: UserId, user_name: String },
     AccountRemoved { user_name: String },
@@ -239,9 +251,17 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
             json!({ "version": melyxar_core::BUILD }),
         ),
         Event::ServerStopped => line(SERVER_STOPPED, None, None, json!({})),
-        Event::SignedIn { user, user_name, device } => {
-            line(SIGNED_IN, Some(user), Some(device), json!({ "user_name": user_name }))
-        }
+        Event::SignedIn {
+            user,
+            user_name,
+            device,
+            device_id,
+        } => line(
+            SIGNED_IN,
+            Some(user),
+            Some(device),
+            json!({ "user_name": user_name, "device_id": device_id.to_db_string() }),
+        ),
         Event::SignInRefused { name, device } => {
             line(SIGN_IN_REFUSED, None, Some(device), json!({ "user_name": name }))
         }
@@ -251,9 +271,17 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
             Some(device),
             json!({ "user_name": user_name }),
         ),
-        Event::SignedOut { user, user_name, device } => {
-            line(SIGNED_OUT, Some(user), Some(device), json!({ "user_name": user_name }))
-        }
+        Event::SignedOut {
+            user,
+            user_name,
+            device,
+            browser,
+        } => line(
+            SIGNED_OUT,
+            Some(user),
+            Some(device),
+            json!({ "user_name": user_name, "browser": browser }),
+        ),
         Event::PasswordChanged { user, user_name } => {
             line(PASSWORD_CHANGED, Some(user), None, json!({ "user_name": user_name }))
         }
@@ -346,6 +374,24 @@ impl Journal {
                 .send_modify(|count| *count = count.wrapping_add(1)),
             Err(error) => {
                 tracing::warn!(%error, "a line of the activity journal could not be written");
+            }
+        }
+    }
+
+    /// Gives the line of a device's sign in the browser its page found, and
+    /// tells whoever follows the journal when a line changed.
+    pub async fn browser_found(&self, device: DeviceId, browser: &str) {
+        match self
+            .database
+            .name_the_browser_of_a_sign_in(SIGNED_IN, device, browser)
+            .await
+        {
+            Ok(0) => {}
+            Ok(_) => self
+                .written
+                .send_modify(|count| *count = count.wrapping_add(1)),
+            Err(error) => {
+                tracing::warn!(%error, "the line of a sign in could not be given its browser");
             }
         }
     }
