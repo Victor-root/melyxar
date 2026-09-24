@@ -1337,16 +1337,50 @@
  * so that player never sees a pointer and never draws anything of its own.
  * ------------------------------------------------------------------------ */
 
+/* The stage, in which the picture's own box is centred. */
 .trailer-frame {
   position: absolute;
   inset: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
 }
 
-.trailer-frame iframe {
-  display: block;
+/* The picture exactly, in the shape YouTube plays in, and nothing past it. */
+.trailer-window {
+  position: relative;
+  width: min(100cqw, 100cqh * 16 / 9);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+
+/* YouTube's player, taller than the picture by a band above and below. It
+   centres the picture in itself, so the picture fills the box exactly, and
+   the title it lays along its top edge and the mark in its bottom corner
+   fall in the bands, outside the box. */
+.trailer-window iframe {
+  position: absolute;
+  left: 0;
+  top: calc(-1 * var(--trailer-band));
+  width: 100%;
+  height: calc(100% + 2 * var(--trailer-band));
+  border: 0;
+  --trailer-band: 140px;
+}
+
+/* What stands in front of the picture while it may not be shown: the film's
+   own backdrop, dimmed, under the controls. */
+.trailer-curtain {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+
+.trailer-curtain img {
   width: 100%;
   height: 100%;
-  border: 0;
+  object-fit: cover;
+  opacity: 0.45;
 }
 
 .trailer-surface {
