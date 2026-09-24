@@ -175,6 +175,7 @@ const en: Dictionary = {
 
   "work.play": "Play",
   "work.trailer": "Trailer",
+  "work.trailer_of": "Trailer: {title}",
   "work.more": "More",
   "work.less": "Less",
   "work.cast": "Cast",
@@ -1250,6 +1251,7 @@ const fr: Dictionary = {
 
   "work.play": "Lire",
   "work.trailer": "Bande-annonce",
+  "work.trailer_of": "Bande-annonce : {title}",
   "work.more": "Plus",
   "work.less": "Moins",
   "work.cast": "Distribution",

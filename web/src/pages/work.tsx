@@ -20,6 +20,7 @@ import { Card } from "../components/card";
 import { useWorkMenu } from "../components/cardmenu";
 import { Panel, Picker } from "../components/panel";
 import { PersonCard } from "../components/person";
+import { TrailerDialog } from "../components/trailer";
 import { Row, RowHead } from "../components/row";
 import { useFittedText } from "../fitting";
 import {
@@ -58,7 +59,6 @@ import { asClock } from "../player/clock";
 import { trackName } from "../player/describe";
 import { Player } from "../player/player";
 import { cutOut } from "../player/thumbnail";
-import { TrailerPlayer } from "../player/trailer";
 import { isCatalogued, isNamed } from "../works";
 import { FolderView, PhotoView } from "./own";
 
@@ -155,10 +155,6 @@ export function WorkPage() {
     );
   }
 
-  if (trailer) {
-    return <TrailerPlayer url={trailer} title={work.title} onClose={() => stopTrailer()} />;
-  }
-
   const version = work.versions[chosen];
   /* A series is nothing but its seasons and a season nothing but its
      episodes: neither is played, neither has a copy on the disk. */
@@ -224,6 +220,10 @@ export function WorkPage() {
           onChanged={readAgain}
         />
       )}
+
+      {/* Over the page rather than in place of it: shut, the page is where
+          it was left. */}
+      {trailer && <TrailerDialog trailer={trailer} title={work.title} onClose={stopTrailer} />}
     </main>
   );
 }
