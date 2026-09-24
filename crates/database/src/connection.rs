@@ -25,6 +25,14 @@ pub enum DatabaseError {
     Corrupt(String),
 }
 
+impl DatabaseError {
+    /// Whether what was written would have given two rows a value only one
+    /// may have, such as two accounts one name.
+    pub fn is_a_duplicate(&self) -> bool {
+        matches!(self, Self::Query(sqlx::Error::Database(error)) if error.is_unique_violation())
+    }
+}
+
 pub type Result<T> = std::result::Result<T, DatabaseError>;
 
 /// How long a statement waits for a lock before giving up.

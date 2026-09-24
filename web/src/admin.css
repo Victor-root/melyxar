@@ -1644,6 +1644,43 @@
   text-transform: uppercase;
 }
 
+/* An account's own face where a panel wears its mark: its picture, or its
+   letters on the accent, filling the square. */
+.account-face {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.account-panel .panel-mark {
+  overflow: hidden;
+  border: none;
+}
+
+/* The libraries granted one by one, under the switch that says it is not
+   all of them. */
+.account-libraries {
+  margin: 0 0 var(--gap-tight) var(--gap-wide);
+}
+
+.account-password {
+  display: grid;
+  gap: var(--gap);
+}
+
+.account-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
 .line-path {
   font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
   font-size: 12px;

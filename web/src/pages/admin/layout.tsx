@@ -57,7 +57,7 @@ const SECTIONS: SectionGroup[] = [
   {
     label: "admin.group.access",
     sections: [
-      { path: "users", icon: PeopleIcon, label: "admin.users", soon: true },
+      { path: "users", icon: PeopleIcon, label: "admin.users" },
       { path: "devices", icon: DeviceIcon, label: "admin.devices", soon: true },
       { path: "security", icon: ShieldIcon, label: "admin.security", soon: true },
     ],

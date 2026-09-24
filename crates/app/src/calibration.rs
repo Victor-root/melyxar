@@ -121,9 +121,17 @@ struct MeasuredAgainst {
 /// where there is nothing else to ask.
 async fn what_to_measure_against(
     state: &AppState,
+    who: &melyxar_core::user::User,
     card: Option<&melyxar_ffmpeg::Card>,
 ) -> Result<MeasuredAgainst> {
-    if let Some(film) = state.database().film_to_measure_against().await? {
+    // Among the films this account could have opened itself: it is played to
+    // them, whole, for as long as the measure takes.
+    let within = crate::reach::within(who);
+    if let Some(film) = state
+        .database()
+        .film_to_measure_against(within.as_deref())
+        .await?
+    {
         let named = film
             .path
             .file_name()
@@ -233,7 +241,7 @@ pub async fn open_calibration_session(
     let sessions = state.sessions().ok_or_else(no_tools)?;
     let capabilities = state.capabilities().ok_or_else(no_tools)?;
 
-    let against = what_to_measure_against(state, capabilities.card()).await?;
+    let against = what_to_measure_against(state, who, capabilities.card()).await?;
     // Never taller than the film itself: asking for more would measure a
     // picture this server would have had to invent.
     let height = height.min(against.native_height);

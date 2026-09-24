@@ -157,6 +157,17 @@ impl PictureRebuild {
 }
 
 /// Works out how one file reaches one client.
+/// Where the file of a copy is, for the route that hands it over as it lies
+/// on the disk.
+pub async fn file_of(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    source_id: melyxar_core::id::MediaSourceId,
+) -> Result<std::path::PathBuf> {
+    crate::reach::may_read_the_copy(state, who, source_id).await?;
+    Ok(crate::playable_file(state.database(), source_id).await?.path)
+}
+
 pub async fn plan(
     state: &AppState,
     who: &melyxar_core::user::User,
@@ -164,10 +175,10 @@ pub async fn plan(
 ) -> Result<PlayPlan> {
     let database = state.database();
 
+    // Before anything is decided or produced, or said about its disk: a film
+    // of a library this account was not granted is a film it cannot start.
+    crate::reach::may_read_the_copy(state, who, request.source_id).await?;
     let source = crate::playable_file(database, request.source_id).await?;
-    // Before anything is decided or produced: a film of a library this
-    // account was not granted is a film it cannot start.
-    crate::reach::may_read_the_work(state, who, source.work_id).await?;
     let user_id = who.id;
 
     // Nothing ever managed to describe this file: no container, no streams.
@@ -406,16 +417,33 @@ fn chosen_track<'a>(
 /// Both, and for different reasons. The tracks so this film starts the same
 /// way next time, down to the track; the languages so the next film does too,
 /// even though its tracks are numbered differently.
+///
+/// The tracks are read back from the copy rather than taken on trust, and the
+/// copy has to be one of this work's: what is remembered is a track this film
+/// really holds, and never one of a film out of this account's reach.
 pub async fn remember_chosen_tracks(
     state: &AppState,
     who: &melyxar_core::user::User,
     work_id: WorkId,
-    audio: Option<&Track>,
-    subtitle: Option<&Track>,
+    source_id: melyxar_core::id::MediaSourceId,
+    audio: Option<melyxar_core::id::TrackId>,
+    subtitle: Option<melyxar_core::id::TrackId>,
 ) -> Result<()> {
     crate::reach::may_read_the_work(state, who, work_id).await?;
     let user_id = who.id;
     let database = state.database();
+    let belongs = database
+        .playable_source(source_id)
+        .await?
+        .is_some_and(|source| source.work_id == work_id);
+    if !belongs {
+        return Err(AppError::Domain(melyxar_core::Error::not_found("media source")));
+    }
+    let tracks = database.tracks_of_source(source_id).await?;
+    let find = |wanted: Option<melyxar_core::id::TrackId>| {
+        wanted.and_then(|id| tracks.iter().find(|track| track.id == id))
+    };
+    let (audio, subtitle) = (find(audio), find(subtitle));
     database
         .record_chosen_tracks(
             user_id,
@@ -1348,6 +1376,116 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_copy_of_a_library_not_granted_is_a_copy_that_is_not_there() {
+        // Reached by the copy's identifier rather than the work's: the file,
+        // the little pictures of the bar and the subtitles each ask for
+        // themselves, before anything is said about the disk or the cache.
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080), subtitle(id)]
+            })
+            .await;
+        let kept_out = melyxar_core::user::User {
+            permissions: Permissions {
+                sees_every_library: false,
+                allowed_libraries: Vec::new(),
+                ..Permissions::viewer()
+            },
+            ..crate::an_ordinary_account(user_id)
+        };
+        let not_there = |error: AppError| {
+            matches!(error, AppError::Domain(error) if error.code == melyxar_core::error::ErrorCode::NotFound)
+        };
+
+        assert!(not_there(
+            file_of(&state, &kept_out, source_id).await.expect_err("refused")
+        ));
+        assert!(not_there(
+            crate::thumbnails::sheet_of(&state, &kept_out, source_id, 0)
+                .await
+                .expect_err("refused")
+        ));
+        let track = state
+            .database()
+            .tracks_of_source(source_id)
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|track| matches!(track.kind, TrackKind::Subtitle(_)))
+            .expect("a subtitle")
+            .id;
+        assert!(not_there(
+            crate::subtitles::as_web_vtt(&state, &kept_out, source_id, track)
+                .await
+                .expect_err("refused")
+        ));
+        assert!(not_there(
+            plan(
+                &state,
+                &kept_out,
+                &PlayRequest {
+                    source_id,
+                    profile: None,
+                    audio_track_id: None,
+                    subtitle_track_id: None,
+                    preferred_video_codec: None,
+                },
+            )
+            .await
+            .expect_err("refused")
+        ));
+
+        assert!(
+            file_of(&state, &crate::an_ordinary_account(user_id), source_id)
+                .await
+                .expect("handed over")
+                .ends_with("Quiet.Harbour.2019.mp4"),
+            "and an account that sees every library is handed it"
+        );
+    }
+
+    #[tokio::test]
+    async fn where_a_file_lies_is_told_to_an_administrator_only() {
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080)]
+            })
+            .await;
+        let work_id = state
+            .database()
+            .playable_source(source_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .work_id;
+        let copy_as_seen_by = |who: melyxar_core::user::User| {
+            let state = state.clone();
+            async move {
+                crate::detail::work_detail(&state, &who, work_id)
+                    .await
+                    .expect("read")
+                    .expect("present")
+                    .versions
+                    .remove(0)
+            }
+        };
+
+        let seen = copy_as_seen_by(crate::an_ordinary_account(user_id)).await;
+        assert_eq!(seen.path, None);
+        assert_eq!(seen.root_label, None);
+
+        let administrator = melyxar_core::user::User {
+            permissions: Permissions::administrator(),
+            ..crate::an_ordinary_account(user_id)
+        };
+        let seen = copy_as_seen_by(administrator).await;
+        assert!(seen
+            .path
+            .is_some_and(|path| path.ends_with("Quiet.Harbour.2019.mp4")));
+        assert_eq!(seen.root_label.as_deref(), Some("disk-one"));
+    }
+
+    #[tokio::test]
     async fn the_general_switch_against_converting_wide_gamut_colour_is_read_from_the_server() {
         // The one thing this layer adds over the pure decision itself: the
         // switch comes from the database rather than from the request, so
@@ -1543,9 +1681,29 @@ mod tests {
             .expect("present")
             .work_id;
 
-        remember_chosen_tracks(&state, &crate::an_ordinary_account(user_id), work_id, Some(french), None)
+        remember_chosen_tracks(
+            &state,
+            &crate::an_ordinary_account(user_id),
+            work_id,
+            source_id,
+            Some(french.id),
+            None,
+        )
+        .await
+        .expect("choice remembered");
+        assert!(
+            remember_chosen_tracks(
+                &state,
+                &crate::an_ordinary_account(user_id),
+                WorkId::new(),
+                source_id,
+                Some(french.id),
+                None,
+            )
             .await
-            .expect("choice remembered");
+            .is_err(),
+            "a copy is only ever remembered for its own work"
+        );
 
         assert_eq!(
             soundtrack_of(&state, user_id, source_id).await.as_deref(),

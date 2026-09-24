@@ -92,6 +92,12 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
     case "account_created":
     case "account_removed":
       return { title: t(`activity.${line.kind}`, { user }), note: null };
+    case "rights_changed":
+    case "signed_out_everywhere":
+      return {
+        title: t(`activity.${line.kind}`, { user }),
+        note: t("activity.by", { name: text(details, "by") ?? t("activity.someone") }),
+      };
     case "account_renamed":
       return {
         title: t("activity.account_renamed", {

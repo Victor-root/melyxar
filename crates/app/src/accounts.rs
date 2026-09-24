@@ -20,6 +20,8 @@ use melyxar_core::id::UserId;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::user::{Permissions, User};
 
+use melyxar_database::users::KeptAnAdministrator;
+
 use crate::activity::{record, Event};
 use crate::{AppError, AppState, Result};
 
@@ -51,6 +53,14 @@ pub enum Refused {
     NameNeeded,
     NameTaken,
     PasswordTooShort,
+    /// Afterwards nobody would be an administrator of this server.
+    LastAdministrator,
+    /// Not something an administrator does to their own account from the
+    /// administration: stepping down, taking it away, signing it out of
+    /// everywhere, or putting a password on it without the current one.
+    NotYourself,
+    /// A library that is not on this server was granted.
+    NoSuchLibrary,
 }
 
 impl Refused {
@@ -59,6 +69,9 @@ impl Refused {
             Self::NameNeeded => "name_needed",
             Self::NameTaken => "name_taken",
             Self::PasswordTooShort => "password_too_short",
+            Self::LastAdministrator => "last_administrator",
+            Self::NotYourself => "not_yourself",
+            Self::NoSuchLibrary => "no_such_library",
         }
     }
 }
@@ -487,12 +500,85 @@ pub async fn create_the_first_account(
     Ok(user)
 }
 
+/// One account as the administration lists it: the account itself, and the
+/// devices it is signed in on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Listed {
+    pub user: User,
+    /// Absent for an account signed in nowhere.
+    pub devices: Option<DevicesOfAnAccount>,
+}
+
+pub use melyxar_database::sessions::DevicesOfAnAccount;
+
+/// Every account of this server, ordered by name, with where each is signed
+/// in. Two reads whatever the number of accounts.
+pub async fn every_account(state: &AppState) -> Result<Vec<Listed>> {
+    let database = state.database();
+    let mut devices = database.devices_of_every_account().await?;
+    Ok(database
+        .list_users()
+        .await?
+        .into_iter()
+        .map(|user| Listed {
+            devices: devices.remove(&user.id),
+            user,
+        })
+        .collect())
+}
+
+/// The account behind an identifier, or the refusal a page shows for one
+/// that is not there.
+async fn account(state: &AppState, id: UserId) -> std::result::Result<User, Trouble> {
+    state
+        .database()
+        .user(id)
+        .await?
+        .ok_or_else(|| Trouble::Failed(melyxar_core::Error::not_found("account").into()))
+}
+
+/// Refuses what an administrator may not do to their own account.
+fn not_to_yourself(acting: &User, target: UserId) -> std::result::Result<(), Trouble> {
+    match acting.id == target {
+        true => Err(Trouble::Refused(Refused::NotYourself)),
+        false => Ok(()),
+    }
+}
+
+/// Rights as they will be kept, every library they grant checked to be one
+/// this server has.
+///
+/// A grant of a library that is not there is refused rather than dropped: it
+/// is a screen out of date, and saying so is better than quietly granting
+/// less than was asked.
+async fn checked(
+    state: &AppState,
+    wanted: &Permissions,
+) -> std::result::Result<Permissions, Trouble> {
+    let settled = wanted.clone().settled();
+    if !settled.allowed_libraries.is_empty() {
+        let there: Vec<_> = state
+            .database()
+            .list_libraries()
+            .await?
+            .into_iter()
+            .map(|library| library.id)
+            .collect();
+        if settled
+            .allowed_libraries
+            .iter()
+            .any(|library| !there.contains(library))
+        {
+            return Err(Trouble::Refused(Refused::NoSuchLibrary));
+        }
+    }
+    Ok(settled)
+}
+
 /// Makes an account, with the rights it is to have.
 ///
-/// Reachable only from a terminal on the machine itself for now: the screen
-/// that offers it belongs to the administration, which does not exist yet.
-/// Nothing about it is terminal-shaped though, so the screen will call this
-/// and not something written again beside it.
+/// The one way an account is made once the server is set up, from the
+/// administration as from a terminal on the machine itself.
 pub async fn create_account(
     state: &AppState,
     name: &str,
@@ -500,11 +586,21 @@ pub async fn create_account(
     permissions: &Permissions,
 ) -> std::result::Result<User, Trouble> {
     let name = name_of(name)?;
+    let permissions = checked(state, permissions).await?;
     let hashed = stored_form_of(password)?;
-    let user = state
+    // Left to the unique index, as a rename is, so two accounts made under
+    // one name in the same breath cannot both come through.
+    let user = match state
         .database()
-        .create_user(name, Some(&hashed), permissions)
-        .await?;
+        .create_user(name, Some(&hashed), &permissions)
+        .await
+    {
+        Ok(user) => user,
+        Err(error) if error.is_a_duplicate() => {
+            return Err(Trouble::Refused(Refused::NameTaken));
+        }
+        Err(error) => return Err(error.into()),
+    };
     tracing::info!(
         account = %user.name,
         administrator = permissions.is_administrator,
@@ -521,44 +617,222 @@ pub async fn create_account(
     Ok(user)
 }
 
+/// What the administration decides about an account.
+///
+/// The right to download and the age limit are not among them yet: neither
+/// is applied anywhere, so an account keeps whatever it holds of them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rights {
+    pub is_administrator: bool,
+    pub sees_every_library: bool,
+    pub libraries: Vec<melyxar_core::id::LibraryId>,
+    pub may_delete: bool,
+    pub may_delete_from_disk: bool,
+    /// How many films it may watch at once, when it is limited.
+    pub most_streams: Option<i32>,
+}
+
+impl Rights {
+    /// These rights laid over the ones an account holds.
+    pub fn over(&self, held: &Permissions) -> Permissions {
+        Permissions {
+            is_administrator: self.is_administrator,
+            sees_every_library: self.sees_every_library,
+            allowed_libraries: self.libraries.clone(),
+            may_delete: self.may_delete,
+            may_delete_from_disk: self.may_delete_from_disk,
+            max_sessions: self.most_streams,
+            ..held.clone()
+        }
+    }
+}
+
+/// Gives an account the rights it is to have, all at once.
+///
+/// Takes effect on the next thing any device of theirs asks: the rights of
+/// whoever is asking are read afresh with every request, so nothing already
+/// open keeps what was taken away.
+pub async fn set_rights(
+    state: &AppState,
+    acting: &User,
+    target: UserId,
+    rights: &Rights,
+) -> std::result::Result<User, Trouble> {
+    let before = account(state, target).await?;
+    let settled = checked(state, &rights.over(&before.permissions)).await?;
+    // An administrator stepping down from the administration would lose the
+    // screen they are standing on with the next thing it asks.
+    if settled.is_administrator != before.permissions.is_administrator {
+        not_to_yourself(acting, target)?;
+    }
+    match state.database().set_permissions(target, &settled).await? {
+        KeptAnAdministrator::Done => {}
+        KeptAnAdministrator::NoSuchAccount => {
+            return Err(Trouble::Failed(melyxar_core::Error::not_found("account").into()));
+        }
+        KeptAnAdministrator::WouldLeaveNone => {
+            return Err(Trouble::Refused(Refused::LastAdministrator));
+        }
+    }
+    // A film already playing asks nothing more of the library it is in: one
+    // of a library just taken away would otherwise play to its end.
+    if settled.sees_less_than(&before.permissions) {
+        crate::watching::stop_everything_of(state, target);
+    }
+    tracing::info!(
+        account = %before.name,
+        by = %acting.name,
+        administrator = settled.is_administrator,
+        every_library = settled.sees_every_library,
+        granted = settled.allowed_libraries.len(),
+        "changed the rights of an account"
+    );
+    record(
+        state,
+        Event::RightsChanged {
+            user: target,
+            user_name: before.name.clone(),
+            by: acting.name.clone(),
+        },
+    )
+    .await;
+    Ok(User {
+        permissions: settled,
+        ..before
+    })
+}
+
+/// Whether this account is still an administrator, asked again by what stays
+/// open for one: a live line outlives the request that opened it.
+pub async fn still_an_administrator(state: &AppState, id: UserId) -> Result<bool> {
+    Ok(state
+        .database()
+        .user(id)
+        .await?
+        .is_some_and(|user| user.permissions.is_administrator))
+}
+
+/// Gives another account the name the administration typed for it.
+pub async fn rename_account(
+    state: &AppState,
+    target: UserId,
+    wanted: &str,
+) -> std::result::Result<User, Trouble> {
+    let before = account(state, target).await?;
+    rename(state, &before, wanted).await
+}
+
+/// Puts a password on another account from the administration, and signs
+/// every device of theirs out.
+///
+/// Never on one's own account: from here no current password is asked for,
+/// so a session left open on a borrowed machine would otherwise be enough to
+/// take an administrator's account from them. Their own is changed from
+/// their profile, current password first.
+pub async fn put_a_password(
+    state: &AppState,
+    acting: &User,
+    target: UserId,
+    password: &str,
+) -> std::result::Result<(), Trouble> {
+    not_to_yourself(acting, target)?;
+    let user = account(state, target).await?;
+    password_put_on(state, &user, password).await
+}
+
+/// Signs every device of another account out.
+pub async fn sign_out_everywhere(
+    state: &AppState,
+    acting: &User,
+    target: UserId,
+) -> std::result::Result<u64, Trouble> {
+    not_to_yourself(acting, target)?;
+    let user = account(state, target).await?;
+    let closed = state.database().close_every_session_of(user.id).await?;
+    crate::watching::stop_everything_of(state, user.id);
+    tracing::warn!(account = %user.name, by = %acting.name, closed, "signed an account out of every device");
+    record(
+        state,
+        Event::SignedOutEverywhere {
+            user: user.id,
+            user_name: user.name,
+            by: acting.name.clone(),
+        },
+    )
+    .await;
+    Ok(closed)
+}
+
+/// Takes another account away from the administration.
+pub async fn remove_account_by_id(
+    state: &AppState,
+    acting: &User,
+    target: UserId,
+) -> std::result::Result<(), Trouble> {
+    not_to_yourself(acting, target)?;
+    let user = account(state, target).await?;
+    taken_away(state, user).await
+}
+
 /// Takes an account away, with everything of theirs, its picture included.
 ///
 /// Refuses the last administrator. A server with nobody who may manage it
 /// cannot be put right from any screen it serves, and nothing in it would
 /// ever say why.
-pub async fn remove_account(state: &AppState, name: &str) -> Result<bool> {
-    let Some((user, _)) = state.database().user_by_name(name).await? else {
-        return Ok(false);
-    };
-    if user.permissions.is_administrator
-        && state.database().administrator_count().await? <= 1
-    {
-        return Err(AppError::Domain(melyxar_core::Error::new(
-            melyxar_core::error::ErrorCode::Conflict,
-            "this is the last administrator of this server",
-        )));
+async fn taken_away(state: &AppState, user: User) -> std::result::Result<(), Trouble> {
+    match state.database().delete_user(user.id).await? {
+        KeptAnAdministrator::Done => {}
+        KeptAnAdministrator::NoSuchAccount => {
+            return Err(Trouble::Failed(melyxar_core::Error::not_found("account").into()));
+        }
+        KeptAnAdministrator::WouldLeaveNone => {
+            return Err(Trouble::Refused(Refused::LastAdministrator));
+        }
     }
-    state.database().delete_user(user.id).await?;
+    crate::watching::stop_everything_of(state, user.id);
     crate::avatars::forget_every_one_of(state, user.id).await;
     tracing::warn!(account = %user.name, "took an account away");
     record(state, Event::AccountRemoved { user_name: user.name }).await;
+    Ok(())
+}
+
+/// Takes an account away from a terminal, by its name, and says whether
+/// there was one by that name.
+pub async fn remove_account(state: &AppState, name: &str) -> std::result::Result<bool, Trouble> {
+    let Some((user, _)) = state.database().user_by_name(name).await? else {
+        return Ok(false);
+    };
+    taken_away(state, user).await?;
     Ok(true)
 }
 
-/// Says which libraries an account may see, replacing whatever it had.
+/// Says which libraries an account may see, from a terminal, and whether
+/// there was an account by that name. Every other right stays as it was.
 pub async fn set_what_an_account_may_see(
     state: &AppState,
     name: &str,
     sees_every_library: bool,
     granted: &[melyxar_core::id::LibraryId],
-) -> Result<bool> {
+) -> std::result::Result<bool, Trouble> {
     let Some((user, _)) = state.database().user_by_name(name).await? else {
         return Ok(false);
     };
-    state
-        .database()
-        .set_library_access(user.id, sees_every_library, granted)
-        .await?;
+    // An administrator sees every library whatever is written: said here
+    // rather than done in silence, since a command that claims to have
+    // limited an account and has not is the worst answer it could give.
+    if user.permissions.is_administrator && !sees_every_library {
+        return Err(Trouble::Failed(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::Conflict,
+            "an administrator sees every library",
+        ))));
+    }
+    let wanted = Permissions {
+        sees_every_library,
+        allowed_libraries: granted.to_vec(),
+        ..user.permissions.clone()
+    };
+    let settled = checked(state, &wanted).await?;
+    state.database().set_permissions(user.id, &settled).await?;
     tracing::info!(
         account = %user.name,
         every = sees_every_library,
@@ -586,23 +860,35 @@ pub async fn set_a_password(
     let Some((user, _)) = state.database().user_by_name(name).await? else {
         return Ok(false);
     };
+    password_put_on(state, &user, password).await?;
+    Ok(true)
+}
+
+/// Puts a password on an account without asking for the one before, and
+/// signs every device of it out: whoever held it before is out.
+async fn password_put_on(
+    state: &AppState,
+    user: &User,
+    password: &str,
+) -> std::result::Result<(), Trouble> {
     let hashed = stored_form_of(password)?;
     state.database().set_password(user.id, Some(&hashed)).await?;
     let closed = state.database().close_every_session_of(user.id).await?;
+    crate::watching::stop_everything_of(state, user.id);
     tracing::warn!(
         account = %user.name,
         closed,
-        "a password was set from the terminal and every device signed out"
+        "a password was put on an account and every device signed out"
     );
     record(
         state,
         Event::PasswordChanged {
             user: user.id,
-            user_name: user.name,
+            user_name: user.name.clone(),
         },
     )
     .await;
-    Ok(true)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1075,5 +1361,232 @@ mod tests {
                 .expect("asked"),
             "a name nobody has is said so rather than claimed to have been done"
         );
+    }
+
+    /// The administrator of a fresh server and one ordinary account, each
+    /// signed in on a device.
+    async fn an_administrator_and_somebody() -> (tempfile::TempDir, AppState, User, OpenedSession) {
+        let (directory, state) = a_server_with_an_account().await;
+        create_account(&state, "zoe", "amber field road", &Permissions::viewer())
+            .await
+            .expect("account made");
+        let admin = a_session(&state, "victor", "quiet harbour", "a laptop")
+            .await
+            .expect("signed in")
+            .user;
+        let zoe = a_session(&state, "zoe", "amber field road", "a phone")
+            .await
+            .expect("signed in");
+        (directory, state, admin, zoe)
+    }
+
+    /// The rights the administration would send for these permissions.
+    fn rights_of(permissions: &Permissions) -> Rights {
+        Rights {
+            is_administrator: permissions.is_administrator,
+            sees_every_library: permissions.sees_every_library,
+            libraries: permissions.allowed_libraries.clone(),
+            may_delete: permissions.may_delete,
+            may_delete_from_disk: permissions.may_delete_from_disk,
+            most_streams: permissions.max_sessions,
+        }
+    }
+
+    fn refused(trouble: Trouble) -> Refused {
+        match trouble {
+            Trouble::Refused(refused) => refused,
+            Trouble::Failed(error) => panic!("failed rather than refused: {error}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn rights_changed_by_an_administrator_hold_from_the_very_next_request() {
+        // Read afresh with every request: a device already signed in keeps
+        // nothing of what was taken away.
+        let (directory, state, admin, zoe) = an_administrator_and_somebody().await;
+        let films = state
+            .database()
+            .create_library(
+                "Films",
+                melyxar_core::library::LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), directory.path().join("films"))],
+            )
+            .await
+            .expect("library created")
+            .id;
+
+        let wanted = Permissions {
+            sees_every_library: false,
+            allowed_libraries: vec![films],
+            may_delete: true,
+            max_sessions: Some(1),
+            ..Permissions::viewer()
+        };
+        let changed = set_rights(&state, &admin, zoe.user.id, &rights_of(&wanted))
+            .await
+            .expect("changed");
+        assert_eq!(changed.permissions, wanted);
+
+        let holder = who_holds(&state, zoe.token.as_text())
+            .await
+            .expect("asked")
+            .expect("still signed in");
+        assert_eq!(holder.user.permissions, wanted);
+
+        let written = state
+            .database()
+            .activity_page(&[], None, 5)
+            .await
+            .expect("read");
+        assert_eq!(written[0].kind, "rights_changed");
+        assert_eq!(written[0].user_id, Some(zoe.user.id));
+    }
+
+    #[tokio::test]
+    async fn a_library_that_is_not_there_is_never_granted() {
+        let (_directory, state, admin, zoe) = an_administrator_and_somebody().await;
+        let wanted = Permissions {
+            sees_every_library: false,
+            allowed_libraries: vec![melyxar_core::id::LibraryId::new()],
+            ..Permissions::viewer()
+        };
+        let trouble = set_rights(&state, &admin, zoe.user.id, &rights_of(&wanted))
+            .await
+            .expect_err("refused");
+        assert_eq!(refused(trouble), Refused::NoSuchLibrary);
+        let trouble = create_account(&state, "max", "amber field road", &wanted)
+            .await
+            .expect_err("refused");
+        assert_eq!(refused(trouble), Refused::NoSuchLibrary);
+    }
+
+    #[tokio::test]
+    async fn an_administrator_cannot_undo_their_own_account_from_the_administration() {
+        let (_directory, state, admin, _) = an_administrator_and_somebody().await;
+        // Another administrator, so that none of this is the last one.
+        create_account(&state, "max", "amber field road", &Permissions::administrator())
+            .await
+            .expect("account made");
+
+        let stepping_down = set_rights(&state, &admin, admin.id, &rights_of(&Permissions::viewer()))
+            .await
+            .expect_err("refused");
+        assert_eq!(refused(stepping_down), Refused::NotYourself);
+        let removing = remove_account_by_id(&state, &admin, admin.id)
+            .await
+            .expect_err("refused");
+        assert_eq!(refused(removing), Refused::NotYourself);
+        let signing_out = sign_out_everywhere(&state, &admin, admin.id)
+            .await
+            .expect_err("refused");
+        assert_eq!(refused(signing_out), Refused::NotYourself);
+        let password = put_a_password(&state, &admin, admin.id, "a whole new one")
+            .await
+            .expect_err("refused");
+        assert_eq!(refused(password), Refused::NotYourself);
+
+        assert!(
+            state
+                .database()
+                .user(admin.id)
+                .await
+                .expect("read")
+                .expect("still there")
+                .permissions
+                .is_administrator
+        );
+    }
+
+    #[tokio::test]
+    async fn the_last_administrator_stays_whoever_asks() {
+        let (_directory, state, admin, zoe) = an_administrator_and_somebody().await;
+        // Made an administrator, then asked to take the first one away: the
+        // first is not the last any more, so that goes through.
+        set_rights(
+            &state,
+            &admin,
+            zoe.user.id,
+            &rights_of(&Permissions::administrator()),
+        )
+            .await
+            .expect("changed");
+        let zoe_now = state
+            .database()
+            .user(zoe.user.id)
+            .await
+            .expect("read")
+            .expect("there");
+        remove_account_by_id(&state, &zoe_now, admin.id)
+            .await
+            .expect("taken away");
+
+        // And from the terminal, where nobody is "yourself", the last one
+        // is still kept.
+        let trouble = remove_account(&state, "zoe").await.expect_err("refused");
+        assert_eq!(refused(trouble), Refused::LastAdministrator);
+    }
+
+    #[tokio::test]
+    async fn a_password_put_on_by_an_administrator_signs_the_account_out() {
+        let (_directory, state, admin, zoe) = an_administrator_and_somebody().await;
+        put_a_password(&state, &admin, zoe.user.id, "a whole new one")
+            .await
+            .expect("put");
+        assert!(
+            who_holds(&state, zoe.token.as_text())
+                .await
+                .expect("asked")
+                .is_none(),
+            "whoever held the account before is out"
+        );
+        assert!(a_session(&state, "zoe", "a whole new one", "a phone")
+            .await
+            .is_some());
+    }
+
+    #[tokio::test]
+    async fn signing_an_account_out_of_everywhere_leaves_the_administrator_signed_in() {
+        let (_directory, state, admin, zoe) = an_administrator_and_somebody().await;
+        let admin_session = a_session(&state, "victor", "quiet harbour", "a desktop")
+            .await
+            .expect("signed in");
+        assert_eq!(
+            sign_out_everywhere(&state, &admin, zoe.user.id)
+                .await
+                .expect("done"),
+            1
+        );
+        assert!(who_holds(&state, zoe.token.as_text())
+            .await
+            .expect("asked")
+            .is_none());
+        assert!(who_holds(&state, admin_session.token.as_text())
+            .await
+            .expect("asked")
+            .is_some());
+    }
+
+    #[tokio::test]
+    async fn a_name_already_taken_is_refused_as_such() {
+        let (_directory, state, admin, zoe) = an_administrator_and_somebody().await;
+        let trouble = create_account(&state, "ZOE", "amber field road", &Permissions::viewer())
+            .await
+            .expect_err("refused");
+        assert_eq!(refused(trouble), Refused::NameTaken);
+        let trouble = rename_account(&state, admin.id, "zoe")
+            .await
+            .expect_err("refused");
+        assert_eq!(refused(trouble), Refused::NameTaken);
+        let listed = every_account(&state).await.expect("listed");
+        assert_eq!(
+            listed
+                .iter()
+                .map(|one| (one.user.name.as_str(), one.devices.map(|d| d.signed_in)))
+                .collect::<Vec<_>>(),
+            vec![("victor", Some(1)), ("zoe", Some(1))],
+            "each with the devices it is signed in on"
+        );
+        let _ = zoe;
     }
 }

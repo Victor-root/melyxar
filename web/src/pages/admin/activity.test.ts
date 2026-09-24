@@ -95,6 +95,16 @@ describe("sayLine", () => {
     expect(sayLine(line("signed_out", {}), t).title).toBe("activity.signed_out(activity.someone)");
   });
 
+  it("says whose rights an administrator changed, and which administrator", () => {
+    expect(sayLine(line("rights_changed", { user_name: "somebody", by: "victor" }), t)).toEqual({
+      title: "activity.rights_changed(somebody)",
+      note: "activity.by(victor)",
+    });
+    expect(sayLine(line("signed_out_everywhere", { user_name: "somebody", by: "victor" }), t).title).toBe(
+      "activity.signed_out_everywhere(somebody)",
+    );
+  });
+
   it("says the name an account had and the one it has now", () => {
     expect(
       sayLine(line("account_renamed", { user_name: "somebody else", previous_name: "somebody" }), t).title,

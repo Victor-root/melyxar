@@ -5,7 +5,7 @@
 //! so the wording a client sees does not depend on which route it knocked at.
 
 use melyxar_core::id::{
-    DeviceId, LibraryId, MediaSourceId, PersonId, PlaybackClientId, TrackId, WorkId,
+    DeviceId, LibraryId, MediaSourceId, PersonId, PlaybackClientId, TrackId, UserId, WorkId,
 };
 
 use crate::error::Result;
@@ -44,4 +44,8 @@ pub(crate) fn parse_client(value: &str) -> Result<PlaybackClientId> {
 
 pub(crate) fn parse_device(value: &str) -> Result<DeviceId> {
     parse(value, "device")
+}
+
+pub(crate) fn parse_account(value: &str) -> Result<UserId> {
+    parse(value, "account")
 }

@@ -19,6 +19,34 @@ export interface Account {
   avatar: string | null;
 }
 
+/** What an account may do and see, as the administration shows and sends
+ *  it. An administrator holds every right whatever is sent. */
+export interface Rights {
+  is_administrator: boolean;
+  sees_every_library: boolean;
+  /** The libraries granted, read only when it does not see every one. */
+  libraries: string[];
+  may_delete: boolean;
+  may_delete_from_disk: boolean;
+  /** How many films it may watch at once. Nothing for no limit. */
+  most_streams: number | null;
+}
+
+/** One account as the page of accounts lists it. */
+export interface ManagedAccount {
+  id: string;
+  name: string;
+  avatar: string | null;
+  /** Whether this is the administrator looking at the page. */
+  is_you: boolean;
+  rights: Rights;
+  created_at: string;
+  /** How many devices it is signed in on. */
+  devices: number;
+  /** When the most recent of them was last used. */
+  last_seen_at: string | null;
+}
+
 /** A name the sign in screen offers, with its picture when it has one. */
 export interface NameAtTheDoor {
   name: string;
@@ -189,8 +217,8 @@ export interface Root {
   label: string;
   /** Its whole path on the server's disk. Shown only on the screen where
       roots are managed: the one place telling two of them apart by more than
-      a label matters. */
-  path: string;
+      a label matters. Sent to an administrator only. */
+  path: string | null;
   access: "missing" | "unreadable" | "read_only" | "read_write";
   explanation_code: string;
   /** What renaming this folder needs. */
@@ -477,9 +505,10 @@ export interface SubtitleTrack {
 export interface Version {
   id: string;
   summary: string;
-  /** Where the file is, root included, and the disk it is on. */
-  path: string;
-  root_label: string;
+  /** Where the file is, root included, and the disk it is on. Sent to an
+      administrator only. */
+  path: string | null;
+  root_label: string | null;
   added_at: string;
   size_bytes: number;
   duration_minutes: number | null;
@@ -1609,6 +1638,19 @@ export const api = {
     put<Account>("/api/v1/me/password", { current, wanted }),
   /* Answers the account under its new name; every device stays signed in. */
   rename: (name: string) => put<Account>("/api/v1/me/name", { name }),
+  accounts: (signal?: AbortSignal) => get<ManagedAccount[]>("/api/v1/accounts", signal),
+  createAccount: (name: string, password: string, rights: Rights) =>
+    post<ManagedAccount>("/api/v1/accounts", { name, password, rights }),
+  setRights: (account: string, rights: Rights) =>
+    put<ManagedAccount>(`/api/v1/accounts/${account}/rights`, rights),
+  renameAccount: (account: string, name: string) =>
+    put<ManagedAccount>(`/api/v1/accounts/${account}/name`, { name }),
+  putPassword: (account: string, password: string) =>
+    put<{ changed: boolean }>(`/api/v1/accounts/${account}/password`, { password }),
+  signOutEverywhere: (account: string) =>
+    remove<{ signed_out: number }>(`/api/v1/accounts/${account}/sessions`),
+  removeAccount: (account: string) =>
+    remove<{ removed: boolean }>(`/api/v1/accounts/${account}`),
   setFavourite: (work: string, favourite: boolean) =>
     put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
   /* On a season or a series this marks every episode below it, which is what

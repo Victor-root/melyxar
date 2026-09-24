@@ -112,7 +112,7 @@ async fn read(
     Viewer(who): Viewer,
 ) -> Result<Json<PreferencesView>> {
     let chosen = melyxar_app::preferences::of(&state, who.id).await?;
-    view(&state, chosen).await
+    view(&state, &who, chosen).await
 }
 
 async fn write(
@@ -194,7 +194,7 @@ async fn write(
     }
 
     let kept = melyxar_app::preferences::save(&state, who.id, chosen).await?;
-    view(&state, kept).await
+    view(&state, &who, kept).await
 }
 
 fn some_language(value: String) -> Option<String> {
@@ -202,8 +202,12 @@ fn some_language(value: String) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
-async fn view(state: &AppState, chosen: Preferences) -> Result<Json<PreferencesView>> {
-    let available = melyxar_app::preferences::languages_available(state).await?;
+async fn view(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    chosen: Preferences,
+) -> Result<Json<PreferencesView>> {
+    let available = melyxar_app::preferences::languages_available(state, who).await?;
     Ok(Json(PreferencesView {
         interface_language: chosen.interface_language,
         theme_mode: chosen.theme_mode.as_str(),

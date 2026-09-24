@@ -51,9 +51,26 @@ fn while_it_is_written(destination: &Path) -> PathBuf {
 /// range request is.
 pub async fn as_web_vtt(
     state: &AppState,
+    who: &melyxar_core::user::User,
     source_id: MediaSourceId,
     track_id: TrackId,
 ) -> Result<PathBuf> {
+    // The cache is kept by track alone, so the track is made to belong to
+    // the copy asked about, and the copy to a library this account may read,
+    // before the cache is looked at: otherwise a copy somebody may read
+    // would lend its address to the subtitles of any other film.
+    crate::reach::may_read_the_copy(state, who, source_id).await?;
+    if !state
+        .database()
+        .tracks_of_source(source_id)
+        .await?
+        .iter()
+        .any(|track| track.id == track_id)
+    {
+        return Err(AppError::Domain(melyxar_core::Error::not_found(
+            "subtitle track",
+        )));
+    }
     let destination = cached_at(state, track_id);
     if tokio::fs::metadata(&destination)
         .await
@@ -460,6 +477,11 @@ fn text_subtitle(track: &Track) -> Result<&SubtitleDetails> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Whoever turns the subtitles on, for tests about something else.
+    fn somebody() -> melyxar_core::user::User {
+        crate::an_ordinary_account(melyxar_core::id::UserId::new())
+    }
     use melyxar_core::media::{AudioDetails, Loudness};
     use melyxar_core::user::Permissions;
     use melyxar_database::Database;
@@ -615,7 +637,7 @@ mod tests {
         )
         .await;
 
-        let written = as_web_vtt(&state, source_id, tracks[0].id)
+        let written = as_web_vtt(&state, &somebody(), source_id, tracks[0].id)
             .await
             .expect("converted");
         let text = std::fs::read_to_string(&written).expect("read back");
@@ -643,14 +665,14 @@ mod tests {
         )
         .await;
 
-        let first = as_web_vtt(&state, source_id, tracks[0].id)
+        let first = as_web_vtt(&state, &somebody(), source_id, tracks[0].id)
             .await
             .expect("converted");
         // Written over with something the tool would never produce: if it ran
         // again, this would be gone.
         std::fs::write(&first, "WEBVTT\n\n00:01.000 --> 00:03.000\nkept\n").expect("written over");
 
-        let again = as_web_vtt(&state, source_id, tracks[0].id)
+        let again = as_web_vtt(&state, &somebody(), source_id, tracks[0].id)
             .await
             .expect("found again");
         assert_eq!(first, again);
@@ -670,7 +692,7 @@ mod tests {
         )
         .await;
 
-        let failure = as_web_vtt(&state, source_id, tracks[0].id)
+        let failure = as_web_vtt(&state, &somebody(), source_id, tracks[0].id)
             .await
             .expect_err("there is no text in a picture to convert");
         assert!(matches!(
@@ -684,7 +706,7 @@ mod tests {
         let (_directory, state, source_id, tracks) =
             state_with(|id| vec![audio_track(id)], &[]).await;
 
-        assert!(as_web_vtt(&state, source_id, tracks[0].id).await.is_err());
+        assert!(as_web_vtt(&state, &somebody(), source_id, tracks[0].id).await.is_err());
     }
 
     #[tokio::test]
@@ -695,7 +717,7 @@ mod tests {
         )
         .await;
 
-        let failure = as_web_vtt(&state, source_id, TrackId::new())
+        let failure = as_web_vtt(&state, &somebody(), source_id, TrackId::new())
             .await
             .expect_err("nothing by that name");
         assert!(matches!(
@@ -833,9 +855,10 @@ mod tests {
         )
         .await;
 
+        let asking = somebody();
         let (first, second) = tokio::join!(
-            as_web_vtt(&state, source_id, tracks[0].id),
-            as_web_vtt(&state, source_id, tracks[0].id)
+            as_web_vtt(&state, &asking, source_id, tracks[0].id),
+            as_web_vtt(&state, &asking, source_id, tracks[0].id)
         );
         for handed in [first.expect("converted"), second.expect("converted")] {
             let text = std::fs::read_to_string(&handed).expect("read back");
@@ -856,7 +879,7 @@ mod tests {
         )
         .await;
 
-        assert!(as_web_vtt(&state, source_id, tracks[0].id).await.is_err());
+        assert!(as_web_vtt(&state, &somebody(), source_id, tracks[0].id).await.is_err());
         assert_eq!(in_the_cache(&state, "part"), 0);
         assert_eq!(in_the_cache(&state, "vtt"), 0);
     }

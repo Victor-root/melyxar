@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Card as CardData, Child, PlaybackPlan, Version, Work } from "../api";
+import { useAccount } from "../account";
 import { useTold } from "../asking";
 import { WayBackUp } from "../components/ancestry";
 import { Card } from "../components/card";
@@ -758,6 +759,9 @@ function Versions({
   onChanged: () => void;
 }) {
   const { t, language } = useSettings();
+  /* Reading a copy again and detaching it are the administrator's, which the
+     server says too: a button that is refused when pressed is not offered. */
+  const { account } = useAccount();
 
   return (
     <section className="section">
@@ -768,10 +772,12 @@ function Versions({
           title={t("work.file")}
           lead={[pictureOf(version), readableSize(version.size_bytes)].filter(Boolean).join(" · ")}
           action={
-            <>
-              <ReadCopyAgain copy={version.id} onRead={onChanged} />
-              {separable && <DetachCopy copy={version.id} onDetached={onChanged} />}
-            </>
+            account?.is_administrator && (
+              <>
+                <ReadCopyAgain copy={version.id} onRead={onChanged} />
+                {separable && <DetachCopy copy={version.id} onDetached={onChanged} />}
+              </>
+            )
           }
         >
           {(version.missing || !version.analysed) && (

@@ -66,6 +66,27 @@ pub async fn may_read_the_work(
     may_read(who, work.library_id)
 }
 
+/// Refuses a copy of a work whose library this account was not granted.
+///
+/// Asked before anything is said about the copy, its disk or what the cache
+/// holds for it: the file, its subtitles and the little pictures of its bar
+/// are all reached by the copy's identifier rather than the work's, and a
+/// copy of a library somebody was not granted is a copy that is not there.
+/// Costs nothing for an account that sees every library.
+pub async fn may_read_the_copy(
+    state: &AppState,
+    who: &User,
+    source_id: melyxar_core::id::MediaSourceId,
+) -> Result<()> {
+    if who.permissions.sees_the_whole_server() {
+        return Ok(());
+    }
+    match state.database().playable_source(source_id).await? {
+        Some(source) => may_read_the_work(state, who, source.work_id).await,
+        None => Ok(()),
+    }
+}
+
 /// What one viewer has been counted for.
 ///
 /// One library asked for is that library, once this account is allowed it.
