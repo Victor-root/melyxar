@@ -119,11 +119,19 @@ function leadOf(account: ManagedAccount, libraries: Library[], t: Wording): stri
   const where =
     account.devices === 0 || account.last_seen_at === null
       ? t("users.nowhere")
-      : `${howMany(account.devices, "users.devices", t)} · ${t("users.last_seen", {
-          when: howLongSince(account.last_seen_at, Date.now(), t),
-        })}`;
+      : `${howMany(account.devices, "users.devices", t)} · ${lastSeen(account.last_seen_at, t)}`;
   return `${role} · ${where}`;
 }
+
+/** When an account was last about: just now, or how long ago. */
+function lastSeen(instant: string, t: Wording): string {
+  const now = Date.now();
+  return now - new Date(instant).getTime() < A_MINUTE_MS
+    ? t("users.active_now")
+    : t("users.last_seen", { when: howLongSince(instant, now, t) });
+}
+
+const A_MINUTE_MS = 60_000;
 
 function AccountPanel({
   account,
@@ -509,12 +517,12 @@ function NewAccount({
             onChange={(event) => setName(event.target.value)}
           />
         </Setting>
-        <Setting label={t("users.password_new")}>
+        <Setting label={t("users.password")}>
           <input
             type="password"
             className="field-line"
             autoComplete="new-password"
-            aria-label={t("users.password_new")}
+            aria-label={t("users.password")}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
