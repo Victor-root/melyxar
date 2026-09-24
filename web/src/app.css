@@ -2884,6 +2884,10 @@ button.seen-mark:not(.seen-mark-on):hover {
   backdrop-filter: blur(12px);
   color: var(--text);
   transition: transform var(--quick) var(--ease), background var(--quick) var(--ease);
+  /* Drawn on a layer of its own from the start rather than from the moment
+     the zoom begins. Lifted onto one only then, it was placed again on the
+     nearest whole pixel and the icon jumped sideways before growing. */
+  will-change: transform;
 }
 
 .work-mark:hover {
@@ -2970,10 +2974,21 @@ button.seen-mark:not(.seen-mark-on):hover {
   gap: var(--gap);
 }
 
-/* A picture cut out of the sheets the player's bar uses, filling the card. */
-.chapter-still {
+/* A picture cut out of the sheets the player's bar uses, as large as the
+   card allows in the film's own shape, on black where the two shapes
+   differ. The card is what the size is measured against. */
+.chapter-frame {
   position: absolute;
   inset: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
+  background: var(--surface-deep);
+}
+
+.chapter-still {
+  width: min(100cqw, 100cqh * var(--film-shape));
+  aspect-ratio: var(--film-shape);
   background-repeat: no-repeat;
 }
 

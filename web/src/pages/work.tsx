@@ -689,8 +689,20 @@ function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) =
           return (
             <article key={chapter.at_second} className="card card-lying" data-card>
               <div className="card-picture">
-                {still ? (
-                  <span className="chapter-still" style={still} aria-hidden="true" />
+                {still && plan.thumbnails ? (
+                  /* The film's own shape inside the card's, with bands
+                     where they differ, as a screen shows a film. Stretched
+                     to the card, a wide film came out squeezed thin. */
+                  <span className="chapter-frame" aria-hidden="true">
+                    <span
+                      className="chapter-still"
+                      style={{
+                        ...still,
+                        ["--film-shape" as string]:
+                          plan.thumbnails.width / plan.thumbnails.height,
+                      }}
+                    />
+                  </span>
                 ) : (
                   <span className="card-initial" aria-hidden="true">
                     {index + 1}
