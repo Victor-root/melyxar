@@ -1679,6 +1679,8 @@ export const api = {
   myDevices: (signal?: AbortSignal) => get<SignedInDevice[]>("/api/v1/me/devices", signal),
   signOutMyDevice: (device: string) =>
     remove<{ signed_out: boolean }>(`/api/v1/me/devices/${device}`),
+  /* Every one of one's own devices but this one; answers how many. */
+  signOutMyOtherDevices: () => remove<{ signed_out: number }>("/api/v1/me/devices"),
   setFavourite: (work: string, favourite: boolean) =>
     put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
   /* On a season or a series this marks every episode below it, which is what

@@ -7,14 +7,17 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import type { Account, SignedInDevice } from "../../api";
 import { useAccount } from "../../account";
-import { refusalAbout, useAsked, useTold } from "../../asking";
+import { refusalAbout, refusalOf, useAsked, useTold } from "../../asking";
 import type { Asked } from "../../asking";
 import { Cropper } from "../../components/cropper";
 import { DeviceLines } from "../../components/device-lines";
 import { Face } from "../../components/face";
 import { PageHead, Panel, Setting, Toggle } from "../../components/panel";
+import { useToast } from "../../components/toasts";
+import { refusalKey } from "../../i18n";
 import { AccountIcon, DeviceIcon, EnterIcon, LockIcon, ProfileIcon } from "../../icons";
 import { useJournalNews } from "../../live";
+import { howMany } from "../../readable";
 import { usePreferences } from "../../screens/settings";
 import { useSettings } from "../../settings";
 
@@ -305,12 +308,55 @@ function useMyDevices(): Asked<SignedInDevice[]> {
 }
 
 /** Each device signed out alone: a phone lost, a computer lent, without
- *  asking anybody. */
+ *  asking anybody. Or every other one at once, when there are too many to
+ *  go through. */
 function MyDevices({ devices }: { devices: Asked<SignedInDevice[]> }) {
   const { t } = useSettings();
+  const toast = useToast();
+  const [asking, setAsking] = useState(false);
+  const others = (devices.answer ?? []).filter((device) => !device.is_this_one).length;
+  const signOutOthers = useTold(async () => {
+    try {
+      const { signed_out } = await api.signOutMyOtherDevices();
+      toast({ state: "ok", title: howMany(signed_out, "me.devices_others_done", t) });
+    } catch (error) {
+      toast({ state: "trouble", title: t("device.sign_out_failed"), detail: t(refusalKey(refusalOf(error))) });
+    }
+    setAsking(false);
+    devices.look();
+  });
+
   return (
-    <Panel icon={DeviceIcon} title={t("me.devices")} lead={t("me.devices_lead")}>
+    <Panel
+      icon={DeviceIcon}
+      title={t("me.devices")}
+      lead={t("me.devices_lead")}
+      action={
+        others > 0 && (
+          <button className="button button-small" onClick={() => setAsking(!asking)}>
+            {t("me.devices_others")}
+          </button>
+        )
+      }
+    >
       {devices.failure && <p className="panel-notice panel-notice-trouble">{t("error.unreachable")}</p>}
+      {asking && others > 0 && (
+        <div className="removal-box">
+          <p className="removal-ask">{howMany(others, "me.devices_others_asks", t)}</p>
+          <div className="removal-actions">
+            <button className="button button-small" onClick={() => setAsking(false)}>
+              {t("settings.cancel")}
+            </button>
+            <button
+              className="button button-small button-danger-full"
+              disabled={signOutOthers.busy}
+              onClick={() => void signOutOthers.tell()}
+            >
+              {t("me.devices_others")}
+            </button>
+          </div>
+        </div>
+      )}
       {devices.answer && (
         <DeviceLines
           devices={devices.answer}
