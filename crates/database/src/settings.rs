@@ -254,6 +254,17 @@ impl Database {
         Ok(())
     }
 
+    /// What the server is called, on its own for the same reason as the
+    /// switch above.
+    pub async fn set_server_name(&self, name: &str) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET server_name = ?, updated_at = ? WHERE id = 1")
+            .bind(name)
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// How many days the activity journal keeps, on its own for the same
     /// reason as the switch above.
     pub async fn set_activity_retention_days(&self, days: i64) -> Result<()> {
@@ -338,6 +349,22 @@ impl Database {
 mod tests {
     use super::*;
     use melyxar_core::user::DEFAULT_ACCENT_COLOR;
+
+    #[tokio::test]
+    async fn the_server_is_renamed_without_touching_its_neighbours() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        database
+            .set_activity_retention_days(30)
+            .await
+            .expect("written");
+        database
+            .set_server_name("Home Cinema")
+            .await
+            .expect("written");
+        let settings = database.server_settings().await.expect("read");
+        assert_eq!(settings.server_name, "Home Cinema");
+        assert_eq!(settings.activity_retention_days, 30);
+    }
 
     #[tokio::test]
     async fn how_long_the_activity_journal_keeps_is_written_on_its_own() {

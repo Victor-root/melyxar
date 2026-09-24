@@ -1539,6 +1539,11 @@ export const api = {
     get<{ days: number }>("/api/v1/system/activity/kept", signal),
   keepActivityDays: (days: number) =>
     put<{ days: number }>("/api/v1/system/activity/kept", { days }),
+  /* What the server is called, for the administrator renaming it. */
+  serverName: (signal?: AbortSignal) =>
+    get<{ server_name: string }>("/api/v1/settings/server", signal),
+  renameServer: (server_name: string) =>
+    put<{ server_name: string }>("/api/v1/settings/server", { server_name }),
   /* What deserves a look, for the administrator asking. */
   attention: (signal?: AbortSignal) =>
     get<{ points: AttentionPoint[] }>("/api/v1/system/attention", signal),

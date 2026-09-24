@@ -164,6 +164,15 @@ impl From<melyxar_app::deletion::Trouble> for ServerError {
     }
 }
 
+impl From<melyxar_app::server::Trouble> for ServerError {
+    fn from(trouble: melyxar_app::server::Trouble) -> Self {
+        match trouble {
+            melyxar_app::server::Trouble::Refused(refused) => Self::refused(refused.as_str()),
+            melyxar_app::server::Trouble::Failed(error) => Self::from(error),
+        }
+    }
+}
+
 impl From<melyxar_app::avatars::Trouble> for ServerError {
     fn from(trouble: melyxar_app::avatars::Trouble) -> Self {
         match trouble {

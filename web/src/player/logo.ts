@@ -74,13 +74,27 @@ export function markFor(title: string, drawnTitle: Picture[], branding: Branding
  */
 let known: Branding | null = null;
 let asking: Promise<Branding | null> | null = null;
+const following = new Set<(branding: Branding) => void>();
+
+/** Tells every screen showing the server's name what it is called now, once
+ *  this page has renamed it. */
+export function serverRenamed(serverName: string): void {
+  if (!known) {
+    return;
+  }
+  known = { ...known, server_name: serverName };
+  for (const follower of following) follower(known);
+}
 
 export function useBranding(): Branding | null {
   const [branding, setBranding] = useState<Branding | null>(known);
 
   useEffect(() => {
+    following.add(setBranding);
     if (known) {
-      return;
+      return () => {
+        following.delete(setBranding);
+      };
     }
     let gone = false;
     asking =
@@ -99,6 +113,7 @@ export function useBranding(): Branding | null {
     });
     return () => {
       gone = true;
+      following.delete(setBranding);
     };
   }, []);
 

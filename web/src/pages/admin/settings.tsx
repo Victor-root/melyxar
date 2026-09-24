@@ -6,10 +6,18 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../../api";
-import { NumberField, PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
+import {
+  Editable,
+  NumberField,
+  PageHead,
+  Panel,
+  Picker,
+  Setting,
+  Toggle,
+} from "../../components/panel";
 import { useToast } from "../../components/toasts";
 import { refusalKey } from "../../i18n";
-import { refusalOf } from "../../asking";
+import { refusalAbout, refusalOf } from "../../asking";
 import {
   DatabaseIcon,
   EnterIcon,
@@ -18,27 +26,18 @@ import {
   ServerIcon,
   WarningIcon,
 } from "../../icons";
+import { serverRenamed } from "../../player/logo";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
 
 export function AdminSettings() {
   const { t } = useSettings();
-  const overview = useOverview().answer;
 
   return (
     <>
       <PageHead lead={t("admin.settings_lead")} />
       <div className="panels">
-        <Panel icon={ServerIcon} title={t("admin.server")} lead={t("admin.server_lead")} soon>
-          <Setting label={t("admin.server_name")} soon>
-            <input className="field-line" disabled value={overview?.server_name ?? ""} readOnly />
-          </Setting>
-          <Setting label={t("admin.logo")} why={t("admin.logo_why")} soon>
-            <button className="button button-small" disabled>
-              {t("settings.avatar_choose")}
-            </button>
-          </Setting>
-        </Panel>
+        <ServerPanel />
 
         <Panel icon={EnterIcon} title={t("admin.door")} lead={t("admin.door_lead")} soon>
           <Setting label={t("admin.door_background")} soon>
@@ -84,6 +83,55 @@ export function AdminSettings() {
         </Panel>
       </div>
     </>
+  );
+}
+
+/** What the server is called, and the mark it will be given. */
+function ServerPanel() {
+  const { t } = useSettings();
+  const toast = useToast();
+  const overview = useOverview();
+  const [name, setName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .serverName(controller.signal)
+      .then((kept) => setName(kept.server_name))
+      .catch(() => {
+        // Left empty: the field says nothing rather than a name the server
+        // may not hold.
+      });
+    return () => controller.abort();
+  }, []);
+
+  const rename = (wanted: string) => {
+    const before = name;
+    setName(wanted);
+    api
+      .renameServer(wanted)
+      .then((kept) => {
+        setName(kept.server_name);
+        serverRenamed(kept.server_name);
+        overview.again();
+      })
+      .catch((error) => {
+        setName(before);
+        toast({ state: "trouble", title: t("admin.server_name_failed"), detail: t(refusalAbout(error, "server")) });
+      });
+  };
+
+  return (
+    <Panel icon={ServerIcon} title={t("admin.server")} lead={t("admin.server_lead")}>
+      <Setting label={t("admin.server_name")}>
+        {name !== null && <Editable value={name} label={t("admin.server_name")} onSettled={rename} />}
+      </Setting>
+      <Setting label={t("admin.logo")} why={t("admin.logo_why")} soon>
+        <button className="button button-small" disabled>
+          {t("settings.avatar_choose")}
+        </button>
+      </Setting>
+    </Panel>
   );
 }
 

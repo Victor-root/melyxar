@@ -16,7 +16,15 @@ import type { Library, LibraryKind, Root, SetAsideFile } from "../../api";
 import { useAsked, useTold } from "../../asking";
 import { FolderPicker } from "../../components/folders";
 import { Modal } from "../../components/modal";
-import { PageHead, Panel, Picker, Setting, StatePill, Toggle } from "../../components/panel";
+import {
+  Editable,
+  PageHead,
+  Panel,
+  Picker,
+  Setting,
+  StatePill,
+  Toggle,
+} from "../../components/panel";
 import type { State } from "../../components/panel";
 import { refusalKey } from "../../i18n";
 import { DeleteIcon, FolderIcon, KindIcon, RefreshIcon } from "../../icons";
@@ -526,55 +534,5 @@ function NewLibrary({
         </button>
       </div>
     </Panel>
-  );
-}
-
-/**
- * A word that can be typed over, and is sent once somebody is done with it.
- *
- * Sent when the field is left rather than at every letter: a name is only ever
- * half typed while it is being typed, and a server told about each half would
- * refuse most of them.
- */
-function Editable({
-  value,
-  label,
-  className,
-  onSettled,
-}: {
-  value: string;
-  label: string;
-  className?: string;
-  onSettled: (value: string) => void;
-}) {
-  const [typed, setTyped] = useState(value);
-  const [typing, setTyping] = useState(false);
-
-  // What the server holds wins whenever nobody is typing, so a refusal puts
-  // the old name back on the screen rather than leaving a name nobody kept.
-  if (!typing && typed !== value) {
-    setTyped(value);
-  }
-
-  return (
-    <input
-      type="text"
-      aria-label={label}
-      className={`field-line${className ? ` ${className}` : ""}`}
-      value={typed}
-      onFocus={() => setTyping(true)}
-      onChange={(event) => setTyped(event.target.value)}
-      onBlur={() => {
-        setTyping(false);
-        if (typed.trim() && typed !== value) {
-          onSettled(typed.trim());
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.currentTarget.blur();
-        }
-      }}
-    />
   );
 }
