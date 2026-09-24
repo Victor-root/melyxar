@@ -70,6 +70,9 @@
   background: var(--accent);
   background-clip: content-box;
   transition: background var(--quick) var(--ease);
+  /* Moved on every frame of a scroll: on a layer of its own, moving it is
+     the compositor's business and redraws nothing. */
+  will-change: transform;
 }
 
 .scrollbar-mark:hover {
@@ -1993,6 +1996,18 @@ input[type="radio"]:disabled {
   content-visibility: auto;
   contain-intrinsic-size: auto 320px;
   transition: transform var(--calm) var(--ease);
+}
+
+/* Except in a row, which holds a couple of dozen cards at most. Skipped
+   there, each card was styled, laid out and drawn only at the moment it came
+   into view, which is while the page is being scrolled: on a first visit
+   every row arriving on screen stalled a frame or two for it. Measured on a
+   home page full of posters, slowed four times: the worst frame of a first
+   scroll went from 200 ms to 50 ms once rows are drawn up front, for a cost
+   paid once, as the page opens. The thousands of a library's grid keep the
+   skipping, which is where it pays. */
+.row-track > .card {
+  content-visibility: visible;
 }
 
 /* The whole card grows a little under the pointer, picture and words

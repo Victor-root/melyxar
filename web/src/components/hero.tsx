@@ -104,6 +104,11 @@ export function Hero({ items }: { items: HeroItem[] }) {
      moving again the moment somebody looks away is worse than one that never
      moved, because it moves exactly when nobody is watching for it. */
   const [held, setHeld] = useState(false);
+  /* The last picture asked for so far. The one in front and the one after
+     it, to begin with: that is all the banner needs to move on without a
+     hole, and the others would only stand in the queue in front of the
+     posters of the rows, at the width of the whole screen. */
+  const [farthest, setFarthest] = useState(1);
   const holder = useRef<HTMLElement>(null);
   const words = useRef<HTMLDivElement>(null);
   const synopsis = useRef<HTMLParagraphElement>(null);
@@ -125,6 +130,8 @@ export function Hero({ items }: { items: HeroItem[] }) {
     );
     return () => window.clearInterval(step);
   }, [many, held, items.length]);
+
+  useEffect(() => setFarthest((was) => Math.max(was, at + 1)), [at]);
 
   // Somebody who asked their system for less movement is not shown a banner
   // that moves on by itself at all.
@@ -183,8 +190,10 @@ export function Hero({ items }: { items: HeroItem[] }) {
       onFocusCapture={() => setHeld(true)}
     >
       {/* Every one of them is drawn, and only the one in front is shown: the
-          pictures are then already in the browser when the banner moves on,
-          so it changes rather than blinking through a hole.
+          next picture is then already in the browser when the banner moves
+          on, so it changes rather than blinking through a hole. Each is
+          asked for one step ahead of being shown, and all of them the moment
+          somebody takes the banner in hand, when any of them can be picked.
 
           All of them under one box, which is what wears the fade at the
           banner's foot. Worn by each picture instead, the same fade was
@@ -192,7 +201,12 @@ export function Hero({ items }: { items: HeroItem[] }) {
           box it has to fade out. */}
       <div className="hero-pictures">
         {items.map((item, rank) => (
-          <HeroBackdrop key={item.id} item={item} shown={rank === at} />
+          <HeroBackdrop
+            key={item.id}
+            item={item}
+            shown={rank === at}
+            wanted={held || rank <= farthest}
+          />
         ))}
       </div>
 
@@ -347,8 +361,9 @@ function HeroProgress({ item }: { item: HeroItem }) {
   );
 }
 
-/** The wide picture behind one work, or its own colour when it has none. */
-function HeroBackdrop({ item, shown }: { item: HeroItem; shown: boolean }) {
+/** The wide picture behind one work, or its own colour when it has none or
+ *  it is not asked for yet. */
+function HeroBackdrop({ item, shown, wanted }: { item: HeroItem; shown: boolean; wanted: boolean }) {
   const { picture, itDidNotLoad } = useShownPicture(item.backdrop);
 
   return (
@@ -357,13 +372,16 @@ function HeroBackdrop({ item, shown }: { item: HeroItem; shown: boolean }) {
       style={{ ["--card-color" as string]: item.color ?? "var(--surface-raised)" }}
       aria-hidden={!shown}
     >
-      {picture && (
+      {picture && wanted && (
         <img
           src={picture.src}
           srcSet={picture.srcSet}
           sizes="100vw"
           alt=""
           decoding="async"
+          /* The one in front is the largest thing on the page and the first
+             thing looked at; the ones behind it wait for the posters. */
+          fetchPriority={shown ? "high" : "low"}
           onError={itDidNotLoad}
         />
       )}
