@@ -223,12 +223,16 @@ pub enum PasswordChange {
 /// server can also be shown the list of accounts on the sign in screen, by
 /// design and by a setting that is on: hiding which names exist while offering
 /// to draw them would be a lock on a door standing open.
+///
+/// A browser that says which one it is has the session this account held on
+/// it replaced rather than joined by another.
 pub async fn sign_in(
     state: &AppState,
     name: &str,
     password: &str,
     device_name: &str,
     remembered: Remembered,
+    client: Option<&str>,
 ) -> Result<SignedInOrNot> {
     let refused = || {
         record(
@@ -280,7 +284,14 @@ pub async fn sign_in(
     let token = SessionToken::new()?;
     let device_id = state
         .database()
-        .open_session(user.id, device_name, &token.fingerprint(), remembered, now())
+        .open_session(
+            user.id,
+            device_name,
+            &token.fingerprint(),
+            remembered,
+            now(),
+            a_browser_identifier(client),
+        )
         .await?;
     tracing::info!(account = %user.name, device = device_name, "signed in");
     record(
@@ -295,6 +306,25 @@ pub async fn sign_in(
     .await;
 
     Ok(SignedInOrNot::Opened(Box::new(OpenedSession { token, user })))
+}
+
+/// The longest identifier a browser may give itself. The ones this
+/// interface makes are thirty six characters.
+const LONGEST_BROWSER_IDENTIFIER: usize = 64;
+
+/// What a browser said it is called, when it has the shape of an identifier.
+///
+/// Anything else is ignored rather than refused: it only ever serves to find
+/// the session this account held on the same browser, and a browser saying
+/// nothing usable simply signs in as a new device.
+fn a_browser_identifier(said: Option<&str>) -> Option<&str> {
+    said.filter(|said| {
+        !said.is_empty()
+            && said.len() <= LONGEST_BROWSER_IDENTIFIER
+            && said
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    })
 }
 
 /// Whoever holds this token, with their rights and their preferences.
@@ -378,6 +408,7 @@ pub async fn change_password(
     wanted: &str,
     device_name: &str,
     remembered: Remembered,
+    client: Option<&str>,
 ) -> std::result::Result<PasswordChange, Trouble> {
     let stored = state
         .database()
@@ -412,7 +443,14 @@ pub async fn change_password(
     let token = SessionToken::new().map_err(|error| Trouble::Failed(AppError::Auth(error)))?;
     state
         .database()
-        .open_session(who.id, device_name, &token.fingerprint(), remembered, now())
+        .open_session(
+            who.id,
+            device_name,
+            &token.fingerprint(),
+            remembered,
+            now(),
+            a_browser_identifier(client),
+        )
         .await?;
     Ok(PasswordChange::Changed(token))
 }
@@ -763,6 +801,64 @@ pub async fn sign_out_everywhere(
     Ok(closed)
 }
 
+pub use melyxar_database::sessions::SignedInDevice;
+
+/// Every device signed in to this server, the most recently used first.
+pub async fn every_device(state: &AppState) -> Result<Vec<SignedInDevice>> {
+    Ok(state.database().signed_in_devices(None).await?)
+}
+
+/// The devices this account is signed in on, the most recently used first.
+pub async fn devices_of(state: &AppState, who: &User) -> Result<Vec<SignedInDevice>> {
+    Ok(state.database().signed_in_devices(Some(who.id)).await?)
+}
+
+/// Signs one device out from the administration, whoever's it is.
+pub async fn sign_out_a_device(
+    state: &AppState,
+    acting: &User,
+    device: melyxar_core::id::DeviceId,
+) -> Result<()> {
+    let found = every_device(state).await?.into_iter().find(|one| one.id == device);
+    signed_out(state, acting, found).await
+}
+
+/// Signs one of one's own devices out: a phone lost, a computer lent.
+///
+/// A device of another account is one that is not there.
+pub async fn sign_out_my_device(
+    state: &AppState,
+    who: &User,
+    device: melyxar_core::id::DeviceId,
+) -> Result<()> {
+    let found = devices_of(state, who).await?.into_iter().find(|one| one.id == device);
+    signed_out(state, who, found).await
+}
+
+/// Signs this device out, stops what it was playing, and says so in the
+/// journal.
+async fn signed_out(state: &AppState, acting: &User, found: Option<SignedInDevice>) -> Result<()> {
+    let found = found.ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("device")))?;
+    // Gone between the two reads is gone all the same.
+    if state.database().close_device(found.id).await?.is_none() {
+        return Ok(());
+    }
+    crate::watching::stop(state, found.id);
+    tracing::warn!(account = %found.user_name, device = %found.name, by = %acting.name, "signed a device out");
+    record(
+        state,
+        Event::DeviceSignedOut {
+            user: found.user_id,
+            user_name: found.user_name,
+            device: found.name,
+            browser: found.browser,
+            by: acting.name.clone(),
+        },
+    )
+    .await;
+    Ok(())
+}
+
 /// Takes another account away from the administration.
 pub async fn remove_account_by_id(
     state: &AppState,
@@ -922,7 +1018,7 @@ mod tests {
         password: &str,
         device: &str,
     ) -> Option<OpenedSession> {
-        match sign_in(state, name, password, device, Remembered::Yes).await.expect("asked") {
+        match sign_in(state, name, password, device, Remembered::Yes, None).await.expect("asked") {
             SignedInOrNot::Opened(opened) => Some(*opened),
             SignedInOrNot::NotAPair => None,
             SignedInOrNot::HeldBack { seconds } => panic!("held back for {seconds} seconds"),
@@ -1037,7 +1133,7 @@ mod tests {
 
         for _ in 0..ALLOWED_TRIES {
             assert!(matches!(
-                sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes)
+                sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None)
                     .await
                     .expect("asked"),
                 SignedInOrNot::NotAPair
@@ -1048,7 +1144,7 @@ mod tests {
         // which is the point of holding it back: checking one is made
         // expensive on purpose, so a thousand guesses a second would be asking
         // this server to grind itself to a halt.
-        let held = sign_in(&state, "victor", "quiet harbour", "a browser", Remembered::Yes)
+        let held = sign_in(&state, "victor", "quiet harbour", "a browser", Remembered::Yes, None)
             .await
             .expect("asked");
         let SignedInOrNot::HeldBack { seconds } = held else {
@@ -1062,7 +1158,7 @@ mod tests {
         let (_directory, state) = a_server_with_an_account().await;
 
         for _ in 0..ALLOWED_TRIES - 1 {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes)
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None)
                 .await
                 .expect("asked");
         }
@@ -1074,7 +1170,7 @@ mod tests {
         // somebody who mistypes their password now and then is never locked
         // out by a week of them.
         for _ in 0..ALLOWED_TRIES - 1 {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes)
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None)
                 .await
                 .expect("asked");
         }
@@ -1096,7 +1192,7 @@ mod tests {
             .expect("password set");
 
         for _ in 0..ALLOWED_TRIES {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes)
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None)
                 .await
                 .expect("asked");
         }
@@ -1236,6 +1332,7 @@ mod tests {
             "amber field road",
             "a browser",
             Remembered::Yes,
+            None,
         )
         .await
         .expect("asked");
@@ -1287,6 +1384,7 @@ mod tests {
             "amber field road",
             "a browser",
             Remembered::Yes,
+            None,
         )
         .await
         .expect("asked");
@@ -1319,6 +1417,7 @@ mod tests {
                 "short",
                 "a browser",
                 Remembered::Yes,
+                None,
             )
                 .await
                 .is_err()
@@ -1565,6 +1664,83 @@ mod tests {
             .await
             .expect("asked")
             .is_some());
+    }
+
+    #[tokio::test]
+    async fn signing_in_again_from_the_same_browser_leaves_one_device() {
+        let (_directory, state) = a_server_with_an_account().await;
+        for _ in 0..3 {
+            let opened = sign_in(
+                &state,
+                "victor",
+                "quiet harbour",
+                "a browser",
+                Remembered::Yes,
+                Some("0f6c2c1e-3b7a-4c55-9e0a-5d1f7a9b2c44"),
+            )
+            .await
+            .expect("asked");
+            assert!(matches!(opened, SignedInOrNot::Opened(_)));
+        }
+        assert_eq!(every_device(&state).await.expect("read").len(), 1);
+    }
+
+    #[test]
+    fn only_what_looks_like_an_identifier_names_a_browser() {
+        assert_eq!(a_browser_identifier(Some("0f6c2c1e-3b7a")), Some("0f6c2c1e-3b7a"));
+        for nonsense in ["", "a b", "x;DROP", &"a".repeat(65)] {
+            assert_eq!(a_browser_identifier(Some(nonsense)), None, "{nonsense}");
+        }
+        assert_eq!(a_browser_identifier(None), None);
+    }
+
+    #[tokio::test]
+    async fn one_device_is_signed_out_alone_by_its_owner_or_an_administrator() {
+        let (_directory, state, admin, zoe) = an_administrator_and_somebody().await;
+        let zoe_again = a_session(&state, "zoe", "amber field road", "a laptop")
+            .await
+            .expect("signed in");
+        let mine = devices_of(&state, &zoe.user).await.expect("read");
+        assert_eq!(mine.len(), 2);
+        let phone = mine
+            .iter()
+            .find(|device| device.name == "a phone")
+            .expect("the phone")
+            .id;
+        let laptop = mine
+            .iter()
+            .find(|device| device.name == "a laptop")
+            .expect("the laptop")
+            .id;
+
+        // Somebody else's device is one that is not there.
+        let admins = devices_of(&state, &admin).await.expect("read")[0].id;
+        assert!(sign_out_my_device(&state, &zoe.user, admins).await.is_err());
+
+        sign_out_my_device(&state, &zoe.user, phone)
+            .await
+            .expect("signed out");
+        assert!(who_holds(&state, zoe.token.as_text())
+            .await
+            .expect("asked")
+            .is_none());
+        assert!(who_holds(&state, zoe_again.token.as_text())
+            .await
+            .expect("asked")
+            .is_some());
+
+        sign_out_a_device(&state, &admin, laptop)
+            .await
+            .expect("signed out");
+        assert!(devices_of(&state, &zoe.user).await.expect("read").is_empty());
+
+        let written = state
+            .database()
+            .activity_page(&[], None, 1)
+            .await
+            .expect("read");
+        assert_eq!(written[0].kind, "device_signed_out");
+        assert_eq!(written[0].device_name.as_deref(), Some("a laptop"));
     }
 
     #[tokio::test]

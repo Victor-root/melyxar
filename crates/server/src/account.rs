@@ -185,12 +185,16 @@ pub(crate) struct Administrator;
 /// the list of what is being watched.
 pub(crate) struct Watcher(pub melyxar_app::watching::Viewer);
 
-/// What the browser behind this request was told about keeping its session.
+/// The browser behind this request, as the row of its device knows it.
 ///
-/// For the one handler that hands the same browser a new token: it has to be
-/// kept for as long as the one it replaces, and nobody but the row of the
-/// device it came from knows how long that was.
-pub(crate) struct ThisBrowser(pub Remembered);
+/// For the handler that hands the same browser a new token, which has to be
+/// kept for as long as the one it replaces and under the same identifier;
+/// and for the lists of devices, which say which one is being looked from.
+pub(crate) struct ThisBrowser {
+    pub device: melyxar_core::id::DeviceId,
+    pub remembered: Remembered,
+    pub client: Option<String>,
+}
 
 impl<S: Send + Sync> FromRequestParts<S> for Viewer {
     type Rejection = ServerError;
@@ -231,7 +235,11 @@ impl<S: Send + Sync> FromRequestParts<S> for ThisBrowser {
         parts
             .extensions
             .get::<SignedIn>()
-            .map(|holder| Self(holder.remembered))
+            .map(|holder| Self {
+                device: holder.device,
+                remembered: holder.remembered,
+                client: holder.client.clone(),
+            })
             .ok_or_else(|| ServerError::unauthenticated("nobody is signed in"))
     }
 }
@@ -345,6 +353,10 @@ struct WhoAndWhat {
     /// sign in screen existed, and it is what the box is ticked to.
     #[serde(default = "kept_unless_said_otherwise")]
     remember: bool,
+    /// The identifier the browser gave itself once and for all, so a new
+    /// session here replaces the one this account held on it.
+    #[serde(default)]
+    client: Option<String>,
 }
 
 fn kept_unless_said_otherwise() -> bool {
@@ -402,6 +414,7 @@ async fn sign_in(
         &asked.password,
         &what_asked(&headers),
         wished_for(asked.remember),
+        asked.client.as_deref(),
     )
     .await?
     {
@@ -472,7 +485,9 @@ async fn change_password(
     State(state): State<AppState>,
     headers: HeaderMap,
     Viewer(user): Viewer,
-    ThisBrowser(remembered): ThisBrowser,
+    ThisBrowser {
+        remembered, client, ..
+    }: ThisBrowser,
     Json(asked): Json<TheOldAndTheNew>,
 ) -> Result<Response> {
     let changed = melyxar_app::accounts::change_password(
@@ -482,6 +497,7 @@ async fn change_password(
         &asked.wanted,
         &what_asked(&headers),
         remembered,
+        client.as_deref(),
     )
     .await?;
 
@@ -556,6 +572,7 @@ async fn set_this_server_up(
         &asked.password,
         &what_asked(&headers),
         wished_for(asked.remember),
+        asked.client.as_deref(),
     )
     .await?
     else {
@@ -610,6 +627,7 @@ mod tests {
             device_name: "a browser".to_string(),
             device_browser: None,
             remembered: Remembered::Yes,
+            client: None,
         });
         request.into_parts().0
     }

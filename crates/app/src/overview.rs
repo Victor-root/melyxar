@@ -179,7 +179,7 @@ mod tests {
         let now = melyxar_core::time::now();
         for (fingerprint, at) in [("today", now), ("last week", now - time::Duration::days(7))] {
             database
-                .open_session(user.id, "a browser", fingerprint, Remembered::Yes, at)
+                .open_session(user.id, "a browser", fingerprint, Remembered::Yes, at, None)
                 .await
                 .expect("session opened");
         }

@@ -864,7 +864,7 @@ mod tests {
             .await
             .expect("account created");
         database
-            .open_session(created.id, "a browser", "a fingerprint", Remembered::Yes, now())
+            .open_session(created.id, "a browser", "a fingerprint", Remembered::Yes, now(), None)
             .await
             .expect("session opened");
 
@@ -999,11 +999,11 @@ mod tests {
         let earlier = datetime!(2026-01-01 08:00 UTC);
         let later = datetime!(2026-01-02 09:30 UTC);
         database
-            .open_session(zoe.id, "a phone", "one", Remembered::Yes, earlier)
+            .open_session(zoe.id, "a phone", "one", Remembered::Yes, earlier, None)
             .await
             .expect("opened");
         database
-            .open_session(zoe.id, "a laptop", "two", Remembered::Yes, later)
+            .open_session(zoe.id, "a laptop", "two", Remembered::Yes, later, None)
             .await
             .expect("opened");
 
