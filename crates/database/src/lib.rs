@@ -27,6 +27,7 @@ pub mod metadata;
 pub mod moved;
 pub mod numbering;
 pub mod own;
+pub mod people;
 pub mod playback;
 pub mod sessions;
 pub mod settings;

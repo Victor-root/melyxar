@@ -542,6 +542,27 @@ impl Database {
         Ok(WorkPage { cards, next })
     }
 
+    /// One work as its card, with what this viewer has made of it.
+    ///
+    /// What the page of a work carries for the marks it shares with every
+    /// card of the same work: ticked on the page, the cards say so too.
+    pub async fn card_of(&self, viewer: UserId, work_id: WorkId) -> Result<Option<WorkCard>> {
+        let row = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_CARD_IS} FROM works w WHERE w.id = ?"
+        )))
+        .bind(work_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let mut cards = [card_from_row(&row)?];
+        self.attach_posters(&mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards).await?;
+        let [card] = cards;
+        Ok(Some(card))
+    }
+
     /// Puts what one viewer has made of every card in place.
     ///
     /// One query for the whole page, like the posters above and for the same
@@ -1132,6 +1153,33 @@ mod tests {
         assert_eq!(state.seen, PlaybackState::InProgress);
         assert_eq!(state.resume_from, Some(Millis::new(920_000)));
         assert!(state.favourite);
+    }
+
+    #[tokio::test]
+    async fn one_work_comes_back_as_its_card_wearing_this_viewers_marks() {
+        let (database, films) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let who = somebody(&database, "vera").await;
+        let film = grid_of(&database, films, who).await[0].id;
+        database
+            .set_favourite(who, film, true)
+            .await
+            .expect("favourite set");
+
+        let card = database
+            .card_of(who, film)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(card.title, "Quiet Harbour");
+        assert!(card.state.expect("a named viewer gets a state").favourite);
+
+        assert_eq!(
+            database
+                .card_of(who, melyxar_core::id::WorkId::new())
+                .await
+                .expect("read"),
+            None
+        );
     }
 
     #[tokio::test]

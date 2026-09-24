@@ -1594,6 +1594,14 @@ mod tests {
             "tmdb"
         }
 
+        async fn person(
+            &self,
+            _external_id: &str,
+            _language: &str,
+        ) -> melyxar_metadata::provider::Result<melyxar_metadata::PersonDetails> {
+            Ok(melyxar_metadata::PersonDetails::default())
+        }
+
         async fn search(
             &self,
             catalogue: Catalogue,

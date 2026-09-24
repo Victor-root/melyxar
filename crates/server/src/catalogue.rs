@@ -6,7 +6,7 @@
 //! each is ten times the weight for text nobody reads there.
 
 use crate::account::Viewer;
-use crate::identifiers::{parse_library, parse_work};
+use crate::identifiers::{parse_library, parse_person, parse_work};
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::Request;
@@ -47,6 +47,7 @@ pub fn router() -> Router<AppState> {
             axum::routing::get(trailer),
         )
         .route("/api/v1/works/{id}/photo", axum::routing::get(photo))
+        .route("/api/v1/people/{id}", axum::routing::get(person))
         .route("/api/v1/home", axum::routing::get(home))
 }
 
@@ -663,6 +664,50 @@ async fn home(
 }
 
 // ---------------------------------------------------------------------------
+// One person
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+struct PersonView {
+    id: String,
+    name: String,
+    biography: Option<String>,
+    /// Year, month and day, as the provider writes them.
+    born_on: Option<String>,
+    died_on: Option<String>,
+    birthplace: Option<String>,
+    photo: Vec<ImageView>,
+    /// What of theirs this viewer can open, newest first.
+    works: Vec<CardView>,
+}
+
+/// The page of one person.
+///
+/// The first opening may wait on the provider, once: what it says of their
+/// life is kept, and every opening after reads it from here.
+async fn person(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Json<PersonView>> {
+    let person_id = parse_person(&id)?;
+    let page = melyxar_app::people::person_page(&state, &who, person_id)
+        .await?
+        .ok_or_else(|| ServerError::not_found("no person with that identifier"))?;
+
+    Ok(Json(PersonView {
+        id: page.person.id.to_string(),
+        name: page.person.name,
+        biography: page.person.biography,
+        born_on: page.person.born_on,
+        died_on: page.person.died_on,
+        birthplace: page.person.birthplace,
+        photo: page.photo.iter().map(image_view).collect(),
+        works: page.works.iter().map(card_view).collect(),
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // One work
 // ---------------------------------------------------------------------------
 
@@ -716,6 +761,19 @@ struct WorkView {
     /// anything that is not a photo, and at either end of the folder.
     previous_photo: Option<String>,
     next_photo: Option<String>,
+    /// This work as a card draws it, with what this viewer made of it: the
+    /// page marks it through the same card every row shows.
+    card: Option<CardView>,
+    /// Works like this one by a genre they share, and that genre. Absent for
+    /// anything but a film or a series, and when nothing shares a genre.
+    alike: Option<AlikeView>,
+}
+
+/// A row of works like another, and the genre it was found by.
+#[derive(Debug, Serialize)]
+struct AlikeView {
+    genre: String,
+    cards: Vec<CardView>,
 }
 
 /// The episode a page offers to play next.
@@ -779,6 +837,8 @@ struct AncestorView {
 
 #[derive(Debug, Serialize)]
 struct CreditView {
+    /// Where their own page is.
+    person_id: String,
     name: String,
     role: String,
     character: Option<String>,
@@ -1034,6 +1094,11 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         previous_episode: detail.previous_episode.as_ref().map(next_episode_view),
         previous_photo: detail.previous_photo.map(|id| id.to_string()),
         next_photo: detail.next_photo.map(|id| id.to_string()),
+        card: detail.card.as_ref().map(card_view),
+        alike: detail.alike.as_ref().map(|alike| AlikeView {
+            genre: alike.genre.clone(),
+            cards: alike.cards.iter().map(card_view).collect(),
+        }),
         children: detail.children.iter().map(child_view).collect(),
         ancestry: detail
             .ancestry
@@ -1077,6 +1142,7 @@ fn work_view(detail: &WorkDetail) -> WorkView {
 
 fn credit_view(credit: &Credit) -> CreditView {
     CreditView {
+        person_id: credit.person_id.to_string(),
         name: credit.name.clone(),
         role: credit.role.clone(),
         character: credit.character.clone(),

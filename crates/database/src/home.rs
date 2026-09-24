@@ -402,6 +402,109 @@ impl Database {
     }
 }
 
+/// How many other works a genre needs before a row of it is worth drawing: a
+/// row this long fills the width of most screens.
+const A_ROW_OF_ALIKE: i64 = 6;
+
+/// A row of works like one other, and the genre they were found by.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Alike {
+    pub genre: String,
+    pub cards: Vec<WorkCard>,
+}
+
+impl Database {
+    /// Works of the same kind as this one that carry one of its genres, for
+    /// the row its page ends with.
+    ///
+    /// The genre is drawn at random among those of its genres that fill a
+    /// row, so two visits to one page can offer two rows; failing any, the
+    /// one with the most works behind it. Inside the row, whatever shares the
+    /// most genres with this work comes first, then the best rated: a film
+    /// that is action and adventure is closer to another that is both than to
+    /// one that is only action.
+    ///
+    /// Nothing at all when no genre of it is carried by anything else.
+    pub async fn alike_by_genre(
+        &self,
+        viewer: UserId,
+        work_id: WorkId,
+        within: Option<&[LibraryId]>,
+        limit: i64,
+    ) -> Result<Option<Alike>> {
+        let (Some(beside), Some(inside)) = (
+            kept_inside(within, "o.library_id"),
+            kept_inside(within, "w.library_id"),
+        ) else {
+            return Ok(None);
+        };
+        let granted = within.unwrap_or_default();
+
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT id, name FROM (
+                 SELECT g.id, g.name,
+                        (SELECT count(*) FROM work_genres t
+                           JOIN works o ON o.id = t.work_id
+                          WHERE t.genre_id = g.id AND o.id <> me.id
+                            AND o.kind = me.kind{beside}) AS others
+                   FROM work_genres mine
+                   JOIN genres g ON g.id = mine.genre_id
+                   JOIN works me ON me.id = mine.work_id
+                  WHERE mine.work_id = ?)
+              WHERE others > 0
+              ORDER BY others >= ? DESC,
+                       CASE WHEN others >= ? THEN random() ELSE -others END
+              LIMIT 1"
+        )));
+        for library in granted {
+            query = query.bind(library.to_db_string());
+        }
+        let Some(chosen) = query
+            .bind(work_id.to_db_string())
+            .bind(A_ROW_OF_ALIKE)
+            .bind(A_ROW_OF_ALIKE)
+            .fetch_optional(self.reader())
+            .await?
+        else {
+            return Ok(None);
+        };
+        let genre_id: String = chosen.try_get("id")?;
+        let genre: String = chosen.try_get("name")?;
+
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_CARD_IS}
+               FROM works w
+               JOIN work_genres wg ON wg.work_id = w.id AND wg.genre_id = ?
+              WHERE w.id <> ?
+                AND w.kind = (SELECT kind FROM works WHERE id = ?){inside}
+              ORDER BY (SELECT count(*) FROM work_genres a
+                          JOIN work_genres b ON b.genre_id = a.genre_id
+                         WHERE a.work_id = w.id AND b.work_id = ?) DESC,
+                       w.community_rating IS NULL, w.community_rating DESC, w.sort_title
+              LIMIT ?"
+        )))
+        .bind(&genre_id)
+        .bind(work_id.to_db_string())
+        .bind(work_id.to_db_string());
+        for library in granted {
+            query = query.bind(library.to_db_string());
+        }
+        let rows = query
+            .bind(work_id.to_db_string())
+            .bind(limit)
+            .fetch_all(self.reader())
+            .await?;
+
+        let mut cards = rows
+            .iter()
+            .map(crate::browse::card_from_row)
+            .collect::<Result<Vec<_>>>()?;
+        self.attach_posters(&mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards).await?;
+        Ok(Some(Alike { genre, cards }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -643,6 +746,70 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![hung[2]],
             "an episode nobody would meet on its own was asked for by hand"
+        );
+    }
+
+    /// Gives a work one more genre.
+    async fn also_of(database: &Database, work: WorkId, genre: &str) {
+        let genre_id = format!("genre-{genre}");
+        sqlx::query("INSERT INTO genres (id, name) VALUES (?, ?) ON CONFLICT DO NOTHING")
+            .bind(&genre_id)
+            .bind(genre)
+            .execute(database.writer())
+            .await
+            .expect("genre written");
+        sqlx::query("INSERT INTO work_genres (work_id, genre_id) VALUES (?, ?)")
+            .bind(work.to_db_string())
+            .bind(&genre_id)
+            .execute(database.writer())
+            .await
+            .expect("genre attached");
+    }
+
+    #[tokio::test]
+    async fn alike_works_share_a_genre_the_closest_first_and_never_another_kind() {
+        let (database, library, who, films) = a_shelf(&[
+            ("Iron Tide", 7.0, "Action"),
+            ("Copper Wind", 6.0, "Action"),
+            ("Silver Gale", 8.0, "Action"),
+            ("Quiet Pond", 9.0, "Drame"),
+        ])
+        .await;
+        also_of(&database, films[0], "Aventure").await;
+        also_of(&database, films[1], "Aventure").await;
+        let series = database
+            .create_work(library, WorkKind::Series, "Storm Line", "storm line", Some(2020))
+            .await
+            .expect("series created");
+        also_of(&database, series.id, "Action").await;
+
+        let alike = database
+            .alike_by_genre(who, films[0], None, 10)
+            .await
+            .expect("read")
+            .expect("a genre is shared");
+        assert_eq!(alike.genre, "Action", "the genre with the most behind it");
+        assert_eq!(
+            alike.cards.iter().map(|card| card.id).collect::<Vec<_>>(),
+            vec![films[1], films[2]],
+            "the one sharing both genres first, never itself, the drama or the series"
+        );
+
+        assert_eq!(
+            database
+                .alike_by_genre(who, films[0], Some(&[]), 10)
+                .await
+                .expect("read"),
+            None,
+            "an account granted nothing is offered nothing"
+        );
+        assert_eq!(
+            database
+                .alike_by_genre(who, films[3], None, 10)
+                .await
+                .expect("read"),
+            None,
+            "a genre nothing else carries makes no row"
         );
     }
 

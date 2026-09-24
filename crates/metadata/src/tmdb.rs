@@ -13,7 +13,7 @@ use serde::Deserialize;
 
 use crate::provider::{
     Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, MetadataProvider,
-    OfferedPicture, PictureKind, ProviderError, Result, SeasonDetails, Trailer,
+    OfferedPicture, PersonDetails, PictureKind, ProviderError, Result, SeasonDetails, Trailer,
 };
 
 const BASE_URL: &str = "https://api.themoviedb.org/3";
@@ -203,6 +203,23 @@ impl MetadataProvider for TmdbProvider {
             )
             .await?;
         Ok(details_from(raw, language))
+    }
+
+    async fn person(&self, external_id: &str, language: &str) -> Result<PersonDetails> {
+        let raw: RawPerson = self
+            .get(
+                &format!("/person/{external_id}"),
+                &[
+                    ("language", language.to_string()),
+                    // Every language the life is written in, in the same
+                    // answer: plenty of people have theirs only in English,
+                    // and a second request for it would cost a round trip on
+                    // the one page that waits for this.
+                    ("append_to_response", "translations".to_string()),
+                ],
+            )
+            .await?;
+        Ok(person_from(raw))
     }
 
     async fn season(
@@ -650,6 +667,60 @@ fn candidate_from(raw: RawMovie, catalogue: Catalogue) -> Candidate {
     }
 }
 
+/// One person, as the provider answers for them.
+#[derive(Debug, Deserialize)]
+struct RawPerson {
+    #[serde(default)]
+    biography: Option<String>,
+    #[serde(default)]
+    birthday: Option<String>,
+    #[serde(default)]
+    deathday: Option<String>,
+    #[serde(default)]
+    place_of_birth: Option<String>,
+    #[serde(default)]
+    translations: Option<RawPersonTranslations>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RawPersonTranslations {
+    #[serde(default)]
+    translations: Vec<RawPersonTranslation>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawPersonTranslation {
+    iso_639_1: String,
+    #[serde(default)]
+    data: RawPersonText,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RawPersonText {
+    #[serde(default)]
+    biography: Option<String>,
+}
+
+/// Reads a person, their life in the language asked for and in English when
+/// it is not written in that one.
+fn person_from(raw: RawPerson) -> PersonDetails {
+    let written = |text: Option<String>| text.filter(|value| !value.trim().is_empty());
+    let biography = written(raw.biography).or_else(|| {
+        raw.translations
+            .unwrap_or_default()
+            .translations
+            .into_iter()
+            .find(|translation| translation.iso_639_1 == "en")
+            .and_then(|translation| written(translation.data.biography))
+    });
+    PersonDetails {
+        biography: biography.map(|text| text.trim().to_string()),
+        born_on: written(raw.birthday),
+        died_on: written(raw.deathday),
+        birthplace: written(raw.place_of_birth),
+    }
+}
+
 fn details_from(raw: DetailsResponse, language: &str) -> Details {
     let pictures = raw.images.unwrap_or_default();
     let credits = raw.credits.unwrap_or_default();
@@ -1008,6 +1079,36 @@ fn country_for_language(language: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_life_not_written_in_the_language_asked_for_is_read_in_english() {
+        let raw: RawPerson = serde_json::from_str(
+            r#"{"biography": "", "birthday": "1970-04-02", "deathday": null,
+                "place_of_birth": "Harbourtown",
+                "translations": {"translations": [
+                    {"iso_639_1": "de", "data": {"biography": "Am Meer geboren."}},
+                    {"iso_639_1": "en", "data": {"biography": "Born by the sea. "}}
+                ]}}"#,
+        )
+        .expect("read");
+        assert_eq!(
+            person_from(raw),
+            PersonDetails {
+                biography: Some("Born by the sea.".to_string()),
+                born_on: Some("1970-04-02".to_string()),
+                died_on: None,
+                birthplace: Some("Harbourtown".to_string()),
+            }
+        );
+
+        let own: RawPerson = serde_json::from_str(
+            r#"{"biography": "Née au bord de la mer.", "birthday": "", "place_of_birth": null}"#,
+        )
+        .expect("read");
+        let own = person_from(own);
+        assert_eq!(own.biography.as_deref(), Some("Née au bord de la mer."));
+        assert_eq!(own.born_on, None, "an empty date is no date");
+    }
 
     /// Shaped like a real answer, with invented content.
     const SEARCH: &str = r#"{
