@@ -363,14 +363,20 @@ pub async fn work_detail(
     // Only a series is ever given a mark of its own: a season and an episode
     // are described by it rather than illustrated on their own, so asking for
     // their pictures would only ever come back with a poster nobody wants
-    // here.
+    // here. Its backdrop is kept aside for the page below it.
     let mut ancestry = Vec::new();
+    let mut series_backdrop = Vec::new();
     for up in database.ancestry_of(work_id).await? {
-        let logo = if up.kind == melyxar_core::work::WorkKind::Series {
-            database.images_of("work", &up.id.to_db_string()).await?
-        } else {
-            Vec::new()
-        };
+        let mut logo = Vec::new();
+        if up.kind == melyxar_core::work::WorkKind::Series {
+            for image in database.images_of("work", &up.id.to_db_string()).await? {
+                match image.image_kind.as_str() {
+                    "logo" => logo.push(image),
+                    "backdrop" => series_backdrop.push(image),
+                    _ => {}
+                }
+            }
+        }
         ancestry.push(Ancestor {
             id: up.id,
             kind: up.kind,
@@ -378,6 +384,15 @@ pub async fn work_detail(
             title: up.title,
             logo,
         });
+    }
+
+    // A season and an episode are almost never given a backdrop of their own
+    // by the provider, and their page stood on a bare ground where the page
+    // of their series has a picture. Theirs when they have one, their
+    // series' otherwise.
+    let mut images = database.images_of("work", &work_id.to_db_string()).await?;
+    if !images.iter().any(|image| image.image_kind == "backdrop") {
+        images.extend(series_backdrop);
     }
 
     // What a page offers to play next, from what it already knows. A series
@@ -447,7 +462,7 @@ pub async fn work_detail(
         studios: database.work_studios(work_id).await?,
         credits,
         collection: database.work_collection(work_id).await?,
-        images: database.images_of("work", &work_id.to_db_string()).await?,
+        images,
         external_ids: database.work_external_ids(work_id).await?,
         versions,
         trailers,
@@ -744,6 +759,24 @@ mod tests {
             )
             .await
             .expect("logo stored");
+        database
+            .replace_images(
+                "work",
+                &series.id.to_db_string(),
+                "backdrop",
+                &[StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: series.id.to_db_string(),
+                    image_kind: "backdrop".to_string(),
+                    relative_path: "works/distant-signal/backdrop-1280.webp".to_string(),
+                    width: Some(1280),
+                    height: Some(720),
+                    fingerprint: "def456".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("backdrop stored");
 
         let viewer = database
             .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
@@ -772,6 +805,21 @@ mod tests {
         assert!(
             up_season.logo.is_empty(),
             "a season draws no mark of its own"
+        );
+        assert_eq!(
+            up_series.logo.iter().map(|image| image.image_kind.as_str()).collect::<Vec<_>>(),
+            vec!["logo"],
+            "the mark of the series, and nothing else of its pictures"
+        );
+        assert_eq!(
+            detail
+                .images
+                .iter()
+                .filter(|image| image.image_kind == "backdrop")
+                .map(|image| image.owner_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![series.id.to_db_string().as_str()],
+            "an episode with no backdrop of its own stands on its series'"
         );
     }
 }
