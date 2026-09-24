@@ -103,6 +103,10 @@ export interface ServerSettings extends ServerIdentity {
   door_background: LoginBackgroundStyle;
   /** Where the picture behind the sign in screen is, when there is one. */
   door_picture: string | null;
+  /** The line under the server's name, or nothing for Melyxar's own. */
+  door_slogan: string | null;
+  /** The longest it may be, in letters. */
+  longest_slogan: number;
 }
 
 export interface Branding {
@@ -115,6 +119,9 @@ export interface Branding {
   /** A picture behind the sign in screen, which wins over the drawn one. */
   login_background_path: string | null;
   login_background_style: LoginBackgroundStyle;
+  /** The line under the server's name as the administrator wrote it, or
+   *  nothing for Melyxar's own, worded in the language of whoever looks. */
+  door_slogan: string | null;
   /** False on a brand new server, which asks for a first account instead of a
       password. */
   setup_complete: boolean;
@@ -1613,6 +1620,8 @@ export const api = {
     put<ServerSettings>("/api/v1/settings/server/door/background", { door_background }),
   setDoorPicture: (image: Blob) =>
     put<ServerSettings>("/api/v1/settings/server/door/picture", image),
+  setDoorSlogan: (door_slogan: string) =>
+    put<ServerSettings>("/api/v1/settings/server/door/slogan", { door_slogan }),
   removeDoorPicture: () => remove<ServerSettings>("/api/v1/settings/server/door/picture"),
   /* What deserves a look, for the administrator asking. */
   attention: (signal?: AbortSignal) =>

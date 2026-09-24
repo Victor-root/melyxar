@@ -114,6 +114,7 @@ export function useWhoIsThere(): Who {
           logo_icon: null,
           login_background_path: null,
           login_background_style: "abstract",
+          door_slogan: null,
           setup_complete: true,
         });
       });

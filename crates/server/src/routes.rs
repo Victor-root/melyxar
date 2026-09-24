@@ -322,6 +322,8 @@ struct PublicBranding {
     /// A word rather than a number, so that what arrives at the screen says
     /// what it means and a third one costs nobody a renumbering.
     login_background_style: &'static str,
+    /// The line under the server's name, or nothing for Melyxar's own.
+    door_slogan: Option<String>,
     setup_complete: bool,
 }
 
@@ -344,6 +346,7 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
             .as_deref()
             .map(crate::images::door_picture_url),
         login_background_style: settings.login_background.as_str(),
+        door_slogan: settings.door_slogan,
         setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,
     }))
 }

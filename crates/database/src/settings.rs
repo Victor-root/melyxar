@@ -86,6 +86,10 @@ pub struct ServerSettings {
     pub login_background_path: Option<String>,
     /// Which drawn background is worn when there is no picture.
     pub login_background: LoginBackground,
+    /// The line under the server's name on the sign in screen, as the
+    /// administrator wrote it. Nothing for Melyxar's own, which is worded in
+    /// the language of whoever is looking.
+    pub door_slogan: Option<String>,
     pub global_custom_css: Option<String>,
     /// Shows the account list before a password is typed. A deliberate
     /// disclosure, so it can be turned off.
@@ -173,7 +177,7 @@ impl Database {
     pub async fn server_settings(&self) -> Result<ServerSettings> {
         let row = sqlx::query(
             "SELECT server_name, logo_path, splash_path, login_background_path,
-                    login_background_style, global_custom_css, show_user_picker,
+                    login_background_style, door_slogan, global_custom_css, show_user_picker,
                     maintenance_enabled, maintenance_message, maintenance_until,
                     read_companion_files, write_companion_files, watched_threshold,
                     activity_retention_days, check_for_updates, tone_mapping_disabled,
@@ -193,6 +197,7 @@ impl Database {
             login_background: LoginBackground::from_word(
                 &row.try_get::<String, _>("login_background_style")?,
             ),
+            door_slogan: row.try_get("door_slogan")?,
             global_custom_css: row.try_get("global_custom_css")?,
             show_user_picker: int_to_bool(row.try_get("show_user_picker")?),
             maintenance_enabled: int_to_bool(row.try_get("maintenance_enabled")?),
@@ -319,6 +324,17 @@ impl Database {
         .bind(timestamp_to_text(now()))
         .execute(self.writer())
         .await?;
+        Ok(())
+    }
+
+    /// The line under the server's name on the sign in screen, or nothing for
+    /// Melyxar's own.
+    pub async fn set_door_slogan(&self, slogan: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET door_slogan = ?, updated_at = ? WHERE id = 1")
+            .bind(slogan)
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
         Ok(())
     }
 
@@ -484,6 +500,22 @@ mod tests {
         let settings = database.server_settings().await.expect("read");
         assert_eq!(settings.login_background_path, None);
         assert_eq!(settings.login_background, LoginBackground::Library);
+    }
+
+    #[tokio::test]
+    async fn the_door_slogan_is_written_and_given_back() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.server_settings().await.expect("read").door_slogan, None);
+        database
+            .set_door_slogan(Some("Films for the whole house"))
+            .await
+            .expect("written");
+        assert_eq!(
+            database.server_settings().await.expect("read").door_slogan.as_deref(),
+            Some("Films for the whole house")
+        );
+        database.set_door_slogan(None).await.expect("given back");
+        assert_eq!(database.server_settings().await.expect("read").door_slogan, None);
     }
 
     #[test]

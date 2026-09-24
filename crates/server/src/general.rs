@@ -40,6 +40,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(choose_door_background),
         )
         .route(
+            "/api/v1/settings/server/door/slogan",
+            axum::routing::put(write_door_slogan),
+        )
+        .route(
             "/api/v1/settings/server/door/picture",
             axum::routing::put(choose_door_picture)
                 .delete(remove_door_picture)
@@ -62,6 +66,9 @@ struct ServerView {
     door_background: &'static str,
     /// Where the picture behind the sign in screen is, when there is one.
     door_picture: Option<String>,
+    /// The line under the server's name, or nothing for Melyxar's own.
+    door_slogan: Option<String>,
+    longest_slogan: usize,
 }
 
 impl ServerView {
@@ -78,6 +85,8 @@ impl ServerView {
                 .map(crate::installing::logo_icon_url),
             door_background: door.background.as_str(),
             door_picture: door.picture.as_deref().map(crate::images::door_picture_url),
+            door_slogan: door.slogan,
+            longest_slogan: melyxar_app::server::LONGEST_SLOGAN,
         }))
     }
 }
@@ -149,6 +158,22 @@ async fn choose_door_background(
             crate::error::ServerError::invalid_input("no background goes by that name")
         })?;
     melyxar_app::server::set_door_background(&state, background).await?;
+    ServerView::of(&state).await
+}
+
+#[derive(Debug, Deserialize)]
+struct SloganAsked {
+    door_slogan: String,
+}
+
+/// Writes the line under the server's name; an empty one gives Melyxar's own
+/// back.
+async fn write_door_slogan(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    Json(asked): Json<SloganAsked>,
+) -> Result<Json<ServerView>> {
+    melyxar_app::server::set_door_slogan(&state, &asked.door_slogan).await?;
     ServerView::of(&state).await
 }
 
