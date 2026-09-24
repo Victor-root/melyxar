@@ -62,7 +62,7 @@ Fait depuis : l'identification à la main depuis la fiche de n'importe quel film
 
 Fait depuis aussi : les images de titre, demandées dans la même requête que le reste, choisies dans la langue de la médiathèque puis en anglais, et préparées en deux largeurs comme les visages. Le lecteur les affiche à droite de la flèche de retour, à la place du titre écrit.
 
-Reste : les films similaires, et la saisie directe d'un identifiant.
+Reste : les films similaires. La saisie directe d'un identifiant est faite, dans la fenêtre d'identification.
 
 Vérifié dans l'environnement de travail : une affiche réelle est préparée en trois tailles avec sa couleur, une affiche inchangée n'est pas retéléchargée, un film sans affiche reste identifié, une clé refusée arrête la série en désignant la clé, et un fournisseur injoignable laisse les films en attente sans rien inventer. Sur cinq vrais films, les visages arrivent pour toute la distribution affichée et pour personne d'autre.
 
@@ -85,7 +85,7 @@ Fait depuis : la fiche refaite sur la disposition d'Emby avec l'identité de Mel
 
 Fait depuis aussi : l'onglet porte le nom de ce qui est en lecture, et Melyxar s'installe comme une application, sur ordinateur comme sur téléphone, avec une icône dessinée par le serveur dans la couleur du logo de la personne.
 
-Reste : la liste « à voir plus tard » (le compte connecté qu'elle attendait existe désormais), la correction manuelle depuis l'interface, la spécification OpenAPI et le canal temps réel.
+Reste : la liste « à voir plus tard » (sa table existe, rien ne s'en sert encore) et la spécification OpenAPI. Faits depuis : la correction manuelle depuis l'interface, et un canal temps réel pour l'administration (journal et lectures en cours), pas encore pour le reste de l'interface.
 
 Vérifié dans l'environnement de travail, sur de vrais films : la grille et la fiche s'affichent sans une seule erreur de console, le défilement continu passe de soixante à cent quarante-cinq cartes sans doublon puis annonce la fin, les flèches du clavier se déplacent d'une carte et d'une rangée, le contour de sélection est visible, et rien ne déborde de l'écran à quatre cents pixels de large.
 
@@ -122,7 +122,7 @@ Fait aussi : l'écran de réglages qui permet enfin de choisir tout cela. Le rep
 
 Reste : la courbe de volume, à vérifier à l'oreille par le mainteneur. Un film que le navigateur ne sait pas ouvrir tel quel le dit clairement : le convertir est le jalon 5.
 
-À savoir : les commandes de lecture elles-mêmes (barre de progression, volume, plein écran) sont aujourd'hui celles du navigateur. Tout ce qui les entoure est à nous : le choix des pistes pendant la lecture, la vitesse, l'image dans un coin, les raccourcis clavier, les étapes de préparation et l'apparence des sous-titres. C'est volontaire à ce stade, et ce n'est pas l'état final : un lecteur à nous est prévu au jalon 8.
+Le lecteur a désormais ses propres commandes (barre de progression, volume, plein écran, titre et retour), en plus du choix des pistes, de la vitesse, de l'image dans un coin, des raccourcis clavier, des étapes de préparation et de l'apparence des sous-titres.
 
 À savoir : par défaut le serveur replie lui-même un son multicanal en stéréo plutôt que de laisser le navigateur le faire, parce que le repliement des navigateurs enterre les dialogues sous les effets. Cela coûte une reconstruction du son, la page le dit, et le réglage permet de laisser faire le navigateur.
 
@@ -213,7 +213,7 @@ Reste à faire :
 
 ## Jalon 7 : réactivité mesurée et tableau de bord
 
-État : la mesure est faite, le tableau de bord reste à faire.
+État : fait. Le tableau de bord, le détail d'une lecture, le journal et l'export de diagnostic sont dans l'administration (voir le jalon 8). Seule la file d'écriture n'y apparaît pas.
 
 Fait :
 
@@ -260,15 +260,15 @@ Vérifié dans un vrai navigateur contre un serveur qui tourne : la porte sur un
 
 Fait depuis, en avance sur ce jalon : la moitié serveur du refus de la conversion des couleurs, réglage général sous « Image » dans les paramètres, décoché par défaut. Demandé pour un processeur trop lent pour reconstruire l'image des films HDR d'une collection, plutôt que pour un écran réellement HDR. Le Dolby Vision sans couche de base compatible reste converti dans tous les cas, pour ne jamais laisser une image cassée à l'écran. L'interrupteur pendant la lecture et le réglage par spectateur, pensés pour l'écran plutôt que pour le processeur, restent à faire avec le reste de ce jalon.
 
-- Écran d'administration : nom du serveur, logo, écran de démarrage, fond et apparence de la page de connexion.
-- Couleur d'accentuation choisie par l'utilisateur, avec palette dérivée et vérification automatique du contraste. **À moitié fait** : le compte la porte, elle est refusée si ce n'est pas un dièse et six chiffres, ses nuances sont dérivées et la couleur lisible dessus est calculée. Il manque l'écran qui la choisit.
+- Écran d'administration : nom du serveur, logo, écran de démarrage, fond et apparence de la page de connexion. **Fait pour le nom et le logo.** Restent l'écran de démarrage et le réglage du fond de la page de connexion depuis l'administration, dessiné mais éteint.
+- Couleur d'accentuation choisie par l'utilisateur, avec palette dérivée et vérification automatique du contraste. **À moitié fait** : le compte la porte, elle est refusée si ce n'est pas un dièse et six chiffres, ses nuances sont dérivées et la couleur lisible dessus est calculée. L'écran qui la choisit est fait, dans Apparence. **Fait.**
 - Modes clair, sombre et automatique, stockés dans les préférences. **Fait** : le compte les porte, le navigateur en garde une copie pour dessiner la porte avant de connaître qui que ce soit.
 - CSS personnalisé, au niveau du serveur pour l'administrateur et au niveau de chaque utilisateur, avec possibilité de le désactiver et adresse de secours sans CSS.
-- Lecteur avec ses propres commandes à la place de celles du navigateur : barre de progression, volume, plein écran, titre du film et retour, le tout cohérent en fenêtre comme en plein écran, et rejoignant le choix des pistes, la vitesse et l'image dans un coin qui existent déjà autour. Les commandes du navigateur conviennent à une vidéo regardée vite fait : elles ne portent ni le nom de ce qu'on regarde, ni ce qui l'entoure, et elles changent d'un navigateur à l'autre. Prévu ici parce que c'est le jalon où l'interface cesse de ressembler à une installation par défaut.
+- Lecteur avec ses propres commandes à la place de celles du navigateur : barre de progression, volume, plein écran, titre du film et retour, le tout cohérent en fenêtre comme en plein écran, et rejoignant le choix des pistes, la vitesse et l'image dans un coin qui existent déjà autour. Les commandes du navigateur conviennent à une vidéo regardée vite fait : elles ne portent ni le nom de ce qu'on regarde, ni ce qui l'entoure, et elles changent d'un navigateur à l'autre. **Fait.**
 - Mode maintenance : message, durée estimée, page dédiée avec le code d'état approprié, accès conservé pour l'administrateur, avertissement des lectures en cours, exemple de configuration nginx.
 - Gestion des utilisateurs et de leurs droits : accès par bibliothèque, limite d'âge, téléchargement, suppression, sessions simultanées. Code à quatre chiffres pour les appareils de télévision déjà autorisés. **Voir la section « Comptes, connexion et droits » plus haut** : l'accès par bibliothèque est fait et appliqué partout, et l'écran des comptes existe ; restent le téléchargement, la limite d'âge et le code des télévisions.
 - Téléchargement d'un fichier, soumis au droit correspondant.
-- Suppression d'une œuvre, avec case décochée par défaut pour effacer aussi le fichier du disque, réservée à l'administrateur, chemin résolu côté serveur et vérifié sous une racine déclarée, entrée au journal d'activité.
+- **Fait.** Suppression d'une œuvre, avec case décochée par défaut pour effacer aussi le fichier du disque, réservée à l'administrateur, chemin résolu côté serveur et vérifié sous une racine déclarée, entrée au journal d'activité.
 - Assistant de première configuration : langue, compte administrateur, mode d'accès. **Fait pour le compte et la langue** : un serveur neuf n'a aucun compte et la première chose qu'il propose est d'en créer un, avec le nom que la personne choisit, et cette porte se referme derrière elle. Reste à y joindre les médiathèques, dont l'explorateur de dossiers, le formulaire et le premier scan existent déjà dans les réglages, et le mode d'accès.
 - Écran de choix d'utilisateur avec avatars, désactivable. **Fait** : les comptes sont proposés sur l'écran de connexion, chacun peut s'en retirer, et chacun choisit sa photo de profil dans ses réglages, montrée sur cet écran et dans l'en-tête.
 - Liste des appareils connectés avec leur dernière activité et révocation individuelle. **Fait** : voir la section « Comptes, connexion et droits » plus haut.
@@ -332,7 +332,7 @@ Ce qui n'est pas dans ce jalon : l'écran de personnalisation de l'accueil (l'ar
 Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
 
 - **L'ordre du bandeau de catégories choisi par la personne.** Fait : un réglage de compte, dans les réglages, que le bandeau et les rangées par sorte suivent tous les deux (voir le README des décisions).
-- **Changer son nom d'utilisateur.** Rien ne le permet aujourd'hui, ni dans l'interface ni dans l'API : la seule chose qu'un compte peut changer de lui-même est son mot de passe et ses préférences. Le nom sert à se connecter, donc le changer touche aussi les sessions ouvertes. Cela appartient au chantier de gestion des comptes, avec la création, la suppression et les droits par médiathèque.
+- **Changer son nom d'utilisateur. Fait** : depuis son profil, et par l'administrateur depuis la page Utilisateurs ; les appareils restent connectés.
 
 ## Après la V0.1
 
