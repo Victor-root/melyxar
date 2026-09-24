@@ -28,7 +28,7 @@
 import { Link } from "react-router-dom";
 import type { Card, Home, Library } from "../api";
 import { useShownPicture } from "./picture";
-import { whereAKindLeads } from "../libraries";
+import { nameOfKind, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { ChevronRightIcon, KindIcon } from "../icons";
 
@@ -222,7 +222,7 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
       <span className="band-words">
         <span className="band-name">
           <KindIcon kind={shelf.kind} size={17} />
-          {t(`kind.${shelf.kind}`)}
+          {nameOfKind(shelf.kind, libraries, t)}
         </span>
       </span>
       <span className="band-arrow" aria-hidden="true">

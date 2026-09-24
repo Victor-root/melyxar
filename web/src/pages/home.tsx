@@ -27,7 +27,7 @@ import { Row, RowHead } from "../components/row";
 import { howFarIn, useHomeScreen } from "../screens/home";
 import { refusalKey } from "../i18n";
 import { whatIsLeft, whichEpisode } from "../readable";
-import { cardShapeOf, whereAKindLeads } from "../libraries";
+import { cardShapeOf, newestOfKind, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { BinocularsIcon, CameraIcon, EyeIcon, KindIcon } from "../icons";
 
@@ -204,7 +204,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
         {home.shelves.map((shelf) => (
           <Shelf
             key={shelf.kind}
-            title={t(`home.newest.${shelf.kind}`)}
+            title={newestOfKind(shelf.kind, libraries, t)}
             mark={<KindIcon kind={shelf.kind} size={24} />}
             cards={shelf.cards}
             shape={cardShapeOf(shelf.kind)}

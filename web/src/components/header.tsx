@@ -43,7 +43,7 @@ import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
 import { useAttention } from "../attention";
 import { sayPoint } from "../pages/admin/activity";
-import { KINDS } from "../libraries";
+import { KINDS, nameOfKind } from "../libraries";
 import { useSettings } from "../settings";
 import { isSectioned } from "./sectioned";
 import { Face } from "./face";
@@ -597,7 +597,7 @@ function Scope({
   const named = (value: string): string => {
     const kind = categories.find((category) => `kind:${category.kind}` === value);
     if (kind) {
-      return t(`kind.${kind.kind}`);
+      return nameOfKind(kind.kind, kind.libraries, t);
     }
     const library = categories
       .flatMap((category) => category.libraries)
@@ -614,7 +614,7 @@ function Scope({
         <div key={category.kind}>
           <ScopeLine value={`kind:${category.kind}`} scope={scope} onChoose={onChoose}>
             <KindIcon kind={category.kind} size={16} />
-            {t(`kind.${category.kind}`)}
+            {nameOfKind(category.kind, category.libraries, t)}
           </ScopeLine>
           {category.libraries.length > 1 &&
             category.libraries.map((library) => (

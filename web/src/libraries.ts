@@ -18,6 +18,7 @@ import { api } from "./api";
 import { useAsked } from "./asking";
 import type { Library, LibraryKind } from "./api";
 import type { CardShape } from "./components/card";
+import type { Wording } from "./readable";
 
 export interface Libraries {
   all: Library[];
@@ -57,6 +58,25 @@ export function useLibraries(): Libraries {
 /** The libraries of one kind, which is what a category really is. */
 export function librariesOfKind(kind: LibraryKind, libraries: Library[]): Library[] {
   return libraries.filter((library) => library.kind === kind);
+}
+
+/**
+ * What a category is called: the name the administrator gave its library when
+ * it holds only one, since the category is then that library, and the kind's
+ * own name when it gathers several.
+ */
+export function nameOfKind(kind: LibraryKind, libraries: Library[], t: Wording): string {
+  const ofThatKind = librariesOfKind(kind, libraries);
+  return ofThatKind.length === 1 ? ofThatKind[0].name : t(`kind.${kind}`);
+}
+
+/** The title of the home page's row of what came in last in a category, named
+ *  like the category itself. */
+export function newestOfKind(kind: LibraryKind, libraries: Library[], t: Wording): string {
+  const ofThatKind = librariesOfKind(kind, libraries);
+  return ofThatKind.length === 1
+    ? t("home.newest.named", { name: ofThatKind[0].name })
+    : t(`home.newest.${kind}`);
 }
 
 /**
