@@ -178,6 +178,13 @@
   padding-left: 5px;
 }
 
+/* With the way back in it the piece is wider by a button, and it takes the
+   room from the edge of the screen rather than from the page beside it: the
+   gutter is air, and the page is what is being read. */
+.header-start-back {
+  margin-left: min(0px, var(--gap) - var(--gutter));
+}
+
 /* The name of the server, and the way back to its front page: there is no
    other, which is why it is set apart rather than written like a word in a
    sentence. */
