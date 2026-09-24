@@ -1,5 +1,5 @@
-//! What the server is called and the logo it wears, as its administrator
-//! chooses them.
+//! What the server is called, the logo it wears and what stands behind its
+//! sign in screen, as its administrator chooses them.
 
 use std::path::Path;
 
@@ -22,7 +22,8 @@ pub const LONGEST_NAME: usize = 15;
 pub enum Refused {
     NameNeeded,
     NameTooLong,
-    /// What was sent for a logo is not an image this server reads.
+    /// What was sent for a logo or a picture is not an image this server
+    /// reads.
     NotAPicture,
     /// It looked like an image and still could not be read as one.
     CouldNotBeRead,
@@ -102,6 +103,101 @@ pub async fn forget_name(state: &AppState) -> Result<(), AppError> {
 /// Kept whole, in its own shape and with what is see-through left so: a logo
 /// is drawn on the page's own ground, never cut into a square or a round.
 pub async fn set_logo(state: &AppState, bytes: &[u8]) -> Result<String, Trouble> {
+    let name = made_from(state, bytes, Sent::Logo).await?;
+    let before = state.database().set_logo(Some(&name)).await?;
+    forget(
+        &state.config().directories.uploads(),
+        before.as_deref().filter(|before| *before != name),
+    )
+    .await;
+    tracing::info!("the server was given a logo");
+    Ok(name)
+}
+
+/// Takes the server's logo away, which puts Melyxar's own back.
+pub async fn remove_logo(state: &AppState) -> Result<(), Trouble> {
+    let before = state.database().set_logo(None).await?;
+    forget(&state.config().directories.uploads(), before.as_deref()).await;
+    Ok(())
+}
+
+pub use melyxar_database::settings::LoginBackground;
+
+/// What stands behind the sign in screen: a picture the administrator put
+/// there, which wins, and the drawn background worn when there is none.
+pub struct Door {
+    pub picture: Option<String>,
+    pub background: LoginBackground,
+}
+
+/// What stands behind the sign in screen.
+pub async fn door(state: &AppState) -> Result<Door, AppError> {
+    let settings = state.database().server_settings().await?;
+    Ok(Door {
+        picture: settings.login_background_path,
+        background: settings.login_background,
+    })
+}
+
+/// Which drawn background the sign in screen wears when no picture was put
+/// there.
+pub async fn set_door_background(
+    state: &AppState,
+    background: LoginBackground,
+) -> Result<(), AppError> {
+    state.database().set_door_background(background).await?;
+    Ok(())
+}
+
+/// Puts these bytes behind the sign in screen, in place of the picture that
+/// was there. Answers where it is, under the folder of what the administrator
+/// sent.
+pub async fn set_door_picture(state: &AppState, bytes: &[u8]) -> Result<String, Trouble> {
+    let name = made_from(state, bytes, Sent::DoorPicture).await?;
+    let before = state.database().set_door_picture(Some(&name)).await?;
+    if let Some(before) = before.filter(|before| *before != name) {
+        tokio::fs::remove_file(state.config().directories.uploads().join(before))
+            .await
+            .ok();
+    }
+    tracing::info!("the sign in screen was given a picture");
+    Ok(name)
+}
+
+/// Takes the picture away from behind the sign in screen, which puts the
+/// drawn background back.
+pub async fn remove_door_picture(state: &AppState) -> Result<(), Trouble> {
+    if let Some(before) = state.database().set_door_picture(None).await? {
+        tokio::fs::remove_file(state.config().directories.uploads().join(before))
+            .await
+            .ok();
+    }
+    Ok(())
+}
+
+/// What an image the administrator sent is made into.
+#[derive(Debug, Clone, Copy)]
+enum Sent {
+    Logo,
+    DoorPicture,
+}
+
+impl Sent {
+    fn prefix(self) -> &'static str {
+        match self {
+            Self::Logo => "logo",
+            Self::DoorPicture => "door",
+        }
+    }
+}
+
+/// Makes the image the administrator sent into what it was sent for, kept in
+/// the folder of what they send under a name that changes with its content.
+/// Answers that name.
+///
+/// The image itself is never kept: it is turned the way its camera said and
+/// written again in the shape it is for, then thrown away.
+async fn made_from(state: &AppState, bytes: &[u8], sent: Sent) -> Result<String, Trouble> {
     if !crate::avatars::is_a_picture(bytes) {
         return Err(Trouble::Refused(Refused::NotAPicture));
     }
@@ -113,34 +209,31 @@ pub async fn set_logo(state: &AppState, bytes: &[u8]) -> Result<String, Trouble>
 
     let folder = state.config().directories.uploads();
     tokio::fs::create_dir_all(&folder).await?;
-    let name = format!("logo-{}.webp", fingerprint::of_bytes(bytes));
-    let sent = folder.join(format!("{name}.source"));
-    tokio::fs::write(&sent, bytes).await?;
+    let name = format!("{}-{}.webp", sent.prefix(), fingerprint::of_bytes(bytes));
+    let source = folder.join(format!("{name}.source"));
+    tokio::fs::write(&source, bytes).await?;
 
-    let reading = sent.clone();
+    let reading = source.clone();
     let orientation =
         tokio::task::spawn_blocking(move || melyxar_library::orientation::orientation_of(&reading))
             .await
             .unwrap_or_default();
-    let made =
-        melyxar_ffmpeg::images::logo(&tools.ffmpeg, &sent, orientation, &folder.join(&name)).await;
-    tokio::fs::remove_file(&sent).await.ok();
+    let destination = folder.join(&name);
+    let made = match sent {
+        Sent::Logo => {
+            melyxar_ffmpeg::images::logo(&tools.ffmpeg, &source, orientation, &destination).await
+        }
+        Sent::DoorPicture => {
+            melyxar_ffmpeg::images::door_picture(&tools.ffmpeg, &source, orientation, &destination)
+                .await
+        }
+    };
+    tokio::fs::remove_file(&source).await.ok();
     if let Err(error) = made {
-        tracing::warn!(%error, "an image sent for the server's logo could not be read");
+        tracing::warn!(%error, sent = sent.prefix(), "an image the administrator sent could not be read");
         return Err(Trouble::Refused(Refused::CouldNotBeRead));
     }
-
-    let before = state.database().set_logo(Some(&name)).await?;
-    forget(&folder, before.as_deref().filter(|before| *before != name)).await;
-    tracing::info!("the server was given a logo");
     Ok(name)
-}
-
-/// Takes the server's logo away, which puts Melyxar's own back.
-pub async fn remove_logo(state: &AppState) -> Result<(), Trouble> {
-    let before = state.database().set_logo(None).await?;
-    forget(&state.config().directories.uploads(), before.as_deref()).await;
-    Ok(())
 }
 
 /// Deletes the files of a logo no longer worn, its icons included. One
@@ -241,6 +334,80 @@ mod tests {
     use super::*;
     use melyxar_config::{Config, Directories};
     use melyxar_database::Database;
+
+    #[tokio::test]
+    async fn the_door_picture_is_brought_down_and_the_one_before_it_deleted() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let config = Config {
+            directories: Directories {
+                data: directory.path().join("data"),
+                cache: directory.path().join("cache"),
+                transcodes: directory.path().join("cache/transcodes"),
+                ..Default::default()
+            },
+            ..Config::default()
+        };
+        crate::startup::prepare_directories(&config).expect("directories prepared");
+        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        let Some(ffmpeg) = tools.as_ref().map(|tools| tools.ffmpeg.clone()) else {
+            eprintln!("no media tool here, a picture was not made");
+            return;
+        };
+        let database = Database::open_in_memory().await.expect("database opens");
+        let state = AppState::new(config, database, tools, capabilities);
+
+        // Wider than any screen needs.
+        let made = |colour: &'static str| {
+            let ffmpeg = ffmpeg.clone();
+            let out = directory.path().join(format!("{colour}.png"));
+            async move {
+                let done = tokio::process::Command::new(&ffmpeg)
+                    .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+                    .arg(format!("color=c={colour}:s=3000x1000"))
+                    .args(["-frames:v", "1"])
+                    .arg(&out)
+                    .status()
+                    .await
+                    .expect("the tool runs");
+                assert!(done.success());
+                tokio::fs::read(&out).await.expect("picture read")
+            }
+        };
+        let folder = state.config().directories.uploads();
+
+        set_door_background(&state, LoginBackground::Library)
+            .await
+            .expect("chosen");
+        let first = set_door_picture(&state, &made("red").await)
+            .await
+            .expect("put there");
+        let probed = tokio::process::Command::new(ffmpeg.with_file_name("ffprobe"))
+            .args(["-v", "error", "-show_entries", "stream=width", "-of", "csv=p=0"])
+            .arg(folder.join(&first))
+            .output()
+            .await
+            .expect("probed");
+        assert_eq!(String::from_utf8_lossy(&probed.stdout).trim(), "2560");
+
+        let second = set_door_picture(&state, &made("blue").await)
+            .await
+            .expect("put there");
+        assert_ne!(first, second, "named after what it holds");
+        assert!(!folder.join(&first).exists(), "the one before is deleted");
+        assert!(matches!(
+            set_door_picture(&state, b"<svg/>").await,
+            Err(Trouble::Refused(Refused::NotAPicture))
+        ));
+        let behind = door(&state).await.expect("read");
+        assert_eq!(behind.picture.as_deref(), Some(second.as_str()));
+        assert_eq!(behind.background, LoginBackground::Library);
+
+        remove_door_picture(&state).await.expect("taken away");
+        assert!(!folder.join(&second).exists());
+        let behind = door(&state).await.expect("read");
+        assert_eq!(behind.picture, None);
+        assert_eq!(behind.background, LoginBackground::Library, "the drawn one stays chosen");
+    }
 
     #[tokio::test]
     async fn a_logo_is_kept_whole_and_the_one_before_it_is_deleted() {

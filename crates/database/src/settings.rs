@@ -37,9 +37,41 @@ impl LoginBackground {
     /// Back from the word. Anything this server does not know is the default:
     /// a background is not worth refusing to start over.
     pub fn from_word(stored: &str) -> Self {
-        match stored {
-            "library" => Self::Library,
-            _ => Self::Abstract,
+        Self::parse(stored).unwrap_or_default()
+    }
+
+    /// The background a word names, and nothing for a word that names none,
+    /// for what a screen sends rather than what the row holds.
+    pub fn parse(word: &str) -> Option<Self> {
+        match word {
+            "abstract" => Some(Self::Abstract),
+            "library" => Some(Self::Library),
+            _ => None,
+        }
+    }
+}
+
+/// A file the administrator sent, kept by name in the settings row.
+#[derive(Debug, Clone, Copy)]
+enum Upload {
+    Logo,
+    DoorPicture,
+}
+
+impl Upload {
+    fn read(self) -> &'static str {
+        match self {
+            Self::Logo => "SELECT logo_path FROM server_settings WHERE id = 1",
+            Self::DoorPicture => "SELECT login_background_path FROM server_settings WHERE id = 1",
+        }
+    }
+
+    fn write(self) -> &'static str {
+        match self {
+            Self::Logo => "UPDATE server_settings SET logo_path = ?, updated_at = ? WHERE id = 1",
+            Self::DoorPicture => {
+                "UPDATE server_settings SET login_background_path = ?, updated_at = ? WHERE id = 1"
+            }
         }
     }
 }
@@ -268,13 +300,37 @@ impl Database {
     /// Gives the server its logo, or takes it away with nothing, and answers
     /// the one it had so the caller can delete its file.
     pub async fn set_logo(&self, logo_path: Option<&str>) -> Result<Option<String>> {
+        self.swap_upload(Upload::Logo, logo_path).await
+    }
+
+    /// Puts this picture behind the sign in screen, or takes it away, and
+    /// answers the one it replaces so its file can be deleted.
+    pub async fn set_door_picture(&self, path: Option<&str>) -> Result<Option<String>> {
+        self.swap_upload(Upload::DoorPicture, path).await
+    }
+
+    /// Which drawn background the sign in screen wears when no picture was
+    /// put there.
+    pub async fn set_door_background(&self, background: LoginBackground) -> Result<()> {
+        sqlx::query(
+            "UPDATE server_settings SET login_background_style = ?, updated_at = ? WHERE id = 1",
+        )
+        .bind(background.as_str())
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// Writes one file the administrator sent in place of the one before, and
+    /// answers that one, read in the same transaction.
+    async fn swap_upload(&self, upload: Upload, path: Option<&str>) -> Result<Option<String>> {
         let mut transaction = self.begin().await?;
-        let before: Option<String> =
-            sqlx::query_scalar("SELECT logo_path FROM server_settings WHERE id = 1")
-                .fetch_one(&mut *transaction)
-                .await?;
-        sqlx::query("UPDATE server_settings SET logo_path = ?, updated_at = ? WHERE id = 1")
-            .bind(logo_path)
+        let before: Option<String> = sqlx::query_scalar(upload.read())
+            .fetch_one(&mut *transaction)
+            .await?;
+        sqlx::query(upload.write())
+            .bind(path)
             .bind(timestamp_to_text(now()))
             .execute(&mut *transaction)
             .await?;
@@ -400,6 +456,42 @@ mod tests {
             Some("logo-b.webp".to_string())
         );
         assert_eq!(database.server_settings().await.expect("read").logo_path, None);
+    }
+
+    #[tokio::test]
+    async fn the_door_picture_answers_the_one_it_replaces_and_the_background_stays() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        database
+            .set_door_background(LoginBackground::Library)
+            .await
+            .expect("chosen");
+        assert_eq!(
+            database.set_door_picture(Some("door-a.webp")).await.expect("given"),
+            None
+        );
+        assert_eq!(
+            database.set_door_picture(Some("door-b.webp")).await.expect("given"),
+            Some("door-a.webp".to_string())
+        );
+        let settings = database.server_settings().await.expect("read");
+        assert_eq!(settings.login_background_path.as_deref(), Some("door-b.webp"));
+        assert_eq!(settings.login_background, LoginBackground::Library);
+        assert_eq!(settings.logo_path, None, "the logo is another column");
+        assert_eq!(
+            database.set_door_picture(None).await.expect("taken away"),
+            Some("door-b.webp".to_string())
+        );
+        let settings = database.server_settings().await.expect("read");
+        assert_eq!(settings.login_background_path, None);
+        assert_eq!(settings.login_background, LoginBackground::Library);
+    }
+
+    #[test]
+    fn only_a_known_word_names_a_background() {
+        assert_eq!(LoginBackground::parse("library"), Some(LoginBackground::Library));
+        assert_eq!(LoginBackground::parse("abstract"), Some(LoginBackground::Abstract));
+        assert_eq!(LoginBackground::parse("stars"), None);
+        assert_eq!(LoginBackground::from_word("stars"), LoginBackground::Abstract);
     }
 
     #[tokio::test]

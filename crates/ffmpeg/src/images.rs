@@ -184,6 +184,22 @@ pub fn logo_arguments(source: &Path, orientation: Orientation, destination: &Pat
     sent_picture_arguments(source, orientation, &inside, Written::Webp, destination)
 }
 
+/// The widest the picture behind the sign in screen is kept: a large screen
+/// at twice its density, and past that only weight.
+pub const DOOR_PICTURE_WIDTH: u32 = 2560;
+
+/// Builds the making of the picture behind the sign in screen out of whatever
+/// image the administrator sent: turned the way its camera said and brought
+/// down to the widest a screen needs, in its own shape. Never enlarged.
+pub fn door_picture_arguments(
+    source: &Path,
+    orientation: Orientation,
+    destination: &Path,
+) -> Vec<OsString> {
+    let inside = format!("scale='min(iw,{DOOR_PICTURE_WIDTH})':-2:flags=lanczos");
+    sent_picture_arguments(source, orientation, &inside, Written::Webp, destination)
+}
+
 /// How wide the square icons made from a server's logo are, the size a
 /// browser asks of an installed application.
 pub const LOGO_ICON_SIDE: u32 = 512;
@@ -280,6 +296,17 @@ pub async fn logo(
     destination: &Path,
 ) -> Result<()> {
     make(tool, logo_arguments(source, orientation, destination)).await
+}
+
+/// Makes the picture behind the sign in screen out of an image the
+/// administrator sent.
+pub async fn door_picture(
+    tool: &Path,
+    source: &Path,
+    orientation: Orientation,
+    destination: &Path,
+) -> Result<()> {
+    make(tool, door_picture_arguments(source, orientation, destination)).await
 }
 
 /// Makes one square icon out of the image sent for a server's logo.
@@ -592,6 +619,21 @@ mod tests {
         );
         assert!(!logo.contains("crop"), "a logo is never cut: {logo}");
         assert!(logo.ends_with("-c:v libwebp -quality 80 /data/logo.webp"));
+    }
+
+    #[test]
+    fn the_door_picture_is_brought_down_to_a_screen_and_turned() {
+        let picture = rendered(&door_picture_arguments(
+            Path::new("/data/sent.source"),
+            Orientation::TurnedRight,
+            Path::new("/data/door.webp"),
+        ));
+        assert!(
+            picture.contains("-vf transpose=clock,scale='min(iw,2560)':-2"),
+            "{picture}"
+        );
+        assert!(!picture.contains("crop"), "a picture is never cut: {picture}");
+        assert!(picture.ends_with("-c:v libwebp -quality 80 /data/door.webp"));
     }
 
     #[test]

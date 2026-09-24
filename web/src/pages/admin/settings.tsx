@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../../api";
-import type { ServerSettings } from "../../api";
+import type { LoginBackgroundStyle, ServerSettings } from "../../api";
 import {
   NumberField,
   PageHead,
@@ -17,7 +17,7 @@ import {
 } from "../../components/panel";
 import { useToast } from "../../components/toasts";
 import { refusalKey } from "../../i18n";
-import { refusalAbout, refusalOf } from "../../asking";
+import { refusalAbout, refusalOf, useAsked } from "../../asking";
 import {
   DatabaseIcon,
   EnterIcon,
@@ -42,25 +42,7 @@ export function AdminSettings() {
       <div className="panels">
         <ServerPanel />
 
-        <Panel icon={EnterIcon} title={t("admin.door")} lead={t("admin.door_lead")} soon>
-          <Setting label={t("admin.door_background")} soon>
-            <Picker
-              label={t("admin.door_background")}
-              value="abstract"
-              options={[
-                ["abstract", t("admin.door_background.abstract")],
-                ["library", t("admin.door_background.library")],
-              ]}
-              onPick={() => {}}
-              disabled
-            />
-          </Setting>
-          <Setting label={t("admin.door_picture")} soon>
-            <button className="button button-small" disabled>
-              {t("settings.avatar_choose")}
-            </button>
-          </Setting>
-        </Panel>
+        <DoorPanel />
 
         <Panel icon={WarningIcon} title={t("admin.maintenance")} lead={t("admin.maintenance_lead")} soon>
           <Setting label={t("admin.maintenance_on")} soon>
@@ -248,6 +230,96 @@ function ServerPanel() {
           </div>
         )}
       </Setting>
+    </Panel>
+  );
+}
+
+/** What stands behind the sign in screen: one of the drawn backgrounds, and a
+ *  picture that wins over it while it is there. */
+function DoorPanel() {
+  const { t } = useSettings();
+  const toast = useToast();
+  const chooser = useRef<HTMLInputElement>(null);
+  const asked = useAsked((signal) => api.server(signal));
+  const [server, setServer] = useState<ServerSettings | null>(null);
+  const [sending, setSending] = useState(false);
+  const shown = server ?? asked.answer;
+
+  const change = (made: () => Promise<ServerSettings>) => {
+    setSending(true);
+    made()
+      .then(setServer)
+      .catch((error) => {
+        const refused =
+          error instanceof ApiError && error.status === TOO_LARGE
+            ? "refused.server.too_large"
+            : refusalAbout(error, "server");
+        toast({ state: "trouble", title: t("admin.door_failed"), detail: t(refused) });
+      })
+      .finally(() => setSending(false));
+  };
+
+  return (
+    <Panel icon={EnterIcon} title={t("admin.door")} lead={t("admin.door_lead")}>
+      {shown && (
+        <>
+          <Setting
+            label={t("admin.door_background")}
+            why={t(shown.door_picture ? "admin.door_background_under" : "admin.door_background_why")}
+          >
+            <Picker
+              label={t("admin.door_background")}
+              value={shown.door_background}
+              options={[
+                ["abstract", t("admin.door_background.abstract")],
+                ["library", t("admin.door_background.library")],
+              ]}
+              onPick={(background: LoginBackgroundStyle) =>
+                change(() => api.setDoorBackground(background))
+              }
+              disabled={sending}
+            />
+          </Setting>
+          <Setting label={t("admin.door_picture")} why={t("admin.door_picture_why")}>
+            <div className="logo-choice">
+              {shown.door_picture && (
+                <img className="door-choice-picture" src={shown.door_picture} alt="" aria-hidden="true" />
+              )}
+              <input
+                ref={chooser}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                hidden
+                onChange={(event) => {
+                  const image = event.target.files?.[0];
+                  // Emptied, so choosing the same file again is still a choice.
+                  event.target.value = "";
+                  if (image) {
+                    change(() => api.setDoorPicture(image));
+                  }
+                }}
+              />
+              <button
+                className="button button-small"
+                disabled={sending}
+                onClick={() => chooser.current?.click()}
+              >
+                {t(shown.door_picture ? "admin.logo_change" : "admin.logo_choose")}
+              </button>
+              {shown.door_picture && (
+                <button
+                  className="button button-small button-quiet"
+                  disabled={sending}
+                  onClick={() => change(api.removeDoorPicture)}
+                >
+                  {t("admin.logo_remove")}
+                </button>
+              )}
+              {sending && <span className="line-note">{t("settings.avatar_busy")}</span>}
+            </div>
+          </Setting>
+        </>
+      )}
     </Panel>
   );
 }

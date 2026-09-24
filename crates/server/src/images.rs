@@ -38,6 +38,13 @@ pub fn logo_url(logo: &str) -> String {
     format!("/api/v1/public/logo/{logo}")
 }
 
+/// Where the picture behind the sign in screen is served. The logo's route
+/// serves the whole folder of what the administrator sends, and this is one
+/// of them, open to anybody for the same reason.
+pub fn door_picture_url(picture: &str) -> String {
+    logo_url(picture)
+}
+
 /// How long a client may keep a picture.
 ///
 /// A year, and marked as never changing. It is safe because the name carries a

@@ -19,9 +19,6 @@ export function DoorBackground({ branding }: { branding: Branding }) {
   if (branding.login_background_path) {
     return (
       <div className="door-picture" aria-hidden="true">
-        {/* What is stored is what the browser asks for: the day an
-            administrator can upload one, the address it is served at is the
-            address written down. */}
         <img src={branding.login_background_path} alt="" />
         {/* A wash over it, or the card and the words would be read against
             whatever somebody happened to upload. */}
