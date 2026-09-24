@@ -16,6 +16,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { PlaybackPlan, Version, Work } from "../api";
 import { useAsked } from "../asking";
+import type { Trailer } from "../components/trailer";
+import { embedOf } from "../trailers";
 
 /**
  * What the address says when a page is meant to start playing by itself.
@@ -86,21 +88,24 @@ export function groupCrew(crew: { name: string; role: string }[]): [string, stri
 /**
  * Which trailer this film can be offered by, if any.
  *
- * One sitting next to the film on the disk plays from here and is preferred:
- * it needs nobody else's server and nothing loads from outside. One hosted
- * elsewhere is watched where it lives instead.
+ * One sitting next to the film on the disk is preferred: it needs nobody
+ * else's server. Failing that, one on a site that offers its player to other
+ * pages plays here too, in that player. Any other link is watched where it
+ * lives.
  */
 export interface TrailerOnOffer {
-  here: string | null;
+  here: Trailer | null;
   away: string | null;
 }
 
 function trailerToOffer(work: Work | null): TrailerOnOffer {
-  const here = work?.trailers.find((one) => one.url)?.url ?? null;
-  return {
-    here,
-    away: here ? null : (work?.trailers.find((one) => one.remote_url)?.remote_url ?? null),
-  };
+  const file = work?.trailers.find((one) => one.url)?.url ?? null;
+  if (file) {
+    return { here: { file }, away: null };
+  }
+  const links = (work?.trailers ?? []).flatMap((one) => (one.remote_url ? [one.remote_url] : []));
+  const embed = links.map(embedOf).find((address) => address !== null) ?? null;
+  return embed ? { here: { embed }, away: null } : { here: null, away: links[0] ?? null };
 }
 
 /** What is being watched right now, when something is. */
@@ -163,8 +168,8 @@ export interface WorkScreen {
   /** Which trailer the film can be offered by. */
   onOffer: TrailerOnOffer;
   /** The trailer being watched here, when one is. */
-  trailer: string | null;
-  watchTrailer: (url: string) => void;
+  trailer: Trailer | null;
+  watchTrailer: (trailer: Trailer) => void;
   stopTrailer: () => void;
   /** Steps straight to the episode after this one, playing it at once: what
       an episode ending on its own asks for, and what the button beside play
@@ -185,7 +190,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
   const [address, setAddress] = useSearchParams();
   const [chosen, setChosen] = useState(0);
   const [playing, setPlaying] = useState<Watching | null>(null);
-  const [trailer, setTrailer] = useState<string | null>(null);
+  const [trailer, setTrailer] = useState<Trailer | null>(null);
   const [again, setAgain] = useState(0);
 
   const asked = useAsked(
@@ -313,7 +318,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     setPlaying(null);
     look();
   }, [look]);
-  const watchTrailer = useCallback((url: string) => setTrailer(url), []);
+  const watchTrailer = useCallback((wanted: Trailer) => setTrailer(wanted), []);
   const stopTrailer = useCallback(() => setTrailer(null), []);
 
   /* Goes straight to another episode's own page, playing the file already

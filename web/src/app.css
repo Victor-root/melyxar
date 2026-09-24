@@ -3042,6 +3042,8 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .modal {
+  /* The buttons of the head, which are what decides how tall it is. */
+  --modal-step: 34px;
   display: flex;
   flex-direction: column;
   width: min(760px, 100%);
@@ -3075,8 +3077,8 @@ button.seen-mark:not(.seen-mark-on):hover {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: var(--modal-step);
+  height: var(--modal-step);
   border-radius: var(--radius-control);
   color: var(--text-soft);
   transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
@@ -3093,6 +3095,36 @@ button.seen-mark:not(.seen-mark-on):hover {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  padding: var(--gap-wide);
+}
+
+/* A trailer is a picture before anything else: as wide as the window lets a
+   picture of the usual shape be once the head of the panel is under it, and
+   nothing around it. */
+.modal-trailer {
+  width: min(
+    1280px,
+    100%,
+    (100dvh - 2 * var(--gap-wide) - var(--modal-step) - 2 * var(--gap) - 1px) * 16 / 9
+  );
+  max-height: none;
+}
+
+.modal-trailer .modal-body {
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface-deep);
+}
+
+.trailer-picture {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+}
+
+.trailer-notice {
+  margin: 0;
   padding: var(--gap-wide);
 }
 

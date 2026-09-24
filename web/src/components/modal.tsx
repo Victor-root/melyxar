@@ -32,12 +32,15 @@ export function Modal({
       Nothing when the panel is only read, or when what it holds is chosen by
       pressing it rather than by agreeing to it. */
   footer,
+  /** What kind of panel it is, for one shaped differently from the rest. */
+  className,
   children,
 }: {
   title: string;
   onBack?: () => void;
   onClose: () => void;
   footer?: ReactNode;
+  className?: string;
   children: ReactNode;
 }) {
   const { t } = useSettings();
@@ -77,7 +80,7 @@ export function Modal({
       }}
     >
       <div
-        className="modal"
+        className={className ? `modal ${className}` : "modal"}
         role="dialog"
         aria-modal="true"
         aria-label={title}
