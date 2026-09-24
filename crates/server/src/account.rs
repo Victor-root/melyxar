@@ -113,8 +113,10 @@ fn answers_to_anybody(path: &str) -> bool {
         return true;
     }
     // The pictures of the accounts, which the sign in screen shows beside
-    // their names.
+    // their names, and what a browser fetches to install the interface as an
+    // application, which it asks for without the cookie.
     path.starts_with("/api/v1/public/faces/")
+        || path.starts_with("/api/v1/public/app/")
         || matches!(
             path,
             "/api/v1/system/health"
@@ -757,12 +759,14 @@ mod tests {
     }
 
     #[test]
-    fn everything_is_closed_unless_it_is_one_of_the_five() {
+    fn everything_is_closed_unless_it_is_open_on_purpose() {
         for open in [
             "/api/v1/system/health",
             "/api/v1/public/branding",
             "/api/v1/public/names",
             "/api/v1/public/faces/an-account/avatar-abc.webp",
+            "/api/v1/public/app/manifest",
+            "/api/v1/public/app/icon/e50000/0c0d10",
             "/api/v1/session",
             "/api/v1/setup",
         ] {

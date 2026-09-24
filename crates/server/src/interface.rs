@@ -120,7 +120,7 @@ fn file_response(folder: &Path, relative: &Path, asked: &HeaderMap) -> Option<Re
 }
 
 /// What the disk had for one file.
-enum Found {
+pub(crate) enum Found {
     /// The version the browser already holds, which was not read at all.
     Held(String),
     /// Another version, read whole.
@@ -134,7 +134,7 @@ enum Found {
 /// Opened once and described from what was opened rather than from the name:
 /// an update swaps each file whole under the same name, and this way what is
 /// described is always what is read.
-fn look(path: &Path, held: Option<&str>) -> Option<Found> {
+pub(crate) fn look(path: &Path, held: Option<&str>) -> Option<Found> {
     let mut file = std::fs::File::open(path).ok()?;
     let metadata = file.metadata().ok()?;
     if !metadata.is_file() {
@@ -234,7 +234,7 @@ mod tests {
             "index.html",
             "melyxar-shade-64.png",
             "favicon-32.png",
-            "apple-touch-icon.png",
+            "melyxar-shade-inset-512.png",
             "melyxar-1024.webp",
         ] {
             assert!(!asked_again.starts_with(FINGERPRINTED), "{asked_again}");

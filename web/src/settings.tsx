@@ -20,6 +20,7 @@ import { api } from "./api";
 import type { ViewerPreferences } from "./api";
 import { initialLanguage, rememberLanguage, safeRead, safeWrite, translate } from "./i18n";
 import type { Language } from "./i18n";
+import { colourTheWindow, markTheApp } from "./installing";
 import { markTheTab, vividOf } from "./mark";
 
 export type ThemeChoice = "dark" | "light" | "system";
@@ -133,6 +134,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         ? "light"
         : "dark";
       root.dataset.theme = theme === "system" ? system : theme;
+      colourTheWindow();
     };
     apply();
 
@@ -155,6 +157,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       root.style.removeProperty("--accent-contrast");
       root.style.removeProperty("--mark-colour");
       void markTheTab(null);
+      markTheApp();
       return;
     }
     root.dataset.accent = "chosen";
@@ -164,6 +167,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const vivid = vividOf(accent);
     root.style.setProperty("--mark-colour", vivid);
     void markTheTab(vivid);
+    markTheApp();
   }, [accent]);
 
   // The banner writes two numbers onto the document, the way the accent
