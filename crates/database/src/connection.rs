@@ -368,6 +368,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn instants_written_in_the_trimmed_form_are_brought_to_a_fixed_width() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database opens");
+        crate::MIGRATOR
+            .run_to(43, &pool)
+            .await
+            .expect("migrated to just before the fixed width");
+        for (id, at) in [
+            ("round", "2026-09-24T16:32:01.51Z"),
+            ("later", "2026-09-24T16:32:01.515Z"),
+            ("whole", "2026-09-24T16:32:02Z"),
+            ("fixed", "2026-09-24T16:32:03.000000001Z"),
+        ] {
+            sqlx::query("INSERT INTO activity_log (id, occurred_at, kind) VALUES (?, ?, 'x')")
+                .bind(id)
+                .bind(at)
+                .execute(&pool)
+                .await
+                .expect("written in the old form");
+        }
+
+        crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+        let rows: Vec<(String, String)> =
+            sqlx::query_as("SELECT id, occurred_at FROM activity_log ORDER BY occurred_at")
+                .fetch_all(&pool)
+                .await
+                .expect("read");
+        assert_eq!(
+            rows,
+            [
+                ("round", "2026-09-24T16:32:01.510000000Z"),
+                ("later", "2026-09-24T16:32:01.515000000Z"),
+                ("whole", "2026-09-24T16:32:02.000000000Z"),
+                ("fixed", "2026-09-24T16:32:03.000000001Z"),
+            ]
+            .map(|(id, at)| (id.to_string(), at.to_string()))
+        );
+    }
+
+    #[tokio::test]
     async fn running_migrations_twice_changes_nothing() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("melyxar.db");

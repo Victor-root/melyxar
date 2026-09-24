@@ -141,7 +141,7 @@ impl Database {
         let mut transaction = self.begin().await?;
         sqlx::query(sqlx::AssertSqlSafe(format!(
             "INSERT OR REPLACE INTO system_measures (at, span_seconds, {COLUMNS})
-             SELECT substr(at, 1, 13) || ':00:00Z', 3600,
+             SELECT substr(at, 1, 13) || ':00:00.000000000Z', 3600,
                     avg(processor), CAST(avg(memory_used) AS INTEGER), max(memory_total),
                     avg(load), avg(received), avg(sent), avg(card), avg(temperature)
              FROM system_measures

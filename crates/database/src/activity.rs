@@ -361,6 +361,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_line_just_after_a_round_instant_is_counted_after_it() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        database
+            .record_activity(&line(datetime!(2026-01-01 08:00:01.515 UTC), "sign_in_refused"))
+            .await
+            .expect("written");
+        assert_eq!(
+            database
+                .count_activity_since(&["sign_in_refused"], datetime!(2026-01-01 08:00:01.51 UTC))
+                .await
+                .expect("counted"),
+            1
+        );
+    }
+
+    #[tokio::test]
     async fn what_an_administrator_saw_is_kept_for_them_alone_and_moves_on() {
         let database = Database::open_in_memory().await.expect("database opens");
         let one = database

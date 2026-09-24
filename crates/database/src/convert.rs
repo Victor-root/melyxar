@@ -2,10 +2,14 @@
 //!
 //! Instants are stored as text in a sortable form and always in UTC, so that
 //! ordering by date is a plain string comparison and no reader has to guess a
-//! zone. Booleans are stored as zero or one, which is what the engine offers.
+//! zone. Sortable means a fixed width: every digit after the second is written,
+//! zeros included, since `01.51Z` trimmed sorts after `01.515Z`. Booleans are stored as zero or one, which is what the engine offers.
 
 use melyxar_core::time::Timestamp;
 use time::format_description::well_known::Rfc3339;
+use time::format_description::BorrowedFormatItem;
+use time::macros::format_description;
+use time::UtcOffset;
 
 use crate::{DatabaseError, Result};
 
@@ -20,9 +24,16 @@ pub fn parse_id<T: std::str::FromStr>(value: &str) -> Result<T> {
         .map_err(|_| DatabaseError::Corrupt(format!("identifier '{value}' is malformed")))
 }
 
+/// The stored form of an instant: UTC, with all nine digits after the second.
+const STORED: &[BorrowedFormatItem<'static>] =
+    format_description!("[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:9]Z");
+
 /// Renders an instant in the stored form.
 pub fn timestamp_to_text(value: Timestamp) -> String {
-    melyxar_core::time::to_text(value)
+    value
+        .to_offset(UtcOffset::UTC)
+        .format(STORED)
+        .expect("an instant always formats")
 }
 
 /// Reads an instant back from the stored form.
@@ -68,6 +79,25 @@ mod tests {
             "stored instants must be in UTC: {text}"
         );
         assert_eq!(parse_timestamp(&text).expect("parses"), paris);
+    }
+
+    #[test]
+    fn stored_instants_keep_every_digit_after_the_second() {
+        assert_eq!(
+            timestamp_to_text(datetime!(2026-09-24 16:32:01.51 UTC)),
+            "2026-09-24T16:32:01.510000000Z"
+        );
+        assert_eq!(
+            timestamp_to_text(datetime!(2026-09-24 16:32:01 UTC)),
+            "2026-09-24T16:32:01.000000000Z"
+        );
+    }
+
+    #[test]
+    fn instants_a_trimmed_form_put_in_the_wrong_order_sort_right() {
+        let round = timestamp_to_text(datetime!(2026-09-24 16:32:01.51 UTC));
+        let later = timestamp_to_text(datetime!(2026-09-24 16:32:01.515 UTC));
+        assert!(round < later, "{round} must sort before {later}");
     }
 
     #[test]
