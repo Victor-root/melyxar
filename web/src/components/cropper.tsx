@@ -13,6 +13,7 @@ import type { Framing } from "../cropping";
 import { centred, MOST_ZOOM, moved, squareShown, zoomedTo } from "../cropping";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
+import { Slider } from "./panel";
 
 /** How many points across the frame is drawn, which fits a phone held
  *  upright with the margins of the panel around it. */
@@ -156,18 +157,19 @@ export function Cropper({
               />
             )}
           </div>
-          <label className="cropper-zoom">
+          <div className="cropper-zoom">
             <span>{t("crop.zoom")}</span>
-            <input
-              type="range"
+            <Slider
+              label={t("crop.zoom")}
               min={1}
               max={MOST_ZOOM}
               step={0.01}
               value={framing?.zoom ?? 1}
+              shown={`${Math.round((framing?.zoom ?? 1) * 100)} %`}
               disabled={!framing}
-              onChange={(event) => zoomTo(Number(event.target.value))}
+              onChange={zoomTo}
             />
-          </label>
+          </div>
         </div>
       )}
     </Modal>

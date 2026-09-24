@@ -567,12 +567,11 @@
   display: flex;
   align-items: center;
   gap: var(--gap);
-  width: min(260px, 100%);
+  width: min(320px, 100%);
 }
 
-.cropper-zoom input {
+.cropper-zoom .slider {
   flex: 1;
-  accent-color: var(--accent);
 }
 
 /* Who is here, at the end of the piece, and the way into everything that is
