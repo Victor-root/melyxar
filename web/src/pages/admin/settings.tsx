@@ -88,7 +88,7 @@ export function AdminSettings() {
 }
 
 /** The longest a server's name may be, as the server holds it to. */
-const LONGEST_NAME = 60;
+const LONGEST_NAME = 15;
 
 /** What the server answers a request carrying more than it takes. */
 const TOO_LARGE = 413;

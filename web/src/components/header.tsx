@@ -350,7 +350,10 @@ export function Header({
   return (
     <header className={`header${out || looking ? "" : " header-away"}`}>
       <div className="header-inner">
-        <div className="header-piece header-start" ref={start}>
+        <div
+          className={`header-piece header-start${location.pathname !== "/" ? " header-start-back" : ""}`}
+          ref={start}
+        >
           {/* Off the front page only: there is nowhere to come back from
               there, and the brand right next to it already leads home. */}
           {location.pathname !== "/" && (

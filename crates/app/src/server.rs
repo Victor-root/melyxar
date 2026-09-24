@@ -12,9 +12,10 @@ use crate::{AppError, AppState};
 /// first migration gives it.
 pub const DEFAULT_NAME: &str = "Melyxar";
 
-/// The longest a server's name may be, the same as a library's: it is carried
-/// in a browser's tab and under an installed icon, where a longer one is cut.
-pub const LONGEST_NAME: usize = 60;
+/// The longest a server's name may be: it stands in the bar at the top beside
+/// the logo and the way back, where a longer one would reach over the page,
+/// and under an installed icon, where a longer one is cut.
+pub const LONGEST_NAME: usize = 15;
 
 /// Why a name was not taken, in a word the interface turns into a sentence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
