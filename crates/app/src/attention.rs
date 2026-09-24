@@ -3,8 +3,11 @@
 //!
 //! Worked out every time it is asked for and never stored. A point born of
 //! past events or of a count can be marked as seen, and is quiet until
-//! something new happens; a point that describes something still wrong
-//! cannot, and goes once it is put right.
+//! something new happens. So can a disk nearly full, which is worth knowing
+//! and rarely worth being told again: it stays quiet while it stays full,
+//! and speaks again if it fills again after having had room. Every other
+//! point describes something still wrong, cannot be seen away, and goes once
+//! it is put right.
 
 use std::collections::HashMap;
 
@@ -56,11 +59,12 @@ pub struct Shown {
 
 impl Point {
     /// What its being seen is written down under, for a point that can be.
-    fn key(&self) -> Option<&'static str> {
+    fn key(&self) -> Option<String> {
         match self {
-            Self::RefusedSignIns { .. } => Some("refused_sign_ins"),
-            Self::FailedTasks { .. } => Some("failed_tasks"),
-            Self::Unidentified { .. } => Some("unidentified"),
+            Self::RefusedSignIns { .. } => Some("refused_sign_ins".to_string()),
+            Self::FailedTasks { .. } => Some("failed_tasks".to_string()),
+            Self::Unidentified { .. } => Some("unidentified".to_string()),
+            Self::Worry(Worry::DiskNearlyFull { mount, .. }) => Some(disk_key(mount)),
             Self::Worry(_) | Self::FallingBehind { .. } => None,
         }
     }
@@ -81,9 +85,18 @@ impl Point {
         match self {
             Self::RefusedSignIns { .. } | Self::FailedTasks { .. } => Some(milliseconds(now)),
             Self::Unidentified { count } => Some(*count),
+            // Seen or not, nothing to count: it is quiet while it lasts.
+            Self::Worry(Worry::DiskNearlyFull { .. }) => Some(1),
             Self::Worry(_) | Self::FallingBehind { .. } => None,
         }
     }
+}
+
+/// What a disk nearly full is marked seen under, one per disk.
+const DISK_FULL: &str = "disk_full:";
+
+fn disk_key(mount: &str) -> String {
+    format!("{DISK_FULL}{mount}")
 }
 
 fn milliseconds(at: Timestamp) -> i64 {
@@ -103,15 +116,41 @@ fn counted_since(seen: &HashMap<String, i64>, key: &str, now: Timestamp) -> Time
         .map_or(a_day_ago, |seen_at| seen_at.max(a_day_ago))
 }
 
-/// Everything there is to look at, as it stands, in the order it matters.
-async fn everything(state: &AppState, seen: &HashMap<String, i64>, now: Timestamp) -> Result<Vec<Point>> {
-    let database = state.database();
-    let mut points: Vec<Point> = crate::overview::collect(state)
-        .await?
-        .worries
+/// The lights of the summary that failed their check, less the disks nearly
+/// full this administrator has already seen.
+fn worries_unseen(worries: Vec<Worry>, seen: &HashMap<String, i64>) -> Vec<Point> {
+    worries
         .into_iter()
+        .filter(|worry| match worry {
+            Worry::DiskNearlyFull { mount, .. } => !seen.contains_key(&disk_key(mount)),
+            _ => true,
+        })
         .map(Point::Worry)
-        .collect();
+        .collect()
+}
+
+/// The disks seen nearly full that have room again.
+fn seen_with_room<'a>(worries: &[Worry], seen: &'a HashMap<String, i64>) -> Vec<&'a str> {
+    seen.keys()
+        .filter(|key| key.starts_with(DISK_FULL))
+        .filter(|key| {
+            !worries.iter().any(|worry| {
+                matches!(worry, Worry::DiskNearlyFull { mount, .. } if disk_key(mount) == **key)
+            })
+        })
+        .map(String::as_str)
+        .collect()
+}
+
+/// Everything there is to look at, as it stands, in the order it matters.
+async fn everything(
+    state: &AppState,
+    worries: Vec<Worry>,
+    seen: &HashMap<String, i64>,
+    now: Timestamp,
+) -> Result<Vec<Point>> {
+    let database = state.database();
+    let mut points = worries_unseen(worries, seen);
 
     let failed = database
         .count_activity_since(&[TASK_FAILED], counted_since(seen, "failed_tasks", now))
@@ -154,7 +193,13 @@ async fn seen_by(state: &AppState, user: UserId) -> Result<HashMap<String, i64>>
 /// left out until something new happens.
 pub async fn points(state: &AppState, user: UserId) -> Result<Vec<Shown>> {
     let seen = seen_by(state, user).await?;
-    let points = everything(state, &seen, melyxar_core::time::now()).await?;
+    let worries = crate::overview::collect(state).await?.worries;
+    // A disk seen full that has room again is forgotten as seen, so that
+    // filling up again later is told as the news it is.
+    for key in seen_with_room(&worries, &seen) {
+        state.database().forget_attention_seen(user, key).await?;
+    }
+    let points = everything(state, worries, &seen, melyxar_core::time::now()).await?;
     Ok(points
         .into_iter()
         .map(|point| Shown {
@@ -169,9 +214,10 @@ pub async fn points(state: &AppState, user: UserId) -> Result<Vec<Shown>> {
 pub async fn mark_seen(state: &AppState, user: UserId) -> Result<()> {
     let now = melyxar_core::time::now();
     let seen = seen_by(state, user).await?;
-    for point in everything(state, &seen, now).await? {
+    let worries = crate::overview::collect(state).await?.worries;
+    for point in everything(state, worries, &seen, now).await? {
         if let (Some(key), Some(mark)) = (point.key(), point.mark_now(now)) {
-            state.database().mark_attention_seen(user, key, mark).await?;
+            state.database().mark_attention_seen(user, &key, mark).await?;
         }
     }
     Ok(())
@@ -217,6 +263,31 @@ mod tests {
             .filter(|one| !matches!(one.point, Point::Worry(_)))
             .map(|one| one.point.clone())
             .collect()
+    }
+
+    #[test]
+    fn a_full_disk_seen_is_quiet_while_it_stays_full_and_forgotten_once_it_has_room() {
+        let full = |mount: &str| Worry::DiskNearlyFull {
+            mount: mount.to_string(),
+            used: 0.97,
+        };
+        let seen: HashMap<String, i64> = [(disk_key("/mnt/one"), 1), (disk_key("/mnt/gone"), 1)]
+            .into_iter()
+            .collect();
+        let worries = vec![full("/mnt/one"), full("/mnt/two"), Worry::CardUnreachable];
+
+        assert_eq!(
+            worries_unseen(worries.clone(), &seen),
+            vec![Point::Worry(full("/mnt/two")), Point::Worry(Worry::CardUnreachable)],
+            "the disk seen is quiet, the one not seen and the card still speak"
+        );
+        assert_eq!(
+            seen_with_room(&worries, &seen),
+            vec![disk_key("/mnt/gone").as_str()],
+            "only the disk that has room again is forgotten"
+        );
+        assert!(Point::Worry(full("/mnt/one")).key().is_some());
+        assert!(Point::Worry(Worry::CardUnreachable).key().is_none());
     }
 
     #[tokio::test]

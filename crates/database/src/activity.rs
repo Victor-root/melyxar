@@ -178,6 +178,16 @@ impl Database {
         )
     }
 
+    /// Forgets that this administrator saw a point.
+    pub async fn forget_attention_seen(&self, user_id: UserId, item: &str) -> Result<()> {
+        sqlx::query("DELETE FROM attention_seen WHERE user_id = ? AND item = ?")
+            .bind(user_id.to_db_string())
+            .bind(item)
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// Writes down that this administrator saw a point as far as this mark.
     pub async fn mark_attention_seen(&self, user_id: UserId, item: &str, mark: i64) -> Result<()> {
         sqlx::query(
@@ -373,5 +383,11 @@ mod tests {
             vec![("failed_tasks".to_string(), 99), ("unidentified".to_string(), 15)]
         );
         assert!(database.attention_seen(other.id).await.expect("read").is_empty());
+
+        database.forget_attention_seen(one.id, "failed_tasks").await.expect("forgotten");
+        assert_eq!(
+            database.attention_seen(one.id).await.expect("read"),
+            vec![("unidentified".to_string(), 15)]
+        );
     }
 }

@@ -852,7 +852,17 @@ function Bell({ administrator }: { administrator: boolean }) {
         </>
       }
     >
-      <span className="bell-title">{t("admin.watch")}</span>
+      {/* Marking them seen sits with the title rather than under the last
+          point, where a long list would push it out of reach. */}
+      <span className="bell-head">
+        <span className="bell-title">{t("admin.watch")}</span>
+        {shown.some((point) => point.may_be_seen) && (
+          <button type="button" className="bell-seen" onClick={() => void markSeen()}>
+            <TickIcon size={14} />
+            {t("attention.mark_seen")}
+          </button>
+        )}
+      </span>
       {shown.length === 0 && <span className="bell-none">{t("attention.none")}</span>}
       {shown.map((point, index) => {
         const said = sayPoint(point, t, language);
@@ -863,12 +873,6 @@ function Bell({ administrator }: { administrator: boolean }) {
           </Link>
         );
       })}
-      {shown.some((point) => point.may_be_seen) && (
-        <button type="button" className="header-menu-line" onClick={() => void markSeen()}>
-          <TickIcon size={16} />
-          {t("attention.mark_seen")}
-        </button>
-      )}
     </Dropdown>
   );
 }
