@@ -1701,15 +1701,6 @@
     color var(--quick) var(--ease);
 }
 
-/* The chevron slides inside its disc, and the disc stays in its corner. */
-.band-arrow > svg {
-  transition: transform var(--quick) var(--ease);
-}
-
-.band-tile:hover .band-arrow > svg {
-  transform: translateX(2px);
-}
-
 .band-tile:hover .band-arrow {
   background: var(--accent);
   box-shadow:
@@ -1720,10 +1711,9 @@
 
 /* Somebody who asked their system for less movement still gets the light and
    the ring that say which tile they are on; what they do not get is the
-   growing, the chevron sliding and the fan opening under them. */
+   growing and the fan opening under them. */
 @media (prefers-reduced-motion: reduce) {
-  .band-tile:hover,
-  .band-tile:hover .band-arrow > svg {
+  .band-tile:hover {
     transform: none;
   }
 
