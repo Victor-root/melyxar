@@ -31,7 +31,10 @@ import {
 import { markFor, useBranding } from "./logo";
 import { useKeptLoudness } from "./loudness";
 import { Rail, Sound, useControlsFade, useTransportKeys } from "./overlay";
+import { Spinner } from "./spinner";
 import { useYouTubeTrailer } from "./youtube";
+import type { TrailerState } from "./youtube";
+import { useShownPicture } from "../components/picture";
 import "./player.css";
 
 /** Where a trailer plays from. */
@@ -59,9 +62,9 @@ export function TrailerPlayer({
 
 function FileTrailer({ url, work, onClose }: { url: string; work: Work; onClose: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
-  const { transport, failed } = useFileTrailer(video);
+  const trailer = useFileTrailer(video);
   return (
-    <TrailerStage work={work} transport={transport} failed={failed} onClose={onClose}>
+    <TrailerStage work={work} trailer={trailer} onClose={onClose}>
       <video ref={video} className="player-video" src={url} autoPlay />
     </TrailerStage>
   );
@@ -77,18 +80,22 @@ function YouTubeTrailer({
   onClose: () => void;
 }) {
   const holder = useRef<HTMLDivElement>(null);
-  const { transport, failed } = useYouTubeTrailer(holder, videoKey);
+  const trailer = useYouTubeTrailer(holder, videoKey);
   return (
     <TrailerStage
       work={work}
-      transport={transport}
-      failed={failed}
+      trailer={trailer}
       /* Some trailers are only allowed to play on YouTube itself: the way
          there is offered rather than a dead end. */
       elsewhere={`https://www.youtube.com/watch?v=${encodeURIComponent(videoKey)}`}
       onClose={onClose}
     >
-      <div ref={holder} className="trailer-frame" />
+      {/* The picture's own box, as large as the stage allows in the shape
+          YouTube plays in, with YouTube's player taller than it: its title
+          and its mark sit above and below the picture, outside the box. */}
+      <div className="trailer-frame">
+        <div className="trailer-window" ref={holder} />
+      </div>
     </TrailerStage>
   );
 }
@@ -98,25 +105,27 @@ function YouTubeTrailer({
  *
  * A layer lies over the picture and takes every click, so YouTube's player
  * underneath never sees a pointer and never draws anything of its own; a
- * click on it starts or stops the trailer, and two fill the screen.
+ * click on it starts or stops the trailer, and two fill the screen. Whenever
+ * the picture may not be shown, the film's own backdrop stands in front of it
+ * instead. A trailer played to its end goes back to the page it came from.
  */
 function TrailerStage({
   work,
-  transport,
-  failed,
+  trailer,
   elsewhere,
   onClose,
   children,
 }: {
   work: Work;
-  transport: Transport;
-  failed: boolean;
+  trailer: TrailerState;
   /** Where it can be watched instead, when it will not play here. */
   elsewhere?: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
   const { t } = useSettings();
+  const { transport, failed, loading, shown, ended } = trailer;
+  const { picture: backdrop } = useShownPicture(work.backdrop);
   const stage = useRef<HTMLDivElement>(null);
   const fullscreen = useFullscreen(stage);
   const branding = useBranding();
@@ -131,18 +140,34 @@ function TrailerStage({
   }, [onClose]);
   useTransportKeys(transport, fullscreen, escape, stir);
 
+  useEffect(() => {
+    if (ended) {
+      onClose();
+    }
+  }, [ended, onClose]);
+
   return (
     <div className="player" role="dialog" aria-label={`${work.title}, ${t("work.trailer")}`}>
       <div className="player-stage" ref={stage}>
         {/* A picture that will not play is taken away rather than left
             saying so in somebody else's words. */}
         {!failed && children}
+        {!shown && (
+          <div className="trailer-curtain" aria-hidden="true">
+            {backdrop && <img src={backdrop.src} srcSet={backdrop.srcSet} sizes="100vw" alt="" />}
+          </div>
+        )}
         <div
           className="trailer-surface"
           onClick={transport.playOrPause}
           onDoubleClick={fullscreen.toggle}
         />
 
+        {loading && (
+          <div className="player-notices">
+            <Spinner />
+          </div>
+        )}
         {failed && (
           <div className="player-notices">
             <p className="player-notice">
@@ -253,11 +278,9 @@ function TrailerStage({
  * itself is almost always one a browser opens, and a whole engine for the
  * exception would cost more than it saves.
  */
-function useFileTrailer(video: React.RefObject<HTMLVideoElement | null>): {
-  transport: Transport;
-  failed: boolean;
-} {
+function useFileTrailer(video: React.RefObject<HTMLVideoElement | null>): TrailerState {
   const [failed, setFailed] = useState(false);
+  const [ended, setEnded] = useState(false);
   const [at, setAt] = useState(0);
   const [length, setLength] = useState(0);
   const [loaded, setLoaded] = useState(0);
@@ -283,6 +306,7 @@ function useFileTrailer(video: React.RefObject<HTMLVideoElement | null>): {
       setLength(Number.isFinite(element.duration) ? element.duration : 0);
       setLoaded(element.buffered.length > 0 ? element.buffered.end(element.buffered.length - 1) : 0);
       setPlaying(!element.paused && !element.ended);
+      setEnded(element.ended);
     };
     const broke = () => setFailed(true);
     const heard = ["timeupdate", "durationchange", "progress", "play", "pause", "ended"];
@@ -330,5 +354,7 @@ function useFileTrailer(video: React.RefObject<HTMLVideoElement | null>): {
     };
   }, [video, at, length, loaded, playing, sound, hear]);
 
-  return { transport, failed };
+  /* A file draws nothing of its own over the picture, so it is shown
+     paused as well as playing. */
+  return { transport, failed, loading: false, shown: true, ended };
 }

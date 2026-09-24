@@ -11,6 +11,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Transport } from "./engine";
+
+/** What a trailer is doing, for the stage it plays on. */
+export interface TrailerState {
+  transport: Transport;
+  failed: boolean;
+  /** Still on its way, before anything can be pressed. */
+  loading: boolean;
+  /** Whether the picture may be shown right now. */
+  shown: boolean;
+  /** Played to its end. */
+  ended: boolean;
+}
 import { useKeptLoudness } from "./loudness";
 
 /** Which video a link to YouTube names, or nothing for any other link. */
@@ -71,8 +83,10 @@ declare global {
   }
 }
 
-/** YouTube's word for a video that is playing. */
+/** YouTube's words for where its player stands. */
+const ENDED = 0;
 const PLAYING = 1;
+const BUFFERING = 3;
 
 /** How often the player is asked where it is: often enough for the bar to
  *  move smoothly, rarely enough to cost nothing. */
@@ -112,19 +126,32 @@ function youTubeApi(): Promise<YouTubeApi> {
  *
  * The element is YouTube's once the player is in it: nothing drawn by React
  * goes inside, and it is emptied again on the way out.
+ *
+ * Whether the picture may be shown is part of the answer. YouTube's player
+ * draws its own things over the picture whenever it is not playing: a play
+ * button before it starts, its title and suggestions when paused, a wall of
+ * other videos at the end. The picture is shown only while it plays, and
+ * while it catches its breath once it has started.
  */
 export function useYouTubeTrailer(
   holder: React.RefObject<HTMLDivElement | null>,
   videoKey: string,
-): { transport: Transport; failed: boolean } {
+): TrailerState {
   const player = useRef<YouTubePlayer | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [at, setAt] = useState(0);
   const [length, setLength] = useState(0);
   const [loaded, setLoaded] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [state, setState] = useState<number | null>(null);
+  const [started, setStarted] = useState(false);
   const [sound, hear] = useKeptLoudness();
+  const playing = state === PLAYING;
+  useEffect(() => {
+    if (playing) {
+      setStarted(true);
+    }
+  }, [playing]);
 
   useEffect(() => {
     const box = holder.current;
@@ -158,7 +185,7 @@ export function useYouTubeTrailer(
           },
           events: {
             onReady: () => setReady(true),
-            onStateChange: (event) => setPlaying(event.data === PLAYING),
+            onStateChange: (event) => setState(event.data),
             onError: () => setFailed(true),
           },
         });
@@ -205,7 +232,7 @@ export function useYouTubeTrailer(
       setAt(it.getCurrentTime());
       setLength(whole);
       setLoaded(it.getVideoLoadedFraction() * whole);
-      setPlaying(it.getPlayerState() === PLAYING);
+      setState(it.getPlayerState());
     };
     ask();
     const every = window.setInterval(ask, ASKED_EVERY_MS);
@@ -247,5 +274,11 @@ export function useYouTubeTrailer(
     [at, length, loaded, playing, sound, hear, goTo],
   );
 
-  return { transport, failed };
+  return {
+    transport,
+    failed,
+    loading: !ready && !failed,
+    shown: playing || (started && state === BUFFERING),
+    ended: state === ENDED,
+  };
 }
