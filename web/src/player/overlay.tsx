@@ -63,7 +63,7 @@ import { GearIcon } from "../icons";
 import type { Mark } from "./logo";
 import { QUALITIES, qualityName } from "./quality";
 import { CODECS, codecName } from "./codec";
-import { nameOfOne, numberOfOne } from "../readable";
+import { captionOf } from "../readable";
 import { FADES_AFTER_MS } from "./settings";
 import type { PlayerSettings } from "./settings";
 import { Thumbnail } from "./thumbnail";
@@ -446,21 +446,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
       // number and its own name, so that is said here whether or not the
       // series has a mark at all.
       if (surroundings.work.kind === "episode") {
-        const season =
-          surroundings.work.ancestry.find((up) => up.kind === "season") ?? null;
-        const caption =
-          [
-            season && numberOfOne("season", season.number, t),
-            nameOfOne(
-              "episode",
-              surroundings.work.number,
-              surroundings.work.has_own_name ? surroundings.work.title : null,
-              t,
-            ),
-          ]
-            .filter(Boolean)
-            .join(" · ") || surroundings.work.title;
-        return <span className="player-title">{caption}</span>;
+        return <span className="player-title">{captionOf(surroundings.work, t)}</span>;
       }
       // Written out only when there is no mark to show instead: a wordmark
       // and the same words beside it is the title twice.

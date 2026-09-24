@@ -36,6 +36,41 @@ export function nameOfOne(
   return title ? `${numbered} · ${title}` : numbered;
 }
 
+/** What is in hand to name something being played. */
+interface Played {
+  kind: string;
+  title: string;
+  number: number | null;
+  has_own_name: boolean;
+  ancestry: { kind: string; number: number | null; title: string }[];
+}
+
+/**
+ * How an episode is told from the others of its series: its season, its
+ * number and its own name. Anything else is its title.
+ */
+export function captionOf(work: Played, t: Wording): string {
+  if (work.kind !== "episode") {
+    return work.title;
+  }
+  const season = work.ancestry.find((up) => up.kind === "season") ?? null;
+  return (
+    [
+      season && numberOfOne("season", season.number, t),
+      nameOfOne("episode", work.number, work.has_own_name ? work.title : null, t),
+    ]
+      .filter(Boolean)
+      .join(" · ") || work.title
+  );
+}
+
+/** What is being played, said whole: an episode leads with its series. */
+export function nameOfPlayed(work: Played, t: Wording): string {
+  const series = work.ancestry.find((up) => up.kind === "series");
+  const caption = captionOf(work, t);
+  return work.kind === "episode" && series ? `${series.title} · ${caption}` : caption;
+}
+
 /** The number alone, for a row that shows the name in a column of its own. */
 export function numberOfOne(kind: string, number: number | null, t: Wording): string {
   if (number === null) {

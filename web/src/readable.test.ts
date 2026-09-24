@@ -14,11 +14,13 @@ import {
   amountOfData,
   asLocalTime,
   asUtcMinutes,
+  captionOf,
   containerName,
   howLong,
   whatIsLeft,
   howLongSince,
   insideTheRange,
+  nameOfPlayed,
   networkRate,
   outOfAHundred,
   outOfTen,
@@ -247,5 +249,38 @@ describe("days", () => {
 
   it("writes today on the reader's calendar", () => {
     expect(todayOf(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
+  });
+});
+
+describe("what is being played", () => {
+  const series = { kind: "series", number: null, title: "The Quiet Coast" };
+  const season = { kind: "season", number: 2, title: "Season 2" };
+  const episode = {
+    kind: "episode",
+    title: "Low Tide",
+    number: 5,
+    has_own_name: true,
+    ancestry: [season, series],
+  };
+
+  it("names a film by its title", () => {
+    const film = { kind: "movie", title: "Ardent Harbour", number: null, has_own_name: true, ancestry: [] };
+    expect(captionOf(film, said)).toBe("Ardent Harbour");
+    expect(nameOfPlayed(film, said)).toBe("Ardent Harbour");
+  });
+
+  it("leads an episode with its series, then its season, number and name", () => {
+    expect(captionOf(episode, said)).toBe(
+      'work.season({"number":2}) · work.episode({"number":5}) · Low Tide',
+    );
+    expect(nameOfPlayed(episode, said)).toBe(
+      'The Quiet Coast · work.season({"number":2}) · work.episode({"number":5}) · Low Tide',
+    );
+  });
+
+  it("leaves out a name a scan only numbered", () => {
+    expect(captionOf({ ...episode, has_own_name: false }, said)).toBe(
+      'work.season({"number":2}) · work.episode({"number":5})',
+    );
   });
 });
