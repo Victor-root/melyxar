@@ -18,9 +18,10 @@
  * standing over the same part of the picture.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlaybackTrack, Work } from "../api";
 import { useToast } from "../components/toasts";
+import { nameOfPlayed } from "../readable";
 import { useSettings } from "../settings";
 import { appearanceClasses, rememberAppearance, storedAppearance } from "./appearance";
 import type { Appearance } from "./appearance";
@@ -128,6 +129,16 @@ export function Player({
     work.logo.length > 0
       ? markFor(title, work.logo, branding)
       : markFor(series?.title ?? title, series?.logo ?? [], branding);
+
+  /* The tab says what is playing, and gives its name back once it stops. */
+  const playing = nameOfPlayed(work, t);
+  useEffect(() => {
+    const before = document.title;
+    document.title = playing;
+    return () => {
+      document.title = before;
+    };
+  }, [playing]);
 
   const setAppearance = (change: Partial<Appearance>) => {
     const next = { ...appearance, ...change };
