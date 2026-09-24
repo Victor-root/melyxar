@@ -25,6 +25,7 @@ export function PersonPage() {
   const asked = useAsked(
     (signal) => (id ? api.person(id, signal) : Promise.resolve(null)),
     [id],
+    id ? `person:${id}` : undefined,
   );
   const person = asked.waiting ? null : asked.answer;
 

@@ -59,7 +59,11 @@ export function useHomeScreen(libraries: Library[]): HomeScreen {
      row holds: a film put on the front page, an episode ticked off. What
      takes its place is the server's answer, so it is asked again. */
   const marks = useMarks();
-  const asked = useAsked((signal) => api.home(undefined, signal), [finished, marks.rowsMoved]);
+  const asked = useAsked(
+    (signal) => api.home(undefined, signal),
+    [finished, marks.rowsMoved],
+    "home",
+  );
 
   /* The rows of unfinished work say what is unfinished now, not what was when
      the page was read. A tick pressed on one of their cards has to empty its

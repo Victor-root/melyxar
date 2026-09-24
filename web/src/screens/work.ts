@@ -196,6 +196,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
   const asked = useAsked(
     (signal) => (id ? api.work(id, signal) : Promise.resolve(null)),
     [id, again],
+    id ? `work:${id}` : undefined,
   );
 
   /* A different film is a different copy list, so the copy being looked at
@@ -215,6 +216,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     (signal) =>
       version && !version.missing ? api.plan(version.id, {}, signal) : Promise.resolve(null),
     [work, chosen],
+    version ? `plan:${version.id}` : undefined,
   );
   /* A copy that is not on the disk has nothing to play, and a reading that
      failed says nothing about where anybody stopped or what they chose. */

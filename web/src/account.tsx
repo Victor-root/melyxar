@@ -16,6 +16,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { api, whenTheDoorCloses } from "./api";
 import type { Account, Branding } from "./api";
 import { foundBrowser } from "./devices";
+import { forgetKept } from "./kept";
 
 export interface Who {
   /** The account, or nothing when nobody is signed in. */
@@ -122,12 +123,16 @@ export function useWhoIsThere(): Who {
   // back to the door, and the door is drawn again from a fresh answer.
   useEffect(() => {
     whenTheDoorCloses(() => {
+      forgetKept();
       setAccount(null);
       setBranding(null);
     });
   }, []);
 
+  /* What the screens kept belongs to whoever was here before: another
+     account, or the same one on a session that ended. */
   const cameIn = useCallback((who: Account) => {
+    forgetKept();
     setAccount(who);
     setStillAsking(false);
   }, []);
@@ -140,6 +145,7 @@ export function useWhoIsThere(): Who {
       // answer. One that never arrives leaves a session the server sweeps on
       // its own, and there is nothing here to say about it.
     }
+    forgetKept();
     setAccount(null);
     setBranding(null);
   }, []);
