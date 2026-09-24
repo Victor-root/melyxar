@@ -122,16 +122,6 @@ function youTubeApi(): Promise<YouTubeApi> {
 }
 
 /**
- * How long YouTube's player keeps its own controls over the picture once it
- * has started playing, before they fade by themselves. Measured on the
- * maintainer's screen as a few seconds; a little more is kept to be sure.
- */
-const ITS_CONTROLS_FADE_MS = 3_500;
-
-/** A moment close enough to another not to be worth a jump. */
-const CLOSE_ENOUGH = 0.5;
-
-/**
  * Plays one YouTube video in the element handed over, and drives it.
  *
  * The element is YouTube's once the player is in it: nothing drawn by React
@@ -140,12 +130,8 @@ const CLOSE_ENOUGH = 0.5;
  * Whether the picture may be shown is part of the answer. YouTube's player
  * draws its own things over the picture whenever it is not playing: a play
  * button before it starts, its title and suggestions when paused, a wall of
- * other videos at the end. And for a few seconds after it starts playing, its
- * own controls, whatever it was told. So every start is a warm up: the video
- * plays silent behind the stage for as long as those controls stay, from a
- * little before the moment wanted, and is shown and heard only once it has
- * reached it with the controls gone. Nobody ever hears it without seeing it,
- * and nobody sees what YouTube draws.
+ * other videos at the end. The picture is shown only while it plays, and
+ * while it catches its breath once it has started.
  */
 export function useYouTubeTrailer(
   holder: React.RefObject<HTMLDivElement | null>,
@@ -158,13 +144,14 @@ export function useYouTubeTrailer(
   const [length, setLength] = useState(0);
   const [loaded, setLoaded] = useState(0);
   const [state, setState] = useState<number | null>(null);
-  /* Where a warm up is leading to, while one is under way. The first one
-     leads to the very beginning. */
-  const [warmingTo, setWarmingTo] = useState<number | null>(0);
   const [started, setStarted] = useState(false);
   const [sound, hear] = useKeptLoudness();
   const playing = state === PLAYING;
-  const warming = warmingTo !== null;
+  useEffect(() => {
+    if (playing) {
+      setStarted(true);
+    }
+  }, [playing]);
 
   useEffect(() => {
     const box = holder.current;
@@ -188,8 +175,6 @@ export function useYouTubeTrailer(
           height: "100%",
           playerVars: {
             autoplay: 1,
-            // Silent from the first frame: the first warm up starts at once.
-            mute: 1,
             controls: 0,
             disablekb: 1,
             fs: 0,
@@ -219,15 +204,11 @@ export function useYouTubeTrailer(
     };
   }, [holder, videoKey]);
 
-  /* Silent while warming up; otherwise the sound the viewer keeps for every
-     film, applied again whenever it changes. */
+  /* The sound the viewer keeps for every film, applied once the player can
+     hear it and again whenever it changes. */
   useEffect(() => {
     const it = player.current;
     if (!ready || !it) {
-      return;
-    }
-    if (warming) {
-      it.mute();
       return;
     }
     it.setVolume(Math.round(sound.volume * 100));
@@ -236,26 +217,7 @@ export function useYouTubeTrailer(
     } else {
       it.unMute();
     }
-  }, [ready, sound, warming]);
-
-  /* The warm up ends once it has played long enough for YouTube's controls
-     to have gone: put on the moment wanted if it is not already there, and
-     shown. Counted from when it really plays, and again from nothing if it
-     stops on the way. */
-  useEffect(() => {
-    if (warmingTo === null || !playing) {
-      return;
-    }
-    const done = window.setTimeout(() => {
-      const it = player.current;
-      if (it && Math.abs(it.getCurrentTime() - warmingTo) > CLOSE_ENOUGH) {
-        it.seekTo(warmingTo, true);
-      }
-      setWarmingTo(null);
-      setStarted(true);
-    }, ITS_CONTROLS_FADE_MS);
-    return () => window.clearTimeout(done);
-  }, [warmingTo, playing]);
+  }, [ready, sound]);
 
   useEffect(() => {
     if (!ready) {
@@ -277,26 +239,18 @@ export function useYouTubeTrailer(
     return () => window.clearInterval(every);
   }, [ready]);
 
-  /* Put somewhere during a warm up, the warm up leads there instead. */
   const goTo = useCallback(
     (seconds: number) => {
       const place = Math.min(Math.max(0, seconds), length || seconds);
-      if (warming) {
-        player.current?.seekTo(Math.max(0, place - ITS_CONTROLS_FADE_MS / 1000), true);
-        setWarmingTo(place);
-        return;
-      }
       player.current?.seekTo(place, true);
       setAt(place);
     },
-    [length, warming],
+    [length],
   );
 
   const transport = useMemo<Transport>(
     () => ({
-      /* The moment the viewer is waiting for, not the one the silent run
-         has got to. */
-      at: warmingTo ?? at,
+      at,
       length,
       loaded,
       playing,
@@ -306,35 +260,25 @@ export function useYouTubeTrailer(
       setMuted: (muted) => hear({ muted }),
       playOrPause: () => {
         const it = player.current;
-        if (!it) {
-          return;
-        }
-        if (playing) {
-          // Stopped during a warm up, it waits where the viewer left it.
-          if (warmingTo !== null) {
-            it.seekTo(warmingTo, true);
-            setWarmingTo(null);
+        if (it) {
+          if (playing) {
+            it.pauseVideo();
+          } else {
+            it.playVideo();
           }
-          it.pauseVideo();
-          return;
         }
-        // Every start is a warm up, leading back to where it stopped.
-        const wanted = warmingTo ?? it.getCurrentTime();
-        it.seekTo(Math.max(0, wanted - ITS_CONTROLS_FADE_MS / 1000), true);
-        setWarmingTo(wanted);
-        it.playVideo();
       },
-      stepBy: (seconds) => goTo((warmingTo ?? at) + seconds),
+      stepBy: (seconds) => goTo(at + seconds),
       goTo,
     }),
-    [at, warmingTo, length, loaded, playing, sound, hear, goTo],
+    [at, length, loaded, playing, sound, hear, goTo],
   );
 
   return {
     transport,
     failed,
-    loading: !failed && (!ready || (warming && (playing || state === BUFFERING))),
-    shown: !warming && (playing || (started && state === BUFFERING)),
+    loading: !ready && !failed,
+    shown: playing || (started && state === BUFFERING),
     ended: state === ENDED,
   };
 }
