@@ -26,6 +26,7 @@ use axum::Router;
 use melyxar_app::AppState;
 
 use crate::images::safe_relative_path;
+use crate::ServerError;
 
 /// The page every address of the interface is answered with.
 const PAGE: &str = "index.html";
@@ -55,6 +56,12 @@ async fn serve(State(state): State<AppState>, asked: HeaderMap, uri: Uri) -> Res
 
 /// What one address is answered with, out of the folder the interface is in.
 fn from_the_folder(folder: &Path, address: &str, asked: &HeaderMap) -> Response {
+    // An address of the surface that no route answered is one that does not
+    // exist. Handed the page, a client calling a mistyped address would be
+    // told it had worked, and read a page of the interface as the answer.
+    if crate::routes::on_the_surface(address) {
+        return ServerError::not_found("no route answers that address").into_response();
+    }
     // Anything under the interface that is not a file is one of its own
     // addresses, and those are answered with the page: the interface reads the
     // address itself and shows the right screen. A name that would reach out
@@ -303,6 +310,24 @@ mod tests {
             assert_eq!(body, "the page", "{address}");
             assert_eq!(headers[header::CACHE_CONTROL], ALWAYS_ASK, "{address}");
         }
+    }
+
+    #[tokio::test]
+    async fn an_address_of_the_surface_no_route_answers_is_not_found() {
+        // Seen as a mistyped address answered with the page and a success,
+        // which a client reads as having worked.
+        let folder = an_installed_interface();
+        for address in ["/api/v1/playback/still-playing", "/API/v1/nothing", "/api"] {
+            let (status, headers, body) = answer(folder.path(), address, &HeaderMap::new()).await;
+            assert_eq!(status, StatusCode::NOT_FOUND, "{address}");
+            assert_eq!(headers[header::CONTENT_TYPE], "application/json", "{address}");
+            assert!(body.contains(r#""code":"not_found""#), "{address}: {body}");
+        }
+
+        // And a page of the interface is still the page.
+        let (status, _, body) = answer(folder.path(), "/library/abc", &HeaderMap::new()).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, "the page");
     }
 
     #[tokio::test]

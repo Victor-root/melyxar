@@ -101,15 +101,7 @@ pub fn router() -> Router<AppState> {
 /// server nobody can sign into. They hold no library and no name: the
 /// interface is the same for every installation of this server.
 fn answers_to_anybody(path: &str) -> bool {
-    // Read without regard to case, so that an address spelt `/API/...` is
-    // still an address of the interface's own surface rather than a page of
-    // it. The router would not match it either way, but a door has to be shut
-    // for a reason rather than by luck.
-    const THE_SURFACE: &[u8] = b"/api";
-    let bytes = path.as_bytes();
-    if bytes.len() < THE_SURFACE.len()
-        || !bytes[..THE_SURFACE.len()].eq_ignore_ascii_case(THE_SURFACE)
-    {
+    if !crate::routes::on_the_surface(path) {
         return true;
     }
     // The pictures of the accounts, which the sign in screen shows beside
