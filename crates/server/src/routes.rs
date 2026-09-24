@@ -18,6 +18,20 @@ use crate::error::Result;
 /// replacing this one and breaking clients that have not caught up.
 pub const API_VERSION: &str = "v1";
 
+/// Whether an address belongs to this server's own surface rather than to a
+/// page of the interface.
+///
+/// Read without regard to case, so that an address spelt `/API/...` is still
+/// one of the surface: the gate shuts it like any other, for a reason rather
+/// than because no route happens to match it, and one no route answers is
+/// refused rather than handed the page.
+pub(crate) fn on_the_surface(path: &str) -> bool {
+    const THE_SURFACE: &[u8] = b"/api";
+    let bytes = path.as_bytes();
+    bytes.len() >= THE_SURFACE.len()
+        && bytes[..THE_SURFACE.len()].eq_ignore_ascii_case(THE_SURFACE)
+}
+
 /// Builds the whole surface.
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -58,8 +72,9 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::page::router())
         .merge(crate::playback::router())
         .merge(crate::preferences::router())
-        // Last: anything that is not an address of the interface proper is
-        // answered with the interface, which reads the address itself.
+        // Last: whatever no route above answered. An address of the surface
+        // is not found; any other is a page of the interface, which reads the
+        // address itself.
         .merge(crate::interface::router())
         .with_state(state)
 }
