@@ -1101,8 +1101,9 @@
   max-width: clamp(220px, 20vw, 340px);
   aspect-ratio: 16 / 9;
   /* Less at the foot, so the name and its arrow sit low, clear of the
-     reflection above them. */
-  padding: var(--gap) var(--gap) calc(var(--gap) - 5px);
+     reflection above them, and as little on the right, so the arrow stands
+     as far from the side as from the foot. */
+  padding: var(--gap) calc(var(--gap) - 5px) calc(var(--gap) - 5px) var(--gap);
   border-radius: var(--radius-card);
   overflow: hidden;
   isolation: isolate;
