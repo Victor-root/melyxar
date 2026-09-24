@@ -20,6 +20,7 @@ import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { SearchPage } from "./pages/search";
 import { PersonPage } from "./pages/person";
+import { useKeptPlaces } from "./scrolling";
 import { WorkPage } from "./pages/work";
 import { AdminLayout } from "./pages/admin/layout";
 import { AdminOverview } from "./pages/admin/overview";
@@ -101,6 +102,8 @@ function TheLibrary() {
      read where it stands. */
   const scrolling = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  // Going back finds every page where it was left.
+  useKeptPlaces(scrolling);
 
   // Watched here, where the bar that starts the work and the pages that show
   // what it produced can both read it.
