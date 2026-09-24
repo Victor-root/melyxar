@@ -1330,80 +1330,45 @@
 }
 
 /* ---------------------------------------------------------------------------
- * A trailer, in the same controls as a film
+ * A trailer
  *
- * The picture fills the stage whatever plays it: a file the browser opens, or
- * the player YouTube offers other sites. A layer over it takes every click,
- * so that player never sees a pointer and never draws anything of its own.
+ * Deliberately not the player above. A trailer is two minutes long, has no
+ * position to come back to and nothing to choose, so it keeps the browser's
+ * own controls and needs no more than a way out and a name.
  * ------------------------------------------------------------------------ */
 
-/* The stage, in which the picture's own box is centred. */
-.trailer-frame {
-  position: absolute;
+.player-trailer {
+  position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
-  container-type: size;
-}
-
-/* The picture exactly, in the shape YouTube plays in, and nothing past it. */
-.trailer-window {
-  position: relative;
-  width: min(100cqw, 100cqh * 16 / 9);
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-}
-
-/* YouTube's player, taller than the picture by a band above and below. It
-   centres the picture in itself, so the picture fills the box exactly, and
-   the title it lays along its top edge and the mark in its bottom corner
-   fall in the bands, outside the box. */
-.trailer-window iframe {
-  position: absolute;
-  left: 0;
-  top: calc(-1 * var(--trailer-band));
-  width: 100%;
-  height: calc(100% + 2 * var(--trailer-band));
-  border: 0;
-  --trailer-band: 140px;
-}
-
-/* What stands in front of the picture while it may not be shown: the film's
-   own backdrop, dimmed, under the controls. */
-.trailer-curtain {
-  position: absolute;
-  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
   background: #000;
 }
 
-.trailer-curtain img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.45;
+.player-trailer-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--gap) var(--gap-wide);
+  color: #fff;
 }
 
-.trailer-surface {
-  position: absolute;
-  inset: 0;
-}
-
-/* The notices let the pointer through to the picture; this one is a way
-   out, and takes it. */
-.trailer-elsewhere {
-  pointer-events: auto;
-}
-
-/* What is playing is a trailer and not the film, said quietly beside the
-   film's own mark. */
-.player-trailer-word {
-  align-self: center;
-  padding: 3px 10px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border-strong);
-  color: var(--text-soft);
-  font-size: 13px;
+.player-trailer-title {
+  color: #fff;
+  font-size: 16px;
   font-weight: 600;
+}
+
+.player-trailer video {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  background: #000;
+}
+
+.player-trailer .player-notice {
+  margin: auto;
 }
 
 /* ---------------------------------------------------------------------------
