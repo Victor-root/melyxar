@@ -49,6 +49,7 @@ pub use melyxar_database::sessions::{Remembered, SignedIn, AN_UNUSED_SESSION_IS_
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refused {
     NameNeeded,
+    NameTaken,
     PasswordTooShort,
 }
 
@@ -56,6 +57,7 @@ impl Refused {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::NameNeeded => "name_needed",
+            Self::NameTaken => "name_taken",
             Self::PasswordTooShort => "password_too_short",
         }
     }
@@ -77,6 +79,15 @@ impl From<melyxar_database::DatabaseError> for Trouble {
     fn from(error: melyxar_database::DatabaseError) -> Self {
         Self::Failed(AppError::from(error))
     }
+}
+
+/// A name as it is kept: without the spaces around it, and never empty.
+fn name_of(asked: &str) -> std::result::Result<&str, Trouble> {
+    let name = asked.trim();
+    if name.is_empty() {
+        return Err(Trouble::Refused(Refused::NameNeeded));
+    }
+    Ok(name)
 }
 
 /// Hashes a password, telling a rule it breaks apart from a failure.
@@ -386,6 +397,39 @@ pub async fn change_password(
     Ok(PasswordChange::Changed(token))
 }
 
+/// Gives somebody's account the name they asked for.
+///
+/// Nothing else moves: everything of theirs hangs off the account and not off
+/// its name, and every device of theirs stays signed in. The lines already in
+/// the journal keep the name they were written under.
+pub async fn rename(
+    state: &AppState,
+    who: &User,
+    wanted: &str,
+) -> std::result::Result<User, Trouble> {
+    let name = name_of(wanted)?;
+    if name == who.name {
+        return Ok(who.clone());
+    }
+    if !state.database().rename_user(who.id, name).await? {
+        return Err(Trouble::Refused(Refused::NameTaken));
+    }
+    tracing::info!(from = %who.name, to = %name, "renamed an account");
+    record(
+        state,
+        Event::AccountRenamed {
+            user: who.id,
+            from: who.name.clone(),
+            to: name.to_string(),
+        },
+    )
+    .await;
+    Ok(User {
+        name: name.to_string(),
+        ..who.clone()
+    })
+}
+
 /// Whether this server still has to be set up.
 ///
 /// One account is what tells a server that has been set up from one that has
@@ -410,10 +454,7 @@ pub async fn create_the_first_account(
     name: &str,
     password: &str,
 ) -> std::result::Result<User, Trouble> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err(Trouble::Refused(Refused::NameNeeded));
-    }
+    let name = name_of(name)?;
 
     // Hashed before the door is looked at, because hashing is the slow part
     // and a password the rule refuses is refused whatever else is true.
@@ -451,10 +492,7 @@ pub async fn create_account(
     password: &str,
     permissions: &Permissions,
 ) -> std::result::Result<User, Trouble> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err(Trouble::Refused(Refused::NameNeeded));
-    }
+    let name = name_of(name)?;
     let hashed = stored_form_of(password)?;
     let user = state
         .database()
@@ -817,6 +855,51 @@ mod tests {
                 .is_some(),
             "leaving one machine must not sign the television out"
         );
+    }
+
+    #[tokio::test]
+    async fn a_renamed_account_signs_in_under_its_new_name_and_stays_signed_in() {
+        let (_directory, state) = a_server_with_an_account().await;
+        let here = a_session(&state, "victor", "quiet harbour", "a browser")
+            .await
+            .expect("signed in");
+        create_account(&state, "marc", "amber field road", &Permissions::viewer())
+            .await
+            .expect("second account made");
+
+        assert!(matches!(
+            rename(&state, &here.user, "   ").await,
+            Err(Trouble::Refused(Refused::NameNeeded))
+        ));
+        assert!(matches!(
+            rename(&state, &here.user, "Marc").await,
+            Err(Trouble::Refused(Refused::NameTaken))
+        ));
+
+        let renamed = rename(&state, &here.user, "  Victor B  ").await.expect("renamed");
+        assert_eq!(renamed.name, "Victor B", "kept without the spaces around it");
+        assert_eq!(renamed.id, here.user.id);
+        assert_eq!(
+            who_holds(&state, here.token.as_text())
+                .await
+                .expect("asked")
+                .expect("still signed in")
+                .user
+                .name,
+            "Victor B"
+        );
+        assert!(a_session(&state, "victor b", "quiet harbour", "a browser").await.is_some());
+        assert!(a_session(&state, "victor", "quiet harbour", "a browser").await.is_none());
+
+        let lines = crate::activity::page(&state, &[crate::activity::Category::Access], None, 10)
+            .await
+            .expect("journal read");
+        let line = lines
+            .iter()
+            .find(|line| line.kind == "account_renamed")
+            .expect("the rename has its line");
+        assert_eq!(line.details["previous_name"], "victor");
+        assert_eq!(line.details["user_name"], "Victor B");
     }
 
     #[tokio::test]

@@ -95,6 +95,12 @@ describe("sayLine", () => {
     expect(sayLine(line("signed_out", {}), t).title).toBe("activity.signed_out(activity.someone)");
   });
 
+  it("says the name an account had and the one it has now", () => {
+    expect(
+      sayLine(line("account_renamed", { user_name: "somebody else", previous_name: "somebody" }), t).title,
+    ).toBe("activity.account_renamed(somebody|somebody else)");
+  });
+
   it("says what a deletion took and whether the disk lost it too", () => {
     const said = sayLine(
       line("works_deleted", { user_name: "somebody", titles: ["Quiet Harbour"], works: 1, from_the_disk: true }),

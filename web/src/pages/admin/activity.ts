@@ -92,6 +92,14 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
     case "account_created":
     case "account_removed":
       return { title: t(`activity.${line.kind}`, { user }), note: null };
+    case "account_renamed":
+      return {
+        title: t("activity.account_renamed", {
+          previous: text(details, "previous_name") ?? t("activity.someone"),
+          user,
+        }),
+        note: null,
+      };
     case "watched": {
       const method = text(details, "method");
       const played = figure(details, "played_seconds");

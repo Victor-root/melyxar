@@ -54,6 +54,32 @@ export function useWhoIsThere(): Who {
     return () => controller.abort();
   }, []);
 
+  // Asked again whenever the page comes back into view, for what was changed
+  // from another tab or another device meanwhile: a new name, a new picture.
+  // Kept as it was when nothing changed, so nothing is drawn again for it.
+  const signedInHere = account !== null;
+  useEffect(() => {
+    if (!signedInHere) {
+      return;
+    }
+    const lookAgain = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      api
+        .me()
+        .then((who) =>
+          setAccount((was) => (JSON.stringify(was) === JSON.stringify(who) ? was : who)),
+        )
+        .catch(() => {
+          // A session that is over sends the page back to the door on its
+          // own; anything else leaves the account as it was known.
+        });
+    };
+    document.addEventListener("visibilitychange", lookAgain);
+    return () => document.removeEventListener("visibilitychange", lookAgain);
+  }, [signedInHere]);
+
   // Which browser this really is, said once somebody is signed in on it: the
   // line a browser sends about itself cannot tell every one apart.
   const signedIn = account?.id ?? null;

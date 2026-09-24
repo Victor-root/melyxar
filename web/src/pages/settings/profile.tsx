@@ -1,6 +1,6 @@
 /*
- * Who this account is: the picture it wears, its password, and whether the
- * door offers its name.
+ * Who this account is: the picture it wears, its name, its password, and
+ * whether the door offers its name.
  */
 
 import { useRef, useState } from "react";
@@ -11,7 +11,7 @@ import { refusalAbout, useTold } from "../../asking";
 import { Cropper } from "../../components/cropper";
 import { Face } from "../../components/face";
 import { PageHead, Panel, Setting, Toggle } from "../../components/panel";
-import { EnterIcon, LockIcon, ProfileIcon } from "../../icons";
+import { AccountIcon, EnterIcon, LockIcon, ProfileIcon } from "../../icons";
 import { usePreferences } from "../../screens/settings";
 import { useSettings } from "../../settings";
 
@@ -30,6 +30,7 @@ export function MyProfile() {
       <PageHead lead={t("me.profile_lead")} />
       <ProfilePicture />
       <div className="panels">
+        <Name />
         <Password />
         {preferences.kept && (
           <Panel icon={EnterIcon} title={t("settings.door")} lead={t("settings.door_why")}>
@@ -130,6 +131,69 @@ function ProfilePicture() {
 }
 
 /**
+ * The name this account signs in with. Every device stays signed in: the name
+ * guards nothing, and everything of the account hangs off it by something
+ * other than its name.
+ */
+function Name() {
+  const { t } = useSettings();
+  const { account, cameIn } = useAccount();
+  /* What is being typed, and nothing while the field shows the name as it is,
+     so a name changed from here is the one the field goes back to. */
+  const [wanted, setWanted] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const told = useTold(async (name: string) => {
+    cameIn(await api.rename(name));
+    setWanted(null);
+    setDone(true);
+  });
+
+  if (!account) {
+    return null;
+  }
+  const shown = wanted ?? account.name;
+  const refused = told.failure;
+
+  return (
+    <Panel icon={AccountIcon} title={t("me.name")} lead={t("me.name_lead")}>
+      <form
+        className="account-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setDone(false);
+          void told.tell(shown);
+        }}
+      >
+        <input
+          type="text"
+          className="field-line"
+          autoComplete="username"
+          aria-label={t("me.name")}
+          value={shown}
+          onChange={(event) => {
+            setDone(false);
+            setWanted(event.target.value);
+          }}
+        />
+        {refused && (
+          <p className="panel-notice panel-notice-trouble">{t(refusalAbout(refused, "account"))}</p>
+        )}
+        {done && <p className="panel-notice panel-notice-ok">{t("me.name_changed")}</p>}
+        <div className="panel-foot">
+          <button
+            type="submit"
+            className="button button-accent"
+            disabled={told.busy || shown.trim() === "" || shown.trim() === account.name}
+          >
+            {t("me.name_change")}
+          </button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+/**
  * Changing the password, which signs every other device out: somebody changes
  * it because they think somebody else knows it.
  */
@@ -154,7 +218,7 @@ function Password() {
   return (
     <Panel icon={LockIcon} title={t("me.password")} lead={t("me.password_lead")}>
       <form
-        className="password-form"
+        className="account-form"
         onSubmit={(event) => {
           event.preventDefault();
           setDone(false);
