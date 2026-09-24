@@ -2013,12 +2013,37 @@
   margin-top: calc(var(--gap) * 1.5);
 }
 
-/* The line between two parts of one panel. */
-.part-rule {
-  width: 100%;
-  margin: var(--gap) 0 0;
-  border: none;
-  border-top: 1px solid var(--border);
+/* What is playing and, beside it past a hairline, what just happened. One
+   above the other once there is no room for both side by side. */
+.playing-split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: calc(var(--gap) * 1.5);
+}
+
+.playing-now {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.playing-beside {
+  min-width: 0;
+  padding-left: calc(var(--gap) * 1.5);
+  border-left: 1px solid var(--border);
+}
+
+@container (max-width: 1000px) {
+  .playing-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .playing-beside {
+    padding: var(--gap) 0 0;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
 }
 
 /* The name of one part of a panel, over what it holds. */

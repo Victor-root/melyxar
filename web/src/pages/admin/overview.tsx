@@ -60,9 +60,7 @@ export function AdminOverview() {
 
       {/* What is playing and what just happened, one panel: the second is
           mostly the first, finished. */}
-      <PlayingPanel>
-        <hr className="part-rule" />
-        <RecentActivity />
+      <PlayingPanel beside={<RecentActivity />}>
         <div className="panel-foot">
           <Link className="button button-small" to="/admin/journal">
             {t("activity.see_journal")}
@@ -427,7 +425,7 @@ function PeoplePanel({ overview }: { overview: Overview | null }) {
 }
 
 /** What happened lately, across the whole server. */
-/** The latest lines of the journal, under what is playing. */
+/** The latest lines of the journal, beside what is playing. */
 function RecentActivity() {
   const { t } = useSettings();
   const { lines } = useActivity(EVERY_FAMILY, RECENT_LINES);

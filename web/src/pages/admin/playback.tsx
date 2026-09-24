@@ -71,15 +71,16 @@ export function AdminPlayback() {
 
 /**
  * Every film playing, a card each, with the figures of them all above. The
- * same panel here and on the summary, which adds its way here at the foot.
+ * same panel here and on the summary, which sets what just happened beside
+ * it and its ways further in at the foot.
  */
-export function PlayingPanel({ children }: { children?: ReactNode }) {
+export function PlayingPanel({ beside, children }: { beside?: ReactNode; children?: ReactNode }) {
   const { t } = useSettings();
   const playing = useNowPlaying();
   const watched = playing.watched ?? [];
 
-  return (
-    <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")}>
+  const now = (
+    <>
       <PlayingStats watched={playing.watched} />
       {playing.cut && <p className="panel-notice">{t("error.unreachable")}</p>}
       {watched.length === 0 ? (
@@ -90,6 +91,19 @@ export function PlayingPanel({ children }: { children?: ReactNode }) {
             <WatchCard key={one.device} watched={one} heardAt={playing.heardAt} />
           ))}
         </div>
+      )}
+    </>
+  );
+
+  return (
+    <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")}>
+      {beside ? (
+        <div className="playing-split">
+          <div className="playing-now">{now}</div>
+          <div className="playing-beside">{beside}</div>
+        </div>
+      ) : (
+        now
       )}
       {children}
     </Panel>
