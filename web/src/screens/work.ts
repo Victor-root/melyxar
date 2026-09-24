@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import type { Version, Work } from "../api";
+import type { PlaybackPlan, Version, Work } from "../api";
 import { useAsked } from "../asking";
 
 /**
@@ -107,6 +107,15 @@ function trailerToOffer(work: Work | null): TrailerOnOffer {
 export interface Watching {
   source: string;
   fromTheStart: boolean;
+  /** Where to start, in seconds, when a moment was chosen by hand: a
+      chapter. */
+  at?: number;
+}
+
+/** The soundtrack and the subtitle a film will start with. */
+export interface Tracks {
+  audio: string | null;
+  subtitle: string | null;
 }
 
 /** Enough of an episode to step straight to it: a `NextEpisode` and a `Child`
@@ -129,6 +138,17 @@ export interface WorkScreen {
   version: Version | undefined;
   /** Where this viewer stopped, when they did. */
   resumeFrom: number | null;
+  /** What playing the chosen copy would be, asked before anything plays: its
+      tracks, the ones it would start with, its chapters and the little
+      pictures of them. Nothing until it has answered, and for a copy that is
+      not on the disk. */
+  plan: PlaybackPlan | null;
+  /** The tracks the film will start with, the viewer's own choice winning
+      the moment it is made. */
+  tracks: Tracks;
+  /** Chooses them, and remembers the choice the way the player does, so the
+      player opens with it. */
+  chooseTracks: (tracks: Tracks) => void;
   /** Read the film again, which is what a match chosen by hand asks for. */
   readAgain: () => void;
   /** What is being watched, and how to start and stop it. */
@@ -138,7 +158,7 @@ export interface WorkScreen {
       moment: it is a page nobody asked for, and it showed for long enough to
       be seen every time a film was started from a card. */
   openingToPlay: boolean;
-  play: (source: string, fromTheStart: boolean) => void;
+  play: (source: string, fromTheStart: boolean, at?: number) => void;
   stopPlaying: () => void;
   /** Which trailer the film can be offered by. */
   onOffer: TrailerOnOffer;
@@ -186,12 +206,44 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
   const work = asked.waiting ? null : asked.answer;
   const version = work?.versions[chosen];
 
-  const resume = useAsked(
+  const planned = useAsked(
     (signal) =>
-      version && !version.missing
-        ? api.plan(version.id, {}, signal).then((plan) => plan.resume_from_seconds)
-        : Promise.resolve(null),
+      version && !version.missing ? api.plan(version.id, {}, signal) : Promise.resolve(null),
     [work, chosen],
+  );
+  /* A copy that is not on the disk has nothing to play, and a reading that
+     failed says nothing about where anybody stopped or what they chose. */
+  const plan = planned.failure ? null : planned.answer;
+  const { look: planAgain } = planned;
+
+  /* The choice just made, shown at once and until the plan asked again says
+     the same: a list that snaps back to the old track for the length of a
+     round trip is a list somebody picks from twice. */
+  const [picked, setPicked] = useState<Tracks | null>(null);
+  useEffect(() => {
+    setPicked(null);
+  }, [plan]);
+  const tracks: Tracks = picked ?? {
+    audio: plan?.chosen_audio_id ?? null,
+    subtitle: plan?.chosen_subtitle_id ?? null,
+  };
+  const chooseTracks = useCallback(
+    (wanted: Tracks) => {
+      if (!work || !version) {
+        return;
+      }
+      setPicked(wanted);
+      api
+        .rememberTracks({
+          work_id: work.id,
+          source_id: version.id,
+          audio_track_id: wanted.audio,
+          subtitle_track_id: wanted.subtitle,
+        })
+        .then(planAgain)
+        .catch(() => setPicked(null));
+    },
+    [work, version, planAgain],
   );
 
   /* Started once and only once. The address is cleared as soon as it is
@@ -248,10 +300,19 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
 
   const readAgain = useCallback(() => setAgain((count) => count + 1), []);
   const play = useCallback(
-    (source: string, fromTheStart: boolean) => setPlaying({ source, fromTheStart }),
+    (source: string, fromTheStart: boolean, at?: number) =>
+      setPlaying({ source, fromTheStart, at }),
     [],
   );
-  const stopPlaying = useCallback(() => setPlaying(null), []);
+  /* The page under the player was left as it was when the film started, and
+     what was watched changed it: where to carry on from, how far the bar
+     goes, whether it now counts as seen. Read again without emptying the
+     screen, which is still the same film. */
+  const { look } = asked;
+  const stopPlaying = useCallback(() => {
+    setPlaying(null);
+    look();
+  }, [look]);
   const watchTrailer = useCallback((url: string) => setTrailer(url), []);
   const stopTrailer = useCallback(() => setTrailer(null), []);
 
@@ -283,9 +344,10 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     chosen,
     choose: setChosen,
     version,
-    /* A copy that is not on the disk cannot be resumed, and a reading that
-       failed says nothing about where anybody stopped. */
-    resumeFrom: resume.failure ? null : resume.answer,
+    resumeFrom: plan?.resume_from_seconds ?? null,
+    plan,
+    tracks,
+    chooseTracks,
     readAgain,
     playing,
     openingToPlay,

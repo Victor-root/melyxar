@@ -347,11 +347,11 @@ function HeroProgress({ item }: { item: HeroItem }) {
   const done = Math.min(item.resume_from_seconds, whole);
 
   return (
-    <p className="hero-progress">
-      <span className="hero-progress-bar" aria-hidden="true">
-        <span className="hero-progress-done" style={{ width: `${(done / whole) * 100}%` }} />
+    <p className="progress-line">
+      <span className="progress-bar" aria-hidden="true">
+        <span className="progress-done" style={{ width: `${(done / whole) * 100}%` }} />
       </span>
-      <span className="hero-progress-said">
+      <span>
         {t("home.hero.progress", {
           done: howLong(Math.round(done / 60), t),
           whole: howLong(item.runtime_minutes, t),

@@ -405,6 +405,8 @@ export interface Home {
 }
 
 export interface Credit {
+  /** Where their own page is. */
+  person_id: string;
   name: string;
   role: string;
   character: string | null;
@@ -588,6 +590,26 @@ export interface Work {
    *  that is not a photo, and at either end of the folder. */
   previous_photo: string | null;
   next_photo: string | null;
+  /** This work as its card, with what this viewer made of it: the page marks
+   *  it through the same card every row draws. */
+  card: Card | null;
+  /** Works like this one by a genre they share, and that genre. Absent for
+   *  anything but a film or a series, and when nothing shares a genre. */
+  alike: { genre: string; cards: Card[] } | null;
+}
+
+/** One person, and what of theirs this server holds. */
+export interface Person {
+  id: string;
+  name: string;
+  biography: string | null;
+  /** Year, month and day, as the provider writes them. */
+  born_on: string | null;
+  died_on: string | null;
+  birthplace: string | null;
+  photo: Picture[];
+  /** What of theirs this account can open, newest first. */
+  works: Card[];
 }
 
 export interface Job {
@@ -1341,6 +1363,7 @@ export const api = {
   works: (options: BrowseOptions, signal?: AbortSignal) =>
     get<Page>(`/api/v1/works?${browseQuery(options)}`, signal),
   work: (id: string, signal?: AbortSignal) => get<Work>(`/api/v1/works/${id}`, signal),
+  person: (id: string, signal?: AbortSignal) => get<Person>(`/api/v1/people/${id}`, signal),
   jobs: (signal?: AbortSignal) => get<Jobs>("/api/v1/jobs", signal),
   /* The mode says how much to go over. Left out, the server does what it has
      always done, which is to fill in what is missing. */
