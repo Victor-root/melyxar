@@ -237,40 +237,8 @@ function wording(error: unknown): string {
   }
 }
 
-/**
- * What any picture that plays is driven by: where it is, how loud, and the
- * hand on it. A film answers to it, and so does a trailer, whether the
- * trailer is a file beside the film or a video played by somebody else's
- * player, so the same bar, the same sound and the same keys drive both.
- */
-export interface Transport {
-  /** Where it has got to, how long it is, and how far it is held, in
-   *  seconds. */
-  at: number;
-  length: number;
-  loaded: number;
-  playing: boolean;
-  /** How loud, from nought to one, and whether the sound is off. */
-  muted: boolean;
-  loudness: number;
-  setLoudness: (volume: number) => void;
-  setMuted: (off: boolean) => void;
-  /** Starts it, or stops it. */
-  playOrPause: () => void;
-  /** A fixed step back or on, from a button or from the keyboard. */
-  stepBy: (seconds: number) => void;
-  /** Where it is put, in seconds from its beginning. */
-  goTo: (seconds: number) => void;
-  /** A hand landing on the bar, and coming off it, saying what it did: for
-   *  whatever has fetching to hold back while it moves. */
-  viewerMoving?: () => void;
-  viewerMoved?: (how: HowItMoved) => void;
-}
-
 /** Everything the player is handed to draw itself and to be driven by. */
-export interface Playback extends Transport {
-  viewerMoving: () => void;
-  viewerMoved: (how: HowItMoved) => void;
+export interface Playback {
   /** The element the film plays in. Put on the one the player draws.
    *
    *  Empty until React has drawn it, which the type now says out loud: a
@@ -309,6 +277,15 @@ export interface Playback extends Transport {
   setQuality: (key: string) => void;
   setCodec: (key: string) => void;
   setSpeed: (value: number) => void;
+  /** A hand landing on the bar, and coming off it, saying what it did. */
+  viewerMoving: () => void;
+  viewerMoved: (how: HowItMoved) => void;
+  /** A fixed step back or on, from a button or from the keyboard. */
+  stepBy: (seconds: number) => void;
+  /** Where the film is put, in seconds from its beginning. */
+  goTo: (seconds: number) => void;
+  /** Starts the film, or stops it. */
+  playOrPause: () => void;
   /**
    * A click on the picture itself, which may turn out to be half of two.
    *
@@ -319,6 +296,16 @@ export interface Playback extends Transport {
    * like.
    */
   pictureClicked: (twice: boolean) => void;
+  /** How loud, from nought to one, and whether the sound is off. */
+  setLoudness: (volume: number) => void;
+  setMuted: (off: boolean) => void;
+  /** Where the film has got to, how long it is, and how far it is held. */
+  at: number;
+  length: number;
+  loaded: number;
+  playing: boolean;
+  muted: boolean;
+  loudness: number;
   /** Whether the words are on their way, and whether they never came. */
   words: "coming" | "refused" | null;
   /** The words on screen at this instant, one entry per line, stripped of any
