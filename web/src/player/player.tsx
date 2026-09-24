@@ -73,7 +73,7 @@ export function Player({
    *  Absent for anything that is not an episode. */
   onSelectEpisode?: (episode: { id: string; source_id: string | null }) => void;
 }) {
-  const { t, language } = useSettings();
+  const { t, language, stepBack, stepOn } = useSettings();
   const title = work.title;
   const toast = useToast();
   /* Left the way the viewer would leave it, and said why: a film that simply
@@ -274,6 +274,7 @@ export function Player({
           naming={naming}
           language={language}
           t={t}
+          steps={{ back: stepBack, on: stepOn }}
           appearance={appearance}
           onAppearance={setAppearance}
         />

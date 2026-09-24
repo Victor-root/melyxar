@@ -1,6 +1,7 @@
 /*
  * How films reach this viewer: the sound folded for their speakers, the
- * languages they would rather hear and read, and how subtitles are dressed.
+ * languages they would rather hear and read, how far the player's buttons
+ * step, and how subtitles are dressed.
  *
  * The first two are kept by the server, because they change what it does: the
  * fold to stereo turns a copy into a rebuild, and a preferred language decides
@@ -9,7 +10,7 @@
  */
 
 import { PageHead, Panel, Picker, Setting, Slider } from "../../components/panel";
-import { LanguagesIcon, SoundIcon, SubtitlesIcon } from "../../icons";
+import { LanguagesIcon, PlaybackIcon, SoundIcon, SubtitlesIcon } from "../../icons";
 import { languageName } from "../../languages";
 import {
   appearanceClasses,
@@ -20,13 +21,17 @@ import {
   SIZES,
 } from "../../player/appearance";
 import { DeviceOptimization } from "../../player/DeviceOptimization";
+import { STEP_LENGTHS } from "../../player/steps";
 import type { Wording } from "../../readable";
 import { usePreferences, useSubtitleLook } from "../../screens/settings";
 import { useSettings } from "../../settings";
 
 export function MyPlayback() {
-  const { t, language } = useSettings();
+  const { t, language, stepBack, setStepBack, stepOn, setStepOn } = useSettings();
   const { kept, change, failed } = usePreferences();
+  const lengths = STEP_LENGTHS.map(
+    (seconds) => [String(seconds), t("settings.step_seconds", { seconds })] as const,
+  );
   const [look, setLook] = useSubtitleLook();
 
   return (
@@ -89,6 +94,25 @@ export function MyPlayback() {
           </Panel>
         </div>
       )}
+
+      <Panel icon={PlaybackIcon} title={t("settings.steps")} lead={t("settings.steps_why")}>
+        <Setting label={t("settings.step_back")}>
+          <Picker
+            label={t("settings.step_back")}
+            value={String(stepBack)}
+            options={lengths}
+            onPick={(seconds) => setStepBack(Number(seconds))}
+          />
+        </Setting>
+        <Setting label={t("settings.step_on")}>
+          <Picker
+            label={t("settings.step_on")}
+            value={String(stepOn)}
+            options={lengths}
+            onPick={(seconds) => setStepOn(Number(seconds))}
+          />
+        </Setting>
+      </Panel>
 
       <Panel
         icon={SubtitlesIcon}

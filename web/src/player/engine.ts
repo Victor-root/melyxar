@@ -45,15 +45,6 @@ type HlsLibrary = Awaited<typeof import("hls.js")>["default"];
 /** The speeds offered. Whole steps: nobody asks for 1.17 times. */
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
-/**
- * How far one step of the film goes, in seconds.
- *
- * Ten, which is what every player uses and what the thing is for: missing a
- * line of dialogue, not choosing a scene. The bar is there for choosing a
- * scene.
- */
-export const A_STEP = 10;
-
 /** How often the position is sent while a film plays. */
 const REPORT_EVERY = 10_000;
 
