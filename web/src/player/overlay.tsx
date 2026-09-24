@@ -34,7 +34,7 @@ import { asClock } from "./clock";
 import { Drawer, SHEETS } from "./drawer";
 import type { SheetName } from "./drawer";
 import { A_STEP, SPEEDS } from "./engine";
-import type { Playback } from "./engine";
+import type { Playback, Transport } from "./engine";
 import type { Fullscreen } from "./fullscreen";
 import {
   AboutIcon,
@@ -170,15 +170,115 @@ function chapterAround(chapters: PlaybackChapter[], at: number): number {
   return index;
 }
 
+/**
+ * Whether the controls have faded out, and how to bring them back.
+ *
+ * They go when a hand stops moving over the stage and come back the moment
+ * one does, unless they are held up: by a paused picture, an open panel, a
+ * viewer who asked for them to stay. Kept here rather than in the stylesheet
+ * alone because the panels and the bar answer to it too: a menu left open
+ * behind a faded bar is a menu nobody can shut. `again` is anything whose
+ * change starts the count afresh, a new picture.
+ */
+export function useControlsFade(
+  stage: React.RefObject<HTMLDivElement | null>,
+  held: boolean,
+  again: unknown,
+): { away: boolean; stir: () => void } {
+  const [away, setAway] = useState(false);
+  const wake = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    const surface = stage.current;
+    if (!surface) {
+      return;
+    }
+    let timer = 0;
+    const up = () => {
+      setAway(false);
+      window.clearTimeout(timer);
+      if (!held) {
+        timer = window.setTimeout(() => setAway(true), FADES_AFTER_MS);
+      }
+    };
+    wake.current = up;
+    up();
+    surface.addEventListener("pointermove", up);
+    surface.addEventListener("pointerdown", up);
+    return () => {
+      window.clearTimeout(timer);
+      surface.removeEventListener("pointermove", up);
+      surface.removeEventListener("pointerdown", up);
+    };
+  }, [stage, held, again]);
+
+  const stir = useCallback(() => wake.current(), []);
+  return { away, stir };
+}
+
+/**
+ * The keyboard, which is the other half of every control on the bar: a key
+ * does exactly what the button beside it does, for a film and a trailer
+ * alike. Escape is the caller's, since what it shuts depends on what is open.
+ */
+export function useTransportKeys(
+  transport: Transport,
+  fullscreen: Fullscreen,
+  escape: () => void,
+  stir: () => void,
+) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      // Somebody typing in a box is typing, not driving the film.
+      const into = event.target as HTMLElement | null;
+      if (into && ["INPUT", "TEXTAREA", "SELECT"].includes(into.tagName)) {
+        return;
+      }
+      const loudness = (by: number) => {
+        transport.setMuted(false);
+        transport.setLoudness(Math.min(1, Math.max(0, transport.loudness + by)));
+      };
+      switch (event.key) {
+        case "Escape":
+          escape();
+          break;
+        case " ":
+        case "k":
+          event.preventDefault();
+          transport.playOrPause();
+          break;
+        case "ArrowLeft":
+        case "ArrowRight":
+          // Held from the page: the bar answers to these as a slider and would
+          // scroll what is behind it otherwise.
+          event.preventDefault();
+          transport.stepBy(event.key === "ArrowLeft" ? -A_STEP : A_STEP);
+          break;
+        case "ArrowUp":
+        case "ArrowDown":
+          event.preventDefault();
+          loudness(event.key === "ArrowUp" ? 0.05 : -0.05);
+          break;
+        case "f":
+          fullscreen.toggle();
+          break;
+        case "m":
+          transport.setMuted(!transport.muted);
+          break;
+        default:
+          return;
+      }
+      stir();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [transport, fullscreen, escape, stir]);
+}
+
 export function Overlay(props: Props) {
   const { playback, stage, fullscreen } = props;
   const { at, length, playing } = playback;
 
-  /* Whether the controls have faded out. Kept here rather than in the
-     stylesheet alone because the panels and the bar answer to it too: a menu
-     left open behind a faded bar is a menu nobody can shut. */
-  const [away, setAway] = useState(false);
-  const stir = useRef<() => void>(() => {});
   /* Where the button that opened the panel stands, across the picture. A panel
      that always opens at one end of the screen leaves a viewer looking for the
      link between the button they pressed and the list that appeared. */
@@ -196,29 +296,7 @@ export function Overlay(props: Props) {
      panel is open: a paused film is a film somebody is about to do something
      with, and a viewer reading a list of soundtracks is not idle. */
   const held = !playing || props.panel !== null || props.settings.keepTheControlsUp;
-  useEffect(() => {
-    const surface = stage.current;
-    if (!surface) {
-      return;
-    }
-    let timer = 0;
-    const wake = () => {
-      setAway(false);
-      window.clearTimeout(timer);
-      if (!held) {
-        timer = window.setTimeout(() => setAway(true), FADES_AFTER_MS);
-      }
-    };
-    stir.current = wake;
-    wake();
-    surface.addEventListener("pointermove", wake);
-    surface.addEventListener("pointerdown", wake);
-    return () => {
-      window.clearTimeout(timer);
-      surface.removeEventListener("pointermove", wake);
-      surface.removeEventListener("pointerdown", wake);
-    };
-  }, [stage, held, playback.pictureKey]);
+  const { away, stir } = useControlsFade(stage, held, playback.pictureKey);
 
   /* How tall the bottom strip actually is right now, carried onto the stage as
      a custom property so that subtitles, which stand outside this overlay
@@ -255,61 +333,19 @@ export function Overlay(props: Props) {
     return () => measure.disconnect();
   }, [stage]);
 
-  /* The keyboard, which is the other half of every control below. Held here
-     rather than on the page so that one place says what a key does, and so
-     that a key does exactly what the button beside it does. */
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      // Somebody typing in a box is typing, not driving the film.
-      const into = event.target as HTMLElement | null;
-      if (into && ["INPUT", "TEXTAREA", "SELECT"].includes(into.tagName)) {
-        return;
-      }
-      const loudness = (by: number) => {
-        playback.setMuted(false);
-        playback.setLoudness(Math.min(1, Math.max(0, playback.loudness + by)));
-      };
-      switch (event.key) {
-        case "Escape":
-          if (props.panel) {
-            props.onPanel(null);
-          } else if (document.fullscreenElement) {
-            void document.exitFullscreen();
-          } else {
-            props.onClose();
-          }
-          break;
-        case " ":
-        case "k":
-          event.preventDefault();
-          playback.playOrPause();
-          break;
-        case "ArrowLeft":
-        case "ArrowRight":
-          // Held from the page: the bar answers to these as a slider and would
-          // scroll what is behind it otherwise.
-          event.preventDefault();
-          playback.stepBy(event.key === "ArrowLeft" ? -A_STEP : A_STEP);
-          break;
-        case "ArrowUp":
-        case "ArrowDown":
-          event.preventDefault();
-          loudness(event.key === "ArrowUp" ? 0.05 : -0.05);
-          break;
-        case "f":
-          fullscreen.toggle();
-          break;
-        case "m":
-          playback.setMuted(!playback.muted);
-          break;
-        default:
-          return;
-      }
-      stir.current();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [playback, props, fullscreen]);
+  /* Escape shuts what is on top first: a panel, then fullscreen, and only
+     then the film. */
+  const { panel, onPanel, onClose } = props;
+  const escape = useCallback(() => {
+    if (panel) {
+      onPanel(null);
+    } else if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      onClose();
+    }
+  }, [panel, onPanel, onClose]);
+  useTransportKeys(playback, fullscreen, escape, stir);
 
   /* Opened from a button, which says where it stands as it does so. */
   const openFrom = useCallback(
@@ -724,7 +760,18 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
 
 /** The sound, always out where a hand can reach it rather than behind a button. */
 function Volume({ surroundings }: { surroundings: Surroundings }) {
-  const { playback, t } = surroundings;
+  return <Sound transport={surroundings.playback} t={surroundings.t} />;
+}
+
+/** The button that silences, and the slider beside it, for a film and a
+ *  trailer alike. */
+export function Sound({
+  transport: playback,
+  t,
+}: {
+  transport: Transport;
+  t: (key: string) => string;
+}) {
   const loud = playback.muted ? 0 : playback.loudness;
   return (
     <span className="player-sound">
@@ -763,7 +810,7 @@ function Volume({ surroundings }: { surroundings: Surroundings }) {
   );
 }
 
-/** The bar, its ends, and the little picture above it. */
+/** The bar and its ends. */
 function Seek({
   surroundings,
   thumbnails,
@@ -771,7 +818,42 @@ function Seek({
   surroundings: Surroundings;
   thumbnails: PlaybackThumbnails | null;
 }) {
-  const { playback, t } = surroundings;
+  return (
+    <div className="player-seek">
+      {/* The two ends of the bar hold whatever the arrangement puts there and
+          are sized by it, never by a width written here: a box wider than its
+          own words pushes the bar away from one end and not the other, and the
+          bar stops being centred between the two. */}
+      <span className="player-seek-end">
+        <ZoneOnTheBar zone="before_bar" surroundings={surroundings} />
+      </span>
+      <Rail
+        transport={surroundings.playback}
+        thumbnails={thumbnails}
+        previewScale={surroundings.settings.previewScale}
+        label={surroundings.t("player.position")}
+      />
+      <span className="player-seek-end">
+        <ZoneOnTheBar zone="after_bar" surroundings={surroundings} />
+      </span>
+    </div>
+  );
+}
+
+/** The bar a hand drags along, and the little picture above it, for a film
+ *  and a trailer alike. A trailer has no pictures for it and shows the time
+ *  alone. */
+export function Rail({
+  transport: playback,
+  thumbnails,
+  previewScale: scale,
+  label,
+}: {
+  transport: Transport;
+  thumbnails: PlaybackThumbnails | null;
+  previewScale: number;
+  label: string;
+}) {
   const { at, length, loaded } = playback;
   const rail = useRef<HTMLDivElement>(null);
   /* Where the cursor is along the bar, from nought to one, while it is on it.
@@ -824,7 +906,7 @@ function Seek({
       // one thing that usually does, leaving the bar, may already have
       // happened once mid-drag and answered to nothing while it was one.
       setHovered(null);
-      playback.viewerMoved(wasDragged.current ? "a_drag" : "a_click");
+      playback.viewerMoved?.(wasDragged.current ? "a_drag" : "a_click");
     };
     window.addEventListener("pointermove", moved);
     window.addEventListener("pointerup", letGo);
@@ -839,7 +921,6 @@ function Seek({
   const played = length > 0 ? Math.min(1, at / length) : 0;
   const held = length > 0 ? Math.min(1, loaded / length) : 0;
   const previewed = hovered !== null && length > 0 ? hovered * length : null;
-  const scale = surroundings.settings.previewScale;
   /* Never wider than the bar it stands on. A viewer can make these larger, and
      a window can be made narrower than the largest of them: past that point it
      is the bar that decides, because a picture wider than the bar cannot be
@@ -854,70 +935,56 @@ function Seek({
   );
 
   return (
-    <div className="player-seek">
-      {/* The two ends of the bar hold whatever the arrangement puts there and
-          are sized by it, never by a width written here: a box wider than its
-          own words pushes the bar away from one end and not the other, and the
-          bar stops being centred between the two. */}
-      <span className="player-seek-end">
-        <ZoneOnTheBar zone="before_bar" surroundings={surroundings} />
+    <div
+      className="player-rail"
+      ref={rail}
+      role="slider"
+      tabIndex={0}
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={Math.round(length)}
+      aria-valuenow={Math.round(at)}
+      aria-valuetext={asClock(at)}
+      onPointerDown={(event) => {
+        const share = shareAt(event.clientX);
+        if (share !== null) {
+          wasDragged.current = false;
+          playback.viewerMoving?.();
+          setDragging(true);
+          setHovered(share);
+          goToShare(share);
+        }
+      }}
+      onPointerMove={(event) => setHovered(shareAt(event.clientX))}
+      onPointerLeave={() => {
+        if (!dragging) {
+          setHovered(null);
+        }
+      }}
+    >
+      {/* Inside the bar rather than beside it, because where it stands is a
+          place along the bar. Hung on the row instead, it was out by the
+          width of the clock to its left: it followed the hand correctly and
+          sat beside it the whole way. */}
+      {previewed !== null && (
+        <div className="player-preview" style={{ left: `${previewLeft}px` }} aria-hidden="true">
+          <Thumbnail
+            thumbnails={thumbnails}
+            seconds={previewed}
+            across={across}
+            className="player-preview-picture"
+          />
+          {/* Under the picture rather than written across it: a time on top
+              of a dark frame of film is a time nobody can read. */}
+          <span className="player-preview-time">{asClock(previewed)}</span>
+        </div>
+      )}
+      <span className="player-rail-fill">
+        <span className="player-rail-track" />
+        <span className="player-rail-held" style={{ width: `${held * 100}%` }} />
+        <span className="player-rail-played" style={{ width: `${played * 100}%` }} />
       </span>
-
-      <div
-        className="player-rail"
-        ref={rail}
-        role="slider"
-        tabIndex={0}
-        aria-label={t("player.position")}
-        aria-valuemin={0}
-        aria-valuemax={Math.round(length)}
-        aria-valuenow={Math.round(at)}
-        aria-valuetext={asClock(at)}
-        onPointerDown={(event) => {
-          const share = shareAt(event.clientX);
-          if (share !== null) {
-            wasDragged.current = false;
-            playback.viewerMoving();
-            setDragging(true);
-            setHovered(share);
-            goToShare(share);
-          }
-        }}
-        onPointerMove={(event) => setHovered(shareAt(event.clientX))}
-        onPointerLeave={() => {
-          if (!dragging) {
-            setHovered(null);
-          }
-        }}
-      >
-        {/* Inside the bar rather than beside it, because where it stands is a
-            place along the bar. Hung on the row instead, it was out by the
-            width of the clock to its left: it followed the hand correctly and
-            sat beside it the whole way. */}
-        {previewed !== null && (
-          <div className="player-preview" style={{ left: `${previewLeft}px` }} aria-hidden="true">
-            <Thumbnail
-              thumbnails={thumbnails}
-              seconds={previewed}
-              across={across}
-              className="player-preview-picture"
-            />
-            {/* Under the picture rather than written across it: a time on top
-                of a dark frame of film is a time nobody can read. */}
-            <span className="player-preview-time">{asClock(previewed)}</span>
-          </div>
-        )}
-        <span className="player-rail-fill">
-          <span className="player-rail-track" />
-          <span className="player-rail-held" style={{ width: `${held * 100}%` }} />
-          <span className="player-rail-played" style={{ width: `${played * 100}%` }} />
-        </span>
-        <span className="player-rail-handle" style={{ left: `${played * 100}%` }} />
-      </div>
-
-      <span className="player-seek-end">
-        <ZoneOnTheBar zone="after_bar" surroundings={surroundings} />
-      </span>
+      <span className="player-rail-handle" style={{ left: `${played * 100}%` }} />
     </div>
   );
 }
