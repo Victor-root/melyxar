@@ -13,8 +13,9 @@
  * ----------------------------------------------------------------------- */
 
 .sectioned {
+  --side-width: 256px;
   display: grid;
-  grid-template-columns: 256px minmax(0, 1fr);
+  grid-template-columns: var(--side-width) minmax(0, 1fr);
   gap: var(--gap-wide);
   align-items: start;
   padding: calc(var(--header-height) + var(--gap)) var(--gutter) var(--gap-section);
@@ -254,14 +255,22 @@
 /* On a wide screen the head of the page rises into the band of the bar at
    the top, between its two pieces, and the first block of the page starts
    level with the side list: the band was room nothing used. Kept clear of
-   the piece at the right end, which is as wide as the account it names. */
+   the piece at the right end, which is as wide as the account it names, and
+   of the one at the left end, as wide as the server's name and logo: moved
+   along past it when it reaches over the page (the header says where it
+   stops). */
 @media (min-width: 1280px) {
   .page-head {
+    --clear-of-start: max(
+      0px,
+      var(--header-start-end, 0px) + var(--gap) - var(--gutter) - var(--side-width) -
+        var(--gap-wide)
+    );
     display: flex;
     align-items: center;
     height: var(--header-height);
-    max-width: calc(100% - 360px);
-    margin: calc(-1 * (var(--header-height) + var(--gap))) 0 var(--gap);
+    max-width: calc(100% - 360px - var(--clear-of-start));
+    margin: calc(-1 * (var(--header-height) + var(--gap))) 0 var(--gap) var(--clear-of-start);
   }
 
   .page-head-line {
@@ -1812,6 +1821,21 @@
   align-items: center;
   gap: var(--gap-tight);
   margin-top: 6px;
+}
+
+/* The server's name being typed, and what keeps it or gives back the one it
+   came with. */
+.name-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
+}
+
+.name-choice .field-line {
+  flex: 1 1 200px;
+  min-width: 0;
 }
 
 /* The server's logo as it stands, beside what changes it. Its own shape at

@@ -4,8 +4,13 @@
 use std::path::Path;
 
 use melyxar_core::fingerprint;
+use melyxar_core::orientation::Orientation;
 
 use crate::{AppError, AppState};
+
+/// What a server is called until its administrator names it, the name the
+/// first migration gives it.
+pub const DEFAULT_NAME: &str = "Melyxar";
 
 /// The longest a server's name may be, the same as a library's: it is carried
 /// in a browser's tab and under an installed icon, where a longer one is cut.
@@ -84,6 +89,12 @@ pub async fn rename(state: &AppState, asked: &str) -> Result<String, Trouble> {
     Ok(name)
 }
 
+/// Gives the server back the name it came with.
+pub async fn forget_name(state: &AppState) -> Result<(), AppError> {
+    state.database().set_server_name(DEFAULT_NAME).await?;
+    Ok(())
+}
+
 /// Makes these bytes the logo of the server, in place of the one it had.
 /// Answers where it is, under the folder of what the administrator sent.
 ///
@@ -131,11 +142,85 @@ pub async fn remove_logo(state: &AppState) -> Result<(), Trouble> {
     Ok(())
 }
 
-/// Deletes the file of a logo no longer worn. One already gone is fine.
+/// Deletes the files of a logo no longer worn, its icons included. One
+/// already gone is fine.
 async fn forget(folder: &Path, name: Option<&str>) {
     if let Some(name) = name {
         tokio::fs::remove_file(folder.join(name)).await.ok();
+        for icon in [LogoIcon::Whole, LogoIcon::Inset] {
+            tokio::fs::remove_file(folder.join(icon.file_of(stem_of(name))))
+                .await
+                .ok();
+        }
     }
+}
+
+/// The two square icons made from the server's logo: what a browser shows in
+/// its tab and an installed application wears.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogoIcon {
+    /// The logo whole, as large as its shape lets it in the square.
+    Whole,
+    /// The logo small enough in the middle for a system that cuts icons to a
+    /// round of its own, laid on a ground when it is served.
+    Inset,
+}
+
+impl LogoIcon {
+    fn file_of(self, stem: &str) -> String {
+        match self {
+            Self::Whole => format!("{stem}.png"),
+            Self::Inset => format!("{stem}-inset.png"),
+        }
+    }
+}
+
+/// The name a logo's files share, which the addresses of its icons carry.
+pub fn stem_of(logo: &str) -> &str {
+    logo.strip_suffix(".webp").unwrap_or(logo)
+}
+
+/// One icon of the logo the server wears, made from it the first time it is
+/// asked for. Nothing when the server wears no logo under that name, which is
+/// also the answer for the icons of one taken away since.
+///
+/// Made from the logo as kept rather than from the image sent, which is never
+/// kept: a logo given before icons were made has them too.
+pub async fn logo_icon(
+    state: &AppState,
+    stem: &str,
+    icon: LogoIcon,
+) -> Result<Option<Vec<u8>>, AppError> {
+    let settings = state.database().server_settings().await?;
+    let Some(logo) = settings.logo_path.filter(|logo| stem_of(logo) == stem) else {
+        return Ok(None);
+    };
+    let folder = state.config().directories.uploads();
+    let path = folder.join(icon.file_of(stem));
+    if let Ok(made) = tokio::fs::read(&path).await {
+        return Ok(Some(made));
+    }
+
+    let Some(tools) = state.tools() else {
+        return Err(melyxar_core::Error::internal("no picture tool on this server").into());
+    };
+    // Written aside and moved into place in one step, so a browser asking
+    // meanwhile never reads half of one.
+    let making = path.with_extension("part.png");
+    let made = melyxar_ffmpeg::images::logo_icon(
+        &tools.ffmpeg,
+        &folder.join(&logo),
+        Orientation::AsStored,
+        icon == LogoIcon::Inset,
+        &making,
+    )
+    .await;
+    if let Err(error) = made {
+        tokio::fs::remove_file(&making).await.ok();
+        return Err(error.into());
+    }
+    tokio::fs::rename(&making, &path).await?;
+    Ok(Some(tokio::fs::read(&path).await?))
 }
 
 /// The name a server is to be called, or a refusal saying why not.
@@ -205,6 +290,12 @@ mod tests {
         let folder = state.config().directories.uploads();
 
         let first = set_logo(&state, &made("red").await).await.expect("worn");
+        let first_icon = logo_icon(&state, stem_of(&first), LogoIcon::Whole)
+            .await
+            .expect("made")
+            .expect("the logo worn has an icon");
+        assert!(first_icon.starts_with(b"\x89PNG"));
+        assert!(folder.join(format!("{}.png", stem_of(&first))).exists());
         let probed = tokio::process::Command::new(ffmpeg.with_file_name("ffprobe"))
             .args([
                 "-v",
@@ -227,6 +318,37 @@ mod tests {
         let second = set_logo(&state, &made("blue").await).await.expect("worn");
         assert_ne!(first, second, "named after what it holds");
         assert!(!folder.join(&first).exists(), "the one before is deleted");
+        assert!(
+            !folder.join(format!("{}.png", stem_of(&first))).exists(),
+            "and its icons with it"
+        );
+        assert_eq!(
+            logo_icon(&state, stem_of(&first), LogoIcon::Whole)
+                .await
+                .expect("asked"),
+            None,
+            "a logo no longer worn has no icon"
+        );
+        let inset = logo_icon(&state, stem_of(&second), LogoIcon::Inset)
+            .await
+            .expect("made")
+            .expect("the logo worn has an icon");
+        let inset_file = directory.path().join("inset.png");
+        tokio::fs::write(&inset_file, &inset).await.expect("kept");
+        let size = tokio::process::Command::new(ffmpeg.with_file_name("ffprobe"))
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "csv=p=0",
+            ])
+            .arg(&inset_file)
+            .output()
+            .await
+            .expect("probed");
+        assert_eq!(String::from_utf8_lossy(&size.stdout).trim(), "512,512");
 
         assert!(matches!(
             set_logo(&state, b"<svg/>").await,
@@ -239,7 +361,26 @@ mod tests {
 
         remove_logo(&state).await.expect("taken away");
         assert!(!folder.join(&second).exists());
+        assert!(!folder
+            .join(format!("{}-inset.png", stem_of(&second)))
+            .exists());
         assert_eq!(identity(&state).await.expect("read").logo, None);
+    }
+
+    #[tokio::test]
+    async fn the_name_given_back_is_the_one_a_new_server_starts_with() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(
+            database.server_settings().await.expect("read").server_name,
+            DEFAULT_NAME
+        );
+        database
+            .set_server_name("Home Cinema")
+            .await
+            .expect("renamed");
+        let state = AppState::new(melyxar_config::Config::default(), database, None, None);
+        forget_name(&state).await.expect("given back");
+        assert_eq!(identity(&state).await.expect("read").name, DEFAULT_NAME);
     }
 
     fn refusal(asked: &str) -> Option<Refused> {

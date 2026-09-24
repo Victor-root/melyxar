@@ -9,6 +9,7 @@
 
 import { useEffect, useRef } from "react";
 import { useBranding } from "./player/logo";
+import { wearTheLogo } from "./installing";
 import { nameTheTab } from "./tab";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { api } from "./api";
@@ -53,6 +54,7 @@ export function App() {
   const who = useWhoIsThere();
   const branding = useBranding();
   useEffect(() => nameTheTab(branding?.server_name ?? null), [branding]);
+  useEffect(() => wearTheLogo(branding?.logo_icon ?? null), [branding]);
 
   // A door that flashes up for a moment in front of somebody who is signed in
   // is worse than a moment of nothing, so nothing is drawn until the server

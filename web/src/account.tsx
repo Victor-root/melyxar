@@ -111,6 +111,7 @@ export function useWhoIsThere(): Who {
         setBranding({
           server_name: "",
           logo: null,
+          logo_icon: null,
           login_background_path: null,
           login_background_style: "abstract",
           setup_complete: true,

@@ -20,9 +20,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/settings/playback",
             axum::routing::get(playback_settings).put(set_playback_settings),
         )
+        .route("/api/v1/settings/server", axum::routing::get(server_settings))
         .route(
-            "/api/v1/settings/server",
-            axum::routing::get(server_settings).put(rename_server),
+            "/api/v1/settings/server/name",
+            axum::routing::put(rename_server).delete(forget_name),
         )
         .route(
             "/api/v1/settings/server/logo",
@@ -36,11 +37,14 @@ pub fn router() -> Router<AppState> {
         )
 }
 
-/// What the server is called and where its logo is, when it has one.
+/// What the server is called, what it would be called given back its own
+/// name, and where its logo is, when it has one.
 #[derive(Debug, Serialize)]
 struct ServerView {
     server_name: String,
+    default_name: &'static str,
     logo: Option<String>,
+    logo_icon: Option<String>,
 }
 
 impl ServerView {
@@ -48,7 +52,12 @@ impl ServerView {
         let identity = melyxar_app::server::identity(state).await?;
         Ok(Json(Self {
             server_name: identity.name,
+            default_name: melyxar_app::server::DEFAULT_NAME,
             logo: identity.logo.as_deref().map(crate::images::logo_url),
+            logo_icon: identity
+                .logo
+                .as_deref()
+                .map(crate::installing::logo_icon_url),
         }))
     }
 }
@@ -72,6 +81,15 @@ async fn rename_server(
     Json(asked): Json<NameAsked>,
 ) -> Result<Json<ServerView>> {
     melyxar_app::server::rename(&state, &asked.server_name).await?;
+    ServerView::of(&state).await
+}
+
+/// Gives the server back the name it came with.
+async fn forget_name(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+) -> Result<Json<ServerView>> {
+    melyxar_app::server::forget_name(&state).await?;
     ServerView::of(&state).await
 }
 

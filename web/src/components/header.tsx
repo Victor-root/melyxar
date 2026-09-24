@@ -151,6 +151,29 @@ export function Header({
   const { jobs } = useRunning();
   const { account, leave } = useAccount();
   const branding = useBranding();
+  const start = useRef<HTMLDivElement>(null);
+
+  /* Where the piece at the left end stops, written on the page: as wide as
+     the server's name and logo, and what rises into the band beside it
+     keeps clear of it rather than sliding under it. */
+  useLayoutEffect(() => {
+    const piece = start.current;
+    if (!piece) {
+      return;
+    }
+    const root = document.documentElement;
+    const measure = () =>
+      root.style.setProperty("--header-start-end", `${piece.getBoundingClientRect().right}px`);
+    measure();
+    const watching = new ResizeObserver(measure);
+    watching.observe(piece);
+    window.addEventListener("resize", measure);
+    return () => {
+      watching.disconnect();
+      window.removeEventListener("resize", measure);
+      root.style.removeProperty("--header-start-end");
+    };
+  }, []);
   /* A scan is the one thing an administrator needs from wherever they happen
      to be: films were added, a name was corrected, a disk came back. */
   const scan = useStartScan(libraries);
@@ -327,7 +350,7 @@ export function Header({
   return (
     <header className={`header${out || looking ? "" : " header-away"}`}>
       <div className="header-inner">
-        <div className="header-piece header-start">
+        <div className="header-piece header-start" ref={start}>
           {/* Off the front page only: there is nowhere to come back from
               there, and the brand right next to it already leads home. */}
           {location.pathname !== "/" && (

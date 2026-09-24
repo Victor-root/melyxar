@@ -6,9 +6,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../../api";
-import type { ServerIdentity } from "../../api";
+import type { ServerSettings } from "../../api";
 import {
-  Editable,
   NumberField,
   PageHead,
   Panel,
@@ -88,6 +87,9 @@ export function AdminSettings() {
   );
 }
 
+/** The longest a server's name may be, as the server holds it to. */
+const LONGEST_NAME = 60;
+
 /** What the server answers a request carrying more than it takes. */
 const TOO_LARGE = 413;
 
@@ -97,14 +99,19 @@ function ServerPanel() {
   const toast = useToast();
   const overview = useOverview();
   const chooser = useRef<HTMLInputElement>(null);
-  const [server, setServer] = useState<ServerIdentity | null>(null);
+  const [server, setServer] = useState<ServerSettings | null>(null);
+  const [typed, setTyped] = useState("");
+  const [naming, setNaming] = useState(false);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
     api
       .server(controller.signal)
-      .then(setServer)
+      .then((read) => {
+        setServer(read);
+        setTyped(read.server_name);
+      })
       .catch(() => {
         // Left empty: the panel says nothing rather than a name the server
         // may not hold.
@@ -114,28 +121,30 @@ function ServerPanel() {
 
   /* Whatever changed, the server answers both as it now holds them, and
      every screen showing either is told at once. */
-  const kept = (now: ServerIdentity) => {
+  const kept = (now: ServerSettings) => {
     setServer(now);
     serverChanged(now);
     overview.again();
   };
 
-  const rename = (wanted: string) => {
-    if (!server) {
-      return;
-    }
-    const before = server;
-    setServer({ ...server, server_name: wanted });
-    api
-      .renameServer(wanted)
-      .then(kept)
+  /* Sent when somebody says so, and said back once it is kept: a name only
+     half typed is never anybody's choice, and a field that saves on its own
+     leaves nobody sure it did. */
+  const changeName = (change: () => Promise<ServerSettings>, done: string) => {
+    setNaming(true);
+    change()
+      .then((now) => {
+        kept(now);
+        setTyped(now.server_name);
+        toast({ state: "ok", title: t(done, { name: now.server_name }) });
+      })
       .catch((error) => {
-        setServer(before);
         toast({ state: "trouble", title: t("admin.server_name_failed"), detail: t(refusalAbout(error, "server")) });
-      });
+      })
+      .finally(() => setNaming(false));
   };
 
-  const changeLogo = (change: () => Promise<ServerIdentity>) => {
+  const changeLogo = (change: () => Promise<ServerSettings>) => {
     setSending(true);
     change()
       .then(kept)
@@ -152,7 +161,39 @@ function ServerPanel() {
   return (
     <Panel icon={ServerIcon} title={t("admin.server")} lead={t("admin.server_lead")}>
       <Setting label={t("admin.server_name")}>
-        {server && <Editable value={server.server_name} label={t("admin.server_name")} onSettled={rename} />}
+        {server && (
+          <form
+            className="name-choice"
+            onSubmit={(event) => {
+              event.preventDefault();
+              changeName(() => api.renameServer(typed), "admin.server_name_saved");
+            }}
+          >
+            <input
+              type="text"
+              className="field-line"
+              aria-label={t("admin.server_name")}
+              value={typed}
+              maxLength={LONGEST_NAME}
+              onChange={(event) => setTyped(event.target.value)}
+            />
+            <button
+              type="submit"
+              className="button button-small button-accent"
+              disabled={naming || !typed.trim() || typed.trim() === server.server_name}
+            >
+              {t("admin.server_name_save")}
+            </button>
+            <button
+              type="button"
+              className="button button-small button-quiet"
+              disabled={naming || server.server_name === server.default_name}
+              onClick={() => changeName(api.forgetServerName, "admin.server_name_given_back")}
+            >
+              {t("admin.server_name_give_back", { name: server.default_name })}
+            </button>
+          </form>
+        )}
       </Setting>
       <Setting label={t("admin.logo")} why={t("admin.logo_why")}>
         {server && (
