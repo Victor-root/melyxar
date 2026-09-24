@@ -34,9 +34,6 @@ const RELIEF_INSET: &str = "melyxar-shade-inset-512.png";
 /// How wide both reliefs are, and so the icons drawn from them.
 const ICON_SIZE: &str = "512x512";
 
-/// What the application is called once installed.
-const NAME: &str = "Melyxar";
-
 /// Asked again each time and answered "unchanged" when it is: the relief can
 /// change under the same address with an update of the interface.
 const ALWAYS_ASK: &str = "no-cache";
@@ -60,8 +57,8 @@ struct Colours {
 #[derive(Debug, Serialize)]
 struct Manifest {
     id: &'static str,
-    name: &'static str,
-    short_name: &'static str,
+    name: String,
+    short_name: String,
     start_url: &'static str,
     scope: &'static str,
     display: &'static str,
@@ -78,14 +75,20 @@ struct Icon {
     purpose: &'static str,
 }
 
-async fn manifest(Query(colours): Query<Colours>) -> Response {
+async fn manifest(State(state): State<AppState>, Query(colours): Query<Colours>) -> Response {
     let (Some(mark), Some(ground)) = (
         Colour::from_hex(&colours.mark),
         Colour::from_hex(&colours.ground),
     ) else {
         return ServerError::invalid_input("a colour is six hexadecimal digits").into_response();
     };
-    let manifest = manifest_for(mark, ground);
+    // Named after the server as its administrator named it, the name the
+    // sign in screen shows.
+    let name = match state.database().server_settings().await {
+        Ok(settings) => settings.server_name,
+        Err(error) => return ServerError::internal(error.to_string()).into_response(),
+    };
+    let manifest = manifest_for(&name, mark, ground);
     (
         [
             (
@@ -102,12 +105,12 @@ async fn manifest(Query(colours): Query<Colours>) -> Response {
 /// The manifest for these colours. The same address every time for the
 /// application itself, so a change of colour updates the one installed rather
 /// than making another.
-fn manifest_for(mark: Colour, ground: Colour) -> Manifest {
+fn manifest_for(name: &str, mark: Colour, ground: Colour) -> Manifest {
     let ground_hex = ground.hex();
     Manifest {
         id: "/",
-        name: NAME,
-        short_name: NAME,
+        name: name.to_owned(),
+        short_name: name.to_owned(),
         start_url: "/",
         scope: "/",
         display: "standalone",
@@ -218,9 +221,12 @@ mod tests {
     fn the_manifest_names_its_icons_in_its_own_colours() {
         let mark = Colour::from_hex("1C7ED6").expect("a colour");
         let ground = Colour::from_hex("0c0d10").expect("a colour");
-        let manifest = serde_json::to_value(manifest_for(mark, ground)).expect("json");
+        let manifest =
+            serde_json::to_value(manifest_for("Home Cinema", mark, ground)).expect("json");
 
         assert_eq!(manifest["id"], "/");
+        assert_eq!(manifest["name"], "Home Cinema");
+        assert_eq!(manifest["short_name"], "Home Cinema");
         assert_eq!(manifest["start_url"], "/");
         assert_eq!(manifest["display"], "standalone");
         assert_eq!(manifest["background_color"], "#0c0d10");
