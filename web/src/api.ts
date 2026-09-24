@@ -504,32 +504,20 @@ export interface Trailer {
 
 /** One work hanging under another: a season of a series, an episode of a
  *  season, what a folder of one's own holds. */
+/** One work hanging under another: its card, and what its place under the
+ *  other adds to it. */
 export interface Child {
-  id: string;
-  kind: "season" | "episode" | "folder" | "video" | "photo";
   /** The season number, the episode number. */
   number: number | null;
-  /** The name it carries today. A page shows the number in the language it is
-   *  being read in and keeps this for whatever the name adds to it. */
-  title: string;
-  runtime_minutes: number | null;
-  /** How many episodes a season holds. Zero for an episode. */
+  /** The name it carries, when that name says anything its number does not.
+   *  A page shows the number in the language it is being read in. */
+  title: string | null;
+  /** What it is about, for a list of episodes that has room to say it. */
+  overview: string | null;
+  /** How many hang under it: a season's episodes, a folder's contents. */
   child_count: number;
-  /** How many of those this viewer has left to watch. */
-  unwatched: number;
-  /** Whether this viewer has watched it. Only ever true of an episode. */
-  watched: boolean;
-  /** Where this viewer stopped in it, when they stopped partway. */
-  resume_from_seconds: number | null;
-  /** False when no file of it is on the disk, so a page says so rather than
-   *  offering a button that fails when it is pressed. */
-  playable: boolean;
-  identification: Card["identification"];
-  color: string | null;
-  poster: Picture[];
-  /** The biggest copy on disk, so a row of these can start one playing on its
-   *  own. Absent along with `playable`. */
-  source_id: string | null;
+  /** It as every row draws it, with what this viewer made of it. */
+  card: Card;
 }
 
 /** The episode a page offers to play next. */
@@ -590,6 +578,9 @@ export interface Work {
   /** The seasons of a series, the episodes of a season, in order. Empty for
    *  anything met on its own. */
   children: Child[];
+  /** Every episode of an episode's season, itself included, in order. Empty
+   *  for anything that is not an episode. */
+  siblings: Child[];
   /** The way back up, nearest first. Empty for anything met on its own. */
   ancestry: Ancestor[];
   /** The episode to watch next: the first one left on a series or a season,

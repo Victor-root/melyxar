@@ -138,26 +138,6 @@ impl Database {
         rows.iter().map(image_from_row).collect()
     }
 
-    /// The pictures of everything hanging under one work, largest first.
-    ///
-    /// One query for a whole page of seasons or episodes, for the same reason
-    /// the faces come back in one: a season of twenty four episodes would
-    /// otherwise cost twenty four round trips. The rows carry the work they
-    /// belong to, which is how a caller puts each picture on its own card.
-    pub async fn pictures_of_children(&self, parent_id: WorkId) -> Result<Vec<StoredImage>> {
-        let rows = sqlx::query(AssertSqlSafe(format!(
-            "SELECT {WHAT_A_PICTURE_IS} FROM images
-             WHERE owner_kind = 'work'
-               AND owner_id IN (SELECT id FROM works WHERE parent_id = ?)
-             ORDER BY width DESC"
-        )))
-        .bind(parent_id.to_db_string())
-        .fetch_all(self.reader())
-        .await?;
-
-        rows.iter().map(image_from_row).collect()
-    }
-
     /// The name the content of one picture earned, when it is already here.
     ///
     /// This is what stops a refresh from fetching a poster that has not

@@ -504,11 +504,11 @@ mod tests {
             .await
             .expect("account created");
         let shown: Vec<String> = database
-            .children_of(viewer.id, summer.id)
+            .children_of(viewer.id, summer.id, "fr")
             .await
             .expect("read")
             .into_iter()
-            .map(|child| child.title)
+            .map(|child| child.card.title)
             .collect();
         assert_eq!(
             shown,

@@ -1152,17 +1152,18 @@ mod tests {
             .expect("the series is met on its own");
 
         let seasons = database
-            .children_of(viewer, series.id)
+            .children_of(viewer, series.id, "fr")
             .await
             .expect("the seasons read");
         assert_eq!(seasons.len(), 1);
         assert_eq!(
-            seasons[0].unwatched, 1,
+            seasons[0].card.state.as_ref().map(|state| state.unwatched),
+            Some(1),
             "a season says how much of it is left"
         );
 
         let episodes = database
-            .children_of(viewer, seasons[0].id)
+            .children_of(viewer, seasons[0].card.id, "fr")
             .await
             .expect("the episodes read");
         assert_eq!(episodes.len(), 1);

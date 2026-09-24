@@ -2582,7 +2582,7 @@ mod tests {
         assert_eq!(
             page.children
                 .iter()
-                .map(|child| (child.work.kind, child.work.ordinal, child.work.child_count))
+                .map(|child| (child.card.kind, child.ordinal, child.child_count))
                 .collect::<Vec<_>>(),
             vec![
                 (WorkKind::Season, Some(1), 2),
@@ -2590,7 +2590,7 @@ mod tests {
             ]
         );
 
-        let first_season = page.children[0].work.id;
+        let first_season = page.children[0].card.id;
         let season_page = crate::detail::work_detail(&state, &a_viewer(&state).await, first_season)
             .await
             .expect("read")
@@ -2609,9 +2609,13 @@ mod tests {
                 .children
                 .iter()
                 .map(|child| (
-                    child.work.ordinal,
-                    child.work.title.clone(),
-                    child.work.playable
+                    child.ordinal,
+                    child.card.title.clone(),
+                    child
+                        .card
+                        .state
+                        .as_ref()
+                        .is_some_and(|state| state.source_id.is_some())
                 ))
                 .collect::<Vec<_>>(),
             vec![
@@ -2620,7 +2624,7 @@ mod tests {
             ]
         );
 
-        let episode = season_page.children[0].work.id;
+        let episode = season_page.children[0].card.id;
         let episode_page = crate::detail::work_detail(&state, &a_viewer(&state).await, episode)
             .await
             .expect("read")
@@ -2629,6 +2633,20 @@ mod tests {
             episode_page.children.is_empty(),
             "nothing hangs under an episode"
         );
+        assert_eq!(
+            episode_page
+                .siblings
+                .iter()
+                .map(|sibling| sibling.card.id)
+                .collect::<Vec<_>>(),
+            season_page
+                .children
+                .iter()
+                .map(|child| child.card.id)
+                .collect::<Vec<_>>(),
+            "an episode travels with every episode of its season, itself included"
+        );
+        assert!(page.siblings.is_empty(), "a series has no season to share");
         assert_eq!(
             episode_page
                 .ancestry
@@ -2710,9 +2728,14 @@ mod tests {
         assert_eq!(
             page.children
                 .iter()
-                .map(|season| (season.work.child_count, season.work.unwatched))
+                .map(|season| {
+                    (
+                        season.child_count,
+                        season.card.state.as_ref().map(|state| state.unwatched),
+                    )
+                })
                 .collect::<Vec<_>>(),
-            vec![(3, 1)]
+            vec![(3, Some(1))]
         );
 
         // The one after an episode is simply the one after it, watched or not.

@@ -72,6 +72,12 @@ export function Card({
   /** A few words at the right of the name, where a row of stills needs them:
       how much of it is left. */
   trailing,
+  /** Whether the name is drawn under the picture. A line of a list says it
+      beside the picture instead. */
+  named = true,
+  /** Whether this is the work the page is about, in a row of the ones around
+      it: lit at rest, and what the row opens on. */
+  here = false,
 }: {
   card: CardData;
   shape?: CardShape;
@@ -79,6 +85,8 @@ export function Card({
   lead?: string;
   note?: string;
   trailing?: string;
+  named?: boolean;
+  here?: boolean;
 }) {
   const { t } = useSettings();
   const navigate = useNavigate();
@@ -127,7 +135,7 @@ export function Card({
 
   return (
     <article
-      className={`card card-${shape}${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " card-chosen" : ""}`}
+      className={`card card-${shape}${here ? " card-here" : ""}${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " card-chosen" : ""}`}
       data-card
       style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
     >
@@ -157,6 +165,7 @@ export function Card({
           to={`/work/${card.id}`}
           title={card.title}
           draggable={false}
+          aria-current={here ? "page" : undefined}
           onClick={choosing.onClick}
         >
           <span className="visually-hidden">{card.title}</span>
@@ -240,11 +249,15 @@ export function Card({
       {/* The name, and at its right what a row of half watched films is read
           for: how much of each one is left. Underneath, which episode it is,
           or the year for anything that is not one. */}
-      <span className="card-line">
-        <span className="card-title">{lead ?? card.title}</span>
-        {trailing && <span className="card-trailing">{trailing}</span>}
-      </span>
-      <span className="card-year">{note ?? card.year ?? ""}</span>
+      {named && (
+        <>
+          <span className="card-line">
+            <span className="card-title">{lead ?? card.title}</span>
+            {trailing && <span className="card-trailing">{trailing}</span>}
+          </span>
+          <span className="card-year">{note ?? card.year ?? ""}</span>
+        </>
+      )}
 
       {menu.drawn}
     </article>

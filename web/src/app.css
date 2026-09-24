@@ -2091,6 +2091,14 @@ input[type="radio"]:disabled {
   }
 }
 
+/* The card of the work the page is about, among the ones around it: ringed
+   in the accent at rest, so it is found without looking for it. */
+.card-here .card-picture {
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 2px var(--accent);
+}
+
 .card-picture img {
   width: 100%;
   height: 100%;
@@ -2591,6 +2599,14 @@ button.seen-mark:not(.seen-mark-on):hover {
   flex-basis: calc(var(--card-width) * 1.62);
 }
 
+/* And it grows past its edges by more than a poster does: in the four pixels
+   kept for a poster, the lit hairline of the first and the last still of a
+   row was cut off by the row's own edge. */
+.row-track:has(> .card-lying) {
+  padding-inline: 7px;
+  margin-inline: -7px;
+}
+
 @media (min-width: 1400px) {
   .row-track > * {
     flex-basis: var(--card-width-wide);
@@ -2746,6 +2762,16 @@ button.seen-mark:not(.seen-mark-on):hover {
   border-radius: var(--radius-card);
   object-fit: cover;
   box-shadow: var(--shadow-raised);
+}
+
+/* An episode is shown by a still, lying down as every row shows it. */
+.work-poster-lying {
+  width: clamp(260px, 30vw, 480px);
+}
+
+.work-poster-lying img,
+.work-poster-lying .work-poster-empty {
+  aspect-ratio: 16 / 9;
 }
 
 .work-poster-empty {
@@ -3868,74 +3894,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   transform: rotate(45deg) translateY(-1px);
 }
 
-.work-children {
-  margin: var(--gap-wide) 0 0;
-}
-
-.work-section {
-  margin: 0 0 var(--gap);
-  font-size: 18px;
-  font-weight: 650;
-}
-
-.season-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--gap-wide) var(--gap);
-}
-
-.season-card {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-decoration: none;
-  color: inherit;
-}
-
-.season-poster {
-  position: relative;
-  aspect-ratio: 2 / 3;
-  border-radius: var(--radius-card);
-  overflow: hidden;
-  background: var(--card-color);
-  box-shadow: var(--shadow-card);
-  transition: transform var(--calm) var(--ease), box-shadow var(--calm) var(--ease);
-}
-
-.season-card:hover .season-poster,
-.season-card:focus-visible .season-poster {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: var(--shadow-raised);
-}
-
-.season-poster img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.season-poster-empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 40px;
-  font-weight: 700;
-  color: color-mix(in srgb, var(--text) 40%, transparent);
-}
-
-.season-name {
-  margin-top: 6px;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.season-title,
-.season-count {
-  font-size: 13px;
-  color: var(--text-soft);
-}
-
 /* --------------------------------------------------------------------------
  * What somebody filmed and photographed themselves
  * ----------------------------------------------------------------------- */
@@ -4113,54 +4071,68 @@ button.seen-mark:not(.seen-mark-on):hover {
   right: var(--gap);
 }
 
-.episode-list {
+/* A season's episodes, one to a line: the still, and beside it what it is
+   called, how it is rated, how long it runs and what it is about. */
+.episode-lines {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 2px;
+  gap: var(--gap-wide);
 }
 
-.episode-link {
-  display: grid;
-  grid-template-columns: 2.5rem 1fr auto 1.25rem;
-  align-items: baseline;
-  gap: var(--gap);
-  padding: var(--gap-tight) var(--gap);
-  border-radius: var(--radius-control);
-  text-decoration: none;
-  color: inherit;
-  transition: background var(--quick) var(--ease);
+.episode-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-wide);
 }
 
-.episode-link:hover,
-.episode-link:focus-visible {
-  background: color-mix(in srgb, var(--surface-raised) 85%, transparent);
+.episode-line > .card {
+  flex: 0 0 clamp(200px, 24vw, 320px);
 }
 
-.episode-number {
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.episode-name {
+.episode-line-words {
   min-width: 0;
+  max-width: 72ch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--gap-tight);
+  padding-top: 2px;
+}
+
+.episode-line-name {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.episode-line-name:hover,
+.episode-line-name:focus-visible {
+  text-decoration: underline;
+}
+
+/* A few lines of it, the rest on the episode's own page. */
+.episode-line-overview {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.episode-length {
-  color: var(--text-faint);
-  font-size: 13px;
-  white-space: nowrap;
-}
+@media (max-width: 700px) {
+  .episode-line {
+    flex-direction: column;
+  }
 
-.episode-watched {
-  color: var(--accent);
-  font-size: 13px;
-  text-align: right;
+  .episode-line > .card {
+    flex-basis: auto;
+    width: 100%;
+  }
 }
 
 .work-all-watched {

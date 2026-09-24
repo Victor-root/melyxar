@@ -10,11 +10,14 @@ use melyxar_core::media::{Chapter, Track};
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::Work;
 use melyxar_database::browse::WorkCard;
-use melyxar_database::catalogue::{ChildWork, PlayableExtraVideo, SourceAnalysis};
+use melyxar_database::catalogue::{PlayableExtraVideo, SourceAnalysis};
 use melyxar_database::home::Alike;
 use melyxar_database::images::StoredImage;
 
 use crate::{AppState, Result};
+
+/// One work hanging under another, as a page carries it.
+pub use melyxar_database::catalogue::ChildWork;
 
 /// How many works the row of alike ones holds: a few screens of it, and
 /// never the whole genre.
@@ -41,7 +44,11 @@ pub struct WorkDetail {
     pub external_ids: Vec<(String, String)>,
     /// What hangs under this one, in order: the seasons of a series, the
     /// episodes of a season. Empty for anything met on its own.
-    pub children: Vec<Child>,
+    pub children: Vec<ChildWork>,
+    /// Every episode of the season an episode belongs to, itself included, in
+    /// order: the way from one to the next on its page and in the player.
+    /// Empty for anything that is not an episode.
+    pub siblings: Vec<ChildWork>,
     /// What this one hangs under, nearest first: an episode answers with its
     /// season and then its series. Empty for anything met on its own.
     ///
@@ -82,14 +89,6 @@ pub struct CarryOn {
     /// The file it would be played from. Absent would mean nothing to play,
     /// and such an episode is never offered.
     pub source_id: Option<MediaSourceId>,
-}
-
-/// One work hanging under this one, with what its card shows.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Child {
-    pub work: ChildWork,
-    /// Every size of its picture, largest first.
-    pub poster: Vec<StoredImage>,
 }
 
 /// One work this one hangs under, as a way back to it.
@@ -353,44 +352,13 @@ pub async fn work_detail(
         })
         .collect();
 
-    // The pictures of a whole page of episodes in one read, then each one
-    // joins its own card, exactly as the faces do above.
-    let pictures = database.pictures_of_children(work_id).await?;
-    let children = database
-        .children_of(viewer, work_id)
-        .await?
-        .into_iter()
-        .map(|child| {
-            let owner = child.id.to_db_string();
-            Child {
-                poster: pictures
-                    .iter()
-                    .filter(|image| image.owner_id == owner)
-                    .cloned()
-                    .collect(),
-                work: child,
-            }
-        })
-        .collect::<Vec<_>>();
-    // A folder inside this one has no picture of its own and is shown with
-    // one of what it holds, as on a grid.
-    let bare_folders: Vec<WorkId> = children
-        .iter()
-        .filter(|child| child.work.kind == melyxar_core::work::WorkKind::Folder)
-        .map(|child| child.work.id)
-        .collect();
-    let lent = database.pictures_lent_to_folders(&bare_folders).await?;
-    let children = children
-        .into_iter()
-        .map(|mut child| {
-            child.poster.extend(
-                lent.iter()
-                    .filter(|(folder, _)| *folder == child.work.id)
-                    .map(|(_, image)| image.clone()),
-            );
-            child
-        })
-        .collect();
+    let children = database.children_of(viewer, work_id, &language).await?;
+    let siblings = match (work.kind, work.parent_id) {
+        (melyxar_core::work::WorkKind::Episode, Some(season)) => {
+            database.children_of(viewer, season, &language).await?
+        }
+        _ => Vec::new(),
+    };
 
     // Only a series is ever given a mark of its own: a season and an episode
     // are described by it rather than illustrated on their own, so asking for
@@ -469,6 +437,7 @@ pub async fn work_detail(
         previous_photo,
         next_photo,
         children,
+        siblings,
         ancestry,
         carry_on_with,
         previous_episode,

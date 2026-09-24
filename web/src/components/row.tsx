@@ -28,7 +28,32 @@ const ALMOST_A_SCREENFUL = 0.9;
  *  still count as being in it. */
 const A_HAIR = 0.5;
 
-export function Row({ children }: { children: ReactNode }) {
+/** Where a card's left edge sits along the row, counted from the row's own
+ *  beginning rather than from the screen: it does not change as the row
+ *  moves, and it is the card's place rather than what is drawn, so a card
+ *  grown under the pointer is still measured where it belongs. */
+function alongTheRow(card: HTMLElement, track: HTMLElement): number {
+  return card.offsetLeft - track.offsetLeft;
+}
+
+/** The room kept at the sides of the row for a card grown under the pointer.
+ *  A card is in its place when it sits just inside that, which is where the
+ *  heading above the row sits too. */
+function roomAtTheSide(track: HTMLElement): number {
+  return parseFloat(getComputedStyle(track).paddingLeft) || 0;
+}
+
+export function Row({
+  children,
+  opensOn,
+}: {
+  children: ReactNode;
+  /** The card, counted from nought, the row is brought to when it arrives:
+      the one a page is about, among the ones around it. The one before it
+      stays in view, so it reads as a place in a run rather than as the
+      start of one. */
+  opensOn?: number;
+}) {
   const { t } = useSettings();
   const track = useRef<HTMLDivElement>(null);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -62,6 +87,18 @@ export function Row({ children }: { children: ReactNode }) {
     return () => watcher.disconnect();
   }, [measure, children]);
 
+  useEffect(() => {
+    const element = track.current;
+    if (!element || opensOn === undefined) {
+      return;
+    }
+    const cards = element.querySelectorAll<HTMLElement>("[data-card]");
+    const landing = cards[Math.max(opensOn - 1, 0)];
+    if (landing) {
+      element.scrollLeft = alongTheRow(landing, element) - roomAtTheSide(element);
+    }
+  }, [opensOn]);
+
   /* One press moves the row by whole cards and leaves it on a card's edge.
      Scrolling by a share of the width instead left the row wherever that
      share happened to land: a first card cut down the middle, a last one cut
@@ -76,11 +113,7 @@ export function Row({ children }: { children: ReactNode }) {
     }
 
     const cards = Array.from(element.querySelectorAll<HTMLElement>("[data-card]"));
-    /* Where a card's left edge sits along the row, counted from the row's
-       own beginning rather than from the screen: it does not change as the
-       row moves, and it is the card's place rather than what is drawn, so a
-       card grown under the pointer is still measured where it belongs. */
-    const along = (card: HTMLElement) => card.offsetLeft - element.offsetLeft;
+    const along = (card: HTMLElement) => alongTheRow(card, element);
 
     if (cards.length < 2) {
       element.scrollBy({
@@ -96,11 +129,7 @@ export function Row({ children }: { children: ReactNode }) {
       return;
     }
 
-    /* The room kept at the sides for a card grown under the pointer. A card
-       is in its place when it sits just inside that, which is where the
-       heading above the row sits too. */
-    const room = parseFloat(getComputedStyle(element).paddingLeft) || 0;
-    const home = first - room;
+    const home = first - roomAtTheSide(element);
     /* Which card the row is resting on, as a count of cards that can fall
        between two of them after a hand has pulled the row. */
     const resting = (element.scrollLeft - home) / step;
