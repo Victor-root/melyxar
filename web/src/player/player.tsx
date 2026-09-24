@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlaybackTrack, Work } from "../api";
 import { useToast } from "../components/toasts";
 import { nameOfPlayed } from "../readable";
+import { showPlaying } from "../tab";
 import { useSettings } from "../settings";
 import { appearanceClasses, rememberAppearance, storedAppearance } from "./appearance";
 import type { Appearance } from "./appearance";
@@ -133,11 +134,8 @@ export function Player({
   /* The tab says what is playing, and gives its name back once it stops. */
   const playing = nameOfPlayed(work, t);
   useEffect(() => {
-    const before = document.title;
-    document.title = playing;
-    return () => {
-      document.title = before;
-    };
+    showPlaying(playing);
+    return () => showPlaying(null);
   }, [playing]);
 
   const setAppearance = (change: Partial<Appearance>) => {
