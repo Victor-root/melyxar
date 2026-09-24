@@ -71,14 +71,44 @@ export function markFor(
  * administrator changes it and not before.
  */
 let known: ServerIdentity | null = null;
-let asking: Promise<ServerIdentity | null> | null = null;
+let asking = false;
 const following = new Set<(branding: ServerIdentity) => void>();
 
+/** How long a question that went unanswered waits before it is asked again. */
+const ASK_AGAIN_AFTER = 2000;
+
 /** Tells every screen showing the server's name or logo what they are now,
- *  once this page has changed them. */
+ *  once this page has changed them or the server has said. */
 export function serverChanged(server: ServerIdentity): void {
   known = server;
   for (const follower of following) follower(server);
+}
+
+/**
+ * Asks the server once, and again shortly for as long as a screen still wants
+ * the answer when it went unanswered: a connection dropped by whatever carries
+ * it, a tunnel or a proxy, would otherwise leave the bar at the top without a
+ * name until somebody reloaded the page.
+ */
+function ask(): void {
+  if (asking || known) {
+    return;
+  }
+  asking = true;
+  api
+    .branding()
+    .then((answer) => {
+      asking = false;
+      serverChanged(answer);
+    })
+    .catch(() => {
+      window.setTimeout(() => {
+        asking = false;
+        if (following.size > 0) {
+          ask();
+        }
+      }, ASK_AGAIN_AFTER);
+    });
 }
 
 export function useBranding(): ServerIdentity | null {
@@ -86,28 +116,15 @@ export function useBranding(): ServerIdentity | null {
 
   useEffect(() => {
     following.add(setBranding);
+    // Known already, perhaps only since this screen was drawn: the answer can
+    // land between the drawing and this, and a screen that did not take it
+    // then would never hear it again.
     if (known) {
-      return () => {
-        following.delete(setBranding);
-      };
+      setBranding(known);
+    } else {
+      ask();
     }
-    let gone = false;
-    asking =
-      asking ??
-      api
-        .branding()
-        .then((answer) => {
-          known = answer;
-          return answer;
-        })
-        .catch(() => null);
-    void asking.then((answer) => {
-      if (!gone && answer) {
-        setBranding(answer);
-      }
-    });
     return () => {
-      gone = true;
       following.delete(setBranding);
     };
   }, []);
