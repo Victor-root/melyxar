@@ -105,6 +105,13 @@ describe("sayLine", () => {
     );
   });
 
+  it("says whose other devices were signed out, and how many", () => {
+    expect(sayLine(line("other_devices_signed_out", { user_name: "somebody", count: 3 }), t)).toEqual({
+      title: "activity.other_devices_signed_out(somebody)",
+      note: "activity.devices(3)",
+    });
+  });
+
   it("says which device of whom was signed out, and by whom", () => {
     expect(
       sayLine(

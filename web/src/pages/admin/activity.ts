@@ -98,6 +98,11 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
         title: t(`activity.${line.kind}`, { user }),
         note: t("activity.by", { name: text(details, "by") ?? t("activity.someone") }),
       };
+    case "other_devices_signed_out":
+      return {
+        title: t("activity.other_devices_signed_out", { user }),
+        note: howMany(figure(details, "count") ?? 0, "activity.devices", t),
+      };
     case "device_signed_out":
       return {
         title: t("activity.device_signed_out", { user }),
