@@ -170,7 +170,7 @@ pub fn avatar_arguments(
 ) -> Vec<OsString> {
     let square =
         format!("crop='min(iw,ih)':'min(iw,ih)',scale='min(iw,{AVATAR_SIDE})':-1:flags=lanczos");
-    sent_picture_arguments(source, orientation, &square, destination)
+    sent_picture_arguments(source, orientation, &square, Written::Webp, destination)
 }
 
 /// Builds the making of a server's logo out of whatever image the
@@ -181,22 +181,62 @@ pub fn logo_arguments(source: &Path, orientation: Orientation, destination: &Pat
     let inside = format!(
         "scale='min(iw,{LOGO_SIDE})':'min(ih,{LOGO_SIDE})':force_original_aspect_ratio=decrease:flags=lanczos"
     );
-    sent_picture_arguments(source, orientation, &inside, destination)
+    sent_picture_arguments(source, orientation, &inside, Written::Webp, destination)
+}
+
+/// How wide the square icons made from a server's logo are, the size a
+/// browser asks of an installed application.
+pub const LOGO_ICON_SIDE: u32 = 512;
+
+/// How long the logo's diagonal is in the icon a system cuts to a shape of
+/// its own: the circle of four fifths of the icon's width, less a little air,
+/// so the logo's corners survive a round cut whatever its proportions.
+const LOGO_INSET_DIAGONAL: u32 = 390;
+
+/// Builds the making of a square icon out of the image sent for a server's
+/// logo: the logo whole in the middle, turned the way its camera said, on a
+/// see-through ground. Filling the square as far as its shape lets it, or,
+/// `inset`, brought in far enough that a round cut leaves all of it.
+pub fn logo_icon_arguments(
+    source: &Path,
+    orientation: Orientation,
+    inset: bool,
+    destination: &Path,
+) -> Vec<OsString> {
+    let side = LOGO_ICON_SIDE;
+    let scale = if inset {
+        let diagonal = LOGO_INSET_DIAGONAL;
+        format!("scale='iw*{diagonal}/hypot(iw,ih)':'ih*{diagonal}/hypot(iw,ih)':flags=lanczos")
+    } else {
+        format!("scale={side}:{side}:force_original_aspect_ratio=decrease:flags=lanczos")
+    };
+    let square = format!("{scale},format=rgba,pad={side}:{side}:(ow-iw)/2:(oh-ih)/2:color=black@0");
+    sent_picture_arguments(source, orientation, &square, Written::Png, destination)
+}
+
+/// How a picture made out of an image somebody sent is written.
+#[derive(Clone, Copy)]
+enum Written {
+    /// As a picture a page shows, small for what it holds.
+    Webp,
+    /// Whole, for what is read again to be laid on a ground.
+    Png,
 }
 
 /// The one picture made out of an image somebody sent, turned first and then
-/// given its shape, written as a picture a browser shows.
+/// given its shape.
 fn sent_picture_arguments(
     source: &Path,
     orientation: Orientation,
     shape: &str,
+    written: Written,
     destination: &Path,
 ) -> Vec<OsString> {
     let filter = match turn_of(orientation) {
         Some(turn) => format!("{turn},{shape}"),
         None => shape.to_string(),
     };
-    vec![
+    let mut arguments = vec![
         OsString::from("-hide_banner"),
         OsString::from("-loglevel"),
         OsString::from("error"),
@@ -208,12 +248,18 @@ fn sent_picture_arguments(
         OsString::from(filter),
         OsString::from("-frames:v"),
         OsString::from("1"),
-        OsString::from("-c:v"),
-        OsString::from("libwebp"),
-        OsString::from("-quality"),
-        OsString::from(QUALITY.to_string()),
-        destination.as_os_str().to_os_string(),
-    ]
+    ];
+    match written {
+        Written::Webp => arguments.extend([
+            OsString::from("-c:v"),
+            OsString::from("libwebp"),
+            OsString::from("-quality"),
+            OsString::from(QUALITY.to_string()),
+        ]),
+        Written::Png => arguments.extend([OsString::from("-c:v"), OsString::from("png")]),
+    }
+    arguments.push(destination.as_os_str().to_os_string());
+    arguments
 }
 
 /// Makes a profile picture out of an image somebody sent.
@@ -234,6 +280,17 @@ pub async fn logo(
     destination: &Path,
 ) -> Result<()> {
     make(tool, logo_arguments(source, orientation, destination)).await
+}
+
+/// Makes one square icon out of the image sent for a server's logo.
+pub async fn logo_icon(
+    tool: &Path,
+    source: &Path,
+    orientation: Orientation,
+    inset: bool,
+    destination: &Path,
+) -> Result<()> {
+    make(tool, logo_icon_arguments(source, orientation, inset, destination)).await
 }
 
 /// Runs the tool on what it was given to make one picture.
@@ -535,6 +592,34 @@ mod tests {
         );
         assert!(!logo.contains("crop"), "a logo is never cut: {logo}");
         assert!(logo.ends_with("-c:v libwebp -quality 80 /data/logo.webp"));
+    }
+
+    #[test]
+    fn a_logo_icon_is_the_logo_whole_in_a_see_through_square() {
+        let whole = rendered(&logo_icon_arguments(
+            Path::new("/data/sent.source"),
+            Orientation::AsStored,
+            false,
+            Path::new("/data/logo.png"),
+        ));
+        assert!(
+            whole.contains(
+                "-vf scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,format=rgba,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0"
+            ),
+            "{whole}"
+        );
+        assert!(whole.ends_with("-c:v png /data/logo.png"));
+
+        let inset = rendered(&logo_icon_arguments(
+            Path::new("/data/sent.source"),
+            Orientation::AsStored,
+            true,
+            Path::new("/data/logo-inset.png"),
+        ));
+        assert!(
+            inset.contains("scale='iw*390/hypot(iw,ih)':'ih*390/hypot(iw,ih)'"),
+            "its diagonal inside the circle a system cuts to: {inset}"
+        );
     }
 
     #[test]

@@ -45,13 +45,21 @@ export type LoginBackgroundStyle = "abstract" | "library";
  *  the server ships with is a fallback the screen holds, never something the
  *  screen assumes. */
 /** What the server is called and where its logo is, when it was given one. */
-export type ServerIdentity = Pick<Branding, "server_name" | "logo">;
+export type ServerIdentity = Pick<Branding, "server_name" | "logo" | "logo_icon">;
+
+/** The same, as the administrator changing them reads it: with the name the
+ *  server would be given back. */
+export interface ServerSettings extends ServerIdentity {
+  default_name: string;
+}
 
 export interface Branding {
   server_name: string;
   /** Where the logo the administrator gave the server is, or nothing for
       Melyxar's own. */
   logo: string | null;
+  /** The same logo as a square icon, for the tab of the browser. */
+  logo_icon: string | null;
   /** A picture behind the sign in screen, which wins over the drawn one. */
   login_background_path: string | null;
   login_background_style: LoginBackgroundStyle;
@@ -1546,11 +1554,12 @@ export const api = {
     put<{ days: number }>("/api/v1/system/activity/kept", { days }),
   /* What the server is called and the logo it wears, for the administrator
      changing them. Each change answers both as the server now holds them. */
-  server: (signal?: AbortSignal) => get<ServerIdentity>("/api/v1/settings/server", signal),
+  server: (signal?: AbortSignal) => get<ServerSettings>("/api/v1/settings/server", signal),
   renameServer: (server_name: string) =>
-    put<ServerIdentity>("/api/v1/settings/server", { server_name }),
-  setServerLogo: (image: Blob) => put<ServerIdentity>("/api/v1/settings/server/logo", image),
-  removeServerLogo: () => remove<ServerIdentity>("/api/v1/settings/server/logo"),
+    put<ServerSettings>("/api/v1/settings/server/name", { server_name }),
+  forgetServerName: () => remove<ServerSettings>("/api/v1/settings/server/name"),
+  setServerLogo: (image: Blob) => put<ServerSettings>("/api/v1/settings/server/logo", image),
+  removeServerLogo: () => remove<ServerSettings>("/api/v1/settings/server/logo"),
   /* What deserves a look, for the administrator asking. */
   attention: (signal?: AbortSignal) =>
     get<{ points: AttentionPoint[] }>("/api/v1/system/attention", signal),

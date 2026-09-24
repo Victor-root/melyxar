@@ -56,15 +56,40 @@ function fromHsl(hue: number, saturation: number, lightness: number): string {
   return `#${channel(0)}${channel(8)}${channel(4)}`;
 }
 
+/** The colour the tab was last asked to be drawn in, and the icon of the
+ *  server's own logo when it wears one, which wins over any colour. */
+let colourAsked: string | null = null;
+let logoWorn: string | null = null;
+
 /**
  * Draws the tab's icon in this colour, or puts back the one the page was
  * served with when there is none: the usual accent is the logo as drawn.
  */
-export async function markTheTab(colour: string | null): Promise<void> {
+export function markTheTab(colour: string | null): Promise<void> {
+  colourAsked = colour;
+  return drawTheTab();
+}
+
+/** Puts the icon of the server's own logo in the tab, or with nothing gives
+ *  the tab back Melyxar's in the accent. */
+export function tabWearsTheLogo(icon: string | null): Promise<void> {
+  logoWorn = icon;
+  return drawTheTab();
+}
+
+async function drawTheTab(): Promise<void> {
   const links = [...document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]')];
   for (const link of links) {
     link.dataset.served ??= link.getAttribute("href") ?? "";
   }
+  if (logoWorn !== null) {
+    safeWrite(STORED_TAB, logoWorn);
+    for (const link of links) {
+      link.href = logoWorn;
+    }
+    return;
+  }
+  const colour = colourAsked;
   if (colour === null) {
     safeWrite(STORED_TAB, "");
     for (const link of links) {
@@ -76,6 +101,11 @@ export async function markTheTab(colour: string | null): Promise<void> {
   const relief = new Image();
   relief.src = RELIEF;
   await relief.decode();
+  // A logo put up, or another colour asked for, while the relief was on its
+  // way: that one is drawn instead.
+  if (logoWorn !== null || colourAsked !== colour) {
+    return;
+  }
   const size = relief.naturalWidth;
   const canvas = document.createElement("canvas");
   canvas.width = size;

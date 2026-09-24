@@ -5,7 +5,8 @@
 //! anybody, like the page itself, and say nothing about the library. The
 //! colours travel in the address: the page writes the address of the
 //! manifest from its own theme, and the manifest gives the addresses of the
-//! icons in the same colours.
+//! icons in the same colours. A server given a logo of its own wears it
+//! instead, under addresses named after the logo.
 
 use axum::body::Body;
 use axum::extract::{Path as RoutePath, Query, State};
@@ -14,6 +15,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::mark::{self, Colour};
+use melyxar_app::server::LogoIcon;
 use melyxar_app::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +25,11 @@ use crate::interface::{look, Found};
 /// Where the icons are served, one address per colour of the logo, and one
 /// per colour of the logo and of the ground under it.
 const ICONS: &str = "/api/v1/public/app/icon";
+
+/// Where the icons of a logo of the server's own are served, named after the
+/// logo: a new logo is a new address, which is what tells a browser to fetch
+/// it again, and an installed application to change its icon.
+const LOGO_ICONS: &str = "/api/v1/public/app/logo";
 
 /// The relief of the logo on its own, filling the square.
 const RELIEF: &str = "melyxar-shade-512.png";
@@ -46,6 +53,17 @@ pub fn router() -> Router<AppState> {
             "/api/v1/public/app/icon/{mark}/{ground}",
             get(icon_on_ground),
         )
+        .route(&format!("{LOGO_ICONS}/{{logo}}"), get(logo_alone))
+        .route(
+            &format!("{LOGO_ICONS}/{{logo}}/{{ground}}"),
+            get(logo_on_ground),
+        )
+}
+
+/// Where the icon of the server's own logo is, the logo filling its square:
+/// what the page puts in its tab.
+pub fn logo_icon_url(logo: &str) -> String {
+    format!("{LOGO_ICONS}/{}", melyxar_app::server::stem_of(logo))
 }
 
 #[derive(Debug, Deserialize)]
@@ -83,12 +101,17 @@ async fn manifest(State(state): State<AppState>, Query(colours): Query<Colours>)
         return ServerError::invalid_input("a colour is six hexadecimal digits").into_response();
     };
     // Named after the server as its administrator named it, the name the
-    // sign in screen shows.
-    let name = match state.database().server_settings().await {
-        Ok(settings) => settings.server_name,
+    // sign in screen shows, and wearing the logo it was given if it was.
+    let settings = match state.database().server_settings().await {
+        Ok(settings) => settings,
         Err(error) => return ServerError::internal(error.to_string()).into_response(),
     };
-    let manifest = manifest_for(&name, mark, ground);
+    let manifest = manifest_for(
+        &settings.server_name,
+        mark,
+        ground,
+        settings.logo_path.as_deref(),
+    );
     (
         [
             (
@@ -102,11 +125,15 @@ async fn manifest(State(state): State<AppState>, Query(colours): Query<Colours>)
         .into_response()
 }
 
-/// The manifest for these colours. The same address every time for the
-/// application itself, so a change of colour updates the one installed rather
-/// than making another.
-fn manifest_for(name: &str, mark: Colour, ground: Colour) -> Manifest {
+/// The manifest for these colours, or for the server's own logo. The same
+/// address every time for the application itself, so a change of colour or of
+/// logo updates the one installed rather than making another.
+fn manifest_for(name: &str, mark: Colour, ground: Colour, logo: Option<&str>) -> Manifest {
     let ground_hex = ground.hex();
+    let alone = match logo {
+        Some(logo) => logo_icon_url(logo),
+        None => format!("{ICONS}/{}", mark.hex()),
+    };
     Manifest {
         id: "/",
         name: name.to_owned(),
@@ -118,13 +145,13 @@ fn manifest_for(name: &str, mark: Colour, ground: Colour) -> Manifest {
         theme_color: format!("#{ground_hex}"),
         icons: [
             Icon {
-                src: format!("{ICONS}/{}", mark.hex()),
+                src: alone.clone(),
                 sizes: ICON_SIZE,
                 r#type: "image/png",
                 purpose: "any",
             },
             Icon {
-                src: format!("{ICONS}/{}/{ground_hex}", mark.hex()),
+                src: format!("{alone}/{ground_hex}"),
                 sizes: ICON_SIZE,
                 r#type: "image/png",
                 purpose: "maskable",
@@ -213,6 +240,62 @@ async fn icon(
     }
 }
 
+async fn logo_alone(State(state): State<AppState>, RoutePath(logo): RoutePath<String>) -> Response {
+    logo_icon(&state, &logo, LogoIcon::Whole, None).await
+}
+
+async fn logo_on_ground(
+    State(state): State<AppState>,
+    RoutePath((logo, ground)): RoutePath<(String, String)>,
+) -> Response {
+    match Colour::from_hex(&ground) {
+        Some(ground) => logo_icon(&state, &logo, LogoIcon::Inset, Some(ground)).await,
+        None => ServerError::invalid_input("a colour is six hexadecimal digits").into_response(),
+    }
+}
+
+/// One icon of the server's own logo, laid on a ground when one is asked for.
+/// Kept for ever: the address changes with the logo and with the ground.
+async fn logo_icon(
+    state: &AppState,
+    logo: &str,
+    icon: LogoIcon,
+    ground: Option<Colour>,
+) -> Response {
+    let made = match melyxar_app::server::logo_icon(state, logo, icon).await {
+        Ok(Some(made)) => made,
+        Ok(None) => return ServerError::not_found("the server wears no such logo").into_response(),
+        Err(error) => return ServerError::from(error).into_response(),
+    };
+    let icon = match ground {
+        None => made,
+        // Laying half a thousand pixels square on a ground takes a few
+        // milliseconds: not for the threads that answer requests.
+        Some(ground) => {
+            match tokio::task::spawn_blocking(move || mark::laid_on(&made, ground)).await {
+                Ok(Ok(laid)) => laid,
+                Ok(Err(error)) => {
+                    tracing::warn!(%error, "the icon of the server's logo could not be laid on its ground");
+                    return ServerError::internal(error.to_string()).into_response();
+                }
+                Err(error) => return ServerError::internal(error.to_string()).into_response(),
+            }
+        }
+    };
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, HeaderValue::from_static("image/png")),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static(crate::images::KEEP_FOR),
+            ),
+        ],
+        Body::from(icon),
+    )
+        .into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,7 +305,7 @@ mod tests {
         let mark = Colour::from_hex("1C7ED6").expect("a colour");
         let ground = Colour::from_hex("0c0d10").expect("a colour");
         let manifest =
-            serde_json::to_value(manifest_for("Home Cinema", mark, ground)).expect("json");
+            serde_json::to_value(manifest_for("Home Cinema", mark, ground, None)).expect("json");
 
         assert_eq!(manifest["id"], "/");
         assert_eq!(manifest["name"], "Home Cinema");
@@ -241,5 +324,27 @@ mod tests {
         );
         assert_eq!(manifest["icons"][1]["purpose"], "maskable");
         assert_eq!(manifest["icons"][1]["type"], "image/png");
+    }
+
+    #[test]
+    fn a_server_with_a_logo_of_its_own_wears_it_once_installed() {
+        let mark = Colour::from_hex("1C7ED6").expect("a colour");
+        let ground = Colour::from_hex("0c0d10").expect("a colour");
+        let manifest = serde_json::to_value(manifest_for(
+            "Home Cinema",
+            mark,
+            ground,
+            Some("logo-abc.webp"),
+        ))
+        .expect("json");
+
+        assert_eq!(
+            manifest["icons"][0]["src"],
+            "/api/v1/public/app/logo/logo-abc"
+        );
+        assert_eq!(
+            manifest["icons"][1]["src"],
+            "/api/v1/public/app/logo/logo-abc/0c0d10"
+        );
     }
 }

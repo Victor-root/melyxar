@@ -9,8 +9,27 @@
  * the session's cookie.
  */
 
+import { tabWearsTheLogo } from "./mark";
+
 /** Where the manifest and the icons are served. */
 const THE_APP = "/api/v1/public/app";
+
+/** The icon of the server's own logo when it wears one. */
+let logoWorn: string | null = null;
+
+/**
+ * Puts the server's own logo in the tab and on the installed application, or
+ * with nothing gives both back Melyxar's in the accent. Called whenever the
+ * logo changes, and only then, so the tab is not redrawn for nothing.
+ */
+export function wearTheLogo(icon: string | null): void {
+  if (icon === logoWorn) {
+    return;
+  }
+  logoWorn = icon;
+  void tabWearsTheLogo(icon);
+  markTheApp();
+}
 
 /** A colour of the theme as six hexadecimal digits, or nothing when the
  *  stylesheet writes it some other way. */
@@ -40,8 +59,9 @@ function aLink(rel: string): () => HTMLLinkElement {
 
 /**
  * Points the browser at the manifest and the touch icon in the logo's colour
- * as it stands now. Called whenever the accent changes, after the logo's
- * colour is written on the page.
+ * as it stands now, or at the server's own logo. Called whenever the accent
+ * changes, after the logo's colour is written on the page, and whenever the
+ * logo does.
  */
 export function markTheApp(): void {
   const mark = tokenOf("--mark-colour");
@@ -50,7 +70,7 @@ export function markTheApp(): void {
     return;
   }
   const manifest = `${THE_APP}/manifest?mark=${mark}&ground=${ground}`;
-  const touch = `${THE_APP}/icon/${mark}/${ground}`;
+  const touch = logoWorn ? `${logoWorn}/${ground}` : `${THE_APP}/icon/${mark}/${ground}`;
   const manifestLink = headElement('link[rel="manifest"]', aLink("manifest"));
   if (manifestLink.getAttribute("href") !== manifest) {
     manifestLink.href = manifest;

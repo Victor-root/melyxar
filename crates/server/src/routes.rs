@@ -298,6 +298,8 @@ struct PublicBranding {
     server_name: String,
     /// Where the logo the administrator gave the server is, when there is one.
     logo: Option<String>,
+    /// Where that logo is as a square icon, for the tab of the browser.
+    logo_icon: Option<String>,
     login_background_path: Option<String>,
     /// Which drawn background the screen wears when no picture was put there.
     /// A word rather than a number, so that what arrives at the screen says
@@ -316,6 +318,10 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
     Ok(Json(PublicBranding {
         server_name: settings.server_name,
         logo: settings.logo_path.as_deref().map(crate::images::logo_url),
+        logo_icon: settings
+            .logo_path
+            .as_deref()
+            .map(crate::installing::logo_icon_url),
         login_background_path: settings.login_background_path,
         login_background_style: settings.login_background.as_str(),
         setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,

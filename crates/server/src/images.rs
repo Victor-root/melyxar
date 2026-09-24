@@ -43,7 +43,7 @@ pub fn logo_url(logo: &str) -> String {
 /// A year, and marked as never changing. It is safe because the name carries a
 /// fingerprint of the content: a different picture is a different name, so
 /// nothing stale can be held on to.
-const KEEP_FOR: &str = "public, max-age=31536000, immutable";
+pub(crate) const KEEP_FOR: &str = "public, max-age=31536000, immutable";
 
 async fn picture(State(state): State<AppState>, RoutePath(path): RoutePath<String>) -> Response {
     match read(&state.config().directories.images(), &path).await {

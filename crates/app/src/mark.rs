@@ -6,7 +6,8 @@
 //! An installed application is given the address of its icon rather than a
 //! picture, and the system fetches it on its own; so the same drawing is made
 //! here, from the same relief and with the same mix, for an address that
-//! carries the colour.
+//! carries the colour. A server given a logo of its own wears that instead,
+//! laid on the ground where a system cuts icons to a shape of its own.
 
 use std::io::Cursor;
 
@@ -38,6 +39,8 @@ pub enum MarkError {
     Unreadable(#[from] png::DecodingError),
     #[error("the relief is not a grey picture with transparency")]
     NotARelief,
+    #[error("the icon is not a colour picture with transparency")]
+    NotAnIcon,
     #[error("the icon could not be written: {0}")]
     Unwritable(#[from] png::EncodingError),
 }
@@ -62,12 +65,38 @@ pub fn draw(relief: &[u8], colour: Colour, ground: Option<Colour>) -> Result<Vec
         drawn.extend_from_slice(&pixel(pair[0], pair[1], colour, ground));
     }
 
+    written(frame.width, frame.height, &drawn)
+}
+
+/// Lays an icon with transparency on a ground, which makes it a full square:
+/// what a system that cuts icons to a shape of its own is given.
+pub fn laid_on(icon: &[u8], ground: Colour) -> Result<Vec<u8>, MarkError> {
+    let mut reader = png::Decoder::new(Cursor::new(icon)).read_info()?;
+    let mut read = vec![0; reader.output_buffer_size().ok_or(MarkError::NotAnIcon)?];
+    let frame = reader.next_frame(&mut read)?;
+    if frame.color_type != png::ColorType::Rgba || frame.bit_depth != png::BitDepth::Eight {
+        return Err(MarkError::NotAnIcon);
+    }
+    let mut laid = read[..frame.buffer_size()].to_vec();
+    for pixel in laid.chunks_exact_mut(4) {
+        let cover = f32::from(pixel[3]) / 255.0;
+        for (index, channel) in ground.0.into_iter().enumerate() {
+            let over = f32::from(pixel[index]) / 255.0;
+            pixel[index] = to_byte(cover * over + (1.0 - cover) * f32::from(channel) / 255.0);
+        }
+        pixel[3] = u8::MAX;
+    }
+    written(frame.width, frame.height, &laid)
+}
+
+/// Writes pixels of colour and transparency as a picture.
+fn written(width: u32, height: u32, pixels: &[u8]) -> Result<Vec<u8>, MarkError> {
     let mut written = Vec::new();
-    let mut encoder = png::Encoder::new(&mut written, frame.width, frame.height);
+    let mut encoder = png::Encoder::new(&mut written, width, height);
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header()?;
-    writer.write_image_data(&drawn)?;
+    writer.write_image_data(pixels)?;
     writer.finish()?;
     Ok(written)
 }
@@ -181,6 +210,28 @@ mod tests {
         // Half the colour, half the ground.
         assert_eq!(&pixels[12..16], &[121, 7, 8, 255]);
         assert_eq!(&pixels[16..20], &[12, 13, 16, 255]);
+    }
+
+    #[test]
+    fn an_icon_laid_on_a_ground_keeps_its_colours_and_loses_its_transparency() {
+        let mut icon = Vec::new();
+        let mut encoder = png::Encoder::new(&mut icon, 3, 1);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().expect("header");
+        writer
+            .write_image_data(&[229, 0, 0, 255, 229, 0, 0, 128, 1, 2, 3, 0])
+            .expect("pixels");
+        writer.finish().expect("finished");
+
+        assert_eq!(
+            pixels_of(&laid_on(&icon, NIGHT).expect("laid")),
+            [
+                229, 0, 0, 255, // covered: the icon
+                121, 6, 8, 255, // half covered: half and half
+                12, 13, 16, 255, // not covered: the ground
+            ]
+        );
     }
 
     #[test]
