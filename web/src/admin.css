@@ -2013,7 +2013,16 @@
   margin-top: calc(var(--gap) * 1.5);
 }
 
-.disks-title {
+/* The line between two parts of one panel. */
+.part-rule {
+  width: 100%;
+  margin: var(--gap) 0 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* The name of one part of a panel, over what it holds. */
+.part-title {
   margin: 0 0 4px;
   color: var(--text-soft);
   font-size: 12.5px;
