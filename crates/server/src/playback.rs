@@ -26,6 +26,7 @@ use melyxar_app::AppState;
 use melyxar_core::id::MediaSourceId;
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::{Millis, Timestamp};
+use melyxar_core::user::User;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
@@ -335,6 +336,9 @@ async fn plan(
 
     let request = body.asked_for(source_id)?;
 
+    if watching {
+        melyxar_app::watching::may_start(&state, &who, watcher.device)?;
+    }
     let plan = melyxar_app::playback::plan(&state, &who, &request).await?;
     if watching {
         melyxar_app::watching::starting(&state, watcher, &plan);
@@ -528,31 +532,25 @@ fn whole_minutes(duration: Millis) -> i64 {
 /// gave them: nothing a client sends is ever treated as a path.
 async fn stream(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     RoutePath(id): RoutePath<String>,
     request: Request<Body>,
 ) -> Response {
-    match serve_file(&state, &id, request).await {
+    match serve_file(&state, &who, &id, request).await {
         Ok(response) => response,
         Err(error) => error.into_response(),
     }
 }
 
-async fn serve_file(state: &AppState, id: &str, request: Request<Body>) -> Result<Response> {
+async fn serve_file(
+    state: &AppState,
+    who: &User,
+    id: &str,
+    request: Request<Body>,
+) -> Result<Response> {
     let source_id = parse_source(id)?;
-    let source = state
-        .database()
-        .playable_source(source_id)
-        .await
-        .map_err(|error| ServerError::internal(error.to_string()))?
-        .ok_or_else(|| ServerError::not_found("no file with that identifier"))?;
-
-    if source.missing {
-        return Err(ServerError::not_found(
-            "the file is not on the disk at the moment",
-        ));
-    }
-
-    crate::serve_the_file(&source.path, request).await
+    let path = melyxar_app::playback::file_of(state, who, source_id).await?;
+    crate::serve_the_file(&path, request).await
 }
 
 // ---------------------------------------------------------------------------
@@ -565,10 +563,11 @@ async fn serve_file(state: &AppState, id: &str, request: Request<Body>) -> Resul
 /// viewer turning subtitles on waits once and nobody waits again.
 async fn subtitle(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     RoutePath((id, track)): RoutePath<(String, String)>,
     request: Request<Body>,
 ) -> Response {
-    match serve_subtitle(&state, &id, &track, request).await {
+    match serve_subtitle(&state, &who, &id, &track, request).await {
         Ok(response) => response,
         // Not written down again here: every way this refuses already says so
         // for itself, with the codec and the stream it was about, which is
@@ -579,6 +578,7 @@ async fn subtitle(
 
 async fn serve_subtitle(
     state: &AppState,
+    who: &User,
     id: &str,
     track: &str,
     request: Request<Body>,
@@ -588,7 +588,7 @@ async fn serve_subtitle(
     // the address; what it names is an identifier, never a path.
     let track_id = parse_track(track.strip_suffix(".vtt").unwrap_or(track))?;
 
-    let path = melyxar_app::subtitles::as_web_vtt(state, source_id, track_id).await?;
+    let path = melyxar_app::subtitles::as_web_vtt(state, who, source_id, track_id).await?;
     let mut response = crate::serve_the_file(&path, request).await?;
     response.headers_mut().insert(
         header::CONTENT_TYPE,
@@ -608,10 +608,11 @@ async fn serve_subtitle(
 /// should be able to make.
 async fn thumbnail_sheet(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     RoutePath((id, sheet)): RoutePath<(String, String)>,
     request: Request<Body>,
 ) -> Response {
-    match serve_sheet(&state, &id, &sheet, request).await {
+    match serve_sheet(&state, &who, &id, &sheet, request).await {
         Ok(response) => response,
         Err(error) => error.into_response(),
     }
@@ -619,6 +620,7 @@ async fn thumbnail_sheet(
 
 async fn serve_sheet(
     state: &AppState,
+    who: &User,
     id: &str,
     sheet: &str,
     request: Request<Body>,
@@ -632,16 +634,17 @@ async fn serve_sheet(
         .parse()
         .map_err(|_| ServerError::not_found("that sheet of thumbnails"))?;
 
-    let path = melyxar_app::thumbnails::sheet_of(state, source_id, number).await?;
+    let path = melyxar_app::thumbnails::sheet_of(state, who, source_id, number).await?;
     let mut response = crate::serve_the_file(&path, request).await?;
     response
         .headers_mut()
         .insert(header::CONTENT_TYPE, HeaderValue::from_static("image/jpeg"));
     // A sheet never changes: it is named after a film that was read once, and
     // a film read again is written down again with as many sheets as it gave.
+    // Kept by this browser alone: whether it may be seen depends on who asks.
     response.headers_mut().insert(
         header::CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=604800, immutable"),
+        HeaderValue::from_static("private, max-age=604800, immutable"),
     );
     Ok(response)
 }
@@ -672,6 +675,7 @@ async fn open_session(
     let source_id = parse_source(&id)?;
     let body = body.map(|Json(body)| body).unwrap_or_default();
 
+    melyxar_app::watching::may_start(&state, &who, watcher.device)?;
     let plan = melyxar_app::playback::plan(
         &state,
         &who,
@@ -997,12 +1001,14 @@ async fn record_progress(
     .await?;
     let stop = heard_from(
         &state,
+        &who,
         watcher,
         work_id,
         Some(position),
         body.paused,
         body.leaving,
-    );
+    )
+    .await?;
 
     Ok(Json(ProgressView { kept, stop }))
 }
@@ -1023,11 +1029,13 @@ struct StillPlayingBody {
 
 async fn still_playing(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Watcher(watcher): Watcher,
     Json(body): Json<StillPlayingBody>,
 ) -> Result<Json<serde_json::Value>> {
     let stop = heard_from(
         &state,
+        &who,
         watcher,
         parse_work(&body.work_id)?,
         body.position_seconds
@@ -1035,25 +1043,27 @@ async fn still_playing(
             .map(Millis::from_seconds_f64),
         body.paused,
         body.leaving,
-    );
+    )
+    .await?;
     Ok(Json(serde_json::json!({ "stop": stop })))
 }
 
 /// What a player said about the film it has open. Answers whether it has
 /// been asked to stop.
-fn heard_from(
+async fn heard_from(
     state: &AppState,
+    who: &User,
     watcher: melyxar_app::watching::Viewer,
     work: melyxar_core::id::WorkId,
     position: Option<Millis>,
     paused: Option<bool>,
     leaving: bool,
-) -> bool {
+) -> Result<bool> {
     if leaving {
         melyxar_app::watching::gone(state, watcher.device, work);
-        return false;
+        return Ok(false);
     }
-    melyxar_app::watching::heard(state, watcher, work, position, paused)
+    Ok(melyxar_app::watching::heard(state, who, watcher, work, position, paused).await?)
 }
 
 /// Kept open by a player while it shows a film. Says "stop" the moment an
@@ -1234,30 +1244,15 @@ async fn remember_tracks(
 ) -> Result<Json<serde_json::Value>> {
     let work_id = parse_work(&body.work_id)?;
     let source_id = parse_source(&body.source_id)?;
-
-    // The tracks are read back from the file rather than taken on trust: what
-    // is remembered has to be a track this film really holds.
-    let tracks = state
-        .database()
-        .tracks_of_source(source_id)
-        .await
-        .map_err(|error| ServerError::internal(error.to_string()))?;
-    let find = |wanted: Option<String>| -> Result<Option<&melyxar_core::media::Track>> {
-        match wanted {
-            None => Ok(None),
-            Some(value) => {
-                let id = parse_track(&value)?;
-                Ok(tracks.iter().find(|track| track.id == id))
-            }
-        }
-    };
+    let track = |wanted: Option<String>| wanted.as_deref().map(parse_track).transpose();
 
     melyxar_app::playback::remember_chosen_tracks(
         &state,
         &who,
         work_id,
-        find(body.audio_track_id)?,
-        find(body.subtitle_track_id)?,
+        source_id,
+        track(body.audio_track_id)?,
+        track(body.subtitle_track_id)?,
     )
     .await?;
 

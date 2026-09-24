@@ -21,6 +21,8 @@ pub enum ErrorCode {
     Forbidden,
     /// Asked too often to be answered right now, and told when to come back.
     TooManyAttempts,
+    /// This account is already watching as many films at once as it may.
+    TooManyStreams,
     Conflict,
     PathNotAllowed,
     RootUnavailable,
@@ -42,6 +44,7 @@ impl ErrorCode {
             Self::Unauthenticated => "unauthenticated",
             Self::Forbidden => "forbidden",
             Self::TooManyAttempts => "too_many_attempts",
+            Self::TooManyStreams => "too_many_streams",
             Self::Conflict => "conflict",
             Self::PathNotAllowed => "path_not_allowed",
             Self::RootUnavailable => "root_unavailable",

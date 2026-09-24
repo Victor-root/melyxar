@@ -232,6 +232,8 @@ function wording(error: unknown): string {
       return "player.no_conversion";
     case "not_described":
       return "player.not_described";
+    case "too_many_streams":
+      return "player.too_many_streams";
     default:
       return "error.unreachable";
   }

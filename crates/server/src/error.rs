@@ -232,7 +232,7 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::InvalidInput => StatusCode::BAD_REQUEST,
         ErrorCode::Unauthenticated => StatusCode::UNAUTHORIZED,
         ErrorCode::Forbidden | ErrorCode::PathNotAllowed => StatusCode::FORBIDDEN,
-        ErrorCode::TooManyAttempts => StatusCode::TOO_MANY_REQUESTS,
+        ErrorCode::TooManyAttempts | ErrorCode::TooManyStreams => StatusCode::TOO_MANY_REQUESTS,
         // Both will work again once a disk is plugged back in or a tool is
         // installed, which is what tells a client to say so rather than to
         // announce a failure of the server itself.

@@ -268,7 +268,7 @@ mod tests {
     async fn a_line_comes_back_as_it_was_written() {
         let database = Database::open_in_memory().await.expect("database opens");
         let user = database
-            .create_user("somebody", Some("a stored form"), &Permissions::administrator())
+            .create_user("somebody", Some("a stored form"), &Permissions::viewer())
             .await
             .expect("account created");
         let written = NewActivity {

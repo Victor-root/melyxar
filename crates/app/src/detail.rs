@@ -124,12 +124,16 @@ pub struct Version {
     pub source_id: MediaSourceId,
     pub relative_path: String,
     /// The disk this copy lives on, by the name the configuration gives it.
-    pub root_label: String,
+    /// Only for an administrator, like the path below.
+    pub root_label: Option<String>,
     /// Where the file is, root included. Shown to whoever runs the server: on
     /// a page about a file, the first thing wanted when something is wrong
     /// with it is where it is. Never used to reach it: playback goes through
     /// the identifier, which is what keeps a path from being an address.
-    pub path: String,
+    ///
+    /// Absent for anybody else: where the server keeps its files is about
+    /// the server, not about the film.
+    pub path: Option<String>,
     /// When a scan first saw it, which is not when the file was made.
     pub added_at: Timestamp,
     pub size_bytes: i64,
@@ -275,6 +279,7 @@ pub async fn work_detail(
         None => database.work_translation(work_id, "en").await?,
     };
 
+    let runs_the_server = who.permissions.is_administrator;
     let mut versions = Vec::new();
     for source in database.sources_of_work(work_id).await? {
         let (analysis, analysed_at) = database
@@ -285,12 +290,14 @@ pub async fn work_detail(
         versions.push(Version {
             source_id: source.id,
             relative_path: source.relative_path.to_string_lossy().into_owned(),
-            root_label: source.root_label.clone(),
-            path: source
-                .root_path
-                .join(&source.relative_path)
-                .to_string_lossy()
-                .into_owned(),
+            root_label: runs_the_server.then(|| source.root_label.clone()),
+            path: runs_the_server.then(|| {
+                source
+                    .root_path
+                    .join(&source.relative_path)
+                    .to_string_lossy()
+                    .into_owned()
+            }),
             added_at: source.added_at,
             size_bytes: source.size_bytes,
             missing_since: source.missing_since,
@@ -550,8 +557,8 @@ mod tests {
     fn version(tracks: Vec<Track>) -> Version {
         Version {
             source_id: MediaSourceId::new(),
-            root_label: "disk-one".to_string(),
-            path: "/mnt/disk-one/films/a.mkv".to_string(),
+            root_label: Some("disk-one".to_string()),
+            path: Some("/mnt/disk-one/films/a.mkv".to_string()),
             added_at: melyxar_core::time::now(),
             relative_path: "Quiet.Harbour.2019.mkv".to_string(),
             size_bytes: 1_000,

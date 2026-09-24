@@ -8,6 +8,9 @@ use crate::id::{DeviceId, LibraryId, UserId};
 use crate::library::LibraryKind;
 use crate::time::Timestamp;
 
+/// The highest limit of simultaneous streams an account can be given.
+pub const MOST_SIMULTANEOUS_STREAMS: i32 = 20;
+
 /// What a person is allowed to do.
 ///
 /// Kept as plain data rather than a role name, so that a right can be granted
@@ -65,6 +68,53 @@ impl Permissions {
             may_delete_from_disk: false,
             max_sessions: None,
         }
+    }
+
+    /// These rights as they are kept, whatever was asked.
+    ///
+    /// An administrator holds every right and sees every library: the
+    /// administration shows the whole server to whoever reaches it, so an
+    /// administrator kept from a library would still read it there, and a
+    /// limit that is not one is a limit somebody relies on for nothing.
+    /// Erasing from the disk is a way of deleting, so it goes with the right
+    /// to delete. An account that sees every library holds no list, and a
+    /// library granted twice is granted once. A number of simultaneous
+    /// streams is kept inside what a household could mean.
+    pub fn settled(self) -> Self {
+        if self.is_administrator {
+            return Self::administrator();
+        }
+        let mut allowed_libraries = match self.sees_every_library {
+            true => Vec::new(),
+            false => self.allowed_libraries,
+        };
+        let mut seen = Vec::with_capacity(allowed_libraries.len());
+        allowed_libraries.retain(|library| {
+            let first = !seen.contains(library);
+            seen.push(*library);
+            first
+        });
+        Self {
+            allowed_libraries,
+            may_delete_from_disk: self.may_delete && self.may_delete_from_disk,
+            max_sessions: self
+                .max_sessions
+                .map(|most| most.clamp(1, MOST_SIMULTANEOUS_STREAMS)),
+            ..self
+        }
+    }
+
+    /// Whether these rights reach less of the libraries than the ones
+    /// before them did: a library that could be read and no longer can.
+    pub fn sees_less_than(&self, before: &Self) -> bool {
+        if self.sees_every_library {
+            return false;
+        }
+        before.sees_every_library
+            || before
+                .allowed_libraries
+                .iter()
+                .any(|library| !self.allowed_libraries.contains(library))
     }
 
     /// Whether this person may see the given library.
@@ -465,6 +515,68 @@ mod tests {
         };
         assert!(permissions.may_access_library(allowed));
         assert!(!permissions.may_access_library(other));
+    }
+
+    #[test]
+    fn an_administrator_is_kept_with_every_right_whatever_was_asked() {
+        let asked = Permissions {
+            is_administrator: true,
+            sees_every_library: false,
+            allowed_libraries: vec![LibraryId::new()],
+            may_delete: false,
+            max_sessions: Some(1),
+            ..Permissions::viewer()
+        };
+        assert_eq!(asked.settled(), Permissions::administrator());
+    }
+
+    #[test]
+    fn rights_are_kept_consistent_with_one_another() {
+        let library = LibraryId::new();
+        let settled = Permissions {
+            sees_every_library: false,
+            allowed_libraries: vec![library, library],
+            may_delete: false,
+            may_delete_from_disk: true,
+            max_sessions: Some(500),
+            ..Permissions::viewer()
+        }
+        .settled();
+        assert_eq!(settled.allowed_libraries, vec![library], "granted once");
+        assert!(
+            !settled.may_delete_from_disk,
+            "erasing from the disk is a way of deleting"
+        );
+        assert_eq!(settled.max_sessions, Some(MOST_SIMULTANEOUS_STREAMS));
+
+        let everything = Permissions {
+            sees_every_library: true,
+            allowed_libraries: vec![library],
+            max_sessions: Some(0),
+            ..Permissions::viewer()
+        }
+        .settled();
+        assert!(everything.allowed_libraries.is_empty());
+        assert_eq!(everything.max_sessions, Some(1));
+        assert_eq!(Permissions::viewer().settled(), Permissions::viewer());
+    }
+
+    #[test]
+    fn rights_that_reach_fewer_libraries_say_so() {
+        let films = LibraryId::new();
+        let series = LibraryId::new();
+        let only = |granted: Vec<LibraryId>| Permissions {
+            sees_every_library: false,
+            allowed_libraries: granted,
+            ..Permissions::viewer()
+        };
+        let every = Permissions::viewer();
+
+        assert!(only(vec![films]).sees_less_than(&every));
+        assert!(only(vec![films]).sees_less_than(&only(vec![films, series])));
+        assert!(!only(vec![films, series]).sees_less_than(&only(vec![films])));
+        assert!(!every.sees_less_than(&only(vec![films])));
+        assert!(!only(vec![films]).sees_less_than(&only(vec![films])));
     }
 
     #[test]

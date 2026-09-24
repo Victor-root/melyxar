@@ -286,7 +286,13 @@ pub async fn make_for(
 ///
 /// Only sheets this server wrote, and only by the number it gave them: nothing
 /// a client sends is ever treated as a path.
-pub async fn sheet_of(state: &AppState, source_id: MediaSourceId, number: u32) -> Result<PathBuf> {
+pub async fn sheet_of(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    source_id: MediaSourceId,
+    number: u32,
+) -> Result<PathBuf> {
+    crate::reach::may_read_the_copy(state, who, source_id).await?;
     let made = state
         .database()
         .thumbnails_of(source_id)

@@ -41,8 +41,12 @@ pub async fn save(
 }
 
 /// The languages a picker can actually offer.
-pub async fn languages_available(state: &AppState) -> Result<AvailableLanguages> {
-    Ok(state.database().languages_in_use().await?)
+pub async fn languages_available(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+) -> Result<AvailableLanguages> {
+    let within = crate::reach::within(who);
+    Ok(state.database().languages_in_use(within.as_deref()).await?)
 }
 
 #[cfg(test)]
@@ -120,8 +124,10 @@ mod tests {
     async fn a_library_with_nothing_in_it_offers_no_language_at_all() {
         // Better than a list of five hundred: someone would pick one no film
         // in the house carries.
-        let (_directory, state, _user_id) = state_with_an_account().await;
-        let available = languages_available(&state).await.expect("read");
+        let (_directory, state, user_id) = state_with_an_account().await;
+        let available = languages_available(&state, &crate::an_ordinary_account(user_id))
+            .await
+            .expect("read");
         assert!(available.audio.is_empty());
         assert!(available.subtitle.is_empty());
     }

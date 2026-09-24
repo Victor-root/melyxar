@@ -24,12 +24,14 @@
 //! asks for a segment every few seconds. So it is written again only once it
 //! has gone stale, which costs at most one write an hour per device.
 
+use std::collections::HashMap;
+
 use melyxar_core::id::{DeviceId, UserId};
 use melyxar_core::time::Timestamp;
 use melyxar_core::user::User;
 use sqlx::{AssertSqlSafe, Row};
 
-use crate::convert::{parse_id, timestamp_to_text};
+use crate::convert::{parse_id, parse_timestamp, timestamp_to_text};
 use crate::{Database, Result};
 
 /// How long a session nobody uses is kept before it is thrown away.
@@ -110,6 +112,15 @@ pub struct SignedIn {
     /// a token handed to the same browser again is kept exactly as long as
     /// the one it replaces, rather than quietly becoming a longer one.
     pub remembered: Remembered,
+}
+
+/// The devices one account is signed in on, as the list of accounts shows
+/// them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DevicesOfAnAccount {
+    pub signed_in: i64,
+    /// When the most recent of them was last used, as written down.
+    pub last_seen_at: Timestamp,
 }
 
 /// The devices signed in to this server, counted.
@@ -271,6 +282,30 @@ impl Database {
             signed_in,
             used_lately,
         })
+    }
+
+    /// How many devices each account is signed in on, and when it was last
+    /// about. An account signed in nowhere is not in the answer.
+    ///
+    /// Read from the last use as written down, which trails the real one by
+    /// up to an hour (see the note at the top of this file).
+    pub async fn devices_of_every_account(&self) -> Result<HashMap<UserId, DevicesOfAnAccount>> {
+        let rows: Vec<(String, i64, String)> = sqlx::query_as(
+            "SELECT user_id, count(*), max(last_seen_at) FROM devices GROUP BY user_id",
+        )
+        .fetch_all(self.reader())
+        .await?;
+        rows.into_iter()
+            .map(|(user, signed_in, last_seen_at)| {
+                Ok((
+                    parse_id(&user)?,
+                    DevicesOfAnAccount {
+                        signed_in,
+                        last_seen_at: parse_timestamp(&last_seen_at)?,
+                    },
+                ))
+            })
+            .collect()
     }
 
     /// Sets, changes or takes away the stored form of an account's password.

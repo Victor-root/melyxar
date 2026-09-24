@@ -414,6 +414,25 @@ impl Watching {
     /// Marks the film on this device to be stopped, tells its live line, and
     /// says whose it is and which it is, for closing it if the player never
     /// obeys.
+    /// How many devices other than this one this account is watching
+    /// something on.
+    fn watching_elsewhere(&self, user: UserId, device: DeviceId) -> usize {
+        self.devices_of(user)
+            .into_iter()
+            .filter(|other| *other != device)
+            .count()
+    }
+
+    /// The devices this account is watching something on.
+    fn devices_of(&self, user: UserId) -> Vec<DeviceId> {
+        self.held()
+            .playing
+            .iter()
+            .filter(|(_, watch)| watch.viewer.user == user)
+            .map(|(device, _)| *device)
+            .collect()
+    }
+
     fn ask_to_stop(&self, device: DeviceId, now: Instant) -> Option<(UserId, WorkId)> {
         let mut held = self.held();
         let watch = held.playing.get_mut(&device)?;
@@ -556,6 +575,25 @@ pub async fn end_everything(state: &AppState) {
     }
 }
 
+/// Refuses a film one too many: this account is already watching, on other
+/// devices, as many films at once as it may.
+///
+/// The device asking is never counted against itself: another film started
+/// on it ends the one it was playing. Asked before anything is converted.
+pub fn may_start(state: &AppState, who: &melyxar_core::user::User, device: DeviceId) -> Result<()> {
+    let Some(most) = who.permissions.max_sessions else {
+        return Ok(());
+    };
+    let elsewhere = state.watching().watching_elsewhere(who.id, device);
+    if elsewhere >= usize::try_from(most).unwrap_or(0) {
+        return Err(crate::AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::TooManyStreams,
+            format!("this account is already watching {elsewhere} films at once"),
+        )));
+    }
+    Ok(())
+}
+
 /// A player asked how to play a film, and was answered with this plan.
 pub fn starting(state: &AppState, viewer: Viewer, plan: &PlayPlan) {
     let ended = state.watching().starting(
@@ -579,13 +617,19 @@ pub fn session_opened(state: &AppState, device: DeviceId, session: SessionId) {
 /// A player said it still has a film open, where it is when it has got
 /// anywhere yet, and whether it is paused when it says. Answers whether it
 /// has been asked to stop.
-pub fn heard(
+///
+/// A film this account may not read is not taken down: heard of first here,
+/// after a restart of the server, it would put a title of a library it was
+/// never granted on the administration's list and in the journal.
+pub async fn heard(
     state: &AppState,
+    who: &melyxar_core::user::User,
     viewer: Viewer,
     work: WorkId,
     position: Option<Millis>,
     paused: Option<bool>,
-) -> bool {
+) -> Result<bool> {
+    crate::reach::may_read_the_work(state, who, work).await?;
     let (stop, ended) = state.watching().heard(
         viewer,
         work,
@@ -597,7 +641,7 @@ pub fn heard(
     if let Some(ended) = ended {
         write_down(state, ended);
     }
-    stop
+    Ok(stop)
 }
 
 /// A player said it is leaving this film.
@@ -666,6 +710,17 @@ pub fn stop(state: &AppState, device: DeviceId) -> bool {
         tracing::info!(device = %device, "a film asked to stop never did, and was closed");
     });
     true
+}
+
+/// Asks every film this account is watching to stop, as an administrator's
+/// stop does, and answers how many there were.
+pub fn stop_everything_of(state: &AppState, user: UserId) -> usize {
+    state
+        .watching()
+        .devices_of(user)
+        .into_iter()
+        .filter(|device| stop(state, *device))
+        .count()
 }
 
 /// Below this, a conversion produces the film more slowly than it plays.
@@ -869,6 +924,28 @@ mod tests {
 
     fn secs(value: u64) -> Duration {
         Duration::from_secs(value)
+    }
+
+    #[test]
+    fn a_film_is_counted_against_the_other_devices_of_its_account_only() {
+        let watching = Watching::default();
+        let phone = viewer(DeviceId::new());
+        let laptop = Viewer {
+            device: DeviceId::new(),
+            ..phone.clone()
+        };
+        let stranger = viewer(DeviceId::new());
+        for who in [&phone, &laptop, &stranger] {
+            watching.starting(who.clone(), plan_for(WorkId::new(), None), Instant::now(), at());
+        }
+
+        assert_eq!(watching.watching_elsewhere(phone.user, phone.device), 1);
+        assert_eq!(
+            watching.watching_elsewhere(phone.user, DeviceId::new()),
+            2,
+            "a third device of the same account finds both"
+        );
+        assert_eq!(watching.watching_elsewhere(stranger.user, stranger.device), 0);
     }
 
     #[test]

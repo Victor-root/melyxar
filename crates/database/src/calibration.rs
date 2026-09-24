@@ -6,10 +6,11 @@
 
 use std::path::PathBuf;
 
-use melyxar_core::id::PlaybackClientId;
+use melyxar_core::id::{LibraryId, PlaybackClientId};
 use melyxar_core::time::{Millis, Timestamp};
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 
+use crate::browse::kept_inside;
 use crate::convert::{bool_to_int, int_to_bool, parse_timestamp, timestamp_to_text};
 use crate::{Database, Result};
 
@@ -121,16 +122,28 @@ impl Database {
     /// must never fail over the film it picked rather than over the codec it
     /// is asking about.
     ///
-    /// Empty for a library nobody has scanned yet, which is what the
-    /// generated film is still there for.
-    pub async fn film_to_measure_against(&self) -> Result<Option<FilmToMeasureAgainst>> {
-        let row = sqlx::query(
+    /// Only among the libraries given, when some are: the film is played to
+    /// whoever asked, so it is one they could have opened themselves.
+    ///
+    /// Empty for a library nobody has scanned yet, and for an account
+    /// granted nothing, which is what the generated film is still there for.
+    pub async fn film_to_measure_against(
+        &self,
+        within: Option<&[LibraryId]>,
+    ) -> Result<Option<FilmToMeasureAgainst>> {
+        let Some(inside) = kept_inside(within, "works.library_id") else {
+            return Ok(None);
+        };
+        // Nothing assembled here but a row of question marks, one per
+        // library identifier the caller was handed by this crate.
+        let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT library_roots.path AS root_path, media_sources.relative_path,
                     media_sources.duration_ms, tracks.stream_index, tracks.codec,
                     tracks.height, tracks.frame_rate, tracks.hdr_format
              FROM tracks
              JOIN media_sources ON media_sources.id = tracks.source_id
              JOIN library_roots ON library_roots.id = media_sources.root_id
+             JOIN works ON works.id = media_sources.work_id
              WHERE tracks.kind = 'video'
                AND tracks.height IS NOT NULL
                AND tracks.is_external = 0
@@ -138,14 +151,17 @@ impl Database {
                AND media_sources.missing_since IS NULL
                AND media_sources.duration_ms >= ?
                AND (tracks.hdr_format IS NULL OR tracks.hdr_format <> 'dolby_vision')
+               {inside}
              ORDER BY tracks.height DESC,
                       COALESCE(tracks.bitrate, media_sources.overall_bitrate, 0) DESC,
                       media_sources.id
-             LIMIT 1",
-        )
-        .bind(LONG_ENOUGH_TO_MEASURE_AGAINST)
-        .fetch_optional(self.reader())
-        .await?;
+             LIMIT 1"
+        )))
+        .bind(LONG_ENOUGH_TO_MEASURE_AGAINST);
+        for library in within.unwrap_or_default() {
+            query = query.bind(library.to_db_string());
+        }
+        let row = query.fetch_optional(self.reader()).await?;
 
         let Some(row) = row else {
             return Ok(None);
@@ -279,18 +295,27 @@ mod tests {
         }
     }
 
+    /// The library the films below are put in.
+    fn the_library() -> LibraryId {
+        "01890a5d-ac96-774b-bcce-b302099a8057"
+            .parse()
+            .expect("an identifier")
+    }
+
     /// Puts a library holding these films into a migrated database.
     async fn a_library_holding(database: &Database, films: &[AFilm]) {
         sqlx::query(
             "INSERT INTO libraries (id, name, kind, metadata_language, created_at, updated_at)
-             VALUES ('lib', 'Films', 'movies', 'fr', ?, ?)",
+             VALUES (?, 'Films', 'movies', 'fr', ?, ?)",
         )
+        .bind(the_library().to_db_string())
         .bind(timestamp_to_text(now()))
         .bind(timestamp_to_text(now()))
         .execute(database.writer())
         .await
         .expect("a library");
-        sqlx::query("INSERT INTO library_roots (id, library_id, label, path) VALUES ('root', 'lib', 'disk-one', '/films')")
+        sqlx::query("INSERT INTO library_roots (id, library_id, label, path) VALUES ('root', ?, 'disk-one', '/films')")
+            .bind(the_library().to_db_string())
             .execute(database.writer())
             .await
             .expect("a root");
@@ -300,9 +325,10 @@ mod tests {
             let source = format!("source-{index}");
             sqlx::query(
                 "INSERT INTO works (id, library_id, kind, title, sort_title, added_at, updated_at)
-                 VALUES (?, 'lib', 'movie', ?, ?, ?, ?)",
+                 VALUES (?, ?, 'movie', ?, ?, ?, ?)",
             )
             .bind(&work)
+            .bind(the_library().to_db_string())
             .bind(film.name)
             .bind(film.name)
             .bind(timestamp_to_text(now()))
@@ -346,7 +372,35 @@ mod tests {
     async fn a_library_nobody_has_scanned_offers_no_film_to_measure_against() {
         let database = Database::open_in_memory().await.expect("database opens");
         assert!(database
-            .film_to_measure_against()
+            .film_to_measure_against(None)
+            .await
+            .expect("asked")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn only_a_film_of_a_library_granted_is_measured_against() {
+        // The film is played to whoever asked for the calibration.
+        let database = Database::open_in_memory().await.expect("database opens");
+        a_library_holding(&database, &[AFilm::plain("a-film", 2160, 30_000_000)]).await;
+
+        let granted = [the_library()];
+        assert!(database
+            .film_to_measure_against(Some(&granted))
+            .await
+            .expect("asked")
+            .is_some());
+        let elsewhere = [LibraryId::new()];
+        assert!(
+            database
+                .film_to_measure_against(Some(&elsewhere))
+                .await
+                .expect("asked")
+                .is_none(),
+            "a film of a library not granted is never handed over"
+        );
+        assert!(database
+            .film_to_measure_against(Some(&[]))
             .await
             .expect("asked")
             .is_none());
@@ -365,7 +419,7 @@ mod tests {
         .await;
 
         let chosen = database
-            .film_to_measure_against()
+            .film_to_measure_against(None)
             .await
             .expect("asked")
             .expect("a film");
@@ -386,7 +440,7 @@ mod tests {
         .await;
 
         let chosen = database
-            .film_to_measure_against()
+            .film_to_measure_against(None)
             .await
             .expect("asked")
             .expect("a film");
@@ -424,7 +478,7 @@ mod tests {
         .await;
 
         let chosen = database
-            .film_to_measure_against()
+            .film_to_measure_against(None)
             .await
             .expect("asked")
             .expect("a film");
@@ -444,7 +498,7 @@ mod tests {
         .await;
 
         let chosen = database
-            .film_to_measure_against()
+            .film_to_measure_against(None)
             .await
             .expect("asked")
             .expect("a film");

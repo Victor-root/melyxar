@@ -49,6 +49,10 @@ pub enum Event {
     AccountCreated { user: UserId, user_name: String },
     AccountRemoved { user_name: String },
     AccountRenamed { user: UserId, from: String, to: String },
+    /// An administrator changed what an account may do or see.
+    RightsChanged { user: UserId, user_name: String, by: String },
+    /// An administrator signed every device of an account out.
+    SignedOutEverywhere { user: UserId, user_name: String, by: String },
     Watched(Viewing),
     TaskEnded(TaskEnded),
     WorksDeleted {
@@ -124,6 +128,8 @@ impl Category {
                 ACCOUNT_CREATED,
                 ACCOUNT_REMOVED,
                 ACCOUNT_RENAMED,
+                RIGHTS_CHANGED,
+                SIGNED_OUT_EVERYWHERE,
             ],
             Self::Playback => &[WATCHED],
             Self::Library => &[TASK_FINISHED, TASK_FAILED, TASK_STOPPED, WORKS_DELETED],
@@ -142,6 +148,8 @@ const PASSWORD_CHANGED: &str = "password_changed";
 const ACCOUNT_CREATED: &str = "account_created";
 const ACCOUNT_REMOVED: &str = "account_removed";
 const ACCOUNT_RENAMED: &str = "account_renamed";
+const RIGHTS_CHANGED: &str = "rights_changed";
+const SIGNED_OUT_EVERYWHERE: &str = "signed_out_everywhere";
 const WATCHED: &str = "watched";
 const TASK_FINISHED: &str = "task_finished";
 pub(crate) const TASK_FAILED: &str = "task_failed";
@@ -296,6 +304,18 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
             Some(user),
             None,
             json!({ "user_name": to, "previous_name": from }),
+        ),
+        Event::RightsChanged { user, user_name, by } => line(
+            RIGHTS_CHANGED,
+            Some(user),
+            None,
+            json!({ "user_name": user_name, "by": by }),
+        ),
+        Event::SignedOutEverywhere { user, user_name, by } => line(
+            SIGNED_OUT_EVERYWHERE,
+            Some(user),
+            None,
+            json!({ "user_name": user_name, "by": by }),
         ),
         Event::Watched(viewing) => {
             let mut details = what_was_watched(database, viewing.work).await?;

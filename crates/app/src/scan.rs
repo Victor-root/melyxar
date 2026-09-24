@@ -3219,12 +3219,12 @@ mod tests {
         assert_eq!(thumbnails.sheets, 1);
         assert!(thumbnails.width > 0 && thumbnails.height > 0);
 
-        assert!(crate::thumbnails::sheet_of(&state, source_id, 0)
+        assert!(crate::thumbnails::sheet_of(&state, &crate::an_ordinary_account(melyxar_core::id::UserId::new()), source_id, 0)
             .await
             .expect("the sheet is in the cache")
             .exists());
         assert!(
-            crate::thumbnails::sheet_of(&state, source_id, 1)
+            crate::thumbnails::sheet_of(&state, &crate::an_ordinary_account(melyxar_core::id::UserId::new()), source_id, 1)
                 .await
                 .is_err(),
             "there is no second sheet to ask for"
@@ -3251,7 +3251,7 @@ mod tests {
         // And a server whose table is gone takes up what is on the disk rather
         // than reading every film again. Three hundred films are a night of
         // reading, and a row lost must never cost that night twice.
-        let sheet = crate::thumbnails::sheet_of(&state, source_id, 0)
+        let sheet = crate::thumbnails::sheet_of(&state, &crate::an_ordinary_account(melyxar_core::id::UserId::new()), source_id, 0)
             .await
             .expect("the sheet is there");
         let written_at = std::fs::metadata(&sheet)

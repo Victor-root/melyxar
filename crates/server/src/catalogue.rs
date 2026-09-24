@@ -123,7 +123,8 @@ async fn serve_photo(
         .iter()
         .find(|version| version.missing_since.is_none())
         .ok_or_else(|| ServerError::not_found("the photo is not on the disk at the moment"))?;
-    crate::serve_the_file(std::path::Path::new(&file.path), request).await
+    let path = melyxar_app::playback::file_of(state, who, file.source_id).await?;
+    crate::serve_the_file(&path, request).await
 }
 
 // ---------------------------------------------------------------------------
@@ -161,8 +162,9 @@ struct RootView {
     label: String,
     /// Its whole path on the server's disk. Shown only on the screen where
     /// roots are managed, for the administrator who has to tell two roots
-    /// apart by more than a label they gave one themselves.
-    path: String,
+    /// apart by more than a label they gave one themselves; absent for
+    /// anybody else.
+    path: Option<String>,
     /// What the server may actually do with this folder, told by trying.
     access: &'static str,
     /// Stable code the interface turns into a sentence in its own language.
@@ -193,7 +195,9 @@ async fn libraries(
                     .map(|root| RootView {
                         id: root.id.to_string(),
                         label: root.label,
-                        path: root.path.to_string_lossy().into_owned(),
+                        path: root
+                            .path
+                            .map(|path| path.to_string_lossy().into_owned()),
                         access: root.access.as_str(),
                         explanation_code: root.access.explanation_code(),
                     })
@@ -833,9 +837,9 @@ struct VersionView {
     summary: String,
     /// Where the file is, root included, and the disk it is on. On a page
     /// about a file, the first thing wanted when something is wrong with it
-    /// is where it is.
-    path: String,
-    root_label: String,
+    /// is where it is. Absent for anybody but an administrator.
+    path: Option<String>,
+    root_label: Option<String>,
     /// When a scan first saw it, which is not when the file was made.
     added_at: String,
     size_bytes: i64,
@@ -1234,8 +1238,8 @@ mod tests {
     fn version_with(tracks: Vec<Track>) -> Version {
         Version {
             source_id: MediaSourceId::new(),
-            root_label: "disk-one".to_string(),
-            path: "/mnt/disk-one/films/a.mkv".to_string(),
+            root_label: Some("disk-one".to_string()),
+            path: Some("/mnt/disk-one/films/a.mkv".to_string()),
             added_at: melyxar_core::time::now(),
             relative_path: "Quiet.Harbour.2019.mkv".to_string(),
             size_bytes: 12_000_000_000,

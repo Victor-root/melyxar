@@ -42,8 +42,9 @@ pub struct RootSummary {
     /// Its whole path on the server's disk. Shown on the one screen an
     /// administrator manages roots from, where knowing exactly which folder a
     /// label stands for is the point of being there; a log line still shows
-    /// only the label, which is the rule everywhere else.
-    pub path: std::path::PathBuf,
+    /// only the label, which is the rule everywhere else. Absent for anybody
+    /// who is not an administrator.
+    pub path: Option<std::path::PathBuf>,
     /// What the server may actually do with the folder, established by trying
     /// rather than by reading permission bits.
     pub access: RootAccess,
@@ -201,7 +202,10 @@ pub async fn libraries(state: &AppState, who: &User) -> Result<Vec<LibrarySummar
                 .map(|root| RootSummary {
                     id: root.id,
                     label: root.label.clone(),
-                    path: root.path.clone(),
+                    path: who
+                        .permissions
+                        .is_administrator
+                        .then(|| root.path.clone()),
                     // A root nobody has tested counts as missing, the most
                     // cautious of the four states.
                     access: access
@@ -245,6 +249,12 @@ pub async fn browse(
 ) -> Result<WorkPage> {
     if let Some(library_id) = request.library_id {
         crate::reach::may_read(who, library_id)?;
+    }
+    // The page after a work is read from where that work sorts, so a work of
+    // a library this account was not granted would lend it its title, its
+    // year and its rating, and say it exists.
+    if let Some(after) = request.after {
+        crate::reach::may_read_the_work(state, who, after).await?;
     }
     // Both of these are put on here rather than sent by the client: what an
     // account may read and who it is are the use case's to know, and a client
@@ -1007,6 +1017,52 @@ mod tests {
         .expect("read");
         assert_eq!(page.cards.len(), 2);
         assert!(page.next.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_page_is_never_read_after_a_work_the_account_may_not_see() {
+        // Where the page begins is read from the work named, so a work of a
+        // library not granted would say it exists and how it sorts.
+        let (_directory, state, _, viewer) =
+            state_with_films(&["Quiet Harbour", "Amber Field"]).await;
+        let first = browse(&state, &BrowseRequest::default(), &viewer)
+            .await
+            .expect("read")
+            .cards[0]
+            .id;
+        let kept_out = User {
+            permissions: melyxar_core::user::Permissions {
+                sees_every_library: false,
+                allowed_libraries: Vec::new(),
+                ..melyxar_core::user::Permissions::viewer()
+            },
+            ..viewer.clone()
+        };
+
+        let refused = browse(
+            &state,
+            &BrowseRequest {
+                after: Some(first),
+                ..Default::default()
+            },
+            &kept_out,
+        )
+        .await
+        .expect_err("refused");
+        assert!(matches!(
+            refused,
+            crate::AppError::Domain(error) if error.code == melyxar_core::error::ErrorCode::NotFound
+        ));
+        assert!(browse(
+            &state,
+            &BrowseRequest {
+                after: Some(first),
+                ..Default::default()
+            },
+            &viewer,
+        )
+        .await
+        .is_ok());
     }
 
     #[tokio::test]
