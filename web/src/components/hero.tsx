@@ -20,7 +20,8 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { keep, recall } from "../kept";
 import type { HeroItem } from "../api";
 import { useShownPicture } from "./picture";
 import { howLong, whatTheFileHolds, whichEpisode } from "../readable";
@@ -99,11 +100,19 @@ function roomLeftOver(box: HTMLElement, text: HTMLElement): number {
 
 export function Hero({ items }: { items: HeroItem[] }) {
   const { t } = useSettings();
-  const [at, setAt] = useState(0);
+  /* Where the banner stood and whether a hand had stopped it, kept for this
+     visit of the page: walked back to from a work opened from it, the banner
+     carries on from the same picture as though nobody had left. */
+  const standing = `hero-at:${useLocation().key}`;
+  const [at, setAt] = useState(() => recall<number>(standing)?.value ?? 0);
   /* Set by the first touch of any kind and never unset: a banner that starts
      moving again the moment somebody looks away is worse than one that never
      moved, because it moves exactly when nobody is watching for it. */
-  const [held, setHeld] = useState(false);
+  const [held, setHeld] = useState(() => recall<boolean>(`${standing}:held`)?.value ?? false);
+  useEffect(() => {
+    keep(standing, at);
+    keep(`${standing}:held`, held);
+  }, [standing, at, held]);
   /* The last picture asked for so far. The one in front and the one after
      it, to begin with: that is all the banner needs to move on without a
      hole, and the others would only stand in the queue in front of the

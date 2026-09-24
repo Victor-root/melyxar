@@ -8,10 +8,12 @@
  * tomorrow needs every bit of it unchanged.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "../api";
 import type { Card, Home, Job, Library } from "../api";
 import { useAsked } from "../asking";
+import { keep, recall } from "../kept";
 import { useMarks } from "../marks";
 import { useRunning, useStartIdentification, useStartScan } from "../running";
 import type { Starter } from "../running";
@@ -73,18 +75,32 @@ export function useHomeScreen(libraries: Library[]): HomeScreen {
      Only taken away, never added: which episode a series waits on once this
      one is watched is a question only the server can answer, and it is on its
      way. */
+  /* The banner drawn at random is drawn once per visit of the page: walked
+     back to from a work opened from it, it is the same banner, not a new
+     draw brought by the answer read again on the way back. A new visit of
+     the page draws again. */
+  const visit = useLocation().key;
+  const lineup = `hero:${visit}`;
+  const answer = asked.answer;
+  useEffect(() => {
+    if (answer && !recall(lineup)) {
+      keep(lineup, answer.hero);
+    }
+  }, [answer, lineup]);
+
   const home = useMemo(() => {
-    if (!asked.answer) {
+    if (!answer) {
       return null;
     }
     const unfinished = (card: Card) => marks.seenOf(card) === "in_progress";
+    const drawn = recall<Home["hero"]>(lineup)?.value ?? answer.hero;
     return {
-      ...asked.answer,
-      hero: asked.answer.hero.filter((entry) => entry.because !== "started" || unfinished(entry)),
-      carry_on: asked.answer.carry_on.filter(unfinished),
-      up_next: asked.answer.up_next.filter((card) => marks.seenOf(card) !== "watched"),
+      ...answer,
+      hero: drawn.filter((entry) => entry.because !== "started" || unfinished(entry)),
+      carry_on: answer.carry_on.filter(unfinished),
+      up_next: answer.up_next.filter((card) => marks.seenOf(card) !== "watched"),
     };
-  }, [asked.answer, marks]);
+  }, [answer, lineup, marks]);
 
   const scan = useStartScan(libraries);
   const lookUp = useStartIdentification(libraries);
