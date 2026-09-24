@@ -1833,9 +1833,30 @@
   gap: var(--gap-tight);
 }
 
-.name-choice .field-line {
+.name-field {
+  position: relative;
+  display: flex;
   flex: 1 1 200px;
   min-width: 0;
+}
+
+.name-field .field-line {
+  flex: 1;
+  min-width: 0;
+  padding-right: 92px;
+}
+
+/* How many letters are left, inside the end of the field, going down as the
+   name grows. */
+.name-left {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 /* The server's logo as it stands, beside what changes it. Its own shape at
