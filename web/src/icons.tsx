@@ -496,6 +496,17 @@ export function ForgetIcon(props: IconProps) {
   );
 }
 
+/** One arrow turning back on itself, for putting something back the way it
+ *  came. */
+export function ResetIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.4 12a7.6 7.6 0 1 0 2.2-5.4L4.4 8.8" />
+      <path d="M4.4 4.2v4.6H9" />
+    </Icon>
+  );
+}
+
 /** Two arrows chasing each other, for asking the catalogue again. */
 export function RefreshIcon(props: IconProps) {
   return (
@@ -771,12 +782,14 @@ export function DiagnosticsIcon(props: IconProps) {
   );
 }
 
-/** A box seen from its corner, for the server itself. */
+/** Two units of a rack, one above the other, each with its lights, for the
+ *  server itself. */
 export function ServerIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="m12 3.4 7.6 4.2v8.8L12 20.6l-7.6-4.2V7.6Z" />
-      <path d="m4.4 7.6 7.6 4.2 7.6-4.2M12 11.8v8.8" />
+      <rect x="3.6" y="4" width="16.8" height="6.6" rx="1.6" />
+      <rect x="3.6" y="13.4" width="16.8" height="6.6" rx="1.6" />
+      <path d="M7.2 7.3h.01M7.2 16.7h.01M10.4 7.3h.01M10.4 16.7h.01M14 7.3h3.2M14 16.7h3.2" />
     </Icon>
   );
 }

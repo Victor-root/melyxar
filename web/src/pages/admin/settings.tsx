@@ -24,10 +24,12 @@ import {
   HistoryIcon,
   MelyxarMark,
   RefreshIcon,
+  ResetIcon,
   ServerIcon,
   WarningIcon,
 } from "../../icons";
 import { serverChanged } from "../../player/logo";
+import { howMany } from "../../readable";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
 
@@ -169,14 +171,21 @@ function ServerPanel() {
               changeName(() => api.renameServer(typed), "admin.server_name_saved");
             }}
           >
-            <input
-              type="text"
-              className="field-line"
-              aria-label={t("admin.server_name")}
-              value={typed}
-              maxLength={LONGEST_NAME}
-              onChange={(event) => setTyped(event.target.value)}
-            />
+            <span className="name-field">
+              <input
+                type="text"
+                className="field-line"
+                aria-label={t("admin.server_name")}
+                aria-describedby="name-left"
+                value={typed}
+                maxLength={LONGEST_NAME}
+                onChange={(event) => setTyped(event.target.value)}
+              />
+              {/* Counted in letters, the way the server counts them. */}
+              <span id="name-left" className="name-left" aria-live="polite">
+                {howMany(LONGEST_NAME - [...typed].length, "admin.server_name_left", t)}
+              </span>
+            </span>
             <button
               type="submit"
               className="button button-small button-accent"
@@ -189,8 +198,10 @@ function ServerPanel() {
               className="button button-small button-quiet"
               disabled={naming || server.server_name === server.default_name}
               onClick={() => changeName(api.forgetServerName, "admin.server_name_given_back")}
+              title={t("admin.server_name_default_why", { name: server.default_name })}
             >
-              {t("admin.server_name_give_back", { name: server.default_name })}
+              <ResetIcon size={15} />
+              {t("admin.server_name_default")}
             </button>
           </form>
         )}
