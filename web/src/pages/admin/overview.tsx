@@ -23,7 +23,6 @@ import {
   FfmpegIcon,
   FolderIcon,
   GraphicsCardIcon,
-  HistoryIcon,
   KindIcon,
   MelyxarMark,
   PeopleIcon,
@@ -59,8 +58,16 @@ export function AdminOverview() {
     <>
       <PageHead lead={t("admin.overview_lead")} />
 
+      {/* What is playing and what just happened, one panel: the second is
+          mostly the first, finished. */}
       <PlayingPanel>
+        <hr className="part-rule" />
+        <RecentActivity />
         <div className="panel-foot">
+          <Link className="button button-small" to="/admin/journal">
+            {t("activity.see_journal")}
+            <ArrowRightIcon size={15} />
+          </Link>
           <Link className="button button-small button-accent" to="/admin/playback">
             {t("admin.see_playback")}
             <ArrowRightIcon size={15} />
@@ -75,7 +82,6 @@ export function AdminOverview() {
         <TasksPanel />
         <WatchPanel />
         <PeoplePanel overview={overview.answer} />
-        <RecentPanel />
       </div>
     </>
   );
@@ -421,23 +427,14 @@ function PeoplePanel({ overview }: { overview: Overview | null }) {
 }
 
 /** What happened lately, across the whole server. */
-function RecentPanel() {
+/** The latest lines of the journal, under what is playing. */
+function RecentActivity() {
   const { t } = useSettings();
   const { lines } = useActivity(EVERY_FAMILY, RECENT_LINES);
   return (
-    <Panel
-      icon={HistoryIcon}
-      title={t("admin.recent")}
-      lead={t("admin.recent_lead")}
-      className="panel-wide"
-    >
+    <section>
+      <h3 className="part-title">{t("admin.recent")}</h3>
       <ActivityLines lines={lines} />
-      <div className="panel-foot">
-        <Link className="button button-small button-accent" to="/admin/journal">
-          {t("activity.see_journal")}
-          <ArrowRightIcon size={15} />
-        </Link>
-      </div>
-    </Panel>
+    </section>
   );
 }

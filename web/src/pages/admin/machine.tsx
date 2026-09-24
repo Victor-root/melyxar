@@ -110,7 +110,7 @@ function Disks({ disks }: { disks: MeasuredDisk[] }) {
   const { t, language } = useSettings();
   return (
     <section className="disks">
-      <h3 className="disks-title">{t("admin.disks")}</h3>
+      <h3 className="part-title">{t("admin.disks")}</h3>
       <div className="lines">
         {disks.map((disk) => {
           const used = usedShare(disk);
