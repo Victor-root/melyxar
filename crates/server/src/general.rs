@@ -2,8 +2,8 @@
 //!
 //! Whether wide gamut colour is ever converted for a client that cannot show
 //! it: a real switch for a real problem, a processor too slow to rebuild a
-//! picture whose only fault is its colour. And what the server is called and
-//! the logo it wears. More
+//! picture whose only fault is its colour. And what the server is called, the
+//! logo it wears and what stands behind its sign in screen. More
 //! belongs here as branding and maintenance reach the interface, which is why
 //! this is its own small module rather than a corner of another one.
 
@@ -35,6 +35,18 @@ pub fn router() -> Router<AppState> {
                     melyxar_app::avatars::LARGEST,
                 )),
         )
+        .route(
+            "/api/v1/settings/server/door/background",
+            axum::routing::put(choose_door_background),
+        )
+        .route(
+            "/api/v1/settings/server/door/picture",
+            axum::routing::put(choose_door_picture)
+                .delete(remove_door_picture)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    melyxar_app::avatars::LARGEST,
+                )),
+        )
 }
 
 /// What the server is called, what it would be called given back its own
@@ -45,11 +57,17 @@ struct ServerView {
     default_name: &'static str,
     logo: Option<String>,
     logo_icon: Option<String>,
+    /// Which drawn background the sign in screen wears when no picture is
+    /// there.
+    door_background: &'static str,
+    /// Where the picture behind the sign in screen is, when there is one.
+    door_picture: Option<String>,
 }
 
 impl ServerView {
     async fn of(state: &AppState) -> Result<Json<Self>> {
         let identity = melyxar_app::server::identity(state).await?;
+        let door = melyxar_app::server::door(state).await?;
         Ok(Json(Self {
             server_name: identity.name,
             default_name: melyxar_app::server::DEFAULT_NAME,
@@ -58,6 +76,8 @@ impl ServerView {
                 .logo
                 .as_deref()
                 .map(crate::installing::logo_icon_url),
+            door_background: door.background.as_str(),
+            door_picture: door.picture.as_deref().map(crate::images::door_picture_url),
         }))
     }
 }
@@ -109,6 +129,45 @@ async fn remove_logo(
     _: crate::account::Administrator,
 ) -> Result<Json<ServerView>> {
     melyxar_app::server::remove_logo(&state).await?;
+    ServerView::of(&state).await
+}
+
+#[derive(Debug, Deserialize)]
+struct DoorBackgroundAsked {
+    door_background: String,
+}
+
+/// Chooses the drawn background the sign in screen wears when no picture is
+/// there.
+async fn choose_door_background(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    Json(asked): Json<DoorBackgroundAsked>,
+) -> Result<Json<ServerView>> {
+    let background = melyxar_app::server::LoginBackground::parse(&asked.door_background)
+        .ok_or_else(|| {
+            crate::error::ServerError::invalid_input("no background goes by that name")
+        })?;
+    melyxar_app::server::set_door_background(&state, background).await?;
+    ServerView::of(&state).await
+}
+
+/// Puts the image sent behind the sign in screen.
+async fn choose_door_picture(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    image: axum::body::Bytes,
+) -> Result<Json<ServerView>> {
+    melyxar_app::server::set_door_picture(&state, &image).await?;
+    ServerView::of(&state).await
+}
+
+/// Takes the picture away from behind the sign in screen.
+async fn remove_door_picture(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+) -> Result<Json<ServerView>> {
+    melyxar_app::server::remove_door_picture(&state).await?;
     ServerView::of(&state).await
 }
 

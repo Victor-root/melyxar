@@ -98,6 +98,11 @@ export type ServerIdentity = Pick<Branding, "server_name" | "logo" | "logo_icon"
  *  server would be given back. */
 export interface ServerSettings extends ServerIdentity {
   default_name: string;
+  /** Which drawn background the sign in screen wears when no picture is
+   *  there. */
+  door_background: LoginBackgroundStyle;
+  /** Where the picture behind the sign in screen is, when there is one. */
+  door_picture: string | null;
 }
 
 export interface Branding {
@@ -1602,6 +1607,13 @@ export const api = {
   forgetServerName: () => remove<ServerSettings>("/api/v1/settings/server/name"),
   setServerLogo: (image: Blob) => put<ServerSettings>("/api/v1/settings/server/logo", image),
   removeServerLogo: () => remove<ServerSettings>("/api/v1/settings/server/logo"),
+  /* What stands behind the sign in screen: a drawn background, and a picture
+     that wins over it while it is there. */
+  setDoorBackground: (door_background: LoginBackgroundStyle) =>
+    put<ServerSettings>("/api/v1/settings/server/door/background", { door_background }),
+  setDoorPicture: (image: Blob) =>
+    put<ServerSettings>("/api/v1/settings/server/door/picture", image),
+  removeDoorPicture: () => remove<ServerSettings>("/api/v1/settings/server/door/picture"),
   /* What deserves a look, for the administrator asking. */
   attention: (signal?: AbortSignal) =>
     get<{ points: AttentionPoint[] }>("/api/v1/system/attention", signal),

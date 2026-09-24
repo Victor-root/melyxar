@@ -1118,11 +1118,15 @@ const en: Dictionary = {
   "admin.logo_remove": "Remove it",
   "admin.logo_failed": "The logo could not be changed",
   "admin.door": "Sign-in screen",
-  "admin.door_lead": "Choose the sign-in screen background.",
+  "admin.door_lead": "Choose what stands behind the sign-in screen.",
   "admin.door_background": "Background",
   "admin.door_background.abstract": "Light and particles",
   "admin.door_background.library": "Media artwork",
   "admin.door_picture": "Custom image",
+  "admin.door_picture_why": "Shown instead of the background. Brought down to 2560 pixels wide.",
+  "admin.door_background_why": "Drawn in the accent colour of whoever is looking.",
+  "admin.door_background_under": "Used again when the image is removed.",
+  "admin.door_failed": "The sign-in screen could not be changed",
   "admin.maintenance": "Maintenance",
   "admin.maintenance_lead": "Notify users of maintenance while keeping administrator access.",
   "admin.maintenance_on": "Maintenance mode",
@@ -1166,7 +1170,7 @@ const en: Dictionary = {
   "me.accent_own": "Custom colour",
   "me.home_lead": "Personalise the layout of your home page.",
   "me.home_order_single": "Only one library type is available, so its order cannot be changed.",
-  "me.playback_lead": "Set your audio, language and subtitle preferences.",
+  "me.playback_lead": "Set your audio, language, skip button and subtitle preferences.",
 };
 
 const fr: Dictionary = {
@@ -2274,11 +2278,15 @@ const fr: Dictionary = {
   "admin.logo_remove": "Le retirer",
   "admin.logo_failed": "Impossible de changer le logo",
   "admin.door": "Écran de connexion",
-  "admin.door_lead": "Choisissez le fond de l’écran de connexion.",
+  "admin.door_lead": "Choisissez ce qui se trouve derrière l’écran de connexion.",
   "admin.door_background": "Arrière-plan",
   "admin.door_background.abstract": "Lumière et particules",
   "admin.door_background.library": "Visuels des médias",
   "admin.door_picture": "Image personnalisée",
+  "admin.door_picture_why": "Affichée à la place de l’arrière-plan. Ramenée à 2560 pixels de large.",
+  "admin.door_background_why": "Dessiné dans la couleur d’accentuation de la personne qui regarde.",
+  "admin.door_background_under": "Repris quand l’image est retirée.",
+  "admin.door_failed": "Impossible de changer l’écran de connexion",
   "admin.maintenance": "Maintenance",
   "admin.maintenance_lead": "Informez les utilisateurs d’une maintenance tout en conservant l’accès administrateur.",
   "admin.maintenance_on": "Mode maintenance",
@@ -2322,7 +2330,7 @@ const fr: Dictionary = {
   "me.accent_own": "Couleur personnalisée",
   "me.home_lead": "Personnalisez la présentation de votre page d’accueil.",
   "me.home_order_single": "Un seul type de bibliothèque est disponible ; son ordre ne peut pas être modifié.",
-  "me.playback_lead": "Définissez vos préférences audio, de langue et de sous-titres.",
+  "me.playback_lead": "Définissez vos préférences audio, de langue, de saut et de sous-titres.",
 };
 
 const dictionaries: Record<Language, Dictionary> = { en, fr };

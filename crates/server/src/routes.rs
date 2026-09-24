@@ -339,7 +339,10 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
             .logo_path
             .as_deref()
             .map(crate::installing::logo_icon_url),
-        login_background_path: settings.login_background_path,
+        login_background_path: settings
+            .login_background_path
+            .as_deref()
+            .map(crate::images::door_picture_url),
         login_background_style: settings.login_background.as_str(),
         setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,
     }))
