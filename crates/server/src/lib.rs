@@ -13,6 +13,7 @@ pub mod activity;
 pub mod calibration;
 pub mod catalogue;
 pub mod deletion;
+pub mod devices;
 pub mod error;
 pub mod general;
 pub(crate) mod identifiers;

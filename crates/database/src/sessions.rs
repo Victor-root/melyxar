@@ -112,6 +112,27 @@ pub struct SignedIn {
     /// a token handed to the same browser again is kept exactly as long as
     /// the one it replaces, rather than quietly becoming a longer one.
     pub remembered: Remembered,
+    /// The identifier the browser gave itself, when it gave one: a session
+    /// handed to it again replaces this one rather than sitting beside it.
+    pub client: Option<String>,
+}
+
+/// One device signed in, as a list of them shows it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignedInDevice {
+    pub id: DeviceId,
+    pub user_id: UserId,
+    pub user_name: String,
+    /// The picture of the account, under the folder of pictures.
+    pub user_avatar: Option<String>,
+    /// What the browser said it was when it signed in.
+    pub name: String,
+    /// The browser its own page found, when it has said.
+    pub browser: Option<String>,
+    pub remembered: Remembered,
+    pub signed_in_at: Timestamp,
+    /// When it was last used, as written down: up to an hour behind.
+    pub last_seen_at: Timestamp,
 }
 
 /// The devices one account is signed in on, as the list of accounts shows
@@ -136,6 +157,10 @@ impl Database {
     ///
     /// The name is whatever the layer above made of the browser that asked: it
     /// is shown in the list of devices and nothing is ever decided from it.
+    ///
+    /// A browser that says which one it is has the session this account held
+    /// on it replaced, in the same transaction: signing in ten times from one
+    /// browser leaves one session, not ten of which nobody holds nine.
     pub async fn open_session(
         &self,
         user_id: UserId,
@@ -143,12 +168,21 @@ impl Database {
         token_fingerprint: &str,
         remembered: Remembered,
         at: Timestamp,
+        client: Option<&str>,
     ) -> Result<DeviceId> {
         let id = DeviceId::new();
+        let mut transaction = self.begin().await?;
+        if let Some(client) = client {
+            sqlx::query("DELETE FROM devices WHERE user_id = ? AND client_id = ?")
+                .bind(user_id.to_db_string())
+                .bind(client)
+                .execute(&mut *transaction)
+                .await?;
+        }
         sqlx::query(
             "INSERT INTO devices
-                 (id, user_id, name, token_hash, remembered, created_at, last_seen_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+                 (id, user_id, name, token_hash, remembered, created_at, last_seen_at, client_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id.to_db_string())
         .bind(user_id.to_db_string())
@@ -157,8 +191,10 @@ impl Database {
         .bind(remembered.as_int())
         .bind(timestamp_to_text(at))
         .bind(timestamp_to_text(at))
-        .execute(self.writer())
+        .bind(client)
+        .execute(&mut *transaction)
         .await?;
+        transaction.commit().await?;
         Ok(id)
     }
 
@@ -185,7 +221,7 @@ impl Database {
         // paid for over and over.
         let Some(row) = sqlx::query(AssertSqlSafe(crate::users::reading_accounts(
             ", d.id AS device_id, d.name AS device_name, d.browser AS device_browser, \
-             d.last_seen_at, d.remembered",
+             d.last_seen_at, d.remembered, d.client_id",
             "JOIN devices d ON d.user_id = u.id
              WHERE d.token_hash = ?",
         )))
@@ -214,6 +250,7 @@ impl Database {
             device_name: row.try_get("device_name")?,
             device_browser: row.try_get("device_browser")?,
             remembered: Remembered::from_int(row.try_get("remembered")?),
+            client: row.try_get("client_id")?,
         }))
     }
 
@@ -234,6 +271,48 @@ impl Database {
             .execute(self.writer())
             .await?;
         Ok(done.rows_affected() > 0)
+    }
+
+    /// The devices signed in, the most recently used first: every one, or
+    /// those of one account.
+    pub async fn signed_in_devices(&self, of: Option<UserId>) -> Result<Vec<SignedInDevice>> {
+        let rows = sqlx::query(
+            "SELECT d.id, d.user_id, u.name AS user_name, u.avatar_path, d.name, d.browser,
+                    d.remembered, d.created_at, d.last_seen_at
+             FROM devices d
+             JOIN users u ON u.id = d.user_id
+             WHERE ?1 IS NULL OR d.user_id = ?1
+             ORDER BY d.last_seen_at DESC, d.created_at DESC",
+        )
+        .bind(of.map(|user| user.to_db_string()))
+        .fetch_all(self.reader())
+        .await?;
+        rows.iter()
+            .map(|row| {
+                Ok(SignedInDevice {
+                    id: parse_id(&row.try_get::<String, _>("id")?)?,
+                    user_id: parse_id(&row.try_get::<String, _>("user_id")?)?,
+                    user_name: row.try_get("user_name")?,
+                    user_avatar: row.try_get("avatar_path")?,
+                    name: row.try_get("name")?,
+                    browser: row.try_get("browser")?,
+                    remembered: Remembered::from_int(row.try_get("remembered")?),
+                    signed_in_at: parse_timestamp(&row.try_get::<String, _>("created_at")?)?,
+                    last_seen_at: parse_timestamp(&row.try_get::<String, _>("last_seen_at")?)?,
+                })
+            })
+            .collect()
+    }
+
+    /// Signs one device out by its identifier, and answers whose it was when
+    /// there was one.
+    pub async fn close_device(&self, device: DeviceId) -> Result<Option<UserId>> {
+        let row: Option<(String,)> =
+            sqlx::query_as("DELETE FROM devices WHERE id = ? RETURNING user_id")
+                .bind(device.to_db_string())
+                .fetch_optional(self.writer())
+                .await?;
+        row.map(|(user,)| parse_id(&user)).transpose()
     }
 
     /// Signs every device of one account out, and says how many that was.
@@ -342,10 +421,124 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn signing_in_again_from_the_same_browser_replaces_the_session_there() {
+        let (database, user_id) = a_server_with_one_account().await;
+        let first = database
+            .open_session(user_id, "a browser", "first", Remembered::Yes, A_MOMENT, Some("browser-one"))
+            .await
+            .expect("opened");
+        let second = database
+            .open_session(user_id, "a browser", "second", Remembered::Yes, A_MOMENT, Some("browser-one"))
+            .await
+            .expect("opened");
+        assert_ne!(first, second);
+        assert!(
+            database
+                .session_holder("first", A_MOMENT)
+                .await
+                .expect("read")
+                .is_none(),
+            "the session it replaced holds nobody"
+        );
+        let holder = database
+            .session_holder("second", A_MOMENT)
+            .await
+            .expect("read")
+            .expect("signed in");
+        assert_eq!(holder.client.as_deref(), Some("browser-one"));
+
+        // Another browser, and one that could keep nothing, sit beside it.
+        database
+            .open_session(user_id, "a phone", "third", Remembered::Yes, A_MOMENT, Some("browser-two"))
+            .await
+            .expect("opened");
+        database
+            .open_session(user_id, "a phone", "fourth", Remembered::Yes, A_MOMENT, None)
+            .await
+            .expect("opened");
+        database
+            .open_session(user_id, "a phone", "fifth", Remembered::Yes, A_MOMENT, None)
+            .await
+            .expect("opened");
+        assert_eq!(
+            database.signed_in_devices(Some(user_id)).await.expect("read").len(),
+            4
+        );
+    }
+
+    #[tokio::test]
+    async fn two_accounts_on_one_browser_keep_a_session_each() {
+        let (database, victor) = a_server_with_one_account().await;
+        let zoe = database
+            .create_user("zoe", Some("a stored form"), &Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
+        database
+            .open_session(victor, "a browser", "his", Remembered::Yes, A_MOMENT, Some("shared"))
+            .await
+            .expect("opened");
+        database
+            .open_session(zoe, "a browser", "hers", Remembered::Yes, A_MOMENT, Some("shared"))
+            .await
+            .expect("opened");
+        assert!(database.session_holder("his", A_MOMENT).await.expect("read").is_some());
+        assert!(database.session_holder("hers", A_MOMENT).await.expect("read").is_some());
+    }
+
+    #[tokio::test]
+    async fn the_devices_are_listed_most_recent_first_and_one_closes_alone() {
+        let (database, victor) = a_server_with_one_account().await;
+        let zoe = database
+            .create_user("zoe", Some("a stored form"), &Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
+        let earlier = datetime!(2026-01-01 08:00 UTC);
+        let later = datetime!(2026-01-02 09:30 UTC);
+        let his = database
+            .open_session(victor, "his laptop", "his", Remembered::Yes, earlier, None)
+            .await
+            .expect("opened");
+        let hers = database
+            .open_session(zoe, "her phone", "hers", Remembered::UntilTheBrowserCloses, later, None)
+            .await
+            .expect("opened");
+
+        let every = database.signed_in_devices(None).await.expect("read");
+        assert_eq!(
+            every
+                .iter()
+                .map(|device| (device.id, device.user_name.as_str(), device.remembered))
+                .collect::<Vec<_>>(),
+            vec![
+                (hers, "zoe", Remembered::UntilTheBrowserCloses),
+                (his, "victor", Remembered::Yes)
+            ]
+        );
+        assert_eq!(every[0].signed_in_at, later);
+        assert_eq!(
+            database
+                .signed_in_devices(Some(victor))
+                .await
+                .expect("read")
+                .iter()
+                .map(|device| device.id)
+                .collect::<Vec<_>>(),
+            vec![his]
+        );
+
+        assert_eq!(database.close_device(hers).await.expect("closed"), Some(zoe));
+        assert!(database.session_holder("hers", later).await.expect("read").is_none());
+        assert!(database.session_holder("his", later).await.expect("read").is_some());
+        assert_eq!(database.close_device(hers).await.expect("asked"), None);
+    }
+
+    #[tokio::test]
     async fn a_token_brings_back_the_account_it_was_opened_for() {
         let (database, user_id) = a_server_with_one_account().await;
         let device = database
-            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
 
@@ -370,11 +563,11 @@ mod tests {
     async fn the_browser_a_page_found_comes_back_with_its_device_and_no_other() {
         let (database, user_id) = a_server_with_one_account().await;
         let device = database
-            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
         database
-            .open_session(user_id, "a browser", "another fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "another fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("second session opened");
 
@@ -413,7 +606,7 @@ mod tests {
     async fn a_session_remembers_whether_it_was_to_be_remembered() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
         database
@@ -423,6 +616,7 @@ mod tests {
                 "another fingerprint",
                 Remembered::UntilTheBrowserCloses,
                 A_MOMENT,
+                None,
             )
             .await
             .expect("session opened");
@@ -479,7 +673,7 @@ mod tests {
             .await
             .expect("account created");
         database
-            .open_session(user.id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user.id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
 
@@ -499,7 +693,7 @@ mod tests {
     async fn a_token_nobody_opened_names_nobody() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
 
@@ -521,7 +715,7 @@ mod tests {
     async fn a_session_nobody_used_for_years_still_names_whoever_opened_it() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
 
@@ -538,7 +732,7 @@ mod tests {
     async fn using_a_session_keeps_it_alive_without_writing_on_every_request() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
 
@@ -573,11 +767,11 @@ mod tests {
     async fn signing_one_device_out_leaves_the_others_signed_in() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
         database
-            .open_session(user_id, "a television", "another fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a television", "another fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
 
@@ -616,11 +810,11 @@ mod tests {
             .await
             .expect("account created");
         database
-            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "one fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
         database
-            .open_session(user_id, "a television", "another fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a television", "another fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
         database
@@ -630,6 +824,7 @@ mod tests {
                 "a third fingerprint",
                 Remembered::Yes,
                 A_MOMENT,
+                None,
             )
             .await
             .expect("session opened");
@@ -671,13 +866,14 @@ mod tests {
                 "an old fingerprint",
                 Remembered::Yes,
                 A_MOMENT,
+                None,
             )
             .await
             .expect("session opened");
 
         let much_later = A_MOMENT + AN_UNUSED_SESSION_IS_KEPT_FOR + time::Duration::days(1);
         database
-            .open_session(user_id, "a browser", "a fresh fingerprint", Remembered::Yes, much_later)
+            .open_session(user_id, "a browser", "a fresh fingerprint", Remembered::Yes, much_later, None)
             .await
             .expect("session opened");
 
@@ -713,7 +909,7 @@ mod tests {
     async fn a_session_used_within_the_year_is_left_alone() {
         let (database, user_id) = a_server_with_one_account().await;
         database
-            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT)
+            .open_session(user_id, "a browser", "a fingerprint", Remembered::Yes, A_MOMENT, None)
             .await
             .expect("session opened");
 
@@ -744,7 +940,7 @@ mod tests {
             ("a phone", "three", A_MOMENT),
         ] {
             database
-                .open_session(user_id, name, fingerprint, Remembered::Yes, at)
+                .open_session(user_id, name, fingerprint, Remembered::Yes, at, None)
                 .await
                 .expect("session opened");
         }
