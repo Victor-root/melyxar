@@ -18,6 +18,7 @@ import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { Card, Filters, LibraryKind } from "../api";
 import { useAsked, wasAbandoned } from "../asking";
+import { keep, recall } from "../kept";
 import { KINDS } from "../libraries";
 
 /** The orderings a library can be read in. */
@@ -60,6 +61,30 @@ function scopeOf(written: string | null): {
     return { library: written.slice("library:".length), kind: undefined };
   }
   return { library: undefined, kind: undefined };
+}
+
+/** The cards of a grid read so far, and the choices they answer. */
+interface Gathered {
+  choices: string;
+  cards: Card[];
+  /** Where the next page starts, or nothing after the last. */
+  next: string | null;
+}
+
+/** The same grid read again from the top, at least as far as it had been. */
+async function gatherAgain(
+  narrowing: Narrowing,
+  as: number,
+  signal: AbortSignal,
+): Promise<Omit<Gathered, "choices">> {
+  const cards: Card[] = [];
+  let next: string | null = null;
+  do {
+    const page = await api.works({ ...narrowing, after: next ?? undefined }, signal);
+    cards.push(...page.cards);
+    next = page.next;
+  } while (next !== null && cards.length < as);
+  return { cards, next };
 }
 
 /** Everything a grid is handed to draw itself and to be driven by. */
@@ -122,22 +147,55 @@ export function useBrowsing(): Browsing {
     };
   }, [id, order, descending, genre, decade, search, unidentified, initial, favourites, scope]);
 
-  const [cards, setCards] = useState<Card[]>([]);
-  const [next, setNext] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  /* The cards gathered so far, with the choices they answer. Kept under
+     those choices as they grow, so a grid walked back to is drawn again
+     whole from its first drawing, as far down as it had been read, rather
+     than from its first page. */
+  const choices = `grid:${JSON.stringify(narrowing)}`;
+  const [gathered, setGathered] = useState<Gathered>(
+    () => recall<Gathered>(choices)?.value ?? { choices, cards: [], next: null },
+  );
+  const [loading, setLoading] = useState(gathered.choices !== choices || gathered.cards.length === 0);
   const [failed, setFailed] = useState(false);
 
-  // Any change to the choices starts the grid again from the top, since the
-  // page after the fiftieth card of one ordering means nothing in another.
+  useEffect(() => {
+    if (gathered.choices === choices && (gathered.cards.length > 0 || gathered.next === null)) {
+      keep(choices, gathered);
+    }
+  }, [choices, gathered]);
+
+  /* Any change to the choices starts the grid again from the top, since the
+     page after the fiftieth card of one ordering means nothing in another.
+     A grid already read under these choices is shown as it was and read
+     again quietly, as many cards as it holds, then put in place in one go
+     if nobody has read further meanwhile. */
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
+    const known = recall<Gathered>(choices)?.value;
     setFailed(false);
+    if (known) {
+      setGathered(known);
+      setLoading(false);
+      gatherAgain(narrowing, known.cards.length, controller.signal)
+        .then((fresh) =>
+          setGathered((now) =>
+            now.choices === choices && now.cards.length === known.cards.length
+              ? { choices, ...fresh }
+              : now,
+          ),
+        )
+        .catch(() => {
+          // What was shown stays: it was true a moment ago, and the next
+          // visit asks again.
+        });
+      return () => controller.abort();
+    }
+    setGathered({ choices, cards: [], next: null });
+    setLoading(true);
     api
       .works(narrowing, controller.signal)
       .then((page) => {
-        setCards(page.cards);
-        setNext(page.next);
+        setGathered({ choices, cards: page.cards, next: page.next });
         setLoading(false);
       })
       .catch((error) => {
@@ -147,13 +205,16 @@ export function useBrowsing(): Browsing {
         }
       });
     return () => controller.abort();
-  }, [narrowing]);
+    // The choices are what the narrowing is written as: one changes with the
+    // other.
+  }, [choices, narrowing]);
 
   const filters = useAsked(
     (signal) => (id ? api.filters(id, signal) : Promise.resolve(null)),
     [id],
   );
 
+  const { next } = gathered;
   const loadMore = useCallback(() => {
     if (!next || loading) {
       return;
@@ -164,12 +225,15 @@ export function useBrowsing(): Browsing {
       .then((page) => {
         // Added to rather than replacing: the cards already on screen stay
         // where they are, which is what keeps the scroll position honest.
-        setCards((current) => [...current, ...page.cards]);
-        setNext(page.next);
+        setGathered((now) =>
+          now.choices === choices
+            ? { choices, cards: [...now.cards, ...page.cards], next: page.next }
+            : now,
+        );
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [narrowing, next, loading]);
+  }, [narrowing, choices, next, loading]);
 
   const choose = useCallback(
     (name: string, value: string | null) => {
@@ -187,7 +251,7 @@ export function useBrowsing(): Browsing {
   return {
     narrowing,
     choose,
-    cards,
+    cards: gathered.choices === choices ? gathered.cards : [],
     more: next !== null,
     loadMore,
     loading,

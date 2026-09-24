@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "./api";
 import { refusalKey } from "./i18n";
+import { keep, recall } from "./kept";
 
 /**
  * Whether this failure is the interface having walked away from its own
@@ -106,12 +107,20 @@ export interface Asked<T> {
  * answers, the answer is written down, the screen draws again, and it asks
  * once more for ever. Held in a box that is filled beside the render, the
  * question can be written plainly at the call and still be asked once.
+ *
+ * `keptAs` names what is asked, for a screen that is walked back to: the
+ * answer is kept under that name, and a screen asking under a name already
+ * answered is handed that answer at once, from its very first drawing, while
+ * the question goes to the server all the same and brings it up to date.
  */
 export function useAsked<T>(
   ask: (signal: AbortSignal) => Promise<T>,
   watching: unknown[] = [],
+  keptAs?: string,
 ): Asked<T> {
-  const [answer, setAnswer] = useState<T | null>(null);
+  /* The answer, with the name it was asked under, so an answer to another
+     name is never handed out as this one's. */
+  const [answer, setAnswer] = useState<{ value: T; name: string | undefined } | null>(null);
   const [failure, setFailure] = useState<ApiError | null>(null);
   const [waiting, setWaiting] = useState(true);
   const [asked, setAsked] = useState(0);
@@ -135,7 +144,10 @@ export function useAsked<T>(
     question
       .current(controller.signal)
       .then((came) => {
-        setAnswer(came);
+        if (keptAs !== undefined) {
+          keep(keptAs, came);
+        }
+        setAnswer({ value: came, name: keptAs });
         // An answer is the end of whatever was wrong before it, which is what
         // a screen looking again on its own beat is waiting to be told.
         setFailure(null);
@@ -150,7 +162,7 @@ export function useAsked<T>(
       });
     return () => controller.abort();
     // The question itself is deliberately not watched: see above.
-  }, [asked, ...watching]);
+  }, [asked, keptAs, ...watching]);
 
   const again = useCallback(() => {
     wanted.current = true;
@@ -162,7 +174,18 @@ export function useAsked<T>(
     setAsked((count) => count + 1);
   }, []);
 
-  return { answer, failure, waiting, again, look };
+  /* What was kept under this name stands in until the server has answered
+     it afresh, and nothing is being waited for in the meantime: the screen
+     has something true to draw. */
+  const known = keptAs !== undefined ? recall<T>(keptAs) : undefined;
+  const fresh = answer !== null && answer.name === keptAs ? answer : undefined;
+  return {
+    answer: fresh ? fresh.value : known ? known.value : null,
+    failure,
+    waiting: known !== undefined && fresh === undefined ? false : waiting,
+    again,
+    look,
+  };
 }
 
 /** Something the server was told to do, and what became of it. */
