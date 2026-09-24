@@ -33,6 +33,7 @@ pub mod playback;
 pub mod reach;
 pub mod preferences;
 pub mod scan;
+pub mod server;
 pub mod startup;
 pub mod state;
 pub mod subtitles;
