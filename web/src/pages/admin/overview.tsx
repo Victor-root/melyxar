@@ -27,7 +27,6 @@ import {
   KindIcon,
   MelyxarMark,
   PeopleIcon,
-  PlaybackIcon,
   TasksIcon,
   WarningIcon,
 } from "../../icons";
@@ -41,8 +40,7 @@ import { sayPoint, sayWorry } from "./activity";
 import { ActivityLines, useActivity } from "./activity-list";
 import { useOverview } from "./layout";
 import { SystemPanel } from "./machine";
-import { MethodPill, PlayingStats, WatchedWords } from "./playback";
-import { useNowPlaying } from "./playing";
+import { PlayingPanel } from "./playback";
 
 /** Every family of the journal, for the lines of the summary. */
 const EVERY_FAMILY: ActivityFamily[] = [];
@@ -61,11 +59,18 @@ export function AdminOverview() {
     <>
       <PageHead lead={t("admin.overview_lead")} />
 
-      <ServerStrip overview={overview.answer} unreachable={overview.failure !== null} />
+      <PlayingPanel>
+        <div className="panel-foot">
+          <Link className="button button-small button-accent" to="/admin/playback">
+            {t("admin.see_playback")}
+            <ArrowRightIcon size={15} />
+          </Link>
+        </div>
+      </PlayingPanel>
 
       <div className="overview-panels">
         <SystemPanel card={overview.answer?.media_tools.card ?? null} />
-        <PlayingPanel />
+        <ServerPanel overview={overview.answer} unreachable={overview.failure !== null} />
         <LibrariesPanel />
         <TasksPanel />
         <WatchPanel />
@@ -87,10 +92,10 @@ function useMinute(): number {
 }
 
 /**
- * The server itself, across the top: its name, whether all is well, and the
- * handful of facts every other answer rests on.
+ * The server itself, beside what the machine spends: its name, whether all is
+ * well, and the handful of facts every other answer rests on.
  */
-function ServerStrip({ overview, unreachable }: { overview: Overview | null; unreachable: boolean }) {
+function ServerPanel({ overview, unreachable }: { overview: Overview | null; unreachable: boolean }) {
   const { t, language } = useSettings();
   const now = useMinute();
 
@@ -98,7 +103,7 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
   const state: State = unreachable ? "trouble" : worries.length > 0 ? "attention" : "ok";
 
   return (
-    <section className="panel server-strip">
+    <section className="panel server-panel">
       <div className="server-who">
         <span className="server-mark" aria-hidden="true">
           <MelyxarMark size={36} />
@@ -128,10 +133,6 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
             </ul>
           )}
         </div>
-        <Link className="button button-small button-accent server-strip-go" to="/admin/diagnostics">
-          {t("admin.see_diagnostics")}
-          <ArrowRightIcon size={15} />
-        </Link>
       </div>
 
       <div className="server-facts">
@@ -180,6 +181,13 @@ function ServerStrip({ overview, unreachable }: { overview: Overview | null; unr
           }
         />
       </div>
+
+      <div className="panel-foot">
+        <Link className="button button-small button-accent" to="/admin/diagnostics">
+          {t("admin.see_diagnostics")}
+          <ArrowRightIcon size={15} />
+        </Link>
+      </div>
     </section>
   );
 }
@@ -211,39 +219,6 @@ function Fact({
         </span>
       </span>
     </div>
-  );
-}
-
-/** Who is watching what, and how it reaches them. */
-function PlayingPanel() {
-  const { t } = useSettings();
-  const playing = useNowPlaying();
-  const watched = playing.watched ?? [];
-
-  return (
-    <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")}>
-      <PlayingStats watched={playing.watched} />
-      {watched.length === 0 ? (
-        <p className="empty-line">{playing.watched && t("admin.playing_none")}</p>
-      ) : (
-        <div className="lines">
-          {watched.map((one) => (
-            <div className="line watch-line" key={one.device}>
-              <WatchedWords watched={one} />
-              <span className="line-end">
-                <MethodPill decision={one.decision} />
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="panel-foot">
-        <Link className="button button-small button-accent" to="/admin/playback">
-          {t("admin.see_playback")}
-          <ArrowRightIcon size={15} />
-        </Link>
-      </div>
-    </Panel>
   );
 }
 
