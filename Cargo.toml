@@ -79,6 +79,9 @@ getrandom = "0.4"
 # Reads which way up a photo is meant to be seen, which a camera writes into
 # the file rather than into its pixels.
 kamadak-exif = "0.6"
+# Reads the relief of the logo and writes the icon of the installed application
+# drawn from it: a few hundred lines of pure Rust, for one small picture.
+png = "0.18"
 
 [profile.release]
 opt-level = 3

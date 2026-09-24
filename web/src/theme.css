@@ -77,6 +77,10 @@
   /* The colour the logo is drawn in: the accent's hue made as vivid as the
      red the logo was drawn in (mark.ts works it out for any other accent). */
   --mark-colour: #e50000;
+  /* What the installed application's icon and opening screen are laid on:
+     the dark ground whatever the theme, so an icon on a phone does not
+     change colour at nightfall with the system's theme. */
+  --app-ground: #0c0d10;
 
   /* What a state is, apart from the accent: the accent says "active, press
      here" and each account picks its own, so a failure must never borrow it.
@@ -233,7 +237,7 @@
 /* Dark is the default: a film library is looked at in the evening. */
 :root,
 :root[data-theme="dark"] {
-  --surface-deep: #0c0d10;
+  --surface-deep: var(--app-ground);
   --surface: #14161b;
   --surface-raised: #1b1e25;
   --surface-hover: #232730;

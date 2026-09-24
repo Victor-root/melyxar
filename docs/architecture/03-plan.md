@@ -83,6 +83,8 @@ Fait : les routes de navigation (cartes paginées par curseur, fiche, images, fi
 
 Fait depuis : la fiche refaite sur la disposition d'Emby avec l'identité de Melyxar. Le haut tient dans l'écran sous la barre (le synopsis s'élargit puis se coupe sur une ligne entière seulement s'il le faut), les pistes audio et sous-titres se choisissent avant la lecture et sont retenues comme dans le lecteur, la barre de reprise se remet à jour en quittant le lecteur, vu, favori et le menu des cartes en boutons ronds, la bande annonce avec son icône, puis les rangées de la distribution, des chapitres (vignettes tirées des planches de la barre de lecture, lecture au chapitre d'un clic) et « Basé sur le genre », et enfin les versions en panneaux. Chaque personne créditée a sa page : photo, naissance, âge, lieu, biographie demandée au fournisseur à la première ouverture, et ses films et séries présents sur le serveur.
 
+Fait depuis aussi : l'onglet porte le nom de ce qui est en lecture, et Melyxar s'installe comme une application, sur ordinateur comme sur téléphone, avec une icône dessinée par le serveur dans la couleur du logo de la personne.
+
 Reste : la liste « à voir plus tard » (le compte connecté qu'elle attendait existe désormais), la correction manuelle depuis l'interface, la spécification OpenAPI et le canal temps réel.
 
 Vérifié dans l'environnement de travail, sur de vrais films : la grille et la fiche s'affichent sans une seule erreur de console, le défilement continu passe de soixante à cent quarante-cinq cartes sans doublon puis annonce la fin, les flèches du clavier se déplacent d'une carte et d'une rangée, le contour de sélection est visible, et rien ne déborde de l'écran à quatre cents pixels de large.
