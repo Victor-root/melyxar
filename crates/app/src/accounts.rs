@@ -265,7 +265,7 @@ pub async fn sign_in(
     state.wrong_answers().forget(user.id);
 
     let token = SessionToken::new()?;
-    state
+    let device_id = state
         .database()
         .open_session(user.id, device_name, &token.fingerprint(), remembered, now())
         .await?;
@@ -276,6 +276,7 @@ pub async fn sign_in(
             user: user.id,
             user_name: user.name.clone(),
             device: device_name.to_string(),
+            device_id,
         },
     )
     .await;
@@ -316,6 +317,11 @@ pub async fn name_the_browser(
         return Ok(());
     }
     state.database().name_the_browser(device, said).await?;
+    // The line of its sign in was written before the page could say, and
+    // would otherwise go on naming the browser the line it sends claims.
+    if let Some(browser) = said {
+        state.journal().browser_found(device, browser).await;
+    }
     Ok(())
 }
 
@@ -333,6 +339,7 @@ pub async fn sign_out(state: &AppState, token: &str) -> Result<bool> {
                 user: holder.user.id,
                 user_name: holder.user.name,
                 device: holder.device_name,
+                browser: holder.device_browser,
             },
         )
         .await;
@@ -855,6 +862,30 @@ mod tests {
                 .is_some(),
             "leaving one machine must not sign the television out"
         );
+    }
+
+    #[tokio::test]
+    async fn the_line_of_a_sign_in_names_the_browser_its_page_found_afterwards() {
+        let (_directory, state) = a_server_with_an_account().await;
+        let here = a_session(&state, "victor", "quiet harbour", "a browser")
+            .await
+            .expect("signed in");
+        let holder = who_holds(&state, here.token.as_text())
+            .await
+            .expect("asked")
+            .expect("signed in");
+        name_the_browser(&state, holder.device, None, Some("Brave"))
+            .await
+            .expect("named");
+
+        let lines = crate::activity::page(&state, &[crate::activity::Category::Access], None, 10)
+            .await
+            .expect("journal read");
+        let line = lines
+            .iter()
+            .find(|line| line.kind == "signed_in")
+            .expect("the sign in has its line");
+        assert_eq!(line.details["browser"], "Brave");
     }
 
     #[tokio::test]
