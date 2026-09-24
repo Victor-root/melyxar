@@ -156,7 +156,7 @@ export function WorkPage() {
   }
 
   if (trailer) {
-    return <TrailerPlayer url={trailer} title={work.title} onClose={() => stopTrailer()} />;
+    return <TrailerPlayer source={trailer} work={work} onClose={stopTrailer} />;
   }
 
   const version = work.versions[chosen];

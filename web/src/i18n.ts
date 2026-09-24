@@ -732,6 +732,8 @@ const en: Dictionary = {
 
   "player.missing": "Media file unavailable on the server.",
   "player.cannot_play": "This browser could not play the video.",
+  "player.watch_on_youtube": "Watch on YouTube",
+  "player.trailer_not_here": "This trailer cannot be played here.",
   "player.words_coming": "Preparing embedded subtitles. The first extraction may take a moment.",
   "player.words_refused": "Could not prepare these subtitles.",
   "player.not_described": "The server could not analyse this file. It may be damaged or use an unsupported format.",
@@ -1800,6 +1802,8 @@ const fr: Dictionary = {
 
   "player.missing": "Fichier média indisponible sur le serveur.",
   "player.cannot_play": "Ce navigateur ne peut pas lire cette vidéo.",
+  "player.watch_on_youtube": "Regarder sur YouTube",
+  "player.trailer_not_here": "Cette bande-annonce ne peut pas être lue ici.",
   "player.words_coming": "Préparation des sous-titres intégrés. Leur première extraction peut prendre quelques instants.",
   "player.words_refused": "Impossible de préparer ces sous-titres.",
   "player.not_described": "Le serveur ne peut pas analyser ce fichier. Il est peut-être endommagé ou dans un format non pris en charge.",

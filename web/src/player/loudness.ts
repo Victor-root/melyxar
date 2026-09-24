@@ -10,6 +10,8 @@
  * the evening and on a television in the afternoon does not want one number.
  */
 
+import { useCallback, useState } from "react";
+
 /** A setting of the sound: how far up, and whether it is silenced outright. */
 export interface Loudness {
   /** Between nothing and one, the way a video element counts it. */
@@ -54,4 +56,21 @@ export function rememberLoudness(loudness: Loudness) {
   } catch {
     // The setting still holds for this sitting, which is what is being heard.
   }
+}
+
+/**
+ * The loudness a trailer plays at, starting from the one kept and keeping
+ * every change: the same number the films play at, so a trailer does not
+ * shout at somebody who turned the films down.
+ */
+export function useKeptLoudness(): [Loudness, (change: Partial<Loudness>) => void] {
+  const [sound, setSound] = useState(storedLoudness);
+  const change = useCallback((wanted: Partial<Loudness>) => {
+    setSound((was) => {
+      const now = { ...was, ...wanted };
+      rememberLoudness(now);
+      return now;
+    });
+  }, []);
+  return [sound, change];
 }

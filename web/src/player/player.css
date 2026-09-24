@@ -1330,45 +1330,46 @@
 }
 
 /* ---------------------------------------------------------------------------
- * A trailer
+ * A trailer, in the same controls as a film
  *
- * Deliberately not the player above. A trailer is two minutes long, has no
- * position to come back to and nothing to choose, so it keeps the browser's
- * own controls and needs no more than a way out and a name.
+ * The picture fills the stage whatever plays it: a file the browser opens, or
+ * the player YouTube offers other sites. A layer over it takes every click,
+ * so that player never sees a pointer and never draws anything of its own.
  * ------------------------------------------------------------------------ */
 
-.player-trailer {
-  position: fixed;
+.trailer-frame {
+  position: absolute;
   inset: 0;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  background: #000;
 }
 
-.player-trailer-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  padding: var(--gap) var(--gap-wide);
-  color: #fff;
-}
-
-.player-trailer-title {
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.player-trailer video {
-  flex: 1;
+.trailer-frame iframe {
+  display: block;
   width: 100%;
-  min-height: 0;
-  background: #000;
+  height: 100%;
+  border: 0;
 }
 
-.player-trailer .player-notice {
-  margin: auto;
+.trailer-surface {
+  position: absolute;
+  inset: 0;
+}
+
+/* The notices let the pointer through to the picture; this one is a way
+   out, and takes it. */
+.trailer-elsewhere {
+  pointer-events: auto;
+}
+
+/* What is playing is a trailer and not the film, said quietly beside the
+   film's own mark. */
+.player-trailer-word {
+  align-self: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* ---------------------------------------------------------------------------
