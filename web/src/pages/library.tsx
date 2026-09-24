@@ -6,7 +6,7 @@ import type { Library } from "../api";
 import { Card } from "../components/card";
 import { Grid } from "../components/grid";
 import { Selecting } from "../components/selection";
-import { cardShapeOf } from "../libraries";
+import { cardShapeOf, nameOfKind } from "../libraries";
 import { ORDERS, useBrowsing } from "../screens/browsing";
 import { useSettings } from "../settings";
 
@@ -30,7 +30,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
           {favourites
             ? t("nav.favourites")
             : (library?.name ??
-              (narrowing.kind ? t(`kind.${narrowing.kind}`) : t("library.all")))}
+              (narrowing.kind ? nameOfKind(narrowing.kind, libraries, t) : t("library.all")))}
         </h1>
         {/* What the library holds, not what has been scrolled to so far: a
             grid that counts its own loaded cards tells the viewer how far

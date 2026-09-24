@@ -11,7 +11,12 @@
 import type { LibraryKind } from "../../api";
 import { PageHead, Panel, Setting, Slider, Toggle } from "../../components/panel";
 import { ChevronDownIcon, ChevronUpIcon, HomeIcon, ImageIcon, KindIcon } from "../../icons";
-import { kindsOnTheHomePage, movedOnTheHomePage, useLibraries } from "../../libraries";
+import {
+  kindsOnTheHomePage,
+  movedOnTheHomePage,
+  nameOfKind,
+  useLibraries,
+} from "../../libraries";
 import { useMarks } from "../../marks";
 import { usePreferences } from "../../screens/settings";
 import type { Preferences } from "../../screens/settings";
@@ -146,7 +151,7 @@ function HomeOrder({ preferences }: { preferences: Preferences }) {
       ) : (
         <ol className="order">
           {shown.map((kind, place) => {
-            const name = t(`kind.${kind}`);
+            const name = nameOfKind(kind, libraries.all, t);
             return (
               <li key={kind} className="order-line">
                 <span className="order-place">{place + 1}</span>
