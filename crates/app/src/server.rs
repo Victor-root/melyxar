@@ -22,6 +22,7 @@ pub const LONGEST_NAME: usize = 15;
 pub enum Refused {
     NameNeeded,
     NameTooLong,
+    SloganTooLong,
     /// What was sent for a logo or a picture is not an image this server
     /// reads.
     NotAPicture,
@@ -34,15 +35,17 @@ impl Refused {
         match self {
             Self::NameNeeded => "name_needed",
             Self::NameTooLong => "name_too_long",
+            Self::SloganTooLong => "slogan_too_long",
             Self::NotAPicture => "not_a_picture",
             Self::CouldNotBeRead => "could_not_be_read",
         }
     }
 
     /// Every one of them, so a test can check each has words on the screen.
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::NameNeeded,
         Self::NameTooLong,
+        Self::SloganTooLong,
         Self::NotAPicture,
         Self::CouldNotBeRead,
     ];
@@ -128,6 +131,8 @@ pub use melyxar_database::settings::LoginBackground;
 pub struct Door {
     pub picture: Option<String>,
     pub background: LoginBackground,
+    /// The line under the server's name, or nothing for Melyxar's own.
+    pub slogan: Option<String>,
 }
 
 /// What stands behind the sign in screen.
@@ -136,7 +141,26 @@ pub async fn door(state: &AppState) -> Result<Door, AppError> {
     Ok(Door {
         picture: settings.login_background_path,
         background: settings.login_background,
+        slogan: settings.door_slogan,
     })
+}
+
+/// The longest line the sign in screen says under the server's name: one
+/// line on a telephone.
+pub const LONGEST_SLOGAN: usize = 80;
+
+/// Writes the line under the server's name on the sign in screen. Nothing
+/// typed gives Melyxar's own back.
+pub async fn set_door_slogan(state: &AppState, asked: &str) -> Result<(), Trouble> {
+    let slogan = asked.trim();
+    if slogan.chars().count() > LONGEST_SLOGAN {
+        return Err(Trouble::Refused(Refused::SloganTooLong));
+    }
+    state
+        .database()
+        .set_door_slogan(Some(slogan).filter(|slogan| !slogan.is_empty()))
+        .await?;
+    Ok(())
 }
 
 /// Which drawn background the sign in screen wears when no picture was put
@@ -334,6 +358,26 @@ mod tests {
     use super::*;
     use melyxar_config::{Config, Directories};
     use melyxar_database::Database;
+
+    #[tokio::test]
+    async fn a_slogan_is_kept_trimmed_refused_too_long_and_given_back_empty() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let state = AppState::new(Config::default(), database, None, Default::default());
+
+        set_door_slogan(&state, "  Films for the whole house  ")
+            .await
+            .expect("kept");
+        assert_eq!(
+            door(&state).await.expect("read").slogan.as_deref(),
+            Some("Films for the whole house")
+        );
+        assert!(matches!(
+            set_door_slogan(&state, &"a".repeat(LONGEST_SLOGAN + 1)).await,
+            Err(Trouble::Refused(Refused::SloganTooLong))
+        ));
+        set_door_slogan(&state, "   ").await.expect("given back");
+        assert_eq!(door(&state).await.expect("read").slogan, None);
+    }
 
     #[tokio::test]
     async fn the_door_picture_is_brought_down_and_the_one_before_it_deleted() {

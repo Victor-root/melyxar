@@ -444,7 +444,7 @@ export function Door({
         {/* What this server is for, at the card's own foot rather than
             floating above it: the last thing read on this screen, once
             there is nothing left to press. */}
-        <p className="door-slogan">{t("door.slogan")}</p>
+        <p className="door-slogan">{branding.door_slogan ?? t("door.slogan")}</p>
       </form>
 
       {/* The language is read from the browser and never asked about here:

@@ -244,11 +244,18 @@ function DoorPanel() {
   const [server, setServer] = useState<ServerSettings | null>(null);
   const [sending, setSending] = useState(false);
   const shown = server ?? asked.answer;
+  /* What is being typed, and nothing while the field shows the slogan as it
+     is, so a slogan kept from here is the one the field goes back to. */
+  const [typed, setTyped] = useState<string | null>(null);
+  const slogan = typed ?? shown?.door_slogan ?? "";
 
   const change = (made: () => Promise<ServerSettings>) => {
     setSending(true);
     made()
-      .then(setServer)
+      .then((now) => {
+        setServer(now);
+        setTyped(null);
+      })
       .catch((error) => {
         const refused =
           error instanceof ApiError && error.status === TOO_LARGE
@@ -279,6 +286,43 @@ function DoorPanel() {
               }
               disabled={sending}
             />
+          </Setting>
+          <Setting label={t("admin.door_slogan")} why={t("admin.door_slogan_why")}>
+            <form
+              className="name-choice"
+              onSubmit={(event) => {
+                event.preventDefault();
+                change(() => api.setDoorSlogan(slogan));
+              }}
+            >
+              <span className="name-field">
+                <input
+                  type="text"
+                  className="field-line"
+                  aria-label={t("admin.door_slogan")}
+                  placeholder={t("door.slogan")}
+                  value={slogan}
+                  maxLength={shown.longest_slogan}
+                  onChange={(event) => setTyped(event.target.value)}
+                />
+              </span>
+              <button
+                type="submit"
+                className="button button-small button-accent"
+                disabled={sending || slogan.trim() === (shown.door_slogan ?? "")}
+              >
+                {t("admin.server_name_save")}
+              </button>
+              <button
+                type="button"
+                className="button button-small button-quiet"
+                disabled={sending || shown.door_slogan === null}
+                onClick={() => change(() => api.setDoorSlogan(""))}
+              >
+                <ResetIcon size={15} />
+                {t("admin.server_name_default")}
+              </button>
+            </form>
           </Setting>
           <Setting label={t("admin.door_picture")} why={t("admin.door_picture_why")}>
             <div className="logo-choice">
