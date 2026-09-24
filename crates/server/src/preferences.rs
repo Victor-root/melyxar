@@ -62,6 +62,9 @@ struct PreferencesView {
     hidden_at_the_door: bool,
     /// Every kind of library, in the order the home page lays them out.
     home_order: Vec<&'static str>,
+    /// How far the player's two step buttons jump, in seconds.
+    step_back_seconds: i64,
+    step_on_seconds: i64,
     /// Every fold this server knows how to perform.
     downmix_methods: Vec<&'static str>,
     /// The languages the library actually holds, which is what a picker
@@ -105,6 +108,10 @@ struct PreferencesBody {
     hidden_at_the_door: Option<bool>,
     #[serde(default)]
     home_order: Option<Vec<String>>,
+    #[serde(default)]
+    step_back_seconds: Option<i64>,
+    #[serde(default)]
+    step_on_seconds: Option<i64>,
 }
 
 async fn read(
@@ -193,6 +200,14 @@ async fn write(
             .ok_or_else(|| ServerError::invalid_input("no kind of library goes by that name"))?;
     }
 
+    // Brought into range when kept, like the banner.
+    if let Some(seconds) = body.step_back_seconds {
+        chosen.step_back_seconds = seconds;
+    }
+    if let Some(seconds) = body.step_on_seconds {
+        chosen.step_on_seconds = seconds;
+    }
+
     let kept = melyxar_app::preferences::save(&state, who.id, chosen).await?;
     view(&state, &who, kept).await
 }
@@ -232,6 +247,8 @@ async fn view(
         header_hides_on_scroll: chosen.header_hides_on_scroll,
         hidden_at_the_door: chosen.hidden_at_the_door,
         home_order: chosen.home_order.iter().map(|kind| kind.as_str()).collect(),
+        step_back_seconds: chosen.step_back_seconds,
+        step_on_seconds: chosen.step_on_seconds,
         downmix_methods: DownmixMethod::every()
             .iter()
             .map(|one| one.as_str())

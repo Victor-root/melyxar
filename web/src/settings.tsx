@@ -22,6 +22,7 @@ import { initialLanguage, rememberLanguage, safeRead, safeWrite, translate } fro
 import type { Language } from "./i18n";
 import { colourTheWindow, markTheApp } from "./installing";
 import { markTheTab, vividOf } from "./mark";
+import { THE_USUAL_STEP } from "./player/steps";
 
 export type ThemeChoice = "dark" | "light" | "system";
 
@@ -32,6 +33,8 @@ const STORED_BANNER_CUT = "melyxar.banner.cut";
 const STORED_BANNER_WHOLE = "melyxar.banner.whole";
 const STORED_BANNER_SHOWN = "melyxar.banner.shown";
 const STORED_HEADER_HIDES = "melyxar.header.hides";
+const STORED_STEP_BACK = "melyxar.step.back";
+const STORED_STEP_ON = "melyxar.step.on";
 
 /** The red of the Melyxar theme, which needs none of the work below. */
 const THE_USUAL_ACCENT = "#c81e1e";
@@ -82,6 +85,12 @@ interface Settings {
       comes back at the first move up. */
   headerHides: boolean;
   setHeaderHides: (hides: boolean) => void;
+  /** How far the player's button back jumps, in seconds. */
+  stepBack: number;
+  setStepBack: (seconds: number) => void;
+  /** How far its button on jumps. */
+  stepOn: number;
+  setStepOn: (seconds: number) => void;
   /** What the account chose, once the server has said. */
   adopt: (chosen: ViewerPreferences) => void;
   /** The wording of one key, in the language in force. */
@@ -124,6 +133,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [headerHides, setHeaderHidesState] = useState(
     () => safeRead(STORED_HEADER_HIDES) !== "no",
   );
+  const [stepBack, setStepBackState] = useState(() =>
+    initialNumber(STORED_STEP_BACK, THE_USUAL_STEP),
+  );
+  const [stepOn, setStepOnState] = useState(() => initialNumber(STORED_STEP_ON, THE_USUAL_STEP));
 
   // The theme is put on the document rather than passed down, so a stylesheet
   // can answer it without a single component knowing a colour.
@@ -245,6 +258,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ header_hides_on_scroll: hides });
   }, []);
 
+  const setStepBack = useCallback((seconds: number) => {
+    safeWrite(STORED_STEP_BACK, String(seconds));
+    setStepBackState(seconds);
+    tellTheServer({ step_back_seconds: seconds });
+  }, []);
+
+  const setStepOn = useCallback((seconds: number) => {
+    safeWrite(STORED_STEP_ON, String(seconds));
+    setStepOnState(seconds);
+    tellTheServer({ step_on_seconds: seconds });
+  }, []);
+
   const adopt = useCallback((chosen: ViewerPreferences) => {
     const language = chosen.interface_language === "fr" ? "fr" : "en";
     rememberLanguage(language);
@@ -269,6 +294,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setBannerShownState(chosen.banner_shown);
     safeWrite(STORED_HEADER_HIDES, chosen.header_hides_on_scroll ? "yes" : "no");
     setHeaderHidesState(chosen.header_hides_on_scroll);
+    safeWrite(STORED_STEP_BACK, String(chosen.step_back_seconds));
+    setStepBackState(chosen.step_back_seconds);
+    safeWrite(STORED_STEP_ON, String(chosen.step_on_seconds));
+    setStepOnState(chosen.step_on_seconds);
   }, []);
 
   const value = useMemo<Settings>(
@@ -289,6 +318,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerShown,
       headerHides,
       setHeaderHides,
+      stepBack,
+      setStepBack,
+      stepOn,
+      setStepOn,
       adopt,
       t: (key, values) => translate(language, key, values),
     }),
@@ -309,6 +342,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerShown,
       headerHides,
       setHeaderHides,
+      stepBack,
+      setStepBack,
+      stepOn,
+      setStepOn,
       adopt,
     ],
   );

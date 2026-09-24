@@ -248,6 +248,14 @@ pub const DEFAULT_BANNER_HEIGHT: f64 = 0.31;
 /// which is that what a banner has to give up is the floor.
 pub const DEFAULT_BANNER_CUT: f64 = 0.13;
 
+/// How far the player's step buttons may jump, in seconds.
+///
+/// Two digits at most, because the length is written inside the button.
+pub const SHORTEST_STEP: i64 = 1;
+pub const LONGEST_STEP: i64 = 90;
+/// What the buttons jumped before anybody could choose.
+pub const DEFAULT_STEP: i64 = 10;
+
 /// Which colour scheme the interface uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -349,6 +357,11 @@ pub struct Preferences {
     /// The kinds of library in the order the home page lays them out, its
     /// band and its rows alike. Always every kind, once each.
     pub home_order: Vec<LibraryKind>,
+    /// How far the player's button back jumps, in seconds.
+    pub step_back_seconds: i64,
+    /// How far its button on jumps. Apart from the other, since a line heard
+    /// again and a title sequence passed over are not the same length.
+    pub step_on_seconds: i64,
 }
 
 impl Default for Preferences {
@@ -373,6 +386,8 @@ impl Default for Preferences {
             // list with holes in it is of no use to anybody.
             hidden_at_the_door: false,
             home_order: LibraryKind::every().to_vec(),
+            step_back_seconds: DEFAULT_STEP,
+            step_on_seconds: DEFAULT_STEP,
         }
     }
 }
@@ -390,6 +405,8 @@ impl Preferences {
             .banner_height
             .clamp(MIN_BANNER_HEIGHT, MAX_BANNER_HEIGHT);
         self.banner_cut = self.banner_cut.clamp(0.0, 1.0);
+        self.step_back_seconds = self.step_back_seconds.clamp(SHORTEST_STEP, LONGEST_STEP);
+        self.step_on_seconds = self.step_on_seconds.clamp(SHORTEST_STEP, LONGEST_STEP);
         if !is_an_accent_colour(&self.accent_color) {
             self.accent_color = DEFAULT_ACCENT_COLOR.to_string();
         }

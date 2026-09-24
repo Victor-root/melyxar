@@ -53,7 +53,7 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.downmix_method, p.downmix_gain,
      p.banner_height, p.banner_cut, p.banner_shown, p.banner_at_random,
      p.banner_fills_the_screen, p.header_hides_on_scroll,
-     p.hidden_at_the_door, p.home_order";
+     p.hidden_at_the_door, p.home_order, p.step_back_seconds, p.step_on_seconds";
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
@@ -387,7 +387,8 @@ impl Database {
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
                 banner_height = ?, banner_cut = ?, banner_shown = ?, banner_at_random = ?,
                 banner_fills_the_screen = ?, header_hides_on_scroll = ?,
-                hidden_at_the_door = ?, home_order = ?
+                hidden_at_the_door = ?, home_order = ?, step_back_seconds = ?,
+                step_on_seconds = ?
              WHERE user_id = ?",
         )
         .bind(&preferences.interface_language)
@@ -407,6 +408,8 @@ impl Database {
         .bind(preferences.header_hides_on_scroll)
         .bind(preferences.hidden_at_the_door)
         .bind(written_order(&preferences.home_order))
+        .bind(preferences.step_back_seconds)
+        .bind(preferences.step_on_seconds)
         .bind(id.to_db_string())
         .execute(self.writer())
         .await?;
@@ -469,8 +472,9 @@ async fn write_an_account(
                                        volume, downmix_method, downmix_gain,
                                        banner_height, banner_cut, banner_shown, banner_at_random,
                                        banner_fills_the_screen, header_hides_on_scroll,
-                                       hidden_at_the_door, home_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       hidden_at_the_door, home_order, step_back_seconds,
+                                       step_on_seconds)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -487,6 +491,8 @@ async fn write_an_account(
     .bind(preferences.header_hides_on_scroll)
     .bind(preferences.hidden_at_the_door)
     .bind(written_order(&preferences.home_order))
+    .bind(preferences.step_back_seconds)
+    .bind(preferences.step_on_seconds)
     .execute(&mut **transaction)
     .await?;
 
@@ -577,6 +583,8 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             header_hides_on_scroll: row.try_get("header_hides_on_scroll")?,
             hidden_at_the_door: row.try_get("hidden_at_the_door")?,
             home_order: read_order(&row.try_get::<String, _>("home_order")?),
+            step_back_seconds: row.try_get("step_back_seconds")?,
+            step_on_seconds: row.try_get("step_on_seconds")?,
         }
         .normalised(),
         created_at,
@@ -1121,6 +1129,8 @@ mod tests {
             banner_fills_the_screen: true,
             header_hides_on_scroll: false,
             home_order: vec![LibraryKind::Anime, LibraryKind::Movies],
+            step_back_seconds: 0,
+            step_on_seconds: 30,
             ..Preferences::default()
         };
         database
@@ -1147,6 +1157,12 @@ mod tests {
         assert!(loaded.preferences.banner_at_random);
         assert!(loaded.preferences.banner_fills_the_screen);
         assert!(!loaded.preferences.header_hides_on_scroll);
+        assert_eq!(
+            loaded.preferences.step_back_seconds,
+            melyxar_core::user::SHORTEST_STEP,
+            "a step of nothing comes back as the shortest there is"
+        );
+        assert_eq!(loaded.preferences.step_on_seconds, 30);
         assert_eq!(
             loaded.preferences.home_order,
             vec![

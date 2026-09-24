@@ -1254,6 +1254,9 @@ export interface ViewerPreferences {
   hidden_at_the_door: boolean;
   /** Every kind of library, in the order the home page lays them out. */
   home_order: LibraryKind[];
+  /** How far the player's two step buttons jump, in seconds. */
+  step_back_seconds: number;
+  step_on_seconds: number;
   /** The languages the library really holds, which is what a picker offers. */
   audio_languages: string[];
   subtitle_languages: string[];

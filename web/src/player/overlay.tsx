@@ -33,7 +33,7 @@ import type { Arrangement, Control, Zone } from "./arrangement";
 import { asClock } from "./clock";
 import { Drawer, SHEETS } from "./drawer";
 import type { SheetName } from "./drawer";
-import { A_STEP, SPEEDS } from "./engine";
+import { SPEEDS } from "./engine";
 import type { Playback } from "./engine";
 import type { Fullscreen } from "./fullscreen";
 import {
@@ -139,6 +139,9 @@ interface Props {
   /** Which language the interface is speaking, for the clock on the wall. */
   language: string;
   t: (key: string, values?: Record<string, string | number>) => string;
+  /** How far the two step buttons, and the arrow keys with them, jump, in
+   *  seconds, as the viewer chose. */
+  steps: { back: number; on: number };
   /** How the words look, and how a viewer changes that. Read here rather than
    *  kept beside the panel that shows it, because it is also what draws the
    *  film's own title bar in the theme it belongs to. */
@@ -289,7 +292,7 @@ export function Overlay(props: Props) {
           // Held from the page: the bar answers to these as a slider and would
           // scroll what is behind it otherwise.
           event.preventDefault();
-          playback.stepBy(event.key === "ArrowLeft" ? -A_STEP : A_STEP);
+          playback.stepBy(event.key === "ArrowLeft" ? -props.steps.back : props.steps.on);
           break;
         case "ArrowUp":
         case "ArrowDown":
@@ -470,10 +473,10 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
       return (
         <button
           className="player-button"
-          onClick={() => playback.stepBy(-A_STEP)}
-          aria-label={t("player.back_ten")}
+          onClick={() => playback.stepBy(-surroundings.steps.back)}
+          aria-label={t("player.step_back", { seconds: surroundings.steps.back })}
         >
-          <StepBackIcon seconds={A_STEP} size={ICON} />
+          <StepBackIcon seconds={surroundings.steps.back} size={ICON} />
         </button>
       );
 
@@ -481,10 +484,10 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
       return (
         <button
           className="player-button"
-          onClick={() => playback.stepBy(A_STEP)}
-          aria-label={t("player.on_ten")}
+          onClick={() => playback.stepBy(surroundings.steps.on)}
+          aria-label={t("player.step_on", { seconds: surroundings.steps.on })}
         >
-          <StepOnIcon seconds={A_STEP} size={ICON} />
+          <StepOnIcon seconds={surroundings.steps.on} size={ICON} />
         </button>
       );
 
