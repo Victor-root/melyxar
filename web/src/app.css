@@ -182,10 +182,25 @@
    other, which is why it is set apart rather than written like a word in a
    sentence. */
 .brand-name {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: "Melyxar Display", "Inter", sans-serif;
   font-size: 19px;
   font-weight: 700;
   letter-spacing: 0.08em;
+}
+
+/* The administrator's own logo, at the height of the mark it stands in for
+   and in whatever shape it was drawn, up to a width that leaves the bar room
+   for the rest of it. */
+.brand-logo {
+  flex: none;
+  height: 28px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
 }
 
 /* Served at sixty four pixels for a square of twenty eight: that is what

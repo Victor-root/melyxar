@@ -44,9 +44,14 @@ export type LoginBackgroundStyle = "abstract" | "library";
  *  Everything here belongs to the administrator rather than to Melyxar: what
  *  the server ships with is a fallback the screen holds, never something the
  *  screen assumes. */
+/** What the server is called and where its logo is, when it was given one. */
+export type ServerIdentity = Pick<Branding, "server_name" | "logo">;
+
 export interface Branding {
   server_name: string;
-  logo_path: string | null;
+  /** Where the logo the administrator gave the server is, or nothing for
+      Melyxar's own. */
+  logo: string | null;
   /** A picture behind the sign in screen, which wins over the drawn one. */
   login_background_path: string | null;
   login_background_style: LoginBackgroundStyle;
@@ -1539,11 +1544,13 @@ export const api = {
     get<{ days: number }>("/api/v1/system/activity/kept", signal),
   keepActivityDays: (days: number) =>
     put<{ days: number }>("/api/v1/system/activity/kept", { days }),
-  /* What the server is called, for the administrator renaming it. */
-  serverName: (signal?: AbortSignal) =>
-    get<{ server_name: string }>("/api/v1/settings/server", signal),
+  /* What the server is called and the logo it wears, for the administrator
+     changing them. Each change answers both as the server now holds them. */
+  server: (signal?: AbortSignal) => get<ServerIdentity>("/api/v1/settings/server", signal),
   renameServer: (server_name: string) =>
-    put<{ server_name: string }>("/api/v1/settings/server", { server_name }),
+    put<ServerIdentity>("/api/v1/settings/server", { server_name }),
+  setServerLogo: (image: Blob) => put<ServerIdentity>("/api/v1/settings/server/logo", image),
+  removeServerLogo: () => remove<ServerIdentity>("/api/v1/settings/server/logo"),
   /* What deserves a look, for the administrator asking. */
   attention: (signal?: AbortSignal) =>
     get<{ points: AttentionPoint[] }>("/api/v1/system/attention", signal),

@@ -12,7 +12,7 @@
  */
 
 import { api, pictureSet } from "../api";
-import type { Picture } from "../api";
+import type { Picture, ServerIdentity } from "../api";
 import { useEffect, useState } from "react";
 
 /** What to draw in the corner, and which of the three it turned out to be. */
@@ -31,12 +31,6 @@ export interface Mark {
   whose: "the_film" | "the_server" | "nobody";
 }
 
-/** What the server calls itself and the mark it was given, fetched once. */
-interface Branding {
-  server_name: string;
-  logo_path: string | null;
-}
-
 /**
  * The mark for one film.
  *
@@ -44,7 +38,11 @@ interface Branding {
  * not have: the provider draws no title for them, and the title written out is
  * then the whole answer rather than a fallback for a slow day.
  */
-export function markFor(title: string, drawnTitle: Picture[], branding: Branding | null): Mark {
+export function markFor(
+  title: string,
+  drawnTitle: Picture[],
+  branding: ServerIdentity | null,
+): Mark {
   const drawn = pictureSet(drawnTitle);
   if (drawn) {
     return {
@@ -54,9 +52,9 @@ export function markFor(title: string, drawnTitle: Picture[], branding: Branding
       whose: "the_film",
     };
   }
-  if (branding?.logo_path) {
+  if (branding?.logo) {
     return {
-      url: `/api/v1/images/${branding.logo_path}`,
+      url: branding.logo,
       srcSet: null,
       words: branding.server_name,
       whose: "the_server",
@@ -72,22 +70,19 @@ export function markFor(title: string, drawnTitle: Picture[], branding: Branding
  * an evening asks four times otherwise, for an answer that changes when an
  * administrator changes it and not before.
  */
-let known: Branding | null = null;
-let asking: Promise<Branding | null> | null = null;
-const following = new Set<(branding: Branding) => void>();
+let known: ServerIdentity | null = null;
+let asking: Promise<ServerIdentity | null> | null = null;
+const following = new Set<(branding: ServerIdentity) => void>();
 
-/** Tells every screen showing the server's name what it is called now, once
- *  this page has renamed it. */
-export function serverRenamed(serverName: string): void {
-  if (!known) {
-    return;
-  }
-  known = { ...known, server_name: serverName };
-  for (const follower of following) follower(known);
+/** Tells every screen showing the server's name or logo what they are now,
+ *  once this page has changed them. */
+export function serverChanged(server: ServerIdentity): void {
+  known = server;
+  for (const follower of following) follower(server);
 }
 
-export function useBranding(): Branding | null {
-  const [branding, setBranding] = useState<Branding | null>(known);
+export function useBranding(): ServerIdentity | null {
+  const [branding, setBranding] = useState<ServerIdentity | null>(known);
 
   useEffect(() => {
     following.add(setBranding);

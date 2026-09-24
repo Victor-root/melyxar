@@ -454,6 +454,14 @@
   object-fit: contain;
 }
 
+/* The administrator's own logo, at the same height and in its own shape, so a
+   wide one is not shrunk to fit a square it was never drawn for. */
+img.door-mark {
+  width: auto;
+  max-width: 240px;
+  border-radius: 0;
+}
+
 /* Spaced out and in capitals, the way a name is set when it is standing in
    for a wordmark rather than being read as a word. */
 .door-name {

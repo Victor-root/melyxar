@@ -2,7 +2,8 @@
 //!
 //! Whether wide gamut colour is ever converted for a client that cannot show
 //! it: a real switch for a real problem, a processor too slow to rebuild a
-//! picture whose only fault is its colour. And what the server is called. More
+//! picture whose only fault is its colour. And what the server is called and
+//! the logo it wears. More
 //! belongs here as branding and maintenance reach the interface, which is why
 //! this is its own small module rather than a corner of another one.
 
@@ -21,34 +22,76 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/v1/settings/server",
-            axum::routing::get(server_settings).put(set_server_settings),
+            axum::routing::get(server_settings).put(rename_server),
+        )
+        .route(
+            "/api/v1/settings/server/logo",
+            axum::routing::put(choose_logo)
+                .delete(remove_logo)
+                // A picture straight off a phone is larger than what any other
+                // request is allowed to carry, the same as a profile picture.
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    melyxar_app::avatars::LARGEST,
+                )),
         )
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ServerSettingsView {
+/// What the server is called and where its logo is, when it has one.
+#[derive(Debug, Serialize)]
+struct ServerView {
+    server_name: String,
+    logo: Option<String>,
+}
+
+impl ServerView {
+    async fn of(state: &AppState) -> Result<Json<Self>> {
+        let identity = melyxar_app::server::identity(state).await?;
+        Ok(Json(Self {
+            server_name: identity.name,
+            logo: identity.logo.as_deref().map(crate::images::logo_url),
+        }))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct NameAsked {
     server_name: String,
 }
 
-/// What the server is called.
 async fn server_settings(
     State(state): State<AppState>,
     _: crate::account::Administrator,
-) -> Result<Json<ServerSettingsView>> {
-    Ok(Json(ServerSettingsView {
-        server_name: melyxar_app::server::name(&state).await?,
-    }))
+) -> Result<Json<ServerView>> {
+    ServerView::of(&state).await
 }
 
-/// Calls the server something else, and answers the name as it was kept.
-async fn set_server_settings(
+/// Calls the server something else.
+async fn rename_server(
     State(state): State<AppState>,
     _: crate::account::Administrator,
-    Json(asked): Json<ServerSettingsView>,
-) -> Result<Json<ServerSettingsView>> {
-    Ok(Json(ServerSettingsView {
-        server_name: melyxar_app::server::rename(&state, &asked.server_name).await?,
-    }))
+    Json(asked): Json<NameAsked>,
+) -> Result<Json<ServerView>> {
+    melyxar_app::server::rename(&state, &asked.server_name).await?;
+    ServerView::of(&state).await
+}
+
+/// Makes the image sent the server's logo.
+async fn choose_logo(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    image: axum::body::Bytes,
+) -> Result<Json<ServerView>> {
+    melyxar_app::server::set_logo(&state, &image).await?;
+    ServerView::of(&state).await
+}
+
+/// Takes the server's logo away, which puts Melyxar's own back.
+async fn remove_logo(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+) -> Result<Json<ServerView>> {
+    melyxar_app::server::remove_logo(&state).await?;
+    ServerView::of(&state).await
 }
 
 #[derive(Debug, Serialize, Deserialize)]

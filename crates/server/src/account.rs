@@ -113,9 +113,10 @@ fn answers_to_anybody(path: &str) -> bool {
         return true;
     }
     // The pictures of the accounts, which the sign in screen shows beside
-    // their names, and what a browser fetches to install the interface as an
+    // their names, the server's logo above them, and what a browser fetches to install the interface as an
     // application, which it asks for without the cookie.
     path.starts_with("/api/v1/public/faces/")
+        || path.starts_with("/api/v1/public/logo/")
         || path.starts_with("/api/v1/public/app/")
         || matches!(
             path,
@@ -765,6 +766,7 @@ mod tests {
             "/api/v1/public/branding",
             "/api/v1/public/names",
             "/api/v1/public/faces/an-account/avatar-abc.webp",
+            "/api/v1/public/logo/logo-abc.webp",
             "/api/v1/public/app/manifest",
             "/api/v1/public/app/icon/e50000/0c0d10",
             "/api/v1/session",

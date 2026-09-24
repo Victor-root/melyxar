@@ -155,6 +155,11 @@ pub async fn average_colour(tool: &Path, source: &Path) -> Result<String> {
 /// round it is shown in, for a screen with fine pixels.
 pub const AVATAR_SIDE: u32 = 256;
 
+/// The most a server's logo is written across or down: well past the largest
+/// it is shown at, the mark above the sign in screen, on a screen with fine
+/// pixels.
+pub const LOGO_SIDE: u32 = 512;
+
 /// Builds the making of a profile picture out of whatever image somebody
 /// sent: turned the way its camera said, cut square around its middle, and
 /// brought down to one size. Never enlarged, since that invents nothing.
@@ -165,9 +170,31 @@ pub fn avatar_arguments(
 ) -> Vec<OsString> {
     let square =
         format!("crop='min(iw,ih)':'min(iw,ih)',scale='min(iw,{AVATAR_SIDE})':-1:flags=lanczos");
+    sent_picture_arguments(source, orientation, &square, destination)
+}
+
+/// Builds the making of a server's logo out of whatever image the
+/// administrator sent: turned the way its camera said and brought down inside
+/// a square, whole and in its own shape, with whatever of it is see-through
+/// left see-through. Never enlarged.
+pub fn logo_arguments(source: &Path, orientation: Orientation, destination: &Path) -> Vec<OsString> {
+    let inside = format!(
+        "scale='min(iw,{LOGO_SIDE})':'min(ih,{LOGO_SIDE})':force_original_aspect_ratio=decrease:flags=lanczos"
+    );
+    sent_picture_arguments(source, orientation, &inside, destination)
+}
+
+/// The one picture made out of an image somebody sent, turned first and then
+/// given its shape, written as a picture a browser shows.
+fn sent_picture_arguments(
+    source: &Path,
+    orientation: Orientation,
+    shape: &str,
+    destination: &Path,
+) -> Vec<OsString> {
     let filter = match turn_of(orientation) {
-        Some(turn) => format!("{turn},{square}"),
-        None => square,
+        Some(turn) => format!("{turn},{shape}"),
+        None => shape.to_string(),
     };
     vec![
         OsString::from("-hide_banner"),
@@ -196,8 +223,23 @@ pub async fn avatar(
     orientation: Orientation,
     destination: &Path,
 ) -> Result<()> {
+    make(tool, avatar_arguments(source, orientation, destination)).await
+}
+
+/// Makes a server's logo out of an image the administrator sent.
+pub async fn logo(
+    tool: &Path,
+    source: &Path,
+    orientation: Orientation,
+    destination: &Path,
+) -> Result<()> {
+    make(tool, logo_arguments(source, orientation, destination)).await
+}
+
+/// Runs the tool on what it was given to make one picture.
+async fn make(tool: &Path, arguments: Vec<OsString>) -> Result<()> {
     let output = TokioCommand::new(tool)
-        .args(avatar_arguments(source, orientation, destination))
+        .args(arguments)
         .stdin(Stdio::null())
         .output()
         .await?;
@@ -476,6 +518,23 @@ mod tests {
             Path::new("/data/avatar.webp"),
         ));
         assert!(upright.contains("-vf crop="), "{upright}");
+    }
+
+    #[test]
+    fn a_logo_is_brought_down_whole_in_its_own_shape() {
+        let logo = rendered(&logo_arguments(
+            Path::new("/data/sent.source"),
+            Orientation::AsStored,
+            Path::new("/data/logo.webp"),
+        ));
+        assert!(
+            logo.contains(
+                "-vf scale='min(iw,512)':'min(ih,512)':force_original_aspect_ratio=decrease"
+            ),
+            "{logo}"
+        );
+        assert!(!logo.contains("crop"), "a logo is never cut: {logo}");
+        assert!(logo.ends_with("-c:v libwebp -quality 80 /data/logo.webp"));
     }
 
     #[test]

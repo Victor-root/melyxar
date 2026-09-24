@@ -265,6 +265,23 @@ impl Database {
         Ok(())
     }
 
+    /// Gives the server its logo, or takes it away with nothing, and answers
+    /// the one it had so the caller can delete its file.
+    pub async fn set_logo(&self, logo_path: Option<&str>) -> Result<Option<String>> {
+        let mut transaction = self.begin().await?;
+        let before: Option<String> =
+            sqlx::query_scalar("SELECT logo_path FROM server_settings WHERE id = 1")
+                .fetch_one(&mut *transaction)
+                .await?;
+        sqlx::query("UPDATE server_settings SET logo_path = ?, updated_at = ? WHERE id = 1")
+            .bind(logo_path)
+            .bind(timestamp_to_text(now()))
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(before)
+    }
+
     /// How many days the activity journal keeps, on its own for the same
     /// reason as the switch above.
     pub async fn set_activity_retention_days(&self, days: i64) -> Result<()> {
@@ -364,6 +381,25 @@ mod tests {
         let settings = database.server_settings().await.expect("read");
         assert_eq!(settings.server_name, "Home Cinema");
         assert_eq!(settings.activity_retention_days, 30);
+    }
+
+    #[tokio::test]
+    async fn a_logo_given_answers_the_one_it_replaces() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.set_logo(Some("logo-a.webp")).await.expect("given"), None);
+        assert_eq!(
+            database.set_logo(Some("logo-b.webp")).await.expect("given"),
+            Some("logo-a.webp".to_string())
+        );
+        assert_eq!(
+            database.server_settings().await.expect("read").logo_path.as_deref(),
+            Some("logo-b.webp")
+        );
+        assert_eq!(
+            database.set_logo(None).await.expect("taken away"),
+            Some("logo-b.webp".to_string())
+        );
+        assert_eq!(database.server_settings().await.expect("read").logo_path, None);
     }
 
     #[tokio::test]

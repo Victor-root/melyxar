@@ -64,7 +64,7 @@ type Result<T> = std::result::Result<T, Trouble>;
 
 /// Whether these bytes open the way an image this server reads does: JPEG,
 /// PNG, WebP or GIF. Read from what the file holds, never from its name.
-fn is_a_picture(bytes: &[u8]) -> bool {
+pub(crate) fn is_a_picture(bytes: &[u8]) -> bool {
     bytes.starts_with(&[0xFF, 0xD8, 0xFF])
         || bytes.starts_with(b"\x89PNG\r\n\x1a\n")
         || bytes.starts_with(b"GIF87a")

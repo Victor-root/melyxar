@@ -1814,6 +1814,23 @@
   margin-top: 6px;
 }
 
+/* The server's logo as it stands, beside what changes it. Its own shape at
+   the height of the mark, so a wide one is seen wide. */
+.logo-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
+}
+
+.logo-choice-picture {
+  height: 32px;
+  width: auto;
+  max-width: 128px;
+  object-fit: contain;
+}
+
 .account-form {
   display: flex;
   flex-direction: column;
