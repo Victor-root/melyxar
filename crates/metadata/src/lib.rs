@@ -16,6 +16,6 @@ pub mod tmdb;
 
 pub use provider::{
     Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, MetadataProvider,
-    OfferedPicture, PictureKind, ProviderError, SeasonDetails, Trailer,
+    OfferedPicture, PersonDetails, PictureKind, ProviderError, SeasonDetails, Trailer,
 };
 pub use tmdb::TmdbProvider;

@@ -230,6 +230,16 @@ pub struct Credit {
     pub photo_path: Option<String>,
 }
 
+/// What the provider says of one person's life, for the page about them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PersonDetails {
+    pub biography: Option<String>,
+    /// Year, month and day, as the provider writes them.
+    pub born_on: Option<String>,
+    pub died_on: Option<String>,
+    pub birthplace: Option<String>,
+}
+
 /// A series of films the provider groups together.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Collection {
@@ -284,6 +294,14 @@ pub trait MetadataProvider: Send + Sync {
         external_id: &str,
         language: &str,
     ) -> impl Future<Output = Result<Details>> + Send;
+
+    /// What the provider says of one person, in the language asked for when
+    /// it has their life written in it.
+    fn person(
+        &self,
+        external_id: &str,
+        language: &str,
+    ) -> impl Future<Output = Result<PersonDetails>> + Send;
 
     /// One season of a series, with its episodes.
     fn season(

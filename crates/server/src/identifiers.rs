@@ -4,7 +4,9 @@
 //! when one of them is not an identifier at all. Written once per kind here,
 //! so the wording a client sees does not depend on which route it knocked at.
 
-use melyxar_core::id::{DeviceId, LibraryId, MediaSourceId, PlaybackClientId, TrackId, WorkId};
+use melyxar_core::id::{
+    DeviceId, LibraryId, MediaSourceId, PersonId, PlaybackClientId, TrackId, WorkId,
+};
 
 use crate::error::Result;
 use crate::ServerError;
@@ -18,6 +20,10 @@ fn parse<T: std::str::FromStr>(value: &str, what: &str) -> Result<T> {
 
 pub(crate) fn parse_work(value: &str) -> Result<WorkId> {
     parse(value, "work")
+}
+
+pub(crate) fn parse_person(value: &str) -> Result<PersonId> {
+    parse(value, "person")
 }
 
 pub(crate) fn parse_library(value: &str) -> Result<LibraryId> {

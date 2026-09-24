@@ -26,6 +26,7 @@ pub mod libraries;
 pub mod measures;
 pub mod openings;
 pub mod overview;
+pub mod people;
 mod own;
 pub mod playback;
 pub mod reach;

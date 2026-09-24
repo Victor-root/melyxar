@@ -9,10 +9,16 @@ use melyxar_core::id::{MediaSourceId, PersonId, WorkId};
 use melyxar_core::media::{Chapter, Track};
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::Work;
+use melyxar_database::browse::WorkCard;
 use melyxar_database::catalogue::{ChildWork, PlayableExtraVideo, SourceAnalysis};
+use melyxar_database::home::Alike;
 use melyxar_database::images::StoredImage;
 
 use crate::{AppState, Result};
+
+/// How many works the row of alike ones holds: a few screens of it, and
+/// never the whole genre.
+const ROW_OF_ALIKE: i64 = 24;
 
 /// A work with everything its page shows.
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +61,12 @@ pub struct WorkDetail {
     /// through them one by one. Both absent for anything but a photo.
     pub previous_photo: Option<WorkId>,
     pub next_photo: Option<WorkId>,
+    /// This work as its card, with what the viewer has made of it: the page
+    /// marks it seen or liked through the same card every row draws.
+    pub card: Option<WorkCard>,
+    /// Works like this one, by a genre they share. Only for a film and a
+    /// series, which are what genres are written on.
+    pub alike: Option<Alike>,
 }
 
 /// The episode a page offers to play next, and where in it.
@@ -441,7 +453,19 @@ pub async fn work_detail(
         _ => (None, None),
     };
 
+    let alike = match work.kind {
+        melyxar_core::work::WorkKind::Movie | melyxar_core::work::WorkKind::Series => {
+            let within = crate::reach::within(who);
+            database
+                .alike_by_genre(viewer, work_id, within.as_deref(), ROW_OF_ALIKE)
+                .await?
+        }
+        _ => None,
+    };
+
     Ok(Some(WorkDetail {
+        card: database.card_of(viewer, work_id).await?,
+        alike,
         previous_photo,
         next_photo,
         children,
