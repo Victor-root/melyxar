@@ -110,7 +110,7 @@ export function useWhoIsThere(): Who {
         // answering. The door says so itself rather than waiting for ever.
         setBranding({
           server_name: "",
-          logo_path: null,
+          logo: null,
           login_background_path: null,
           login_background_style: "abstract",
           setup_complete: true,

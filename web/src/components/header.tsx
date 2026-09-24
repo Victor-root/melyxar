@@ -44,6 +44,7 @@ import { useAccount } from "../account";
 import { useAttention } from "../attention";
 import { sayPoint } from "../pages/admin/activity";
 import { KINDS, nameOfKind } from "../libraries";
+import { useBranding } from "../player/logo";
 import { useSettings } from "../settings";
 import { isSectioned } from "./sectioned";
 import { Face } from "./face";
@@ -149,6 +150,7 @@ export function Header({
   const searchForm = useRef<HTMLFormElement>(null);
   const { jobs } = useRunning();
   const { account, leave } = useAccount();
+  const branding = useBranding();
   /* A scan is the one thing an administrator needs from wherever they happen
      to be: films were added, a name was corrected, a disk came back. */
   const scan = useStartScan(libraries);
@@ -342,9 +344,17 @@ export function Header({
           <Link className="brand" to="/">
             {/* Decorative: the name is written right next to it, and an
                 image announced twice over is exactly what a screen reader
-                must not have to hear. */}
-            <MelyxarMark size={28} />
-            <span className="brand-name">{t("app.name")}</span>
+                must not have to hear. The administrator's own logo keeps its
+                own colours; the one Melyxar ships takes the accent. Nothing
+                until the server has said which, so Melyxar's never flashes
+                up in front of somebody else's. */}
+            {branding &&
+              (branding.logo ? (
+                <img className="brand-logo" src={branding.logo} alt="" aria-hidden="true" />
+              ) : (
+                <MelyxarMark size={28} />
+              ))}
+            <span className="brand-name">{branding?.server_name}</span>
           </Link>
         </div>
 

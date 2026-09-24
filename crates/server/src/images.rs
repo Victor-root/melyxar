@@ -23,12 +23,19 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/images/{*path}", axum::routing::get(picture))
         .route("/api/v1/public/faces/{*path}", axum::routing::get(face))
+        .route("/api/v1/public/logo/{*path}", axum::routing::get(logo))
 }
 
 /// Where the picture of an account is served, from where it is kept. Open to
 /// anybody, so the sign in screen can show it beside the name.
 pub fn face_url(avatar_path: &str) -> String {
     format!("/api/v1/public/faces/{avatar_path}")
+}
+
+/// Where the server's logo is served, from the name it is kept under. Open to
+/// anybody, so the sign in screen can show it above the server's name.
+pub fn logo_url(logo: &str) -> String {
+    format!("/api/v1/public/logo/{logo}")
 }
 
 /// How long a client may keep a picture.
@@ -47,6 +54,13 @@ async fn picture(State(state): State<AppState>, RoutePath(path): RoutePath<Strin
 
 async fn face(State(state): State<AppState>, RoutePath(path): RoutePath<String>) -> Response {
     match read(&state.config().directories.avatars(), &path).await {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
+async fn logo(State(state): State<AppState>, RoutePath(path): RoutePath<String>) -> Response {
+    match read(&state.config().directories.uploads(), &path).await {
         Ok(response) => response,
         Err(error) => error.into_response(),
     }

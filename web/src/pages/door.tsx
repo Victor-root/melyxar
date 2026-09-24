@@ -182,8 +182,8 @@ export function Door({
         <div className="door-crown">
           {/* A mark of the administrator's own stays in its own colours; the
               one Melyxar ships takes the accent, like the rest of the page. */}
-          {branding.logo_path ? (
-            <img className="door-mark" src={branding.logo_path} alt="" aria-hidden="true" />
+          {branding.logo ? (
+            <img className="door-mark" src={branding.logo} alt="" aria-hidden="true" />
           ) : (
             <MelyxarMark size={58} className="door-mark" />
           )}
