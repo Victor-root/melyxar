@@ -123,8 +123,9 @@ export interface Tracks {
   subtitle: string | null;
 }
 
-/** Enough of an episode to step straight to it: a `NextEpisode` and a `Child`
- *  both carry this much, and stepping to one asks for nothing more. */
+/** Enough of an episode to step straight to it: a `NextEpisode` carries this
+ *  much, and so does the card of an episode, and stepping to one asks for
+ *  nothing more. */
 export interface Playable {
   id: string;
   source_id: string | null;

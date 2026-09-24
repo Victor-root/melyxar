@@ -13,7 +13,7 @@ use axum::http::Request;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::browse::{BrowseRequest, Initial, WorkCard, WorkOrder, DEFAULT_PAGE};
-use melyxar_app::detail::{CarryOn, Credit, Version, WorkDetail};
+use melyxar_app::detail::{CarryOn, ChildWork, Credit, Version, WorkDetail};
 use melyxar_app::picture::StoredImage;
 use melyxar_app::AppState;
 use melyxar_core::media::TrackKind;
@@ -438,22 +438,13 @@ fn its_own_name(
     (!melyxar_app::episodes::is_only_a_number(kind, ordinal, title)).then(|| title.to_string())
 }
 
-fn child_view(child: &melyxar_app::detail::Child) -> ChildView {
+fn child_view(child: &ChildWork) -> ChildView {
     ChildView {
-        id: child.work.id.to_string(),
-        kind: child.work.kind.as_str(),
-        number: child.work.ordinal,
-        title: its_own_name(child.work.kind, child.work.ordinal, &child.work.title),
-        runtime_minutes: child.work.runtime.map(whole_minutes),
-        child_count: child.work.child_count,
-        unwatched: child.work.unwatched,
-        watched: child.work.watched,
-        resume_from_seconds: child.work.resume_from.map(Millis::as_seconds_f64),
-        playable: child.work.playable,
-        identification: child.work.identification.as_str(),
-        color: child.work.dominant_color.clone(),
-        poster: pictures_of(&child.poster, "poster"),
-        source_id: child.work.source_id.map(|id| id.to_string()),
+        number: child.ordinal,
+        title: its_own_name(child.card.kind, child.ordinal, &child.card.title),
+        overview: child.overview.clone(),
+        child_count: child.child_count,
+        card: card_view(&child.card),
     }
 }
 
@@ -747,6 +738,9 @@ struct WorkView {
     /// The seasons of a series, the episodes of a season, in order. Empty for
     /// anything met on its own.
     children: Vec<ChildView>,
+    /// Every episode of an episode's season, itself included, in order.
+    /// Empty for anything that is not an episode.
+    siblings: Vec<ChildView>,
     /// The way back up, nearest first: an episode carries its season and then
     /// its series. Empty for anything met on its own.
     ancestry: Vec<AncestorView>,
@@ -788,12 +782,10 @@ struct NextEpisodeView {
     source_id: Option<String>,
 }
 
-/// One work hanging under this one, as a card on its page.
+/// One work hanging under this one: its card, and what its place under this
+/// one adds to it.
 #[derive(Debug, Serialize)]
 struct ChildView {
-    id: String,
-    /// season or episode.
-    kind: &'static str,
     /// The season number, the episode number. Absent only if a row was ever
     /// written without one.
     number: Option<i32>,
@@ -801,25 +793,12 @@ struct ChildView {
     /// Absent for a season a scan could only number, so a page draws the
     /// number in its own language rather than the English one written down.
     title: Option<String>,
-    runtime_minutes: Option<i64>,
-    /// How many episodes a season holds. Zero for an episode.
+    /// What it is about, for a list of episodes that has room to say it.
+    overview: Option<String>,
+    /// How many hang under it: a season's episodes, a folder's contents.
     child_count: i64,
-    /// How many of those this viewer has left to watch.
-    unwatched: i64,
-    /// Whether this viewer has watched it. Only ever true of an episode.
-    watched: bool,
-    /// Where this viewer stopped in it, when they stopped partway.
-    resume_from_seconds: Option<f64>,
-    /// False when no file of it is on the disk right now, so a page can say so
-    /// rather than offer it and fail.
-    playable: bool,
-    identification: &'static str,
-    color: Option<String>,
-    poster: Vec<ImageView>,
-    /// The biggest copy on disk, so a row of these can start one playing on
-    /// its own rather than sending a viewer to its page to ask again. Absent
-    /// along with `playable`.
-    source_id: Option<String>,
+    /// It as every row draws it, with what this viewer made of it.
+    card: CardView,
 }
 
 /// One work this one hangs under, as a way back to it.
@@ -1100,6 +1079,7 @@ fn work_view(detail: &WorkDetail) -> WorkView {
             cards: alike.cards.iter().map(card_view).collect(),
         }),
         children: detail.children.iter().map(child_view).collect(),
+        siblings: detail.siblings.iter().map(child_view).collect(),
         ancestry: detail
             .ancestry
             .iter()

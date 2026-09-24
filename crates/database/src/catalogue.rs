@@ -21,6 +21,7 @@ use melyxar_core::time::{now, Millis, Timestamp};
 use melyxar_core::work::{IdentificationNote, IdentificationState, Work, WorkKind};
 use sqlx::{AssertSqlSafe, Row, Sqlite};
 
+use crate::browse::{card_from_row, WorkCard, WHAT_A_CARD_IS};
 use crate::convert::{
     bool_to_int, int_to_bool, parse_id, parse_optional_timestamp, parse_timestamp,
     timestamp_to_text,
@@ -79,35 +80,22 @@ pub struct RankedChild {
     pub title: String,
 }
 
-/// One work hanging under another, with what its card shows.
+/// One work hanging under another: its card, and what its place under the
+/// other adds to it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChildWork {
-    pub id: WorkId,
-    pub kind: WorkKind,
     /// The season number, the episode number.
     pub ordinal: Option<i32>,
-    pub title: String,
-    /// How long it runs: what the provider said, or failing that the longest
-    /// copy on disk, so an episode nobody has looked up still says something.
-    pub runtime: Option<Millis>,
-    /// How many hang under this one, for a season saying how many episodes.
+    /// How many hang under this one, for a season saying how many episodes
+    /// and a folder how many things.
     pub child_count: i64,
-    /// Whether a file of it is on the disk right now.
-    pub playable: bool,
-    /// Episodes under this one this viewer has not watched. Zero for an
-    /// episode, which holds none.
-    pub unwatched: i64,
-    /// Whether this viewer has watched this one. Only ever true of an episode.
-    pub watched: bool,
-    /// Where this viewer stopped in it, when they stopped partway.
-    pub resume_from: Option<Millis>,
-    pub identification: IdentificationState,
-    pub dominant_color: Option<String>,
-    pub added_at: Timestamp,
-    /// The biggest copy on disk, ready for a button that plays this one
-    /// straight from a row of them rather than sending a viewer to a page
-    /// that asks the same question over again. Absent along with `playable`.
-    pub source_id: Option<MediaSourceId>,
+    /// What it is about in the language asked for, and failing that in
+    /// English, for a list of episodes that has room to say it.
+    pub overview: Option<String>,
+    /// It as every row draws it, with what this viewer made of it. Its length
+    /// is what the provider said, and failing that the longest copy on disk,
+    /// so an episode nobody has looked up still says something.
+    pub card: WorkCard,
 }
 
 /// Works one provider says are the same film.
@@ -471,87 +459,66 @@ impl Database {
 
     /// Everything hanging under one work, in the order it is numbered.
     ///
-    /// A series answers with its seasons, a season with its episodes. Read in
-    /// one go, with everything each card shows: whether anything can be
-    /// played, how long it runs, how many the one below holds, how many of
-    /// those this viewer has left to watch, and where they stopped. A page of
-    /// twenty four episodes that asked those questions per episode would be a
-    /// hundred and twenty round trips.
-    pub async fn children_of(&self, viewer: UserId, parent_id: WorkId) -> Result<Vec<ChildWork>> {
+    /// A series answers with its seasons, a season with its episodes, each as
+    /// the card every row draws: the same pictures, the same marks of this
+    /// viewer, and for an episode the same wide picture a row lying its cards
+    /// down shows. Read a whole page at a time, like any row of cards: a page
+    /// of twenty four episodes that asked per episode would be a hundred round
+    /// trips.
+    pub async fn children_of(
+        &self,
+        viewer: UserId,
+        parent_id: WorkId,
+        language: &str,
+    ) -> Result<Vec<ChildWork>> {
         // Ordered the one way children are ever ordered, named below so the
         // shelf read and this one cannot come back in different orders.
         let rows = sqlx::query(AssertSqlSafe(format!(
-            "SELECT w.id, w.kind, w.ordinal, w.title, w.runtime_ms, w.child_count,
-                    w.identification, w.dominant_color, w.added_at,
-                    (SELECT count(*) FROM media_sources s
-                      WHERE s.work_id = w.id AND s.missing_since IS NULL) AS playable,
+            "SELECT {WHAT_A_CARD_IS}, w.ordinal, w.child_count,
                     (SELECT max(s.duration_ms) FROM media_sources s WHERE s.work_id = w.id)
                         AS longest_ms,
-                    -- The one a play button starting from this row alone
-                    -- would mean, the same copy `next_episode_after` would
-                    -- offer: the biggest still on disk.
-                    (SELECT s.id FROM media_sources s
-                      WHERE s.work_id = w.id AND s.missing_since IS NULL
-                      ORDER BY s.size_bytes DESC LIMIT 1) AS source_id,
-                    -- What is left to watch under this one. A season answers
-                    -- for its episodes; an episode has nothing under it and
-                    -- answers nothing.
-                    (SELECT count(*) FROM works c
-                      LEFT JOIN playback_progress q
-                             ON q.work_id = c.id AND q.user_id = ?1
-                      WHERE c.parent_id = w.id
-                        AND coalesce(q.state, 'not_started') <> 'watched') AS unwatched,
-                    coalesce(p.state, 'not_started') AS seen,
-                    p.position_ms
+                    coalesce(asked.overview, english.overview) AS overview
              FROM works w
-             LEFT JOIN playback_progress p ON p.work_id = w.id AND p.user_id = ?1
-             WHERE w.parent_id = ?2
+             LEFT JOIN work_translations asked
+                    ON asked.work_id = w.id AND asked.language = ?2
+             LEFT JOIN work_translations english
+                    ON english.work_id = w.id AND english.language = 'en'
+             WHERE w.parent_id = ?1
              {IN_THE_ONE_ORDER}"
         )))
-        .bind(viewer.to_db_string())
         .bind(parent_id.to_db_string())
+        .bind(language)
         .fetch_all(self.reader())
         .await?;
 
-        rows.iter()
-            .map(|row| {
-                let kind_text: String = row.try_get("kind")?;
-                let identification_text: String = row.try_get("identification")?;
-                Ok(ChildWork {
-                    id: parse_id(&row.try_get::<String, _>("id")?)?,
-                    kind: WorkKind::parse(&kind_text).ok_or_else(|| {
-                        DatabaseError::Corrupt(format!("work kind '{kind_text}'"))
-                    })?,
-                    ordinal: row.try_get("ordinal")?,
-                    title: row.try_get("title")?,
-                    runtime: row
-                        .try_get::<Option<i64>, _>("runtime_ms")?
-                        .or(row.try_get::<Option<i64>, _>("longest_ms")?)
-                        .map(Millis::new),
-                    child_count: row.try_get("child_count")?,
-                    playable: row.try_get::<i64, _>("playable")? > 0,
-                    unwatched: row.try_get("unwatched")?,
-                    watched: row.try_get::<String, _>("seen")? == "watched",
-                    // Only where somebody really stopped partway: a position
-                    // of nothing is where everybody starts, and a button
-                    // offering to carry on from the very beginning is a button
-                    // saying the wrong thing.
-                    resume_from: row
-                        .try_get::<Option<i64>, _>("position_ms")?
-                        .filter(|position| *position > 0)
-                        .map(Millis::new),
-                    identification: IdentificationState::parse(&identification_text).ok_or_else(
-                        || DatabaseError::Corrupt(format!("state '{identification_text}'")),
-                    )?,
-                    dominant_color: row.try_get("dominant_color")?,
-                    added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
-                    source_id: row
-                        .try_get::<Option<String>, _>("source_id")?
-                        .map(|id| parse_id(&id))
-                        .transpose()?,
-                })
+        let mut cards = Vec::with_capacity(rows.len());
+        let mut places = Vec::with_capacity(rows.len());
+        for row in &rows {
+            let mut card = card_from_row(row)?;
+            card.runtime = card
+                .runtime
+                .or(row.try_get::<Option<i64>, _>("longest_ms")?.map(Millis::new));
+            cards.push(card);
+            places.push((
+                row.try_get("ordinal")?,
+                row.try_get("child_count")?,
+                row.try_get("overview")?,
+            ));
+        }
+        self.attach_posters(&mut cards).await?;
+        self.attach_wide_pictures(&mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards).await?;
+
+        Ok(places
+            .into_iter()
+            .zip(cards)
+            .map(|((ordinal, child_count, overview), card)| ChildWork {
+                ordinal,
+                child_count,
+                overview,
+                card,
             })
-            .collect()
+            .collect())
     }
 
     /// What hangs under one work, as a shelf rather than as a page.
@@ -2991,6 +2958,17 @@ mod tests {
             .id
     }
 
+    /// What the viewer made of one child, which a read for somebody always
+    /// carries.
+    fn state_of(child: &ChildWork) -> &crate::browse::CardState {
+        child.card.state.as_ref().expect("read for somebody")
+    }
+
+    /// The copy a play button on one child would start.
+    fn source_of(child: &ChildWork) -> Option<MediaSourceId> {
+        state_of(child).source_id
+    }
+
     async fn library() -> (Database, LibraryId, LibraryRootId) {
         let database = Database::open_in_memory().await.expect("database opens");
         let library = database
@@ -3117,7 +3095,7 @@ mod tests {
         let (series, seasons, _) = a_series(&database, library_id).await;
 
         let viewer = a_viewer(&database).await;
-        let answered = database.children_of(viewer, series).await.expect("read");
+        let answered = database.children_of(viewer, series, "fr").await.expect("read");
         assert_eq!(
             answered
                 .iter()
@@ -3126,7 +3104,7 @@ mod tests {
             vec![Some(1), Some(2)],
             "in the order they are numbered, not the order they were written"
         );
-        assert!(answered.iter().all(|child| child.kind == WorkKind::Season));
+        assert!(answered.iter().all(|child| child.card.kind == WorkKind::Season));
         assert_eq!(
             answered
                 .iter()
@@ -3137,11 +3115,11 @@ mod tests {
         );
 
         let first = database
-            .children_of(viewer, seasons[0])
+            .children_of(viewer, seasons[0], "fr")
             .await
             .expect("read");
         assert_eq!(first.len(), 2);
-        assert!(first.iter().all(|child| child.kind == WorkKind::Episode));
+        assert!(first.iter().all(|child| child.card.kind == WorkKind::Episode));
         assert_eq!(
             first.iter().map(|child| child.ordinal).collect::<Vec<_>>(),
             vec![Some(1), Some(2)]
@@ -3159,14 +3137,13 @@ mod tests {
 
         // One episode with no file at all.
         let untouched = database
-            .children_of(viewer, seasons[0])
+            .children_of(viewer, seasons[0], "fr")
             .await
             .expect("read")
             .into_iter()
-            .find(|child| child.id == episodes[0])
+            .find(|child| child.card.id == episodes[0])
             .expect("the episode is among the children");
-        assert_eq!(untouched.source_id, None, "nothing to play means nothing to name");
-        assert!(!untouched.playable);
+        assert_eq!(source_of(&untouched), None, "nothing to play means nothing to name");
 
         // The other with two copies, one heavier than the other.
         let smaller = database
@@ -3179,14 +3156,69 @@ mod tests {
             .expect("file recorded");
 
         let named = database
-            .children_of(viewer, seasons[0])
+            .children_of(viewer, seasons[0], "fr")
             .await
             .expect("read")
             .into_iter()
-            .find(|child| child.id == episodes[1])
+            .find(|child| child.card.id == episodes[1])
             .expect("the episode is among the children");
-        assert_eq!(named.source_id, Some(biggest));
-        assert_ne!(named.source_id, Some(smaller));
+        assert_eq!(source_of(&named), Some(biggest));
+        assert_ne!(source_of(&named), Some(smaller));
+    }
+
+    #[tokio::test]
+    async fn an_episode_in_a_list_says_what_it_is_about_and_how_long_it_runs() {
+        // A list of episodes has room for a few lines on each one, in the
+        // language of the library, and for a length even before anybody has
+        // looked the episode up.
+        let (database, library_id, root_id) = library().await;
+        let (_, seasons, episodes) = a_series(&database, library_id).await;
+        database
+            .set_work_synopsis(episodes[0], "fr", None, "Un phare, une tempête.")
+            .await
+            .expect("synopsis written");
+        database
+            .set_work_synopsis(episodes[0], "en", None, "A lighthouse, a storm.")
+            .await
+            .expect("synopsis written");
+        database
+            .set_work_synopsis(episodes[1], "en", None, "The harbour at dawn.")
+            .await
+            .expect("synopsis written");
+        let source = database
+            .insert_source(episodes[1], root_id, Path::new("two.mkv"), 1_000, now())
+            .await
+            .expect("file recorded");
+        database
+            .store_analysis(
+                source,
+                &SourceAnalysis {
+                    duration: Some(Millis::new(2_700_000)),
+                    ..SourceAnalysis::default()
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+
+        let viewer = a_viewer(&database).await;
+        let read = database
+            .children_of(viewer, seasons[0], "fr")
+            .await
+            .expect("read");
+        assert_eq!(
+            read.iter()
+                .map(|child| child.overview.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("Un phare, une tempête."), Some("The harbour at dawn.")],
+            "the language asked for, and English where it has nothing"
+        );
+        assert_eq!(
+            read.iter().map(|child| child.card.runtime).collect::<Vec<_>>(),
+            vec![None, Some(Millis::new(2_700_000))],
+            "nobody said how long the second runs, and its file does"
+        );
     }
 
     #[tokio::test]
@@ -3205,7 +3237,7 @@ mod tests {
 
         let viewer = a_viewer(&database).await;
         assert!(database
-            .children_of(viewer, film.id)
+            .children_of(viewer, film.id, "fr")
             .await
             .expect("read")
             .is_empty());
@@ -3421,23 +3453,23 @@ mod tests {
         }
         watched(&database, viewer, episodes[0]).await;
 
-        let read = database.children_of(viewer, series).await.expect("read");
+        let read = database.children_of(viewer, series, "fr").await.expect("read");
         assert_eq!(
             read.iter()
-                .map(|season| (season.child_count, season.unwatched))
+                .map(|season| (season.child_count, state_of(season).unwatched))
                 .collect::<Vec<_>>(),
             vec![(2, 1), (1, 1)],
             "the first season holds two and one is left; the second holds one"
         );
 
         let inside = database
-            .children_of(viewer, seasons[0])
+            .children_of(viewer, seasons[0], "fr")
             .await
             .expect("read");
         assert_eq!(
             inside
                 .iter()
-                .map(|episode| episode.watched)
+                .map(|episode| state_of(episode).seen == melyxar_core::work::PlaybackState::Watched)
                 .collect::<Vec<_>>(),
             vec![true, false]
         );
@@ -3502,11 +3534,13 @@ mod tests {
 
         let viewer = a_viewer(&database).await;
         let read = database
-            .children_of(viewer, seasons[0])
+            .children_of(viewer, seasons[0], "fr")
             .await
             .expect("read");
         assert_eq!(
-            read.iter().map(|child| child.playable).collect::<Vec<_>>(),
+            read.iter()
+                .map(|child| source_of(child).is_some())
+                .collect::<Vec<_>>(),
             vec![true, false]
         );
     }
@@ -5516,7 +5550,7 @@ mod tests {
         );
 
         let viewer = a_viewer(&database).await;
-        let seasons = database.children_of(viewer, kept).await.expect("read");
+        let seasons = database.children_of(viewer, kept, "fr").await.expect("read");
         assert_eq!(
             seasons
                 .iter()
@@ -6025,11 +6059,11 @@ mod tests {
 
         let viewer = a_viewer(database).await;
         database
-            .children_of(viewer, series_id)
+            .children_of(viewer, series_id, "fr")
             .await
             .expect("read")
             .into_iter()
-            .map(|season| season.id)
+            .map(|season| season.card.id)
             .collect()
     }
 

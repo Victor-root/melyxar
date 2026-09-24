@@ -24,11 +24,13 @@ import { TrailerDialog } from "../components/trailer";
 import { Row, RowHead } from "../components/row";
 import { useFittedText } from "../fitting";
 import {
+  CollectionIcon,
   FilmIcon,
   FolderIcon,
   HeartIcon,
   MoreIcon,
   PeopleIcon,
+  PlaylistIcon,
   SoundIcon,
   StarIcon,
   SubtitlesIcon,
@@ -43,7 +45,6 @@ import {
   howLong,
   howMany,
   nameOfOne,
-  numberOfOne,
   outOfTen,
   readableBitrate,
   readableDate,
@@ -51,6 +52,7 @@ import {
   whatIsLeft,
   whatTheFileHolds,
 } from "../readable";
+import type { Wording } from "../readable";
 import { elsewhere, groupCrew, useWorkScreen } from "../screens/work";
 import type { Tracks } from "../screens/work";
 import { useSettings } from "../settings";
@@ -179,6 +181,8 @@ export function WorkPage() {
 
       {holdsOthers && <WhatHangsUnder work={work} />}
 
+      {work.kind === "episode" && <TheRestOfTheSeason work={work} />}
+
       {work.cast.length > 0 && (
         <section className="section">
           <RowHead mark={<PeopleIcon size={24} />} title={t("work.cast")} />
@@ -247,7 +251,15 @@ function TopOfTheWork({
   const navigate = useNavigate();
   const work = screen.work as Work;
   const version = work.versions[screen.chosen];
-  const { picture: poster, itDidNotLoad: posterFailed } = useShownPicture(work.poster);
+  /* An episode is shown by a still, lying down as every row shows it: stood
+     up, a still is a poster cut out of the middle of a wide picture. Its own
+     card among the episodes of its season carries the wide picture a row
+     would draw, the still itself or failing that one of its series. */
+  const lying = work.kind === "episode";
+  const itself = work.siblings.find((sibling) => sibling.card.id === work.id)?.card;
+  const { picture: poster, itDidNotLoad: posterFailed } = useShownPicture(
+    itself && itself.wide.length > 0 ? itself.wide : work.poster,
+  );
   const { here, away } = screen.onOffer;
 
   /* A season is announced by its number in the language being read, and by
@@ -278,12 +290,12 @@ function TopOfTheWork({
 
   return (
     <section className="work-top">
-      <div className="work-poster">
+      <div className={`work-poster${lying ? " work-poster-lying" : ""}`}>
         {poster ? (
           <img
             src={poster.src}
             srcSet={poster.srcSet}
-            sizes="(max-width: 800px) 40vw, 300px"
+            sizes={lying ? "(max-width: 800px) 60vw, 480px" : "(max-width: 800px) 40vw, 300px"}
             alt=""
             onError={posterFailed}
           />
@@ -961,9 +973,11 @@ function ReadCopyAgain({ copy, onRead }: { copy: string; onRead: () => void }) {
 /**
  * What hangs under this one: the seasons of a series, the episodes of a season.
  *
- * Seasons are cards, because a season is chosen by its poster the way a film
- * is. Episodes are rows, because an episode is chosen by its number and its
- * name and there are twenty four of them.
+ * Seasons are a row of cards, because a season is chosen by its poster the
+ * way a film is. Episodes are a list, each still beside its name, its length
+ * and what it is about, because an episode is chosen by what happens in it.
+ * Both are drawn with the card every row draws, so they grow, light up, play
+ * and open their menu exactly as every other card does.
  */
 function WhatHangsUnder({ work }: { work: Work }) {
   const { t } = useSettings();
@@ -976,18 +990,26 @@ function WhatHangsUnder({ work }: { work: Work }) {
   }
 
   return (
-    <section className="work-children">
-      <h2 className="work-section">{t(seasons ? "work.seasons" : "work.episodes")}</h2>
+    <section className="section">
+      <RowHead
+        mark={seasons ? <CollectionIcon size={24} /> : <PlaylistIcon size={24} />}
+        title={t(seasons ? "work.seasons" : "work.episodes")}
+      />
       {seasons ? (
-        <div className="season-grid">
+        <Row>
           {work.children.map((child) => (
-            <SeasonCard key={child.id} child={child} />
+            <Card
+              key={child.card.id}
+              card={child.card}
+              lead={nameOfChild(child, t)}
+              note={howMany(child.child_count, "work.episode_count", t)}
+            />
           ))}
-        </div>
+        </Row>
       ) : (
-        <ol className="episode-list">
+        <ol className="episode-lines">
           {work.children.map((child) => (
-            <EpisodeRow key={child.id} child={child} />
+            <EpisodeLine key={child.card.id} child={child} />
           ))}
         </ol>
       )}
@@ -995,69 +1017,91 @@ function WhatHangsUnder({ work }: { work: Work }) {
   );
 }
 
-function SeasonCard({ child }: { child: Child }) {
+/** One episode of a season's list: its still, and beside it what it is
+ *  called, how it is rated, how long it runs and what it is about. */
+function EpisodeLine({ child }: { child: Child }) {
   const { t } = useSettings();
-  const { picture: poster, itDidNotLoad } = useShownPicture(child.poster);
+  const { card } = child;
+  const left =
+    card.resume_from_seconds !== null
+      ? whatIsLeft(card.resume_from_seconds, card.runtime_minutes, t)
+      : undefined;
 
   return (
-    <Link
-      to={`/work/${child.id}`}
-      className="season-card"
-      style={{ ["--card-color" as string]: child.color ?? "var(--surface)" }}
-    >
-      <div className="season-poster">
-        {poster ? (
-          <img
-            src={poster.src}
-            srcSet={poster.srcSet}
-            sizes="200px"
-            alt=""
-            onError={itDidNotLoad}
-          />
-        ) : (
-          <div className="season-poster-empty" aria-hidden="true">
-            {child.number ?? ""}
-          </div>
-        )}
+    <li className="episode-line">
+      <Card card={card} shape="lying" named={false} />
+      <div className="episode-line-words">
+        <Link className="episode-line-name" to={`/work/${card.id}`}>
+          {nameOfChild(child, t)}
+        </Link>
+        <p className="work-facts">
+          {card.rating !== null && (
+            <span className="work-rating">
+              <StarIcon size={15} />
+              {outOfTen(card.rating)}
+            </span>
+          )}
+          <span>{lengthOf(card, t)}</span>
+          {left && <span>{left}</span>}
+        </p>
+        {child.overview && <p className="episode-line-overview">{child.overview}</p>}
       </div>
-      <span className="season-name">{numberOfOne(child.kind, child.number, t)}</span>
-      {child.title && <span className="season-title">{child.title}</span>}
-      <span className="season-count">
-        {child.unwatched > 0
-          ? howMany(child.unwatched, "work.left_to_watch", t)
-          : howMany(child.child_count, "work.episode_count", t)}
-      </span>
-    </Link>
+    </li>
   );
 }
 
-function EpisodeRow({ child }: { child: Child }) {
+/**
+ * Every episode of the season this one belongs to, this one lit among them:
+ * the way to the one before and the ones after without going back up to the
+ * season. The row opens where this one is, and its heading leads to the
+ * season itself.
+ */
+function TheRestOfTheSeason({ work }: { work: Work }) {
   const { t } = useSettings();
+  const season = work.ancestry.find((up) => up.kind === "season");
+  /* A season of one episode is this page again, as a row of one card. */
+  if (!season || work.siblings.length < 2) {
+    return null;
+  }
+  const here = work.siblings.findIndex((sibling) => sibling.card.id === work.id);
 
   return (
-    <li className="episode">
-      <Link to={`/work/${child.id}`} className="episode-link">
-        <span className="episode-number">{child.number ?? ""}</span>
-        <span className="episode-name">
-          {child.title ?? numberOfOne(child.kind, child.number, t)}
-        </span>
-        <span className="episode-length">
-          {!child.playable
-            ? t("work.not_on_disk")
-            : child.runtime_minutes
-              ? t("work.minutes", { count: child.runtime_minutes })
-              : ""}
-        </span>
-        {/* A tick rather than a word: a list of twenty four lines each ending
-            in "Vu" reads as a wall of the same word. */}
-        {child.watched && (
-          <span className="episode-watched" title={t("work.watched")} aria-label={t("work.watched")}>
-            ✓
-          </span>
-        )}
-      </Link>
-    </li>
+    <section className="section">
+      <RowHead
+        mark={<PlaylistIcon size={24} />}
+        title={nameOfOne(season.kind, season.number, season.title, t) || t("work.episodes")}
+        to={`/work/${season.id}`}
+      />
+      {/* Drawn anew for another season, so it opens on its own episode
+          rather than keeping where the last season's row was left. */}
+      <Row key={season.id} opensOn={here < 0 ? undefined : here}>
+        {work.siblings.map((sibling) => (
+          <Card
+            key={sibling.card.id}
+            card={sibling.card}
+            shape="lying"
+            here={sibling.card.id === work.id}
+            lead={nameOfChild(sibling, t)}
+            note={lengthOf(sibling.card, t)}
+          />
+        ))}
+      </Row>
+    </section>
   );
+}
+
+/** What one season or episode is called: its number in the language being
+ *  read, and its own name when it has one the number does not say. */
+function nameOfChild(child: Child, t: Wording): string {
+  return nameOfOne(child.card.kind, child.number, child.title, t) || child.card.title;
+}
+
+/** How long an episode runs, or that there is no file of it to play. */
+function lengthOf(card: CardData, t: Wording): string {
+  if (card.source === null) {
+    return t("work.not_on_disk");
+  }
+  return card.runtime_minutes ? howLong(card.runtime_minutes, t) : "";
 }
 
 /**
@@ -1089,8 +1133,8 @@ function CarryOn({ work }: { work: Work }) {
      and carrying on. A season page counts watched episodes and a series page
      counts what is left inside each season: an episode has nothing under it,
      so counting its children would say every season page is untouched. */
-  const untouched = work.children.every((child) =>
-    child.kind === "episode" ? !child.watched : child.unwatched === child.child_count,
+  const untouched = work.children.every(({ card }) =>
+    card.kind === "episode" ? card.seen !== "watched" : card.unwatched === card.episodes,
   );
   const wording = t(untouched ? "work.start_series" : "work.carry_on", {
     season: String(next.season).padStart(2, "0"),

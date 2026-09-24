@@ -14,8 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Credit, PlaybackChapter, PlaybackPlan, Work } from "../api";
-import { api, pictureSet } from "../api";
-import { useAsked } from "../asking";
+import { pictureSet } from "../api";
 import { useDragToScroll } from "../dragging";
 import { SeenMark } from "../components/seen";
 import { asClock } from "./clock";
@@ -398,10 +397,8 @@ function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number 
  * Every episode of the season this one belongs to, in order, with the one
  * playing now told apart from the rest.
  *
- * The one sheet here that asks the server something on its own: an episode's
- * own description carries its season and its series, nearest first, but
- * never the episodes sitting beside it. Asked for once, when this sheet is
- * first opened, and not before: a viewer who never opens it never costs it.
+ * The episodes sitting beside this one travel with its own description, so
+ * the sheet has them the moment it opens and asks nothing of its own.
  */
 function Episodes({
   work,
@@ -409,17 +406,9 @@ function Episodes({
   onSelectEpisode,
   t,
 }: Pick<Props, "work" | "t" | "onSelectEpisode"> & { across: number }) {
-  const season = work.ancestry.find((up) => up.kind === "season") ?? null;
-  const asked = useAsked(
-    (signal) => (season ? api.work(season.id, signal) : Promise.resolve(null)),
-    [season?.id],
-  );
-  const episodes = asked.answer?.children ?? [];
+  const episodes = work.siblings;
 
-  if (!season) {
-    return null;
-  }
-  if (asked.waiting) {
+  if (work.kind !== "episode") {
     return null;
   }
   if (episodes.length === 0) {
@@ -429,19 +418,17 @@ function Episodes({
   const down = Math.round(across * A_PICTURE_IS);
   return (
     <Strip along={across} picture={down}>
-      {episodes.map((episode) => {
-        const poster = pictureSet(episode.poster);
-        const now = episode.id === work.id;
-        const canPlay = !now && episode.playable && episode.source_id !== null;
+      {episodes.map(({ card, number, title }) => {
+        const poster = pictureSet(card.poster);
+        const now = card.id === work.id;
+        const canPlay = !now && card.source !== null;
         return (
           <button
-            key={episode.id}
+            key={card.id}
             className={`player-drawer-episode${now ? " player-drawer-episode-now" : ""}`}
             disabled={!canPlay}
             onClick={
-              canPlay
-                ? () => onSelectEpisode?.({ id: episode.id, source_id: episode.source_id })
-                : undefined
+              canPlay ? () => onSelectEpisode?.({ id: card.id, source_id: card.source }) : undefined
             }
           >
             <span className="player-drawer-frame" style={{ height: `${down}px` }}>
@@ -456,23 +443,19 @@ function Episodes({
                 />
               ) : (
                 <span className="player-drawer-initial" aria-hidden="true">
-                  {episode.number ?? ""}
+                  {number ?? ""}
                 </span>
               )}
               {now && <span className="player-drawer-card-now">{t("player.playing_now")}</span>}
-              {episode.watched && <SeenMark watched />}
+              {card.seen === "watched" && <SeenMark watched />}
             </span>
-            <span className="player-drawer-card-name">
-              {numberOfOne("episode", episode.number, t)}
-            </span>
-            {episode.title && (
-              <span className="player-drawer-card-title">{episode.title}</span>
-            )}
+            <span className="player-drawer-card-name">{numberOfOne("episode", number, t)}</span>
+            {title && <span className="player-drawer-card-title">{title}</span>}
             <span className="player-drawer-card-under">
-              {!episode.playable
+              {card.source === null
                 ? t("work.not_on_disk")
-                : episode.runtime_minutes
-                  ? t("work.minutes", { count: episode.runtime_minutes })
+                : card.runtime_minutes
+                  ? t("work.minutes", { count: card.runtime_minutes })
                   : ""}
             </span>
           </button>

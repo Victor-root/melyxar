@@ -24,7 +24,7 @@ export function FolderView({ work }: { work: Work }) {
   const { t } = useSettings();
   const navigate = useNavigate();
   const marks = useMarks();
-  const children = work.children.filter((child) => !marks.goneOf(child.id));
+  const children = work.children.filter((child) => !marks.goneOf(child.card.id));
 
   return (
     <main className="page own-folder">
@@ -37,10 +37,10 @@ export function FolderView({ work }: { work: Work }) {
       {children.length === 0 ? (
         <p className="notice">{t("own.empty")}</p>
       ) : (
-        <Selecting items={children}>
+        <Selecting items={children.map((child) => child.card)}>
           <div className="own-grid">
             {children.map((child) => (
-              <OwnTile key={child.id} child={child} />
+              <OwnTile key={child.card.id} child={child} />
             ))}
           </div>
         </Selecting>
@@ -53,9 +53,11 @@ export function FolderView({ work }: { work: Work }) {
  *  somebody opening a video of their own wants; a folder and a photo open. */
 function OwnTile({ child }: { child: Child }) {
   const { t } = useSettings();
-  const { picture, itDidNotLoad } = useShownPicture(child.poster);
-  const to = child.kind === "video" && child.playable ? `/work/${child.id}?play` : `/work/${child.id}`;
-  const choosing = useChoosingPress(child.id);
+  const { card } = child;
+  const { picture, itDidNotLoad } = useShownPicture(card.poster);
+  const playable = card.source !== null;
+  const to = card.kind === "video" && playable ? `/work/${card.id}?play` : `/work/${card.id}`;
+  const choosing = useChoosingPress(card.id);
 
   return (
     <div
@@ -63,8 +65,8 @@ function OwnTile({ child }: { child: Child }) {
     >
       <Link
         to={to}
-        className={`own-tile own-tile-${child.kind}`}
-        style={{ ["--card-color" as string]: child.color ?? "var(--surface)" }}
+        className={`own-tile own-tile-${card.kind}`}
+        style={{ ["--card-color" as string]: card.color ?? "var(--surface)" }}
         onClick={choosing.onClick}
       >
         <div className="own-picture">
@@ -82,25 +84,25 @@ function OwnTile({ child }: { child: Child }) {
               <HomeMediaIcon size={32} />
             </div>
           )}
-          {child.kind === "folder" && (
+          {card.kind === "folder" && (
             <span className="own-badge">{howMany(child.child_count, "own.item_count", t)}</span>
           )}
-          {child.kind === "video" && (
+          {card.kind === "video" && (
             <span className="own-badge">
               <span className="play-mark" aria-hidden="true" />
-              {child.runtime_minutes ? t("work.minutes", { count: child.runtime_minutes }) : ""}
+              {card.runtime_minutes ? t("work.minutes", { count: card.runtime_minutes }) : ""}
             </span>
           )}
         </div>
-        <span className="own-name">{child.title}</span>
-        {!child.playable && child.kind !== "folder" && (
+        <span className="own-name">{card.title}</span>
+        {!playable && card.kind !== "folder" && (
           <span className="own-missing">{t("work.not_on_disk")}</span>
         )}
       </Link>
       {/* Beside the link rather than in it, laid over the corner of the
           picture: a button inside a link is a press that goes two ways. */}
       <div className="own-select">
-        <SelectMark id={child.id} />
+        <SelectMark id={card.id} />
       </div>
     </div>
   );
