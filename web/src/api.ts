@@ -1565,13 +1565,15 @@ export const api = {
      signed in straight away. Refused once there is one. */
   setUp: (name: string, password: string, remember: boolean) =>
     post<Account>("/api/v1/setup", { name, password, remember }),
-  /* Changing it signs every other device out and keeps this one going. */
   /* The picture of the account signed in, sent as the file chosen. Both
      answer the account as it now is. */
   setAvatar: (image: Blob) => put<Account>("/api/v1/me/avatar", image),
   removeAvatar: () => remove<Account>("/api/v1/me/avatar"),
+  /* Changing it signs every other device out and keeps this one going. */
   changePassword: (current: string, wanted: string) =>
     put<Account>("/api/v1/me/password", { current, wanted }),
+  /* Answers the account under its new name; every device stays signed in. */
+  rename: (name: string) => put<Account>("/api/v1/me/name", { name }),
   setFavourite: (work: string, favourite: boolean) =>
     put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
   /* On a season or a series this marks every episode below it, which is what

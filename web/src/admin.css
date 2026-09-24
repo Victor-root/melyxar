@@ -1820,7 +1820,7 @@
   margin-top: 6px;
 }
 
-.password-form {
+.account-form {
   display: flex;
   flex-direction: column;
   gap: 10px;

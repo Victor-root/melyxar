@@ -36,6 +36,7 @@ pub enum Event {
     PasswordChanged { user: UserId, user_name: String },
     AccountCreated { user: UserId, user_name: String },
     AccountRemoved { user_name: String },
+    AccountRenamed { user: UserId, from: String, to: String },
     Watched(Viewing),
     TaskEnded(TaskEnded),
     WorksDeleted {
@@ -110,6 +111,7 @@ impl Category {
                 PASSWORD_CHANGED,
                 ACCOUNT_CREATED,
                 ACCOUNT_REMOVED,
+                ACCOUNT_RENAMED,
             ],
             Self::Playback => &[WATCHED],
             Self::Library => &[TASK_FINISHED, TASK_FAILED, TASK_STOPPED, WORKS_DELETED],
@@ -127,6 +129,7 @@ const SIGNED_OUT: &str = "signed_out";
 const PASSWORD_CHANGED: &str = "password_changed";
 const ACCOUNT_CREATED: &str = "account_created";
 const ACCOUNT_REMOVED: &str = "account_removed";
+const ACCOUNT_RENAMED: &str = "account_renamed";
 const WATCHED: &str = "watched";
 const TASK_FINISHED: &str = "task_finished";
 pub(crate) const TASK_FAILED: &str = "task_failed";
@@ -260,6 +263,12 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
         Event::AccountRemoved { user_name } => {
             line(ACCOUNT_REMOVED, None, None, json!({ "user_name": user_name }))
         }
+        Event::AccountRenamed { user, from, to } => line(
+            ACCOUNT_RENAMED,
+            Some(user),
+            None,
+            json!({ "user_name": to, "previous_name": from }),
+        ),
         Event::Watched(viewing) => {
             let mut details = what_was_watched(database, viewing.work).await?;
             details["user_name"] = json!(viewing.user_name);

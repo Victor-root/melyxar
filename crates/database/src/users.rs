@@ -265,6 +265,26 @@ impl Database {
         Ok(done.rows_affected() > 0)
     }
 
+    /// Gives an account another name, and says `false` when another account
+    /// already has it.
+    ///
+    /// Left to the unique index rather than looked up first, so two accounts
+    /// asking for the same name in the same breath cannot both have it. The
+    /// index ignores case, as signing in does; the account's own name written
+    /// otherwise is not another account's.
+    pub async fn rename_user(&self, id: UserId, name: &str) -> Result<bool> {
+        let renamed = sqlx::query("UPDATE users SET name = ? WHERE id = ?")
+            .bind(name)
+            .bind(id.to_db_string())
+            .execute(self.writer())
+            .await;
+        match renamed {
+            Ok(_) => Ok(true),
+            Err(sqlx::Error::Database(error)) if error.is_unique_violation() => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     /// Says which libraries an account may see, replacing whatever it had.
     ///
     /// Whole rather than one at a time: what is being set is the answer to
@@ -551,6 +571,36 @@ mod tests {
             database.names_at_the_door().await.expect("read")[0].avatar_path,
             None
         );
+    }
+
+    #[tokio::test]
+    async fn an_account_takes_a_new_name_unless_another_one_has_it() {
+        let database = database().await;
+        let zoe = database
+            .create_user("Zoe", Some("a stored form"), &Permissions::viewer())
+            .await
+            .expect("account created");
+        database
+            .create_user("Marc", Some("a stored form"), &Permissions::viewer())
+            .await
+            .expect("account created");
+
+        assert!(!database.rename_user(zoe.id, "marc").await.expect("asked"));
+        assert_eq!(
+            database.user(zoe.id).await.expect("read").expect("found").name,
+            "Zoe",
+            "a name another account has, whatever its case, leaves the account as it was"
+        );
+
+        assert!(database.rename_user(zoe.id, "ZOE").await.expect("asked"));
+        assert!(database.rename_user(zoe.id, "Zoé").await.expect("asked"));
+        let (renamed, _) = database
+            .user_by_name("Zoé")
+            .await
+            .expect("lookup works")
+            .expect("found under the new name");
+        assert_eq!(renamed.id, zoe.id);
+        assert!(database.user_by_name("Zoe").await.expect("lookup works").is_none());
     }
 
     #[tokio::test]

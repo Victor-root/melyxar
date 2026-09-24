@@ -62,6 +62,7 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/v1/me", axum::routing::get(me))
         .route("/api/v1/me/password", axum::routing::put(change_password))
+        .route("/api/v1/me/name", axum::routing::put(rename))
         .route("/api/v1/me/browser", axum::routing::put(name_the_browser))
         .route(
             "/api/v1/me/avatar",
@@ -499,6 +500,21 @@ async fn change_password(
             "that is not the current password",
         )),
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct NameBody {
+    name: String,
+}
+
+/// Gives this account the name asked for, and answers the account wearing it.
+async fn rename(
+    State(state): State<AppState>,
+    Viewer(user): Viewer,
+    Json(asked): Json<NameBody>,
+) -> Result<Json<AccountView>> {
+    let renamed = melyxar_app::accounts::rename(&state, &user, &asked.name).await?;
+    Ok(Json(AccountView::from(&renamed)))
 }
 
 #[derive(Debug, Deserialize)]
