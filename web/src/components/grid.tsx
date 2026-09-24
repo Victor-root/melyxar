@@ -93,13 +93,17 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
     cards[next].scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, []);
 
+  /* One box holding both, so the end is always under the last card. Left
+     loose beside it, the end became a neighbour of whatever the grid was set
+     beside, the letters, and sat at the top of the page: always in view, it
+     either fetched the whole library at once or never fetched again. */
   return (
-    <>
+    <div>
       <div className={`grid grid-${shape}`} ref={grid} onKeyDown={onKeyDown}>
         {children}
       </div>
       <div ref={sentinel} aria-hidden="true" />
-    </>
+    </div>
   );
 }
 
