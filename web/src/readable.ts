@@ -113,6 +113,49 @@ export function readableDate(value: string, language: string): string | null {
     : when.toLocaleString(language, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** A day written year, month and day, as a provider writes a birthday. */
+const A_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * A day spelled out in the language being read.
+ *
+ * Read as a day and never as an instant: taken for midnight somewhere, a
+ * birthday lands on the day before for anybody west of that somewhere.
+ */
+export function readableDay(day: string, language: string): string | null {
+  const parts = A_DAY.exec(day);
+  if (!parts) {
+    return null;
+  }
+  const when = new Date(Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3])));
+  return when.toLocaleDateString(language, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** The whole years from one day to another, both written year, month and
+ *  day: how old somebody is, or was. */
+export function yearsBetween(from: string, to: string): number | null {
+  const start = A_DAY.exec(from);
+  const end = A_DAY.exec(to);
+  if (!start || !end) {
+    return null;
+  }
+  const [, fromYear, fromMonth, fromDay] = start.map(Number);
+  const [, toYear, toMonth, toDay] = end.map(Number);
+  const beforeTheBirthday = toMonth < fromMonth || (toMonth === fromMonth && toDay < fromDay);
+  return toYear - fromYear - (beforeTheBirthday ? 1 : 0);
+}
+
+/** Today, written year, month and day, on the reader's own calendar. */
+export function todayOf(now: Date): string {
+  const two = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())}`;
+}
+
 /**
  * The time of day an instant carries, and nothing else.
  *
@@ -177,6 +220,20 @@ export function howLong(minutes: number, t: Wording): string {
   return rest === 0
     ? t("work.hours", { hours })
     : t("work.hours_minutes", { hours, minutes: rest });
+}
+
+/** How much of a film is left, which is what a row of half watched ones is
+ *  read for, and what the bar under a play button says. */
+export function whatIsLeft(
+  seconds: number,
+  runtimeMinutes: number | null,
+  t: Wording,
+): string | undefined {
+  if (!runtimeMinutes || runtimeMinutes <= 0) {
+    return undefined;
+  }
+  const left = Math.max(Math.round(runtimeMinutes - seconds / 60), 0);
+  return left === 0 ? undefined : t("home.hero.left", { time: howLong(left, t) });
 }
 
 /**

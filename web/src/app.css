@@ -2665,20 +2665,25 @@ button.seen-mark:not(.seen-mark-on):hover {
  * One film
  * ----------------------------------------------------------------------- */
 
+/* The page is a picture before it is anything else: the backdrop runs the
+   whole way up behind the bar and gives way into the page the way the banner
+   of the home page does, sideways for the words and downwards for the rows. */
 .work {
   position: relative;
+  isolation: isolate;
   padding: 0 var(--gutter) var(--gap-section);
 }
 
 .work-backdrop {
   position: absolute;
   inset: 0 0 auto 0;
-  height: min(62vh, 620px);
+  height: min(100dvh, 1100px);
   z-index: -1;
   overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 55%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent);
 }
 
-/* The same as the banner of the home page, for the same reason. */
 .work-backdrop img {
   width: 100%;
   height: 100%;
@@ -2686,25 +2691,37 @@ button.seen-mark:not(.seen-mark-on):hover {
   object-position: center var(--where-a-band-is-cut);
 }
 
-.work-scrim {
+.work-backdrop::after {
+  content: "";
   position: absolute;
   inset: 0;
-  background: var(--scrim);
+  background:
+    linear-gradient(
+      to right,
+      var(--surface-deep) 18%,
+      color-mix(in srgb, var(--surface-deep) 70%, transparent) 55%,
+      color-mix(in srgb, var(--surface-deep) 40%, transparent)
+    ),
+    linear-gradient(to top, var(--surface-deep), transparent 60%);
 }
 
-.work-inner {
+/* The top of the page: under the bar, and never taller than the window. */
+.work-top {
   display: flex;
-  gap: var(--gap-section);
-  padding-top: min(26vh, 240px);
+  align-items: flex-start;
+  gap: clamp(var(--gap-wide), 3vw, 56px);
+  padding: calc(var(--header-height) + var(--gap)) 0 var(--gap-section);
 }
 
 .work-poster {
-  flex: 0 0 268px;
+  flex: none;
+  width: clamp(180px, 19vw, 300px);
 }
 
 .work-poster img,
 .work-poster-empty {
-  width: 268px;
+  display: block;
+  width: 100%;
   aspect-ratio: 2 / 3;
   border-radius: var(--radius-card);
   object-fit: cover;
@@ -2721,30 +2738,267 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .work-body {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+/* A ruler as tall as the room the top of the page has: the window under the
+   bar, less the air kept above and below. Nothing is drawn with it; the page
+   reads it to know how much of the synopsis fits. */
+.work-room {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: calc(100dvh - var(--header-height) - var(--gap) - var(--gap-section));
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .work-title {
   margin: 0;
-  font-size: clamp(28px, 4vw, 46px);
-  font-weight: 750;
+  font-size: clamp(30px, 3.6vw, 52px);
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
 }
 
 .work-tagline {
-  margin: var(--gap-tight) 0 0;
+  margin: -6px 0 0;
   color: var(--text-soft);
   font-style: italic;
   font-size: 16px;
 }
 
+/* What it is, on one line, the way the banner says it. */
 .work-facts {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--gap-tight);
-  margin: var(--gap) 0;
+  align-items: center;
+  gap: 6px var(--gap-wide);
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+.work-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.work-rating svg {
+  color: var(--accent-bright);
+}
+
+/* Bordered rather than filled, like the badges of the banner: facts about the
+   work, not buttons. */
+.work-badge {
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-deep) 45%, transparent);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+}
+
+.work-badge-warning {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+
+.work-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+/* Which copy, which sound, which words: a word and a choice each, on one
+   line while there is room for it. */
+.work-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px var(--gap-wide);
+}
+
+.work-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14.5px;
+}
+
+.work-choice-label {
+  color: var(--text-faint);
+}
+
+.work-choice-value {
+  font-weight: 550;
+}
+
+.work-choice .picker {
+  min-width: 0;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  border-color: var(--border);
+  background: var(--panel-glass);
+  backdrop-filter: blur(12px);
+  font-weight: 550;
+}
+
+.work-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  margin-top: 4px;
+}
+
+/* Seen, liked and the menu: round, the way the marks of a card are, and
+   lit in the accent once they say yes. */
+.work-marks {
+  display: inline-flex;
+  gap: 10px;
+}
+
+.work-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel-glass);
+  backdrop-filter: blur(12px);
+  color: var(--text);
+  transition: transform var(--quick) var(--ease), background var(--quick) var(--ease);
+}
+
+.work-mark:hover {
+  background: var(--surface-hover);
+  transform: scale(1.06);
+}
+
+.work-mark-on {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  color: var(--accent-bright);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-mark:hover {
+    transform: none;
+  }
+}
+
+.work-progress {
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.work-progress .progress-bar {
+  width: 300px;
+}
+
+/* As wide as reads comfortably, and the whole column when the screen is too
+   short for it to fit otherwise. */
+.work-synopsis {
+  max-width: 78ch;
+}
+
+.work-body-wide .work-synopsis {
+  max-width: none;
+}
+
+.work-overview {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15.5px;
+  line-height: 1.65;
+  overflow: hidden;
+  /* A life written in paragraphs keeps them. */
+  white-space: pre-line;
+}
+
+/* Cut on a whole line, the dots saying there is more. */
+.work-overview[data-cut] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+
+.work-overview-empty {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* Who made it: the part on the left, the names beside it. */
+.work-credits {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 5px var(--gap-wide);
+  margin: 0;
+  font-size: 14.5px;
+}
+
+.work-credit {
+  display: contents;
+}
+
+.work-credit dt {
+  color: var(--text-faint);
+}
+
+.work-credit dd {
+  margin: 0;
+  color: var(--text);
+}
+
+.work-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+/* A picture cut out of the sheets the player's bar uses, filling the card. */
+.chapter-still {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+}
+
+/* The panels of what the file holds: a little narrower than the ones of the
+   administration, since there are one per track. */
+.work-panels {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+}
+
+.work-facts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+/* Narrow: the poster above, and the words under it across the whole width. */
+@media (max-width: 800px) {
+  .work-top {
+    flex-direction: column;
+  }
+
+  .work-poster {
+    width: min(220px, 50vw);
+  }
 }
 
 .fact {
@@ -2754,11 +3008,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   border: 1px solid var(--border);
   font-size: 13px;
   color: var(--text-soft);
-}
-
-.fact-warning {
-  border-color: var(--accent);
-  color: var(--accent-bright);
 }
 
 /* --------------------------------------------------------------------------
@@ -3066,150 +3315,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   accent-color: var(--accent);
 }
 
-.work-actions {
-  display: flex;
-  gap: var(--gap);
-  margin: var(--gap-wide) 0;
-  flex-wrap: wrap;
-}
-
-.work-synopsis {
-  max-width: 74ch;
-}
-
-.work-overview {
-  margin: 0;
-  color: var(--text-soft);
-  line-height: 1.65;
-  display: -webkit-box;
-  -webkit-line-clamp: 5;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* Opened, the text simply stops being clipped: no second copy, no jump. */
-.work-overview-open {
-  -webkit-line-clamp: unset;
-  overflow: visible;
-}
-
-.work-overview-empty {
-  color: var(--text-faint);
-  font-style: italic;
-}
-
-.work-collection {
-  color: var(--text-faint);
-  font-size: 14px;
-}
-
-.work-crew {
-  margin: var(--gap-wide) 0 0;
-  display: grid;
-  gap: 4px;
-}
-
-.crew-line {
-  display: flex;
-  gap: var(--gap);
-  font-size: 14px;
-}
-
-.crew-line dt {
-  color: var(--text-faint);
-  min-width: 110px;
-}
-
-.crew-line dd {
-  margin: 0;
-  color: var(--text-soft);
-}
-
-.cast-row {
-  display: flex;
-  gap: var(--gap);
-  overflow-x: auto;
-  padding-bottom: var(--gap-tight);
-  scroll-snap-type: x proximity;
-}
-
-.cast-card {
-  flex: 0 0 120px;
-  scroll-snap-align: start;
-  text-align: center;
-}
-
-.cast-face {
-  width: 96px;
-  height: 96px;
-  margin: 0 auto 6px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  font-size: 32px;
-  font-weight: 650;
-  color: var(--text-faint);
-}
-
-/* A portrait is taller than it is wide, so it is cropped to the frame rather
-   than squeezed into it, and cropped from the top where the face is. */
-.cast-face img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 50% 15%;
-}
-
-.cast-name {
-  display: block;
-  font-size: 13px;
-  font-weight: 550;
-}
-
-.cast-role {
-  display: block;
-  font-size: 12px;
-  color: var(--text-faint);
-}
-
-/* --------------------------------------------------------------------------
- * Versions and tracks
- * ----------------------------------------------------------------------- */
-
-.version-tabs {
-  display: flex;
-  gap: var(--gap-tight);
-  flex-wrap: wrap;
-  margin-bottom: var(--gap);
-}
-
-.version {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  padding: var(--gap-wide);
-}
-
-.version-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap-tight);
-  align-items: center;
-  margin: 0 0 var(--gap);
-}
-
-.version-summary {
-  font-weight: 650;
-}
-
-.version-size {
-  font-size: 13px;
-  color: var(--text-faint);
-}
-
 /* The grid with the letters beside it. The letters follow the page down, so
    jumping to another one never means scrolling back up first. */
 .grid-with-letters {
@@ -3273,54 +3378,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   }
 }
 
-/* Quiet: corrections and re-readings, not what anybody came here to do. */
-.version-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap-tight);
-  align-items: center;
-  margin: 0 0 var(--gap);
-}
-
-/* Where the file is and what it weighs, before anything about its insides:
-   that is the order somebody reads in when something is wrong with it. */
-.media-facts {
-  margin: 0 0 var(--gap-wide);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 2px var(--gap-wide);
-}
-
-/* One card per track, as many as the file holds. They wrap rather than
-   scroll: reading them side by side is the whole point. */
-.track-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: var(--gap);
-}
-
-.track-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  padding: var(--gap);
-  background: var(--surface-raised);
-}
-
-.track-card h3 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
-}
-
-.track-facts {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .fact-line {
   display: flex;
   gap: var(--gap-tight);
@@ -3351,22 +3408,6 @@ button.seen-mark:not(.seen-mark-on):hover {
 .fact-line-wide dd {
   font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
   font-size: 12px;
-}
-
-.work-studios,
-.work-links {
-  margin: var(--gap-tight) 0 0;
-  font-size: 14px;
-  color: var(--text-soft);
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap-tight);
-  align-items: baseline;
-}
-
-.work-studios-label {
-  color: var(--text-faint);
-  font-size: 13px;
 }
 
 .work-link {
@@ -4301,7 +4342,9 @@ button.seen-mark:not(.seen-mark-on):hover {
   margin-top: 4px;
 }
 
-.hero-progress {
+/* How far in a work already is: a bar and what is left, under the buttons
+   that carry on with it, on the banner and on the page of the work alike. */
+.progress-line {
   display: flex;
   align-items: center;
   gap: var(--gap);
@@ -4310,7 +4353,7 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--text-faint);
 }
 
-.hero-progress-bar {
+.progress-bar {
   width: 220px;
   max-width: 48%;
   height: 4px;
@@ -4319,7 +4362,7 @@ button.seen-mark:not(.seen-mark-on):hover {
   overflow: hidden;
 }
 
-.hero-progress-done {
+.progress-done {
   display: block;
   height: 100%;
   background: var(--accent);

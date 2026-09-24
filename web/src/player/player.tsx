@@ -25,10 +25,10 @@ import { useSettings } from "../settings";
 import { appearanceClasses, rememberAppearance, storedAppearance } from "./appearance";
 import type { Appearance } from "./appearance";
 import { storedArrangement } from "./arrangement";
+import { trackName } from "./describe";
 import { canBePlayedAsItIs, usePlayback } from "./engine";
 import { PlaybackFacts } from "./facts";
 import { useFullscreen } from "./fullscreen";
-import { languageName } from "../languages";
 import { markFor, useBranding } from "./logo";
 import { Overlay, SkipStretch } from "./overlay";
 import type { Panel, Shape } from "./overlay";
@@ -37,33 +37,11 @@ import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
 import "./player.css";
 
-/**
- * What to call a track in a list.
- *
- * The language first, since that is what a viewer is looking for, then what
- * the file itself calls it when it says something, and the number of channels
- * when there is more than a pair.
- */
-function trackName(track: PlaybackTrack, t: (key: string) => string, speaking: string): string {
-  const parts = [
-    track.language ? languageName(track.language, speaking) : t("player.unknown_language"),
-  ];
-  if (track.title) {
-    parts.push(track.title);
-  }
-  if (track.channels && track.channels > 2) {
-    parts.push(`${track.channels}`);
-  }
-  if (track.burns_in) {
-    parts.push(t("player.burns_in_short"));
-  }
-  return parts.join(" · ");
-}
-
 export function Player({
   sourceId,
   work,
   fromTheStart,
+  startAt,
   onClose,
   onEnded,
   onNextEpisode,
@@ -77,6 +55,8 @@ export function Player({
   work: Work;
   /** Set when the viewer asked to start again rather than carry on. */
   fromTheStart?: boolean;
+  /** Where to start instead, in seconds, when a moment was chosen by hand. */
+  startAt?: number;
   onClose: () => void;
   /** Told when the film reaches its end on its own, so an episode can be
    *  followed by the one after it. */
@@ -104,6 +84,7 @@ export function Player({
     sourceId,
     workId: work.id,
     fromTheStart,
+    startAt,
     onEnded,
     onStopped: stoppedByAnAdministrator,
   });

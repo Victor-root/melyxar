@@ -8,7 +8,8 @@
  * wrong.
  */
 
-import type { FilmHolds, PictureRebuild, Producing } from "../api";
+import type { FilmHolds, PictureRebuild, PlaybackTrack, Producing } from "../api";
+import { languageName } from "../languages";
 
 type Wording = (key: string, values?: Record<string, string | number>) => string;
 
@@ -96,4 +97,28 @@ export function soundDone(method: string, t: Wording): string {
   return method === "full_transcode" || method === "transcode_audio"
     ? t("facts.rebuilt_sound")
     : t("facts.carried_over");
+}
+
+/**
+ * What to call a track in a list, in the player and on the page that
+ * chooses one before it opens.
+ *
+ * The language first, since that is what a viewer is looking for, then what
+ * the file itself calls it when it says something, and the number of channels
+ * when there is more than a pair.
+ */
+export function trackName(track: PlaybackTrack, t: Wording, speaking: string): string {
+  const parts = [
+    track.language ? languageName(track.language, speaking) : t("player.unknown_language"),
+  ];
+  if (track.title) {
+    parts.push(track.title);
+  }
+  if (track.channels && track.channels > 2) {
+    parts.push(`${track.channels}`);
+  }
+  if (track.burns_in) {
+    parts.push(t("player.burns_in_short"));
+  }
+  return parts.join(" · ");
 }

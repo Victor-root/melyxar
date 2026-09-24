@@ -16,6 +16,7 @@ import {
   asUtcMinutes,
   containerName,
   howLong,
+  whatIsLeft,
   howLongSince,
   insideTheRange,
   networkRate,
@@ -24,7 +25,10 @@ import {
   percentOf,
   readableBitrate,
   readableSize,
+  readableDay,
   releaseOf,
+  todayOf,
+  yearsBetween,
 } from "./readable";
 
 /** Standing in for the interface's own wording, so what is checked is the sum
@@ -211,5 +215,37 @@ describe("containerName", () => {
   it("keeps the analyser's first name for one it has no other name for", () => {
     expect(containerName("avi")).toBe("AVI");
     expect(containerName("flv")).toBe("FLV");
+  });
+});
+
+describe("whatIsLeft", () => {
+  it("says what is left of a film, in whole minutes", () => {
+    expect(whatIsLeft(92 * 60, 115, said)).toBe(
+      'home.hero.left({"time":"work.minutes({\\"count\\":23})"})',
+    );
+  });
+
+  it("says nothing without a length, or with nothing left", () => {
+    expect(whatIsLeft(600, null, said)).toBeUndefined();
+    expect(whatIsLeft(115 * 60, 115, said)).toBeUndefined();
+  });
+});
+
+describe("days", () => {
+  it("counts whole years, the birthday itself included", () => {
+    expect(yearsBetween("1973-08-06", "2026-08-05")).toBe(52);
+    expect(yearsBetween("1973-08-06", "2026-08-06")).toBe(53);
+    expect(yearsBetween("1973-08-06", "2026-09-24")).toBe(53);
+    expect(yearsBetween("unknown", "2026-09-24")).toBeNull();
+  });
+
+  it("spells a day out without letting a clock move it", () => {
+    expect(readableDay("1973-08-06", "fr")).toBe("6 août 1973");
+    expect(readableDay("1973-08-06", "en")).toBe("August 6, 1973");
+    expect(readableDay("", "fr")).toBeNull();
+  });
+
+  it("writes today on the reader's calendar", () => {
+    expect(todayOf(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
   });
 });

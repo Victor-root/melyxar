@@ -18,17 +18,14 @@
  * rewrite when it comes rather than an adjustment.
  */
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 import { playsOnItsOwn } from "../works";
 import { useShownPicture } from "./picture";
-import { CardMenu } from "./cardmenu";
-import { IdentifyDialog } from "./identify";
-import { DeleteDialog } from "./deletion";
-import { PicturesDialog } from "./pictures";
+import { useWorkMenu } from "./cardmenu";
 import { SelectMark, useChoosingPress } from "./selection";
 import { SeenMark } from "./seen";
 import { HeartIcon, MoreIcon, PlayIcon } from "../icons";
@@ -94,16 +91,15 @@ export function Card({
   const { picture: poster, itDidNotLoad } = useShownPicture(
     shape === "lying" && card.wide.length > 0 ? card.wide : card.poster,
   );
-  /* Where the menu is drawn from. Kept as the button's place at the moment
-     it was pressed, because the menu is drawn over the page rather than
-     inside the card, which clips what it holds. */
+  /* The menu is drawn over the page rather than inside the card, which
+     clips what it holds. The card says what it is from the answer the page
+     was drawn from, so a renamed or repainted work has the page read
+     again rather than mended here. */
   const kebab = useRef<HTMLButtonElement>(null);
-  const [menuFrom, setMenuFrom] = useState<DOMRect | null>(null);
-  /* Held by the card rather than by the menu, which is taken away the moment
-     one of its lines is pressed. */
-  const [identifying, setIdentifying] = useState(false);
-  const [choosingPictures, setChoosingPictures] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const menu = useWorkMenu(card, {
+    identified: marks.rowsHaveMoved,
+    picturesChanged: marks.rowsHaveMoved,
+  });
   const choosing = useChoosingPress(card.id);
 
   const unknown = card.identification === "unidentified" || card.identification === "pending";
@@ -215,15 +211,11 @@ export function Card({
             <button
               ref={kebab}
               type="button"
-              className={`card-mark${menuFrom ? " card-mark-on" : ""}`}
+              className={`card-mark${menu.open ? " card-mark-on" : ""}`}
               aria-label={t("card.more")}
               title={t("card.more")}
-              aria-expanded={menuFrom !== null}
-              onClick={stop(() =>
-                setMenuFrom((was) =>
-                  was ? null : (kebab.current?.getBoundingClientRect() ?? null),
-                ),
-              )}
+              aria-expanded={menu.open}
+              onClick={stop(() => menu.toggle(kebab.current))}
             >
               <MoreIcon size={17} />
             </button>
@@ -254,44 +246,7 @@ export function Card({
       </span>
       <span className="card-year">{note ?? card.year ?? ""}</span>
 
-      {menuFrom && (
-        <CardMenu
-          card={card}
-          from={menuFrom}
-          openedBy={kebab.current}
-          onIdentify={() => setIdentifying(true)}
-          onEditImages={() => setChoosingPictures(true)}
-          onDelete={() => setDeleting(true)}
-          onClose={() => setMenuFrom(null)}
-        />
-      )}
-
-      {identifying && (
-        <IdentifyDialog
-          workId={card.id}
-          title={card.title}
-          onClose={() => setIdentifying(false)}
-          /* The card says what it is from the answer the page was drawn
-             from, so the page is read again rather than mended here. */
-          onIdentified={() => marks.rowsHaveMoved()}
-        />
-      )}
-
-      {choosingPictures && (
-        <PicturesDialog
-          workId={card.id}
-          onClose={() => setChoosingPictures(false)}
-          onChanged={() => marks.rowsHaveMoved()}
-        />
-      )}
-
-      {deleting && (
-        <DeleteDialog
-          works={[card]}
-          onClose={() => setDeleting(false)}
-          onDeleted={() => setDeleting(false)}
-        />
-      )}
+      {menu.drawn}
     </article>
   );
 }

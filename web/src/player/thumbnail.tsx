@@ -31,6 +31,31 @@ export function spotOf(
   };
 }
 
+/**
+ * The thumbnail covering one moment, as a background filling a box of any
+ * size: the sheet is stretched so one thumbnail fills the box, and moved so the
+ * right one is in it. For a box whose width is the stylesheet's rather than a
+ * number known here, a card in a row.
+ */
+export function cutOut(
+  thumbnails: PlaybackThumbnails,
+  seconds: number,
+): { backgroundImage: string; backgroundSize: string; backgroundPosition: string } | null {
+  const spot = spotOf(thumbnails, seconds);
+  if (!spot) {
+    return null;
+  }
+  /* A percentage of position slides the sheet by the share of what is left
+     over once the box is taken out of it, so the last column is at a hundred
+     and a sheet of one column never moves. */
+  const along = (at: number, of: number) => (of > 1 ? (at / (of - 1)) * 100 : 0);
+  return {
+    backgroundImage: `url(${thumbnails.url}/${spot.sheet}.jpg)`,
+    backgroundSize: `${thumbnails.columns * 100}% ${thumbnails.rows * 100}%`,
+    backgroundPosition: `${along(spot.column, thumbnails.columns)}% ${along(spot.row, thumbnails.rows)}%`,
+  };
+}
+
 /** How tall a thumbnail is at a given width, keeping the film's own shape. */
 export function heightAt(thumbnails: PlaybackThumbnails, across: number): number {
   return thumbnails.width > 0 ? (across * thumbnails.height) / thumbnails.width : 0;

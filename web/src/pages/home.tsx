@@ -23,13 +23,13 @@ import { Band } from "../components/band";
 import { Card } from "../components/card";
 import type { CardShape } from "../components/card";
 import { Hero } from "../components/hero";
-import { Row } from "../components/row";
+import { Row, RowHead } from "../components/row";
 import { howFarIn, useHomeScreen } from "../screens/home";
 import { refusalKey } from "../i18n";
-import { howLong, whichEpisode } from "../readable";
+import { whatIsLeft, whichEpisode } from "../readable";
 import { cardShapeOf, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
-import { BinocularsIcon, CameraIcon, ChevronRightIcon, EyeIcon, KindIcon } from "../icons";
+import { BinocularsIcon, CameraIcon, EyeIcon, KindIcon } from "../icons";
 
 /** Where the row of everything newest leads, which is the same grid read in
  *  the same order. */
@@ -268,51 +268,6 @@ function Together({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * The heading of one row.
- *
- * A row that has a whole grid behind it says so twice: the heading itself
- * leads there, carrying the chevron that says it is a way through, and the
- * words at the right say it in words for whoever does not read chevrons. A
- * row that is only ever a row, like what somebody left halfway, has neither,
- * because a chevron leading nowhere is worse than no chevron.
- */
-function RowHead({
-  mark,
-  title,
-  to,
-  children,
-}: {
-  mark?: React.ReactNode;
-  title: string;
-  to?: string;
-  children?: React.ReactNode;
-}) {
-  const { t } = useSettings();
-
-  return (
-    <div className="section-head">
-      <h2>
-        {mark}
-        {to ? (
-          <Link className="section-through" to={to}>
-            {title}
-            <ChevronRightIcon size={17} />
-          </Link>
-        ) : (
-          title
-        )}
-      </h2>
-      {children}
-      {to && (
-        <Link className="section-all" to={to}>
-          {t("home.see_all")}
-        </Link>
-      )}
-    </div>
-  );
-}
-
 /** One row of cards, which draws nothing at all when it holds nothing. */
 function Shelf<T extends CardData>({
   title,
@@ -340,20 +295,6 @@ function Shelf<T extends CardData>({
       </Row>
     </section>
   );
-}
-
-/** How much of a film is left, which is what a row of half watched ones is
- *  read for. */
-function whatIsLeft(
-  seconds: number,
-  runtimeMinutes: number | null,
-  t: ReturnType<typeof useSettings>["t"],
-): string | undefined {
-  if (!runtimeMinutes || runtimeMinutes <= 0) {
-    return undefined;
-  }
-  const left = Math.max(Math.round(runtimeMinutes - seconds / 60), 0);
-  return left === 0 ? undefined : t("home.hero.left", { time: howLong(left, t) });
 }
 
 /**

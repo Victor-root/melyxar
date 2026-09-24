@@ -330,18 +330,20 @@ export interface Playback {
  * Plays one film, from asking the server what to do with it to leaving it.
  *
  * `fromTheStart` is set when the viewer asked to begin again rather than to
- * carry on.
+ * carry on, and `startAt` when they chose a moment of their own, a chapter.
  */
 export function usePlayback({
   sourceId,
   workId,
   fromTheStart,
+  startAt,
   onEnded,
   onStopped,
 }: {
   sourceId: string;
   workId: string;
   fromTheStart?: boolean;
+  startAt?: number;
   /** Told when the film reaches its end on its own, for whoever wants to put
    *  something else on after it. Never told when the viewer asked for it to
    *  repeat, because the browser then never reaches an end at all. */
@@ -551,7 +553,8 @@ export function usePlayback({
       .then((answer) => {
         if (!opened.current) {
           opened.current = true;
-          resumeAt.current = fromTheStart ? null : answer.resume_from_seconds;
+          resumeAt.current =
+            startAt ?? (fromTheStart ? null : answer.resume_from_seconds);
         }
         // Together, always: what is produced is decided on the three of them.
         setPlan(answer);
@@ -575,7 +578,7 @@ export function usePlayback({
         }
       });
     return () => controller.abort();
-  }, [sourceId, audioId, subtitleId, fromTheStart, quality, codec, choiceSerial]);
+  }, [sourceId, audioId, subtitleId, fromTheStart, startAt, quality, codec, choiceSerial]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
   /* The codec the picture is really being rebuilt into, and how fast the film

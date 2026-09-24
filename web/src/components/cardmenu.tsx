@@ -18,7 +18,8 @@
  * page, which is also what keeps it above the cards after it.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import type { Card } from "../api";
@@ -26,6 +27,9 @@ import { useAccount } from "../account";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 import { isCatalogued, playsOnItsOwn } from "../works";
+import { DeleteDialog } from "./deletion";
+import { IdentifyDialog } from "./identify";
+import { PicturesDialog } from "./pictures";
 import { useSelection } from "./selection";
 import {
   CollectionIcon,
@@ -65,6 +69,88 @@ interface Entry {
 
 /** How far from the edge of the window a menu is allowed to sit. */
 const OFF_THE_EDGE = 8;
+
+/** What a work's menu is opened from, and what it draws. */
+export interface WorkMenu {
+  /** Whether it is open, for the button that opens it to say so. */
+  open: boolean;
+  /** Opens it under a button, or shuts it when it was open. */
+  toggle: (button: HTMLElement | null) => void;
+  /** The menu and the panels its lines open, to be drawn beside the button. */
+  drawn: ReactNode;
+}
+
+/**
+ * A work's menu and the panels its lines open, for a card and for the page of
+ * the work alike: the same lines, answering the same way.
+ *
+ * The panels are held here rather than by the menu, which is taken away the
+ * moment one of its lines is pressed.
+ */
+export function useWorkMenu(
+  card: Card,
+  after: {
+    /** Said once the work was named by hand. */
+    identified: () => void;
+    /** Said whenever the pictures it wears changed. */
+    picturesChanged: () => void;
+    /** Said once it is gone, for a page that has nothing left to show. */
+    deleted?: () => void;
+  },
+): WorkMenu {
+  const [from, setFrom] = useState<{ rect: DOMRect; button: HTMLElement } | null>(null);
+  const [identifying, setIdentifying] = useState(false);
+  const [choosingPictures, setChoosingPictures] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const shut = useCallback(() => setFrom(null), []);
+
+  const toggle = useCallback((button: HTMLElement | null) => {
+    setFrom((was) => (was || !button ? null : { rect: button.getBoundingClientRect(), button }));
+  }, []);
+
+  const drawn = (
+    <>
+      {from && (
+        <CardMenu
+          card={card}
+          from={from.rect}
+          openedBy={from.button}
+          onIdentify={() => setIdentifying(true)}
+          onEditImages={() => setChoosingPictures(true)}
+          onDelete={() => setDeleting(true)}
+          onClose={shut}
+        />
+      )}
+      {identifying && (
+        <IdentifyDialog
+          workId={card.id}
+          title={card.title}
+          onClose={() => setIdentifying(false)}
+          onIdentified={after.identified}
+        />
+      )}
+      {choosingPictures && (
+        <PicturesDialog
+          workId={card.id}
+          onClose={() => setChoosingPictures(false)}
+          onChanged={after.picturesChanged}
+        />
+      )}
+      {deleting && (
+        <DeleteDialog
+          works={[card]}
+          onClose={() => setDeleting(false)}
+          onDeleted={() => {
+            setDeleting(false);
+            after.deleted?.();
+          }}
+        />
+      )}
+    </>
+  );
+
+  return { open: from !== null, toggle, drawn };
+}
 
 export function CardMenu({
   card,
@@ -134,6 +220,9 @@ export function CardMenu({
     };
     const away = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // Shut the menu and nothing else: the page under it answers to the
+        // same key by going back.
+        event.stopPropagation();
         onClose();
       }
     };

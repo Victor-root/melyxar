@@ -19,6 +19,7 @@ import { Toasts } from "./components/toasts";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { SearchPage } from "./pages/search";
+import { PersonPage } from "./pages/person";
 import { WorkPage } from "./pages/work";
 import { AdminLayout } from "./pages/admin/layout";
 import { AdminOverview } from "./pages/admin/overview";
@@ -131,6 +132,7 @@ function TheLibrary() {
                   library rather than a library of its own. */}
               <Route path="/favourites" element={<LibraryPage libraries={libraries.all} />} />
               <Route path="/work/:id" element={<WorkPage />} />
+              <Route path="/person/:id" element={<PersonPage />} />
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverview />} />
                 <Route path="libraries" element={<AdminLibraries />} />
@@ -153,9 +155,11 @@ function TheLibrary() {
               </Route>
               <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
             </Routes>
-            {/* Owed wherever the provider's pictures and words are shown,
-                which the tools and somebody's own settings are not. */}
-            {!isSectioned(location.pathname) && (
+            {/* Said on the home page and the grids, where the provider's
+                pictures and words are shown. Not on the tools and somebody's
+                own settings, which show none of them, nor on the page of a
+                work or of a person, which is meant to be the film alone. */}
+            {!isSectioned(location.pathname) && !/^\/(work|person)\//.test(location.pathname) && (
               <footer className="footer">
                 <span>{t("attribution.tmdb")}</span>
               </footer>

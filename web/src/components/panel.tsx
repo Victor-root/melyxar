@@ -219,6 +219,9 @@ export function Picker<T extends string>({
     };
     const away = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // Shut the list and nothing else: the page under it answers to the
+        // same key by going back.
+        event.stopPropagation();
         setOpen(false);
         field.current?.focus();
       }

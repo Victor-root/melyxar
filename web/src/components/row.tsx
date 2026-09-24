@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useDragToScroll } from "../dragging";
 import { useSettings } from "../settings";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
@@ -185,6 +186,51 @@ export function Row({ children }: { children: ReactNode }) {
         >
           <ChevronRightIcon size={26} />
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The heading of one row.
+ *
+ * A row that has a whole grid behind it says so twice: the heading itself
+ * leads there, carrying the chevron that says it is a way through, and the
+ * words at the right say it in words for whoever does not read chevrons. A
+ * row that is only ever a row, like what somebody left halfway, has neither,
+ * because a chevron leading nowhere is worse than no chevron.
+ */
+export function RowHead({
+  mark,
+  title,
+  to,
+  children,
+}: {
+  mark?: React.ReactNode;
+  title: string;
+  to?: string;
+  children?: React.ReactNode;
+}) {
+  const { t } = useSettings();
+
+  return (
+    <div className="section-head">
+      <h2>
+        {mark}
+        {to ? (
+          <Link className="section-through" to={to}>
+            {title}
+            <ChevronRightIcon size={17} />
+          </Link>
+        ) : (
+          title
+        )}
+      </h2>
+      {children}
+      {to && (
+        <Link className="section-all" to={to}>
+          {t("home.see_all")}
+        </Link>
       )}
     </div>
   );

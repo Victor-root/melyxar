@@ -362,6 +362,33 @@ export function LeaveIcon(props: IconProps) {
 }
 
 /* -------------------------------------------------------------------------
+ * The page of one work
+ * ---------------------------------------------------------------------- */
+
+/** Solid, for how well a work is rated. */
+export function StarIcon(props: IconProps) {
+  return (
+    <Icon {...props} strokeWidth={1.4}>
+      <path
+        d="m12 3.6 2.5 5.3 5.8.7-4.3 4 1.1 5.7L12 16.5l-5.1 2.8L8 13.6l-4.3-4 5.8-.7Z"
+        fill="currentColor"
+      />
+    </Icon>
+  );
+}
+
+/** A clapperboard, for the trailer: the film before the film. */
+export function TrailerIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="10" width="18" height="10" rx="1.8" />
+      <path d="M3 10 19.8 5.5 19 2.6 2.2 7.1Z" />
+      <path d="M7.4 5.7l2.3 3M12.2 4.4l2.3 3" />
+    </Icon>
+  );
+}
+
+/* -------------------------------------------------------------------------
  * What a card's menu offers
  * ---------------------------------------------------------------------- */
 
