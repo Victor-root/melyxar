@@ -315,6 +315,22 @@ impl Database {
         row.map(|(user,)| parse_id(&user)).transpose()
     }
 
+    /// Signs every device of one account out but the one given, and answers
+    /// the devices it signed out.
+    pub async fn close_other_devices(
+        &self,
+        user_id: UserId,
+        kept: DeviceId,
+    ) -> Result<Vec<DeviceId>> {
+        let rows: Vec<(String,)> =
+            sqlx::query_as("DELETE FROM devices WHERE user_id = ? AND id <> ? RETURNING id")
+                .bind(user_id.to_db_string())
+                .bind(kept.to_db_string())
+                .fetch_all(self.writer())
+                .await?;
+        rows.iter().map(|(device,)| parse_id(device)).collect()
+    }
+
     /// Signs every device of one account out, and says how many that was.
     ///
     /// What a changed password means: somebody changes it because they think
@@ -532,6 +548,41 @@ mod tests {
         assert!(database.session_holder("hers", later).await.expect("read").is_none());
         assert!(database.session_holder("his", later).await.expect("read").is_some());
         assert_eq!(database.close_device(hers).await.expect("asked"), None);
+    }
+
+    #[tokio::test]
+    async fn signing_the_other_devices_out_keeps_this_one_and_other_accounts() {
+        let (database, victor) = a_server_with_one_account().await;
+        let zoe = database
+            .create_user("zoe", Some("a stored form"), &Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
+        let here = database
+            .open_session(victor, "a browser", "here", Remembered::Yes, A_MOMENT, None)
+            .await
+            .expect("opened");
+        let phone = database
+            .open_session(victor, "a phone", "phone", Remembered::Yes, A_MOMENT, None)
+            .await
+            .expect("opened");
+        database
+            .open_session(zoe, "her phone", "hers", Remembered::Yes, A_MOMENT, None)
+            .await
+            .expect("opened");
+
+        assert_eq!(
+            database.close_other_devices(victor, here).await.expect("closed"),
+            vec![phone]
+        );
+        assert!(database.session_holder("here", A_MOMENT).await.expect("read").is_some());
+        assert!(database.session_holder("phone", A_MOMENT).await.expect("read").is_none());
+        assert!(database.session_holder("hers", A_MOMENT).await.expect("read").is_some());
+        assert!(database
+            .close_other_devices(victor, here)
+            .await
+            .expect("asked")
+            .is_empty());
     }
 
     #[tokio::test]

@@ -1,7 +1,8 @@
 //! The devices signed in to this server.
 //!
 //! Every one of them for an administrator, and one's own for everybody else:
-//! a phone lost is signed out by whoever lost it, without asking anybody.
+//! a phone lost is signed out by whoever lost it, without asking anybody,
+//! and every other device at once when there are too many to go through.
 //! Which device may be signed out by whom is the use cases' to decide.
 
 use axum::extract::{Path, State};
@@ -20,7 +21,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/devices", get(every_device))
         .route("/api/v1/devices/{id}", delete(sign_out_a_device))
-        .route("/api/v1/me/devices", get(my_devices))
+        .route(
+            "/api/v1/me/devices",
+            get(my_devices).delete(sign_out_my_other_devices),
+        )
         .route("/api/v1/me/devices/{id}", delete(sign_out_my_device))
 }
 
@@ -106,6 +110,16 @@ async fn sign_out_my_device(
 ) -> Result<Json<serde_json::Value>> {
     melyxar_app::accounts::sign_out_my_device(&state, &who, parse_device(&id)?).await?;
     Ok(Json(serde_json::json!({ "signed_out": true })))
+}
+
+async fn sign_out_my_other_devices(
+    Viewer(who): Viewer,
+    this: ThisBrowser,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>> {
+    let closed =
+        melyxar_app::accounts::sign_out_my_other_devices(&state, &who, this.device).await?;
+    Ok(Json(serde_json::json!({ "signed_out": closed })))
 }
 
 #[cfg(test)]
