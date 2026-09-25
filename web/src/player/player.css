@@ -138,6 +138,8 @@
   height: 100%;
   background: #000;
   overflow: hidden;
+  /* What a turned picture is measured against. */
+  container-type: size;
 }
 
 .player-video {
@@ -157,6 +159,37 @@
 }
 .player-video-stretch {
   object-fit: fill;
+}
+
+/* The picture turned, for a video filmed with the telephone the wrong way
+   round. A quarter turn swaps its two sides, so the element is laid out the
+   other way round first and then turned back into the stage, measured on the
+   stage itself: the fit chosen above then answers the screen as it is seen. */
+.player-video-turned {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100cqw;
+  height: 100cqh;
+  transform: translate(-50%, -50%) rotate(var(--player-turn));
+}
+
+.player-video-turned-90,
+.player-video-turned-270 {
+  width: 100cqh;
+  height: 100cqw;
+}
+
+.player-video-turned-90 {
+  --player-turn: 90deg;
+}
+
+.player-video-turned-180 {
+  --player-turn: 180deg;
+}
+
+.player-video-turned-270 {
+  --player-turn: 270deg;
 }
 
 /* ---------------------------------------------------------------------------

@@ -64,7 +64,7 @@ import { GearIcon } from "../icons";
 import type { Mark } from "./logo";
 import { QUALITIES, qualityName } from "./quality";
 import { CODECS, codecName } from "./codec";
-import { captionOf } from "../readable";
+import { captionOf, type Wording } from "../readable";
 import { FADES_AFTER_MS } from "./settings";
 import type { PlayerSettings } from "./settings";
 import { Thumbnail } from "./thumbnail";
@@ -92,6 +92,7 @@ export type Panel =
   | "settings.codec"
   | "settings.wide_gamut"
   | "settings.shape"
+  | "settings.turn"
   | "settings.repeat"
   | "settings.words_offset"
   | "facts"
@@ -100,6 +101,11 @@ export type Panel =
 /** How the picture is fitted into the screen. */
 export const SHAPES = ["auto", "cover", "stretch"] as const;
 export type Shape = (typeof SHAPES)[number];
+
+/** How far the picture is turned, clockwise. For a video of one's own filmed
+ *  with the telephone the wrong way round, which no film ever is. */
+export const TURNS = [0, 90, 180, 270] as const;
+export type Turn = (typeof TURNS)[number];
 
 /* How large an icon is drawn, read from the stylesheet so that the sizes live
    in one place and a viewer changing them later changes them everywhere. */
@@ -129,6 +135,8 @@ interface Props {
   mark: Mark;
   shape: Shape;
   onShape: (shape: Shape) => void;
+  turn: Turn;
+  onTurn: (turn: Turn) => void;
   /** What goes fullscreen, which is the picture and its controls together. */
   stage: React.RefObject<HTMLDivElement | null>;
   /** Whether the screen is filled, and how to ask for it either way. The
@@ -160,6 +168,11 @@ interface Props {
 }
 
 /** Whether what is open is one of the drawer's three sheets. */
+/** A turn as a viewer reads it: nothing at all, or how far. */
+function turnName(turn: Turn, t: Wording): string {
+  return turn === 0 ? t("player.turn.none") : t("player.turn.degrees", { degrees: turn });
+}
+
 function isASheet(panel: Panel | null): panel is SheetName {
   return panel !== null && (SHEETS as readonly string[]).includes(panel);
 }
@@ -1322,6 +1335,17 @@ function sheetFor(
               into
               onPick={() => onPanel("settings.shape")}
             />
+            {/* Only for a video of one's own: a film is never shot sideways,
+                and a line nobody needs is a line in everybody's way. */}
+            {surroundings.work.kind === "video" && (
+              <Line
+                label={t("player.turn")}
+                value={turnName(surroundings.turn, t)}
+                changed={surroundings.turn !== 0}
+                into
+                onPick={() => onPanel("settings.turn")}
+              />
+            )}
             <Line
               label={t("player.speed")}
               value={`${playback.speed}×`}
@@ -1385,6 +1409,20 @@ function sheetFor(
             label={t(`player.shape.${shape}`)}
             chosen={surroundings.shape === shape}
             onPick={() => surroundings.onShape(shape)}
+          />
+        )),
+      };
+
+    case "settings.turn":
+      return {
+        title: t("player.turn"),
+        from: "settings",
+        lines: TURNS.map((turn) => (
+          <Line
+            key={turn}
+            label={turnName(turn, t)}
+            chosen={surroundings.turn === turn}
+            onPick={() => surroundings.onTurn(turn)}
           />
         )),
       };

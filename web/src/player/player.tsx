@@ -41,7 +41,7 @@ import { useFullscreen } from "./fullscreen";
 import type { Fullscreen } from "./fullscreen";
 import { markFor, useBranding } from "./logo";
 import { Overlay, SkipStretch } from "./overlay";
-import type { Panel, Shape } from "./overlay";
+import type { Panel, Shape, Turn } from "./overlay";
 import { rememberSettings, storedSettings } from "./settings";
 import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
@@ -194,6 +194,8 @@ function Film({
   /* How the picture is fitted. Not remembered between films on purpose: it
      answers one film that was mastered oddly, not a standing preference. */
   const [shape, setShape] = useState<Shape>("auto");
+  /* How far the picture is turned. For this film only, like its fit. */
+  const [turn, setTurn] = useState<Turn>(0);
   /* Where each control sits. Read once: nothing writes one yet, and the day a
      settings screen does, this is the line that starts listening. */
   const [arrangement] = useState(storedArrangement);
@@ -243,7 +245,7 @@ function Film({
         <video
           key={pictureKey ?? undefined}
           ref={video}
-          className={`player-video player-video-${shape}`}
+          className={`player-video player-video-${shape}${turn === 0 ? "" : ` player-video-turned player-video-turned-${turn}`}`}
           src={canBePlayedAsItIs(plan) ? plan.url : undefined}
           autoPlay
           /* The picture itself starts and stops the film, the way every
@@ -328,6 +330,8 @@ function Film({
         mark={mark}
         shape={shape}
         onShape={setShape}
+        turn={turn}
+        onTurn={setTurn}
         stage={stage}
         fullscreen={fullscreen}
         panel={panel}
