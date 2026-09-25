@@ -141,6 +141,14 @@ export function WorkPage() {
   if (playing) {
     return (
       <Player
+        /* A fresh player for every file. Without it, stepping to an episode
+           whose page was already known kept this one, and what it held about
+           the last file (where it had got to, its plan, its session) was
+           applied to the next: the next one opened where the last ended,
+           reached its end at once and stepped again. An episode whose page
+           was not known yet got a fresh player anyway, the page being empty
+           while it arrived. */
+        key={playing.source}
         sourceId={playing.source}
         work={work}
         fromTheStart={playing.fromTheStart}
