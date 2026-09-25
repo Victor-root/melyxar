@@ -29,16 +29,21 @@ pub struct MovedFile {
 
 impl Database {
     /// The files of a library marked absent that are present somewhere else
-    /// in it.
+    /// in it, under the same name or under another one.
     ///
-    /// Recognised by what a move keeps and a different file would not all
-    /// share: the same name, the same size and the same date. A file with two
-    /// such twins is left alone, since nothing says which of them it became.
+    /// Recognised by what a move or a rename keeps and a different file would
+    /// not: the same size to the byte and the same date of last change to the
+    /// nanosecond. The name is not asked for, since a rename changes nothing
+    /// else, and it used to be: a film renamed became a new work, and lost
+    /// where everybody was in it and what they had watched. Whenever the match
+    /// is not one for one, a file gone with two twins or a file here that two
+    /// gone files could have become, it is left alone: nothing says which is
+    /// which.
     pub async fn moved_files(&self, library_id: LibraryId) -> Result<Vec<MovedFile>> {
         let rows = sqlx::query(
             "SELECT gone.id AS gone_id, gone.work_id AS gone_work,
-                    gone.relative_path AS gone_path,
-                    here.work_id AS here_work, here.relative_path AS here_path
+                    here.id AS here_id, here.work_id AS here_work,
+                    here.relative_path AS here_path
              FROM media_sources gone
              JOIN library_roots gone_root ON gone_root.id = gone.root_id
              JOIN media_sources here ON here.size_bytes = gone.size_bytes
@@ -52,16 +57,16 @@ impl Database {
         .fetch_all(self.reader())
         .await?;
 
-        let mut twins: Vec<(MediaSourceId, MovedFile)> = Vec::new();
+        // Each pair with the two rows it joins, which is what tells a match
+        // that is one for one from one that is not.
+        let mut twins: Vec<(MediaSourceId, MediaSourceId, MovedFile)> = Vec::new();
         for row in &rows {
-            let gone_path = PathBuf::from(row.try_get::<String, _>("gone_path")?);
             let here = PathBuf::from(row.try_get::<String, _>("here_path")?);
-            if gone_path.file_name() != here.file_name() {
-                continue;
-            }
             let gone: MediaSourceId = parse_id(&row.try_get::<String, _>("gone_id")?)?;
+            let here_id: MediaSourceId = parse_id(&row.try_get::<String, _>("here_id")?)?;
             twins.push((
                 gone,
+                here_id,
                 MovedFile {
                     gone,
                     gone_work: parse_id(&row.try_get::<String, _>("gone_work")?)?,
@@ -73,8 +78,11 @@ impl Database {
 
         Ok(twins
             .iter()
-            .filter(|(gone, _)| twins.iter().filter(|(other, _)| other == gone).count() == 1)
-            .map(|(_, moved)| moved.clone())
+            .filter(|(gone, here, _)| {
+                twins.iter().filter(|(other, _, _)| other == gone).count() == 1
+                    && twins.iter().filter(|(_, other, _)| other == here).count() == 1
+            })
+            .map(|(_, _, moved)| moved.clone())
             .collect())
     }
 
@@ -217,6 +225,61 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_file_renamed_is_followed_like_a_file_moved() {
+        let (database, library_id, root_id) = library().await;
+        let moment = now();
+        let old = a_work(&database, library_id, "Quiet Harbour").await;
+        let gone = a_file(&database, root_id, old, "Films/Quiet.Harbour.2019.mkv", moment).await;
+        let new = a_work(&database, library_id, "Quiet Harbour (2019)").await;
+        a_file(&database, root_id, new, "Films/Quiet Harbour (2019).mkv", moment).await;
+        database.mark_source_missing(gone).await.expect("marked");
+
+        let viewer = a_viewer(&database).await;
+        database
+            .record_playback_progress(
+                viewer,
+                old,
+                Millis::new(1_800_000),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("half watched");
+
+        let moved = database.moved_files(library_id).await.expect("read");
+        assert_eq!(moved.len(), 1, "another name, the same file");
+        database.follow_moved_file(&moved[0]).await.expect("followed");
+        assert_eq!(
+            database
+                .playback_progress(viewer, new)
+                .await
+                .expect("read")
+                .map(|progress| progress.position),
+            Some(Millis::new(1_800_000)),
+            "where somebody was in it goes with it"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_here_that_two_gone_files_could_have_become_is_left_alone() {
+        let (database, library_id, root_id) = library().await;
+        let moment = now();
+        let first = a_work(&database, library_id, "One").await;
+        let second = a_work(&database, library_id, "Two").await;
+        let one = a_file(&database, root_id, first, "Old/One.mkv", moment).await;
+        let two = a_file(&database, root_id, second, "Old/Two.mkv", moment).await;
+        database.mark_source_missing(one).await.expect("marked");
+        database.mark_source_missing(two).await.expect("marked");
+
+        let here = a_work(&database, library_id, "Which").await;
+        a_file(&database, root_id, here, "New/Which.mkv", moment).await;
+        assert!(
+            database.moved_files(library_id).await.expect("read").is_empty(),
+            "nothing says which of the two it was"
+        );
     }
 
     #[tokio::test]
