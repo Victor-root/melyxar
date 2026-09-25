@@ -123,32 +123,13 @@ export function WorkPage() {
       </main>
     );
   }
-  /* Opened only to play, and the film is not up yet: nothing of the page is
-     drawn. Somebody who pressed play on a card never asked to see this page,
-     and it used to flash past them on the way to the film. */
-  if (!work || openingToPlay) {
-    return <main className="page" aria-busy="true" />;
-  }
-  /* What somebody filmed or photographed themselves has pages of its own: a
-     folder is what it holds, and a photo is looked at rather than played. */
-  if (work.kind === "folder") {
-    return <FolderView work={work} />;
-  }
-  if (work.kind === "photo") {
-    return <PhotoView work={work} />;
-  }
-
+  /* Before anything else about the work, since the player stays through the
+     moment between two episodes when the next one's description is still on
+     its way: taken down and put back, it would give back a filled screen
+     and every choice made in it. */
   if (playing) {
     return (
       <Player
-        /* A fresh player for every file. Without it, stepping to an episode
-           whose page was already known kept this one, and what it held about
-           the last file (where it had got to, its plan, its session) was
-           applied to the next: the next one opened where the last ended,
-           reached its end at once and stepped again. An episode whose page
-           was not known yet got a fresh player anyway, the page being empty
-           while it arrived. */
-        key={playing.source}
         sourceId={playing.source}
         work={work}
         fromTheStart={playing.fromTheStart}
@@ -164,6 +145,20 @@ export function WorkPage() {
         onSelectEpisode={playEpisode}
       />
     );
+  }
+  /* Opened only to play, and the film is not up yet: nothing of the page is
+     drawn. Somebody who pressed play on a card never asked to see this page,
+     and it used to flash past them on the way to the film. */
+  if (!work || openingToPlay) {
+    return <main className="page" aria-busy="true" />;
+  }
+  /* What somebody filmed or photographed themselves has pages of its own: a
+     folder is what it holds, and a photo is looked at rather than played. */
+  if (work.kind === "folder") {
+    return <FolderView work={work} />;
+  }
+  if (work.kind === "photo") {
+    return <PhotoView work={work} />;
   }
 
   const version = work.versions[chosen];
