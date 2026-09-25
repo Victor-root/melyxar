@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { PlaybackPlan, Version, Work } from "../api";
 import { useAsked } from "../asking";
@@ -159,11 +159,12 @@ export interface WorkScreen {
   readAgain: () => void;
   /** What is being watched, and how to start and stop it. */
   playing: Watching | null;
-  /** True while this page was opened only in order to play, and the film has
-      not started yet. The page under it is not drawn at all during that
-      moment: it is a page nobody asked for, and it showed for long enough to
-      be seen every time a film was started from a card. */
-  openingToPlay: boolean;
+  /** True while this page was opened only in order to play and nothing is
+      playing: the film has not started yet, or it has just been left and
+      the way back is being taken. The page under it is not drawn at all
+      during that moment: it is a page nobody asked for, and it showed for
+      long enough to be seen every time a film was started from a card. */
+  onlyToPlay: boolean;
   play: (source: string, fromTheStart: boolean, at?: number) => void;
   stopPlaying: () => void;
   /** Which trailer the film can be offered by. */
@@ -189,6 +190,7 @@ export interface WorkScreen {
 export function useWorkScreen(id: string | undefined): WorkScreen {
   const navigate = useNavigate();
   const [address, setAddress] = useSearchParams();
+  const location = useLocation();
   const [chosen, setChosen] = useState(0);
   const [playing, setPlaying] = useState<Watching | null>(null);
   const [trailer, setTrailer] = useState<Trailer | null>(null);
@@ -254,27 +256,28 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     [work, version, planAgain],
   );
 
-  /* Started once and only once. The address is cleared as soon as it is
-     acted on, so coming back to this page later does not start the film
-     again, and the hand is what stops a screen drawn twice from starting
-     twice before the address has been cleared. */
-  const started = useRef(false);
-  useEffect(() => {
-    if (!address.has(START_AT_ONCE) || started.current || !version || version.missing) {
-      return;
-    }
-    started.current = true;
-    setPlaying({ source: version.id, fromTheStart: false });
-    const rest = new URLSearchParams(address);
-    rest.delete(START_AT_ONCE);
-    setAddress(rest, { replace: true });
-  }, [address, setAddress, version]);
-
   /* Set the moment a step to another episode asks for it, and read back only
      once, right below: it says the id is about to change on purpose, with
      the file to play already chosen, rather than by a back button or a link
      that knows nothing about what was playing here. */
   const stepping = useRef(false);
+
+  /* Set when the film was started by the address rather than from this
+     page, and kept through every episode stepped to after it: somebody who
+     pressed play on a card never came to see this page, so leaving the film
+     takes them straight back to where they pressed it. Left unset when the
+     address was the first thing opened in the tab, since there is then
+     nowhere in Melyxar to go back to. */
+  const cameToPlay = useRef(false);
+  /* The moment between leaving such a film and being back where it was
+     started from, when nothing of this page is drawn either. */
+  const [leaving, setLeaving] = useState(false);
+
+  /* Started once and only once. The address is cleared as soon as it is
+     acted on, so coming back to this page later does not start the film
+     again, and the hand is what stops a screen drawn twice from starting
+     twice before the address has been cleared. */
+  const started = useRef(false);
 
   /* A different work is a different film to start, so the one press the
      address carried is spent and a new one may be honoured.
@@ -285,37 +288,45 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
      to the same change of id. Left to a fetch instead, a step from one
      episode to the next would render this screen once with the new work's
      title and the old work's file still playing, the new work having
-     arrived before the address was ever acted on. */
-  const shownId = useRef(id);
+     arrived before the address was ever acted on.
+
+     Written before the start below, so that it runs first: a work already
+     kept in memory is drawn whole at once, its film is started in the very
+     same round, and this used to clear it straight after. */
   useEffect(() => {
-    /* Only a change of id, never the first drawing. A work already kept in
-       memory is drawn whole at once, so the film its address asked for is
-       started in the very first round of effects, and this one, running in
-       that same round, used to clear it straight away: a play button on a
-       card opened the page and played nothing, every time for a work opened
-       once before. */
-    if (shownId.current === id) {
-      return;
-    }
-    shownId.current = id;
     started.current = false;
+    setLeaving(false);
     if (stepping.current) {
       stepping.current = false;
     } else {
+      cameToPlay.current = false;
       setPlaying(null);
     }
   }, [id]);
+
+  useEffect(() => {
+    if (!address.has(START_AT_ONCE) || started.current || !version || version.missing) {
+      return;
+    }
+    started.current = true;
+    cameToPlay.current = location.key !== "default";
+    setPlaying({ source: version.id, fromTheStart: false });
+    const rest = new URLSearchParams(address);
+    rest.delete(START_AT_ONCE);
+    setAddress(rest, { replace: true });
+  }, [address, setAddress, version, location.key]);
 
   /* Between the address saying "play" and the film being on the screen there
      is a moment where everything needed to start it is still being fetched.
      Nothing of the page is drawn in that moment. It ends the instant the
      film starts, and also the instant it turns out there is nothing to play:
      a blank screen for ever would be worse than a page that flashed. */
-  const openingToPlay =
-    address.has(START_AT_ONCE) &&
-    playing === null &&
-    !asked.failure &&
-    (work === null || (version !== undefined && !version.missing));
+  const onlyToPlay =
+    leaving ||
+    (address.has(START_AT_ONCE) &&
+      playing === null &&
+      !asked.failure &&
+      (work === null || (version !== undefined && !version.missing)));
 
   const readAgain = useCallback(() => setAgain((count) => count + 1), []);
   const play = useCallback(
@@ -330,8 +341,13 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
   const { look } = asked;
   const stopPlaying = useCallback(() => {
     setPlaying(null);
+    if (cameToPlay.current) {
+      setLeaving(true);
+      navigate(-1);
+      return;
+    }
     look();
-  }, [look]);
+  }, [look, navigate]);
   const watchTrailer = useCallback((wanted: Trailer) => setTrailer(wanted), []);
   const stopTrailer = useCallback(() => setTrailer(null), []);
 
@@ -339,11 +355,13 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
      named for it rather than waiting for that page to answer for itself:
      what it would answer is the very thing already in hand, and waiting for
      it back is what let the file just left keep playing under the title of
-     the one just reached. */
+     the one just reached. In place of the page left rather than after it:
+     episodes watched one after the other are one sitting, and the way back
+     leads out of it rather than through each of them. */
   const stepTo = useCallback(
     (next: Playable) => {
       stepping.current = true;
-      navigate(`/work/${next.id}`);
+      navigate(`/work/${next.id}`, { replace: true });
       if (next.source_id) {
         setPlaying({ source: next.source_id, fromTheStart: false });
       }
@@ -369,7 +387,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     chooseTracks,
     readAgain,
     playing,
-    openingToPlay,
+    onlyToPlay,
     play,
     stopPlaying,
     onOffer: trailerToOffer(work),
