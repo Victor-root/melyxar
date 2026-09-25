@@ -258,8 +258,10 @@ function TopOfTheWork({
   /* An episode is shown by a still, lying down as every row shows it: stood
      up, a still is a poster cut out of the middle of a wide picture. Its own
      card among the episodes of its season carries the wide picture a row
-     would draw, the still itself or failing that one of its series. */
-  const lying = work.kind === "episode";
+     would draw, the still itself or failing that one of its series. A video
+     of one's own lies down too: its picture is a frame of it, and stood up
+     it lost both its sides. */
+  const lying = work.kind === "episode" || work.kind === "video";
   const itself = work.siblings.find((sibling) => sibling.card.id === work.id)?.card;
   const { picture: poster, itDidNotLoad: posterFailed } = useShownPicture(
     itself && itself.wide.length > 0 ? itself.wide : work.poster,
