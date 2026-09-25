@@ -2228,6 +2228,37 @@ input[type="radio"]:disabled {
   opacity: 1;
 }
 
+/* Nothing but the banner in the corner it is folded over. The rounded edge
+   is smoothed once for every layer stacked under it, the card's colour, the
+   poster and the shade drawn over it under the pointer, and in the pixels
+   that edge only half covers each of those showed through the banner: a
+   thread of poster along the curve. So under a banner the very tip of the
+   corner is cut out of all of them, a triangle small enough to lie wholly
+   under the banner and large enough to hold the whole curve. */
+.card-picture:has(.seen-mark-on),
+.card:hover .card-picture:has(.seen-mark),
+.card:focus-within .card-picture:has(.seen-mark) {
+  --under-the-banner: 24px;
+
+  background: linear-gradient(
+    225deg,
+    transparent calc(var(--under-the-banner) / 1.4142),
+    var(--card-color) 0
+  );
+}
+
+.card-picture:has(.seen-mark-on) :is(img, .card-hover),
+.card:hover .card-picture:has(.seen-mark) :is(img, .card-hover),
+.card:focus-within .card-picture:has(.seen-mark) :is(img, .card-hover) {
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--under-the-banner)) 0,
+    100% var(--under-the-banner),
+    100% 100%,
+    0 100%
+  );
+}
+
 .seen-mark-on {
   background: var(--accent);
   color: var(--accent-contrast);
