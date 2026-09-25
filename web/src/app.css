@@ -2447,12 +2447,29 @@ button.seen-mark:not(.seen-mark-on):hover {
   height: 4px;
   z-index: 3;
   background: rgba(0, 0, 0, 0.55);
+  transition: background var(--quick) var(--ease);
 }
 
 .card-progress-done {
   display: block;
   height: 100%;
   background: var(--accent);
+  transition: background var(--quick) var(--ease);
+}
+
+/* Under the pointer the line becomes part of the rim lit around the card:
+   how far in it is, drawn as that rim running thicker along the foot, in
+   its colour. The dark track under it goes, since the rim itself already
+   says where the whole length ends; left in, it stood between the rim and
+   the picture as a strip of its own. */
+.card:hover .card-progress,
+.card:focus-within .card-progress {
+  background: transparent;
+}
+
+.card:hover .card-progress-done,
+.card:focus-within .card-progress-done {
+  background: var(--accent-bright);
 }
 
 /* What the card offers beyond pressing it. */
