@@ -9,10 +9,11 @@
 import type { Card } from "./api";
 
 /** Whether a card starts something playing rather than only opening a page.
- *  A series is opened to choose an episode, a folder to see what it holds,
- *  and a photo is looked at rather than played. */
+ *  A series plays the episode it carries on with, which its own page works
+ *  out; a folder is opened to see what it holds, and a photo is looked at
+ *  rather than played. */
 export function playsOnItsOwn(card: Pick<Card, "source" | "kind">): boolean {
-  return card.source !== null && card.kind !== "series" && card.kind !== "photo";
+  return card.kind === "series" || (card.source !== null && card.kind !== "photo");
 }
 
 /** Whether a work has its name, whoever gave it: a provider, a person, or

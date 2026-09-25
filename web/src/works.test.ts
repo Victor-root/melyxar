@@ -12,7 +12,7 @@ describe("what a work offers", () => {
     expect(playsOnItsOwn({ source: "s", kind: "movie" })).toBe(true);
     expect(playsOnItsOwn({ source: "s", kind: "video" })).toBe(true);
     expect(playsOnItsOwn({ source: "s", kind: "photo" })).toBe(false);
-    expect(playsOnItsOwn({ source: "s", kind: "series" })).toBe(false);
+    expect(playsOnItsOwn({ source: null, kind: "series" })).toBe(true);
     expect(playsOnItsOwn({ source: null, kind: "folder" })).toBe(false);
     expect(playsOnItsOwn({ source: null, kind: "movie" })).toBe(false);
   });
