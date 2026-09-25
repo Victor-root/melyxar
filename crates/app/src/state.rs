@@ -53,6 +53,8 @@ struct Inner {
     measuring: crate::measures::Measuring,
     /// What is being watched right now, device by device.
     watching: crate::watching::Watching,
+    /// The folders of the libraries that asked for them to be watched.
+    folder_watch: crate::folder_watch::FolderWatch,
     /// Where the activity journal is written.
     journal: crate::activity::Journal,
 }
@@ -115,6 +117,7 @@ impl AppState {
                 started_at: melyxar_core::time::now(),
                 measuring: crate::measures::Measuring::new(),
                 watching: crate::watching::Watching::default(),
+                folder_watch: crate::folder_watch::FolderWatch::default(),
             }),
         }
     }
@@ -141,6 +144,10 @@ impl AppState {
 
     pub(crate) fn watching(&self) -> &crate::watching::Watching {
         &self.inner.watching
+    }
+
+    pub fn folder_watch(&self) -> &crate::folder_watch::FolderWatch {
+        &self.inner.folder_watch
     }
 
     pub fn jobs(&self) -> &JobRunner {

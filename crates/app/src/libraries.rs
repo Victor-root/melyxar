@@ -218,6 +218,8 @@ pub async fn add_root(state: &AppState, library_id: LibraryId, path: &Path) -> R
     {
         tracing::warn!(library = library.name, %error, "the scan of the new folder would not start");
     }
+    // A library that is watched watches its new folder too.
+    state.folder_watch().follow_the_libraries(state).await;
     Ok(root)
 }
 
@@ -298,6 +300,7 @@ pub async fn remove(state: &AppState, library_id: LibraryId) -> Result<Removed> 
         "a library was taken away: its films, their pages and everything only \
          they pointed at are gone, and no file of the collection was touched",
     );
+    state.folder_watch().follow_the_libraries(state).await;
     Ok(went)
 }
 
@@ -332,6 +335,7 @@ pub async fn remove_root(
          pages and everything only they pointed at are gone, and no file of \
          the collection was touched",
     );
+    state.folder_watch().follow_the_libraries(state).await;
     Ok(went)
 }
 

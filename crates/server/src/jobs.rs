@@ -458,6 +458,11 @@ async fn set_library_options(
         .set_library_options(library.id, options)
         .await
         .map_err(internal)?;
+    // Waited for, so the answer and the next reading of the libraries say
+    // where the watching really stands.
+    if changed {
+        state.folder_watch().follow_the_libraries(&state).await;
+    }
 
     // After the switches and not before: a language that changes sets a run
     // going, and a run that started while the switches failed to be written

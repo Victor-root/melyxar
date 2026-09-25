@@ -20,6 +20,7 @@ pub mod deletion;
 pub mod detail;
 pub mod diagnostics;
 pub mod episodes;
+pub mod folder_watch;
 pub mod identify;
 pub mod images;
 pub mod libraries;
