@@ -3053,7 +3053,8 @@ button.seen-mark:not(.seen-mark-on):hover {
 .panels.work-panels {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  /* The cards of one row as tall as the tallest of them. */
+  align-items: stretch;
 }
 
 .panels.work-panels > .panel {
