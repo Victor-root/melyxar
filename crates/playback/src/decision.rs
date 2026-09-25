@@ -12,7 +12,7 @@
 use melyxar_core::media::{
     AudioDetails, HdrFormat, MediaSource, SubtitleDetails, Track, TrackKind, VideoDetails,
 };
-use melyxar_core::user::DownmixMethod;
+use melyxar_core::user::{DownmixMethod, WideGamutChoice};
 use serde::{Deserialize, Serialize};
 
 use crate::profile::ClientProfile;
@@ -84,6 +84,15 @@ pub enum Reason {
     /// shows green and purple rather than a picture.
     DolbyVisionWithoutBaseLayer {
         profile: Option<i32>,
+    },
+    /// Wide gamut colour the viewer asked to have converted.
+    WideGamutConversionChosen {
+        format: HdrFormat,
+    },
+    /// The picture is rebuilt for another reason, and a rebuilt picture is of
+    /// standard range: its wide gamut colour is converted on the way.
+    WideGamutRebuiltAsStandard {
+        format: HdrFormat,
     },
     InterlacedPicture,
     BitrateTooHigh {
@@ -167,6 +176,11 @@ pub struct PlaybackDecision {
     pub bitrate_ceiling: Option<i64>,
     /// Convert wide gamut colour to standard range.
     pub tone_map: bool,
+    /// Whether the viewer's choice decided what is done with the picture's
+    /// wide gamut colour. False for a picture of standard range, and for one
+    /// whose handling was imposed: a flavour always converted, a picture
+    /// rebuilt anyway, a server told never to convert.
+    pub wide_gamut_follows_choice: bool,
     /// Every reason behind the answer, in the order they were found.
     pub reasons: Vec<Reason>,
 }
@@ -204,6 +218,9 @@ pub struct PlaybackRequest<'a> {
     /// unconverted that looks broken rather than merely washed out, so it is
     /// converted regardless of this.
     pub never_tone_map: bool,
+    /// What the viewer wants done with wide gamut colour, for a picture that
+    /// could otherwise be carried over as it is.
+    pub wide_gamut: WideGamutChoice,
 }
 
 /// Decides how a source reaches a client.
@@ -214,13 +231,7 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
     let audio = chosen_audio(source, request.audio_track);
     let subtitle = chosen_subtitle(request.subtitle_track);
 
-    let video_action = decide_video(
-        video,
-        source,
-        request.profile,
-        request.never_tone_map,
-        &mut reasons,
-    );
+    let video_action = decide_video(video, source, request.profile, &mut reasons);
     let audio_action = decide_audio(audio, request, &mut reasons);
     let (delivery, subtitle_forces_burn) =
         decide_subtitles(subtitle, request.profile, &mut reasons);
@@ -233,9 +244,25 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         video_action
     };
 
-    let tone_map = video.is_some_and(|(_, details)| {
-        details.needs_tone_mapping() && must_convert_wide_gamut(details, request.never_tone_map)
-    }) && !request.profile.supports_hdr;
+    // The colour last, because whether the picture is rebuilt anyway is part
+    // of the answer: a picture rebuilt for any reason comes out of standard
+    // range, and can only keep its colours by having them converted.
+    let colour = video.map_or(Colour::Standard, |(_, details)| {
+        wide_gamut_colour(details, request, video_action == StreamAction::Transcode)
+    });
+    let (conversion, wide_gamut_follows_choice) = match colour {
+        Colour::Standard => (None, false),
+        Colour::Imposed(conversion) => (conversion, false),
+        Colour::Chosen(conversion) => (conversion, true),
+    };
+    let tone_map = conversion.is_some();
+    let video_action = match conversion {
+        Some(reason) => {
+            reasons.push(reason);
+            StreamAction::Transcode
+        }
+        None => video_action,
+    };
 
     let scale_to_height = match (request.profile.max_height, video) {
         (Some(max), Some((_, details))) if details.visible_height() > max => Some(max),
@@ -303,6 +330,7 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         scale_to_height,
         bitrate_ceiling,
         tone_map,
+        wide_gamut_follows_choice,
         reasons,
     }
 }
@@ -433,23 +461,59 @@ fn chose_a_non_default_track(
     Some(chosen.stream_index) != first_index
 }
 
-/// Whether this stream's wide gamut colour must be converted before a client
-/// that cannot show it plays it.
+/// What is done with a picture's wide gamut colour: the conversion when it is
+/// converted, with its reason, and nothing when it is kept.
+enum Colour {
+    /// A picture of standard range, with nothing to decide.
+    Standard,
+    /// Decided whatever the viewer chose.
+    Imposed(Option<Reason>),
+    /// Decided by the viewer's choice.
+    Chosen(Option<Reason>),
+}
+
+/// What is done with this stream's wide gamut colour, and why.
 ///
-/// Almost always the operator's own choice, but not always: Dolby Vision
-/// without a compatible base layer looks broken rather than merely washed out
-/// when left alone, and no switch may leave that on a screen.
-fn must_convert_wide_gamut(details: &VideoDetails, never_tone_map: bool) -> bool {
-    details
-        .hdr
-        .is_some_and(|format| format.is_incompatible_without_conversion() || !never_tone_map)
+/// Four rules, in this order. Dolby Vision without a compatible base layer is
+/// always converted: left alone it looks broken rather than washed out, on
+/// any screen, and no switch may leave that on one. The operator's switch
+/// then converts nothing else. A picture rebuilt for another reason is
+/// converted, since what comes out of a rebuild is of standard range. Only a
+/// picture that could be carried over as it is is left to the viewer's
+/// choice, which by default keeps it where the client shows it.
+fn wide_gamut_colour(
+    details: &VideoDetails,
+    request: &PlaybackRequest<'_>,
+    rebuilt_anyway: bool,
+) -> Colour {
+    let Some(format) = details.hdr else {
+        return Colour::Standard;
+    };
+    if let HdrFormat::DolbyVision { profile } = format {
+        if format.is_incompatible_without_conversion() {
+            return Colour::Imposed(Some(Reason::DolbyVisionWithoutBaseLayer { profile }));
+        }
+    }
+    if request.never_tone_map {
+        return Colour::Imposed(None);
+    }
+    if rebuilt_anyway {
+        return Colour::Imposed(Some(Reason::WideGamutRebuiltAsStandard { format }));
+    }
+    Colour::Chosen(match request.wide_gamut {
+        WideGamutChoice::NeverConvert => None,
+        WideGamutChoice::AlwaysConvert => Some(Reason::WideGamutConversionChosen { format }),
+        WideGamutChoice::Automatic => (!request
+            .profile
+            .shows_wide_gamut(&details.codec, format))
+        .then_some(Reason::WideGamutNotSupported { format }),
+    })
 }
 
 fn decide_video(
     video: Option<(&Track, &VideoDetails)>,
     source: &MediaSource,
     profile: &ClientProfile,
-    never_tone_map: bool,
     reasons: &mut Vec<Reason>,
 ) -> StreamAction {
     let Some((_, details)) = video else {
@@ -476,22 +540,6 @@ fn decide_video(
             });
         }
         must_rebuild = true;
-    }
-
-    if let Some(format) = details.hdr {
-        if !profile.supports_hdr && must_convert_wide_gamut(details, never_tone_map) {
-            if format.is_incompatible_without_conversion() {
-                reasons.push(Reason::DolbyVisionWithoutBaseLayer {
-                    profile: match format {
-                        HdrFormat::DolbyVision { profile } => profile,
-                        _ => None,
-                    },
-                });
-            } else {
-                reasons.push(Reason::WideGamutNotSupported { format });
-            }
-            must_rebuild = true;
-        }
     }
 
     if let Some(max) = profile.max_height {
@@ -624,7 +672,10 @@ fn decide_subtitles(
 mod tests {
     use super::*;
     use melyxar_core::id::{LibraryRootId, MediaSourceId, TrackId, WorkId};
-    use melyxar_core::media::{ColorInfo, FileIdentity, Loudness, SubtitleLayout, VideoDetails};
+    use crate::profile::{VideoCapability, WideGamutCapability};
+    use melyxar_core::media::{
+        ColorInfo, Curve, FileIdentity, Loudness, SubtitleLayout, VideoDetails,
+    };
     use melyxar_core::time::{now, Millis};
     use std::path::PathBuf;
 
@@ -735,6 +786,7 @@ mod tests {
             downmix: DownmixMethod::None,
             level_loudness: false,
             never_tone_map: false,
+            wide_gamut: WideGamutChoice::Automatic,
         }
     }
 
@@ -829,7 +881,7 @@ mod tests {
     }
 
     #[test]
-    fn wide_gamut_colour_is_converted_because_no_browser_shows_it() {
+    fn wide_gamut_colour_is_converted_for_a_client_that_does_not_show_it() {
         let profile = ClientProfile::conservative_browser();
         let source = source(
             "matroska,webm",
@@ -936,22 +988,121 @@ mod tests {
         )));
     }
 
-    #[test]
-    fn a_client_that_shows_wide_gamut_gets_the_stream_untouched() {
+    /// A client that opens the container and shows wide gamut on the given
+    /// codec and curves.
+    fn showing_wide_gamut(codec: &str, curves: &[Curve]) -> ClientProfile {
         let mut profile = ClientProfile::conservative_browser();
-        profile.supports_hdr = true;
         profile.containers.push("matroska".into());
-        let source = source(
+        profile.video.push(VideoCapability::any("hevc"));
+        profile.wide_gamut = curves
+            .iter()
+            .map(|curve| WideGamutCapability {
+                codec: codec.into(),
+                curve: *curve,
+            })
+            .collect();
+        profile
+    }
+
+    fn wide_gamut_film(codec: &str, format: HdrFormat) -> MediaSource {
+        source(
             "matroska,webm",
             vec![
-                video_track(0, "h264", 2160, Some(HdrFormat::Hdr10)),
+                video_track(0, codec, 2160, Some(format)),
                 audio_track(1, "aac", 2, true),
             ],
-        );
-        let decision = decide(&source, &request(&profile));
+        )
+    }
+
+    #[test]
+    fn a_client_that_shows_wide_gamut_gets_the_stream_untouched() {
+        let profile = showing_wide_gamut("hevc", &[Curve::Pq]);
+        let decision = decide(&wide_gamut_film("hevc", HdrFormat::Hdr10), &request(&profile));
 
         assert_eq!(decision.method, PlaybackMethod::DirectPlay);
         assert!(!decision.tone_map);
+    }
+
+    #[test]
+    fn wide_gamut_shown_for_another_codec_or_curve_is_still_converted() {
+        let profile = showing_wide_gamut("av1", &[Curve::Pq]);
+        let decision = decide(&wide_gamut_film("hevc", HdrFormat::Hdr10), &request(&profile));
+        assert!(decision.tone_map, "shown for another codec only");
+
+        let profile = showing_wide_gamut("hevc", &[Curve::Pq]);
+        let decision = decide(&wide_gamut_film("hevc", HdrFormat::Hlg), &request(&profile));
+        assert!(decision.tone_map, "shown on another curve only");
+        assert!(decision
+            .reasons
+            .contains(&Reason::WideGamutNotSupported { format: HdrFormat::Hlg }));
+    }
+
+    #[test]
+    fn the_flavour_with_no_base_layer_is_converted_even_for_a_screen_that_shows_wide_gamut() {
+        // What the old rule only avoided by taking every screen for one of
+        // standard range: handed over as it is, this is green and purple.
+        let profile = showing_wide_gamut("hevc", &[Curve::Pq, Curve::Hlg]);
+        let decision = decide(
+            &wide_gamut_film("hevc", HdrFormat::DolbyVision { profile: Some(5) }),
+            &PlaybackRequest {
+                wide_gamut: WideGamutChoice::NeverConvert,
+                ..request(&profile)
+            },
+        );
+        assert!(decision.tone_map);
+        assert_eq!(decision.method, PlaybackMethod::FullTranscode);
+        assert!(!decision.wide_gamut_follows_choice, "imposed, whatever was chosen");
+    }
+
+    #[test]
+    fn a_picture_rebuilt_for_another_reason_comes_out_converted() {
+        // Shown as it is, but asked smaller: a rebuilt picture is of standard
+        // range, so its colours are converted on the way or come out wrong.
+        let mut profile = showing_wide_gamut("hevc", &[Curve::Pq]);
+        profile.max_height = Some(1080);
+        let decision = decide(
+            &wide_gamut_film("hevc", HdrFormat::Hdr10),
+            &PlaybackRequest {
+                wide_gamut: WideGamutChoice::NeverConvert,
+                ..request(&profile)
+            },
+        );
+        assert!(decision.tone_map);
+        assert!(decision
+            .reasons
+            .contains(&Reason::WideGamutRebuiltAsStandard { format: HdrFormat::Hdr10 }));
+        assert!(!decision.wide_gamut_follows_choice);
+    }
+
+    #[test]
+    fn the_viewer_can_ask_for_the_conversion_or_to_keep_the_colour() {
+        let shows = showing_wide_gamut("hevc", &[Curve::Pq]);
+        let asked = decide(
+            &wide_gamut_film("hevc", HdrFormat::Hdr10),
+            &PlaybackRequest {
+                wide_gamut: WideGamutChoice::AlwaysConvert,
+                ..request(&shows)
+            },
+        );
+        assert!(asked.tone_map, "converted though the screen was said to show it");
+        assert!(asked
+            .reasons
+            .contains(&Reason::WideGamutConversionChosen { format: HdrFormat::Hdr10 }));
+
+        let mut shows_nothing = ClientProfile::conservative_browser();
+        shows_nothing.containers.push("matroska".into());
+        shows_nothing.video.push(VideoCapability::any("hevc"));
+        let kept = decide(
+            &wide_gamut_film("hevc", HdrFormat::Hdr10),
+            &PlaybackRequest {
+                wide_gamut: WideGamutChoice::NeverConvert,
+                ..request(&shows_nothing)
+            },
+        );
+        assert!(!kept.tone_map, "kept though the screen was not said to show it");
+        assert_eq!(kept.method, PlaybackMethod::DirectPlay);
+        assert!(kept.wide_gamut_follows_choice);
+        assert!(asked.wide_gamut_follows_choice);
     }
 
     #[test]

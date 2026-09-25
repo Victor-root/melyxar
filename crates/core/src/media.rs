@@ -249,14 +249,40 @@ impl HdrFormat {
     }
 }
 
+/// The curve a wide gamut picture is written on, which a screen has to show
+/// it on for its colours to come out right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Curve {
+    /// The perceptual quantiser, which the common flavour is written on.
+    Pq,
+    /// Hybrid log gamma, the broadcasters' curve.
+    Hlg,
+}
+
 impl HdrFormat {
-    /// Whether the stream needs converting before a browser can show it with
-    /// correct colours.
+    /// Whether a standard range picture made from this stream, a thumbnail or
+    /// a rebuilt film, needs its colours converted.
     ///
-    /// Every flavour does: no browser on Linux displays high dynamic range
-    /// properly today.
+    /// Every flavour does: left as they are, its colours come out washed out
+    /// in a picture of standard range.
     pub fn needs_tone_mapping(self) -> bool {
         true
+    }
+
+    /// The curves a client has to show for this stream to be handed over as
+    /// it is, or nothing for a flavour no client is ever handed untouched.
+    ///
+    /// Dolby Vision other than profile five carries a base layer on one of
+    /// the two curves, and which one is not recorded: it is kept only for a
+    /// client that shows both.
+    pub fn curves_needed(self) -> Option<&'static [Curve]> {
+        match self {
+            Self::Hdr10 => Some(&[Curve::Pq]),
+            Self::Hlg => Some(&[Curve::Hlg]),
+            Self::DolbyVision { .. } if self.is_incompatible_without_conversion() => None,
+            Self::DolbyVision { .. } => Some(&[Curve::Pq, Curve::Hlg]),
+        }
     }
 
     /// Dolby Vision profile five is the one that looks broken rather than
@@ -513,6 +539,19 @@ mod tests {
         // words in the language, and are never enough to go on.
         assert!(!named(Some("AD")).is_audio_description());
         assert!(!named(Some("Commentary")).is_audio_description());
+    }
+
+    #[test]
+    fn each_flavour_names_the_curves_a_screen_must_show_it_on() {
+        assert_eq!(HdrFormat::Hdr10.curves_needed(), Some(&[Curve::Pq][..]));
+        assert_eq!(HdrFormat::Hlg.curves_needed(), Some(&[Curve::Hlg][..]));
+        // Its base layer is on one of the two, and which one is not known.
+        assert_eq!(
+            HdrFormat::DolbyVision { profile: Some(8) }.curves_needed(),
+            Some(&[Curve::Pq, Curve::Hlg][..])
+        );
+        // No base layer at all: never handed over untouched.
+        assert_eq!(HdrFormat::DolbyVision { profile: Some(5) }.curves_needed(), None);
     }
 
     #[test]

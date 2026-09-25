@@ -8,7 +8,7 @@ use axum::extract::State;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_core::library::LibraryKind;
-use melyxar_core::user::{DownmixMethod, Preferences, ThemeMode};
+use melyxar_core::user::{DownmixMethod, Preferences, ThemeMode, WideGamutChoice};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
@@ -65,6 +65,10 @@ struct PreferencesView {
     /// How far the player's two step buttons jump, in seconds.
     step_back_seconds: i64,
     step_on_seconds: i64,
+    /// What is done with a film of wide gamut colour.
+    wide_gamut: &'static str,
+    /// Every choice offered for it, in the order a screen shows them.
+    wide_gamut_choices: Vec<&'static str>,
     /// Every fold this server knows how to perform.
     downmix_methods: Vec<&'static str>,
     /// The languages the library actually holds, which is what a picker
@@ -112,6 +116,8 @@ struct PreferencesBody {
     step_back_seconds: Option<i64>,
     #[serde(default)]
     step_on_seconds: Option<i64>,
+    #[serde(default)]
+    wide_gamut: Option<String>,
 }
 
 async fn read(
@@ -200,6 +206,11 @@ async fn write(
             .ok_or_else(|| ServerError::invalid_input("no kind of library goes by that name"))?;
     }
 
+    if let Some(choice) = body.wide_gamut {
+        chosen.wide_gamut = WideGamutChoice::parse(&choice).ok_or_else(|| {
+            ServerError::invalid_input("no choice about wide gamut colour goes by that name")
+        })?;
+    }
     // Brought into range when kept, like the banner.
     if let Some(seconds) = body.step_back_seconds {
         chosen.step_back_seconds = seconds;
@@ -249,6 +260,11 @@ async fn view(
         home_order: chosen.home_order.iter().map(|kind| kind.as_str()).collect(),
         step_back_seconds: chosen.step_back_seconds,
         step_on_seconds: chosen.step_on_seconds,
+        wide_gamut: chosen.wide_gamut.as_str(),
+        wide_gamut_choices: WideGamutChoice::every()
+            .iter()
+            .map(|choice| choice.as_str())
+            .collect(),
         downmix_methods: DownmixMethod::every()
             .iter()
             .map(|one| one.as_str())

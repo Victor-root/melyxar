@@ -26,7 +26,7 @@ use melyxar_app::AppState;
 use melyxar_core::id::MediaSourceId;
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::{Millis, Timestamp};
-use melyxar_core::user::User;
+use melyxar_core::user::{User, WideGamutChoice};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
@@ -111,6 +111,10 @@ struct PlanBody {
     /// negotiation.
     #[serde(default)]
     preferred_video_codec: Option<String>,
+    /// What to do with wide gamut colour for this playback alone, over the
+    /// account's own choice. Absent leaves it to that choice.
+    #[serde(default)]
+    wide_gamut: Option<String>,
     /// Sent by a player about to show the film, rather than by a page asking
     /// only where it would resume: what is being watched starts here.
     #[serde(default)]
@@ -134,6 +138,17 @@ impl PlanBody {
                 .map(parse_track)
                 .transpose()?,
             preferred_video_codec: self.preferred_video_codec,
+            wide_gamut: self
+                .wide_gamut
+                .as_deref()
+                .map(|choice| {
+                    WideGamutChoice::parse(choice).ok_or_else(|| {
+                        ServerError::invalid_input(
+                            "no choice about wide gamut colour goes by that name",
+                        )
+                    })
+                })
+                .transpose()?,
         })
     }
 }
@@ -198,6 +213,18 @@ struct PlanView {
     /// the journal. The two halves have to sit side by side or neither means
     /// anything.
     film: FilmView,
+    /// What is done with the film's wide gamut colour, when it has any.
+    wide_gamut: Option<WideGamutView>,
+}
+
+/// What is done with a film's wide gamut colour.
+#[derive(Debug, Serialize)]
+struct WideGamutView {
+    /// Converted to standard range, rather than handed over as it is.
+    converted: bool,
+    /// Whether the viewer's choice decided it. When it did not, choosing
+    /// otherwise changes nothing, and a player does not offer to.
+    follows_choice: bool,
 }
 
 /// What the file holds, as the analyser read it.
@@ -395,6 +422,7 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
             .map(|track| track.id.to_string())
     };
 
+    let film = film_view(plan);
     PlanView {
         url: format!("/api/v1/playback/{}/stream", plan.source_id),
         chosen_audio_id: chosen(plan.decision.audio_stream_index, false),
@@ -438,7 +466,15 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
             .collect(),
         favourite: plan.favourite,
         rebuild: rebuild_view(plan),
-        film: film_view(plan),
+        wide_gamut: film
+            .picture
+            .as_ref()
+            .and_then(|picture| picture.hdr)
+            .map(|_| WideGamutView {
+                converted: plan.decision.tone_map,
+                follows_choice: plan.decision.wide_gamut_follows_choice,
+            }),
+        film,
     }
 }
 
@@ -1379,6 +1415,7 @@ mod tests {
                 scale_to_height: None,
                 bitrate_ceiling: None,
                 tone_map: false,
+                wide_gamut_follows_choice: false,
                 reasons: Vec::new(),
             },
             resume_from: None,

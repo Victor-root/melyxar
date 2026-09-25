@@ -17,7 +17,7 @@ use melyxar_core::media_log::file_name_of;
 use melyxar_core::segments::MediaSegment;
 use melyxar_core::thumbnails::Thumbnails;
 use melyxar_core::time::{Millis, Timestamp};
-use melyxar_core::user::DownmixMethod;
+use melyxar_core::user::{DownmixMethod, WideGamutChoice};
 use melyxar_core::work::{state_for_position, PlaybackState, DEFAULT_WATCHED_THRESHOLD};
 use melyxar_playback::decision::{decide, PlaybackRequest};
 
@@ -65,6 +65,9 @@ pub struct PlayRequest {
     /// themselves is the same mechanism, and choosing it for them is a later
     /// piece of work.
     pub preferred_video_codec: Option<String>,
+    /// What to do with wide gamut colour for this playback alone, over the
+    /// account's own choice. Absent leaves it to that choice.
+    pub wide_gamut: Option<WideGamutChoice>,
 }
 
 /// Everything a player needs to start.
@@ -254,6 +257,12 @@ pub async fn plan(
         .map(|values| values.downmix_gain)
         .unwrap_or(melyxar_core::user::DEFAULT_DOWNMIX_GAIN);
     let never_tone_map = database.tone_mapping_disabled().await?;
+    let wide_gamut = request.wide_gamut.unwrap_or_else(|| {
+        preferences
+            .as_ref()
+            .map(|values| values.wide_gamut)
+            .unwrap_or_default()
+    });
 
     let decision = decide(
         &media,
@@ -268,6 +277,7 @@ pub async fn plan(
             // goes here, and the answer will say it was asked for.
             level_loudness: false,
             never_tone_map,
+            wide_gamut,
         },
     );
 
@@ -1363,6 +1373,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -1429,6 +1440,7 @@ mod tests {
                     audio_track_id: None,
                     subtitle_track_id: None,
                     preferred_video_codec: None,
+                    wide_gamut: None,
                 },
             )
             .await
@@ -1515,6 +1527,7 @@ mod tests {
             audio_track_id: None,
             subtitle_track_id: None,
             preferred_video_codec: None,
+            wide_gamut: None,
         };
 
         let before = plan(&state, &crate::an_ordinary_account(user_id), &request).await.expect("a plan");
@@ -1553,6 +1566,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -1602,6 +1616,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: Some(chosen.id),
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -1637,6 +1652,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -1808,6 +1824,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -1835,6 +1852,7 @@ mod tests {
             audio_track_id: None,
             subtitle_track_id: None,
             preferred_video_codec: None,
+            wide_gamut: None,
         };
 
         // A server nobody has configured already folds the sound its own way
@@ -1926,6 +1944,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -1966,6 +1985,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -2019,6 +2039,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -2072,6 +2093,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: Some(words.id),
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -2121,6 +2143,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: Some(words.id),
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -2154,6 +2177,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -2313,6 +2337,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await;
@@ -2360,6 +2385,7 @@ mod tests {
             scale_to_height: height_asked,
             bitrate_ceiling: rate,
             tone_map,
+            wide_gamut_follows_choice: false,
             reasons: Vec::new(),
         }
     }
@@ -2707,6 +2733,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -2797,6 +2824,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -2864,6 +2892,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await;
@@ -2912,6 +2941,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
@@ -2965,6 +2995,7 @@ mod tests {
                 audio_track_id: None,
                 subtitle_track_id: None,
                 preferred_video_codec: None,
+                wide_gamut: None,
             },
         )
         .await
