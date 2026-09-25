@@ -2232,19 +2232,23 @@ input[type="radio"]:disabled {
    is smoothed once for every layer stacked under it, the card's colour, the
    poster and the shade drawn over it under the pointer, and in the pixels
    that edge only half covers each of those showed through the banner: a
-   thread of poster along the curve. So under a banner the very tip of the
-   corner is cut out of all of them, a triangle small enough to lie wholly
-   under the banner and large enough to hold the whole curve. */
+   thread of poster along the curve and along both straight edges. So under
+   a banner the whole corner it covers is cut out of all of them, stopping
+   a few points short of its slant so the cut never shows beside it. */
 .card-picture:has(.seen-mark-on),
 .card:hover .card-picture:has(.seen-mark),
 .card:focus-within .card-picture:has(.seen-mark) {
-  --under-the-banner: 24px;
+  --under-the-banner: 42px;
 
   background: linear-gradient(
     225deg,
     transparent calc(var(--under-the-banner) / 1.4142),
     var(--card-color) 0
   );
+}
+
+.card .card-picture:has(.seen-mark[data-long="yes"]) {
+  --under-the-banner: 54px;
 }
 
 .card-picture:has(.seen-mark-on) :is(img, .card-hover),
