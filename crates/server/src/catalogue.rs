@@ -14,6 +14,7 @@ use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::browse::{BrowseRequest, Initial, WorkCard, WorkOrder, DEFAULT_PAGE};
 use melyxar_app::detail::{CarryOn, ChildWork, Credit, Version, WorkDetail};
+use melyxar_app::folder_watch::WatchState;
 use melyxar_app::picture::StoredImage;
 use melyxar_app::AppState;
 use melyxar_core::media::TrackKind;
@@ -150,6 +151,11 @@ struct LibraryView {
     /// Whether its folders are watched, and it is scanned again as soon as
     /// something in them changes.
     watch_in_real_time: bool,
+    /// Where that watching stands, for a library that asked for it:
+    /// watching, starting while it is being set up, or refused.
+    watch_state: Option<&'static str>,
+    /// Why it was refused, as a word the interface turns into a sentence.
+    watch_refusal: Option<&'static str>,
     /// The language its films are described in, as a two letter code.
     metadata_language: String,
     roots: Vec<RootView>,
@@ -179,10 +185,18 @@ async fn libraries(
     Viewer(who): Viewer,
 ) -> Result<Json<Vec<LibraryView>>> {
     let summaries = melyxar_app::catalogue::libraries(&state, &who).await?;
-    Ok(Json(
-        summaries
-            .into_iter()
-            .map(|library| LibraryView {
+    let mut views = Vec::with_capacity(summaries.len());
+    for library in summaries {
+        let (watch_state, watch_refusal) = if library.options.watch_in_real_time {
+            match state.folder_watch().state_of(library.id).await {
+                Some(WatchState::Watching) => (Some("watching"), None),
+                Some(WatchState::Refused(why)) => (Some("refused"), Some(why.as_str())),
+                None => (Some("starting"), None),
+            }
+        } else {
+            (None, None)
+        };
+        views.push(LibraryView {
                 id: library.id.to_string(),
                 name: library.name,
                 kind: library.kind.as_str(),
@@ -191,6 +205,8 @@ async fn libraries(
                 key_frames_during_scan: library.options.key_frames_during_scan,
                 thumbnails_during_scan: library.options.thumbnails_during_scan,
                 watch_in_real_time: library.options.watch_in_real_time,
+                watch_state,
+                watch_refusal,
                 metadata_language: library.metadata_language,
                 set_aside: library.set_aside,
                 roots: library
@@ -206,9 +222,9 @@ async fn libraries(
                         explanation_code: root.access.explanation_code(),
                     })
                     .collect(),
-            })
-            .collect(),
-    ))
+            });
+    }
+    Ok(Json(views))
 }
 
 #[derive(Debug, Serialize)]

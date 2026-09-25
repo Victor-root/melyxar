@@ -64,6 +64,10 @@ futures-util = "0.3"
 tower-http = { version = "0.7", features = ["fs", "trace", "compression-gzip"] }
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
+# Watches a library's folders for what is added, moved or removed, through
+# the kernel's own notifications on Linux. The platform backends of other
+# systems are left out: the server only runs on Linux.
+notify = { version = "8.2", default-features = false }
 # Its TLS options were renamed at 0.13: what was "rustls-tls" is now "rustls",
 # and the roots are no longer chosen by a feature at all, the platform's own
 # store being verified against by default. "query" and "form" became features

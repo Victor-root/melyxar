@@ -508,6 +508,10 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     // The players gone quiet are let go, and what they watched written down.
     let watching = melyxar_app::watching::keep_swept(&state);
 
+    // The folders of the libraries that asked for it, so a film copied in is
+    // taken in without anybody asking for a scan.
+    let folders = melyxar_app::folder_watch::keep_watching(&state);
+
     // A scan of a whole collection runs for hours, so an update in the middle
     // of one must not mean starting it over by hand, or worse, forgetting to.
     let cut_short = melyxar_app::startup::close_what_a_previous_run_left(&state)
@@ -526,6 +530,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     upkeep.abort();
     measuring.abort();
     watching.abort();
+    folders.abort();
     melyxar_app::watching::end_everything(&state).await;
     melyxar_app::activity::record(&state, melyxar_app::activity::Event::ServerStopped).await;
     melyxar_app::playback::close_every_session(&state).await;
