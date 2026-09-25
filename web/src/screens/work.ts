@@ -286,7 +286,18 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
      episode to the next would render this screen once with the new work's
      title and the old work's file still playing, the new work having
      arrived before the address was ever acted on. */
+  const shownId = useRef(id);
   useEffect(() => {
+    /* Only a change of id, never the first drawing. A work already kept in
+       memory is drawn whole at once, so the film its address asked for is
+       started in the very first round of effects, and this one, running in
+       that same round, used to clear it straight away: a play button on a
+       card opened the page and played nothing, every time for a work opened
+       once before. */
+    if (shownId.current === id) {
+      return;
+    }
+    shownId.current = id;
     started.current = false;
     if (stepping.current) {
       stepping.current = false;
