@@ -316,6 +316,27 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     setAddress(rest, { replace: true });
   }, [address, setAddress, version, location.key]);
 
+  /* A series or a season is never played itself: the address asking to play
+     one hands over, in its place, to the episode it carries on with, the one
+     left halfway or else the first not watched yet. Only on the server's
+     own answer, never on the copy kept from an earlier visit, which would
+     start the episode that was next before the last one was watched. With
+     nothing left to carry on with, the page is simply shown. */
+  const aWhole = work?.kind === "series" || work?.kind === "season";
+  useEffect(() => {
+    if (!address.has(START_AT_ONCE) || !aWhole || !asked.current || !work) {
+      return;
+    }
+    const next = work.carry_on_with;
+    if (next?.source_id) {
+      navigate(`/work/${next.id}?${START_AT_ONCE}`, { replace: true });
+      return;
+    }
+    const rest = new URLSearchParams(address);
+    rest.delete(START_AT_ONCE);
+    setAddress(rest, { replace: true });
+  }, [address, setAddress, aWhole, asked.current, work, navigate]);
+
   /* Between the address saying "play" and the film being on the screen there
      is a moment where everything needed to start it is still being fetched.
      Nothing of the page is drawn in that moment. It ends the instant the
@@ -326,7 +347,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     (address.has(START_AT_ONCE) &&
       playing === null &&
       !asked.failure &&
-      (work === null || (version !== undefined && !version.missing)));
+      (work === null || aWhole || (version !== undefined && !version.missing)));
 
   const readAgain = useCallback(() => setAgain((count) => count + 1), []);
   const play = useCallback(

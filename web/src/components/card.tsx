@@ -113,8 +113,8 @@ export function Card({
   const unknown = card.identification === "unidentified" || card.identification === "pending";
   const seen = marks.seenOf(card);
   const favourite = marks.favouriteOf(card);
-  /* A series is opened rather than played: what a play button on one would
-     mean is the next episode, which is what the row of them is for. */
+  /* A series plays the episode it carries on with: its page works out which
+     and hands over to it. */
   const playable = playsOnItsOwn(card);
   const howFar =
     watched ??

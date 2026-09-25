@@ -82,6 +82,11 @@ export interface Asked<T> {
       again each time somebody asks afresh, so a screen that says it is looking
       says it every time it is sent looking. */
   waiting: boolean;
+  /** Whether the answer is the server's own, given since this screen asked,
+      rather than the copy kept from an earlier visit that stands in for it
+      meanwhile. What is drawn can go by the copy; what is acted on at once,
+      like which episode to start, waits for this. */
+  current: boolean;
   /** Somebody asked for it again: the last refusal is put aside and the screen
       says it is looking, because a button that changes nothing when it is
       pressed is a button that looks broken. */
@@ -183,6 +188,7 @@ export function useAsked<T>(
     answer: fresh ? fresh.value : known ? known.value : null,
     failure,
     waiting: known !== undefined && fresh === undefined ? false : waiting,
+    current: fresh !== undefined,
     again,
     look,
   };
