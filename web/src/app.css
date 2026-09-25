@@ -1183,23 +1183,16 @@
   transition: transform var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
 }
 
-/* The same ring the search field wears when it is being used: one way of
-   saying "this is the thing you are on", everywhere. And the same growing as
-   a card and as every button: one gesture for "this comes forward", not a
-   tile that nudges upwards while the posters below it grow.
-
-   Drawn as a ring outside the tile rather than as a border of its own: a
-   border would take a point off the picture all the way round, and that
-   point of tile colour showing past the rim is exactly what used to read as
-   a second, greyer rim around the first. */
+/* The same growing as a card and as every button: one gesture for "this
+   comes forward", not a tile that nudges upwards while the posters below it
+   grow. The rim itself lights up on the tile's own edge, below; what is
+   added around it is only the glow. */
 .band-tile:hover,
 .band-tile:focus-visible {
   outline: none;
   transform: scale(1.035);
   z-index: 1;
-  box-shadow:
-    0 0 0 1px var(--accent),
-    0 0 0 4px var(--accent-glow);
+  box-shadow: 0 0 0 4px var(--accent-glow);
 }
 
 /*
@@ -1637,46 +1630,29 @@
 }
 
 /*
- * The rim the door's card wears, on the ways in.
+ * The rim of a way in: one even line of accent all the way round, drawn just
+ * inside the tile's edge so it covers that edge rather than sitting beside
+ * it. A rim cut out of a turning gradient by a mask used to stand here, and
+ * at any zoom but a whole one it came out thicker on some sides than others
+ * and brighter in some corners than others, which read as a rim drawn by
+ * chance.
  *
- * The same drawing, stop for stop: one hairline of accent all the way round
- * whose colour turns as it goes, which is what tells a lit edge from a
- * border. It sits on the tile's own outside edge, where the door's sits on
- * the card's, with nothing of the tile left showing past it.
- *
- * It goes out under the pointer: what says "this is the one you are on" is
- * the ring below, and two rims on one tile is one too many.
+ * Under the pointer it is the same line, full strength and a little heavier,
+ * with the glow around the tile: one rim that lights up, never two.
  */
 .band-tile::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1px;
-  background: conic-gradient(
-    from 128deg,
-    color-mix(in srgb, var(--accent-bright) 92%, transparent),
-    color-mix(in srgb, var(--accent) 54%, transparent) 16%,
-    color-mix(in srgb, var(--accent-dim) 34%, transparent) 33%,
-    color-mix(in srgb, var(--accent-bright) 96%, transparent) 54%,
-    color-mix(in srgb, var(--accent) 52%, transparent) 74%,
-    color-mix(in srgb, var(--accent-bright) 86%, transparent)
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 62%, transparent);
   pointer-events: none;
-  transition: opacity var(--quick) var(--ease);
+  transition: box-shadow var(--quick) var(--ease);
 }
 
 .band-tile:hover::before,
 .band-tile:focus-visible::before {
-  opacity: 0;
+  box-shadow: inset 0 0 0 1.5px var(--accent-bright);
 }
 
 /* The ground the fan stands on, and what keeps the words off it. Solid along
