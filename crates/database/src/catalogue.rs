@@ -592,15 +592,47 @@ impl Database {
         row.map(|row| work_from_row(&row)).transpose()
     }
 
-    /// Where a viewer would pick a series back up: the first episode of it they
-    /// have not watched.
+    /// Where a viewer would pick a series back up.
     ///
-    /// Read in order rather than from the last one played, because a series
-    /// watched out of order has a hole in it and the hole is what somebody
-    /// means by where they are. Nothing when every episode here has been
-    /// watched, which is a series to start again rather than to carry on.
+    /// An episode left halfway first, the one played last when there are
+    /// several: somebody who stopped in the middle of one is in the middle of
+    /// that one, whatever else they skipped. Failing that, the first episode
+    /// not watched yet, read in order rather than from the last one played,
+    /// because a series watched out of order has a hole in it and the hole is
+    /// what somebody means by where they are. Nothing when every episode here
+    /// has been watched, which is a series to start again rather than to
+    /// carry on.
     pub async fn where_to_resume(&self, viewer: UserId, series_id: WorkId) -> Result<Option<Work>> {
+        if let Some(halfway) = self.an_episode_left_halfway(viewer, series_id).await? {
+            return Ok(Some(halfway));
+        }
         self.an_episode_of(viewer, series_id, None, true).await
+    }
+
+    /// The episode of a series a viewer played last and stopped in the middle
+    /// of, when there is one with a file still behind it.
+    async fn an_episode_left_halfway(
+        &self,
+        viewer: UserId,
+        series_id: WorkId,
+    ) -> Result<Option<Work>> {
+        let row = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} FROM works e
+             JOIN works s ON s.id = e.parent_id
+             JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
+             WHERE s.parent_id = ? AND e.kind = 'episode' AND p.state = 'in_progress'
+               AND EXISTS (SELECT 1 FROM media_sources m
+                            WHERE m.work_id = e.id AND m.missing_since IS NULL)
+             ORDER BY p.last_played_at DESC
+             LIMIT 1",
+            what_a_work_is("e.")
+        )))
+        .bind(viewer.to_db_string())
+        .bind(series_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+
+        row.map(|row| work_from_row(&row)).transpose()
     }
 
     /// The series an episode belongs to, and where it sits in it.
@@ -3440,6 +3472,69 @@ mod tests {
             None,
             "and nothing once it has all been watched, which is a series to \
              start again rather than to carry on"
+        );
+    }
+
+    async fn left_halfway(
+        database: &Database,
+        viewer: UserId,
+        work: WorkId,
+        at: melyxar_core::time::Timestamp,
+    ) {
+        database
+            .record_playback_progress(
+                viewer,
+                work,
+                Millis::new(600_000),
+                melyxar_core::work::PlaybackState::InProgress,
+                at,
+            )
+            .await
+            .expect("recorded");
+    }
+
+    #[tokio::test]
+    async fn an_episode_left_halfway_is_where_a_series_is_picked_back_up() {
+        // Somebody in the middle of an episode is in the middle of that one,
+        // even past a hole left earlier in the series.
+        let (database, library_id, root_id) = library().await;
+        let viewer = a_viewer(&database).await;
+        let (series, _, episodes) = a_series(&database, library_id).await;
+        for (rank, episode) in episodes.iter().enumerate() {
+            a_file_behind(&database, root_id, *episode, &format!("{rank}.mkv")).await;
+        }
+        let two_days_ago = melyxar_core::time::now() - time::Duration::days(2);
+        left_halfway(&database, viewer, episodes[2], two_days_ago).await;
+        assert_eq!(
+            database
+                .where_to_resume(viewer, series)
+                .await
+                .expect("read")
+                .map(|found| found.id),
+            Some(episodes[2]),
+            "the one left halfway, not the first one nobody has watched"
+        );
+
+        // Two left halfway: the one played last.
+        left_halfway(&database, viewer, episodes[1], two_days_ago + time::Duration::DAY).await;
+        assert_eq!(
+            database
+                .where_to_resume(viewer, series)
+                .await
+                .expect("read")
+                .map(|found| found.id),
+            Some(episodes[1])
+        );
+
+        // Finished, it gives way to the other one still halfway.
+        watched(&database, viewer, episodes[1]).await;
+        assert_eq!(
+            database
+                .where_to_resume(viewer, series)
+                .await
+                .expect("read")
+                .map(|found| found.id),
+            Some(episodes[2])
         );
     }
 
