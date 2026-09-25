@@ -53,12 +53,12 @@ export function DebugJournal() {
       </button>
       {open && layer && (
         <Modal
-          title={t("debug.journal")}
+          title={t("admin.journal_lines")}
           onClose={() => setOpen(false)}
           className="debug-journal"
           into={layer}
         >
-          <TechnicalJournal />
+          <TechnicalJournal bare />
         </Modal>
       )}
     </div>,
