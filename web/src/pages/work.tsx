@@ -80,7 +80,7 @@ export function WorkPage() {
     chosen,
     readAgain,
     playing,
-    openingToPlay,
+    onlyToPlay,
     stopPlaying,
     trailer,
     stopTrailer,
@@ -146,10 +146,10 @@ export function WorkPage() {
       />
     );
   }
-  /* Opened only to play, and the film is not up yet: nothing of the page is
-     drawn. Somebody who pressed play on a card never asked to see this page,
+  /* Opened only to play, and the film is not up yet or has just been left:
+     nothing of the page is drawn. Somebody who pressed play on a card never asked to see this page,
      and it used to flash past them on the way to the film. */
-  if (!work || openingToPlay) {
+  if (!work || onlyToPlay) {
     return <main className="page" aria-busy="true" />;
   }
   /* What somebody filmed or photographed themselves has pages of its own: a
