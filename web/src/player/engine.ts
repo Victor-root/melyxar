@@ -49,6 +49,12 @@ export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 /** How often the position is sent while a film plays. */
 const REPORT_EVERY = 10_000;
 
+/** The longest the picture is kept covered after its first picture. */
+const COVERED_AT_MOST_MS = 1000;
+/** Two pictures further apart than this in the film are a jump rather than
+ *  the film running from one to the next. */
+const ONE_STEP_OF_A_FILM_S = 0.25;
+
 /** Below this, a film counts as not started, so leaving at once loses nothing. */
 const WORTH_REPORTING = 5;
 
@@ -259,6 +265,8 @@ export interface Playback {
   pictureKey: string | null;
   /** Which picture the browser has actually opened. */
   readyPicture: string | null;
+  /** Which picture is on screen and moving: kept covered until then. */
+  movingPicture: string | null;
   audioId: string | null;
   subtitleId: string | null;
   quality: Quality;
@@ -461,6 +469,12 @@ export function usePlayback({
   /* Which picture the browser has actually opened. Null until it has: the
      words are hung on the picture, and only once it is there. */
   const [readyPicture, setReadyPicture] = useState<string | null>(null);
+  /* Which picture has been seen moving. A browser puts up the first picture
+     of a film the moment it has it and sets the film going a beat later, so
+     that picture stood still on the screen for up to a fifth of a second
+     every time a film started: measured on every start in the maintainer's
+     journal, and felt as a stutter before the film ran smoothly. */
+  const [movingPicture, setMovingPicture] = useState<string | null>(null);
   /** How far there is left to wait, shown while the picture is not there. */
   const [loadingPercent, setLoadingPercent] = useState(0);
   /* Which of the real moments on the way to a playing film has been reached,
@@ -1557,6 +1571,57 @@ export function usePlayback({
     };
   }, [pictureKey, onPictureReady, report, notePictureRefused, repeat]);
 
+  /* The picture is uncovered once two pictures in a row show the film
+     running, never on the first alone. Uncovered anyway a moment after the
+     first picture, for a film the browser left paused or a browser that
+     cannot say when each picture reaches the screen: a covered picture that
+     never comes out is worse than one that started with a hitch. */
+  useEffect(() => {
+    const element = video.current;
+    if (!element || pictureKey === null) {
+      return;
+    }
+    const key = pictureKey;
+    let previous: number | null = null;
+    let pending: number | null = null;
+    let atMost = 0;
+    const uncover = () => {
+      window.clearTimeout(atMost);
+      if (pending !== null) {
+        element.cancelVideoFrameCallback?.(pending);
+        pending = null;
+      }
+      setMovingPicture(key);
+    };
+    if (!element.requestVideoFrameCallback) {
+      element.addEventListener("playing", uncover, { once: true });
+      return () => element.removeEventListener("playing", uncover);
+    }
+    const onPicture = (_now: number, picture: VideoFrameCallbackMetadata) => {
+      pending = null;
+      if (previous === null) {
+        atMost = window.setTimeout(uncover, COVERED_AT_MOST_MS);
+      } else if (
+        !element.paused &&
+        !element.seeking &&
+        picture.mediaTime > previous &&
+        picture.mediaTime - previous < ONE_STEP_OF_A_FILM_S
+      ) {
+        uncover();
+        return;
+      }
+      previous = picture.mediaTime;
+      pending = element.requestVideoFrameCallback(onPicture);
+    };
+    pending = element.requestVideoFrameCallback(onPicture);
+    return () => {
+      window.clearTimeout(atMost);
+      if (pending !== null) {
+        element.cancelVideoFrameCallback?.(pending);
+      }
+    };
+  }, [pictureKey]);
+
   return {
     video,
     plan,
@@ -1567,6 +1632,7 @@ export function usePlayback({
     loadingPercent,
     pictureKey,
     readyPicture,
+    movingPicture,
     audioId,
     subtitleId,
     quality,

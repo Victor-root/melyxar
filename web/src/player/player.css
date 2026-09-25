@@ -149,6 +149,15 @@
   background: #000;
 }
 
+/* Laid over the picture while it is kept covered, the same black as the
+   stage around it. */
+.player-veil {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+}
+
 /* How the picture is fitted. Whole by default, which is what a film was shot
    for; the other two are for a film mastered with the bars baked in. */
 .player-video-auto {

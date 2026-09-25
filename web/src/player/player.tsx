@@ -183,6 +183,7 @@ function Film({
     loadingPercent,
     pictureKey,
     readyPicture,
+    movingPicture,
     words,
     shownWords,
     holdTheWords,
@@ -279,6 +280,10 @@ function Film({
         </video>
       )}
 
+      {/* Over the picture until it is seen moving, so its first picture never
+          stands still on the screen before the film sets off. */}
+      {plan && !failed && movingPicture !== pictureKey && <div className="player-veil" />}
+
       {/* What stands in front of the picture before there is one to watch,
           and what is wrong when something is. Over the picture like
           everything else: a notice that pushes the film down the page is a
@@ -298,7 +303,7 @@ function Film({
             server can be finished with its own part and the film still be
             seconds away on a slow connection, and a number that stopped
             climbing there would be a number lying about what is left. */}
-        {rebuilt && readyPicture !== pictureKey && !failed && (
+        {rebuilt && movingPicture !== pictureKey && !failed && (
           <div className="player-working">
             <Spinner />
             <p className="player-notice player-notice-bare">
