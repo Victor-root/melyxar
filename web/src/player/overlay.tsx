@@ -25,6 +25,7 @@ import type {
   PlaybackSegment,
   PlaybackThumbnails,
   PlaybackTrack,
+  WideGamutChoice,
   Work,
 } from "../api";
 import { BACKGROUNDS, COLOURS, DEFAULT_APPEARANCE, EDGES, HEIGHTS, SIZES } from "./appearance";
@@ -89,6 +90,7 @@ export type Panel =
   | "settings.speed"
   | "settings.quality"
   | "settings.codec"
+  | "settings.wide_gamut"
   | "settings.shape"
   | "settings.repeat"
   | "settings.words_offset"
@@ -107,6 +109,14 @@ const PLAY_ICON = 34;
 /** How far the words can be shifted, and by how much at a time, in seconds. */
 const OFFSET_STEP = 0.5;
 const OFFSET_FURTHEST = 15;
+
+/** What can be done with a film's HDR for this film alone, the account's own
+ *  choice first. */
+const WIDE_GAMUT_HERE: [WideGamutChoice | null, string][] = [
+  [null, "player.wide_gamut.account"],
+  ["never_convert", "player.wide_gamut.keep"],
+  ["always_convert", "player.wide_gamut.convert"],
+];
 
 interface Props {
   playback: Playback;
@@ -1330,6 +1340,15 @@ function sheetFor(
               into
               onPick={() => onPanel("settings.codec")}
             />
+            {plan.wide_gamut && (
+              <Line
+                label={t("player.wide_gamut")}
+                value={t(plan.wide_gamut.converted ? "player.wide_gamut.converted" : "player.wide_gamut.kept")}
+                changed={playback.wideGamut !== null}
+                into
+                onPick={() => onPanel("settings.wide_gamut")}
+              />
+            )}
             <Line
               label={t("player.repeat")}
               value={t(playback.repeat ? "player.repeat.film" : "player.repeat.none")}
@@ -1411,6 +1430,34 @@ function sheetFor(
           />
         )),
       };
+
+    case "settings.wide_gamut": {
+      const handling = plan.wide_gamut;
+      return {
+        title: t("player.wide_gamut"),
+        from: "settings",
+        lines:
+          handling && !handling.follows_choice ? (
+            /* Nothing to offer: whatever is picked, the film comes out the
+               same, and a choice that changes nothing is worse than none. */
+            <p className="player-menu-why">
+              {t(handling.converted ? "player.wide_gamut.imposed_converted" : "player.wide_gamut.imposed_kept")}
+            </p>
+          ) : (
+            <>
+              <p className="player-menu-why">{t("player.wide_gamut.why")}</p>
+              {WIDE_GAMUT_HERE.map(([choice, wording]) => (
+                <Line
+                  key={wording}
+                  label={t(wording)}
+                  chosen={playback.wideGamut === choice}
+                  onPick={() => playback.setWideGamut(choice)}
+                />
+              ))}
+            </>
+          ),
+      };
+    }
 
     case "settings.repeat":
       return {

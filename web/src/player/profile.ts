@@ -44,6 +44,22 @@ const AUDIO: Probe[] = [
   { type: 'audio/mp4; codecs="ac-3"', name: "ac3" },
 ];
 
+/** The codecs a wide gamut film comes in, each asked at ten bits. */
+const WIDE_GAMUT: Probe[] = [
+  { type: 'video/mp4; codecs="hvc1.2.4.L153.B0"', name: "hevc" },
+  { type: 'video/webm; codecs="vp09.02.10.10"', name: "vp9" },
+  { type: 'video/mp4; codecs="av01.0.12M.10"', name: "av1" },
+];
+
+/** The curves a wide gamut picture is written on, as the browser and the
+ *  server each name them. */
+const CURVES: { transfer: TransferFunction; name: Curve; metadata?: HdrMetadataType }[] = [
+  // The common flavour carries the brightness of the screen it was mastered
+  // on, and a browser that cannot read it has no business saying yes.
+  { transfer: "pq", name: "pq", metadata: "smpteSt2086" },
+  { transfer: "hlg", name: "hlg" },
+];
+
 /**
  * A codec this browser takes in a stream fed to it piece by piece, and how far
  * it takes it.
@@ -62,6 +78,14 @@ export interface RebuiltCapability {
   power_efficient: boolean | null;
 }
 
+export type Curve = "pq" | "hlg";
+
+/** A codec whose wide gamut picture this browser shows as it is, on one curve. */
+export interface WideGamutCapability {
+  codec: string;
+  curve: Curve;
+}
+
 export interface ClientProfile {
   containers: string[];
   video: { codec: string }[];
@@ -70,7 +94,9 @@ export interface ClientProfile {
   audio_codecs: string[];
   max_audio_channels: number | null;
   subtitle_formats: string[];
-  supports_hdr: boolean;
+  /** The wide gamut pictures shown as they are, empty on a screen of
+   *  standard range. */
+  wide_gamut: WideGamutCapability[];
   max_height: number | null;
   max_bitrate: number | null;
   can_switch_tracks_in_container: boolean;
@@ -252,6 +278,69 @@ function whatToTellTheServer(
 }
 
 /**
+ * The wide gamut pictures this browser decodes as they are, whatever the
+ * screen.
+ *
+ * Asked once and kept, like the rest of what is about the machine. Asked for a
+ * film opened whole and for one fed in pieces alike, because a picture carried
+ * over as it is reaches the player either way, and a yes to one only would
+ * leave the other showing it washed out.
+ */
+let wideGamutDecoded: Promise<WideGamutCapability[]> | null = null;
+
+function wideGamutItDecodes(): Promise<WideGamutCapability[]> {
+  wideGamutDecoded ??= Promise.all(
+    WIDE_GAMUT.flatMap((entry) =>
+      CURVES.map(async (curve) => ({
+        capability: { codec: entry.name, curve: curve.name },
+        decodes: await decodesAsItIs(entry.type, curve),
+      })),
+    ),
+  ).then((answers) => answers.filter((answer) => answer.decodes).map((answer) => answer.capability));
+  return wideGamutDecoded;
+}
+
+async function decodesAsItIs(type: string, curve: (typeof CURVES)[number]): Promise<boolean> {
+  const capabilities = navigator.mediaCapabilities;
+  if (!capabilities?.decodingInfo) {
+    return false;
+  }
+  const video: VideoConfiguration = {
+    contentType: type,
+    width: 3840,
+    height: 2160,
+    bitrate: weight(2160),
+    framerate: 24,
+    colorGamut: "rec2020",
+    transferFunction: curve.transfer,
+    ...(curve.metadata ? { hdrMetadataType: curve.metadata } : {}),
+  };
+  try {
+    const answers = await Promise.all(
+      (["file", "media-source"] as const).map((kind) => capabilities.decodingInfo({ type: kind, video })),
+    );
+    return answers.every((answer) => answer.supported);
+  } catch {
+    // A browser that refuses the question is taken for one that shows none:
+    // converted, a film is never washed out.
+    return false;
+  }
+}
+
+/**
+ * The wide gamut pictures this browser shows as they are, right now.
+ *
+ * The screen is asked every time, since the answer changes with it: high
+ * dynamic range switched off in the system, or the window moved to another
+ * screen. A decoder that hands the picture over as it is shows it washed out
+ * on a screen that is not in that mode.
+ */
+async function wideGamutShown(): Promise<WideGamutCapability[]> {
+  const screenShowsIt = window.matchMedia?.("(dynamic-range: high)").matches ?? false;
+  return screenShowsIt ? wideGamutItDecodes() : [];
+}
+
+/**
  * Forgets what was cached about this browser's decode capability.
  *
  * Called once a calibration just finished, so the very next question about
@@ -285,9 +374,7 @@ export async function clientProfile(asked?: Quality): Promise<ClientProfile> {
     // is how a film comes out with no voices on a stereo setup.
     max_audio_channels: 2,
     subtitle_formats: ["webvtt"],
-    // No browser shows wide gamut colour correctly on this platform today, so
-    // saying otherwise would hand over a film that looks washed out and grey.
-    supports_hdr: false,
+    wide_gamut: await wideGamutShown(),
     // Only what the viewer asked for. Nothing is assumed from a screen size
     // or a connection: a viewer who wants the film as it is gets the film as
     // it is, and one who asked for less says so.
