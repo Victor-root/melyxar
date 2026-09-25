@@ -2438,44 +2438,21 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 /* Drawn on the picture itself: it is the one thing that tells two cards of a
    row apart at a glance. Above the hover layer, since how far in something is
-   does not stop being true under the pointer.
-
-   Floated inside the picture as a rounded line of its own, clear of every
-   edge: laid flat along the foot, its ends were cut by the rounded corners
-   and the rim under the pointer ran straight across it. */
+   does not stop being true under the pointer. */
 .card-progress {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   height: 4px;
   z-index: 3;
-  border-radius: 999px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .card-progress-done {
   display: block;
   height: 100%;
-  border-radius: inherit;
   background: var(--accent);
-  transition: background var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
-}
-
-/* Lit with the rest of the card under the pointer. */
-.card:hover .card-progress-done,
-.card:focus-within .card-progress-done {
-  background: var(--accent-bright);
-  box-shadow: 0 0 8px var(--accent-glow);
-}
-
-/* The buttons at the foot of a card stand just above that line rather than
-   on it. */
-.card-picture:has(.card-progress) .card-corner,
-.card-picture:has(.card-progress) .select-mark {
-  bottom: 22px;
 }
 
 /* What the card offers beyond pressing it. */
