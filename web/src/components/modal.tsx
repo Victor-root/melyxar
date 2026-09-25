@@ -34,6 +34,9 @@ export function Modal({
   footer,
   /** What kind of panel it is, for one shaped differently from the rest. */
   className,
+  /** Where it is drawn, when not over the whole page: a panel opened while
+      something else fills the screen has to be drawn inside that. */
+  into,
   children,
 }: {
   title: string;
@@ -41,6 +44,7 @@ export function Modal({
   onClose: () => void;
   footer?: ReactNode;
   className?: string;
+  into?: Element;
   children: ReactNode;
 }) {
   const { t } = useSettings();
@@ -104,6 +108,6 @@ export function Modal({
         {footer && <footer className="modal-foot">{footer}</footer>}
       </div>
     </div>,
-    document.body,
+    into ?? document.body,
   );
 }

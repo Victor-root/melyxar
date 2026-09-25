@@ -20,6 +20,21 @@ import { ActivityJournal, FAMILIES } from "./activity-list";
 
 export function AdminJournal() {
   const { t } = useSettings();
+  return (
+    <>
+      <PageHead lead={t("journal.why")} />
+      {/* First, above what people did: it is what is read when something goes
+          wrong, and under the activity it went unseen. */}
+      <TechnicalJournal />
+      <ActivityPanel />
+    </>
+  );
+}
+
+/** What the server has been saying, with its tags, its filter and the copy
+ *  that hands it over. Also opened from anywhere by the debug button. */
+export function TechnicalJournal() {
+  const { t } = useSettings();
   const {
     journal,
     failed,
@@ -47,97 +62,91 @@ export function AdminJournal() {
     }
   }, [shown]);
 
+  /* The buttons on the panel they act on rather than beside the name of the
+     page, where three of them left the name no room. */
   return (
-    <>
-      <PageHead lead={t("journal.why")} />
-
-      <ActivityPanel />
-
-      {/* On the panel they act on rather than beside the name of the page,
-          where three of them left the name no room. */}
-      <Panel
-        icon={JournalIcon}
-        title={t("admin.journal_lines")}
-        className="journal-panel"
-        action={
-          <>
-            <button className="button button-accent" onClick={copy}>
-              {copied ? t("journal.copied") : t("journal.copy")}
-            </button>
-            <button className="button" onClick={forget}>
-              {t("journal.forget")}
-            </button>
-            {/* For trying the slow path again. A subtitle already converted
-                is served in a millisecond and proves nothing about the minute
-                it took to get there. */}
+    <Panel
+      icon={JournalIcon}
+      title={t("admin.journal_lines")}
+      className="journal-panel"
+      action={
+        <>
+          <button className="button button-accent" onClick={copy}>
+            {copied ? t("journal.copied") : t("journal.copy")}
+          </button>
+          <button className="button" onClick={forget}>
+            {t("journal.forget")}
+          </button>
+          {/* For trying the slow path again. A subtitle already converted
+              is served in a millisecond and proves nothing about the minute
+              it took to get there. */}
+          <button
+            className="button"
+            onClick={() =>
+              void forgetConvertedSubtitles().then((forgotten) => {
+                if (forgotten !== null) {
+                  setThrownAway(t("journal.subtitles_gone", { count: forgotten }));
+                }
+              })
+            }
+          >
+            {thrownAway || t("journal.forget_subtitles")}
+          </button>
+        </>
+      }
+    >
+      <div className="journal-filters">
+        <label className="journal-search">
+          <SearchIcon size={18} />
+          <input
+            type="search"
+            value={holding}
+            placeholder={t("journal.holding")}
+            aria-label={t("journal.holding")}
+            onChange={(event) => setHolding(event.target.value)}
+          />
+        </label>
+        <div className="chips">
+          <button
+            className={`chip${ticked.length === 0 ? " chip-on" : ""}`}
+            aria-pressed={ticked.length === 0}
+            onClick={everyTag}
+          >
+            {t("journal.every_tag")}
+          </button>
+          {journal.tags.map((tag) => (
             <button
-              className="button"
-              onClick={() =>
-                void forgetConvertedSubtitles().then((forgotten) => {
-                  if (forgotten !== null) {
-                    setThrownAway(t("journal.subtitles_gone", { count: forgotten }));
-                  }
-                })
-              }
+              key={tag.name}
+              className={`chip${ticked.includes(tag.name) ? " chip-on" : ""}`}
+              aria-pressed={ticked.includes(tag.name)}
+              onClick={() => toggle(tag.name)}
             >
-              {thrownAway || t("journal.forget_subtitles")}
+              {tag.name}
+              <span className="chip-count">{tag.lines}</span>
             </button>
-          </>
-        }
-      >
-        <div className="journal-filters">
-          <label className="journal-search">
-            <SearchIcon size={18} />
-            <input
-              type="search"
-              value={holding}
-              placeholder={t("journal.holding")}
-              aria-label={t("journal.holding")}
-              onChange={(event) => setHolding(event.target.value)}
-            />
-          </label>
-          <div className="chips">
-            <button
-              className={`chip${ticked.length === 0 ? " chip-on" : ""}`}
-              aria-pressed={ticked.length === 0}
-              onClick={everyTag}
-            >
-              {t("journal.every_tag")}
-            </button>
-            {journal.tags.map((tag) => (
-              <button
-                key={tag.name}
-                className={`chip${ticked.includes(tag.name) ? " chip-on" : ""}`}
-                aria-pressed={ticked.includes(tag.name)}
-                onClick={() => toggle(tag.name)}
-              >
-                {tag.name}
-                <span className="chip-count">{tag.lines}</span>
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
+      </div>
 
-        {failed && <p className="panel-notice panel-notice-trouble">{t("error.unreachable")}</p>}
+      {failed && <p className="panel-notice panel-notice-trouble">{t("error.unreachable")}</p>}
 
-        {shown && (
-          <>
-            <p className="panel-say">{t("report.select")}</p>
-            <textarea className="report-text" ref={selectable} readOnly value={shown} />
-          </>
-        )}
+      {shown && (
+        <>
+          <p className="panel-say">{t("report.select")}</p>
+          <textarea className="report-text" ref={selectable} readOnly value={shown} />
+        </>
+      )}
 
-        {journal.lines.length === 0 ? (
-          <p className="empty-line">{t("journal.nothing")}</p>
-        ) : (
-          <div className="log">
-            {journal.lines.map((line, index) => (
-              <Line key={`${line.at}-${index}`} line={line} />
-            ))}
-          </div>
-        )}
-      </Panel>
-    </>
+      {journal.lines.length === 0 ? (
+        <p className="empty-line">{t("journal.nothing")}</p>
+      ) : (
+        <div className="log">
+          {journal.lines.map((line, index) => (
+            <Line key={`${line.at}-${index}`} line={line} />
+          ))}
+        </div>
+      )}
+    </Panel>
   );
 }
 

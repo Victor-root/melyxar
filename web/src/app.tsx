@@ -19,6 +19,7 @@ import { Header } from "./components/header";
 import { isSectioned } from "./components/sectioned";
 import { ScrollBar } from "./components/scrollbar";
 import { Toasts } from "./components/toasts";
+import { DebugJournal } from "./components/debug-journal";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { SearchPage } from "./pages/search";
@@ -130,6 +131,8 @@ function TheLibrary() {
             Where the two sit in the markup does not decide that on its own;
             it is the bar's own fixed position, in app.css, that lifts it out
             of the page. */}
+        {/* DEBUG ONLY, TO BE REMOVED with components/debug-journal.tsx. */}
+        <DebugJournal />
         <div className="shell">
           <Header libraries={libraries.all} scrolling={scrolling} />
           <div className="shell-scroll" ref={scrolling}>
