@@ -186,6 +186,23 @@ function LibraryPanel({
             onChange={(thumbnails_during_scan) => editing.settle(library, { thumbnails_during_scan })}
           />
         </Setting>
+        <Setting
+          label={t("settings.watch_in_real_time")}
+          why={t(library.watch_state === "starting" ? "admin.watch_starting" : "admin.watch_why")}
+        >
+          <Toggle
+            label={t("settings.watch_in_real_time")}
+            checked={library.watch_in_real_time}
+            onChange={(watch_in_real_time) => editing.settle(library, { watch_in_real_time })}
+          />
+        </Setting>
+        {/* Said where the switch is: a switch left on that watches nothing
+            is a library that silently stopped growing on its own. */}
+        {library.watch_refusal && (
+          <p className="panel-notice panel-notice-trouble">
+            {t(`admin.watch_refused.${library.watch_refusal}`)}
+          </p>
+        )}
       </div>
 
       {/* The folders it looks in. A log line shows only the label, but this is
