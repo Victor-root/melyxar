@@ -19,6 +19,12 @@
 //! The rest are numbers about a film playing, which is the half of a reading
 //! the server cannot see at all: it knows what it produced and when it handed
 //! it over, never whether any of it reached a screen.
+//!
+//! A film handed over as it lies on the disk is followed the same way, named
+//! by its file rather than by a session, since none was ever opened for it.
+//! It used to be followed not at all: the server hands such a film over and
+//! hears nothing more, so a browser that took the whole of it and never showed
+//! a picture left a journal with nothing in it.
 
 use axum::{Json, Router};
 use melyxar_app::AppState;
@@ -221,6 +227,31 @@ enum Seen {
         /// Whether the film went on playing, read by the browser itself.
         browser_took_over: bool,
     },
+    /// Where the film stood a few seconds after the browser was handed it.
+    ///
+    /// Said once, whatever the answer. Every other fact here follows a film
+    /// that is playing, and a film the browser never set going, or set going
+    /// without ever showing a picture, is not one: it went by in silence.
+    HowItStarted {
+        /// How long after the browser was handed the film, in milliseconds.
+        after_ms: u32,
+        at_second: f64,
+        /// Whether the browser left it paused, which nobody on the page asked
+        /// for this early: a browser refusing to start a film on its own.
+        paused: bool,
+        /// How ready the browser says it is, on its own scale of nought to
+        /// four, and how far it has got fetching the film, of nought to three.
+        ready_state: u32,
+        network_state: u32,
+        pictures_shown: u32,
+        pictures_dropped: u32,
+        held_from_second: Option<f64>,
+        held_to_second: Option<f64>,
+        stretches: u32,
+        /// The browser's own code for what went wrong, when it says anything
+        /// went wrong at all.
+        error_code: Option<u32>,
+    },
     /// One of the real moments on the way to a film playing, and how long the
     /// one before it took.
     ///
@@ -324,12 +355,45 @@ impl HowItMoved {
 /// refusals are made of. A journal is read by eye.
 const ENOUGH_OF_A_REFUSAL: usize = 300;
 
-/// Which session the fact is about, and the fact.
+/// Which reading the fact is about, and the fact.
+///
+/// A session for a film being rebuilt, the source for one handed over as it
+/// is, and exactly one of the two.
 #[derive(Debug, Deserialize)]
 struct FromThePage {
-    session: String,
+    #[serde(default)]
+    session: Option<String>,
+    #[serde(default)]
+    source: Option<String>,
     #[serde(flatten)]
     seen: Seen,
+}
+
+/// The reading a fact is about, once its name has been read.
+#[derive(Debug, PartialEq)]
+enum Reading {
+    /// A film being rebuilt, into this session.
+    Session(melyxar_app::playback::SessionId),
+    /// A film handed over as it lies on the disk.
+    File(melyxar_core::id::MediaSourceId),
+}
+
+impl Reading {
+    /// The one reading named, or a refusal when the name is malformed or when
+    /// there is not exactly one.
+    fn named(session: Option<&str>, source: Option<&str>) -> Result<Self> {
+        match (session, source) {
+            (Some(session), None) => session.parse().map(Self::Session).map_err(|_| {
+                crate::error::ServerError::invalid_input("the session identifier is malformed")
+            }),
+            (None, Some(source)) => source.parse().map(Self::File).map_err(|_| {
+                crate::error::ServerError::invalid_input("the source identifier is malformed")
+            }),
+            _ => Err(crate::error::ServerError::invalid_input(
+                "a fact names either a session or a source",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -354,12 +418,10 @@ async fn what_the_page_saw(
 ) -> Result<Json<Written>> {
     // The identifier is a name from outside: read as one, never used as one.
     // Written down as the page sent it only once it parses.
-    let session = said
-        .session
-        .parse::<melyxar_app::playback::SessionId>()
-        .map_err(|_| {
-            crate::error::ServerError::invalid_input("the session identifier is malformed")
-        })?;
+    let (session, source) = match Reading::named(said.session.as_deref(), said.source.as_deref())? {
+        Reading::Session(session) => (Some(tracing::field::display(session)), None),
+        Reading::File(source) => (None, Some(tracing::field::display(source))),
+    };
 
     match said.seen {
         Seen::PlaybackBegan {
@@ -367,7 +429,8 @@ async fn what_the_page_saw(
             began_at_second,
             first_segment,
         } => tracing::debug!(
-            %session,
+            session,
+            source,
             playlist_said_second,
             began_at_second,
             first_segment,
@@ -379,7 +442,8 @@ async fn what_the_page_saw(
             was_playing,
             moved_by,
         } => tracing::debug!(
-            %session,
+            session,
+            source,
             from_second,
             to_second,
             was_playing,
@@ -392,7 +456,8 @@ async fn what_the_page_saw(
             drawn_across,
             drawn_down,
         } => tracing::debug!(
-            %session,
+            session,
+            source,
             across,
             down,
             drawn_across,
@@ -406,7 +471,8 @@ async fn what_the_page_saw(
             was_held_already,
             stretches,
         } => tracing::debug!(
-            %session,
+            session,
+            source,
             asked_for_second,
             showed_second,
             after_ms,
@@ -423,7 +489,8 @@ async fn what_the_page_saw(
             ready_state,
             pictures_shown,
         } => tracing::debug!(
-            %session,
+            session,
+            source,
             at_second,
             was_seeking,
             held_from_second,
@@ -436,7 +503,13 @@ async fn what_the_page_saw(
         Seen::PlaybackPickedUpAgain {
             at_second,
             waited_ms,
-        } => tracing::debug!(%session, at_second, waited_ms, "the film picked up again"),
+        } => tracing::debug!(
+            session,
+            source,
+            at_second,
+            waited_ms,
+            "the film picked up again"
+        ),
         Seen::ThePictureStoodStill {
             at_second,
             for_ms,
@@ -448,7 +521,8 @@ async fn what_the_page_saw(
             ready_state,
             page_was_hidden,
         } => tracing::debug!(
-            %session,
+            session,
+            source,
             at_second,
             for_ms,
             pictures_shown,
@@ -466,7 +540,8 @@ async fn what_the_page_saw(
             pictures_shown,
             pictures_dropped,
         } => tracing::debug!(
-            %session,
+            session,
+            source,
             at_second,
             over_ms,
             pictures_shown,
@@ -477,13 +552,43 @@ async fn what_the_page_saw(
             because,
             browser_took_over,
         } => tracing::warn!(
-            %session,
+            session,
+            source,
             because = cut_short(&because),
             browser_took_over,
             "the library gave up on this film"
         ),
+        Seen::HowItStarted {
+            after_ms,
+            at_second,
+            paused,
+            ready_state,
+            network_state,
+            pictures_shown,
+            pictures_dropped,
+            held_from_second,
+            held_to_second,
+            stretches,
+            error_code,
+        } => tracing::debug!(
+            session,
+            source,
+            after_ms,
+            at_second,
+            paused,
+            ready_state,
+            network_state,
+            pictures_shown,
+            pictures_dropped,
+            held_from_second,
+            held_to_second,
+            stretches,
+            error_code,
+            "where the film stood a few seconds in"
+        ),
         Seen::LoadingStage { stage, after_ms } => tracing::debug!(
-            %session,
+            session,
+            source,
             stage = stage.as_word(),
             after_ms,
             "the page reached a loading stage"
@@ -505,7 +610,7 @@ mod tests {
         )
         .expect("a fact this module names is read");
 
-        assert_eq!(said.session, "01a0a143-2ab0-748d-8924-e3208b7930c9");
+        assert_eq!(said.session.as_deref(), Some("01a0a143-2ab0-748d-8924-e3208b7930c9"));
         match said.seen {
             Seen::PlaybackBegan {
                 playlist_said_second,
@@ -654,6 +759,49 @@ mod tests {
                 "moved_by":"whatever the browser felt like"}"#
         )
         .is_err());
+    }
+
+    #[test]
+    fn a_film_handed_over_as_it_is_is_named_by_its_source() {
+        // No session is ever opened for it, and it used to be followed not at
+        // all: a browser that took the whole film and never showed a picture
+        // left nothing behind.
+        let said: FromThePage = serde_json::from_str(
+            r#"{"source":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"how_it_started",
+                "after_ms":5000,"at_second":0,"paused":false,"ready_state":4,
+                "network_state":1,"pictures_shown":0,"pictures_dropped":0,
+                "held_from_second":0,"held_to_second":92.4,"stretches":1,"error_code":null}"#,
+        )
+        .expect("a fact about a file is read");
+        assert!(matches!(
+            Reading::named(said.session.as_deref(), said.source.as_deref()),
+            Ok(Reading::File(_))
+        ));
+        match said.seen {
+            Seen::HowItStarted {
+                paused,
+                pictures_shown,
+                error_code,
+                ..
+            } => {
+                assert!(!paused);
+                assert_eq!(pictures_shown, 0);
+                assert_eq!(error_code, None);
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_fact_names_exactly_one_reading() {
+        let named = "01a0a143-2ab0-748d-8924-e3208b7930c9";
+        assert!(matches!(Reading::named(Some(named), None), Ok(Reading::Session(_))));
+        assert!(matches!(Reading::named(None, Some(named)), Ok(Reading::File(_))));
+        // Both at once, neither, or a name that is not one: refused.
+        assert!(Reading::named(Some(named), Some(named)).is_err());
+        assert!(Reading::named(None, None).is_err());
+        assert!(Reading::named(None, Some("a film somebody likes")).is_err());
+        assert!(Reading::named(Some("x"), None).is_err());
     }
 
     #[test]

@@ -747,9 +747,8 @@ export type HowItMoved =
  * when a film starts happens here rather than on the server, and the journal
  * showed none of it.
  */
-export type PageSaw =
+export type PageFact =
   | {
-      session: string;
       saw: "playback_began";
       /** What the playlist told the library, when it read it. */
       playlist_said_second: number | null;
@@ -759,7 +758,6 @@ export type PageSaw =
       first_segment: number;
     }
   | {
-      session: string;
       saw: "viewer_jumped";
       from_second: number;
       to_second: number;
@@ -767,7 +765,6 @@ export type PageSaw =
       moved_by: HowItMoved;
     }
   | {
-      session: string;
       saw: "the_picture_arrived";
       /** How wide and tall the browser says the picture is meant to be shown. */
       across: number;
@@ -777,7 +774,6 @@ export type PageSaw =
       drawn_down: number;
     }
   | {
-      session: string;
       saw: "the_picture_came_back";
       /** Where the viewer had asked to land. */
       asked_for_second: number;
@@ -791,7 +787,6 @@ export type PageSaw =
       stretches: number;
     }
   | {
-      session: string;
       saw: "playback_stalled";
       at_second: number;
       /** Whether the browser was still trying to move to a new place. */
@@ -805,13 +800,11 @@ export type PageSaw =
       pictures_shown: number;
     }
   | {
-      session: string;
       saw: "playback_picked_up_again";
       at_second: number;
       waited_ms: number;
     }
   | {
-      session: string;
       saw: "the_picture_stood_still";
       at_second: number;
       for_ms: number;
@@ -827,7 +820,6 @@ export type PageSaw =
       page_was_hidden: boolean;
     }
   | {
-      session: string;
       saw: "pictures_were_dropped";
       at_second: number;
       /** The stretch this counts over, in milliseconds. */
@@ -836,7 +828,6 @@ export type PageSaw =
       pictures_dropped: number;
     }
   | {
-      session: string;
       saw: "playback_refused";
       /** Why the library gave up, in its own words. Cut short by the server. */
       because: string;
@@ -844,7 +835,23 @@ export type PageSaw =
       browser_took_over: boolean;
     }
   | {
-      session: string;
+      saw: "how_it_started";
+      /** How long after the browser was handed the film. */
+      after_ms: number;
+      at_second: number;
+      /** Whether the browser left it paused, which nobody asked for this early. */
+      paused: boolean;
+      ready_state: number;
+      network_state: number;
+      pictures_shown: number;
+      pictures_dropped: number;
+      held_from_second: number | null;
+      held_to_second: number | null;
+      stretches: number;
+      /** The browser's own code for what went wrong, when it says anything did. */
+      error_code: number | null;
+    }
+  | {
       saw: "loading_stage";
       /** One of the real moments on the way to a film playing. */
       stage:
@@ -858,6 +865,12 @@ export type PageSaw =
       /** How long the stage before this one took, in milliseconds. */
       after_ms: number;
     };
+
+/** The reading a fact is about: the session a rebuilt film is fed from, or the
+ *  source of one handed over as it is, for which no session is ever opened. */
+export type Reading = { session: string } | { source: string };
+
+export type PageSaw = Reading & PageFact;
 
 /** What the summary of the administration says about the server. */
 export interface Overview {

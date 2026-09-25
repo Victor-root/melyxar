@@ -12,7 +12,7 @@
  * server names, sent as numbers, and the server writes the sentence.
  */
 
-import { api, type HowItMoved } from "../api";
+import { api, type HowItMoved, type Reading } from "../api";
 
 /** How still the clock has to be before the film counts as stopped. */
 const STOPPED_AFTER_MS = 1_000;
@@ -59,6 +59,15 @@ const A_GESTURE_ENDS_AFTER_MS = 400;
  * the thing this must not quietly swallow.
  */
 const CLOSE_ENOUGH_TO_THE_LANDING_MS = 250;
+
+/**
+ * How long after being handed the film the browser is asked where it stands.
+ *
+ * Long enough for any film that starts at all to have started, short enough
+ * that the line is there while somebody is still looking at a film that has
+ * not.
+ */
+const SAY_HOW_IT_STARTED_AFTER_MS = 5_000;
 
 /** The stretch the browser holds around one moment, and how many it holds. */
 function whatIsHeldAround(element: HTMLVideoElement, moment: number) {
@@ -111,7 +120,7 @@ export interface Watching {
 /**
  * Follows one film and reports what the server cannot see.
  */
-export function watchTheReading(element: HTMLVideoElement, session: string): Watching {
+export function watchTheReading(element: HTMLVideoElement, reading: Reading): Watching {
   const tell = (said: Parameters<typeof api.tellTheJournal>[0]) => {
     // Nothing waits on a line in a journal, and a film that plays matters
     // more than knowing how it played.
@@ -144,7 +153,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
     }
     saidTheShape = shape;
     tell({
-      session,
+      ...reading,
       saw: "the_picture_arrived",
       across: element.videoWidth,
       down: element.videoHeight,
@@ -202,7 +211,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
       }
       waitingForThePicture = null;
       tell({
-        session,
+        ...reading,
         saw: "the_picture_came_back",
         asked_for_second: waiting.askedFor,
         showed_second: picture.mediaTime,
@@ -256,7 +265,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
         return;
       }
       tell({
-        session,
+        ...reading,
         saw: "viewer_jumped",
         from_second: from,
         to_second: element.currentTime,
@@ -325,7 +334,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
       const dropped = droppedNow - droppedAtWindowStart;
       if (dropped > 0) {
         tell({
-          session,
+          ...reading,
           saw: "pictures_were_dropped",
           at_second: at,
           over_ms: Math.round(now - droppedWindowSince),
@@ -346,7 +355,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
         // Said once for this stop, and its end said once when it comes.
         stoppedSaidSoAlready = true;
         tell({
-          session,
+          ...reading,
           saw: "playback_stalled",
           at_second: at,
           was_seeking: element.seeking,
@@ -358,7 +367,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
     } else {
       if (stoppedSaidSoAlready && stoppedSince !== null) {
         tell({
-          session,
+          ...reading,
           saw: "playback_picked_up_again",
           at_second: at,
           waited_ms: Math.round(now - stoppedSince),
@@ -378,7 +387,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
       } else if (!frozenSaidSoAlready && now - frozenSince >= SAY_SO_ANYWAY_AFTER_MS) {
         frozenSaidSoAlready = true;
         tell({
-          session,
+          ...reading,
           saw: "the_picture_stood_still",
           at_second: at,
           for_ms: Math.round(now - frozenSince),
@@ -392,7 +401,7 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
     } else if (shown !== frozenPictures) {
       if (frozenSince !== null && !frozenSaidSoAlready && now - frozenSince >= STOPPED_AFTER_MS) {
         tell({
-          session,
+          ...reading,
           saw: "the_picture_stood_still",
           at_second: frozenClock,
           for_ms: Math.round(now - frozenSince),
@@ -413,12 +422,35 @@ export function watchTheReading(element: HTMLVideoElement, session: string): Wat
 
   const ticking = window.setInterval(look, LOOK_EVERY_MS);
 
+  /* Where the film stands a little after the browser was handed it, said once
+     whatever the answer. Everything above follows a film that is playing: a
+     film the browser left paused, or set going without ever showing a
+     picture, went by without a line. */
+  const handedAt = performance.now();
+  const startedOrNot = window.setTimeout(() => {
+    const at = element.currentTime;
+    tell({
+      ...reading,
+      saw: "how_it_started",
+      after_ms: Math.round(performance.now() - handedAt),
+      at_second: at,
+      paused: element.paused,
+      ready_state: element.readyState,
+      network_state: element.networkState,
+      pictures_shown: picturesShown(element),
+      pictures_dropped: picturesDropped(element),
+      error_code: element.error?.code ?? null,
+      ...whatIsHeldAround(element, at),
+    });
+  }, SAY_HOW_IT_STARTED_AFTER_MS);
+
   return {
     movedBy: (how) => {
       movedBy = how;
     },
     stop: () => {
       window.clearInterval(ticking);
+      window.clearTimeout(startedOrNot);
       window.clearTimeout(settling);
       if (waitingForThePicture?.pending != null) {
         element.cancelVideoFrameCallback?.(waitingForThePicture.pending);

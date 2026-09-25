@@ -308,6 +308,9 @@ pub async fn plan(
     let wide_gamut_shown = has_wide_gamut.then(|| wide_gamut_shown(&profile));
     tracing::info!(
         file = %file_name_of(&source.path),
+        // What the page names a film handed over as it is by, in what it says
+        // of it afterwards.
+        source = %source.id,
         method = decision.method.as_str(),
         video = ?decision.video,
         audio = ?decision.audio,
