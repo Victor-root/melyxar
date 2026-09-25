@@ -4963,3 +4963,8 @@ button.seen-mark:not(.seen-mark-on):hover {
 .debug-journal {
   width: min(1100px, 100%);
 }
+
+.journal-bare {
+  display: grid;
+  gap: var(--gap);
+}
