@@ -816,9 +816,19 @@
   outline-offset: -2px;
 }
 
+/* The line under the hand in the accent the list is already tinted with,
+   only deeper, and rimmed with it: the grey of the other lists read as a
+   hole in a list of that colour. Its icon lights up the way a card's menu
+   does. */
 .header-menu-line:hover:not(:disabled),
 .header-menu-line.active {
-  background: var(--surface-hover);
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.header-menu-line:hover:not(:disabled) > svg,
+.header-menu-line.active > svg {
+  color: var(--accent-bright);
 }
 
 /* A press that has nothing behind it yet, and a press waiting on a scan
