@@ -9,6 +9,7 @@
 //! It also means a future television client needs no change here at all: it
 //! simply sends a different profile.
 
+use melyxar_core::media::{Curve, HdrFormat};
 use serde::{Deserialize, Serialize};
 
 /// The codec no client has ever refused, and therefore the one produced when
@@ -124,6 +125,19 @@ impl RebuiltCapability {
     }
 }
 
+/// A codec whose wide gamut picture the client shows as it is, on one curve.
+///
+/// Asked of the platform codec by codec and curve by curve, because the
+/// answer really is that specific: a screen switched to high dynamic range
+/// shows it only through a decoder that hands it over as such, and a browser
+/// does that for some codecs and not others.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WideGamutCapability {
+    /// Codec name as the analyser spells it.
+    pub codec: String,
+    pub curve: Curve,
+}
+
 /// Everything a client says it can handle.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClientProfile {
@@ -150,12 +164,13 @@ pub struct ClientProfile {
     /// Subtitle formats the client can render itself, alongside the video.
     #[serde(default)]
     pub subtitle_formats: Vec<String>,
-    /// Whether the client displays wide gamut colour correctly.
+    /// The wide gamut pictures the client shows as they are.
     ///
-    /// No browser on Linux does today, so this is false in practice and every
-    /// wide gamut film gets converted.
+    /// Empty for a screen of standard range, and for a client that says
+    /// nothing: a film is then converted, which is the answer that never
+    /// shows anybody a washed out picture.
     #[serde(default)]
-    pub supports_hdr: bool,
+    pub wide_gamut: Vec<WideGamutCapability>,
     /// Tallest picture the client will accept.
     #[serde(default)]
     pub max_height: Option<i32>,
@@ -252,6 +267,18 @@ impl ClientProfile {
         self.accepts_rebuilt(codec, height) && self.efficient(codec)
     }
 
+    /// Whether a wide gamut picture of this codec and flavour is shown as it
+    /// is: every curve the flavour needs, for that codec.
+    pub fn shows_wide_gamut(&self, codec: &str, format: HdrFormat) -> bool {
+        format.curves_needed().is_some_and(|curves| {
+            curves.iter().all(|curve| {
+                self.wide_gamut.iter().any(|shown| {
+                    shown.curve == *curve && shown.codec.eq_ignore_ascii_case(codec)
+                })
+            })
+        })
+    }
+
     pub fn supports_subtitle_format(&self, codec: &str) -> bool {
         self.subtitle_formats
             .iter()
@@ -283,7 +310,7 @@ impl ClientProfile {
             ],
             max_audio_channels: Some(2),
             subtitle_formats: vec!["webvtt".into()],
-            supports_hdr: false,
+            wide_gamut: Vec::new(),
             max_height: None,
             max_bitrate: None,
             can_switch_tracks_in_container: false,
@@ -294,6 +321,32 @@ impl ClientProfile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wide_gamut_is_shown_only_for_the_codec_and_every_curve_it_needs() {
+        let mut profile = ClientProfile::conservative_browser();
+        profile.wide_gamut = vec![WideGamutCapability {
+            codec: "hevc".into(),
+            curve: Curve::Pq,
+        }];
+        assert!(profile.shows_wide_gamut("HEVC", HdrFormat::Hdr10));
+        assert!(!profile.shows_wide_gamut("av1", HdrFormat::Hdr10), "another codec");
+        assert!(!profile.shows_wide_gamut("hevc", HdrFormat::Hlg), "another curve");
+        assert!(
+            !profile.shows_wide_gamut("hevc", HdrFormat::DolbyVision { profile: Some(8) }),
+            "its base layer may be on the curve not shown"
+        );
+
+        profile.wide_gamut.push(WideGamutCapability {
+            codec: "hevc".into(),
+            curve: Curve::Hlg,
+        });
+        assert!(profile.shows_wide_gamut("hevc", HdrFormat::DolbyVision { profile: Some(8) }));
+        assert!(
+            !profile.shows_wide_gamut("hevc", HdrFormat::DolbyVision { profile: Some(5) }),
+            "never handed over untouched, whatever the screen"
+        );
+    }
 
     #[test]
     fn a_capability_without_restrictions_covers_any_profile_and_level() {
@@ -478,7 +531,8 @@ mod tests {
                                  {"codec":"av1","max_height":1080,"power_efficient":false},
                                  {"codec":"hevc","max_height":null}],
                 "audio_codecs":["aac"],"max_audio_channels":2,
-                "subtitle_formats":["webvtt"],"supports_hdr":false,
+                "subtitle_formats":["webvtt"],
+                "wide_gamut":[{"codec":"hevc","curve":"pq"}],
                 "max_height":null,"max_bitrate":null,
                 "can_switch_tracks_in_container":false}"#,
         )
@@ -492,6 +546,7 @@ mod tests {
             "a codec the page measured no limit for is not limited"
         );
         assert!(!profile.efficient("av1"), "read from the wire, not assumed");
+        assert!(profile.shows_wide_gamut("hevc", HdrFormat::Hdr10));
         assert!(
             profile.efficient("hevc"),
             "a codec the page said nothing about is not punished for it"
@@ -505,7 +560,10 @@ mod tests {
         assert!(!profile.supports_audio_codec("dts"));
         assert!(!profile.supports_audio_codec("truehd"));
         assert!(profile.supports_audio_codec("aac"));
-        assert!(!profile.supports_hdr, "no browser shows wide gamut today");
+        assert!(
+            profile.wide_gamut.is_empty(),
+            "a client that said nothing is not taken for one that shows wide gamut"
+        );
         assert!(
             !profile.can_switch_tracks_in_container,
             "a browser cannot switch tracks inside a file it plays directly"

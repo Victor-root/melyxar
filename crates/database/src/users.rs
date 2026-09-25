@@ -7,7 +7,9 @@
 use melyxar_core::id::{LibraryId, UserId};
 use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{now, Timestamp};
-use melyxar_core::user::{DownmixMethod, Permissions, Preferences, ThemeMode, User};
+use melyxar_core::user::{
+    DownmixMethod, Permissions, Preferences, ThemeMode, User, WideGamutChoice,
+};
 use sqlx::{AssertSqlSafe, Row};
 
 use crate::convert::{bool_to_int, int_to_bool, parse_id, parse_timestamp, timestamp_to_text};
@@ -53,7 +55,8 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.downmix_method, p.downmix_gain,
      p.banner_height, p.banner_cut, p.banner_shown, p.banner_at_random,
      p.banner_fills_the_screen, p.header_hides_on_scroll,
-     p.hidden_at_the_door, p.home_order, p.step_back_seconds, p.step_on_seconds";
+     p.hidden_at_the_door, p.home_order, p.step_back_seconds, p.step_on_seconds,
+     p.wide_gamut";
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
@@ -388,7 +391,7 @@ impl Database {
                 banner_height = ?, banner_cut = ?, banner_shown = ?, banner_at_random = ?,
                 banner_fills_the_screen = ?, header_hides_on_scroll = ?,
                 hidden_at_the_door = ?, home_order = ?, step_back_seconds = ?,
-                step_on_seconds = ?
+                step_on_seconds = ?, wide_gamut = ?
              WHERE user_id = ?",
         )
         .bind(&preferences.interface_language)
@@ -410,6 +413,7 @@ impl Database {
         .bind(written_order(&preferences.home_order))
         .bind(preferences.step_back_seconds)
         .bind(preferences.step_on_seconds)
+        .bind(preferences.wide_gamut.as_str())
         .bind(id.to_db_string())
         .execute(self.writer())
         .await?;
@@ -473,8 +477,8 @@ async fn write_an_account(
                                        banner_height, banner_cut, banner_shown, banner_at_random,
                                        banner_fills_the_screen, header_hides_on_scroll,
                                        hidden_at_the_door, home_order, step_back_seconds,
-                                       step_on_seconds)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       step_on_seconds, wide_gamut)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -493,6 +497,7 @@ async fn write_an_account(
     .bind(written_order(&preferences.home_order))
     .bind(preferences.step_back_seconds)
     .bind(preferences.step_on_seconds)
+    .bind(preferences.wide_gamut.as_str())
     .execute(&mut **transaction)
     .await?;
 
@@ -585,6 +590,8 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             home_order: read_order(&row.try_get::<String, _>("home_order")?),
             step_back_seconds: row.try_get("step_back_seconds")?,
             step_on_seconds: row.try_get("step_on_seconds")?,
+            wide_gamut: WideGamutChoice::parse(&row.try_get::<String, _>("wide_gamut")?)
+                .unwrap_or_default(),
         }
         .normalised(),
         created_at,
@@ -1131,6 +1138,7 @@ mod tests {
             home_order: vec![LibraryKind::Anime, LibraryKind::Movies],
             step_back_seconds: 0,
             step_on_seconds: 30,
+            wide_gamut: WideGamutChoice::NeverConvert,
             ..Preferences::default()
         };
         database
@@ -1163,6 +1171,7 @@ mod tests {
             "a step of nothing comes back as the shortest there is"
         );
         assert_eq!(loaded.preferences.step_on_seconds, 30);
+        assert_eq!(loaded.preferences.wide_gamut, WideGamutChoice::NeverConvert);
         assert_eq!(
             loaded.preferences.home_order,
             vec![

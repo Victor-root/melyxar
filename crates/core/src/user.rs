@@ -256,6 +256,47 @@ pub const LONGEST_STEP: i64 = 90;
 /// What the buttons jumped before anybody could choose.
 pub const DEFAULT_STEP: i64 = 10;
 
+/// What a viewer wants done with a film of wide gamut colour.
+///
+/// Wide gamut colour is kept as it is only where the screen shows it: shown
+/// on a screen of standard range it looks washed out and grey, so it is
+/// converted there. Whether the screen shows it is asked of the browser, and
+/// this is the viewer's word over that answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WideGamutChoice {
+    /// Kept where the browser says the screen shows it, converted elsewhere.
+    #[default]
+    Automatic,
+    /// Always converted to standard range, for a screen the browser takes for
+    /// one that shows it when it does not do it well.
+    AlwaysConvert,
+    /// Never converted for its colour alone, for a screen that shows it and
+    /// that the browser does not say so of.
+    NeverConvert,
+}
+
+impl WideGamutChoice {
+    /// Every choice, in the order a screen offers them.
+    pub const fn every() -> [Self; 3] {
+        [Self::Automatic, Self::AlwaysConvert, Self::NeverConvert]
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::AlwaysConvert => "always_convert",
+            Self::NeverConvert => "never_convert",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::every()
+            .into_iter()
+            .find(|choice| choice.as_str() == value)
+    }
+}
+
 /// Which colour scheme the interface uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -362,6 +403,8 @@ pub struct Preferences {
     /// How far its button on jumps. Apart from the other, since a line heard
     /// again and a title sequence passed over are not the same length.
     pub step_on_seconds: i64,
+    /// What is done with a film of wide gamut colour.
+    pub wide_gamut: WideGamutChoice,
 }
 
 impl Default for Preferences {
@@ -388,6 +431,7 @@ impl Default for Preferences {
             home_order: LibraryKind::every().to_vec(),
             step_back_seconds: DEFAULT_STEP,
             step_on_seconds: DEFAULT_STEP,
+            wide_gamut: WideGamutChoice::default(),
         }
     }
 }
@@ -635,6 +679,15 @@ mod tests {
                 "{method:?} must force processing"
             );
         }
+    }
+
+    #[test]
+    fn wide_gamut_choices_round_trip_through_their_stored_form() {
+        for choice in WideGamutChoice::every() {
+            assert_eq!(WideGamutChoice::parse(choice.as_str()), Some(choice));
+        }
+        assert_eq!(WideGamutChoice::parse("sometimes"), None);
+        assert_eq!(WideGamutChoice::default(), WideGamutChoice::Automatic);
     }
 
     #[test]

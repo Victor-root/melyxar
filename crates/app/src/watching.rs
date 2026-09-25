@@ -900,6 +900,7 @@ mod tests {
                 scale_to_height: None,
                 bitrate_ceiling: None,
                 tone_map: false,
+                wide_gamut_follows_choice: false,
                 reasons: Vec::new(),
             },
             resume_from,
