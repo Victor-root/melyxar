@@ -14,6 +14,8 @@ function library(id: string, name: string): Library {
     key_frames_during_scan: false,
     thumbnails_during_scan: false,
     watch_in_real_time: false,
+    watch_state: null,
+    watch_refusal: null,
     metadata_language: "fr",
     roots: [],
     set_aside: 0,
