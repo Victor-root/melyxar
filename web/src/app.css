@@ -1186,13 +1186,16 @@
 /* The same growing as a card and as every button: one gesture for "this
    comes forward", not a tile that nudges upwards while the posters below it
    grow. The rim itself lights up on the tile's own edge, below; what is
-   added around it is only the glow. */
+   added around it is only light falling off it, with no edge of its own: a
+   band of glow drawn solid read as a second, duller rim around the first. */
 .band-tile:hover,
 .band-tile:focus-visible {
   outline: none;
   transform: scale(1.035);
   z-index: 1;
-  box-shadow: 0 0 0 4px var(--accent-glow);
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 0 26px 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /*
