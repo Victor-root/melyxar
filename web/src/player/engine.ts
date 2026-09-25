@@ -28,7 +28,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import { api, ApiError } from "../api";
 import { wasAbandoned } from "../asking";
-import type { HowItMoved, PlaybackPlan, PlaybackSession } from "../api";
+import type { HowItMoved, PlaybackPlan, PlaybackSession, WideGamutChoice } from "../api";
 import { qualityCalled, rememberQuality, storedQuality } from "./quality";
 import type { Quality } from "./quality";
 import { codecCalled, rememberCodec, requestedCodec, storedCodec } from "./codec";
@@ -264,11 +264,15 @@ export interface Playback {
   /** Which codec a transcode is asked to come out in. "auto" leaves the
    *  choice to the usual negotiation. */
   codec: Codec;
+  /** What is done with the film's wide gamut colour for this film alone, and
+   *  null when that is left to the account's own choice. */
+  wideGamut: WideGamutChoice | null;
   speed: number;
   /** Chooses a soundtrack and a subtitle, and remembers the choice. */
   choose: (audio: string | null, subtitle: string | null) => void;
   setQuality: (key: string) => void;
   setCodec: (key: string) => void;
+  setWideGamut: (choice: WideGamutChoice | null) => void;
   setSpeed: (value: number) => void;
   /** A hand landing on the bar, and coming off it, saying what it did. */
   viewerMoving: () => void;
@@ -448,6 +452,11 @@ export function usePlayback({
      to the usual negotiation, which is what nearly everyone wants nearly
      always; forcing one is for chasing a stutter. */
   const [codec, setCodecState] = useState(storedCodec);
+  /* What to do with the film's wide gamut colour, over the account's own
+     choice. For this film alone and never remembered: it answers a doubt
+     about one screen on one evening, and the account's choice is where a
+     lasting answer goes. */
+  const [wideGamut, setWideGamut] = useState<WideGamutChoice | null>(null);
   /* Which picture the browser has actually opened. Null until it has: the
      words are hung on the picture, and only once it is there. */
   const [readyPicture, setReadyPicture] = useState<string | null>(null);
@@ -518,6 +527,9 @@ export function usePlayback({
      for the opening of a film nobody is at and the server builds a segment
      that will never be seen. */
   const openedAt = useRef(0);
+  /* Which picture the listeners below were last hung on, to tell a fresh
+     element from the same one listened to again. */
+  const listenedTo = useRef<string | null>(null);
 
   /* Asked again whenever a track changes: which tracks are wanted is part of
      the question, and the answer can change with it. A film played as it is
@@ -536,6 +548,7 @@ export function usePlayback({
             audio_track_id: audioId,
             subtitle_track_id: subtitleId,
             preferred_video_codec: requestedCodec(codec),
+            wide_gamut: wideGamut,
             // This is the player about to show the film, which is what makes
             // it one being watched.
             watching: true,
@@ -571,7 +584,7 @@ export function usePlayback({
         }
       });
     return () => controller.abort();
-  }, [sourceId, audioId, subtitleId, fromTheStart, startAt, quality, codec, choiceSerial]);
+  }, [sourceId, audioId, subtitleId, fromTheStart, startAt, quality, codec, wideGamut, choiceSerial]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
   /* The codec the picture is really being rebuilt into, and how fast the film
@@ -595,7 +608,7 @@ export function usePlayback({
      must not throw away a conversion already under way and make the viewer
      wait through it again. */
   const beingProduced = rebuilt
-    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${planFor ?? ""}:${codecFor ?? ""}:${afresh}`
+    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${plan.wide_gamut?.converted ?? ""}:${planFor ?? ""}:${codecFor ?? ""}:${afresh}`
     : null;
   /* Which picture is on screen: the file itself, or one session of segments.
      A change here means a fresh element rather than a new address on the old
@@ -642,6 +655,7 @@ export function usePlayback({
           audio_track_id: audioId,
           subtitle_track_id: paintedIn,
           preferred_video_codec: requestedCodec(codec),
+          wide_gamut: wideGamut,
           start_at_seconds: openedAt.current,
         }),
       )
@@ -1429,6 +1443,17 @@ export function usePlayback({
     element.muted = wanted.muted;
     // A fresh element does not carry what the viewer asked of the last one.
     element.loop = repeat;
+    /* Nor where the last one had got to. Going from a rebuilt film back to
+       the file itself, a lighter picture given up or its colours kept after
+       all, has no session to carry the position over, and the file would
+       open at its beginning. Only when nothing already says where to pick
+       up, and read before this element's own zero overwrites it. */
+    if (listenedTo.current !== null && listenedTo.current !== pictureKey) {
+      if (resumeAt.current === null && lastPosition.current > 0) {
+        resumeAt.current = lastPosition.current;
+      }
+    }
+    listenedTo.current = pictureKey;
     const tell = () => {
       setAt(element.currentTime);
       setLength(Number.isFinite(element.duration) ? element.duration : 0);
@@ -1503,10 +1528,12 @@ export function usePlayback({
     subtitleId,
     quality,
     codec,
+    wideGamut,
     speed,
     choose,
     setQuality,
     setCodec,
+    setWideGamut,
     setSpeed,
     viewerMoving,
     viewerMoved,

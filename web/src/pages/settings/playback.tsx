@@ -1,16 +1,16 @@
 /*
- * How films reach this viewer: the sound folded for their speakers, the
- * languages they would rather hear and read, how far the player's buttons
- * step, and how subtitles are dressed.
+ * How films reach this viewer: the sound folded for their speakers, what is
+ * done with HDR, the languages they would rather hear and read, how far the
+ * player's buttons step, and how subtitles are dressed.
  *
- * The first two are kept by the server, because they change what it does: the
- * fold to stereo turns a copy into a rebuild, and a preferred language decides
- * which soundtrack starts. How subtitles look is kept by this browser, since it
- * only changes what is drawn here.
+ * The first three are kept by the server, because they change what it does:
+ * the fold to stereo turns a copy into a rebuild, so does converting HDR, and
+ * a preferred language decides which soundtrack starts. How subtitles look is
+ * kept by this browser, since it only changes what is drawn here.
  */
 
 import { PageHead, Panel, Picker, Setting, Slider } from "../../components/panel";
-import { LanguagesIcon, PlaybackIcon, SoundIcon, SubtitlesIcon } from "../../icons";
+import { ImageIcon, LanguagesIcon, PlaybackIcon, SoundIcon, SubtitlesIcon } from "../../icons";
 import { languageName } from "../../languages";
 import {
   appearanceClasses,
@@ -93,6 +93,19 @@ export function MyPlayback() {
             )}
           </Panel>
         </div>
+      )}
+
+      {kept && (
+        <Panel icon={ImageIcon} title={t("settings.picture")} lead={t("settings.picture_why")}>
+          <Setting label={t("settings.wide_gamut")} why={t(`wide_gamut.${kept.wide_gamut}_why`)}>
+            <Picker
+              label={t("settings.wide_gamut")}
+              value={kept.wide_gamut}
+              options={kept.wide_gamut_choices.map((choice) => [choice, t(`wide_gamut.${choice}`)] as const)}
+              onPick={(wide_gamut) => change({ wide_gamut })}
+            />
+          </Setting>
+        </Panel>
       )}
 
       <Panel icon={PlaybackIcon} title={t("settings.steps")} lead={t("settings.steps_why")}>

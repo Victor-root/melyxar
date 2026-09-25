@@ -1127,7 +1127,21 @@ export interface PlaybackPlan {
   favourite: boolean;
   /** What the file itself holds, beside what is being made of it. */
   film: FilmHolds;
+  /** What is done with the film's wide gamut colour, when it has any. */
+  wide_gamut: WideGamutHandling | null;
 }
+
+/** What is done with a film's wide gamut colour. */
+export interface WideGamutHandling {
+  /** Converted to standard range, rather than handed over as it is. */
+  converted: boolean;
+  /** Whether the viewer's choice decided it. When it did not, choosing
+   *  otherwise changes nothing, and the player does not offer to. */
+  follows_choice: boolean;
+}
+
+/** What a viewer wants done with a film of wide gamut colour. */
+export type WideGamutChoice = "automatic" | "always_convert" | "never_convert";
 
 /** One stretch of a film a button offers to skip. */
 export interface PlaybackSegment {
@@ -1269,6 +1283,9 @@ export interface ViewerPreferences {
   /** How far the player's two step buttons jump, in seconds. */
   step_back_seconds: number;
   step_on_seconds: number;
+  /** What is done with a film of wide gamut colour. */
+  wide_gamut: WideGamutChoice;
+  wide_gamut_choices: WideGamutChoice[];
   /** The languages the library really holds, which is what a picker offers. */
   audio_languages: string[];
   subtitle_languages: string[];

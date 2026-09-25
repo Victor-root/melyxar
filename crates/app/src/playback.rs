@@ -298,6 +298,14 @@ pub async fn plan(
     // is the first question anybody asks about a film that stutters, and the
     // answer used to be somewhere between a process listing and a guess.
     let shape = picture_shape(&tracks);
+    // For a film of wide gamut colour, what the browser said it shows as it
+    // is and what the viewer chose: together, why it was or was not
+    // converted, which nothing else on a screen says.
+    let has_wide_gamut = tracks.iter().any(|track| match &track.kind {
+        melyxar_core::media::TrackKind::Video(details) => details.hdr.is_some(),
+        _ => false,
+    });
+    let wide_gamut_shown = has_wide_gamut.then(|| wide_gamut_shown(&profile));
     tracing::info!(
         file = %file_name_of(&source.path),
         method = decision.method.as_str(),
@@ -312,6 +320,8 @@ pub async fn plan(
         rebuilt_on = rebuild.as_ref().and_then(PictureRebuild::card_name),
         rebuilt_into = rebuild.as_ref().map(|rebuild| rebuild.codec.as_str()),
         requested_codec = request.preferred_video_codec.as_deref(),
+        wide_gamut = has_wide_gamut.then_some(wide_gamut.as_str()),
+        wide_gamut_shown = wide_gamut_shown.as_deref(),
         read_by = rebuild.as_ref().map(|rebuild| match rebuild.reads_the_film {
             true => "card",
             false => "processor",
@@ -677,6 +687,19 @@ fn height_of(tracks: &[Track]) -> Option<i32> {
 /// twenty across is shown far wider than that; a film that loses that on the
 /// way out is shown stretched, and nothing anywhere said what shape it started
 /// as.
+/// The wide gamut pictures a client shows as they are, as the journal says them.
+fn wide_gamut_shown(profile: &ClientProfile) -> String {
+    if profile.wide_gamut.is_empty() {
+        return "none".to_string();
+    }
+    profile
+        .wide_gamut
+        .iter()
+        .map(|shown| format!("{} {:?}", shown.codec, shown.curve))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn picture_shape(tracks: &[Track]) -> Option<(i32, i32, Option<String>)> {
     tracks.iter().find_map(|track| match &track.kind {
         melyxar_core::media::TrackKind::Video(details) => Some((
