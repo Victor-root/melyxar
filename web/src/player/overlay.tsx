@@ -913,6 +913,7 @@ function Seek({
               seconds={previewed}
               across={across}
               className="player-preview-picture"
+              turn={surroundings.turn}
             />
             {/* Under the picture rather than written across it: a time on top
                 of a dark frame of film is a time nobody can read. */}

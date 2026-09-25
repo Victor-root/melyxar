@@ -9,6 +9,7 @@
  */
 
 import type { PlaybackThumbnails } from "../api";
+import type { Turn } from "./overlay";
 
 /** Which thumbnail covers a moment, and where it sits on its sheet. */
 export function spotOf(
@@ -62,7 +63,16 @@ export function heightAt(thumbnails: PlaybackThumbnails, across: number): number
 }
 
 /**
- * The thumbnail covering one moment, drawn at the width asked for.
+ * The room a thumbnail takes once turned: a quarter turn swaps its two sides,
+ * a half turn keeps them.
+ */
+export function turnedBox(across: number, down: number, turn: Turn): { across: number; down: number } {
+  return turn === 90 || turn === 270 ? { across: down, down: across } : { across, down };
+}
+
+/**
+ * The thumbnail covering one moment, drawn at the width asked for, turned the
+ * way the picture is.
  *
  * Nothing at all when the film has not been read for them, which is what every
  * caller wants: an empty grey box where a picture should be says the player is
@@ -73,19 +83,23 @@ export function Thumbnail({
   seconds,
   across,
   className,
+  turn = 0,
 }: {
   thumbnails: PlaybackThumbnails | null;
   seconds: number;
   /** How wide to draw it. The height follows from the film's own shape. */
   across: number;
   className: string;
+  /** How far the picture on screen is turned, so the thumbnail matches it.
+   *  Its long side stays as long as asked, whichever way it then lies. */
+  turn?: Turn;
 }) {
   const spot = thumbnails ? spotOf(thumbnails, seconds) : null;
   if (!thumbnails || !spot || across <= 0) {
     return null;
   }
   const down = heightAt(thumbnails, across);
-  return (
+  const cut = (
     <span
       className={className}
       style={{
@@ -94,7 +108,22 @@ export function Thumbnail({
         backgroundImage: `url(${thumbnails.url}/${spot.sheet}.jpg)`,
         backgroundSize: `${thumbnails.columns * across}px ${thumbnails.rows * down}px`,
         backgroundPosition: `-${spot.column * across}px -${spot.row * down}px`,
+        ...(turn === 0 ? {} : { transform: `translate(-50%, -50%) rotate(${turn}deg)` }),
       }}
     />
+  );
+  if (turn === 0) {
+    return cut;
+  }
+  /* Turned about its middle inside a box of the room it takes once turned,
+     so whatever stands around it makes room for the shape really seen. */
+  const room = turnedBox(across, down, turn);
+  return (
+    <span
+      className="thumbnail-turned"
+      style={{ width: `${room.across}px`, height: `${room.down}px` }}
+    >
+      {cut}
+    </span>
   );
 }

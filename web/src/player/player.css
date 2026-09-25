@@ -658,6 +658,19 @@
     0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
+/* A thumbnail turned with the picture, standing in the room it takes once
+   turned. */
+.thumbnail-turned {
+  position: relative;
+  display: block;
+}
+
+.thumbnail-turned > * {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+}
+
 /* Under the picture rather than written across it: a time on a dark frame of
    film is a time nobody can read. */
 .player-preview-time {

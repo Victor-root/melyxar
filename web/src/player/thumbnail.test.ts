@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlaybackThumbnails } from "../api";
-import { cutOut } from "./thumbnail";
+import { cutOut, turnedBox } from "./thumbnail";
 
 const sheets: PlaybackThumbnails = {
   url: "/sheets",
@@ -31,5 +31,17 @@ describe("cutOut", () => {
   it("never moves a sheet of one column, and stops at the last thumbnail", () => {
     const narrow = { ...sheets, columns: 1, rows: 4, counted: 4 };
     expect(cutOut(narrow, 9999)?.backgroundPosition).toBe("0% 100%");
+  });
+});
+
+describe("turnedBox", () => {
+  it("swaps the two sides for a quarter turn either way", () => {
+    expect(turnedBox(240, 135, 90)).toEqual({ across: 135, down: 240 });
+    expect(turnedBox(240, 135, 270)).toEqual({ across: 135, down: 240 });
+  });
+
+  it("keeps them for no turn and for a half turn", () => {
+    expect(turnedBox(240, 135, 0)).toEqual({ across: 240, down: 135 });
+    expect(turnedBox(240, 135, 180)).toEqual({ across: 240, down: 135 });
   });
 });
