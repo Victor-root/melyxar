@@ -1011,7 +1011,11 @@
   );
 }
 
+/* Above the row under it, whose track reaches up behind the heading to keep
+   room for a card's glow: a press on the heading is a press on the heading. */
 .section-head {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: baseline;
   gap: var(--gap);
@@ -2563,6 +2567,12 @@ button.seen-mark:not(.seen-mark-on):hover {
    of a home page is a suggestion, and a suggestion four lines tall is a page
    to scroll past before reaching the next one. */
 .row {
+  /* The room kept above the cards for the light a card gives off under the
+     pointer: the track scrolls sideways, so it clips whatever reaches past
+     it, and the glow used to stop dead along the top of the row. Taken back
+     by a margin of the same size, so nothing on the page moves for it. */
+  --row-air: 30px;
+
   position: relative;
 }
 
@@ -2575,8 +2585,8 @@ button.seen-mark:not(.seen-mark-on):hover {
      rather than eight: a card grown by a thirtieth reaches three of them,
      and every pixel kept here is a pixel taken from the margin the arrows
      stand in. */
-  padding: 8px 4px var(--gap-tight);
-  margin: -8px -4px calc(var(--gap-tight) * -1);
+  padding: var(--row-air) 4px var(--gap-tight);
+  margin: calc(var(--row-air) * -1) -4px calc(var(--gap-tight) * -1);
   scrollbar-width: none;
   /* A hand pulling a row of posters is not a hand selecting their titles,
      and the blue wash that appeared under one was the whole reason the drag
@@ -2646,7 +2656,9 @@ button.seen-mark:not(.seen-mark-on):hover {
  * chevron over a wall of posters is a chevron nobody finds. */
 .row-arrow {
   position: absolute;
-  top: 0;
+  /* Level with the cards rather than with the air kept above them, less the
+     few points it always reached above them for the focus ring. */
+  top: calc(var(--row-air) - 8px);
   bottom: var(--gap-tight);
   z-index: 2;
   display: grid;
