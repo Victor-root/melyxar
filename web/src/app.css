@@ -3047,8 +3047,65 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 /* The panels of what the file holds: a little narrower than the ones of the
    administration, since there are one per track. */
-.work-panels {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+/* Each card as wide as what it says and no wider: stretched to a column,
+   a card of short facts was mostly empty on its right. A long path still
+   wraps inside the widest a card may be. */
+.panels.work-panels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.panels.work-panels > .panel {
+  flex: 0 1 auto;
+  min-width: min(100%, 260px);
+  max-width: min(100%, 460px);
+}
+
+/* The title beside its mark rather than under it, in a card only as wide as
+   its facts. */
+.panels.work-panels .panel-words {
+  flex-basis: auto;
+}
+
+/* The facts in two columns, every value starting at the same place. A path
+   keeps a line of its own. */
+.panels.work-panels .work-facts-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--gap);
+  row-gap: 2px;
+}
+
+.panels.work-panels .fact-line {
+  display: contents;
+}
+
+.panels.work-panels .fact-line-wide {
+  display: flex;
+}
+
+/* The title beside its mark rather than under it, in a card only as wide as
+   its facts. */
+.panels.work-panels .panel-words {
+  flex-basis: auto;
+}
+
+/* The facts in two columns, every value starting at the same place: the
+   label column as wide as its longest label. A path keeps a line of its own. */
+.panels.work-panels .work-facts-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--gap);
+  row-gap: 2px;
+}
+
+.panels.work-panels .fact-line {
+  display: contents;
+}
+
+.panels.work-panels .fact-line-wide {
+  display: flex;
 }
 
 .work-facts-list {
