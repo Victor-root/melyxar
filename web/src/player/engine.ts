@@ -28,7 +28,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import { api, ApiError } from "../api";
 import { wasAbandoned } from "../asking";
-import type { HowItMoved, PlaybackPlan, PlaybackSession, WideGamutChoice } from "../api";
+import type { HowItMoved, PlaybackPlan, PlaybackSession, Reading, WideGamutChoice } from "../api";
 import { qualityCalled, rememberQuality, storedQuality } from "./quality";
 import type { Quality } from "./quality";
 import { codecCalled, rememberCodec, requestedCodec, storedCodec } from "./codec";
@@ -829,7 +829,7 @@ export function usePlayback({
        the picture standing still while the sound runs on, and where a viewer
        jumped from. The server knows what it produced and when it handed it
        over, never whether any of it reached a screen. */
-    watching.current = watchTheReading(element, stream.id);
+    watching.current = watchTheReading(element, { session: stream.id });
     const stopWatching = watching.current.stop;
     /* What a real film teaches this machine about the codec it is being
        rebuilt into, which no test can teach it as well: a generated film
@@ -980,7 +980,7 @@ export function usePlayback({
            browser played it. A film that plays the plain way beats a film
            that does not play. */
         const browserTakesOver = element.canPlayType("application/vnd.apple.mpegurl") !== "";
-        sayItGaveUp(stream.id, because, browserTakesOver);
+        sayItGaveUp({ session: stream.id }, because, browserTakesOver);
         if (browserTakesOver) {
           feed?.destroy();
           feed = null;
@@ -1004,6 +1004,23 @@ export function usePlayback({
       feed?.destroy();
     };
   }, [stream, rebuiltInto, filmFrameRate]);
+
+  /* The same watch over a film handed over as it lies on the disk. The server
+     hears nothing from such a film once it has handed it over, so whatever
+     went wrong with it on the screen reached nobody: a browser that took the
+     whole film and never moved it left an empty journal behind. */
+  useEffect(() => {
+    const element = video.current;
+    if (!element || pictureKey !== "file") {
+      return;
+    }
+    watching.current = watchTheReading(element, { source: sourceId });
+    const stopWatching = watching.current.stop;
+    return () => {
+      watching.current = null;
+      stopWatching();
+    };
+  }, [pictureKey, sourceId]);
 
   /* A choice is remembered once it has been made, never on the way in: the
      tracks a page opens with are what the rules already decided, and writing
@@ -1402,12 +1419,11 @@ export function usePlayback({
     // The one other way a film stops playing outright, beside the library
     // giving up on it: the browser's own decoder failing beneath it, with
     // hls.js none the wiser. Left unreported, a fault this real left nothing
-    // behind but a screenshot. Sent only against a rebuilt session, since a
-    // file played as it lies on disk was never asked of the server at all.
-    if (because && session.current) {
-      sayItGaveUp(session.current, because, false);
+    // behind but a screenshot. A film with no session is the file itself.
+    if (because) {
+      sayItGaveUp(session.current ? { session: session.current } : { source: sourceId }, because, false);
     }
-  }, []);
+  }, [sourceId]);
 
   /* The picture in a corner of the screen while the viewer does something
      else. Offered by the browser rather than by us, so whoever draws the
@@ -1612,8 +1628,8 @@ function sayWhereItBegan(Library: HlsLibrary, feed: Hls, session: string) {
  * produced. Without it, a film that plays the plain way looks like a film that
  * plays, and the reason it had to is nowhere.
  */
-function sayItGaveUp(session: string, because: string, browserTookOver: boolean) {
+function sayItGaveUp(reading: Reading, because: string, browserTookOver: boolean) {
   api
-    .tellTheJournal({ session, saw: "playback_refused", because, browser_took_over: browserTookOver })
+    .tellTheJournal({ ...reading, saw: "playback_refused", because, browser_took_over: browserTookOver })
     .catch(() => {});
 }
