@@ -340,6 +340,48 @@ async function wideGamutShown(): Promise<WideGamutCapability[]> {
   return screenShowsIt ? wideGamutItDecodes() : [];
 }
 
+/** What the browser says of one film it decodes. */
+export interface Decoding {
+  /** Whether it decodes it on the graphics card. */
+  onTheCard: boolean;
+  /** Whether it keeps up with it. */
+  smoothly: boolean;
+}
+
+/**
+ * How this browser says it decodes one film: the codec at the film's own size,
+ * rate and weight, handed over whole or fed in pieces.
+ *
+ * Null for a codec this file asks nothing about, and for a browser that cannot
+ * be asked or refuses the question.
+ */
+export async function howItDecodes(
+  codec: string,
+  picture: { width: number; height: number; frameRate: number | null; bitrate: number | null },
+  handedOver: "file" | "media-source",
+): Promise<Decoding | null> {
+  const probe = VIDEO.find((entry) => entry.name === codec.toLowerCase());
+  const capabilities = navigator.mediaCapabilities;
+  if (!probe || !capabilities?.decodingInfo) {
+    return null;
+  }
+  try {
+    const answer = await capabilities.decodingInfo({
+      type: handedOver,
+      video: {
+        contentType: probe.type,
+        width: picture.width,
+        height: picture.height,
+        bitrate: picture.bitrate ?? weight(picture.height),
+        framerate: picture.frameRate ?? 24,
+      },
+    });
+    return { onTheCard: answer.powerEfficient, smoothly: answer.smooth };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Forgets what was cached about this browser's decode capability.
  *

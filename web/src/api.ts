@@ -852,6 +852,19 @@ export type PageFact =
       error_code: number | null;
     }
   | {
+      saw: "how_it_decodes";
+      /** The graphics card as the browser names it, when it names one. */
+      card: string | null;
+      codec: string;
+      across: number;
+      down: number;
+      frames_per_second: number | null;
+      /** Whether the browser says it decodes this on the card. */
+      on_the_card: boolean | null;
+      /** Whether it says it keeps up. */
+      smoothly: boolean | null;
+    }
+  | {
       saw: "loading_stage";
       /** One of the real moments on the way to a film playing. */
       stage:

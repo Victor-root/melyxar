@@ -37,6 +37,7 @@ import { rememberLoudness, storedLoudness } from "./loudness";
 import { clientProfile } from "./profile";
 import { learnFromWatching } from "./learning";
 import { watchTheReading } from "./watch";
+import { sayHowItDecodes } from "./card";
 import type { Watching } from "./watch";
 
 /** The library itself, as the dynamic import hands it over. */
@@ -1021,6 +1022,32 @@ export function usePlayback({
       stopWatching();
     };
   }, [pictureKey, sourceId]);
+
+  /* What decodes the picture now on screen, said once for every picture: a
+     film that stutters here and plays elsewhere is most of the time a
+     browser decoding it without the graphics card, which nothing on the
+     server can see. */
+  useEffect(() => {
+    const element = video.current;
+    if (!element || !plan || readyPicture === null || readyPicture !== pictureKey) {
+      return;
+    }
+    const held = plan.film.picture;
+    const codec = plan.rebuild?.codec ?? held?.codec;
+    if (!codec) {
+      return;
+    }
+    sayHowItDecodes(stream ? { session: stream.id } : { source: sourceId }, {
+      codec,
+      width: element.videoWidth,
+      height: element.videoHeight,
+      frameRate: held?.frame_rate ?? null,
+      bitrate: plan.rebuild ? plan.rebuild.bitrate : (held?.bitrate ?? null),
+      handedOver: canBePlayedAsItIs(plan) ? "file" : "media-source",
+    });
+    // Once per picture: the plan and the session move on their own without
+    // the picture on screen changing.
+  }, [readyPicture]);
 
   /* A choice is remembered once it has been made, never on the way in: the
      tracks a page opens with are what the rules already decided, and writing

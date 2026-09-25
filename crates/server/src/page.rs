@@ -11,10 +11,10 @@
 //! vocabulary for, whatever else ends up running in the browser, and reading
 //! this file is enough to know exactly what can appear under the `page` tag.
 //!
-//! One fact carries wording rather than numbers, and only one: a library
-//! naming what it could not do with a film this server produced, which is the
-//! answer and cannot be a number. It is cut short here, and it is still a fact
-//! this module named.
+//! Two facts carry wording rather than numbers: a library naming what it could
+//! not do with a film this server produced, and the graphics card the browser
+//! names, which are the answer and cannot be numbers. Both are cut short here,
+//! and both are still facts this module named.
 //!
 //! The rest are numbers about a film playing, which is the half of a reading
 //! the server cannot see at all: it knows what it produced and when it handed
@@ -251,6 +251,31 @@ enum Seen {
         /// The browser's own code for what went wrong, when it says anything
         /// went wrong at all.
         error_code: Option<u32>,
+    },
+    /// What decodes the film on the viewer's side: the graphics card the
+    /// browser names, and whether the browser says it decodes this film on
+    /// that card and keeps up with it.
+    ///
+    /// A film that stutters on one machine and plays on the next is most of
+    /// the time a browser decoding it without the card. Measured on a graphics
+    /// driver four years old: one browser on the machine used the card, the
+    /// other refused it without a word and dropped half the pictures of a film
+    /// in 4K. No browser hands the driver's version to a page as such; the
+    /// card is written as the browser names it, and some carry the version
+    /// inside the name.
+    HowItDecodes {
+        /// The card as the browser names it, when it names one.
+        card: Option<String>,
+        /// The codec the browser is decoding, as the analyser spells it.
+        codec: String,
+        across: u32,
+        down: u32,
+        frames_per_second: Option<f64>,
+        /// Whether the browser says it decodes this on the card. Absent when
+        /// it could not be asked.
+        on_the_card: Option<bool>,
+        /// Whether it says it keeps up.
+        smoothly: Option<bool>,
     },
     /// One of the real moments on the way to a film playing, and how long the
     /// one before it took.
@@ -586,6 +611,26 @@ async fn what_the_page_saw(
             error_code,
             "where the film stood a few seconds in"
         ),
+        Seen::HowItDecodes {
+            card,
+            codec,
+            across,
+            down,
+            frames_per_second,
+            on_the_card,
+            smoothly,
+        } => tracing::debug!(
+            session,
+            source,
+            card = card.as_deref().map(cut_short),
+            codec = cut_short(&codec),
+            across,
+            down,
+            frames_per_second,
+            on_the_card,
+            smoothly,
+            "the browser says how it decodes this film"
+        ),
         Seen::LoadingStage { stage, after_ms } => tracing::debug!(
             session,
             source,
@@ -790,6 +835,36 @@ mod tests {
             }
             other => panic!("read as the wrong fact: {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_browser_says_what_decodes_the_film_and_may_not_know() {
+        let said: FromThePage = serde_json::from_str(
+            r#"{"source":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"how_it_decodes",
+                "card":"ANGLE (Intel, Intel(R) Arc(TM) A380 Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                "codec":"h264","across":3840,"down":2160,"frames_per_second":60,
+                "on_the_card":false,"smoothly":false}"#,
+        )
+        .expect("what decodes the film is read");
+        match said.seen {
+            Seen::HowItDecodes {
+                card, on_the_card, ..
+            } => {
+                assert!(card.is_some_and(|card| card.contains("A380")));
+                assert_eq!(on_the_card, Some(false));
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
+
+        // A browser that names no card and could not be asked still says what
+        // it is decoding.
+        let unknown: FromThePage = serde_json::from_str(
+            r#"{"source":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"how_it_decodes",
+                "card":null,"codec":"hevc","across":1920,"down":1080,"frames_per_second":null,
+                "on_the_card":null,"smoothly":null}"#,
+        )
+        .expect("read");
+        assert!(matches!(unknown.seen, Seen::HowItDecodes { card: None, on_the_card: None, .. }));
     }
 
     #[test]
