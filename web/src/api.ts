@@ -746,6 +746,55 @@ export type HowItMoved =
   | "picked_up_where_it_was_left"
   | "not_the_page";
 
+/** How a film failed to flow for a moment as it started: a picture held on
+ *  the screen too long, pictures of the film never shown, or the page too
+ *  busy to look while the browser went on showing them. */
+export type HitchKind = "held" | "skipped" | "blind";
+
+/** One moment the film did not flow as it should have. */
+export interface OpeningHitch {
+  kind: HitchKind;
+  /** How long after the first picture, in milliseconds. */
+  at_ms: number;
+  /** The moment of the film, in seconds. */
+  at_second: number;
+  /** How long between the two pictures, in milliseconds. */
+  gap_ms: number;
+  /** Pictures of the film that were never shown, for a skip. */
+  pictures_lost: number;
+  /** How much of the gap the page spent busy with its own work. */
+  busy_ms: number;
+}
+
+/** What the opening seconds of a film came to, picture by picture. */
+export interface OpeningSeconds {
+  /** How long was followed, from the first picture, in milliseconds. */
+  over_ms: number;
+  pictures: number;
+  /** How long one picture of this film lasts, as measured. */
+  picture_ms: number;
+  held: number;
+  worst_held_ms: number;
+  skipped: number;
+  pictures_lost: number;
+  blind: number;
+  worst_blind_ms: number;
+  /** The first few, in order. */
+  first_hitches: OpeningHitch[];
+  /** Pictures the browser itself counts as decoded and thrown away. */
+  pictures_dropped: number;
+  /** How many times the browser said it was waiting for more of the film. */
+  waited: number;
+  /** Spells of fifty milliseconds or more the page spent on its own work,
+   *  and how long they came to. Absent when the browser cannot say. */
+  busy_spells: number | null;
+  busy_ms: number | null;
+  /** Films this tab started before this one: the first is the cold one. */
+  films_before_in_this_tab: number;
+  /** How long the page had been open when the first picture came up. */
+  page_age_ms: number;
+}
+
 /**
  * A fact the page may tell the journal.
  *
@@ -834,6 +883,7 @@ export type PageFact =
       pictures_shown: number;
       pictures_dropped: number;
     }
+  | ({ saw: "the_opening_seconds" } & OpeningSeconds)
   | {
       saw: "playback_refused";
       /** Why the library gave up, in its own words. Cut short by the server. */

@@ -13,6 +13,7 @@
  */
 
 import { api, type HowItMoved, type Reading } from "../api";
+import { followTheOpening } from "./opening";
 
 /** How still the clock has to be before the film counts as stopped. */
 const STOPPED_AFTER_MS = 1_000;
@@ -422,6 +423,12 @@ export function watchTheReading(element: HTMLVideoElement, reading: Reading): Wa
 
   const ticking = window.setInterval(look, LOOK_EVERY_MS);
 
+  /* The opening seconds picture by picture, which is the only way a stutter
+     of a picture or two as a film starts reaches the journal at all. */
+  const stopFollowingTheOpening = followTheOpening(element, (opening) =>
+    tell({ ...reading, saw: "the_opening_seconds", ...opening }),
+  );
+
   /* Where the film stands a little after the browser was handed it, said once
      whatever the answer. Everything above follows a film that is playing: a
      film the browser left paused, or set going without ever showing a
@@ -450,6 +457,7 @@ export function watchTheReading(element: HTMLVideoElement, reading: Reading): Wa
     },
     stop: () => {
       window.clearInterval(ticking);
+      stopFollowingTheOpening();
       window.clearTimeout(startedOrNot);
       window.clearTimeout(settling);
       if (waitingForThePicture?.pending != null) {

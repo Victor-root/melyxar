@@ -211,6 +211,43 @@ enum Seen {
         pictures_shown: u32,
         pictures_dropped: u32,
     },
+    /// The opening seconds of a film, picture by picture.
+    ///
+    /// A film that stutters once as it starts and then plays smoothly is
+    /// invisible to every other fact here: the clock never stops for a whole
+    /// second, and a picture held a moment too long is not one the browser
+    /// counts as dropped. Only when each picture reached the screen says it.
+    /// Said once per film, when its first seconds are over or when it is left
+    /// before that, with what tells a cold start from a warm one: how many
+    /// films the tab had started before, and how long it had been open.
+    TheOpeningSeconds {
+        /// How long was followed, from the first picture.
+        over_ms: u32,
+        pictures: u32,
+        /// How long one picture of this film lasts, as measured.
+        picture_ms: f64,
+        /// Pictures held on the screen too long: nothing new was ready.
+        held: u32,
+        worst_held_ms: u32,
+        /// Jumps over pictures of the film that were never shown.
+        skipped: u32,
+        pictures_lost: u32,
+        /// Stretches the page was too busy to be told of each picture while
+        /// the browser went on showing them: not a fault on the screen.
+        blind: u32,
+        worst_blind_ms: u32,
+        first_hitches: Vec<OpeningHitch>,
+        /// Pictures the browser itself counts as decoded and thrown away.
+        pictures_dropped: u32,
+        /// How many times the browser said it was waiting for more film.
+        waited: u32,
+        /// Spells of fifty milliseconds or more the page spent on its own
+        /// work, and how long they came to, when the browser can say.
+        busy_spells: Option<u32>,
+        busy_ms: Option<u32>,
+        films_before_in_this_tab: u32,
+        page_age_ms: u64,
+    },
     /// Playback stopped outright, in whatever words the failure carried, and
     /// whether the browser's own reader was handed the playlist instead.
     ///
@@ -372,6 +409,70 @@ impl HowItMoved {
             Self::NotThePage => "not the page",
         }
     }
+}
+
+/// One moment of the opening seconds the film did not flow.
+#[derive(Debug, Deserialize)]
+struct OpeningHitch {
+    kind: HitchKind,
+    /// How long after the first picture.
+    at_ms: u32,
+    /// The moment of the film.
+    at_second: f64,
+    /// How long between the two pictures.
+    gap_ms: u32,
+    /// Pictures of the film never shown, for a skip.
+    pictures_lost: u32,
+    /// How much of the gap the page spent busy with its own work.
+    busy_ms: u32,
+}
+
+/// What kind of moment it was.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum HitchKind {
+    Held,
+    Skipped,
+    Blind,
+}
+
+impl HitchKind {
+    /// The word written in the journal.
+    fn as_word(self) -> &'static str {
+        match self {
+            Self::Held => "held",
+            Self::Skipped => "skipped",
+            Self::Blind => "unseen",
+        }
+    }
+}
+
+/// How many hitches are written one by one, whatever a page sends.
+const HITCHES_WRITTEN: usize = 8;
+
+/// The hitches of an opening on one line, the first few only.
+fn hitches_in_a_line(hitches: &[OpeningHitch]) -> String {
+    hitches
+        .iter()
+        .take(HITCHES_WRITTEN)
+        .map(|hitch| {
+            let mut said = format!(
+                "{} {}ms at {}ms (film {:.3}s)",
+                hitch.kind.as_word(),
+                hitch.gap_ms,
+                hitch.at_ms,
+                hitch.at_second
+            );
+            if hitch.pictures_lost > 0 {
+                said.push_str(&format!(" lost {}", hitch.pictures_lost));
+            }
+            if hitch.busy_ms > 0 {
+                said.push_str(&format!(" page busy {}ms", hitch.busy_ms));
+            }
+            said
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// How much of the library's wording is kept.
@@ -572,6 +673,44 @@ async fn what_the_page_saw(
             pictures_shown,
             pictures_dropped,
             "the browser dropped pictures without ever losing the clock"
+        ),
+        Seen::TheOpeningSeconds {
+            over_ms,
+            pictures,
+            picture_ms,
+            held,
+            worst_held_ms,
+            skipped,
+            pictures_lost,
+            blind,
+            worst_blind_ms,
+            first_hitches,
+            pictures_dropped,
+            waited,
+            busy_spells,
+            busy_ms,
+            films_before_in_this_tab,
+            page_age_ms,
+        } => tracing::debug!(
+            session,
+            source,
+            over_ms,
+            pictures,
+            picture_ms,
+            held,
+            worst_held_ms,
+            skipped,
+            pictures_lost,
+            blind,
+            worst_blind_ms,
+            pictures_dropped,
+            waited,
+            busy_spells,
+            busy_ms,
+            films_before_in_this_tab,
+            page_age_ms,
+            hitches = hitches_in_a_line(&first_hitches),
+            "how the first seconds of the film flowed"
         ),
         Seen::PlaybackRefused {
             because,
@@ -865,6 +1004,41 @@ mod tests {
         )
         .expect("read");
         assert!(matches!(unknown.seen, Seen::HowItDecodes { card: None, on_the_card: None, .. }));
+    }
+
+    #[test]
+    fn the_opening_seconds_name_each_hitch_and_only_the_first_few() {
+        let hitch = r#"{"kind":"held","at_ms":2042,"at_second":1227.41,"gap_ms":162,
+                        "pictures_lost":0,"busy_ms":80}"#;
+        let said: FromThePage = serde_json::from_str(&format!(
+            r#"{{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"the_opening_seconds",
+                "over_ms":15000,"pictures":360,"picture_ms":41.7,"held":12,"worst_held_ms":162,
+                "skipped":0,"pictures_lost":0,"blind":0,"worst_blind_ms":0,
+                "first_hitches":[{}],"pictures_dropped":0,"waited":0,
+                "busy_spells":null,"busy_ms":null,"films_before_in_this_tab":0,"page_age_ms":5321}}"#,
+            [hitch; 12].join(",")
+        ))
+        .expect("the opening seconds are a fact this module names");
+
+        match said.seen {
+            Seen::TheOpeningSeconds {
+                first_hitches,
+                busy_spells,
+                ..
+            } => {
+                assert_eq!(busy_spells, None);
+                let line = hitches_in_a_line(&first_hitches);
+                assert_eq!(line.matches("held").count(), HITCHES_WRITTEN);
+                assert!(line.starts_with("held 162ms at 2042ms (film 1227.410s) page busy 80ms"));
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
+
+        // A kind of hitch this module has no word for is refused.
+        assert!(serde_json::from_str::<OpeningHitch>(
+            r#"{"kind":"anything","at_ms":0,"at_second":0,"gap_ms":0,"pictures_lost":0,"busy_ms":0}"#
+        )
+        .is_err());
     }
 
     #[test]
