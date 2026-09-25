@@ -764,6 +764,10 @@ export interface OpeningHitch {
   pictures_lost: number;
   /** How much of the gap the page spent busy with its own work. */
   busy_ms: number;
+  /** How far the film's own clock went during the gap: about the gap itself
+   *  when the clock ran on under a picture that stood still, next to nothing
+   *  when the clock itself stopped. Absent when it could not be read. */
+  clock_ms: number | null;
 }
 
 /** What the opening seconds of a film came to, picture by picture. */
@@ -793,6 +797,9 @@ export interface OpeningSeconds {
   films_before_in_this_tab: number;
   /** How long the page had been open when the first picture came up. */
   page_age_ms: number;
+  /** Whether the film started with its sound on. The browser's clock runs
+   *  on the sound, so a sound card slow to wake holds the pictures too. */
+  sound_on: boolean;
 }
 
 /**

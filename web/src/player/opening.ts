@@ -30,6 +30,15 @@ export interface Presented {
   afterABreak: boolean;
 }
 
+/** Where the film's own clock stood at one moment on the page's clock. It
+ *  tells a picture held while the clock ran on from the clock itself having
+ *  stopped, which only the element can say, since no picture is shown then. */
+export interface ClockReading {
+  at: number;
+  /** The film's clock, in seconds. */
+  clock: number;
+}
+
 /** A stretch when the page's own work kept it from doing anything else. */
 export interface BusySpell {
   startedAt: number;
@@ -39,7 +48,13 @@ export interface BusySpell {
 /** What the opening seconds came to, before what only the element knows. */
 export type Opening = Omit<
   OpeningSeconds,
-  "pictures_dropped" | "waited" | "busy_spells" | "busy_ms" | "films_before_in_this_tab" | "page_age_ms"
+  | "pictures_dropped"
+  | "waited"
+  | "busy_spells"
+  | "busy_ms"
+  | "films_before_in_this_tab"
+  | "page_age_ms"
+  | "sound_on"
 >;
 
 /** How much longer than one picture a gap has to last to be a hitch. Half a
@@ -70,8 +85,29 @@ function busyDuring(spells: BusySpell[], from: number, to: number): number {
   return busy;
 }
 
+/** How far the film's clock went between two moments, in milliseconds, read
+ *  from the last reading at or before the first and the first at or after
+ *  the second. Nothing when the readings do not reach that far. */
+function clockDuring(readings: ClockReading[], from: number, to: number): number | null {
+  let before: ClockReading | undefined;
+  let after: ClockReading | undefined;
+  for (const reading of readings) {
+    if (reading.at <= from) {
+      before = reading;
+    }
+    if (reading.at >= to && after === undefined) {
+      after = reading;
+    }
+  }
+  return before && after ? Math.round((after.clock - before.clock) * 1000) : null;
+}
+
 /** Reads the pictures of the opening seconds into what went wrong in them. */
-export function readTheOpening(pictures: Presented[], busy: BusySpell[]): Opening {
+export function readTheOpening(
+  pictures: Presented[],
+  busy: BusySpell[],
+  clock: ClockReading[],
+): Opening {
   const steps: number[] = [];
   for (let index = 1; index < pictures.length; index += 1) {
     const before = pictures[index - 1];
@@ -132,6 +168,7 @@ export function readTheOpening(pictures: Presented[], busy: BusySpell[]): Openin
         gap_ms: Math.round(gap),
         pictures_lost: lost,
         busy_ms: Math.round(busyDuring(busy, before.shownAt, after.shownAt)),
+        clock_ms: clockDuring(clock, before.shownAt, after.shownAt),
       });
     }
   }
@@ -166,6 +203,9 @@ export function followTheOpening(
 
   const pictures: Presented[] = [];
   const busy: BusySpell[] = [];
+  const clock: ClockReading[] = [];
+  let soundOn = false;
+  let reading = 0;
   let broken = false;
   let waited = 0;
   let droppedAtFirst = 0;
@@ -200,6 +240,7 @@ export function followTheOpening(
       element.cancelVideoFrameCallback?.(pending);
       pending = null;
     }
+    cancelAnimationFrame(reading);
     busyWatcher?.disconnect();
     element.removeEventListener("pause", aBreak);
     element.removeEventListener("seeking", aBreak);
@@ -212,13 +253,14 @@ export function followTheOpening(
     const to = pictures[pictures.length - 1].shownAt;
     const inside = busy.filter((spell) => spell.startedAt + spell.lasted > from && spell.startedAt < to);
     say({
-      ...readTheOpening(pictures, busy),
+      ...readTheOpening(pictures, busy, clock),
       pictures_dropped: droppedSoFar(element) - droppedAtFirst,
       waited,
       busy_spells: watchingBusy ? inside.length : null,
       busy_ms: watchingBusy ? Math.round(inside.reduce((sum, spell) => sum + spell.lasted, 0)) : null,
       films_before_in_this_tab: filmsBeforeThis,
       page_age_ms: pageAge,
+      sound_on: soundOn,
     });
   };
 
@@ -228,6 +270,7 @@ export function followTheOpening(
     if (pictures.length === 0) {
       droppedAtFirst = droppedSoFar(element);
       pageAge = Math.round(shownAt);
+      soundOn = !element.muted && element.volume > 0;
       broken = false;
     }
     pictures.push({
@@ -244,6 +287,12 @@ export function followTheOpening(
     pending = element.requestVideoFrameCallback(onPicture);
   };
   pending = element.requestVideoFrameCallback(onPicture);
+
+  const readTheClock = () => {
+    clock.push({ at: performance.now(), clock: element.currentTime });
+    reading = requestAnimationFrame(readTheClock);
+  };
+  reading = requestAnimationFrame(readTheClock);
 
   return finish;
 }

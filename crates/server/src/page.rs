@@ -247,6 +247,10 @@ enum Seen {
         busy_ms: Option<u32>,
         films_before_in_this_tab: u32,
         page_age_ms: u64,
+        /// Whether the film started with its sound on. The browser's clock
+        /// runs on the sound, so a sound card slow to wake holds the
+        /// pictures too.
+        sound_on: bool,
     },
     /// Playback stopped outright, in whatever words the failure carried, and
     /// whether the browser's own reader was handed the playlist instead.
@@ -425,6 +429,10 @@ struct OpeningHitch {
     pictures_lost: u32,
     /// How much of the gap the page spent busy with its own work.
     busy_ms: u32,
+    /// How far the film's own clock went during the gap: about the gap
+    /// itself when the clock ran on under a picture that stood still, next to
+    /// nothing when the clock itself stopped.
+    clock_ms: Option<u32>,
 }
 
 /// What kind of moment it was.
@@ -468,6 +476,9 @@ fn hitches_in_a_line(hitches: &[OpeningHitch]) -> String {
             }
             if hitch.busy_ms > 0 {
                 said.push_str(&format!(" page busy {}ms", hitch.busy_ms));
+            }
+            if let Some(clock) = hitch.clock_ms {
+                said.push_str(&format!(" clock moved {clock}ms"));
             }
             said
         })
@@ -691,6 +702,7 @@ async fn what_the_page_saw(
             busy_ms,
             films_before_in_this_tab,
             page_age_ms,
+            sound_on,
         } => tracing::debug!(
             session,
             source,
@@ -709,6 +721,7 @@ async fn what_the_page_saw(
             busy_ms,
             films_before_in_this_tab,
             page_age_ms,
+            sound_on,
             hitches = hitches_in_a_line(&first_hitches),
             "how the first seconds of the film flowed"
         ),
@@ -1009,13 +1022,14 @@ mod tests {
     #[test]
     fn the_opening_seconds_name_each_hitch_and_only_the_first_few() {
         let hitch = r#"{"kind":"held","at_ms":2042,"at_second":1227.41,"gap_ms":162,
-                        "pictures_lost":0,"busy_ms":80}"#;
+                        "pictures_lost":0,"busy_ms":80,"clock_ms":4}"#;
         let said: FromThePage = serde_json::from_str(&format!(
             r#"{{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"the_opening_seconds",
                 "over_ms":15000,"pictures":360,"picture_ms":41.7,"held":12,"worst_held_ms":162,
                 "skipped":0,"pictures_lost":0,"blind":0,"worst_blind_ms":0,
                 "first_hitches":[{}],"pictures_dropped":0,"waited":0,
-                "busy_spells":null,"busy_ms":null,"films_before_in_this_tab":0,"page_age_ms":5321}}"#,
+                "busy_spells":null,"busy_ms":null,"films_before_in_this_tab":0,"page_age_ms":5321,
+                "sound_on":true}}"#,
             [hitch; 12].join(",")
         ))
         .expect("the opening seconds are a fact this module names");
@@ -1029,14 +1043,17 @@ mod tests {
                 assert_eq!(busy_spells, None);
                 let line = hitches_in_a_line(&first_hitches);
                 assert_eq!(line.matches("held").count(), HITCHES_WRITTEN);
-                assert!(line.starts_with("held 162ms at 2042ms (film 1227.410s) page busy 80ms"));
+                assert!(line.starts_with(
+                    "held 162ms at 2042ms (film 1227.410s) page busy 80ms clock moved 4ms"
+                ));
             }
             other => panic!("read as the wrong fact: {other:?}"),
         }
 
         // A kind of hitch this module has no word for is refused.
         assert!(serde_json::from_str::<OpeningHitch>(
-            r#"{"kind":"anything","at_ms":0,"at_second":0,"gap_ms":0,"pictures_lost":0,"busy_ms":0}"#
+            r#"{"kind":"anything","at_ms":0,"at_second":0,"gap_ms":0,"pictures_lost":0,
+                "busy_ms":0,"clock_ms":null}"#
         )
         .is_err());
     }
