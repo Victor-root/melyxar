@@ -13,6 +13,12 @@
  * into it, until it has been reached and the page has held still a moment,
  * or somebody takes the page in hand. A new page starts at the top, and a
  * page that only rewrote its own address stays where it is.
+ *
+ * The page is not shown while it grows into its place. Shown, it was seen
+ * higher up than it had been left and then jumping down to it, a flash on
+ * every step back. It stays out of sight until it stands where it was, which
+ * with the page kept in memory is the very first frame, and never longer than
+ * a moment: a page that cannot reach its place any more is shown as it is.
  */
 
 import { useEffect, useLayoutEffect, useRef } from "react";
@@ -37,12 +43,32 @@ const GIVING_UP_MS = 8000;
  *  that is still arriving does not shift under it afterwards. */
 const SETTLED_MS = 400;
 
+/** The longest a page is kept out of sight while it grows into its place. */
+const HIDDEN_AT_MOST_MS = 1000;
+
+/** The mark on the box while the page is out of sight, read by the
+ *  stylesheet. */
+const OUT_OF_SIGHT = "puttingBack";
+
 /** A pixel of slack: a scroll position is rarely a whole number. */
 const A_PIXEL = 1;
 
 /** Where the places are kept across a reload of the page, for as long as the
  *  tab lives. */
 const STORED = "melyxar.places";
+
+/**
+ * The name a page of the history is kept under.
+ *
+ * Its place in the history and its address together. The place alone is not
+ * enough: the first page a tab opens on is always given the same one, so a
+ * page opened afresh by its address was handed the place of whichever page had
+ * opened the tab before it, and went looking for a place that was never its
+ * own.
+ */
+export function pageOf(location: { key: string; pathname: string; search: string }): string {
+  return `${location.key} ${location.pathname}${location.search}`;
+}
 
 /** Keeps one more place, the most recent last, forgetting the oldest past the
  *  number kept. */
@@ -106,7 +132,7 @@ function store(places: Map<string, Place>) {
 export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
   const location = useLocation();
   const how = useNavigationType();
-  const page = useRef(location.key);
+  const page = useRef(pageOf(location));
   const places = useRef<Map<string, Place>>(readStored());
 
   /* Written down as the page moves: the box and every row in it, since a
@@ -138,7 +164,7 @@ export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
   }, [scroller]);
 
   useLayoutEffect(() => {
-    page.current = location.key;
+    page.current = pageOf(location);
     const box = scroller.current;
     if (!box) {
       return;
@@ -147,7 +173,7 @@ export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
       box.scrollTop = 0;
       return;
     }
-    const wanted = places.current.get(location.key);
+    const wanted = places.current.get(page.current);
     if (how !== "POP" || !wanted) {
       return;
     }
@@ -156,8 +182,12 @@ export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
     const began = performance.now();
     let tall = -1;
     let stillSince = began;
+    const show = () => {
+      delete box.dataset[OUT_OF_SIGHT];
+    };
     const stop = () => {
       cancelAnimationFrame(frame);
+      show();
       for (const hand of HANDS) {
         box.removeEventListener(hand, stop);
       }
@@ -174,19 +204,26 @@ export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
         tall = box.scrollHeight;
         stillSince = now;
       }
-      const settled = isThere(placeOf(box), wanted) && now - stillSince > SETTLED_MS;
-      if (settled || now - began > GIVING_UP_MS) {
+      const there = isThere(placeOf(box), wanted);
+      if (there || now - began > HIDDEN_AT_MOST_MS) {
+        show();
+      }
+      if ((there && now - stillSince > SETTLED_MS) || now - began > GIVING_UP_MS) {
         stop();
         return;
       }
       frame = requestAnimationFrame(step);
     };
+    // Before the page is first painted, since this runs ahead of it.
+    box.dataset[OUT_OF_SIGHT] = "";
     /* Somebody reaching for the page wins over the place being put back. */
     for (const hand of HANDS) {
       box.addEventListener(hand, stop, { passive: true });
     }
     step();
     return stop;
+    // The whole location is read through the name above, and it changes
+    // with the key: every move through the history is a new key.
   }, [location.key, how, scroller]);
 }
 

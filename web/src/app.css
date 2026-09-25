@@ -33,6 +33,13 @@
   display: none;
 }
 
+/* A page walked back to, kept out of sight for the moment it takes to stand
+   where it was left again: seen growing into its place, it flashed higher up
+   and then jumped. */
+.shell-scroll[data-putting-back] {
+  visibility: hidden;
+}
+
 /*
  * The bar that says where in the page somebody is.
  *
