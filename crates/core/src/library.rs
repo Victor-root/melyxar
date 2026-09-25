@@ -160,6 +160,9 @@ pub struct LibraryOptions {
     pub key_frames_during_scan: bool,
     /// Make the thumbnails of the playback bar during the scan.
     pub thumbnails_during_scan: bool,
+    /// Watch the library's folders, and scan again as soon as something in
+    /// them changes, rather than waiting for somebody or the night to ask.
+    pub watch_in_real_time: bool,
 }
 
 impl LibraryOptions {
@@ -213,6 +216,7 @@ mod tests {
         let in_one_sitting = LibraryOptions {
             key_frames_during_scan: true,
             thumbnails_during_scan: true,
+            watch_in_real_time: false,
         };
         assert!(
             !in_one_sitting.leaves_something_to_the_upkeep(),

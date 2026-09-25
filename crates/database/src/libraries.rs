@@ -215,16 +215,20 @@ impl Database {
     ) -> Result<bool> {
         let result = sqlx::query(
             "UPDATE libraries
-                SET key_frames_during_scan = ?, thumbnails_during_scan = ?, updated_at = ?
+                SET key_frames_during_scan = ?, thumbnails_during_scan = ?,
+                    watch_in_real_time = ?, updated_at = ?
               WHERE id = ?
-                AND (key_frames_during_scan <> ? OR thumbnails_during_scan <> ?)",
+                AND (key_frames_during_scan <> ? OR thumbnails_during_scan <> ?
+                     OR watch_in_real_time <> ?)",
         )
         .bind(options.key_frames_during_scan)
         .bind(options.thumbnails_during_scan)
+        .bind(options.watch_in_real_time)
         .bind(timestamp_to_text(now()))
         .bind(id.to_db_string())
         .bind(options.key_frames_during_scan)
         .bind(options.thumbnails_during_scan)
+        .bind(options.watch_in_real_time)
         .execute(self.writer())
         .await?;
         Ok(result.rows_affected() > 0)
@@ -269,7 +273,7 @@ impl Database {
     pub async fn list_libraries(&self) -> Result<Vec<Library>> {
         let rows = sqlx::query(
             "SELECT id, name, kind, metadata_language,
-                    key_frames_during_scan, thumbnails_during_scan
+                    key_frames_during_scan, thumbnails_during_scan, watch_in_real_time
              FROM libraries ORDER BY name COLLATE NOCASE",
         )
         .fetch_all(self.reader())
@@ -290,6 +294,7 @@ impl Database {
                 options: LibraryOptions {
                     key_frames_during_scan: row.try_get("key_frames_during_scan")?,
                     thumbnails_during_scan: row.try_get("thumbnails_during_scan")?,
+                    watch_in_real_time: row.try_get("watch_in_real_time")?,
                 },
                 roots: self.library_roots(id).await?,
             });
@@ -754,6 +759,7 @@ mod tests {
         let both = LibraryOptions {
             key_frames_during_scan: true,
             thumbnails_during_scan: true,
+            watch_in_real_time: false,
         };
         assert!(
             database
@@ -779,6 +785,7 @@ mod tests {
         let only_one = LibraryOptions {
             key_frames_during_scan: true,
             thumbnails_during_scan: false,
+            watch_in_real_time: false,
         };
         assert!(database
             .set_library_options(library.id, only_one)
@@ -788,6 +795,22 @@ mod tests {
             database.list_libraries().await.expect("listed")[0].options,
             only_one,
             "the two switches are two answers, not one"
+        );
+
+        let watched = LibraryOptions {
+            watch_in_real_time: true,
+            ..only_one
+        };
+        assert!(
+            database
+                .set_library_options(library.id, watched)
+                .await
+                .expect("written"),
+            "watching a library's folders is a change of its own"
+        );
+        assert_eq!(
+            database.list_libraries().await.expect("listed")[0].options,
+            watched
         );
     }
 

@@ -147,6 +147,9 @@ struct LibraryView {
     key_frames_during_scan: bool,
     /// The same for the thumbnails of the playback bar.
     thumbnails_during_scan: bool,
+    /// Whether its folders are watched, and it is scanned again as soon as
+    /// something in them changes.
+    watch_in_real_time: bool,
     /// The language its films are described in, as a two letter code.
     metadata_language: String,
     roots: Vec<RootView>,
@@ -187,6 +190,7 @@ async fn libraries(
                 version: library.version,
                 key_frames_during_scan: library.options.key_frames_during_scan,
                 thumbnails_during_scan: library.options.thumbnails_during_scan,
+                watch_in_real_time: library.options.watch_in_real_time,
                 metadata_language: library.metadata_language,
                 set_aside: library.set_aside,
                 roots: library

@@ -13,6 +13,7 @@ function library(id: string, name: string): Library {
     version: 0,
     key_frames_during_scan: false,
     thumbnails_during_scan: false,
+    watch_in_real_time: false,
     metadata_language: "fr",
     roots: [],
     set_aside: 0,

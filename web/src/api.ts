@@ -267,6 +267,9 @@ export interface Library {
   key_frames_during_scan: boolean;
   /** The same, for the pictures of the playback bar. */
   thumbnails_during_scan: boolean;
+  /** Whether its folders are watched, and it is scanned again as soon as
+      something in them changes. */
+  watch_in_real_time: boolean;
   /** The language this library's films are described in, as a two letter code.
       Changing it asks the provider about every film again. */
   metadata_language: string;
@@ -1490,11 +1493,13 @@ export const api = {
   setLibraryOptions: (library: string, options: {
     key_frames_during_scan: boolean;
     thumbnails_during_scan: boolean;
+    watch_in_real_time: boolean;
     metadata_language: string;
   }) =>
     put<{
       key_frames_during_scan: boolean;
       thumbnails_during_scan: boolean;
+      watch_in_real_time: boolean;
       metadata_language: string;
       changed: boolean;
       /** How many films went back in the queue, when the language changed. */

@@ -65,6 +65,7 @@ export function useLibraryEditing(onChanged: () => void): LibraryEditing {
       .setLibraryOptions(library.id, {
         key_frames_during_scan: wanted.key_frames_during_scan,
         thumbnails_during_scan: wanted.thumbnails_during_scan,
+        watch_in_real_time: wanted.watch_in_real_time,
         metadata_language: wanted.metadata_language,
       })
       .then((kept) => {

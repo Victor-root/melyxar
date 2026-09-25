@@ -396,6 +396,9 @@ pub(crate) fn provider_of(
 struct OptionsAsked {
     key_frames_during_scan: bool,
     thumbnails_during_scan: bool,
+    /// Whether the library's folders are watched and scanned again as soon
+    /// as something in them changes.
+    watch_in_real_time: bool,
     /// The language this library's films are described in, as a two letter
     /// code. Changing it asks the provider about every film again.
     metadata_language: String,
@@ -405,6 +408,7 @@ struct OptionsAsked {
 struct OptionsView {
     key_frames_during_scan: bool,
     thumbnails_during_scan: bool,
+    watch_in_real_time: bool,
     metadata_language: String,
     /// Whether anything really moved. A screen that sent what was already
     /// there gets a plain no rather than a second copy of the same answer.
@@ -447,6 +451,7 @@ async fn set_library_options(
     let options = melyxar_core::library::LibraryOptions {
         key_frames_during_scan: asked.key_frames_during_scan,
         thumbnails_during_scan: asked.thumbnails_during_scan,
+        watch_in_real_time: asked.watch_in_real_time,
     };
     let changed = state
         .database()
@@ -467,6 +472,7 @@ async fn set_library_options(
         library = library.name,
         key_frames_during_scan = options.key_frames_during_scan,
         thumbnails_during_scan = options.thumbnails_during_scan,
+        watch_in_real_time = options.watch_in_real_time,
         metadata_language = language,
         changed,
         asked_about_again,
@@ -476,6 +482,7 @@ async fn set_library_options(
     Ok(Json(OptionsView {
         key_frames_during_scan: options.key_frames_during_scan,
         thumbnails_during_scan: options.thumbnails_during_scan,
+        watch_in_real_time: options.watch_in_real_time,
         metadata_language: language,
         changed: changed || asked_about_again.is_some(),
         asked_about_again,
