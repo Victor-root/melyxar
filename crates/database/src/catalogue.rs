@@ -621,7 +621,7 @@ impl Database {
             "SELECT {} FROM works e
              JOIN works s ON s.id = e.parent_id
              JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
-             WHERE ?2 IN (s.parent_id, s.id) AND e.kind = 'episode' AND p.state = 'in_progress'
+             WHERE ?2 IN (s.parent_id, s.id) AND e.kind = 'episode' AND p.position_ms > 0
                AND EXISTS (SELECT 1 FROM media_sources m
                             WHERE m.work_id = e.id AND m.missing_since IS NULL)
              ORDER BY p.last_played_at DESC

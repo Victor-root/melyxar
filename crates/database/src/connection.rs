@@ -541,6 +541,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn only_a_work_with_somewhere_to_carry_on_from_keeps_its_position() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database opens");
+        crate::MIGRATOR
+            .run_to(53, &pool)
+            .await
+            .expect("migrated to just before the new step");
+        sqlx::query(
+            "INSERT INTO users (id, name, created_at) VALUES ('someone', 'someone', '2026-09-26T00:00:00Z');
+             INSERT INTO libraries (id, name, kind, created_at, updated_at)
+             VALUES ('films', 'Films', 'movies', '2026-09-26T00:00:00Z', '2026-09-26T00:00:00Z');",
+        )
+        .execute(&pool)
+        .await
+        .expect("account and library written");
+        for (work, state, marked, position) in [
+            ("by_the_rules", "watched", 0, 6_900_000),
+            ("by_hand", "watched", 1, 1_800_000),
+            ("halfway", "in_progress", 0, 3_600_000),
+            ("glanced_at", "not_started", 0, 40_000),
+        ] {
+            sqlx::query(
+                "INSERT INTO works (id, library_id, kind, title, sort_title, added_at, updated_at)
+                 VALUES (?1, 'films', 'movie', ?1, ?1, '2026-09-26T00:00:00Z', '2026-09-26T00:00:00Z')",
+            )
+            .bind(work)
+            .execute(&pool)
+            .await
+            .expect("work written");
+            sqlx::query(
+                "INSERT INTO playback_progress (user_id, work_id, position_ms, state, marked_manually)
+                 VALUES ('someone', ?, ?, ?, ?)",
+            )
+            .bind(work)
+            .bind(position)
+            .bind(state)
+            .bind(marked)
+            .execute(&pool)
+            .await
+            .expect("progress written");
+        }
+
+        crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+        let rows: Vec<(String, i64)> =
+            sqlx::query_as("SELECT work_id, position_ms FROM playback_progress ORDER BY work_id")
+                .fetch_all(&pool)
+                .await
+                .expect("read");
+        assert_eq!(
+            rows,
+            vec![
+                ("by_hand".to_string(), 1_800_000),
+                ("by_the_rules".to_string(), 0),
+                ("glanced_at".to_string(), 0),
+                ("halfway".to_string(), 3_600_000),
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn running_migrations_twice_changes_nothing() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("melyxar.db");

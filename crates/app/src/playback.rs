@@ -18,7 +18,7 @@ use melyxar_core::segments::MediaSegment;
 use melyxar_core::thumbnails::Thumbnails;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::user::{DownmixMethod, WideGamutChoice};
-use melyxar_core::work::{progress_after, PlaybackState};
+use melyxar_core::work::progress_after;
 use melyxar_playback::decision::{decide, PlaybackRequest};
 
 use crate::{AppError, AppState, Result};
@@ -370,7 +370,7 @@ pub async fn plan(
         .map_or(0, |values| values.resume_rewind_seconds)
         * 1_000;
     let resume_from = remembered
-        .filter(|progress| progress.state == PlaybackState::InProgress)
+        .filter(|progress| progress.position.get() > 0)
         .map(|progress| Millis::new((progress.position.get() - rewind).max(0)));
 
     // Nothing here waits on them or makes them: a film that has none is a film
@@ -1230,6 +1230,7 @@ mod tests {
         AudioDetails, ColorInfo, Loudness, SubtitleDetails, SubtitleLayout, TrackKind, VideoDetails,
     };
     use melyxar_core::user::Permissions;
+    use melyxar_core::work::PlaybackState;
     use melyxar_database::catalogue::SourceAnalysis;
     use melyxar_database::Database;
     use melyxar_playback::decision::{PlaybackMethod, SubtitleDelivery};
@@ -3164,6 +3165,61 @@ mod tests {
         assert!(
             plan.resume_from.is_none(),
             "offering to carry on ten seconds before the credits helps nobody"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_marked_watched_and_started_again_carries_on_from_where_it_stopped() {
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080), audio(id, "aac", 2, true)]
+            })
+            .await;
+        let work_id = state
+            .database()
+            .playable_source(source_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .work_id;
+        let who = crate::an_ordinary_account(user_id);
+        let asked = PlayRequest {
+            source_id,
+            profile: None,
+            audio_track_id: None,
+            subtitle: SubtitleAsked::Unsaid,
+            preferred_video_codec: None,
+            wide_gamut: None,
+        };
+
+        mark_watched(&state, &who, work_id, true).await.expect("marked");
+        // Half an hour into a second viewing.
+        record_position(
+            &state,
+            &who,
+            work_id,
+            Millis::new(1_800_000),
+            melyxar_core::time::now(),
+        )
+        .await
+        .expect("recorded");
+
+        let watched = plan(&state, &who, &asked).await.expect("a plan");
+        assert_eq!(watched.resume_from, Some(Millis::new(1_800_000)));
+
+        mark_watched(&state, &who, work_id, false).await.expect("unmarked");
+        let unwatched = plan(&state, &who, &asked).await.expect("a plan");
+        assert_eq!(
+            unwatched.resume_from,
+            Some(Millis::new(1_800_000)),
+            "saying it is not watched after all moves nobody back to the beginning"
+        );
+
+        mark_watched(&state, &who, work_id, true).await.expect("marked again");
+        let watched_again = plan(&state, &who, &asked).await.expect("a plan");
+        assert!(
+            watched_again.resume_from.is_none(),
+            "marked watched, there is nothing left to carry on"
         );
     }
 
