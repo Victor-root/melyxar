@@ -8,7 +8,7 @@ use axum::extract::State;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_core::library::LibraryKind;
-use melyxar_core::user::{DownmixMethod, Preferences, ThemeMode, WideGamutChoice};
+use melyxar_core::user::{DownmixMethod, Preferences, SubtitleMode, ThemeMode, WideGamutChoice};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
@@ -35,6 +35,10 @@ struct PreferencesView {
     /// preference, and the file decides.
     preferred_audio_language: Option<String>,
     preferred_subtitle_language: Option<String>,
+    /// When a film starts with subtitles nobody picked for it.
+    subtitle_mode: &'static str,
+    /// Every mode offered for it, in the order a screen shows them.
+    subtitle_modes: Vec<&'static str>,
     /// none, centre_and_bass_split, night_dialogue, intensity_preserving or
     /// broadcast_standard.
     downmix_method: &'static str,
@@ -92,6 +96,8 @@ struct PreferencesBody {
     preferred_audio_language: Option<String>,
     #[serde(default)]
     preferred_subtitle_language: Option<String>,
+    #[serde(default)]
+    subtitle_mode: Option<String>,
     #[serde(default)]
     downmix_method: Option<String>,
     #[serde(default)]
@@ -167,6 +173,10 @@ async fn write(
     if let Some(language) = body.preferred_subtitle_language {
         chosen.preferred_subtitle_language = some_language(language);
     }
+    if let Some(mode) = body.subtitle_mode {
+        chosen.subtitle_mode = SubtitleMode::parse(&mode)
+            .ok_or_else(|| ServerError::invalid_input("no subtitle mode goes by that name"))?;
+    }
     if let Some(method) = body.downmix_method {
         chosen.downmix_method = DownmixMethod::parse(&method)
             .ok_or_else(|| ServerError::invalid_input("no fold to stereo goes by that name"))?;
@@ -240,6 +250,11 @@ async fn view(
         accent_color: chosen.accent_color,
         preferred_audio_language: chosen.preferred_audio_language,
         preferred_subtitle_language: chosen.preferred_subtitle_language,
+        subtitle_mode: chosen.subtitle_mode.as_str(),
+        subtitle_modes: SubtitleMode::every()
+            .iter()
+            .map(|mode| mode.as_str())
+            .collect(),
         downmix_method: chosen.downmix_method.as_str(),
         downmix_gain: chosen.downmix_gain,
         downmix_gain_range: [
