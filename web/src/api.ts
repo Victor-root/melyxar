@@ -681,6 +681,9 @@ export interface Work {
   /** Works like this one by a genre they share, and that genre. Absent for
    *  anything but a film or a series, and when nothing shares a genre. */
   alike: { genre: string; cards: Card[] } | null;
+  /** The saga a film belongs to and every film of it here, the first to
+   *  come out first, this one among them. */
+  saga: { name: string; cards: Card[] } | null;
 }
 
 /** One person, and what of theirs this server holds. */

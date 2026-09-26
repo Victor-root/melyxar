@@ -205,6 +205,20 @@ export function WorkPage() {
         />
       )}
 
+      {/* The saga first: the films this one follows on from and leads to
+          are closer to it than anything sharing a genre. Opened on this one,
+          ringed, so it reads as a place in a run. */}
+      {work.saga && (
+        <section className="section">
+          <RowHead mark={<CollectionIcon size={24} />} title={work.saga.name} />
+          <Row opensOn={work.saga.cards.findIndex((card) => card.id === work.id)}>
+            {work.saga.cards.map((card) => (
+              <Card key={card.id} card={card} here={card.id === work.id} />
+            ))}
+          </Row>
+        </section>
+      )}
+
       {work.alike && work.alike.cards.length > 0 && (
         <section className="section">
           <RowHead
