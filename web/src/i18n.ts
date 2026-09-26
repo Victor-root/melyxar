@@ -117,7 +117,7 @@ const en: Dictionary = {
   "door.create": "Create an account",
   "door.create_why": "Ask your server administrator to create an account.",
   "settings.library_order": "Library order",
-  "settings.library_order_why": "Set the order of the library tiles and of their rows on the home page.",
+  "settings.library_order_why": "Set the order of the library tiles on the home page. Their rows are placed in the home page order above.",
   "settings.home_sections": "Home page order",
   "settings.home_sections_why":
     "Drag the sections below the banner into the order you want, and hide the ones you do not use.",
@@ -127,7 +127,6 @@ const en: Dictionary = {
   "home_section.carry_on": "Carry on watching",
   "home_section.up_next": "Up next",
   "home_section.recently_added": "Recently added",
-  "home_section.libraries": "Recently added in each library",
   "settings.door": "Sign-in screen",
   "settings.door_why":
     "Choose an account on the sign-in screen, then enter its password.",
@@ -1336,7 +1335,7 @@ const fr: Dictionary = {
   "door.create": "Créer un compte",
   "door.create_why": "Contactez l’administrateur du serveur pour créer un compte.",
   "settings.library_order": "Ordre des médiathèques",
-  "settings.library_order_why": "Définissez l’ordre des tuiles des médiathèques et de leurs rangées sur l’accueil.",
+  "settings.library_order_why": "Définissez l’ordre des tuiles des médiathèques sur l’accueil. Leurs rangées se placent dans l’ordre de l’accueil ci-dessus.",
   "settings.home_sections": "Ordre de l’accueil",
   "settings.home_sections_why":
     "Faites glisser les sections sous la bannière dans l’ordre voulu, et masquez celles qui ne vous servent pas.",
@@ -1346,7 +1345,6 @@ const fr: Dictionary = {
   "home_section.carry_on": "Continuer la lecture",
   "home_section.up_next": "À suivre",
   "home_section.recently_added": "Récemment ajoutés",
-  "home_section.libraries": "Ajouts récents par médiathèque",
   "settings.door": "Écran de connexion",
   "settings.door_why":
     "Choisissez un compte sur l’écran de connexion, puis saisissez son mot de passe.",

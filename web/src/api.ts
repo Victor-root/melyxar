@@ -488,8 +488,14 @@ export interface Home {
   sections: HomeSection[];
 }
 
-/** One section of the home page below its banner. */
-export type HomeSection = "band" | "carry_on" | "up_next" | "recently_added" | "libraries";
+/** One section of the home page below its banner: the newest of each kind
+ *  of library is a section of its own. */
+export type HomeSection =
+  | "band"
+  | "carry_on"
+  | "up_next"
+  | "recently_added"
+  | `newest:${LibraryKind}`;
 
 export interface Credit {
   /** Where their own page is. */

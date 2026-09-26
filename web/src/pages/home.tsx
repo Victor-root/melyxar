@@ -4,8 +4,8 @@
  * The banner leads, then the sections below it in the order the viewer
  * chose in their settings, those they hid left out: the tiles leading to each
  * library, what was left halfway, what each started series is waiting on,
- * what arrived last, and one row per kind of library this server really
- * holds. The server says which, in which order. A row with nothing in it is
+ * what arrived last, and the newest of each kind of library this server
+ * really holds, a section each. The server says which, in which order. A row with nothing in it is
  * not drawn, so a server of films alone shows no empty row of anime and
  * nobody meets a heading standing over nothing.
  *
@@ -97,8 +97,9 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   }
 
   /* Each section as it is drawn, laid out below in the order the viewer
-     chose. */
-  const sections: Record<HomeSection, React.ReactNode> = {
+     chose. The row of a kind of library this server does not hold has
+     nothing to draw, and is not drawn. */
+  const sections: Partial<Record<HomeSection, React.ReactNode>> = {
     /* Where to go for somebody who already knows what they want. */
     band: <Band shelves={home.shelves} libraries={libraries} />,
 
@@ -172,17 +173,20 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       </section>
     ),
 
-    /* One row per kind of library this server really holds. */
-    libraries: home.shelves.map((shelf) => (
-      <Shelf
-        key={shelf.kind}
-        title={newestOfKind(shelf.kind, libraries, t)}
-        mark={<KindIcon kind={shelf.kind} size={24} />}
-        cards={shelf.cards}
-        shape={cardShapeOf(shelf.kind)}
-        to={whereAKindLeads(shelf.kind, libraries)}
-      />
-    )),
+    /* The newest of each kind of library this server really holds, a
+       section each. */
+    ...Object.fromEntries(
+      home.shelves.map((shelf) => [
+        `newest:${shelf.kind}`,
+        <Shelf
+          title={newestOfKind(shelf.kind, libraries, t)}
+          mark={<KindIcon kind={shelf.kind} size={24} />}
+          cards={shelf.cards}
+          shape={cardShapeOf(shelf.kind)}
+          to={whereAKindLeads(shelf.kind, libraries)}
+        />,
+      ]),
+    ),
   };
 
   return (

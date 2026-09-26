@@ -12,17 +12,23 @@
 import type { HomeSection, LibraryKind } from "../../api";
 import { PageHead, Panel, Setting, Slider, Toggle } from "../../components/panel";
 import { Sortable } from "../../components/sortable";
-import { HomeIcon, ImageIcon, KindIcon, SlidersIcon } from "../../icons";
 import {
-  kindsOnTheHomePage,
-  nameOfKind,
-  reorderedOnTheHomePage,
-  useLibraries,
-} from "../../libraries";
+  BinocularsIcon,
+  CameraIcon,
+  CollectionIcon,
+  EyeIcon,
+  HomeIcon,
+  ImageIcon,
+  KindIcon,
+  SlidersIcon,
+} from "../../icons";
+import { kindsOnTheHomePage, nameOfKind, newestOfKind, useLibraries } from "../../libraries";
 import { useMarks } from "../../marks";
+import { kindOfSection, sectionsOnOffer } from "../../screens/home";
 import { usePreferences } from "../../screens/settings";
 import type { Preferences } from "../../screens/settings";
 import { useSettings } from "../../settings";
+import { reorderedAmong } from "../../sorting";
 import { shareOfThePictureKept } from "./banner";
 
 export function MyHomePage() {
@@ -127,19 +133,25 @@ function Banner({ preferences }: { preferences: Preferences }) {
 
 /**
  * The sections of the home page below its banner: in which order, and which
- * of them it shows. A hidden section keeps its place in the list, so shown
- * again it comes back where it was.
+ * of them it shows. The newest of each kind of library is a section of its
+ * own, offered only for the kinds this account holds. A hidden section keeps
+ * its place in the list, so shown again it comes back where it was.
  */
 function HomeSections({ preferences }: { preferences: Preferences }) {
   const { t } = useSettings();
   const marks = useMarks();
+  const libraries = useLibraries();
   const { kept, change } = preferences;
 
   if (!kept) {
     return null;
   }
   const hidden = kept.hidden_home_sections;
-  const name = (section: HomeSection) => t(`home_section.${section}`);
+  const offered = sectionsOnOffer(kept.home_sections, kindsOnTheHomePage(kept.home_order, libraries.all));
+  const name = (section: HomeSection) => {
+    const kind = kindOfSection(section);
+    return kind ? newestOfKind(kind, libraries.all, t) : t(`home_section.${section}`);
+  };
 
   // The home page is read again once the server holds the change, so it is
   // already right when somebody goes back to it.
@@ -153,14 +165,19 @@ function HomeSections({ preferences }: { preferences: Preferences }) {
   return (
     <Panel icon={SlidersIcon} title={t("settings.home_sections")} lead={t("settings.home_sections_why")}>
       <Sortable
-        items={kept.home_sections}
+        items={offered}
         keyOf={(section) => section}
         nameOf={name}
-        onMove={(home_sections) => change({ home_sections }).then(marks.rowsHaveMoved)}
+        onMove={(reordered) =>
+          change({ home_sections: reorderedAmong(kept.home_sections, offered, reordered) }).then(
+            marks.rowsHaveMoved,
+          )
+        }
         lineClass={(section) => (hidden.includes(section) ? "order-line-off" : undefined)}
       >
         {(section) => (
           <>
+            <SectionMark section={section} />
             <span className="order-name">{name(section)}</span>
             <Toggle
               label={t("settings.home_section_shown", { name: name(section) })}
@@ -174,9 +191,31 @@ function HomeSections({ preferences }: { preferences: Preferences }) {
   );
 }
 
+/** What each section is drawn with on the home page, so a line of the list
+ *  is found by eye as well as by its name. */
+function SectionMark({ section }: { section: HomeSection }) {
+  const kind = kindOfSection(section);
+  return (
+    <span className="line-mark" aria-hidden="true">
+      {kind ? (
+        <KindIcon kind={kind} size={18} />
+      ) : section === "band" ? (
+        <CollectionIcon size={18} />
+      ) : section === "carry_on" ? (
+        <EyeIcon size={18} />
+      ) : section === "up_next" ? (
+        <BinocularsIcon size={18} />
+      ) : (
+        <CameraIcon size={18} />
+      )}
+    </span>
+  );
+}
+
 /**
- * The order the home page lays the kinds of library out in, its tiles and its
- * rows alike. Only the kinds this account holds are offered.
+ * The order of the tiles leading to each kind of library. Only the kinds
+ * this account holds are offered; the rows of each kind are placed in the
+ * order of the home page above.
  */
 function LibraryOrder({ preferences }: { preferences: Preferences }) {
   const { t } = useSettings();
@@ -199,7 +238,7 @@ function LibraryOrder({ preferences }: { preferences: Preferences }) {
           keyOf={(kind) => kind}
           nameOf={(kind) => nameOfKind(kind, libraries.all, t)}
           onMove={(reordered: LibraryKind[]) =>
-            change({ home_order: reorderedOnTheHomePage(kept.home_order, shown, reordered) }).then(
+            change({ home_order: reorderedAmong(kept.home_order, shown, reordered) }).then(
               marks.rowsHaveMoved,
             )
           }
