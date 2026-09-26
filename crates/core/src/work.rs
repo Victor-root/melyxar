@@ -272,11 +272,16 @@ impl ResumeRules {
 
 /// The state a reported position leaves a work in, and the position kept.
 ///
-/// A manual mark always wins. Without a known length any progress means the
-/// work was started. Otherwise, in this order: from the largest share on, or
-/// at the end, it is watched; below the smallest share it was only glanced
-/// at, and starts again from the beginning; a work too short to come back to
-/// is watched once past that smallest share; anything else is in progress.
+/// Without a known length any progress means the work was started.
+/// Otherwise, in this order: from the largest share on, or at the end, it is
+/// watched; below the smallest share it was only glanced at; a work too short
+/// to come back to is watched once past that smallest share; anything else
+/// is in progress. Only a work in progress keeps where it was: one watched
+/// has nowhere left to be picked up from, and one glanced at starts again.
+///
+/// A work marked watched by hand stays watched whatever is reported, and
+/// keeps where it was when it is being watched again partway, so it can be
+/// picked up from there like any other.
 ///
 /// A pure function so it can be tested exhaustively and reused by every client.
 pub fn progress_after(
@@ -285,25 +290,25 @@ pub fn progress_after(
     rules: ResumeRules,
     manually_marked: bool,
 ) -> (PlaybackState, Millis) {
-    if manually_marked {
-        return (PlaybackState::Watched, position);
-    }
-    let Some(duration) = duration.filter(|value| value.get() > 0) else {
-        let state = match position.get() > 0 {
-            true => PlaybackState::InProgress,
-            false => PlaybackState::NotStarted,
-        };
-        return (state, position);
+    let (state, kept) = match duration.filter(|value| value.get() > 0) {
+        None if position.get() > 0 => (PlaybackState::InProgress, position),
+        None => (PlaybackState::NotStarted, Millis::ZERO),
+        Some(duration) => {
+            let percent = position.ratio_of(duration) * 100.0;
+            if position >= duration || percent >= rules.max_percent as f64 {
+                (PlaybackState::Watched, Millis::ZERO)
+            } else if position.get() <= 0 || percent < rules.min_percent as f64 {
+                (PlaybackState::NotStarted, Millis::ZERO)
+            } else if duration.get() < rules.min_seconds * 1_000 {
+                (PlaybackState::Watched, Millis::ZERO)
+            } else {
+                (PlaybackState::InProgress, position)
+            }
+        }
     };
-    let percent = position.ratio_of(duration) * 100.0;
-    if position >= duration || percent >= rules.max_percent as f64 {
-        (PlaybackState::Watched, position)
-    } else if position.get() <= 0 || percent < rules.min_percent as f64 {
-        (PlaybackState::NotStarted, Millis::ZERO)
-    } else if duration.get() < rules.min_seconds * 1_000 {
-        (PlaybackState::Watched, position)
-    } else {
-        (PlaybackState::InProgress, position)
+    match manually_marked {
+        true => (PlaybackState::Watched, kept),
+        false => (state, kept),
     }
 }
 
@@ -482,9 +487,9 @@ mod tests {
     }
 
     #[test]
-    fn a_position_past_the_largest_share_counts_as_watched() {
-        assert_eq!(after(3_300_000, Some(HOUR)).0, PlaybackState::Watched);
-        assert_eq!(after(3_600_000, Some(HOUR)).0, PlaybackState::Watched);
+    fn a_position_past_the_largest_share_is_watched_with_nowhere_left_to_resume() {
+        assert_eq!(after(3_300_000, Some(HOUR)), (PlaybackState::Watched, Millis::ZERO));
+        assert_eq!(after(3_600_000, Some(HOUR)), (PlaybackState::Watched, Millis::ZERO));
     }
 
     #[test]
@@ -506,16 +511,26 @@ mod tests {
     #[test]
     fn a_work_too_short_to_come_back_to_is_watched_once_past_the_smallest_share() {
         let clip = Some(Millis::new(100_000));
-        assert_eq!(after(30_000, clip).0, PlaybackState::Watched);
+        assert_eq!(after(30_000, clip), (PlaybackState::Watched, Millis::ZERO));
         assert_eq!(after(2_000, clip), (PlaybackState::NotStarted, Millis::ZERO));
         let longer = Some(Millis::new(121_000));
         assert_eq!(after(30_000, longer).0, PlaybackState::InProgress);
     }
 
     #[test]
-    fn a_manual_mark_wins_over_every_rule() {
-        let marked = progress_after(Millis::ZERO, Some(HOUR), RULES, true);
-        assert_eq!(marked.0, PlaybackState::Watched);
+    fn a_manual_mark_wins_over_every_rule_and_keeps_where_it_is_watched_again() {
+        let marked = |position_ms| progress_after(Millis::new(position_ms), Some(HOUR), RULES, true);
+        assert_eq!(marked(0), (PlaybackState::Watched, Millis::ZERO));
+        assert_eq!(
+            marked(900_000),
+            (PlaybackState::Watched, Millis::new(900_000)),
+            "watched again partway, it can be picked up from there"
+        );
+        assert_eq!(
+            marked(3_500_000),
+            (PlaybackState::Watched, Millis::ZERO),
+            "watched again to the end, there is nowhere left to pick up"
+        );
     }
 
     #[test]

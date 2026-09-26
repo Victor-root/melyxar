@@ -120,8 +120,9 @@ impl Database {
     /// whole library. The position travels with it, so a card can show how far
     /// in it is without asking again per film.
     ///
-    /// Only what is really unfinished: a film somebody marked watched, or
-    /// played to its end, has nothing to carry on.
+    /// Only what has a place to carry on from: playing a film to its end, or
+    /// marking it watched, lets go of the position, and a film watched once
+    /// and started again is here until then, marked watched or not.
     pub async fn works_to_carry_on(
         &self,
         user_id: UserId,
@@ -149,7 +150,7 @@ impl Database {
              JOIN works w ON w.id = p.work_id
              LEFT JOIN works season ON season.id = w.parent_id AND w.kind = 'episode'
              LEFT JOIN works series ON series.id = season.parent_id
-             WHERE p.user_id = ? AND p.state = 'in_progress'{inside}
+             WHERE p.user_id = ? AND p.position_ms > 0{inside}
              ORDER BY p.last_played_at DESC, w.sort_title
              LIMIT ?"
         )))
@@ -325,7 +326,7 @@ impl Database {
                  -- milliseconds on an account with twenty thousand of them,
                  -- against a budget of thirty; bounded here it is four. What
                  -- the bound costs is written in the decisions.
-                 SELECT work_id, state, last_played_at
+                 SELECT work_id, state, position_ms, last_played_at
                    FROM playback_progress
                   WHERE user_id = ?1 AND last_played_at IS NOT NULL
                   ORDER BY last_played_at DESC
@@ -346,7 +347,7 @@ impl Database {
                   WHERE s.parent_id IS NOT NULL{inside}
                   GROUP BY s.parent_id
                  HAVING sum(CASE WHEN q.state = 'watched' THEN 1 ELSE 0 END) > 0
-                    AND sum(CASE WHEN q.state = 'in_progress' THEN 1 ELSE 0 END) = 0
+                    AND sum(CASE WHEN q.position_ms > 0 THEN 1 ELSE 0 END) = 0
                   ORDER BY touched_at DESC
                   LIMIT ?3
              ),
@@ -593,9 +594,11 @@ impl Database {
     /// contradicting each other.
     ///
     /// The mark is written as a manual one, which is what makes it outlast
-    /// whatever a player reports afterwards. Unmarking takes the position with
-    /// it: a series put back to unwatched that still offered to carry on
-    /// halfway through would be saying two things at once.
+    /// whatever a player reports afterwards. Marking watched lets go of the
+    /// position, since there is nothing left to carry on. Unmarking keeps it:
+    /// a film watched once and started again is still where it was stopped,
+    /// and saying it is not watched after all does not move anybody back to
+    /// the beginning.
     ///
     /// Answers how many works it wrote, so a caller can tell a work that was
     /// marked from a name that means nothing here.
@@ -623,11 +626,13 @@ impl Database {
                      AND (t.parent_id = ?5
                           OR t.parent_id IN (SELECT id FROM works WHERE parent_id = ?5)))
              ON CONFLICT (user_id, work_id) DO UPDATE SET
-                state = excluded.state,
+                state = CASE WHEN excluded.state = 'watched' THEN 'watched'
+                             WHEN playback_progress.position_ms > 0 THEN 'in_progress'
+                             ELSE 'not_started' END,
                 marked_manually = excluded.marked_manually,
                 position_ms = CASE WHEN excluded.state = 'watched'
-                                   THEN playback_progress.position_ms
-                                   ELSE 0 END,
+                                   THEN 0
+                                   ELSE playback_progress.position_ms END,
                 reported_at = excluded.reported_at,
                 last_played_at = excluded.last_played_at",
         )
@@ -977,8 +982,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn putting_a_film_back_to_unwatched_takes_its_position_with_it() {
+    async fn a_film_watched_and_started_again_keeps_its_place_until_marked_watched_again() {
         let (database, user_id, work_id, _) = one_film().await;
+        database
+            .mark_watched(user_id, work_id, true)
+            .await
+            .expect("marked");
         database
             .record_playback_progress(
                 user_id,
@@ -993,7 +1002,48 @@ mod tests {
         database
             .mark_watched(user_id, work_id, false)
             .await
+            .expect("unmarked");
+        let stored = database
+            .playback_progress(user_id, work_id)
+            .await
+            .expect("progress read")
+            .expect("a row was written");
+        assert_eq!(stored.state, PlaybackState::InProgress);
+        assert_eq!(
+            stored.position,
+            Millis::new(920_000),
+            "saying it is not watched after all moves nobody back to the beginning"
+        );
+        assert!(!stored.marked_manually);
+
+        database
+            .mark_watched(user_id, work_id, true)
+            .await
+            .expect("marked again");
+        let stored = database
+            .playback_progress(user_id, work_id)
+            .await
+            .expect("progress read")
+            .expect("a row was written");
+        assert_eq!(stored.state, PlaybackState::Watched);
+        assert_eq!(
+            stored.position,
+            Millis::ZERO,
+            "a work marked watched has nothing left to carry on"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_film_never_started_goes_back_to_not_started_when_unmarked() {
+        let (database, user_id, work_id, _) = one_film().await;
+        database
+            .mark_watched(user_id, work_id, true)
+            .await
             .expect("marked");
+        database
+            .mark_watched(user_id, work_id, false)
+            .await
+            .expect("unmarked");
 
         let stored = database
             .playback_progress(user_id, work_id)
@@ -1001,11 +1051,7 @@ mod tests {
             .expect("progress read")
             .expect("a row was written");
         assert_eq!(stored.state, PlaybackState::NotStarted);
-        assert_eq!(
-            stored.position,
-            Millis::new(0),
-            "a work put back to unwatched must not still offer to carry on"
-        );
+        assert_eq!(stored.position, Millis::ZERO);
     }
 
     #[tokio::test]
@@ -1264,17 +1310,61 @@ mod tests {
             "where it stopped travels with it, rather than being asked for per film"
         );
 
-        // A film watched to its end has nothing to carry on.
+        // A film watched to its end has nothing to carry on, and lets go of
+        // where it stopped.
         database
             .record_playback_progress(
                 user_id,
                 work_id,
-                Millis::new(7_000_000),
+                Millis::ZERO,
                 PlaybackState::Watched,
                 datetime!(2026-01-01 13:00 UTC),
             )
             .await
             .expect("recorded");
+        assert!(database
+            .works_to_carry_on(user_id, None, 20)
+            .await
+            .expect("read")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_film_watched_and_started_again_is_carried_on_until_marked_watched_again() {
+        let (database, user_id, work_id, _) = one_film().await;
+        database
+            .mark_watched(user_id, work_id, true)
+            .await
+            .expect("marked");
+        database
+            .record_playback_progress(
+                user_id,
+                work_id,
+                Millis::new(1_800_000),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("recorded");
+
+        let carrying_on = database.works_to_carry_on(user_id, None, 20).await.expect("read");
+        assert_eq!(carrying_on.len(), 1, "watched once, it still has a place to carry on from");
+        assert_eq!(carrying_on[0].position, Millis::new(1_800_000));
+
+        database
+            .mark_watched(user_id, work_id, false)
+            .await
+            .expect("unmarked");
+        assert_eq!(
+            database.works_to_carry_on(user_id, None, 20).await.expect("read").len(),
+            1,
+            "unmarking changes nothing about where it stopped"
+        );
+
+        database
+            .mark_watched(user_id, work_id, true)
+            .await
+            .expect("marked again");
         assert!(database
             .works_to_carry_on(user_id, None, 20)
             .await
