@@ -2358,26 +2358,54 @@ input[type="radio"]:disabled {
   z-index: 1;
 }
 
+/* A work with no picture: its first letter in the lettering of the name of
+   the server, on a dark ground the accent lights faintly from above, rather
+   than a heavy grey letter on flat grey that read as a card that failed to
+   load. */
 .card-initial {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 44px;
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--accent) var(--no-picture-glow), transparent),
+      transparent 70%
+    ),
+    linear-gradient(
+      color-mix(in srgb, var(--surface-deep) 40%, var(--card-color)),
+      color-mix(in srgb, var(--surface-deep) 75%, var(--card-color))
+    );
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: 52px;
   font-weight: 700;
-  color: color-mix(in srgb, var(--text) 40%, transparent);
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text) 30%, transparent);
 }
 
 .card-flag {
   position: absolute;
   left: 8px;
   top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 3px 8px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--surface-deep) 90%, transparent);
   font-size: 11px;
   color: var(--text-soft);
   border: 1px solid var(--border-strong);
+}
+
+/* A film nobody could name is something to see to, and says so in the
+   colour this interface keeps for that, with the mark of the filter that
+   gathers them: found at a glance, without the card looking broken. */
+.card-flag-attention {
+  background: color-mix(in srgb, var(--surface-deep) 88%, var(--attention));
+  border-color: color-mix(in srgb, var(--attention) 55%, transparent);
+  color: var(--attention);
 }
 
 /* Where somebody is with a work: a banner folded over the corner of the
@@ -2484,9 +2512,9 @@ input[type="radio"]:disabled {
   --under-the-banner: 54px;
 }
 
-.card-picture:has(.seen-mark-on) :is(img, .card-hover),
-.card:hover .card-picture:has(.seen-mark) :is(img, .card-hover),
-.card:focus-within .card-picture:has(.seen-mark) :is(img, .card-hover) {
+.card-picture:has(.seen-mark-on) :is(img, .card-initial, .card-hover),
+.card:hover .card-picture:has(.seen-mark) :is(img, .card-initial, .card-hover),
+.card:focus-within .card-picture:has(.seen-mark) :is(img, .card-initial, .card-hover) {
   clip-path: polygon(
     0 0,
     calc(100% - var(--under-the-banner)) 0,

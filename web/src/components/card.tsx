@@ -28,7 +28,7 @@ import { useShownPicture } from "./picture";
 import { useWorkMenu } from "./cardmenu";
 import { SelectMark, useChoosingPress } from "./selection";
 import { SeenMark } from "./seen";
-import { HeartIcon, MoreIcon, PlayIcon } from "../icons";
+import { HeartIcon, IdentifyIcon, MoreIcon, PlayIcon } from "../icons";
 
 /** How a card is laid out: standing like a poster, or lying like a still. */
 export type CardShape = "standing" | "lying";
@@ -175,7 +175,10 @@ export function Card({
             what the grid already showed, knowing why is what sends somebody to
             rename a file rather than to press the button again. */}
         {unknown && (
-          <span className="card-flag">
+          <span
+            className={`card-flag${card.identification === "unidentified" ? " card-flag-attention" : ""}`}
+          >
+            {card.identification === "unidentified" && <IdentifyIcon size={12} />}
             {card.identification_note
               ? t(`note.short.${card.identification_note}`)
               : t(card.identification === "pending" ? "work.pending" : "work.unidentified")}

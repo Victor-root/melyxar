@@ -248,6 +248,9 @@
   --text-soft: #aab2c0;
   --text-faint: #6f7888;
 
+  /* How much of the accent lights a card that has no picture. */
+  --no-picture-glow: 16%;
+
   --scrim: linear-gradient(to top, #0c0d10 8%, rgba(12, 13, 16, 0.75) 45%, rgba(12, 13, 16, 0) 100%);
   color-scheme: dark;
 }
@@ -265,6 +268,9 @@
   --text-faint: #7b8393;
 
   --accent-glow: rgba(200, 30, 30, 0.22);
+  /* On white a little of it goes a long way: as much as on dark was a blush
+     across the top of the card. */
+  --no-picture-glow: 6%;
   /* Deeper on white, where the bright ones fade to pastel. */
   --ok: #17904f;
   --attention: #b86e00;
