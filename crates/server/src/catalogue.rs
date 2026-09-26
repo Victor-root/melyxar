@@ -794,6 +794,17 @@ struct WorkView {
     /// Works like this one by a genre they share, and that genre. Absent for
     /// anything but a film or a series, and when nothing shares a genre.
     alike: Option<AlikeView>,
+    /// The saga a film belongs to and every film of it here, the first to
+    /// come out first, this one among them. Absent for a film of no saga, or
+    /// the only one of it here.
+    saga: Option<SagaView>,
+}
+
+/// A saga, and the films of it this account can reach.
+#[derive(Debug, Serialize)]
+struct SagaView {
+    name: String,
+    cards: Vec<CardView>,
 }
 
 /// A row of works like another, and the genre it was found by.
@@ -1110,6 +1121,10 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         alike: detail.alike.as_ref().map(|alike| AlikeView {
             genre: alike.genre.clone(),
             cards: alike.cards.iter().map(card_view).collect(),
+        }),
+        saga: detail.saga.as_ref().map(|saga| SagaView {
+            name: saga.name.clone(),
+            cards: saga.cards.iter().map(card_view).collect(),
         }),
         children: detail.children.iter().map(child_view).collect(),
         siblings: detail.siblings.iter().map(child_view).collect(),

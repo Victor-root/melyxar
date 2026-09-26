@@ -415,6 +415,13 @@ impl Database {
 /// row this long fills the width of most screens.
 const A_ROW_OF_ALIKE: i64 = 6;
 
+/// The saga a work belongs to, and every work of it an account can reach.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Saga {
+    pub name: String,
+    pub cards: Vec<WorkCard>,
+}
+
 /// A row of works like one other, and the genre they were found by.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Alike {
@@ -511,6 +518,59 @@ impl Database {
         self.attach_posters(&mut cards).await?;
         self.attach_viewer_state(viewer, &mut cards).await?;
         Ok(Some(Alike { genre, cards }))
+    }
+
+    /// The saga a work belongs to, with every work of it this account can
+    /// reach, itself included, in the order they came out.
+    ///
+    /// Nothing when it belongs to none, and nothing either when it is the
+    /// only one of its saga here: a row holding only the page it stands on
+    /// says nothing.
+    pub async fn saga_of(
+        &self,
+        viewer: UserId,
+        work_id: WorkId,
+        within: Option<&[LibraryId]>,
+    ) -> Result<Option<Saga>> {
+        let Some(inside) = kept_inside(within, "w.library_id") else {
+            return Ok(None);
+        };
+        let saga: Option<(String, String)> = sqlx::query_as(
+            "SELECT c.id, c.name FROM collections c
+               JOIN collection_items ci ON ci.collection_id = c.id
+              WHERE ci.work_id = ?
+              ORDER BY c.origin = 'provider' DESC, c.sort_name
+              LIMIT 1",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+        let Some((saga_id, name)) = saga else {
+            return Ok(None);
+        };
+
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_CARD_IS}
+               FROM works w
+               JOIN collection_items ci ON ci.work_id = w.id AND ci.collection_id = ?{inside}
+              ORDER BY w.release_year IS NULL, w.release_year, w.sort_title"
+        )))
+        .bind(&saga_id);
+        for library in within.unwrap_or_default() {
+            query = query.bind(library.to_db_string());
+        }
+        let rows = query.fetch_all(self.reader()).await?;
+        if rows.len() < 2 {
+            return Ok(None);
+        }
+
+        let mut cards = rows
+            .iter()
+            .map(crate::browse::card_from_row)
+            .collect::<Result<Vec<_>>>()?;
+        self.attach_posters(&mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards).await?;
+        Ok(Some(Saga { name, cards }))
     }
 }
 
@@ -819,6 +879,73 @@ mod tests {
                 .expect("read"),
             None,
             "a genre nothing else carries makes no row"
+        );
+    }
+
+    /// Puts works in a saga, as the provider would have.
+    async fn in_a_saga(database: &Database, name: &str, works: &[WorkId]) {
+        let saga = melyxar_core::id::CollectionId::new().to_db_string();
+        sqlx::query(
+            "INSERT INTO collections (id, name, sort_name, origin, created_at)
+             VALUES (?, ?, ?, 'provider', '2026-09-26T00:00:00Z')",
+        )
+        .bind(&saga)
+        .bind(name)
+        .bind(name.to_lowercase())
+        .execute(database.writer())
+        .await
+        .expect("saga written");
+        for work in works {
+            sqlx::query("INSERT INTO collection_items (collection_id, work_id) VALUES (?, ?)")
+                .bind(&saga)
+                .bind(work.to_db_string())
+                .execute(database.writer())
+                .await
+                .expect("work put in the saga");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_saga_holds_every_work_of_it_here_in_the_order_they_came_out() {
+        let (database, _, who, films) = a_shelf(&[
+            ("Iron Tide", 7.0, "Action"),
+            ("Copper Wind", 6.0, "Action"),
+            ("Silver Gale", 8.0, "Action"),
+            ("Quiet Pond", 9.0, "Drame"),
+        ])
+        .await;
+        for (film, year) in [(films[0], 2012), (films[1], 2008), (films[2], 2019)] {
+            sqlx::query("UPDATE works SET release_year = ? WHERE id = ?")
+                .bind(year)
+                .bind(film.to_db_string())
+                .execute(database.writer())
+                .await
+                .expect("year set");
+        }
+        in_a_saga(&database, "Tide Saga", &[films[0], films[1], films[2]]).await;
+        in_a_saga(&database, "Pond Saga", &[films[3]]).await;
+
+        let saga = database
+            .saga_of(who, films[0], None)
+            .await
+            .expect("read")
+            .expect("a saga");
+        assert_eq!(saga.name, "Tide Saga");
+        assert_eq!(
+            saga.cards.iter().map(|card| card.id).collect::<Vec<_>>(),
+            vec![films[1], films[0], films[2]],
+            "every one of it, itself included, the first to come out first"
+        );
+
+        assert_eq!(
+            database.saga_of(who, films[3], None).await.expect("read"),
+            None,
+            "a saga of one here makes no row"
+        );
+        assert_eq!(
+            database.saga_of(who, films[0], Some(&[])).await.expect("read"),
+            None,
+            "an account granted nothing is offered nothing"
         );
     }
 
