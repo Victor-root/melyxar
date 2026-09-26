@@ -113,3 +113,33 @@ export function frameStats(gaps: number[], frame: number): FrameStats {
     worst: gaps.length > 0 ? Math.max(...gaps) : 0,
   };
 }
+
+/** One frame drawn, and how long the main thread held it. */
+export interface Drawn {
+  at: number;
+  gap: number;
+  /** From the start of the frame to the recorder's turn in it: what the page
+      did first with the scrolling and the hand. */
+  before: number;
+  /** From there until the frame was painted: the page's other work for the
+      frame, then style, layout and paint. Unknown until it was painted. */
+  painting?: number;
+}
+
+/** How long the main thread held one frame. */
+export function heldFor(drawn: Drawn): number {
+  return drawn.before + (drawn.painting ?? 0);
+}
+
+/** Below this share of a frame, the main thread had room to spare. */
+const ROOM_TO_SPARE = 0.6;
+
+/**
+ * Whether the main thread is what made a frame late: the frame before it
+ * held it for most of a frame's worth of time, so the next one could not
+ * start on time. Otherwise the time went elsewhere: the compositor, the
+ * pictures or the graphics card.
+ */
+export function heldUpByTheMainThread(previous: Drawn | undefined, frame: number): boolean {
+  return previous !== undefined && heldFor(previous) > frame * ROOM_TO_SPARE;
+}

@@ -14,8 +14,15 @@
  */
 
 import { putOnTheClipboard } from "./clipboard";
-import type { Pass, Scrolled } from "./measure-report";
-import { frameStats, framesLost, passesOf, percentile } from "./measure-report";
+import type { Drawn, Pass, Scrolled } from "./measure-report";
+import {
+  frameStats,
+  framesLost,
+  heldFor,
+  heldUpByTheMainThread,
+  passesOf,
+  percentile,
+} from "./measure-report";
 
 const ARMED = "melyxar.measure";
 
@@ -51,7 +58,7 @@ interface Loaded {
 }
 
 interface Recording {
-  frames: { at: number; gap: number }[];
+  frames: Drawn[];
   scrolls: Scrolled[];
   sideways: number;
   loaded: Loaded[];
@@ -114,12 +121,30 @@ function begin() {
   recording = now;
   performance.setResourceTimingBufferSize(5000);
 
+  /* How long the main thread holds each frame, however short. The browser
+     only describes frames of more than fifty milliseconds, and a frame lost
+     while scrolling is one of thirty three: without this, every one of them
+     read as the main thread being free. A message posted from the recorder's
+     turn in a frame is only answered once that frame has been painted. */
+  const painted = new MessageChannel();
+  const waiting: { drawn: Drawn; turn: number }[] = [];
+  painted.port1.onmessage = () => {
+    const one = waiting.shift();
+    if (one) {
+      one.drawn.painting = performance.now() - one.turn;
+    }
+  };
+
   let last = performance.now();
   const tick = (at: number) => {
     if (recording !== now) {
       return;
     }
-    now.frames.push({ at, gap: at - last });
+    const turn = performance.now();
+    const drawn: Drawn = { at, gap: at - last, before: Math.max(0, turn - at) };
+    now.frames.push(drawn);
+    waiting.push({ drawn, turn });
+    painted.port2.postMessage(null);
     last = at;
     requestAnimationFrame(tick);
   };
@@ -357,8 +382,11 @@ function written(now: Recording): string {
       .filter((drawn) => drawn.at >= pass.from && drawn.at <= pass.to + WHILE_SCROLLING_MS)
       .map((drawn) => drawn.gap);
     const stats = frameStats(inside, frame);
+    const held = whileScrolling
+      .filter((drawn) => drawn.at >= pass.from && drawn.at <= pass.to + WHILE_SCROLLING_MS)
+      .map(heldFor);
     say(
-      `pass ${index + 1} ${pass.direction} ${pass.startTop} -> ${pass.endTop} from ${seconds(pass.from)} for ${seconds(pass.to - pass.from)}: ${stats.frames} frames, ${stats.lost} lost, ${stats.stalls} stalls, p50 ${stats.p50.toFixed(1)}, p95 ${stats.p95.toFixed(1)}, worst ${ms(stats.worst)}`,
+      `pass ${index + 1} ${pass.direction} ${pass.startTop} -> ${pass.endTop} from ${seconds(pass.from)} for ${seconds(pass.to - pass.from)}: ${stats.frames} frames, ${stats.lost} lost, ${stats.stalls} stalls, p50 ${stats.p50.toFixed(1)}, p95 ${stats.p95.toFixed(1)}, worst ${ms(stats.worst)} | main thread per frame p50 ${percentile(held, 0.5).toFixed(1)}, p95 ${percentile(held, 0.95).toFixed(1)}, worst ${ms(held.length > 0 ? Math.max(...held) : 0)}`,
     );
   });
 
@@ -377,9 +405,15 @@ function written(now: Recording): string {
     const near = (at: number) => at >= from - AROUND_MS && at <= drawn.at;
     const arrived = now.loaded.filter((loaded) => near(loaded.at)).length;
     const ended = resources.filter((entry) => near(entry.responseEnd)).length;
+    const previous = now.frames[now.frames.indexOf(drawn) - 1];
+    const before = previous
+      ? `frame before held ${ms(heldFor(previous))} (scroll ${ms(previous.before)}, work+style+layout+paint ${ms(previous.painting ?? 0)})`
+      : "no frame before";
     const main =
       busy.length === 0
-        ? "main thread free (compositor, pictures or graphics card)"
+        ? heldUpByTheMainThread(previous, frame)
+          ? `main thread, ${before}`
+          : `main thread light, ${before}: compositor, pictures or graphics card`
         : busy
             .map((long) => {
               const script = long.scripts.reduce((sum, one) => sum + one.duration, 0);

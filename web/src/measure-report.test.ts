@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { frameStats, framesLost, passesOf, percentile } from "./measure-report";
+import {
+  frameStats,
+  framesLost,
+  heldFor,
+  heldUpByTheMainThread,
+  passesOf,
+  percentile,
+} from "./measure-report";
 
 const at = (points: [number, number][]) => points.map(([time, top]) => ({ at: time, top }));
 
@@ -51,5 +58,20 @@ describe("frames", () => {
     const stats = frameStats([16, 17, 16, 50, 17], 16.7);
     expect(stats).toMatchObject({ frames: 5, lost: 2, stalls: 1, worst: 50 });
     expect(percentile([1, 2, 3, 4], 0.5)).toBe(2);
+  });
+});
+
+describe("the main thread's share of a frame", () => {
+  const drawn = (before: number, painting?: number) => ({ at: 0, gap: 16.7, before, painting });
+
+  it("adds what came before the recorder's turn to what came after", () => {
+    expect(heldFor(drawn(2, 5))).toBe(7);
+    expect(heldFor(drawn(2))).toBe(2);
+  });
+
+  it("blames a late frame on the main thread only when the one before left no room", () => {
+    expect(heldUpByTheMainThread(drawn(3, 12), 16.7)).toBe(true);
+    expect(heldUpByTheMainThread(drawn(1, 4), 16.7)).toBe(false);
+    expect(heldUpByTheMainThread(undefined, 16.7)).toBe(false);
   });
 });
