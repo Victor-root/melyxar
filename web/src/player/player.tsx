@@ -288,6 +288,16 @@ function Film({
           stands still on the screen before the film sets off. */}
       {plan && !failed && movingPicture !== pictureKey && <div className="player-veil" />}
 
+      {/* Everything drawn on the film, from the subtitles to the sound bar,
+          needs the film to be drawn with the page. Filling the screen with
+          nothing else in sight, a browser may hand the picture straight to
+          the graphics chip instead, and on some machines it then leaves off
+          whatever small thing appears over it: the maintainer's laptop showed
+          neither the subtitles nor the sound bar until the pointer brought
+          the controls back. A glaze over the whole picture, too faint to
+          see, keeps it drawn with the page. */}
+      <div className="player-glaze" aria-hidden="true" />
+
       {/* What stands in front of the picture before there is one to watch,
           and what is wrong when something is. Over the picture like
           everything else: a notice that pushes the film down the page is a
