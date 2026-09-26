@@ -11,7 +11,7 @@ use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::Work;
 use melyxar_database::browse::WorkCard;
 use melyxar_database::catalogue::{PlayableExtraVideo, SourceAnalysis};
-use melyxar_database::home::Alike;
+use melyxar_database::home::{Alike, Saga};
 use melyxar_database::images::StoredImage;
 
 use crate::{AppState, Result};
@@ -74,6 +74,9 @@ pub struct WorkDetail {
     /// Works like this one, by a genre they share. Only for a film and a
     /// series, which are what genres are written on.
     pub alike: Option<Alike>,
+    /// The saga a film belongs to, with every film of it this account can
+    /// reach. Only for a film, which is what sagas gather.
+    pub saga: Option<Saga>,
 }
 
 /// The episode a page offers to play next, and where in it.
@@ -461,9 +464,18 @@ pub async fn work_detail(
         _ => None,
     };
 
+    let saga = match work.kind {
+        melyxar_core::work::WorkKind::Movie => {
+            let within = crate::reach::within(who);
+            database.saga_of(viewer, work_id, within.as_deref()).await?
+        }
+        _ => None,
+    };
+
     Ok(Some(WorkDetail {
         card: database.card_of(viewer, work_id).await?,
         alike,
+        saga,
         previous_photo,
         next_photo,
         children,
