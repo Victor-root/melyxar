@@ -685,8 +685,8 @@ export interface Work {
   alike: { genre: string; cards: Card[] } | null;
   /** The saga a film belongs to and every film of it here, the first to
    *  come out first, this one among them, then the films where its
-   *  characters come back. Without a name for a film in no saga, whose row
-   *  holds only those films. */
+   *  characters come back. Without a name for a film in no saga or alone
+   *  of its saga here, whose row holds only those films. */
   saga: { name: string | null; cards: Card[] } | null;
 }
 

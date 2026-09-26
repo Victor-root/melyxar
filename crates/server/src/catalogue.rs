@@ -807,7 +807,8 @@ struct WorkView {
 /// its characters come back.
 #[derive(Debug, Serialize)]
 struct SagaView {
-    /// Nothing for a film in no saga, whose row holds only those films.
+    /// Nothing for a film in no saga or alone of its saga here, whose row
+    /// holds only those films.
     name: Option<String>,
     cards: Vec<CardView>,
 }

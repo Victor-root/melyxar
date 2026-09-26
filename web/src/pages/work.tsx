@@ -207,8 +207,9 @@ export function WorkPage() {
 
       {/* The saga first: the films this one follows on from and leads to
           are closer to it than anything sharing a genre. Opened on this one,
-          ringed, so it reads as a place in a run. A film in no saga has the
-          films where its characters come back, and is not among them. */}
+          ringed, so it reads as a place in a run. A film in no saga, or alone
+          of its saga here, has the films where its characters come back, and
+          is not among them. */}
       {work.saga && (
         <section className="section">
           <RowHead
