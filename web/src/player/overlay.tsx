@@ -128,6 +128,9 @@ function isTypedIn(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement && target.type !== "range";
 }
 
+/** How large what a key did is drawn in the middle of the picture. */
+const KEY_SAID_ICON = 46;
+
 /** How long the sound stays said down the side after the last press. */
 const SOUND_SAID_FOR_MS = 1500;
 
@@ -247,6 +250,14 @@ export function Overlay(props: Props) {
     soundSaidFor.current = window.setTimeout(() => setSoundSaid(false), SOUND_SAID_FOR_MS);
   });
   useEffect(() => () => window.clearTimeout(soundSaidFor.current), []);
+  /* What a key just did to the film, said in the middle of the picture. Only
+     for a key: a hand on the mouse is already looking at the button it
+     pressed, while a key is pressed looking at the film. Counted, so that a
+     second press says it again from the start. */
+  const [keyed, setKeyed] = useState<{ what: Keyed; count: number } | null>(null);
+  const sayKey = useRef((what: Keyed) =>
+    setKeyed((was) => ({ what, count: (was?.count ?? 0) + 1 })),
+  );
   /* Where the button that opened the panel stands, across the picture. A panel
      that always opens at one end of the screen leaves a viewer looking for the
      link between the button they pressed and the list that appeared. */
@@ -349,6 +360,7 @@ export function Overlay(props: Props) {
         case "k":
           // Held from whatever has the focus: a button would be pressed again.
           event.preventDefault();
+          sayKey.current(playback.playing ? "pause" : "play");
           playback.playOrPause();
           break;
         case "ArrowLeft":
@@ -356,6 +368,7 @@ export function Overlay(props: Props) {
           // Held from the page: the bar answers to these as a slider and would
           // scroll what is behind it otherwise.
           event.preventDefault();
+          sayKey.current(event.key === "ArrowLeft" ? "back" : "on");
           playback.stepBy(event.key === "ArrowLeft" ? -props.steps.back : props.steps.on);
           break;
         /* The sound alone, without bringing the controls back over the film:
@@ -451,6 +464,14 @@ export function Overlay(props: Props) {
         </div>
       </div>
       <SoundSaid playback={playback} shown={soundSaid} />
+      {keyed && (
+        <KeySaid
+          key={keyed.count}
+          what={keyed.what}
+          steps={props.steps}
+          onDone={() => setKeyed(null)}
+        />
+      )}
     </>
   );
 }
@@ -476,6 +497,30 @@ function SoundSaid({ playback, shown }: { playback: Playback; shown: boolean }) 
       <span className="player-sound-said-number">{Math.round(loud * 100)}</span>
       <span className="player-sound-said-rail" />
       <VolumeIcon level={levelOf(loud)} size={22} />
+    </div>
+  );
+}
+
+/** What a key can do to the film that is said in the middle of it. */
+type Keyed = "play" | "pause" | "back" | "on";
+
+/** What a key just did, in the middle of the picture: a disc that comes up
+ *  and fades away by itself, and is gone once it has. */
+function KeySaid({
+  what,
+  steps,
+  onDone,
+}: {
+  what: Keyed;
+  steps: { back: number; on: number };
+  onDone: () => void;
+}) {
+  return (
+    <div className="player-key-said" aria-hidden="true" onAnimationEnd={onDone}>
+      {what === "play" && <PlayIcon size={KEY_SAID_ICON} />}
+      {what === "pause" && <PauseIcon size={KEY_SAID_ICON} />}
+      {what === "back" && <StepBackIcon seconds={steps.back} size={KEY_SAID_ICON} />}
+      {what === "on" && <StepOnIcon seconds={steps.on} size={KEY_SAID_ICON} />}
     </div>
   );
 }
