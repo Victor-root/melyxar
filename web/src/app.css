@@ -2274,9 +2274,13 @@ input[type="radio"]:disabled {
    Grown rather than reflowed: a transform moves nothing around it, so the
    grid under the pointer stays exactly where it was. Lifted above its
    neighbours while it is grown, or the one it grows over would be drawn on
-   top of it. */
+   top of it.
+
+   Held forward for a hand on the keyboard, and while the card's menu is
+   open, but not for a button merely clicked: a click leaves the button
+   focused, and the card stayed grown after the pointer had left it. */
 .card:hover,
-.card:focus-within {
+.card:has(:focus-visible, [aria-expanded="true"]) {
   transform: scale(1.035);
   z-index: 3;
 }
@@ -2321,12 +2325,12 @@ input[type="radio"]:disabled {
 /* Coming forward, and lit while it is: the rim, and light falling off it
    with no edge of its own, the way a library tile lights up. */
 .card:hover .card-picture::after,
-.card:focus-within .card-picture::after {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-picture::after {
   box-shadow: inset 0 0 0 1.5px var(--accent-bright);
 }
 
 .card:hover .card-picture,
-.card:focus-within .card-picture {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-picture {
   box-shadow:
     var(--shadow-raised),
     0 0 8px color-mix(in srgb, var(--accent) 55%, transparent),
@@ -2335,7 +2339,7 @@ input[type="radio"]:disabled {
 
 @media (prefers-reduced-motion: reduce) {
   .card:hover,
-  .card:focus-within {
+  .card:has(:focus-visible, [aria-expanded="true"]) {
     transform: none;
   }
 }
@@ -2485,7 +2489,7 @@ input[type="radio"]:disabled {
    the grey arrived. It still fades out: leaving, the picture is whole again
    under it at once, and there is nothing behind it to flash. */
 .card:hover .seen-mark,
-.card:focus-within .seen-mark,
+.card:has(:focus-visible, [aria-expanded="true"]) .seen-mark,
 .seen-mark-on {
   opacity: 1;
   transition:
@@ -2502,7 +2506,7 @@ input[type="radio"]:disabled {
    a few points short of its slant so the cut never shows beside it. */
 .card-picture:has(.seen-mark-on),
 .card:hover .card-picture:has(.seen-mark),
-.card:focus-within .card-picture:has(.seen-mark) {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-picture:has(.seen-mark) {
   --under-the-banner: 42px;
 
   background: linear-gradient(
@@ -2518,7 +2522,7 @@ input[type="radio"]:disabled {
 
 .card-picture:has(.seen-mark-on) :is(img, .card-initial, .card-hover),
 .card:hover .card-picture:has(.seen-mark) :is(img, .card-initial, .card-hover),
-.card:focus-within .card-picture:has(.seen-mark) :is(img, .card-initial, .card-hover) {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-picture:has(.seen-mark) :is(img, .card-initial, .card-hover) {
   clip-path: polygon(
     0 0,
     calc(100% - var(--under-the-banner)) 0,
@@ -2576,7 +2580,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .card:hover .card-hover,
-.card:focus-within .card-hover {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-hover {
   opacity: 1;
 }
 
@@ -2613,7 +2617,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .card:hover .card-play,
-.card:focus-within .card-play {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-play {
   transform: translate(-50%, -50%) scale(1);
 }
 
@@ -2679,7 +2683,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .card:hover .select-mark,
-.card:focus-within .select-mark,
+.card:has(:focus-visible, [aria-expanded="true"]) .select-mark,
 .own-cell:hover .select-mark,
 .own-cell:focus-within .select-mark,
 .selecting .select-mark {
@@ -2763,12 +2767,12 @@ button.seen-mark:not(.seen-mark-on):hover {
    says where the whole length ends; left in, it stood between the rim and
    the picture as a strip of its own. */
 .card:hover .card-progress,
-.card:focus-within .card-progress {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-progress {
   background: transparent;
 }
 
 .card:hover .card-progress-done,
-.card:focus-within .card-progress-done {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-progress-done {
   background: var(--accent-bright);
 }
 
@@ -4881,7 +4885,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .hero:hover .hero-step,
-.hero:focus-within .hero-step {
+.hero:has(:focus-visible) .hero-step {
   opacity: 1;
 }
 
