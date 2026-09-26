@@ -1266,6 +1266,9 @@ export interface WideGamutHandling {
 /** What a viewer wants done with a film of wide gamut colour. */
 export type WideGamutChoice = "automatic" | "always_convert" | "never_convert";
 
+/** When a film starts with subtitles nobody picked for it. */
+export type SubtitleMode = "always" | "smart" | "only_forced" | "from_the_file" | "never";
+
 /** One stretch of a film a button offers to skip. */
 export interface PlaybackSegment {
   /** recap, intro, outro or advertisement. */
@@ -1376,6 +1379,8 @@ export interface ViewerPreferences {
   /** Three letter code, or null for no preference: the file then decides. */
   preferred_audio_language: string | null;
   preferred_subtitle_language: string | null;
+  subtitle_mode: SubtitleMode;
+  subtitle_modes: SubtitleMode[];
   downmix_method: string;
   downmix_gain: number;
   /** The range the gain is kept inside, so a slider cannot be dragged

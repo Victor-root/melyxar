@@ -43,6 +43,7 @@ import { MyProfile } from "./pages/settings/profile";
 import { MyAppearance } from "./pages/settings/appearance";
 import { MyHomePage } from "./pages/settings/home";
 import { MyPlayback } from "./pages/settings/playback";
+import { MySubtitles } from "./pages/settings/subtitles";
 import { Door } from "./pages/door";
 import { LibrariesContext, useWatchedLibraries } from "./libraries";
 import { RunningContext, useWatchedWork } from "./running";
@@ -163,6 +164,7 @@ function TheLibrary() {
                 <Route path="appearance" element={<MyAppearance />} />
                 <Route path="home" element={<MyHomePage />} />
                 <Route path="playback" element={<MyPlayback />} />
+                <Route path="subtitles" element={<MySubtitles />} />
               </Route>
               <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
             </Routes>
