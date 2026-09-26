@@ -10,6 +10,7 @@ import { Grid } from "../components/grid";
 import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
 import { ArrowRightIcon, CloseIcon, IdentifyIcon } from "../icons";
+import { letterOfTheTopRow } from "../letters";
 import { cardShapeOf, nameOfKind } from "../libraries";
 import { ORDERS, useBrowsing } from "../screens/browsing";
 import { useSettings } from "../settings";
@@ -38,7 +39,15 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
    */
   const holder = useRef<HTMLDivElement>(null);
   const [jumping, setJumping] = useState<string | null>(null);
-  const [landing, setLanding] = useState<string | null>(null);
+  const [landing, setLanding] = useState<{ work: string; letter: string } | null>(null);
+  /* The letter of the titles at the top of the screen, lit on the rail. */
+  const [reading, setReading] = useState<string | null>(null);
+  /* The letter just jumped to, and where the page stood once it got there.
+     Its row may open on the last titles of the letter before, and it is
+     still the letter somebody asked for; it holds until the page is moved
+     by hand. */
+  const held = useRef<{ letter: string; at: number } | null>(null);
+  const showsLetters = !!filters && filters.initials.length > 1 && order === "title";
 
   const jumpTo = (letter: string) => {
     setJumping(letter);
@@ -47,7 +56,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
       .then(async (page) => {
         const first = page.cards[0]?.id;
         if (first && (await reach(first))) {
-          setLanding(first);
+          setLanding({ work: first, letter });
         }
       })
       .catch(() => {
@@ -58,9 +67,13 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
   };
 
   useEffect(() => {
-    const target = landing
-      ? holder.current?.querySelector<HTMLElement>(`[data-card="${CSS.escape(landing)}"]`)
-      : null;
+    if (!landing) {
+      return;
+    }
+    const { work, letter } = landing;
+    const target = holder.current?.querySelector<HTMLElement>(
+      `[data-card="${CSS.escape(work)}"]`,
+    );
     // Not drawn yet: the cards that hold it are on their way to the screen,
     // and this runs again when they arrive.
     if (!target) {
@@ -100,12 +113,48 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
       if (still < STILL_FRAMES && frames < LANDING_FRAMES) {
         next = requestAnimationFrame(land);
       } else {
+        held.current = { letter, at: box.scrollTop };
+        setReading(letter);
         setLanding(null);
       }
     };
     land();
     return () => cancelAnimationFrame(next);
   }, [landing, cards]);
+
+  /* Which letter is on the screen, read again as the page moves: the one
+     most of the top row is filed under. */
+  useEffect(() => {
+    const grid = holder.current;
+    const box = grid ? scrollerOf(grid) : null;
+    if (!showsLetters || !grid || !box) {
+      return;
+    }
+    const filedUnder = new Map(cards.map((card) => [card.id, card.initial]));
+    let asked = 0;
+    const read = () => {
+      asked = 0;
+      const jumped = held.current;
+      if (jumped && Math.abs(box.scrollTop - jumped.at) <= A_NUDGE) {
+        setReading(jumped.letter);
+        return;
+      }
+      held.current = null;
+      setReading(letterAtTheTop(grid, box, filedUnder));
+    };
+    const soon = () => {
+      if (!asked) {
+        asked = requestAnimationFrame(read);
+      }
+    };
+    read();
+    box.addEventListener("scroll", soon, { passive: true });
+    return () => {
+      box.removeEventListener("scroll", soon);
+      cancelAnimationFrame(asked);
+    };
+  }, [cards, showsLetters]);
+  const lit = jumping ?? reading;
 
   return (
     <main className="page">
@@ -220,7 +269,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
             nowhere reads as a fault. One letter alone is no choice, and a
             grid read by year or by rating is not in the order of its
             letters, so there is nowhere for one to lead. */}
-        {filters && filters.initials.length > 1 && order === "title" && (
+        {showsLetters && (
           <nav
             className="letters"
             aria-label={t("library.letters")}
@@ -230,9 +279,10 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
               <button
                 key={entry.name}
                 type="button"
-                className={`letter${jumping === entry.name ? " letter-on" : ""}`}
+                className={`letter${lit === entry.name ? " letter-on" : ""}`}
                 onClick={() => jumpTo(entry.name)}
                 title={t("library.count", { count: entry.works })}
+                aria-current={lit === entry.name ? "location" : undefined}
               >
                 {entry.name.toUpperCase()}
               </button>
@@ -241,10 +291,11 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
         )}
       </div>
 
-      {loading && <p className="notice">{t("library.loading")}</p>}
-      {!loading && !more && cards.length > 0 && (
-        <p className="notice notice-faint">{t("library.end")}</p>
-      )}
+      {/* Said only while there is nothing on the screen yet. Once there is,
+          the next cards are fetched well before the end comes into view, and
+          a line under the grid about it, or about there being no more, only
+          stood in the way. */}
+      {loading && cards.length === 0 && <p className="notice">{t("library.loading")}</p>}
     </main>
   );
 }
@@ -255,6 +306,29 @@ const STILL_FRAMES = 6;
 /** The most frames a jump is given to settle, under a second: long enough for
  *  the cards around it to be drawn, and never a page that fights a hand. */
 const LANDING_FRAMES = 45;
+
+/** How far the page may move after a jump before the letter jumped to gives
+ *  way to the one on the screen: less than any hand moves it. */
+const A_NUDGE = 2;
+
+/** The letter of the titles at the top of the grid, where the bar at the top
+ *  of the screen stops. */
+function letterAtTheTop(
+  grid: HTMLElement,
+  box: HTMLElement,
+  filedUnder: Map<string, string>,
+): string | null {
+  const room = parseFloat(getComputedStyle(box).getPropertyValue("--header-room")) || 0;
+  const drawn = grid.querySelectorAll<HTMLElement>("[data-card]");
+  return letterOfTheTopRow(
+    drawn.length,
+    (index) => {
+      const { top, height } = drawn[index].getBoundingClientRect();
+      return { top, height, letter: filedUnder.get(drawn[index].dataset.card ?? "") };
+    },
+    box.getBoundingClientRect().top + room,
+  );
+}
 
 /** The box a page scrolls in, which is not the window here: the nearest one
  *  above the element that can be scrolled up and down. */

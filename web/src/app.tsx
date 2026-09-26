@@ -16,7 +16,6 @@ import { api } from "./api";
 import { AttentionProvider } from "./attention";
 import { AdministrationLine } from "./live";
 import { Header } from "./components/header";
-import { isSectioned } from "./components/sectioned";
 import { ScrollBar } from "./components/scrollbar";
 import { Toasts } from "./components/toasts";
 import { DebugJournal } from "./components/debug-journal";
@@ -167,11 +166,13 @@ function TheLibrary() {
               </Route>
               <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
             </Routes>
-            {/* Said on the home page and the grids, where the provider's
-                pictures and words are shown. Not on the tools and somebody's
-                own settings, which show none of them, nor on the page of a
-                work or of a person, which is meant to be the film alone. */}
-            {!isSectioned(location.pathname) && !/^\/(work|person)\//.test(location.pathname) && (
+            {/* Said once, on the home page, where the provider's pictures and
+                words are shown first. Not under a grid, which is read to its
+                end to find a film and where a line of small print only
+                stands in the way, nor on the tools and somebody's own
+                settings, which show none of them, nor on the page of a work
+                or of a person, which is meant to be the film alone. */}
+            {location.pathname === "/" && (
               <footer className="footer">
                 <span>{t("attribution.tmdb")}</span>
               </footer>

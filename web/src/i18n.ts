@@ -175,7 +175,6 @@ const en: Dictionary = {
   "library.filter.clear": "Remove the {name} filter",
   "library.empty": "No matching titles.",
   "library.loading": "Loading",
-  "library.end": "End of results",
 
   "search.placeholder": "Search for a title",
 
@@ -1372,7 +1371,6 @@ const fr: Dictionary = {
   "library.filter.clear": "Retirer le filtre {name}",
   "library.empty": "Aucun titre correspondant.",
   "library.loading": "Chargement",
-  "library.end": "Fin des résultats",
 
   "search.placeholder": "Rechercher un titre",
 

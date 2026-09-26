@@ -197,14 +197,31 @@ pub enum Initial {
 /// button alike.
 const OTHER_INITIAL: &str = "#";
 
+/// The letter a work is filed under, read from its ordering title under the
+/// name `w`: its first letter, or the bucket for everything else.
+///
+/// Written once for the row of letters and for the cards alike, so the
+/// letter a card says it is under is always one the row offers.
+macro_rules! initial_of_a_title {
+    () => {
+        "CASE WHEN substr(w.sort_title, 1, 1) BETWEEN 'a' AND 'z'
+              THEN substr(w.sort_title, 1, 1)
+              ELSE '#'
+         END"
+    };
+}
+
 /// The columns a card is read from, always under the name `w`.
 ///
 /// Written once because five queries now answer with cards, and a column one
 /// of them forgot is a card that cannot be read back at all.
-pub(crate) const WHAT_A_CARD_IS: &str =
+pub(crate) const WHAT_A_CARD_IS: &str = concat!(
     "w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
      w.community_rating, w.identification, w.identification_note,
-     w.dominant_color, w.added_at";
+     w.dominant_color, w.added_at, ",
+    initial_of_a_title!(),
+    " AS initial"
+);
 
 /// The clause that keeps a read inside the libraries an account was granted.
 ///
@@ -317,6 +334,10 @@ pub struct WorkCard {
     /// moment instead of grey holes.
     pub dominant_color: Option<String>,
     pub added_at: Timestamp,
+    /// The letter it is filed under in a grid read by title, or `#` for a
+    /// title beginning with no letter: what a row of letters lights up for the
+    /// titles on the screen.
+    pub initial: String,
     /// Every size of the poster, largest first.
     pub poster: Vec<StoredImage>,
     /// A picture wider than it is tall, for the rows that lie a card down
@@ -946,20 +967,16 @@ impl Database {
     ) -> Result<Vec<(String, i64)>> {
         // The bucket for everything beginning with no letter sorts before the
         // letters, which is where a row of them wants it.
-        let counted = "SELECT CASE
-                           WHEN substr(sort_title, 1, 1) BETWEEN 'a' AND 'z'
-                           THEN substr(sort_title, 1, 1)
-                           ELSE '#'
-                         END AS initial,
-                         count(*) AS total
-                       FROM works
-                       WHERE ";
-        let counted = format!("{counted}{}", met_on_its_own(""));
+        let counted = format!(
+            "SELECT {} AS initial, count(*) AS total FROM works w WHERE {}",
+            initial_of_a_title!(),
+            met_on_its_own("w.")
+        );
 
         let rows = match library_id {
             Some(id) => {
                 sqlx::query(AssertSqlSafe(format!(
-                    "{counted} AND library_id = ? GROUP BY initial ORDER BY initial"
+                    "{counted} AND w.library_id = ? GROUP BY initial ORDER BY initial"
                 )))
                 .bind(id.to_db_string())
                 .fetch_all(self.reader())
@@ -1044,6 +1061,7 @@ pub(crate) fn card_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<WorkCard> {
         identification_note: crate::catalogue::identification_note_from_row(row)?,
         dominant_color: row.try_get("dominant_color")?,
         added_at: parse_timestamp(&row.try_get::<String, _>("added_at")?)?,
+        initial: row.try_get("initial")?,
         poster: Vec::new(),
         wide: Vec::new(),
         state: None,
@@ -2209,6 +2227,47 @@ mod tests {
             starting_at("#").await,
             vec!["2 Lost Days"],
             "everything beginning with no letter shares one bucket"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_card_says_the_letter_it_is_filed_under() {
+        // What lights up the letter of the titles on the screen, so it is the
+        // ordering title that decides, exactly as it decides where a letter
+        // leads.
+        let (database, library_id) =
+            library_of(&[("Amber Field", 2020, 7.0), ("2 Lost Days", 2015, 6.5)]).await;
+        database
+            .create_work(
+                library_id,
+                WorkKind::Movie,
+                "The Quiet Road",
+                "quiet road",
+                Some(2018),
+            )
+            .await
+            .expect("work created");
+
+        let page = database
+            .browse_works(&BrowseRequest {
+                library_id: Some(library_id),
+                ..Default::default()
+            })
+            .await
+            .expect("read");
+        let filed: Vec<(&str, &str)> = page
+            .cards
+            .iter()
+            .map(|card| (card.title.as_str(), card.initial.as_str()))
+            .collect();
+        assert_eq!(
+            filed,
+            vec![
+                ("2 Lost Days", "#"),
+                ("Amber Field", "a"),
+                ("The Quiet Road", "q"),
+            ],
+            "a leading article counts for nothing, and no letter shares one bucket"
         );
     }
 

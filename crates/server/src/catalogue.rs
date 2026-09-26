@@ -341,6 +341,8 @@ struct CardView {
     /// movie, series, season or episode. What a card offers depends on it: a
     /// film plays, a series is opened.
     kind: &'static str,
+    /// The letter it is filed under in a grid read by title, `#` for none.
+    initial: String,
     /// Which library it came from, so a card can say where it lives without
     /// the page asking a second time.
     library: String,
@@ -421,6 +423,7 @@ fn card_view(card: &WorkCard) -> CardView {
         poster: card.poster.iter().map(image_view).collect(),
         wide: card.wide.iter().map(image_view).collect(),
         kind: card.kind.as_str(),
+        initial: card.initial.clone(),
         library: card.library_id.to_string(),
         // A read nobody was named for carries nobody's marks, and answers as
         // a work nobody has touched rather than by leaving the fields out:

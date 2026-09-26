@@ -1743,11 +1743,6 @@
   resize: vertical;
 }
 
-.notice-faint {
-  color: var(--text-faint);
-  font-size: 13px;
-}
-
 .empty {
   text-align: center;
   padding: 15vh var(--gap-wide);
@@ -3796,12 +3791,18 @@ button.seen-mark:not(.seen-mark-on):hover {
   accent-color: var(--accent);
 }
 
-/* The grid with the letters beside it. The letters follow the page down, so
-   jumping to another one never means scrolling back up first. */
+/* The grid with the letters beside it. The letters stand fixed on the
+   screen, so jumping to another one never means scrolling back up first, and
+   the grid keeps their width free at its side. */
 .grid-with-letters {
+  --letter-width: 28px;
   display: flex;
   align-items: flex-start;
   gap: var(--gap-wide);
+}
+
+.grid-with-letters:has(> .letters) {
+  padding-right: calc(var(--letter-width) + 10px + var(--gap-wide));
 }
 
 .grid-with-letters > :first-child {
@@ -3818,6 +3819,10 @@ button.seen-mark:not(.seen-mark-on):hover {
  * one, so a library with every letter never runs off the bottom. Kept under
  * the bar rather than behind it, since the piece at that end of it stands
  * right above.
+ *
+ * Fixed to the screen rather than carried along with the grid: held inside
+ * the grid, it was pushed back up by the end of it, and moved under the hand
+ * at the bottom of every library.
  */
 .letters {
   --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide));
@@ -3827,10 +3832,12 @@ button.seen-mark:not(.seen-mark-on):hover {
   flex-direction: column;
   padding: 6px 4px;
   border-radius: 18px;
-  /* Held where it already stands at the top of the grid, so it does not
-     shift under the hand the first time the page moves. */
-  position: sticky;
+  /* Level with the top of the grid, so it stands where the grid begins and
+     never moves once the page does. */
+  position: fixed;
+  z-index: 5;
   top: calc(var(--header-height) + var(--gap-wide));
+  right: var(--gutter);
   max-height: var(--letters-room);
   overflow-y: auto;
   scrollbar-width: none;
@@ -3849,7 +3856,7 @@ button.seen-mark:not(.seen-mark-on):hover {
   flex: none;
   display: grid;
   place-items: center;
-  width: 28px;
+  width: var(--letter-width);
   height: var(--letter);
   border-radius: var(--radius-pill);
   color: var(--text-soft);
@@ -3863,7 +3870,8 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--accent-bright);
 }
 
-/* The letter being gone to, while the grid reads on as far as it. */
+/* The letter of the titles at the top of the screen, and the one being gone
+   to while the grid reads on as far as it. */
 .letter-on,
 .letter-on:hover {
   background: var(--accent);
@@ -3875,6 +3883,10 @@ button.seen-mark:not(.seen-mark-on):hover {
 @media (max-width: 700px) {
   .grid-with-letters {
     flex-direction: column-reverse;
+  }
+
+  .grid-with-letters:has(> .letters) {
+    padding-right: 0;
   }
 
   .letters {
