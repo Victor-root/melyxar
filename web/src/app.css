@@ -2000,10 +2000,15 @@ input[type="radio"]:disabled {
 .browse-field .picker,
 .browse-field .picker:hover:not(:disabled),
 .browse-field .picker-open {
-  min-width: 0;
+  --picker-side: 10px;
+  /* Cut short, a value keeps a word's worth of letters beside its arrow (the
+     gap and the sixteen of the icon): a field with nothing left in it but
+     its arrow is a field nobody can read, and one narrower than its arrow
+     ran into the press beside it. */
+  min-width: calc(2.6em + 6px + 16px + 2 * var(--picker-side));
   height: 32px;
   gap: 6px;
-  padding: 0 10px;
+  padding: 0 var(--picker-side);
   border-color: transparent;
   border-radius: var(--radius-pill);
   background: none;
@@ -2088,8 +2093,15 @@ input[type="radio"]:disabled {
    the piece at the right end. Kept clear of both, which the header measures
    as they grow: the server's name and logo at one end, the account and the
    search field opened in it at the other. Narrower, the band has no room for
-   a bar this long, and both stay under it. */
-@media (min-width: 1680px) {
+   a bar at all, and both stay under it.
+
+   How long the bar is depends on what it is set to and on whether the search
+   is open, so no width of the window says whether it fits. It gives ground
+   instead, measured against the room it is left: the names of its choices
+   first, which the values explain on their own, then the words of the
+   filter beside it, whose icon stays, and last the values themselves, cut
+   short rather than run under the title or the search. */
+@media (min-width: 1360px) {
   .browse-head {
     --clear-of-start: max(0px, var(--header-start-end, 0px) + var(--gap-wide) - var(--gutter));
     flex-wrap: nowrap;
@@ -2112,6 +2124,71 @@ input[type="radio"]:disabled {
 
   .browse-head .browse-bar {
     min-width: 0;
+    container-type: inline-size;
+  }
+
+  .browse-head .browse-piece {
+    min-width: 0;
+  }
+
+  .browse-head .browse-alone {
+    flex: none;
+  }
+
+  /* Each choice's name, value and presses laid straight into the piece, so
+     that giving ground weighs each of them against its own floor: grouped
+     in a box of their own, the box gave way whole and its presses ran out
+     over the choice beside it. The hairline between two choices is the
+     second one's to draw. */
+  .browse-head .browse-field {
+    display: contents;
+  }
+
+  .browse-head .browse-field + .browse-field::before {
+    content: "";
+    flex: none;
+    align-self: stretch;
+    width: 1px;
+    margin-left: 4px;
+    background: var(--border);
+  }
+
+  .browse-head .browse-label {
+    margin: 0 2px 0 12px;
+  }
+
+  @container (max-width: 780px) {
+    .browse-label {
+      display: none;
+    }
+
+    .browse-field + .browse-field::before {
+      margin-right: 4px;
+    }
+  }
+
+  @container (max-width: 620px) {
+    .browse-alone-words {
+      display: none;
+    }
+
+    .browse-alone {
+      padding: 0 12px;
+    }
+  }
+
+  /* The search open beside a bar with its filters set, on the narrowest
+     screen that has a band: the room between its words goes too. */
+  @container (max-width: 540px) {
+    .browse-field + .browse-field::before {
+      margin: 0 2px;
+    }
+
+    .browse-field .picker,
+    .browse-field .picker:hover:not(:disabled),
+    .browse-field .picker-open {
+      --picker-side: 6px;
+    }
   }
 }
 
