@@ -532,6 +532,9 @@ struct HomeView {
     /// Whether anything is still waiting to be looked up, so the page can say
     /// so rather than showing untitled films with no explanation.
     awaiting_identification: i64,
+    /// The sections to draw below the banner, in order: band, carry_on,
+    /// up_next, recently_added and libraries, those this viewer shows.
+    sections: Vec<&'static str>,
 }
 
 /// One work the page opens on, and why it is there.
@@ -680,6 +683,7 @@ async fn home(
             .collect(),
         works: page.works,
         awaiting_identification: page.awaiting_identification,
+        sections: page.sections.iter().map(|section| section.as_str()).collect(),
     }))
 }
 

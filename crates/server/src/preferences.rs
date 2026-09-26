@@ -8,7 +8,9 @@ use axum::extract::State;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_core::library::LibraryKind;
-use melyxar_core::user::{DownmixMethod, Preferences, SubtitleMode, ThemeMode, WideGamutChoice};
+use melyxar_core::user::{
+    DownmixMethod, HomeSection, Preferences, SubtitleMode, ThemeMode, WideGamutChoice,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
@@ -66,6 +68,10 @@ struct PreferencesView {
     hidden_at_the_door: bool,
     /// Every kind of library, in the order the home page lays them out.
     home_order: Vec<&'static str>,
+    /// Every section of the home page below its banner, in the order it lays
+    /// them out, and those it leaves off.
+    home_sections: Vec<&'static str>,
+    hidden_home_sections: Vec<&'static str>,
     /// How far the player's two step buttons jump, in seconds.
     step_back_seconds: i64,
     step_on_seconds: i64,
@@ -118,6 +124,10 @@ struct PreferencesBody {
     hidden_at_the_door: Option<bool>,
     #[serde(default)]
     home_order: Option<Vec<String>>,
+    #[serde(default)]
+    home_sections: Option<Vec<String>>,
+    #[serde(default)]
+    hidden_home_sections: Option<Vec<String>>,
     #[serde(default)]
     step_back_seconds: Option<i64>,
     #[serde(default)]
@@ -215,6 +225,12 @@ async fn write(
             .collect::<Option<_>>()
             .ok_or_else(|| ServerError::invalid_input("no kind of library goes by that name"))?;
     }
+    if let Some(sections) = body.home_sections {
+        chosen.home_sections = sections_named(&sections)?;
+    }
+    if let Some(sections) = body.hidden_home_sections {
+        chosen.hidden_home_sections = sections_named(&sections)?;
+    }
 
     if let Some(choice) = body.wide_gamut {
         chosen.wide_gamut = WideGamutChoice::parse(&choice).ok_or_else(|| {
@@ -236,6 +252,15 @@ async fn write(
 fn some_language(value: String) -> Option<String> {
     let trimmed = value.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+/// Sections of the home page read from their names, all of them or none.
+fn sections_named(names: &[String]) -> Result<Vec<HomeSection>> {
+    names
+        .iter()
+        .map(|name| HomeSection::parse(name))
+        .collect::<Option<_>>()
+        .ok_or_else(|| ServerError::invalid_input("no section of the home page goes by that name"))
 }
 
 async fn view(
@@ -273,6 +298,16 @@ async fn view(
         header_hides_on_scroll: chosen.header_hides_on_scroll,
         hidden_at_the_door: chosen.hidden_at_the_door,
         home_order: chosen.home_order.iter().map(|kind| kind.as_str()).collect(),
+        home_sections: chosen
+            .home_sections
+            .iter()
+            .map(|section| section.as_str())
+            .collect(),
+        hidden_home_sections: chosen
+            .hidden_home_sections
+            .iter()
+            .map(|section| section.as_str())
+            .collect(),
         step_back_seconds: chosen.step_back_seconds,
         step_on_seconds: chosen.step_on_seconds,
         wide_gamut: chosen.wide_gamut.as_str(),

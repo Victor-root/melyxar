@@ -353,6 +353,55 @@ impl SubtitleMode {
     }
 }
 
+/// One section of the home page, below its banner.
+///
+/// The banner is not one of them: it is the picture the page opens on, drawn
+/// edge to edge above everything else, and has its own switch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HomeSection {
+    /// The tiles leading to each kind of library.
+    Band,
+    /// What was left halfway.
+    CarryOn,
+    /// The episode each started series is waiting on.
+    UpNext,
+    /// Everything newest, whatever its kind.
+    RecentlyAdded,
+    /// One row of the newest per kind of library, in the order of the kinds.
+    Libraries,
+}
+
+impl HomeSection {
+    /// Every section, in the order the home page had before anybody could
+    /// choose.
+    pub const fn every() -> [Self; 5] {
+        [
+            Self::Band,
+            Self::CarryOn,
+            Self::UpNext,
+            Self::RecentlyAdded,
+            Self::Libraries,
+        ]
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Band => "band",
+            Self::CarryOn => "carry_on",
+            Self::UpNext => "up_next",
+            Self::RecentlyAdded => "recently_added",
+            Self::Libraries => "libraries",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::every()
+            .into_iter()
+            .find(|section| section.as_str() == value)
+    }
+}
+
 /// Which colour scheme the interface uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -456,6 +505,12 @@ pub struct Preferences {
     /// The kinds of library in the order the home page lays them out, its
     /// band and its rows alike. Always every kind, once each.
     pub home_order: Vec<LibraryKind>,
+    /// The sections of the home page in the order it lays them out. Always
+    /// every section, once each, shown or not.
+    pub home_sections: Vec<HomeSection>,
+    /// The sections left off the home page. Kept apart from the order, so a
+    /// section shown again comes back where it was.
+    pub hidden_home_sections: Vec<HomeSection>,
     /// How far the player's button back jumps, in seconds.
     pub step_back_seconds: i64,
     /// How far its button on jumps. Apart from the other, since a line heard
@@ -488,6 +543,8 @@ impl Default for Preferences {
             // list with holes in it is of no use to anybody.
             hidden_at_the_door: false,
             home_order: LibraryKind::every().to_vec(),
+            home_sections: HomeSection::every().to_vec(),
+            hidden_home_sections: Vec::new(),
             step_back_seconds: DEFAULT_STEP,
             step_on_seconds: DEFAULT_STEP,
             wide_gamut: WideGamutChoice::default(),
@@ -526,7 +583,31 @@ impl Preferences {
             }
         }
         self.home_order = order;
+        // The same for the sections, for the same reason.
+        let mut sections: Vec<HomeSection> = Vec::new();
+        for section in self.home_sections.into_iter().chain(HomeSection::every()) {
+            if !sections.contains(&section) {
+                sections.push(section);
+            }
+        }
+        self.home_sections = sections;
+        let mut hidden: Vec<HomeSection> = Vec::new();
+        for section in self.hidden_home_sections {
+            if !hidden.contains(&section) {
+                hidden.push(section);
+            }
+        }
+        self.hidden_home_sections = hidden;
         self
+    }
+
+    /// The sections the home page shows, in the order it shows them.
+    pub fn home_sections_shown(&self) -> Vec<HomeSection> {
+        self.home_sections
+            .iter()
+            .copied()
+            .filter(|section| !self.hidden_home_sections.contains(section))
+            .collect()
     }
 
     /// Where a kind of library comes on this person's home page, first at
@@ -822,6 +903,44 @@ mod tests {
         let usual = Preferences::default().normalised();
         assert_eq!(usual.banner_height, DEFAULT_BANNER_HEIGHT);
         assert_eq!(usual.banner_cut, DEFAULT_BANNER_CUT);
+    }
+
+    #[test]
+    fn the_home_sections_always_hold_every_section_once() {
+        let chosen = Preferences {
+            home_sections: vec![
+                HomeSection::Libraries,
+                HomeSection::Band,
+                HomeSection::Libraries,
+            ],
+            hidden_home_sections: vec![HomeSection::UpNext, HomeSection::UpNext],
+            ..Preferences::default()
+        }
+        .normalised();
+        assert_eq!(
+            chosen.home_sections,
+            vec![
+                HomeSection::Libraries,
+                HomeSection::Band,
+                HomeSection::CarryOn,
+                HomeSection::UpNext,
+                HomeSection::RecentlyAdded,
+            ]
+        );
+        assert_eq!(chosen.hidden_home_sections, vec![HomeSection::UpNext]);
+        assert_eq!(
+            chosen.home_sections_shown(),
+            vec![
+                HomeSection::Libraries,
+                HomeSection::Band,
+                HomeSection::CarryOn,
+                HomeSection::RecentlyAdded,
+            ],
+            "a hidden section keeps its place and is only left out"
+        );
+        for section in HomeSection::every() {
+            assert_eq!(HomeSection::parse(section.as_str()), Some(section));
+        }
     }
 
     #[test]

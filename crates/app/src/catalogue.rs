@@ -6,7 +6,7 @@
 //! like the browser without any rule being written twice.
 
 use melyxar_core::id::{LibraryId, WorkId};
-use melyxar_core::user::User;
+use melyxar_core::user::{HomeSection, User};
 use melyxar_core::library::{LibraryKind, LibraryOptions, RootAccess};
 
 use crate::browse::{BrowseRequest, WorkCard, WorkOrder, WorkPage};
@@ -79,6 +79,10 @@ pub struct Home {
     pub shelves: Vec<Shelf>,
     pub works: i64,
     pub awaiting_identification: i64,
+    /// The sections this viewer shows below the banner, in the order they
+    /// chose. Every row above is sent whatever this says: the banner is made
+    /// of what was left halfway and what has just arrived, shown or not.
+    pub sections: Vec<HomeSection>,
 }
 
 /// One row of the home page, for one kind of library.
@@ -343,6 +347,7 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
         recently_added,
         works: counted.browsable,
         awaiting_identification: counted.awaiting_identification,
+        sections: who.preferences.home_sections_shown(),
     })
 }
 
@@ -979,6 +984,35 @@ mod tests {
         let page = home(&state, None, &viewer).await.expect("read");
         assert!(page.hero.is_empty());
         assert_eq!(page.recently_added.cards.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_hidden_section_is_left_out_of_the_page_but_its_rows_still_come() {
+        let (_directory, state, _library_id, mut viewer) =
+            state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
+        assert_eq!(
+            home(&state, None, &viewer).await.expect("read").sections,
+            HomeSection::every().to_vec()
+        );
+
+        viewer.preferences.home_sections = vec![HomeSection::Libraries, HomeSection::Band];
+        viewer.preferences.hidden_home_sections = vec![HomeSection::RecentlyAdded];
+        viewer.preferences = viewer.preferences.normalised();
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert_eq!(
+            page.sections,
+            vec![
+                HomeSection::Libraries,
+                HomeSection::Band,
+                HomeSection::CarryOn,
+                HomeSection::UpNext,
+            ]
+        );
+        assert_eq!(
+            page.recently_added.cards.len(),
+            3,
+            "the banner is made of what has just arrived, shown or not"
+        );
     }
 
     #[tokio::test]
