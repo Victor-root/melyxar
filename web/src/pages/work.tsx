@@ -747,11 +747,16 @@ function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) =
 }
 
 /**
- * What the file holds, at the very end, drawn as the panels of the
- * administration are: one for the file, one per track.
+ * What the file holds, at the very end.
  *
- * Everything the analysis recorded and nothing hidden behind a summary, in the
- * order somebody reads when something is wrong with a file: where it is
+ * The file itself first, as a heading rather than a card: where it is and
+ * what it is on one line each, the way every other player puts it above what
+ * the file holds. Then one card per track, all the same size in a grid that
+ * wraps, so a film with four soundtracks reads as a set of alike things
+ * rather than a row of cards each as tall as its own facts.
+ *
+ * Everything the analysis recorded and nothing hidden behind a summary, in
+ * the order somebody reads when something is wrong with a file: where it is
  * first, then what is inside.
  */
 function Versions({
@@ -767,48 +772,42 @@ function Versions({
   /* Reading a copy again and detaching it are the administrator's, which the
      server says too: a button that is refused when pressed is not offered. */
   const { account } = useAccount();
+  const about = [
+    { label: null, value: version.container ? containerName(version.container) : null },
+    { label: null, value: readableSize(version.size_bytes) },
+    { label: t("media.added"), value: readableDate(version.added_at, language) },
+    { label: t("media.disk"), value: version.root_label },
+    { label: t("media.bitrate"), value: readableBitrate(version.overall_bitrate) },
+    { label: t("work.chapters_row"), value: version.chapters > 0 ? String(version.chapters) : null },
+  ].filter((fact) => fact.value);
 
   return (
     <section className="section">
-      <RowHead mark={<FolderIcon size={24} />} title={t("work.versions")} />
+      <RowHead mark={<FolderIcon size={24} />} title={t("work.media_info")} />
+      <div className="media-file">
+        <div className="media-file-words">
+          <p className="media-file-path">{version.path}</p>
+          <p className="media-file-about">
+            {about.map((fact) => (
+              <span key={fact.label ?? fact.value} className="media-file-fact">
+                {fact.label && <span className="media-file-label">{fact.label}</span>}
+                {fact.value}
+              </span>
+            ))}
+            {version.missing && (
+              <span className="work-badge work-badge-warning">{t("work.missing")}</span>
+            )}
+            {!version.analysed && <span className="work-badge">{t("work.not_analysed")}</span>}
+          </p>
+        </div>
+        {account?.is_administrator && (
+          <div className="media-file-actions">
+            <ReadCopyAgain copy={version.id} onRead={onChanged} />
+            {separable && <DetachCopy copy={version.id} onDetached={onChanged} />}
+          </div>
+        )}
+      </div>
       <div className="panels work-panels">
-        <Panel
-          icon={FolderIcon}
-          title={t("work.file")}
-          lead={[pictureOf(version), readableSize(version.size_bytes)].filter(Boolean).join(" · ")}
-          action={
-            account?.is_administrator && (
-              <>
-                <ReadCopyAgain copy={version.id} onRead={onChanged} />
-                {separable && <DetachCopy copy={version.id} onDetached={onChanged} />}
-              </>
-            )
-          }
-        >
-          {(version.missing || !version.analysed) && (
-            <p className="work-badges">
-              {version.missing && (
-                <span className="work-badge work-badge-warning">{t("work.missing")}</span>
-              )}
-              {!version.analysed && <span className="work-badge">{t("work.not_analysed")}</span>}
-            </p>
-          )}
-          <dl className="work-facts-list">
-            <Fact label={t("media.path")} value={version.path} wide />
-            <Fact label={t("media.disk")} value={version.root_label} />
-            <Fact label={t("media.added")} value={readableDate(version.added_at, language)} />
-            <Fact
-              label={t("media.container")}
-              value={version.container ? containerName(version.container) : null}
-            />
-            <Fact label={t("media.bitrate")} value={readableBitrate(version.overall_bitrate)} />
-            <Fact
-              label={t("work.chapters_row")}
-              value={version.chapters > 0 ? version.chapters : null}
-            />
-          </dl>
-        </Panel>
-
         {version.video.map((track, index) => (
           <Panel
             key={`v${index}`}
@@ -904,17 +903,15 @@ function Versions({
 function Fact({
   label,
   value,
-  wide,
 }: {
   label: string;
   value: string | number | null | undefined;
-  wide?: boolean;
 }) {
   if (value === null || value === undefined || value === "") {
     return null;
   }
   return (
-    <div className={wide ? "fact-line fact-line-wide" : "fact-line"}>
+    <div className="fact-line">
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
