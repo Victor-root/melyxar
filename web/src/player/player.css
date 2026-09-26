@@ -1259,15 +1259,27 @@
   overflow: hidden;
 }
 
+/* The bar it is moved by: as tall as its title, with the cross drawn
+   smaller than the player's own buttons, which are sized for a hand
+   reaching across a whole picture. */
 .facts-head {
+  --player-button: 30px;
+  --player-button-ring: 1px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--gap);
-  padding: 10px var(--gap);
+  padding: 4px 6px 4px var(--gap);
   border-bottom: 1px solid var(--border);
   font-size: 14px;
   font-weight: 650;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.facts-head:active {
+  cursor: grabbing;
 }
 
 .facts-blocks {

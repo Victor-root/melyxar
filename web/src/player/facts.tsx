@@ -12,7 +12,7 @@
  * says whether a picture arrived the shape it left.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
 import type { CalibrationEntry, PlaybackPlan, Producing } from "../api";
@@ -96,7 +96,72 @@ interface Props {
   onClose: () => void;
 }
 
+/** How far the window has been moved from where it opens, in pixels. */
+interface Moved {
+  across: number;
+  down: number;
+}
+
+/**
+ * A window moved by its title bar, and never past the picture it stands on.
+ *
+ * Where it may go is read once, as the hand takes hold, and the rest of the
+ * way is arithmetic on the pointer: nothing is measured while it moves.
+ */
+function useMovedByItsHead() {
+  const [moved, setMoved] = useState<Moved>({ across: 0, down: 0 });
+  const holding = useRef<{
+    x: number;
+    y: number;
+    from: Moved;
+    across: [number, number];
+    down: [number, number];
+  } | null>(null);
+
+  const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    const head = event.currentTarget;
+    const sheet = head.parentElement;
+    const room = sheet?.parentElement;
+    // The cross in the bar is a button, not a place to take hold of.
+    if (event.button !== 0 || (event.target as Element).closest("button") || !sheet || !room) {
+      return;
+    }
+    const it = sheet.getBoundingClientRect();
+    const within = room.getBoundingClientRect();
+    holding.current = {
+      x: event.clientX,
+      y: event.clientY,
+      from: moved,
+      across: [moved.across + within.left - it.left, moved.across + within.right - it.right],
+      down: [moved.down + within.top - it.top, moved.down + within.bottom - it.bottom],
+    };
+    head.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    const hold = holding.current;
+    if (!hold) {
+      return;
+    }
+    const kept = (value: number, [low, high]: [number, number]) => Math.min(Math.max(value, low), high);
+    setMoved({
+      across: kept(hold.from.across + event.clientX - hold.x, hold.across),
+      down: kept(hold.from.down + event.clientY - hold.y, hold.down),
+    });
+  };
+
+  const letGo = () => {
+    holding.current = null;
+  };
+
+  return {
+    style: { transform: `translate(${moved.across}px, ${moved.down}px)` },
+    head: { onPointerDown, onPointerMove, onPointerUp: letGo, onPointerCancel: letGo },
+  };
+}
+
 export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
+  const movable = useMovedByItsHead();
   const [says, setSays] = useState<WhatTheBrowserSays | null>(null);
   const [working, setWorking] = useState<Producing | null>(null);
   const [calibration, setCalibration] = useState<CalibrationEntry[]>([]);
@@ -164,8 +229,8 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
       : null;
 
   return (
-    <aside className="facts" aria-label={t("facts.title")}>
-      <div className="facts-head">
+    <aside className="facts" aria-label={t("facts.title")} style={movable.style}>
+      <div className="facts-head" {...movable.head}>
         <strong>{t("facts.title")}</strong>
         <button className="player-button" onClick={onClose} aria-label={t("facts.close")}>
           ✕
