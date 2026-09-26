@@ -520,6 +520,8 @@ struct HomeParams {
 struct HomeView {
     /// The few works the page opens on, largest of all.
     hero: Vec<HeroView>,
+    /// Whether they were drawn at random.
+    hero_at_random: bool,
     /// Films this viewer started and has not finished, the latest first.
     carry_on: Vec<CarryOnView>,
     /// The episode each started series is waiting on.
@@ -648,6 +650,7 @@ async fn home(
                     .and_then(|place| place.episode_number),
             })
             .collect(),
+        hero_at_random: page.hero_at_random,
         carry_on: page
             .carry_on
             .iter()

@@ -118,11 +118,11 @@ function Banner({ preferences }: { preferences: Preferences }) {
             label={t("settings.banner_at_random")}
             checked={kept.banner_at_random}
             disabled={!bannerShown}
+            // The banner is part of the page this changes, so the page is
+            // read again once the server holds it, rather than left showing
+            // the old handful.
             onChange={(banner_at_random) => {
-              void change({ banner_at_random });
-              // The banner is part of the page this changes, so the page is
-              // read again rather than left showing the old handful.
-              marks.rowsHaveMoved();
+              void change({ banner_at_random }).then(marks.rowsHaveMoved);
             }}
           />
         </Setting>

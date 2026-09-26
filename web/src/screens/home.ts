@@ -118,12 +118,14 @@ export function useHomeScreen(libraries: Library[]): HomeScreen {
   /* The banner drawn at random is drawn once per visit of the page: walked
      back to from a work opened from it, it is the same banner, not a new
      draw brought by the answer read again on the way back. A new visit of
-     the page draws again. */
+     the page draws again. Only a banner drawn at random is held: any other
+     is the server's answer as it stands, and a banner just switched away
+     from random has to leave the old draw behind at once. */
   const visit = useLocation().key;
   const lineup = `hero:${visit}`;
   const answer = asked.answer;
   useEffect(() => {
-    if (answer && !recall(lineup)) {
+    if (answer?.hero_at_random && !recall(lineup)) {
       keep(lineup, answer.hero);
     }
   }, [answer, lineup]);
@@ -133,7 +135,9 @@ export function useHomeScreen(libraries: Library[]): HomeScreen {
       return null;
     }
     const unfinished = (card: Card) => marks.resumeOf(card) !== null;
-    const drawn = recall<Home["hero"]>(lineup)?.value ?? answer.hero;
+    const drawn = answer.hero_at_random
+      ? (recall<Home["hero"]>(lineup)?.value ?? answer.hero)
+      : answer.hero;
     return {
       ...answer,
       hero: drawn.filter((entry) => entry.because !== "started" || unfinished(entry)),

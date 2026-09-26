@@ -459,6 +459,8 @@ export type HeroItem = Card & {
 export interface Home {
   /** The few works the page opens on, largest of all. */
   hero: HeroItem[];
+  /** Whether they were drawn at random. */
+  hero_at_random: boolean;
   /** Films and episodes started and not finished, the latest first. An
       episode carries the series it hangs under, which is what the card leads
       with: nobody left off in the middle of an episode title. */

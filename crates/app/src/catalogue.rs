@@ -64,6 +64,9 @@ pub struct Filters {
 pub struct Home {
     /// What the page leads with, at most five, largest of all.
     pub hero: Vec<HeroItem>,
+    /// Whether that banner was drawn at random, which is what a page walked
+    /// back to holds still rather than drawing again.
+    pub hero_at_random: bool,
     /// Films this viewer started and has not finished, the latest first.
     ///
     /// A film left halfway is the one thing somebody comes back for, and
@@ -341,6 +344,7 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
             true => the_hero(state, who, granted, &carry_on, &recently_added).await?,
             false => Vec::new(),
         },
+        hero_at_random: who.preferences.banner_at_random,
         carry_on,
         up_next,
         shelves: the_shelves(state, who).await?,
@@ -797,6 +801,22 @@ mod tests {
             page.carry_on[0].position,
             melyxar_core::time::Millis::new(1_800_000),
             "a card has to know how far in it is without asking again per film"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_page_says_whether_its_banner_was_drawn_at_random() {
+        let (_directory, state, library_id, mut viewer) =
+            state_with_films(&["Quiet Harbour", "Amber Field"]).await;
+
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
+        assert!(!page.hero_at_random);
+
+        viewer.preferences.banner_at_random = true;
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
+        assert!(
+            page.hero_at_random,
+            "a page walked back to holds a random banner still, and only a random one"
         );
     }
 
