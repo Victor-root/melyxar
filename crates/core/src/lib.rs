@@ -16,6 +16,7 @@ pub mod media;
 pub mod media_log;
 pub mod orientation;
 pub mod refresh;
+pub mod saga;
 pub mod segments;
 pub mod text;
 pub mod thumbnails;

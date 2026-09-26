@@ -75,7 +75,8 @@ pub struct WorkDetail {
     /// series, which are what genres are written on.
     pub alike: Option<Alike>,
     /// The saga a film belongs to, with every film of it this account can
-    /// reach. Only for a film, which is what sagas gather.
+    /// reach, then the films where its characters come back. Only for a
+    /// film, which is what sagas gather.
     pub saga: Option<Saga>,
 }
 
@@ -247,6 +248,37 @@ async fn as_carry_on(state: &AppState, episode: melyxar_core::work::Work) -> Res
         episode: episode.ordinal,
         title: episode.title,
     })
+}
+
+/// The saga a film belongs to, followed by the films where its leads come
+/// back as the same characters, the ones where they matter most first.
+///
+/// Nothing when that makes fewer than two films: a row holding only the page
+/// it stands on says nothing.
+async fn saga_and_its_kin(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    work_id: WorkId,
+) -> Result<Option<Saga>> {
+    let database = state.database();
+    let within = crate::reach::within(who);
+    let Some(mut saga) = database.saga_of(who.id, work_id, within.as_deref()).await? else {
+        return Ok(None);
+    };
+
+    let films: Vec<WorkId> = saga.cards.iter().map(|card| card.id).collect();
+    let leads = database.roles_in(&films, melyxar_core::saga::LEADS).await?;
+    let mut people: Vec<PersonId> = leads.iter().map(|role| role.person_id).collect();
+    people.sort();
+    people.dedup();
+    let elsewhere = database
+        .roles_elsewhere(&people, &films, within.as_deref())
+        .await?;
+    let kin = melyxar_core::saga::kin_of_a_saga(&leads, &elsewhere);
+    saga.cards
+        .extend(database.cards_in_order(who.id, &kin).await?);
+
+    Ok((saga.cards.len() > 1).then_some(saga))
 }
 
 /// Reads everything one page shows about one work.
@@ -465,10 +497,7 @@ pub async fn work_detail(
     };
 
     let saga = match work.kind {
-        melyxar_core::work::WorkKind::Movie => {
-            let within = crate::reach::within(who);
-            database.saga_of(viewer, work_id, within.as_deref()).await?
-        }
+        melyxar_core::work::WorkKind::Movie => saga_and_its_kin(state, who, work_id).await?,
         _ => None,
     };
 
@@ -692,6 +721,185 @@ mod tests {
         }
 
         (database, work.id)
+    }
+
+    /// Identifies a film as a provider would, with its saga and its cast.
+    async fn identified(
+        database: &melyxar_database::Database,
+        library: melyxar_core::id::LibraryId,
+        title: &str,
+        year: i32,
+        saga: Option<&str>,
+        cast: &[(&str, &str, i32)],
+    ) -> WorkId {
+        use melyxar_database::metadata::{CollectionRecord, CreditRecord, IdentifiedWork};
+
+        let work = database
+            .create_work(
+                library,
+                melyxar_core::work::WorkKind::Movie,
+                title,
+                &title.to_lowercase(),
+                Some(year),
+            )
+            .await
+            .expect("work created");
+        database
+            .apply_identification(
+                work.id,
+                &IdentifiedWork {
+                    provider: "tmdb".to_string(),
+                    external_id: title.to_lowercase(),
+                    imdb_id: None,
+                    language: "en".to_string(),
+                    title: title.to_string(),
+                    sort_title: title.to_lowercase(),
+                    tagline: None,
+                    overview: None,
+                    release_year: Some(year),
+                    runtime: None,
+                    community_rating: None,
+                    age_rating_label: None,
+                    genres: Vec::new(),
+                    studios: Vec::new(),
+                    credits: cast
+                        .iter()
+                        .map(|(actor, character, billed)| CreditRecord {
+                            external_id: actor.to_string(),
+                            name: actor.to_string(),
+                            sort_name: actor.to_lowercase(),
+                            role: "actor".to_string(),
+                            character: Some(character.to_string()),
+                            ordinal: *billed,
+                            photo_path: None,
+                        })
+                        .collect(),
+                    collection: saga.map(|name| CollectionRecord {
+                        external_id: name.to_lowercase(),
+                        name: name.to_string(),
+                        sort_name: name.to_lowercase(),
+                    }),
+                    trailers: Vec::new(),
+                },
+                false,
+            )
+            .await
+            .expect("identification applied");
+        work.id
+    }
+
+    #[tokio::test]
+    async fn a_saga_leads_on_to_the_films_where_its_characters_come_back() {
+        let database = melyxar_database::Database::open_in_memory()
+            .await
+            .expect("database opens");
+        let library = database
+            .create_library(
+                "Films",
+                melyxar_core::library::LibraryKind::Movies,
+                "en",
+                &[(
+                    "disk-one".to_string(),
+                    std::path::PathBuf::from("/mnt/one/Films"),
+                )],
+            )
+            .await
+            .expect("library created")
+            .id;
+        let hero = ("Aldo Brisk", "Kael Vorn", 0);
+        let rising = identified(
+            &database,
+            library,
+            "Storm Rising",
+            2011,
+            Some("Storm Saga"),
+            &[hero],
+        )
+        .await;
+        let falling = identified(
+            &database,
+            library,
+            "Storm Falling",
+            2013,
+            Some("Storm Saga"),
+            &[hero],
+        )
+        .await;
+        let gather = identified(
+            &database,
+            library,
+            "Heroes Gather",
+            2012,
+            Some("Heroes Saga"),
+            &[("Aldo Brisk", "Kael", 2)],
+        )
+        .await;
+        let reunion = identified(
+            &database,
+            library,
+            "Heroes Return",
+            2019,
+            Some("Heroes Saga"),
+            &[hero],
+        )
+        .await;
+        let pond = identified(
+            &database,
+            library,
+            "Quiet Pond",
+            2015,
+            None,
+            &[("Aldo Brisk", "Doran Pike", 0)],
+        )
+        .await;
+        let lantern = identified(
+            &database,
+            library,
+            "Lone Lantern",
+            2016,
+            Some("Lantern Saga"),
+            &[],
+        )
+        .await;
+        let viewer = database
+            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
+        let state = AppState::new(melyxar_config::Config::default(), database, None, None);
+        let who = crate::an_ordinary_account(viewer);
+        let saga_of = async |work| {
+            work_detail(&state, &who, work)
+                .await
+                .expect("read")
+                .expect("present")
+                .saga
+                .map(|saga| {
+                    (
+                        saga.name,
+                        saga.cards.iter().map(|card| card.id).collect::<Vec<_>>(),
+                    )
+                })
+        };
+
+        assert_eq!(
+            saga_of(rising).await,
+            Some((
+                "Storm Saga".to_string(),
+                vec![rising, falling, reunion, gather]
+            )),
+            "its own films first, then where its hero comes back, the most present first"
+        );
+        assert_eq!(
+            saga_of(pond).await,
+            None,
+            "the same actor as somebody else ties nothing"
+        );
+        assert_eq!(
+            saga_of(lantern).await,
+            None,
+            "a saga of one here with nowhere to lead makes no row"
+        );
     }
 
     #[tokio::test]

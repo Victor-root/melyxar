@@ -5,7 +5,8 @@
 //! the server was told to put in front of everybody, and what it picks when
 //! nobody told it anything.
 
-use melyxar_core::id::{LibraryId, UserId, WorkId};
+use melyxar_core::id::{LibraryId, PersonId, UserId, WorkId};
+use melyxar_core::saga::Role;
 use melyxar_core::time::now;
 use sqlx::{AssertSqlSafe, Row};
 
@@ -523,9 +524,7 @@ impl Database {
     /// The saga a work belongs to, with every work of it this account can
     /// reach, itself included, in the order they came out.
     ///
-    /// Nothing when it belongs to none, and nothing either when it is the
-    /// only one of its saga here: a row holding only the page it stands on
-    /// says nothing.
+    /// Nothing when it belongs to none.
     pub async fn saga_of(
         &self,
         viewer: UserId,
@@ -560,9 +559,6 @@ impl Database {
             query = query.bind(library.to_db_string());
         }
         let rows = query.fetch_all(self.reader()).await?;
-        if rows.len() < 2 {
-            return Ok(None);
-        }
 
         let mut cards = rows
             .iter()
@@ -572,6 +568,97 @@ impl Database {
         self.attach_viewer_state(viewer, &mut cards).await?;
         Ok(Some(Saga { name, cards }))
     }
+
+    /// The parts played in these works with a character to them, billed
+    /// higher than `billed_under`.
+    pub async fn roles_in(&self, works: &[WorkId], billed_under: i32) -> Result<Vec<Role>> {
+        if works.is_empty() {
+            return Ok(Vec::new());
+        }
+        let places = vec!["?"; works.len()].join(", ");
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT work_id, person_id, character_name, ordinal FROM credits
+              WHERE work_id IN ({places}) AND role = 'actor'
+                AND ordinal < ? AND character_name IS NOT NULL"
+        )));
+        for work in works {
+            query = query.bind(work.to_db_string());
+        }
+        let rows = query.bind(billed_under).fetch_all(self.reader()).await?;
+        rows.iter().map(role_from_row).collect()
+    }
+
+    /// The parts these people play in the films this account can reach, apart
+    /// from the ones left out, in the order the films came out.
+    pub async fn roles_elsewhere(
+        &self,
+        people: &[PersonId],
+        leaving_out: &[WorkId],
+        within: Option<&[LibraryId]>,
+    ) -> Result<Vec<Role>> {
+        let Some(inside) = kept_inside(within, "w.library_id") else {
+            return Ok(Vec::new());
+        };
+        if people.is_empty() {
+            return Ok(Vec::new());
+        }
+        let who = vec!["?"; people.len()].join(", ");
+        let left = vec!["?"; leaving_out.len()].join(", ");
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT c.work_id, c.person_id, c.character_name, c.ordinal
+               FROM credits c
+               JOIN works w ON w.id = c.work_id
+              WHERE c.person_id IN ({who}) AND c.role = 'actor'
+                AND c.character_name IS NOT NULL
+                AND w.kind = 'movie' AND w.id NOT IN ({left}){inside}
+              ORDER BY w.release_year IS NULL, w.release_year, w.sort_title, c.ordinal"
+        )));
+        for person in people {
+            query = query.bind(person.to_db_string());
+        }
+        for work in leaving_out {
+            query = query.bind(work.to_db_string());
+        }
+        for library in within.unwrap_or_default() {
+            query = query.bind(library.to_db_string());
+        }
+        let rows = query.fetch_all(self.reader()).await?;
+        rows.iter().map(role_from_row).collect()
+    }
+
+    /// The cards of these works, in the order they are given.
+    pub async fn cards_in_order(&self, viewer: UserId, works: &[WorkId]) -> Result<Vec<WorkCard>> {
+        if works.is_empty() {
+            return Ok(Vec::new());
+        }
+        let places = vec!["?"; works.len()].join(", ");
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_CARD_IS} FROM works w WHERE w.id IN ({places})"
+        )));
+        for work in works {
+            query = query.bind(work.to_db_string());
+        }
+        let mut cards = query
+            .fetch_all(self.reader())
+            .await?
+            .iter()
+            .map(crate::browse::card_from_row)
+            .collect::<Result<Vec<_>>>()?;
+        cards.sort_by_key(|card| works.iter().position(|work| *work == card.id));
+        self.attach_posters(&mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards).await?;
+        Ok(cards)
+    }
+}
+
+/// One part read back from the credits.
+fn role_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Role> {
+    Ok(Role {
+        work_id: parse_id(&row.try_get::<String, _>("work_id")?)?,
+        person_id: parse_id(&row.try_get::<String, _>("person_id")?)?,
+        character: row.try_get("character_name")?,
+        billed: row.try_get("ordinal")?,
+    })
 }
 
 #[cfg(test)]
@@ -938,14 +1025,127 @@ mod tests {
         );
 
         assert_eq!(
-            database.saga_of(who, films[3], None).await.expect("read"),
+            database
+                .saga_of(who, films[3], None)
+                .await
+                .expect("read")
+                .expect("a saga")
+                .cards
+                .len(),
+            1,
+            "a saga of one here is still its saga: the films sharing its characters may follow"
+        );
+        assert_eq!(
+            database
+                .saga_of(who, WorkId::new(), None)
+                .await
+                .expect("read"),
             None,
-            "a saga of one here makes no row"
+            "a work in no saga has none"
         );
         assert_eq!(
             database.saga_of(who, films[0], Some(&[])).await.expect("read"),
             None,
             "an account granted nothing is offered nothing"
+        );
+    }
+
+    /// Credits somebody with a part in a work.
+    async fn playing(
+        database: &Database,
+        person: PersonId,
+        work: WorkId,
+        character: &str,
+        billed: i32,
+    ) {
+        sqlx::query(
+            "INSERT INTO people (id, name, sort_name, created_at)
+             VALUES (?1, ?1, ?1, '2026-09-26T00:00:00Z') ON CONFLICT DO NOTHING",
+        )
+        .bind(person.to_db_string())
+        .execute(database.writer())
+        .await
+        .expect("person written");
+        sqlx::query(
+            "INSERT INTO credits (id, work_id, person_id, role, character_name, ordinal)
+             VALUES (?, ?, ?, 'actor', ?, ?)",
+        )
+        .bind(melyxar_core::id::CreditId::new().to_db_string())
+        .bind(work.to_db_string())
+        .bind(person.to_db_string())
+        .bind(character)
+        .bind(billed)
+        .execute(database.writer())
+        .await
+        .expect("credit written");
+    }
+
+    #[tokio::test]
+    async fn the_parts_a_saga_s_leads_play_elsewhere_are_read_back_in_the_order_films_came_out() {
+        let (database, library, who, films) = a_shelf(&[
+            ("Storm Rising", 7.0, "Action"),
+            ("Storm Falling", 7.0, "Action"),
+            ("Heroes Gather", 8.0, "Action"),
+            ("Heroes Part", 8.0, "Action"),
+        ])
+        .await;
+        for (film, year) in [(films[2], 2019), (films[3], 2012)] {
+            sqlx::query("UPDATE works SET release_year = ? WHERE id = ?")
+                .bind(year)
+                .bind(film.to_db_string())
+                .execute(database.writer())
+                .await
+                .expect("year set");
+        }
+        let [hero, extra] = std::array::from_fn(|_| PersonId::new());
+        playing(&database, hero, films[0], "Kael Vorn", 0).await;
+        playing(&database, extra, films[0], "Harbour Guard", 9).await;
+        playing(&database, hero, films[1], "Kael Vorn", 0).await;
+        playing(&database, hero, films[2], "Kael", 2).await;
+        playing(&database, hero, films[3], "Kael Vorn", 1).await;
+
+        let saga = [films[0], films[1]];
+        let leads = database.roles_in(&saga, 5).await.expect("read");
+        assert_eq!(leads.len(), 2, "the guard is billed too low to lead anything");
+        assert!(leads.iter().all(|role| role.person_id == hero && role.billed == 0));
+
+        let elsewhere = database
+            .roles_elsewhere(&[hero], &saga, None)
+            .await
+            .expect("read");
+        assert_eq!(
+            elsewhere
+                .iter()
+                .map(|role| (role.work_id, role.character.as_str(), role.billed))
+                .collect::<Vec<_>>(),
+            vec![(films[3], "Kael Vorn", 1), (films[2], "Kael", 2)],
+            "outside the saga, the earliest film first"
+        );
+        assert!(
+            database
+                .roles_elsewhere(&[hero], &saga, Some(&[]))
+                .await
+                .expect("read")
+                .is_empty(),
+            "an account granted nothing is offered nothing"
+        );
+        assert_eq!(
+            database
+                .roles_elsewhere(&[hero], &saga, Some(&[library]))
+                .await
+                .expect("read")
+                .len(),
+            2
+        );
+
+        let cards = database
+            .cards_in_order(who, &[films[2], films[0], films[3]])
+            .await
+            .expect("read");
+        assert_eq!(
+            cards.iter().map(|card| card.id).collect::<Vec<_>>(),
+            vec![films[2], films[0], films[3]],
+            "in the order they were asked for"
         );
     }
 
