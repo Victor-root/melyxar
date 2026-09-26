@@ -112,6 +112,29 @@ export type Turn = (typeof TURNS)[number];
 const ICON = 27;
 const PLAY_ICON = 34;
 
+/**
+ * Whether a key belongs to something other than the film: a box somebody is
+ * typing in, or a slider in a panel being set.
+ *
+ * The sound slider on the bar is neither. Pressed once with the mouse, it
+ * kept the keyboard, and the arrows moved it by a hundredth on their own
+ * without the player hearing of it, so nothing said the sound down the
+ * side. What its arrows would do is what the player's own do, so they are
+ * the player's.
+ */
+function isSomewhereElse(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+    return true;
+  }
+  if (target instanceof HTMLInputElement) {
+    return target.type !== "range" || target.closest(".player-menu") !== null;
+  }
+  return false;
+}
+
 /** How long the sound stays said down the side after the last press. */
 const SOUND_SAID_FOR_MS = 1500;
 
@@ -312,9 +335,7 @@ export function Overlay(props: Props) {
      that a key does exactly what the button beside it does. */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      // Somebody typing in a box is typing, not driving the film.
-      const into = event.target as HTMLElement | null;
-      if (into && ["INPUT", "TEXTAREA", "SELECT"].includes(into.tagName)) {
+      if (isSomewhereElse(event.target)) {
         return;
       }
       const loudness = (by: number) => {
