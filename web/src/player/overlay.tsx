@@ -62,8 +62,8 @@ import {
 } from "./icons";
 import { GearIcon } from "../icons";
 import type { Mark } from "./logo";
-import { QUALITIES, qualityName } from "./quality";
-import { CODECS, codecName } from "./codec";
+import { AS_IT_IS, QUALITIES, qualityName } from "./quality";
+import { AUTOMATIC, CODECS, codecName } from "./codec";
 import { captionOf, type Wording } from "../readable";
 import { markTheOpening } from "./opening";
 import { FADES_AFTER_MS } from "./settings";
@@ -96,7 +96,6 @@ export type Panel =
   | "settings.turn"
   | "settings.repeat"
   | "settings.words_offset"
-  | "facts"
   | SheetName;
 
 /** How the picture is fitted into the screen. */
@@ -145,6 +144,9 @@ interface Props {
   fullscreen: Fullscreen;
   panel: Panel | null;
   onPanel: (panel: Panel | null) => void;
+  /** Opens the playback diagnostics, a window of their own beside the
+   *  panels rather than one of them. */
+  onFacts: () => void;
   onClose: () => void;
   /** Steps to the episode after or before this one. Absent where there is
    *  none, which is when the button that asks for it draws nothing. */
@@ -1343,6 +1345,7 @@ function sheetFor(
             <Line
               label={t("player.shape")}
               value={t(`player.shape.${surroundings.shape}`)}
+              changed={surroundings.shape !== "auto"}
               into
               onPick={() => onPanel("settings.shape")}
             />
@@ -1360,18 +1363,21 @@ function sheetFor(
             <Line
               label={t("player.speed")}
               value={`${playback.speed}×`}
+              changed={playback.speed !== 1}
               into
               onPick={() => onPanel("settings.speed")}
             />
             <Line
               label={t("player.quality")}
               value={qualityName(playback.quality, t("player.quality.as_it_is"))}
+              changed={playback.quality.key !== AS_IT_IS.key}
               into
               onPick={() => onPanel("settings.quality")}
             />
             <Line
               label={t("player.codec")}
               value={codecName(playback.codec, t("player.codec.auto"))}
+              changed={playback.codec.key !== AUTOMATIC.key}
               into
               onPick={() => onPanel("settings.codec")}
             />
@@ -1387,12 +1393,14 @@ function sheetFor(
             <Line
               label={t("player.repeat")}
               value={t(playback.repeat ? "player.repeat.film" : "player.repeat.none")}
+              changed={playback.repeat}
               into
               onPick={() => onPanel("settings.repeat")}
             />
             <Line
               label={t("player.words_offset")}
               value={`${playback.wordsOffset > 0 ? "+" : ""}${playback.wordsOffset.toFixed(1)} s`}
+              changed={playback.wordsOffset !== 0}
               into
               onPick={() => onPanel("settings.words_offset")}
             />
@@ -1405,7 +1413,13 @@ function sheetFor(
                 })
               }
             />
-            <Line label={t("facts.title")} into onPick={() => onPanel("facts")} />
+            <Line
+              label={t("facts.title")}
+              onPick={() => {
+                surroundings.onFacts();
+                shut();
+              }}
+            />
           </>
         ),
       };
@@ -1559,8 +1573,7 @@ function sheetFor(
       };
     }
 
-    // The facts are a sheet of their own rather than a list of choices, and
-    // the player draws them beside this.
+    // The drawer's sheets, which the drawer draws.
     default:
       return null;
   }

@@ -192,6 +192,10 @@ function Film({
   /* Which panel is open, if any. Shut between films: one is opened to look at
      one film in particular. */
   const [panel, setPanel] = useState<Panel | null>(null);
+  /* Whether the playback diagnostics are open. Apart from the panels: they
+     are watched while the film plays and while other panels come and go, so
+     only their own cross shuts them. */
+  const [diagnosing, setDiagnosing] = useState(false);
   /* How the picture is fitted. Not remembered between films on purpose: it
      answers one film that was mastered oddly, not a standing preference. */
   const [shape, setShape] = useState<Shape>("auto");
@@ -341,6 +345,7 @@ function Film({
         fullscreen={fullscreen}
         panel={panel}
         onPanel={setPanel}
+        onFacts={() => setDiagnosing(true)}
         onClose={onClose}
         onNextEpisode={onNextEpisode}
         onPreviousEpisode={onPreviousEpisode}
@@ -378,13 +383,13 @@ function Film({
         </div>
       )}
 
-      {panel === "facts" && plan && (
+      {diagnosing && plan && (
         <PlaybackFacts
           plan={plan}
           video={video}
           session={stream?.id ?? null}
           t={t}
-          onClose={() => setPanel(null)}
+          onClose={() => setDiagnosing(false)}
         />
       )}
     </>
