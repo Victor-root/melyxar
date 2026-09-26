@@ -158,6 +158,22 @@ impl ProbeStream {
             .map(|(_, value)| value.as_str())
     }
 
+    /// How many bits a second the stream carries.
+    ///
+    /// Read from the stream itself first. A Matroska file leaves that empty
+    /// for its picture, and the tool that wrote it keeps the figure in a tag
+    /// instead, `BPS`, or `BPS-eng` in files written by older versions: every
+    /// other player reads it there, and a film shown without the bitrate of
+    /// its picture was a film missing the one number that says how good it is.
+    pub fn bitrate(&self) -> Option<i64> {
+        self.bit_rate
+            .as_deref()
+            .or_else(|| self.tag("BPS"))
+            .or_else(|| self.tag("BPS-eng"))
+            .and_then(|value| value.trim().parse().ok())
+            .filter(|bits: &i64| *bits > 0)
+    }
+
     /// Dolby Vision profile, when the stream announces one.
     pub fn dolby_vision_profile(&self) -> Option<i32> {
         self.side_data_list.iter().find_map(|block| {

@@ -193,7 +193,7 @@ fn video_details(stream: &ProbeStream) -> VideoDetails {
                     .and_then(parse_rational)
                     .filter(|rate| *rate > 0.0)
             }),
-        bitrate: stream.bit_rate.as_deref().and_then(|v| v.parse().ok()),
+        bitrate: stream.bitrate(),
         pixel_format: stream.pix_fmt.clone(),
         reference_frames: stream.refs.filter(|value| *value > 0),
         hdr: detect_hdr(stream, &color),
@@ -270,7 +270,7 @@ fn audio_details(stream: &ProbeStream) -> AudioDetails {
         channel_layout: stream.channel_layout.clone(),
         sample_rate: stream.sample_rate.as_deref().and_then(|v| v.parse().ok()),
         bit_depth: stream.bits_per_sample.filter(|value| *value > 0),
-        bitrate: stream.bit_rate.as_deref().and_then(|v| v.parse().ok()),
+        bitrate: stream.bitrate(),
         // Left empty here. Loudness is measured by a separate background pass,
         // because measuring it means reading the whole file.
         loudness: Loudness::default(),
@@ -336,6 +336,34 @@ mod tests {
 
     fn lining_up(json: &str) -> HowTheStreamsLineUp {
         HowTheStreamsLineUp::of(&parse_report(json).expect("the report parses"))
+    }
+
+    #[test]
+    fn the_bitrate_a_matroska_file_keeps_in_a_tag_is_read_there() {
+        let file = analyse(
+            r#"{"streams":[
+                {"index":0,"codec_type":"video","codec_name":"hevc","width":1920,"height":800,
+                 "tags":{"BPS":"7012345"}},
+                {"index":1,"codec_type":"audio","codec_name":"ac3","bit_rate":"640000",
+                 "tags":{"BPS":"1"}},
+                {"index":2,"codec_type":"audio","codec_name":"aac","tags":{"BPS-eng":"192000"}},
+                {"index":3,"codec_type":"audio","codec_name":"dts"}]}"#,
+        );
+        let bitrates: Vec<Option<i64>> = file
+            .tracks
+            .iter()
+            .map(|track| match &track.kind {
+                TrackKind::Video(video) => video.bitrate,
+                TrackKind::Audio(audio) => audio.bitrate,
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            bitrates,
+            vec![Some(7_012_345), Some(640_000), Some(192_000), None],
+            "the tag when the stream says nothing, the stream when it does, \
+             and nothing rather than a guess"
+        );
     }
 
     #[test]
