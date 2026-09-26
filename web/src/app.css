@@ -2447,10 +2447,18 @@ input[type="radio"]:disabled {
   height: 15px;
 }
 
+/* Shown at once rather than faded in. The corner under it is cut out of the
+   picture in the same instant, which cannot be faded, and a banner fading in
+   over a corner already cut away flashed the page behind through it before
+   the grey arrived. It still fades out: leaving, the picture is whole again
+   under it at once, and there is nothing behind it to flash. */
 .card:hover .seen-mark,
 .card:focus-within .seen-mark,
 .seen-mark-on {
   opacity: 1;
+  transition:
+    opacity 0s,
+    background var(--quick) var(--ease);
 }
 
 /* Nothing but the banner in the corner it is folded over. The rounded edge
