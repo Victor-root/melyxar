@@ -5,7 +5,9 @@
 import type { Library } from "../api";
 import { Card } from "../components/card";
 import { Grid } from "../components/grid";
+import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
+import { ArrowRightIcon, CloseIcon, IdentifyIcon } from "../icons";
 import { cardShapeOf, nameOfKind } from "../libraries";
 import { ORDERS, useBrowsing } from "../screens/browsing";
 import { useSettings } from "../settings";
@@ -40,66 +42,63 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
         )}
       </div>
 
-      <div className="controls">
-        <label className="choice">
-          <span className="choice-label">{t("library.sort")}</span>
-          <select value={order} onChange={(event) => choose("order", event.target.value)}>
-            {ORDERS.map((value) => (
-              <option key={value} value={value}>
-                {t(`library.sort.${value}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+      {/* How the grid is read, in one piece of the glass the bar at the top is
+          made of: a row of loose system fields was the one place left that
+          looked like a form rather than like Melyxar. */}
+      <div className="browse-bar">
+        <div className="browse-piece">
+          <span className="browse-field">
+            <span className="browse-label">{t("library.sort")}</span>
+            <Picker
+              value={order}
+              options={ORDERS.map((value) => [value, t(`library.sort.${value}`)] as const)}
+              onPick={(value) => choose("order", value)}
+              label={t("library.sort")}
+            />
+            {/* Which way round, drawn as the way the arrow points rather than
+                written out: a sentence for an arrow's worth of meaning. */}
+            <button
+              type="button"
+              className={`browse-direction${descending ? " browse-direction-down" : ""}`}
+              onClick={() => choose("descending", descending ? null : "true")}
+              aria-pressed={descending}
+              aria-label={t("library.descending")}
+              title={t(descending ? "library.descending" : "library.ascending")}
+            >
+              <ArrowRightIcon size={16} />
+            </button>
+          </span>
 
-        <button
-          className={`toggle ${descending ? "toggle-on" : ""}`}
-          onClick={() => choose("descending", descending ? null : "true")}
-          aria-pressed={descending}
-        >
-          {t("library.descending")}
-        </button>
-
-        {filters && filters.genres.length > 0 && (
-          <label className="choice">
-            <span className="choice-label">{t("library.filter.genre")}</span>
-            <select
+          {filters && filters.genres.length > 0 && (
+            <Narrower
+              label={t("library.filter.genre")}
               value={genre ?? ""}
-              onChange={(event) => choose("genre", event.target.value || null)}
-            >
-              <option value="">{t("library.filter.any")}</option>
-              {filters.genres.map((entry) => (
-                <option key={entry.name} value={entry.name}>
-                  {entry.name} ({entry.works})
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+              options={filters.genres.map((entry) => [entry.name, `${entry.name} (${entry.works})`])}
+              onPick={(value) => choose("genre", value || null)}
+            />
+          )}
 
-        {filters && filters.decades.length > 0 && (
-          <label className="choice">
-            <span className="choice-label">{t("library.filter.decade")}</span>
-            <select
-              value={decade ?? ""}
-              onChange={(event) => choose("decade", event.target.value || null)}
-            >
-              <option value="">{t("library.filter.any")}</option>
-              {filters.decades.map((entry) => (
-                <option key={entry.decade} value={entry.decade}>
-                  {entry.decade}s ({entry.works})
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+          {filters && filters.decades.length > 0 && (
+            <Narrower
+              label={t("library.filter.decade")}
+              value={decade === undefined ? "" : String(decade)}
+              options={filters.decades.map((entry) => [
+                String(entry.decade),
+                `${entry.decade}s (${entry.works})`,
+              ])}
+              onPick={(value) => choose("decade", value || null)}
+            />
+          )}
+        </div>
 
         {awaitsNames && (
           <button
-            className={`toggle ${unidentified ? "toggle-on" : ""}`}
+            type="button"
+            className={`browse-piece browse-alone${unidentified ? " browse-alone-on" : ""}`}
             onClick={() => choose("unidentified", unidentified ? null : "true")}
             aria-pressed={unidentified}
           >
+            <IdentifyIcon size={16} />
             {t("library.filter.unidentified")}
           </button>
         )}
@@ -152,5 +151,46 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
         <p className="notice notice-faint">{t("library.end")}</p>
       )}
     </main>
+  );
+}
+
+/**
+ * One filter of the bar: what it narrows by, what it is set to, and, once set,
+ * the way to take it off in one press rather than by finding "Any" in its list.
+ */
+function Narrower({
+  label,
+  value,
+  options,
+  onPick,
+}: {
+  label: string;
+  /** Empty while nothing is narrowed. */
+  value: string;
+  options: (readonly [string, string])[];
+  onPick: (value: string) => void;
+}) {
+  const { t } = useSettings();
+  return (
+    <span className={`browse-field${value ? " browse-field-on" : ""}`}>
+      <span className="browse-label">{label}</span>
+      <Picker
+        value={value}
+        options={[["", t("library.filter.any")], ...options]}
+        onPick={onPick}
+        label={label}
+      />
+      {value && (
+        <button
+          type="button"
+          className="browse-clear"
+          onClick={() => onPick("")}
+          aria-label={t("library.filter.clear", { name: label })}
+          title={t("library.filter.clear", { name: label })}
+        >
+          <CloseIcon size={14} />
+        </button>
+      )}
+    </span>
   );
 }
