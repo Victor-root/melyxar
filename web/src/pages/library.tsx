@@ -103,9 +103,13 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
               className={`browse-piece browse-alone${unidentified ? " browse-alone-on" : ""}`}
               onClick={() => choose("unidentified", unidentified ? null : "true")}
               aria-pressed={unidentified}
+              aria-label={t("library.filter.unidentified")}
+              title={t("library.filter.unidentified")}
             >
               <IdentifyIcon size={16} />
-              {t("library.filter.unidentified")}
+              {/* Left out when the bar is short of room, the icon standing
+                  for it. */}
+              <span className="browse-alone-words">{t("library.filter.unidentified")}</span>
             </button>
           )}
         </div>
