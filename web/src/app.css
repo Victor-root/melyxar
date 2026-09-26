@@ -3123,50 +3123,74 @@ button.seen-mark:not(.seen-mark-on):hover {
 /* Each card as wide as what it says and no wider: stretched to a column,
    a card of short facts was mostly empty on its right. A long path still
    wraps inside the widest a card may be. */
+/* One card per track, every one the same width and the same height: as many
+   to a row as fit, and every row as tall as the tallest card of all, so four
+   soundtracks read as four alike things. */
 .panels.work-panels {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  grid-auto-rows: 1fr;
+}
+
+/* One to a row, alike heights say nothing and leave holes. */
+@media (max-width: 660px) {
+  .panels.work-panels {
+    grid-auto-rows: auto;
+  }
+}
+
+/* The file above its tracks, as a heading rather than a card: where it is,
+   then what it is, with what can be done to it at the right. */
+.media-file {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap);
+  margin-bottom: calc(var(--gap) * 1.25);
+}
+
+.media-file-words {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.media-file-path {
+  margin: 0 0 6px;
+  color: var(--text-soft);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.media-file-about {
+  margin: 0;
   display: flex;
   flex-wrap: wrap;
-  /* The cards of one row as tall as the tallest of them. */
-  align-items: stretch;
+  align-items: center;
+  column-gap: calc(var(--gap) * 1.25);
+  row-gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.panels.work-panels > .panel {
-  flex: 0 1 auto;
-  min-width: min(100%, 260px);
-  max-width: min(100%, 460px);
+.media-file-label {
+  margin-right: 6px;
+  color: var(--text-faint);
+  font-weight: 400;
 }
 
-/* The title beside its mark rather than under it, in a card only as wide as
-   its facts. */
-.panels.work-panels .panel-words {
-  flex-basis: auto;
-}
-
-/* The facts in two columns, every value starting at the same place. A path
-   keeps a line of its own. */
-.panels.work-panels .work-facts-list {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  column-gap: var(--gap);
-  row-gap: 2px;
-}
-
-.panels.work-panels .fact-line {
-  display: contents;
-}
-
-.panels.work-panels .fact-line-wide {
+.media-file-actions {
+  flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
 }
 
-/* The title beside its mark rather than under it, in a card only as wide as
-   its facts. */
+/* The title beside its mark rather than under it. */
 .panels.work-panels .panel-words {
   flex-basis: auto;
 }
 
 /* The facts in two columns, every value starting at the same place: the
-   label column as wide as its longest label. A path keeps a line of its own. */
+   label column as wide as its longest label. */
 .panels.work-panels .work-facts-list {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -3176,10 +3200,6 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 .panels.work-panels .fact-line {
   display: contents;
-}
-
-.panels.work-panels .fact-line-wide {
-  display: flex;
 }
 
 .work-facts-list {
@@ -3627,18 +3647,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--text);
   min-width: 0;
   word-break: break-word;
-}
-
-/* A path is long and is read whole, so it takes a line of its own. */
-.fact-line-wide {
-  grid-column: 1 / -1;
-  flex-direction: column;
-  gap: 0;
-}
-
-.fact-line-wide dd {
-  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
-  font-size: 12px;
 }
 
 .work-link {
