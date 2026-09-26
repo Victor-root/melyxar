@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use melyxar_core::media::{normalise_language, SubtitleLayout};
+use melyxar_core::media::{normalise_language, says_forced, SubtitleLayout};
 
 /// What a subtitle file turned out to be.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,8 +51,8 @@ fn subtitle_format(file_name: &str) -> Option<(&'static str, SubtitleLayout)> {
         .map(|(_, codec, layout)| (*codec, *layout))
 }
 
-/// Words that say what a subtitle is for rather than which language it is in.
-const FORCED_MARKS: [&str; 3] = ["forced", "force", "forcés"];
+/// Words that say a subtitle is for viewers hard of hearing rather than which
+/// language it is in.
 const HEARING_MARKS: [&str; 5] = ["sdh", "cc", "hi", "sme", "malentendants"];
 
 /// Reads a subtitle file sitting next to a film.
@@ -75,7 +75,7 @@ pub fn read(file_name: &str, remainder: &str) -> Option<SidecarSubtitle> {
         .filter(|word| !word.is_empty())
     {
         let lowered = word.to_lowercase();
-        if FORCED_MARKS.contains(&lowered.as_str()) {
+        if says_forced(&lowered) {
             subtitle.is_forced = true;
         } else if HEARING_MARKS.contains(&lowered.as_str()) {
             subtitle.is_hearing_impaired = true;
