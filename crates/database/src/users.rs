@@ -8,7 +8,8 @@ use melyxar_core::id::{LibraryId, UserId};
 use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::user::{
-    DownmixMethod, Permissions, Preferences, SubtitleMode, ThemeMode, User, WideGamutChoice,
+    DownmixMethod, HomeSection, Permissions, Preferences, SubtitleMode, ThemeMode, User,
+    WideGamutChoice,
 };
 use sqlx::{AssertSqlSafe, Row};
 
@@ -55,8 +56,8 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.downmix_method, p.downmix_gain,
      p.banner_height, p.banner_cut, p.banner_shown, p.banner_at_random,
      p.banner_fills_the_screen, p.header_hides_on_scroll,
-     p.hidden_at_the_door, p.home_order, p.step_back_seconds, p.step_on_seconds,
-     p.wide_gamut";
+     p.hidden_at_the_door, p.home_order, p.home_sections, p.hidden_home_sections,
+     p.step_back_seconds, p.step_on_seconds, p.wide_gamut";
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
@@ -391,7 +392,8 @@ impl Database {
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
                 banner_height = ?, banner_cut = ?, banner_shown = ?, banner_at_random = ?,
                 banner_fills_the_screen = ?, header_hides_on_scroll = ?,
-                hidden_at_the_door = ?, home_order = ?, step_back_seconds = ?,
+                hidden_at_the_door = ?, home_order = ?, home_sections = ?,
+                hidden_home_sections = ?, step_back_seconds = ?,
                 step_on_seconds = ?, wide_gamut = ?
              WHERE user_id = ?",
         )
@@ -413,6 +415,8 @@ impl Database {
         .bind(preferences.header_hides_on_scroll)
         .bind(preferences.hidden_at_the_door)
         .bind(written_order(&preferences.home_order))
+        .bind(written_sections(&preferences.home_sections))
+        .bind(written_sections(&preferences.hidden_home_sections))
         .bind(preferences.step_back_seconds)
         .bind(preferences.step_on_seconds)
         .bind(preferences.wide_gamut.as_str())
@@ -437,6 +441,20 @@ fn written_order(order: &[LibraryKind]) -> String {
 /// than locking the account out.
 fn read_order(stored: &str) -> Vec<LibraryKind> {
     stored.split(',').filter_map(LibraryKind::parse).collect()
+}
+
+/// Sections of a home page as they are kept, and read back the same way as
+/// the kinds of library.
+fn written_sections(sections: &[HomeSection]) -> String {
+    sections
+        .iter()
+        .map(|section| section.as_str())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn read_sections(stored: &str) -> Vec<HomeSection> {
+    stored.split(',').filter_map(HomeSection::parse).collect()
 }
 
 /// Writes an account, its preferences and its grants, inside one transaction.
@@ -479,8 +497,9 @@ async fn write_an_account(
                                        banner_height, banner_cut, banner_shown, banner_at_random,
                                        banner_fills_the_screen, header_hides_on_scroll,
                                        hidden_at_the_door, home_order, step_back_seconds,
-                                       step_on_seconds, wide_gamut, subtitle_mode)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       step_on_seconds, wide_gamut, subtitle_mode,
+                                       home_sections, hidden_home_sections)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -501,6 +520,8 @@ async fn write_an_account(
     .bind(preferences.step_on_seconds)
     .bind(preferences.wide_gamut.as_str())
     .bind(preferences.subtitle_mode.as_str())
+    .bind(written_sections(&preferences.home_sections))
+    .bind(written_sections(&preferences.hidden_home_sections))
     .execute(&mut **transaction)
     .await?;
 
@@ -593,6 +614,10 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             header_hides_on_scroll: row.try_get("header_hides_on_scroll")?,
             hidden_at_the_door: row.try_get("hidden_at_the_door")?,
             home_order: read_order(&row.try_get::<String, _>("home_order")?),
+            home_sections: read_sections(&row.try_get::<String, _>("home_sections")?),
+            hidden_home_sections: read_sections(
+                &row.try_get::<String, _>("hidden_home_sections")?,
+            ),
             step_back_seconds: row.try_get("step_back_seconds")?,
             step_on_seconds: row.try_get("step_on_seconds")?,
             wide_gamut: WideGamutChoice::parse(&row.try_get::<String, _>("wide_gamut")?)
@@ -1145,6 +1170,8 @@ mod tests {
             step_on_seconds: 30,
             wide_gamut: WideGamutChoice::NeverConvert,
             subtitle_mode: SubtitleMode::OnlyForced,
+            home_sections: vec![HomeSection::Libraries],
+            hidden_home_sections: vec![HomeSection::Band],
             ..Preferences::default()
         };
         database
@@ -1179,6 +1206,17 @@ mod tests {
         assert_eq!(loaded.preferences.step_on_seconds, 30);
         assert_eq!(loaded.preferences.wide_gamut, WideGamutChoice::NeverConvert);
         assert_eq!(loaded.preferences.subtitle_mode, SubtitleMode::OnlyForced);
+        assert_eq!(
+            loaded.preferences.home_sections,
+            vec![
+                HomeSection::Libraries,
+                HomeSection::Band,
+                HomeSection::CarryOn,
+                HomeSection::UpNext,
+                HomeSection::RecentlyAdded,
+            ]
+        );
+        assert_eq!(loaded.preferences.hidden_home_sections, vec![HomeSection::Band]);
         assert_eq!(
             loaded.preferences.home_order,
             vec![
