@@ -402,7 +402,7 @@ pub fn effective_container(source: &MediaSource) -> Option<String> {
 /// marks it as its default: it is a narrator talking over the film, wanted by
 /// the few who ask for it and by nobody who did not. Asked for by hand it is
 /// played like any other track.
-fn chosen_audio<'a>(
+pub(crate) fn chosen_audio<'a>(
     source: &'a MediaSource,
     requested: Option<&'a Track>,
 ) -> Option<(&'a Track, &'a AudioDetails)> {

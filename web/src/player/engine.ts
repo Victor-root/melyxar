@@ -453,6 +453,10 @@ export function usePlayback({
      nothing when nothing is already held is a choice React sees no change
      in and, left to it, silently drops. */
   const [choiceSerial, setChoiceSerial] = useState(0);
+  /* Said to the server in so many words: naming no subtitle only says
+     nothing, and left to itself the server picks the one the account's mode
+     asks for, which is the one the viewer just turned off. */
+  const subtitlesOff = choiceSerial > 0 && subtitleId === null;
   const [speed, setSpeedState] = useState(1);
   /* What the viewer asked the picture to be held to. Kept across films rather
      than per film: somebody watching on a thin connection is on a thin
@@ -563,6 +567,7 @@ export function usePlayback({
             profile,
             audio_track_id: audioId,
             subtitle_track_id: subtitleId,
+            subtitles_off: subtitlesOff,
             preferred_video_codec: requestedCodec(codec),
             wide_gamut: wideGamut,
             // This is the player about to show the film, which is what makes
@@ -614,10 +619,12 @@ export function usePlayback({
      off the method, which stays the same either way: choosing another one used
      to change nothing at all, and the words only appeared once something else
      forced a new session, which is a very long way of saying they never
-     appeared. */
+     appeared. Read off the answer rather than off what the viewer picked,
+     since the server picks one on its own too, and turning that one off has
+     to change what is produced. */
   const paintedIn =
-    plan?.subtitles.find((track) => track.id === subtitleId)?.burns_in === true
-      ? subtitleId
+    plan?.subtitles.find((track) => track.id === plan.chosen_subtitle_id)?.burns_in === true
+      ? plan.chosen_subtitle_id
       : null;
   /* What the server would actually be asked to produce. A subtitle handed
      over alongside the picture changes none of it, so turning subtitles on
@@ -670,6 +677,7 @@ export function usePlayback({
           profile,
           audio_track_id: audioId,
           subtitle_track_id: paintedIn,
+          subtitles_off: paintedIn === null && subtitlesOff,
           preferred_video_codec: requestedCodec(codec),
           wide_gamut: wideGamut,
           start_at_seconds: openedAt.current,

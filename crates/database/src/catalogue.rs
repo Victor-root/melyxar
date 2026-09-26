@@ -2601,9 +2601,9 @@ pub(crate) async fn merge_within(
         for carried in [
             "INSERT OR IGNORE INTO playback_progress
                 (user_id, work_id, position_ms, state, marked_manually, play_count,
-                 audio_track_id, subtitle_track_id, reported_at, last_played_at)
+                 audio_track_id, subtitle_track_id, subtitles_off, reported_at, last_played_at)
              SELECT user_id, ?, position_ms, state, marked_manually, play_count,
-                    audio_track_id, subtitle_track_id, reported_at, last_played_at
+                    audio_track_id, subtitle_track_id, subtitles_off, reported_at, last_played_at
              FROM playback_progress WHERE work_id = ?",
             "INSERT OR IGNORE INTO favorites (user_id, work_id, created_at)
              SELECT user_id, ?, created_at FROM favorites WHERE work_id = ?",

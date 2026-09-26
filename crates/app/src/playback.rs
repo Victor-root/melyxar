@@ -54,8 +54,8 @@ pub struct PlayRequest {
     pub profile: Option<ClientProfile>,
     /// Chosen soundtrack. Absent means the one the file marks as default.
     pub audio_track_id: Option<TrackId>,
-    /// Chosen subtitle. Absent means none.
-    pub subtitle_track_id: Option<TrackId>,
+    /// Which subtitle the viewer asked for, if they said anything.
+    pub subtitle: SubtitleAsked,
     /// A codec asked for directly, forced whenever this server allows it and
     /// the card can produce it.
     ///
@@ -68,6 +68,21 @@ pub struct PlayRequest {
     /// What to do with wide gamut colour for this playback alone, over the
     /// account's own choice. Absent leaves it to that choice.
     pub wide_gamut: Option<WideGamutChoice>,
+}
+
+/// Which subtitle a viewer asked for.
+///
+/// Three answers rather than an optional track, because "none" and "nothing
+/// said" are not the same request: the account's mode picks a subtitle for a
+/// film nobody said anything about, and turning subtitles off has to stay off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SubtitleAsked {
+    /// What this film was left with, otherwise what the account's mode picks.
+    #[default]
+    Unsaid,
+    /// No subtitle at all.
+    Off,
+    Track(TrackId),
 }
 
 /// Everything a player needs to start.
@@ -223,30 +238,39 @@ pub async fn plan(
     // What the viewer asked for now, otherwise what they chose last time for
     // this very film, otherwise a track in the language they prefer. Only then
     // does the file get to decide, which is what happens today for everyone.
-    let audio = chosen_track(
+    let audio = chosen_soundtrack(
         &tracks,
         request.audio_track_id,
         remembered.as_ref().and_then(|stored| stored.audio_track_id),
         preferences
             .as_ref()
             .and_then(|values| values.preferred_audio_language.as_deref()),
-        TrackShape::Audio,
     );
-    let subtitle = match request.subtitle_track_id {
-        // A subtitle is only shown when someone asks for one: a film that
-        // starts with subtitles nobody wanted is a film someone stops.
-        Some(id) => tracks.iter().find(|track| track.id == id),
-        None => chosen_track(
-            &tracks,
-            None,
-            remembered
+    // Asked for now, otherwise what this film was left with, subtitles
+    // turned off included. Only a film nobody said anything about is left to
+    // the account's mode.
+    let by_id = |wanted: TrackId| tracks.iter().find(|track| track.id == wanted);
+    let subtitle = match request.subtitle {
+        SubtitleAsked::Track(id) => by_id(id),
+        SubtitleAsked::Off => None,
+        SubtitleAsked::Unsaid => match &remembered {
+            Some(stored) if stored.subtitles_off => None,
+            _ => remembered
                 .as_ref()
-                .and_then(|stored| stored.subtitle_track_id),
-            preferences
-                .as_ref()
-                .and_then(|values| values.preferred_subtitle_language.as_deref()),
-            TrackShape::Subtitle,
-        ),
+                .and_then(|stored| stored.subtitle_track_id)
+                .and_then(by_id)
+                .or_else(|| {
+                    let chosen = preferences.as_ref();
+                    melyxar_playback::subtitle_by_mode(
+                        &media,
+                        audio,
+                        chosen
+                            .map(|values| values.subtitle_mode)
+                            .unwrap_or_default(),
+                        chosen.and_then(|values| values.preferred_subtitle_language.as_deref()),
+                    )
+                }),
+        },
     };
     let downmix = preferences
         .as_ref()
@@ -385,35 +409,18 @@ pub async fn plan(
     })
 }
 
-/// Which of the two kinds of track is being looked for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TrackShape {
-    Audio,
-    Subtitle,
-}
-
-impl TrackShape {
-    fn matches(self, track: &Track) -> bool {
-        match self {
-            Self::Audio => matches!(track.kind, melyxar_core::media::TrackKind::Audio(_)),
-            Self::Subtitle => matches!(track.kind, melyxar_core::media::TrackKind::Subtitle(_)),
-        }
-    }
-}
-
-/// Picks a track, in the order a viewer would expect.
+/// Picks a soundtrack, in the order a viewer would expect.
 ///
 /// What they asked for now beats what they chose last time, which beats the
 /// language they prefer in general. A choice pointing at a track the file no
 /// longer holds falls through to the next rule rather than to nothing: an
 /// analysis run again renumbers the tracks, and a viewer should not have to
 /// notice.
-fn chosen_track<'a>(
+fn chosen_soundtrack<'a>(
     tracks: &'a [Track],
     asked_for: Option<TrackId>,
     remembered: Option<TrackId>,
     preferred_language: Option<&str>,
-    shape: TrackShape,
 ) -> Option<&'a Track> {
     let by_id = |wanted: TrackId| tracks.iter().find(|track| track.id == wanted);
 
@@ -426,7 +433,7 @@ fn chosen_track<'a>(
 
     let wanted = preferred_language.map(melyxar_core::media::normalise_language)?;
     tracks.iter().find(|track| {
-        shape.matches(track)
+        matches!(track.kind, TrackKind::Audio(_))
             && track
                 .language
                 .as_deref()
@@ -479,13 +486,15 @@ pub async fn remember_chosen_tracks(
     if let Some(user) = database.user(user_id).await? {
         let mut preferences = user.preferences;
         // A track with no language declared teaches nothing about what this
-        // viewer prefers, so it leaves the preference alone.
+        // viewer prefers, so it leaves the preference alone. Nor does turning
+        // subtitles off: whether a film starts with any is the mode's to say,
+        // and the language read is what the mode looks for.
         if let Some(language) = audio.and_then(|track| track.language.clone()) {
             preferences.preferred_audio_language = Some(language);
         }
-        // Subtitles are different: turning them off is itself a preference,
-        // and one a viewer expects to hold for the next film too.
-        preferences.preferred_subtitle_language = subtitle.and_then(|track| track.language.clone());
+        if let Some(language) = subtitle.and_then(|track| track.language.clone()) {
+            preferences.preferred_subtitle_language = Some(language);
+        }
         database.save_preferences(user_id, &preferences).await?;
     }
     Ok(())
@@ -1397,7 +1406,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -1464,7 +1473,7 @@ mod tests {
                     source_id,
                     profile: None,
                     audio_track_id: None,
-                    subtitle_track_id: None,
+                    subtitle: SubtitleAsked::Unsaid,
                     preferred_video_codec: None,
                     wide_gamut: None,
                 },
@@ -1551,7 +1560,7 @@ mod tests {
             source_id,
             profile: None,
             audio_track_id: None,
-            subtitle_track_id: None,
+            subtitle: SubtitleAsked::Unsaid,
             preferred_video_codec: None,
             wide_gamut: None,
         };
@@ -1590,7 +1599,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -1640,7 +1649,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: Some(chosen.id),
+                subtitle: SubtitleAsked::Track(chosen.id),
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -1676,7 +1685,7 @@ mod tests {
                 source_id: source,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -1848,7 +1857,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -1857,6 +1866,63 @@ mod tests {
         .expect("a plan");
         assert_eq!(plan.decision.subtitles, SubtitleDelivery::None);
         assert_eq!(plan.decision.subtitle_stream_index, None);
+    }
+
+    #[tokio::test]
+    async fn forced_lines_start_on_their_own_and_stay_off_once_turned_off() {
+        // A French soundtrack with the few lines it does not say in French.
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                let mut forced = subtitle(id);
+                forced.is_forced = true;
+                vec![video(id, "h264", 1080), audio(id, "aac", 2, true), forced]
+            })
+            .await;
+        let who = crate::an_ordinary_account(user_id);
+        let subtitle_of = |subtitle| {
+            let (state, who) = (&state, &who);
+            async move {
+                plan(
+                    state,
+                    who,
+                    &PlayRequest {
+                        source_id,
+                        profile: None,
+                        audio_track_id: None,
+                        subtitle,
+                        preferred_video_codec: None,
+                        wide_gamut: None,
+                    },
+                )
+                .await
+                .expect("a plan")
+                .decision
+                .subtitle_stream_index
+            }
+        };
+
+        assert_eq!(
+            subtitle_of(SubtitleAsked::Unsaid).await,
+            Some(2),
+            "nobody has to ask for the lines the soundtrack does not say"
+        );
+        assert_eq!(subtitle_of(SubtitleAsked::Off).await, None);
+
+        let work_id = state
+            .database()
+            .playable_source(source_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .work_id;
+        remember_chosen_tracks(&state, &who, work_id, source_id, None, None)
+            .await
+            .expect("choice remembered");
+        assert_eq!(
+            subtitle_of(SubtitleAsked::Unsaid).await,
+            None,
+            "turned off in this film, they stay off in it"
+        );
     }
 
     #[tokio::test]
@@ -1876,7 +1942,7 @@ mod tests {
             source_id,
             profile: Some(profile),
             audio_track_id: None,
-            subtitle_track_id: None,
+            subtitle: SubtitleAsked::Unsaid,
             preferred_video_codec: None,
             wide_gamut: None,
         };
@@ -1968,7 +2034,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2009,7 +2075,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2063,7 +2129,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2117,7 +2183,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: Some(words.id),
+                subtitle: SubtitleAsked::Track(words.id),
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2167,7 +2233,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: Some(words.id),
+                subtitle: SubtitleAsked::Track(words.id),
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2201,7 +2267,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2361,7 +2427,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2757,7 +2823,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2848,7 +2914,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2916,7 +2982,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -2965,7 +3031,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
@@ -3019,7 +3085,7 @@ mod tests {
                 source_id,
                 profile: None,
                 audio_track_id: None,
-                subtitle_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
             },
