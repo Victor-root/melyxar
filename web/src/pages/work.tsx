@@ -581,7 +581,6 @@ function Marks({
 }) {
   const { t } = useSettings();
   const marks = useMarks();
-  const seen = marks.seenOf(card) === "watched";
   const favourite = marks.favouriteOf(card);
   const kebab = useRef<HTMLButtonElement>(null);
   const menu = useWorkMenu(card, {
@@ -590,21 +589,11 @@ function Marks({
     deleted: onDeleted,
   });
 
-  const seenSaid = t(seen ? "card.menu.mark_unwatched" : "card.menu.mark_watched");
   const favouriteSaid = t(favourite ? "card.unfavourite" : "card.favourite");
 
   return (
     <span className="work-marks">
-      <button
-        type="button"
-        className={`work-mark${seen ? " work-mark-on" : ""}`}
-        aria-pressed={seen}
-        aria-label={seenSaid}
-        title={seenSaid}
-        onClick={() => marks.setWatched(card, !seen)}
-      >
-        <TickIcon size={22} />
-      </button>
+      <SeenButton card={card} />
       <button
         type="button"
         className={`work-mark${favourite ? " work-mark-on" : ""}`}
@@ -628,6 +617,30 @@ function Marks({
       </button>
       {menu.drawn}
     </span>
+  );
+}
+
+/** Marks a work watched or not, and says which it is. The page's own work
+ *  has it among its marks, and every episode of a season's list has one
+ *  of its own, smaller: the corner of a still is too small a place to be
+ *  the only way to tick one off. */
+function SeenButton({ card, small = false }: { card: CardData; small?: boolean }) {
+  const { t } = useSettings();
+  const marks = useMarks();
+  const seen = marks.seenOf(card) === "watched";
+  const said = t(seen ? "card.menu.mark_unwatched" : "card.menu.mark_watched");
+
+  return (
+    <button
+      type="button"
+      className={`work-mark${small ? " work-mark-small" : ""}${seen ? " work-mark-on" : ""}`}
+      aria-pressed={seen}
+      aria-label={said}
+      title={said}
+      onClick={() => marks.setWatched(card, !seen)}
+    >
+      <TickIcon size={small ? 16 : 22} />
+    </button>
   );
 }
 
@@ -1063,9 +1076,12 @@ function EpisodeLine({ child }: { child: Child }) {
     <li className="episode-line">
       <Card card={card} shape="lying" named={false} />
       <div className="episode-line-words">
-        <Link className="episode-line-name" to={`/work/${card.id}`}>
-          {nameOfChild(child, t)}
-        </Link>
+        <div className="episode-line-head">
+          <Link className="episode-line-name" to={`/work/${card.id}`}>
+            {nameOfChild(child, t)}
+          </Link>
+          <SeenButton card={card} small />
+        </div>
         <p className="work-facts">
           {card.rating !== null && (
             <span className="work-rating">

@@ -3285,6 +3285,12 @@ button.seen-mark:not(.seen-mark-on):hover {
   transform: scale(1.06);
 }
 
+.work-mark-small {
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+
 .work-mark-on {
   border-color: color-mix(in srgb, var(--accent) 60%, transparent);
   color: var(--accent-bright);
@@ -4545,6 +4551,12 @@ button.seen-mark:not(.seen-mark-on):hover {
   align-items: flex-start;
   gap: var(--gap-tight);
   padding-top: 2px;
+}
+
+.episode-line-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
 }
 
 .episode-line-name {
