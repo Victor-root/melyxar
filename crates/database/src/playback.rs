@@ -60,6 +60,9 @@ pub struct StoredProgress {
     /// same way rather than back on whatever the file marks as default.
     pub audio_track_id: Option<TrackId>,
     pub subtitle_track_id: Option<TrackId>,
+    /// Whether they turned the subtitles off, which is not the same as never
+    /// having picked any.
+    pub subtitles_off: bool,
 }
 
 /// A work somebody started and has not finished, and where they got to.
@@ -240,7 +243,7 @@ impl Database {
     ) -> Result<Option<StoredProgress>> {
         let row = sqlx::query(
             "SELECT position_ms, state, marked_manually, play_count, reported_at, last_played_at,
-                    audio_track_id, subtitle_track_id
+                    audio_track_id, subtitle_track_id, subtitles_off
              FROM playback_progress WHERE user_id = ? AND work_id = ?",
         )
         .bind(user_id.to_db_string())
@@ -266,6 +269,7 @@ impl Database {
                 )?,
                 audio_track_id: parse_track(row.try_get("audio_track_id")?)?,
                 subtitle_track_id: parse_track(row.try_get("subtitle_track_id")?)?,
+                subtitles_off: crate::convert::int_to_bool(row.try_get("subtitles_off")?),
             })
         })
         .transpose()
@@ -496,16 +500,18 @@ impl Database {
     ) -> Result<()> {
         sqlx::query(
             "INSERT INTO playback_progress
-                (user_id, work_id, audio_track_id, subtitle_track_id)
-             VALUES (?, ?, ?, ?)
+                (user_id, work_id, audio_track_id, subtitle_track_id, subtitles_off)
+             VALUES (?, ?, ?, ?, ?)
              ON CONFLICT (user_id, work_id) DO UPDATE SET
                 audio_track_id = excluded.audio_track_id,
-                subtitle_track_id = excluded.subtitle_track_id",
+                subtitle_track_id = excluded.subtitle_track_id,
+                subtitles_off = excluded.subtitles_off",
         )
         .bind(user_id.to_db_string())
         .bind(work_id.to_db_string())
         .bind(audio_track_id.map(|id| id.to_db_string()))
         .bind(subtitle_track_id.map(|id| id.to_db_string()))
+        .bind(crate::convert::bool_to_int(subtitle_track_id.is_none()))
         .execute(self.writer())
         .await?;
         Ok(())
@@ -1589,6 +1595,7 @@ mod tests {
             .expect("present");
         assert_eq!(stored.audio_track_id, Some(soundtrack));
         assert_eq!(stored.subtitle_track_id, Some(caption));
+        assert!(!stored.subtitles_off);
         assert_eq!(
             stored.position,
             Millis::ZERO,
@@ -1600,15 +1607,13 @@ mod tests {
             .record_chosen_tracks(user_id, work_id, Some(soundtrack), None)
             .await
             .expect("choice recorded");
-        assert_eq!(
-            database
-                .playback_progress(user_id, work_id)
-                .await
-                .expect("read")
-                .expect("present")
-                .subtitle_track_id,
-            None
-        );
+        let stored = database
+            .playback_progress(user_id, work_id)
+            .await
+            .expect("read")
+            .expect("present");
+        assert_eq!(stored.subtitle_track_id, None);
+        assert!(stored.subtitles_off);
     }
 
     #[tokio::test]

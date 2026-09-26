@@ -20,7 +20,7 @@ use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::playback::{
     ClientProfile, PlayPlan, PlayRequest, Preparation, Producing, Session, StreamAction,
-    SubtitleDelivery, SEGMENT_DURATION,
+    SubtitleAsked, SubtitleDelivery, SEGMENT_DURATION,
 };
 use melyxar_app::AppState;
 use melyxar_core::id::MediaSourceId;
@@ -106,6 +106,11 @@ struct PlanBody {
     audio_track_id: Option<String>,
     #[serde(default)]
     subtitle_track_id: Option<String>,
+    /// Said when the viewer turned subtitles off. Naming no track says
+    /// nothing, which leaves the choice to what the film was left with and
+    /// to the account's mode.
+    #[serde(default)]
+    subtitles_off: bool,
     /// A codec asked for directly, forced whenever this server allows it and
     /// the card can produce it. Absent leaves the choice to the usual
     /// negotiation.
@@ -132,11 +137,16 @@ impl PlanBody {
                 .as_deref()
                 .map(parse_track)
                 .transpose()?,
-            subtitle_track_id: self
-                .subtitle_track_id
-                .as_deref()
-                .map(parse_track)
-                .transpose()?,
+            subtitle: match (self.subtitle_track_id.as_deref(), self.subtitles_off) {
+                (Some(_), true) => {
+                    return Err(ServerError::invalid_input(
+                        "a subtitle cannot be both named and turned off",
+                    ));
+                }
+                (Some(id), false) => SubtitleAsked::Track(parse_track(id)?),
+                (None, true) => SubtitleAsked::Off,
+                (None, false) => SubtitleAsked::Unsaid,
+            },
             preferred_video_codec: self.preferred_video_codec,
             wide_gamut: self
                 .wide_gamut
@@ -1316,6 +1326,38 @@ mod tests {
         assert_eq!(body.wanted.subtitle_track_id.as_deref(), Some("3"));
         assert_eq!(body.wanted.preferred_video_codec.as_deref(), Some("av1"));
         assert_eq!(body.start_at_seconds, Some(1024.5));
+    }
+
+    #[test]
+    fn subtitles_turned_off_are_not_the_same_as_nothing_said() {
+        let asked = |body: &str| {
+            serde_json::from_str::<PlanBody>(body)
+                .expect("a body is read")
+                .asked_for(MediaSourceId::new())
+                .map(|request| request.subtitle)
+        };
+        assert_eq!(asked("{}").ok(), Some(SubtitleAsked::Unsaid));
+        assert_eq!(
+            asked(r#"{"subtitles_off":true}"#).ok(),
+            Some(SubtitleAsked::Off)
+        );
+        let track = TrackId::new();
+        assert_eq!(
+            asked(&format!(
+                r#"{{"subtitle_track_id":"{}"}}"#,
+                track.to_db_string()
+            ))
+            .ok(),
+            Some(SubtitleAsked::Track(track))
+        );
+        assert!(
+            asked(&format!(
+                r#"{{"subtitle_track_id":"{}","subtitles_off":true}}"#,
+                track.to_db_string()
+            ))
+            .is_err(),
+            "a track both named and turned off is a request that means nothing"
+        );
     }
 
     #[test]

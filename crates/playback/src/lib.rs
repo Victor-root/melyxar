@@ -12,9 +12,11 @@
 
 pub mod decision;
 pub mod profile;
+pub mod subtitles;
 
 pub use decision::{
     decide, PlaybackDecision, PlaybackMethod, PlaybackRequest, Reason, StreamAction,
     SubtitleDelivery,
 };
 pub use profile::{ClientProfile, VideoCapability};
+pub use subtitles::subtitle_by_mode;
