@@ -2,6 +2,8 @@
  * A grid of a whole library, with what narrows it.
  */
 
+import { useEffect, useRef, useState } from "react";
+import { api } from "../api";
 import type { Library } from "../api";
 import { Card } from "../components/card";
 import { Grid } from "../components/grid";
@@ -14,14 +16,96 @@ import { useSettings } from "../settings";
 
 export function LibraryPage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
-  const { narrowing, choose, cards, more, loadMore, loading, failed, filters } = useBrowsing();
-  const { order, descending, genre, decade, search, unidentified, initial, favourites } =
-    narrowing;
+  const { narrowing, choose, cards, more, loadMore, reach, loading, failed, filters } =
+    useBrowsing();
+  const { order, descending, genre, decade, search, unidentified, favourites } = narrowing;
   const library = libraries.find((entry) => entry.id === narrowing.library);
   const shape = cardShapeOf(library?.kind ?? narrowing.kind);
   /* What somebody filmed themselves is never waiting for a name, so there is
      nothing to narrow to. */
   const awaitsNames = library?.kind !== "home_media" && narrowing.kind !== "home_media";
+
+  /*
+   * A letter takes the grid to where its titles begin, with the row holding
+   * the first of them at the top of the screen, and every other title still
+   * there above and below it. It used to keep only that letter's titles,
+   * which hid the rest of the library behind a press.
+   *
+   * The server says which work comes first under the letter, in the order
+   * and inside the filters the grid is read with, since it is the one that
+   * knows how a title is filed; the grid reads on until it holds that work,
+   * and the page is scrolled to it once it is drawn.
+   */
+  const holder = useRef<HTMLDivElement>(null);
+  const [jumping, setJumping] = useState<string | null>(null);
+  const [landing, setLanding] = useState<string | null>(null);
+
+  const jumpTo = (letter: string) => {
+    setJumping(letter);
+    api
+      .works({ ...narrowing, initial: letter, limit: 1 })
+      .then(async (page) => {
+        const first = page.cards[0]?.id;
+        if (first && (await reach(first))) {
+          setLanding(first);
+        }
+      })
+      .catch(() => {
+        // The letter stays where it was, which is what a press that could
+        // not be answered looks like.
+      })
+      .finally(() => setJumping(null));
+  };
+
+  useEffect(() => {
+    const target = landing
+      ? holder.current?.querySelector<HTMLElement>(`[data-card="${CSS.escape(landing)}"]`)
+      : null;
+    // Not drawn yet: the cards that hold it are on their way to the screen,
+    // and this runs again when they arrive.
+    if (!target) {
+      return;
+    }
+    const box = scrollerOf(target);
+    if (!box) {
+      setLanding(null);
+      return;
+    }
+    const style = getComputedStyle(box);
+    const air = parseFloat(style.getPropertyValue("--gap-wide")) || 0;
+    const below = () => target.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    /* Under the bar at the top while it is out, at the very top once it has
+       stepped aside. Which one it is depends on the jump itself, since the
+       bar steps aside when the page is read down and comes back when it is
+       read up, so it is read again on every frame rather than guessed. */
+    const clearOfTheBar = () => parseFloat(style.getPropertyValue("--header-room")) || 0;
+    /* Straight there rather than gliding, and put there again on every
+       frame until it holds still. The cards off the screen are not drawn and
+       stand at a guessed height, so where the row is only settles as the
+       cards around it are drawn: a glide drew them one after the other on
+       the way and ended short of it, and a single second look came before
+       they had been. */
+    let frames = 0;
+    let still = 0;
+    let next = 0;
+    const land = () => {
+      const off = below() - clearOfTheBar() - air;
+      if (Math.abs(off) > 1) {
+        box.scrollBy({ top: off, behavior: "instant" });
+        still = 0;
+      } else {
+        still += 1;
+      }
+      frames += 1;
+      if (still < STILL_FRAMES && frames < LANDING_FRAMES) {
+        next = requestAnimationFrame(land);
+      } else {
+        setLanding(null);
+      }
+    };
+    land();
+    return () => cancelAnimationFrame(next);
+  }, [landing, cards]);
 
   return (
     <main className="page">
@@ -123,7 +207,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
       {/* The grid and the letters beside it. A few hundred films is too long
           to scroll through and too short to search by hand every time, and the
           letter is the one thing anybody remembers about a title. */}
-      <div className="grid-with-letters">
+      <div className="grid-with-letters" ref={holder}>
         <Selecting items={cards}>
           <Grid onReachEnd={loadMore} hasMore={more} shape={shape}>
             {cards.map((card) => (
@@ -132,23 +216,23 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
           </Grid>
         </Selecting>
 
-        {/* Only the letters the library really has: a letter leading to an
-            empty grid reads as a fault. One letter alone is no choice. */}
-        {filters && filters.initials.length > 1 && (
-          <nav className="letters" aria-label={t("library.letters")}>
-            <button
-              className={`letter ${initial ? "" : "letter-on"}`}
-              onClick={() => choose("initial", null)}
-            >
-              {t("library.letters.all")}
-            </button>
+        {/* Only the letters the library really has: a letter leading
+            nowhere reads as a fault. One letter alone is no choice, and a
+            grid read by year or by rating is not in the order of its
+            letters, so there is nowhere for one to lead. */}
+        {filters && filters.initials.length > 1 && order === "title" && (
+          <nav
+            className="letters"
+            aria-label={t("library.letters")}
+            style={{ ["--letters" as string]: filters.initials.length }}
+          >
             {filters.initials.map((entry) => (
               <button
                 key={entry.name}
-                className={`letter ${initial === entry.name ? "letter-on" : ""}`}
-                onClick={() => choose("initial", entry.name)}
+                type="button"
+                className={`letter${jumping === entry.name ? " letter-on" : ""}`}
+                onClick={() => jumpTo(entry.name)}
                 title={t("library.count", { count: entry.works })}
-                aria-pressed={initial === entry.name}
               >
                 {entry.name.toUpperCase()}
               </button>
@@ -163,6 +247,25 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
       )}
     </main>
   );
+}
+
+/** How many frames in a row a jump has to stand where it was sent before it
+ *  counts as there: enough for the bar at the top to have answered it. */
+const STILL_FRAMES = 6;
+/** The most frames a jump is given to settle, under a second: long enough for
+ *  the cards around it to be drawn, and never a page that fights a hand. */
+const LANDING_FRAMES = 45;
+
+/** The box a page scrolls in, which is not the window here: the nearest one
+ *  above the element that can be scrolled up and down. */
+function scrollerOf(element: HTMLElement): HTMLElement | null {
+  for (let box = element.parentElement; box; box = box.parentElement) {
+    const { overflowY } = getComputedStyle(box);
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return box;
+    }
+  }
+  return null;
 }
 
 /**

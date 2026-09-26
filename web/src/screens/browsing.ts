@@ -13,13 +13,17 @@
  * a grid drawn another way would still need exactly as it is.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { Card, Filters, LibraryKind } from "../api";
 import { useAsked, wasAbandoned } from "../asking";
 import { keep, recall } from "../kept";
 import { KINDS } from "../libraries";
+
+/** How many cards a jump reads at once, the most the server hands out: a
+ *  jump is one wait, and the fewer questions it takes the shorter it is. */
+const PAGE_FOR_A_JUMP = 200;
 
 /** The orderings a library can be read in. */
 export const ORDERS = ["title", "added_at", "release_year", "community_rating", "runtime"] as const;
@@ -33,7 +37,6 @@ export interface Narrowing {
   decade: number | undefined;
   search: string | undefined;
   unidentified: boolean;
-  initial: string | undefined;
   /** Only what this account marked. A view rather than a library, so it
       sorts, filters and pages like everything else. */
   favourites: boolean;
@@ -99,6 +102,9 @@ export interface Browsing {
   more: boolean;
   /** Ask for it. Does nothing while one is already on its way. */
   loadMore: () => void;
+  /** Reads on until the grid holds this work, and says whether it does: a
+      jump to a place further down than anybody has scrolled yet. */
+  reach: (work: string) => Promise<boolean>;
   /** Whether a page is on its way. */
   loading: boolean;
   /** Whether the server could not be asked. */
@@ -123,7 +129,6 @@ export function useBrowsing(): Browsing {
   const decade = parameters.get("decade") ? Number(parameters.get("decade")) : undefined;
   const search = parameters.get("search") ?? undefined;
   const unidentified = parameters.get("unidentified") === "true";
-  const initial = parameters.get("initial") ?? undefined;
   /* Read from the path rather than from a parameter: the favourites are a
      place somebody goes to, and a place is an address. */
   const favourites = pathname === "/favourites";
@@ -141,20 +146,30 @@ export function useBrowsing(): Browsing {
       decade,
       search,
       unidentified,
-      initial,
       favourites,
       kind: asked.kind,
     };
-  }, [id, order, descending, genre, decade, search, unidentified, initial, favourites, scope]);
+  }, [id, order, descending, genre, decade, search, unidentified, favourites, scope]);
 
   /* The cards gathered so far, with the choices they answer. Kept under
      those choices as they grow, so a grid walked back to is drawn again
      whole from its first drawing, as far down as it had been read, rather
      than from its first page. */
   const choices = `grid:${JSON.stringify(narrowing)}`;
-  const [gathered, setGathered] = useState<Gathered>(
+  const [gathered, setShown] = useState<Gathered>(
     () => recall<Gathered>(choices)?.value ?? { choices, cards: [], next: null },
   );
+  /* The same cards, readable at once by whatever reads on from them rather
+     than a render later: two readers each going by what the screen showed
+     both asked for the page after it, and the grid held it twice. */
+  const latest = useRef(gathered);
+  const setGathered = useCallback((next: Gathered) => {
+    latest.current = next;
+    setShown(next);
+  }, []);
+  /* The next page while it is on its way, which anybody wanting it waits
+     for rather than asking again. */
+  const onItsWay = useRef<Promise<Gathered> | null>(null);
   const [loading, setLoading] = useState(gathered.choices !== choices || gathered.cards.length === 0);
   const [failed, setFailed] = useState(false);
 
@@ -172,18 +187,18 @@ export function useBrowsing(): Browsing {
   useEffect(() => {
     const controller = new AbortController();
     const known = recall<Gathered>(choices)?.value;
+    onItsWay.current = null;
     setFailed(false);
     if (known) {
       setGathered(known);
       setLoading(false);
       gatherAgain(narrowing, known.cards.length, controller.signal)
-        .then((fresh) =>
-          setGathered((now) =>
-            now.choices === choices && now.cards.length === known.cards.length
-              ? { choices, ...fresh }
-              : now,
-          ),
-        )
+        .then((fresh) => {
+          const now = latest.current;
+          if (now.choices === choices && now.cards.length === known.cards.length) {
+            setGathered({ choices, ...fresh });
+          }
+        })
         .catch(() => {
           // What was shown stays: it was true a moment ago, and the next
           // visit asks again.
@@ -207,33 +222,70 @@ export function useBrowsing(): Browsing {
     return () => controller.abort();
     // The choices are what the narrowing is written as: one changes with the
     // other.
-  }, [choices, narrowing]);
+  }, [choices, narrowing, setGathered]);
 
   const filters = useAsked(
     (signal) => (id ? api.filters(id, signal) : Promise.resolve(null)),
     [id],
   );
 
-  const { next } = gathered;
+  /* The page after the last card, added to the grid. One at a time: whoever
+     asks while one is on its way is handed that one. */
+  const readOn = useCallback(
+    (limit?: number): Promise<Gathered> => {
+      const waiting = onItsWay.current;
+      if (waiting) {
+        return waiting;
+      }
+      const from = latest.current;
+      if (from.choices !== choices || from.next === null) {
+        return Promise.resolve(from);
+      }
+      setLoading(true);
+      const asking = api
+        .works({ ...narrowing, after: from.next, limit })
+        .then((page) => {
+          // Added to rather than replacing: the cards already on screen stay
+          // where they are, which is what keeps the scroll position honest.
+          // Unless the choices changed meanwhile, which starts a grid of its
+          // own that this page is no part of.
+          if (latest.current === from) {
+            setGathered({ choices, cards: [...from.cards, ...page.cards], next: page.next });
+          }
+          return latest.current;
+        })
+        .finally(() => {
+          if (onItsWay.current === asking) {
+            onItsWay.current = null;
+            setLoading(false);
+          }
+        });
+      onItsWay.current = asking;
+      return asking;
+    },
+    [narrowing, choices, setGathered],
+  );
+
   const loadMore = useCallback(() => {
-    if (!next || loading) {
-      return;
-    }
-    setLoading(true);
-    api
-      .works({ ...narrowing, after: next })
-      .then((page) => {
-        // Added to rather than replacing: the cards already on screen stay
-        // where they are, which is what keeps the scroll position honest.
-        setGathered((now) =>
-          now.choices === choices
-            ? { choices, cards: [...now.cards, ...page.cards], next: page.next }
-            : now,
-        );
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [narrowing, choices, next, loading]);
+    readOn().catch(() => {
+      // The next nearing of the end asks again.
+    });
+  }, [readOn]);
+
+  const reach = useCallback(
+    async (work: string) => {
+      let now = latest.current;
+      while (!now.cards.some((card) => card.id === work) && now.next !== null) {
+        const before = now;
+        now = await readOn(PAGE_FOR_A_JUMP);
+        if (now === before || now.choices !== choices) {
+          return false;
+        }
+      }
+      return now.cards.some((card) => card.id === work);
+    },
+    [readOn, choices],
+  );
 
   const choose = useCallback(
     (name: string, value: string | null) => {
@@ -252,8 +304,9 @@ export function useBrowsing(): Browsing {
     narrowing,
     choose,
     cards: gathered.choices === choices ? gathered.cards : [],
-    more: next !== null,
+    more: gathered.next !== null,
     loadMore,
+    reach,
     loading,
     failed,
     /* A library whose filters could not be read offers none, rather than the

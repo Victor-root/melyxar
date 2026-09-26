@@ -182,6 +182,19 @@ export function Header({
       root.style.removeProperty("--header-side-width");
     };
   }, []);
+  /* How much of the top of the page the bar covers right now, written on the
+     page as its width is: all of its band while it is out, none once it has
+     stepped aside. What puts something at the top of the screen reads it, so
+     that thing lands under the bar rather than behind it. */
+  const shown = out || looking;
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--header-room", shown ? "var(--header-height)" : "0px");
+    return () => {
+      root.style.removeProperty("--header-room");
+    };
+  }, [shown]);
+
   /* A scan is the one thing an administrator needs from wherever they happen
      to be: films were added, a name was corrected, a disk came back. */
   const scan = useStartScan(libraries);
@@ -356,7 +369,7 @@ export function Header({
   const administrator = account?.is_administrator === true;
 
   return (
-    <header className={`header${out || looking ? "" : " header-away"}`}>
+    <header className={`header${shown ? "" : " header-away"}`}>
       <div className="header-inner">
         <div
           className={`header-piece header-start${location.pathname !== "/" ? " header-start-back" : ""}`}

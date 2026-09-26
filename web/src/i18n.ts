@@ -620,7 +620,6 @@ const en: Dictionary = {
   "row.on": "Scroll row right",
 
   "library.letters": "Jump to a letter",
-  "library.letters.all": "All",
 
   "detach.open": "Separate this version as another title",
   "detach.busy": "Separating version…",
@@ -1810,7 +1809,6 @@ const fr: Dictionary = {
   "row.on": "Faire défiler la rangée vers la droite",
 
   "library.letters": "Aller à une lettre",
-  "library.letters.all": "Tout",
 
   "detach.open": "Séparer cette version en un autre titre",
   "detach.busy": "Séparation de la version…",
