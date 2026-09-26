@@ -2885,6 +2885,11 @@ button.seen-mark:not(.seen-mark-on):hover {
      it, and the glow used to stop dead along the top of the row. Taken back
      by a margin of the same size, so nothing on the page moves for it. */
   --row-air: 30px;
+  /* The same room at the sides, where the glow of the first and the last
+     card used to be cut off square. Taken out of the page's margin, never
+     wider than it: a phone's narrow margin gives what it has, and the
+     screen's edge does the rest. */
+  --row-side-air: min(var(--row-air), var(--gutter));
 
   position: relative;
 }
@@ -2893,13 +2898,10 @@ button.seen-mark:not(.seen-mark-on):hover {
   display: flex;
   gap: var(--gap);
   overflow-x: auto;
-  /* Room for the focus ring and for a card grown under the pointer, both of
-     which a hidden overflow would otherwise clip. Four pixels at the sides
-     rather than eight: a card grown by a thirtieth reaches three of them,
-     and every pixel kept here is a pixel taken from the margin the arrows
-     stand in. */
-  padding: var(--row-air) 4px var(--gap-tight);
-  margin: calc(var(--row-air) * -1) -4px calc(var(--gap-tight) * -1);
+  /* Room for the focus ring, for a card grown under the pointer and for the
+     light it gives off, all of which a hidden overflow would otherwise clip. */
+  padding: var(--row-air) var(--row-side-air) var(--gap-tight);
+  margin: calc(var(--row-air) * -1) calc(var(--row-side-air) * -1) calc(var(--gap-tight) * -1);
   scrollbar-width: none;
   /* A hand pulling a row of posters is not a hand selecting their titles,
      and the blue wash that appeared under one was the whole reason the drag
@@ -2938,13 +2940,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   flex-basis: calc(var(--card-width) * 1.62);
 }
 
-/* And it grows past its edges by more than a poster does: in the four pixels
-   kept for a poster, the lit hairline of the first and the last still of a
-   row was cut off by the row's own edge. */
-.row-track:has(> .card-lying) {
-  padding-inline: 7px;
-  margin-inline: -7px;
-}
 
 @media (min-width: 1400px) {
   .row-track > * {
