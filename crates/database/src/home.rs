@@ -36,8 +36,11 @@ pub struct Dressed {
     pub tagline: Option<String>,
     pub overview: Option<String>,
     pub genres: Vec<String>,
-    /// How tall the picture of the best copy is, which is what a badge
-    /// saying 4K is really saying.
+    /// How wide and how tall the picture of the best copy is, which is what
+    /// a badge saying 4K is really saying. Both, because a film wider than a
+    /// screen is stored with its black bands cut off and its height alone
+    /// undersells it.
+    pub width: Option<i64>,
     pub height: Option<i64>,
     /// hdr10, hlg or dolby_vision, when the picture carries one.
     pub hdr: Option<String>,
@@ -138,11 +141,16 @@ impl Database {
         // rather than promised by the catalogue.
         let mut facts = sqlx::query(AssertSqlSafe(format!(
             "SELECT w.id AS work_id,
+                    (SELECT t.width FROM tracks t
+                       JOIN media_sources s ON s.id = t.source_id
+                      WHERE s.work_id = w.id AND s.missing_since IS NULL
+                        AND t.kind = 'video' AND t.height IS NOT NULL
+                      ORDER BY t.width * t.height DESC, t.id LIMIT 1) AS width,
                     (SELECT t.height FROM tracks t
                        JOIN media_sources s ON s.id = t.source_id
                       WHERE s.work_id = w.id AND s.missing_since IS NULL
                         AND t.kind = 'video' AND t.height IS NOT NULL
-                      ORDER BY t.height DESC LIMIT 1) AS height,
+                      ORDER BY t.width * t.height DESC, t.id LIMIT 1) AS height,
                     (SELECT t.hdr_format FROM tracks t
                        JOIN media_sources s ON s.id = t.source_id
                       WHERE s.work_id = w.id AND s.missing_since IS NULL
@@ -162,6 +170,7 @@ impl Database {
         for row in facts.fetch_all(self.reader()).await? {
             let owner: WorkId = parse_id(&row.try_get::<String, _>("work_id")?)?;
             let entry = dressed.entry(owner).or_default();
+            entry.width = row.try_get("width")?;
             entry.height = row.try_get("height")?;
             entry.hdr = row.try_get("hdr")?;
             entry.sound = row.try_get("sound")?;
@@ -948,7 +957,11 @@ mod tests {
             .expect("dressed read");
         let one = dressed.get(&films[0]).expect("the film is dressed");
         assert_eq!(one.genres, vec!["Drame".to_string()]);
-        assert_eq!(one.height, Some(2160), "the copy still on disk decides");
+        assert_eq!(
+            (one.width, one.height),
+            (Some(3840), Some(2160)),
+            "the copy still on disk decides, both sides of the same picture"
+        );
         assert_eq!(one.hdr.as_deref(), Some("hdr10"));
         assert_eq!(
             one.sound.as_deref(),

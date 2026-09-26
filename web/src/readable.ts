@@ -301,27 +301,45 @@ export function whichEpisode(
  * reading the interface in French is still looking for "Dolby Atmos".
  */
 export function whatTheFileHolds(facts: {
+  width: number | null;
   height: number | null;
   hdr: string | null;
   sound: string | null;
 }): string[] {
-  return [pictureName(facts.height), rangeName(facts.hdr), soundName(facts.sound)].filter(
+  /* No badge for a picture smaller than 720p: "SD" beside a title reads as
+     a fault rather than as a fact. */
+  const picture = pictureName(facts.width, facts.height);
+  return [picture === "SD" ? null : picture, rangeName(facts.hdr), soundName(facts.sound)].filter(
     (name): name is string => name !== null,
   );
 }
 
-/** How tall a picture is, said as the badge on a box says it. */
-function pictureName(height: number | null): string | null {
-  if (height === null) {
+/**
+ * How large a picture is, said as the badge on a box says it: whichever of
+ * its two sides says more, the rule the server names a copy by too. A film
+ * wider than a screen is stored with its black bands cut off, so a 1080p
+ * film can be 800 lines tall and a 4K film 1600: read by its height alone,
+ * the first was called 720p where every other player says 1080p.
+ */
+export function pictureName(width: number | null, height: number | null): string | null {
+  const across = width ?? 0;
+  const down = height ?? 0;
+  if (across <= 0 && down <= 0) {
     return null;
   }
-  if (height >= 2000) {
+  if (across >= 3200 || down >= 2000) {
     return "4K";
   }
-  if (height >= 1000) {
+  if (across >= 2400 || down >= 1400) {
+    return "1440p";
+  }
+  if (across >= 1800 || down >= 1000) {
     return "1080p";
   }
-  return height >= 700 ? "720p" : null;
+  if (across >= 1200 || down >= 700) {
+    return "720p";
+  }
+  return "SD";
 }
 
 const RANGE_NAMES: Record<string, string> = {
