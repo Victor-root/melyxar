@@ -1,30 +1,27 @@
 /*
  * The home page, as a set of rows rather than as one.
  *
- * The order is the server's: what the page opens on, what was left halfway,
- * what each started series is waiting on, what arrived last, then one row per
- * kind of library this server really holds. A row with nothing in it is not
- * drawn, so a server of films alone shows no empty row of anime and nobody
- * meets a heading standing over nothing.
+ * The banner leads, then the sections below it in the order the viewer
+ * chose in their settings, those they hid left out: the tiles leading to each
+ * library, what was left halfway, what each started series is waiting on,
+ * what arrived last, and one row per kind of library this server really
+ * holds. The server says which, in which order. A row with nothing in it is
+ * not drawn, so a server of films alone shows no empty row of anime and
+ * nobody meets a heading standing over nothing.
  *
  * Every row is the same card, which is what makes a mark pressed in one of
  * them show in all the others at once.
- *
- * Nothing here is arranged by hand yet. The order and what each row holds
- * come from the server, and the day somebody can turn a row off or move it
- * the pieces are already separate: that screen is a later worksite, and this
- * one is built so as not to be in its way.
  */
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Card as CardData, Library } from "../api";
+import type { Card as CardData, HomeSection, Library } from "../api";
 import { Band } from "../components/band";
 import { Card } from "../components/card";
 import type { CardShape } from "../components/card";
 import { Hero } from "../components/hero";
 import { Row, RowHead } from "../components/row";
-import { howFarIn, useHomeScreen } from "../screens/home";
+import { howFarIn, laidOut, useHomeScreen } from "../screens/home";
 import { refusalKey } from "../i18n";
 import { whatIsLeft, whichEpisode } from "../readable";
 import { cardShapeOf, newestOfKind, whereAKindLeads } from "../libraries";
@@ -99,6 +96,95 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
     );
   }
 
+  /* Each section as it is drawn, laid out below in the order the viewer
+     chose. */
+  const sections: Record<HomeSection, React.ReactNode> = {
+    /* Where to go for somebody who already knows what they want. */
+    band: <Band shelves={home.shelves} libraries={libraries} />,
+
+    /* What was left halfway. Lying down, because what tells two of these
+       apart is the still and the bar under it rather than the poster, and
+       each one says how much of it is left and where it sits in its series:
+       an episode title on its own is a title nobody placed. */
+    carry_on: home.carry_on.length > 0 && (
+      <section className="section">
+        <RowHead mark={<EyeIcon size={24} />} title={t("home.carry_on")} />
+        <Row>
+          {home.carry_on.map((card) => (
+            <Card
+              key={card.id}
+              card={card}
+              shape="lying"
+              watched={howFarIn(card.position_seconds, card.runtime_minutes)}
+              lead={card.series_title ?? undefined}
+              note={whichEpisode(card, t)}
+              trailing={whatIsLeft(card.position_seconds, card.runtime_minutes, t)}
+            />
+          ))}
+        </Row>
+      </section>
+    ),
+
+    /* And what has not been started: the next episode of each series that
+       is waiting on one, under the name of the series rather than under the
+       episode's own, which nobody remembers. */
+    up_next: home.up_next.length > 0 && (
+      <section className="section">
+        <RowHead mark={<BinocularsIcon size={24} />} title={t("home.up_next")} />
+        <Row>
+          {home.up_next.map((card) => (
+            <Card
+              key={card.id}
+              card={card}
+              shape="lying"
+              lead={card.series_title}
+              note={whichEpisode(card, t)}
+            />
+          ))}
+        </Row>
+      </section>
+    ),
+
+    recently_added: (
+      <section className="section">
+        <RowHead mark={<CameraIcon size={24} />} title={t("home.recently_added")} to={EVERYTHING_NEWEST}>
+          {home.awaiting_identification > 0 && (
+            <>
+              <Link className="pill" to="/search?unidentified=true">
+                {t("home.awaiting", { count: home.awaiting_identification })}
+              </Link>
+              {/* The one way to ask for it from a screen. Without this the
+                  films sit there named after their file for ever, and the
+                  only way out is a terminal. */}
+              {jobs.length === 0 && (
+                <button className="button button-small" onClick={lookUp.start} disabled={lookUp.starting}>
+                  {t("home.identify")}
+                </button>
+              )}
+            </>
+          )}
+        </RowHead>
+        <Row>
+          {home.recently_added.map((card) => (
+            <Card key={card.id} card={card} />
+          ))}
+        </Row>
+      </section>
+    ),
+
+    /* One row per kind of library this server really holds. */
+    libraries: home.shelves.map((shelf) => (
+      <Shelf
+        key={shelf.kind}
+        title={newestOfKind(shelf.kind, libraries, t)}
+        mark={<KindIcon kind={shelf.kind} size={24} />}
+        cards={shelf.cards}
+        shape={cardShapeOf(shelf.kind)}
+        to={whereAKindLeads(shelf.kind, libraries)}
+      />
+    )),
+  };
+
   return (
     <>
       <div className="home-backdrop drift" aria-hidden="true" />
@@ -109,108 +195,23 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       <Hero items={home.hero} />
 
       <main className="page page-home">
-        {/* Where to go for somebody who already knows what they want, before
-            any row of suggestions. */}
-        <Band shelves={home.shelves} libraries={libraries} />
-
-        {/* The two rows of what is already under way, side by side while
-            both are short enough to go on one line. They are two rows
-            either way, with a heading each; what they share is a line, and
-            only while there is room for one. The stylesheet decides, on the
-            width of the window it is being read in. */}
-        {(home.carry_on.length > 0 || home.up_next.length > 0) && (
-          <Together>
-            {/* What was left halfway. Lying down, because what tells two of
-                these apart is the still and the bar under it rather than
-                the poster, and each one says how much of it is left and
-                where it sits in its series: an episode title on its own is
-                a title nobody placed. */}
-            {home.carry_on.length > 0 && (
-              <section className="section">
-                <RowHead mark={<EyeIcon size={24} />} title={t("home.carry_on")} />
-                <Row>
-                  {home.carry_on.map((card) => (
-                    <Card
-                      key={card.id}
-                      card={card}
-                      shape="lying"
-                      watched={howFarIn(card.position_seconds, card.runtime_minutes)}
-                      lead={card.series_title ?? undefined}
-                      note={whichEpisode(card, t)}
-                      trailing={whatIsLeft(card.position_seconds, card.runtime_minutes, t)}
-                    />
-                  ))}
-                </Row>
-              </section>
-            )}
-
-            {/* And what has not been started: the next episode of each
-                series that is waiting on one, under the name of the series
-                rather than under the episode's own, which nobody
-                remembers. */}
-            {home.up_next.length > 0 && (
-              <section className="section">
-                <RowHead mark={<BinocularsIcon size={24} />} title={t("home.up_next")} />
-                <Row>
-                  {home.up_next.map((card) => (
-                    <Card
-                      key={card.id}
-                      card={card}
-                      shape="lying"
-                      lead={card.series_title}
-                      note={whichEpisode(card, t)}
-                    />
-                  ))}
-                </Row>
-              </section>
-            )}
-          </Together>
+        {laidOut(home.sections).map((laid) =>
+          typeof laid === "string" ? (
+            <Fragment key={laid}>{sections[laid]}</Fragment>
+          ) : (
+            /* The two rows of what is already under way, side by side while
+               both are short enough to go on one line. They are two rows
+               either way, with a heading each; what they share is a line,
+               and only while there is room for one. The stylesheet decides,
+               on the width of the window it is being read in. */
+            (sections[laid[0]] || sections[laid[1]]) && (
+              <Together key={laid.join(":")}>
+                {sections[laid[0]]}
+                {sections[laid[1]]}
+              </Together>
+            )
+          ),
         )}
-
-        <section className="section">
-          <RowHead
-            mark={<CameraIcon size={24} />}
-            title={t("home.recently_added")}
-            to={EVERYTHING_NEWEST}
-          >
-            {home.awaiting_identification > 0 && (
-              <>
-                <Link className="pill" to="/search?unidentified=true">
-                  {t("home.awaiting", { count: home.awaiting_identification })}
-                </Link>
-                {/* The one way to ask for it from a screen. Without this the
-                    films sit there named after their file for ever, and the
-                    only way out is a terminal. */}
-                {jobs.length === 0 && (
-                  <button
-                    className="button button-small"
-                    onClick={lookUp.start}
-                    disabled={lookUp.starting}
-                  >
-                    {t("home.identify")}
-                  </button>
-                )}
-              </>
-            )}
-          </RowHead>
-          <Row>
-            {home.recently_added.map((card) => (
-              <Card key={card.id} card={card} />
-            ))}
-          </Row>
-        </section>
-
-        {/* One row per kind of library this server really holds. */}
-        {home.shelves.map((shelf) => (
-          <Shelf
-            key={shelf.kind}
-            title={newestOfKind(shelf.kind, libraries, t)}
-            mark={<KindIcon kind={shelf.kind} size={24} />}
-            cards={shelf.cards}
-            shape={cardShapeOf(shelf.kind)}
-            to={whereAKindLeads(shelf.kind, libraries)}
-          />
-        ))}
 
         {/* The server said no, which is an answer and belongs on the screen
             that asked rather than in a log nobody is reading. */}
