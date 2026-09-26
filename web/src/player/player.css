@@ -227,7 +227,18 @@
 .player-overlay[data-away="yes"] {
   opacity: 0;
   pointer-events: none;
+}
+
+/* The pointer goes with the controls. Said on the picture rather than on the
+   controls, which take no pointer at all while they are away and so never
+   had a say in what it looks like. A window left open on the picture keeps
+   its own. */
+.player-stage:has(.player-overlay[data-away="yes"]) {
   cursor: none;
+}
+
+.player-stage:has(.player-overlay[data-away="yes"]) .facts {
+  cursor: auto;
 }
 
 /* Lifted to clear the bottom strip while it is actually covering the
