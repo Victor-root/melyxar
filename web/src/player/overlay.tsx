@@ -113,26 +113,19 @@ const ICON = 27;
 const PLAY_ICON = 34;
 
 /**
- * Whether a key belongs to something other than the film: a box somebody is
- * typing in, or a slider in a panel being set.
+ * Whether a key is somebody typing, in a box, rather than driving the film.
  *
- * The sound slider on the bar is neither. Pressed once with the mouse, it
- * kept the keyboard, and the arrows moved it by a hundredth on their own
- * without the player hearing of it, so nothing said the sound down the
- * side. What its arrows would do is what the player's own do, so they are
- * the player's.
+ * Nothing else keeps its keys: the arrows are the bar and the sound, and the
+ * space bar is play and pause, whatever was pressed last. A slider or a
+ * button pressed with the mouse keeps the keyboard, and it used to take
+ * them: the arrows moved the sound slider by a hundredth without the player
+ * hearing of it, and the space bar pressed the last button again.
  */
-function isSomewhereElse(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
+function isTypedIn(target: EventTarget | null): boolean {
   if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
     return true;
   }
-  if (target instanceof HTMLInputElement) {
-    return target.type !== "range" || target.closest(".player-menu") !== null;
-  }
-  return false;
+  return target instanceof HTMLInputElement && target.type !== "range";
 }
 
 /** How long the sound stays said down the side after the last press. */
@@ -244,8 +237,8 @@ export function Overlay(props: Props) {
   }, [away, playback.video]);
   const stir = useRef<() => void>(() => {});
   /* The sound said down the side of the picture for a moment, when the keys
-     change it while the controls are away: the one change a viewer makes
-     without looking at anything, and the one they want to see the end of. */
+     change it: the one change a viewer makes without looking at anything,
+     and the one they want to see the end of. */
   const [soundSaid, setSoundSaid] = useState(false);
   const soundSaidFor = useRef(0);
   const saySound = useRef(() => {
@@ -335,7 +328,7 @@ export function Overlay(props: Props) {
      that a key does exactly what the button beside it does. */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (isSomewhereElse(event.target)) {
+      if (isTypedIn(event.target)) {
         return;
       }
       const loudness = (by: number) => {
@@ -354,6 +347,7 @@ export function Overlay(props: Props) {
           break;
         case " ":
         case "k":
+          // Held from whatever has the focus: a button would be pressed again.
           event.preventDefault();
           playback.playOrPause();
           break;
@@ -456,7 +450,7 @@ export function Overlay(props: Props) {
           </div>
         </div>
       </div>
-      <SoundSaid playback={playback} shown={soundSaid && away} />
+      <SoundSaid playback={playback} shown={soundSaid} />
     </>
   );
 }
@@ -466,9 +460,9 @@ export function Overlay(props: Props) {
  * the sound bar of the controls stood on its end, with the number above it
  * and what it sounds like under it.
  *
- * Drawn only while the controls are away, since with them up the bar at the
- * bottom already says it. Always there and faded rather than made on each
- * press, so it comes and goes without a jump.
+ * On every press of a sound key, controls up or not: it is where the eye
+ * looks for the answer to that key. Always there and faded rather than made
+ * on each press, so it comes and goes without a jump.
  */
 function SoundSaid({ playback, shown }: { playback: Playback; shown: boolean }) {
   const loud = playback.muted ? 0 : playback.loudness;
