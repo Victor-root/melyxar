@@ -1246,13 +1246,18 @@
  * What is happening to this film
  * ------------------------------------------------------------------------ */
 
+/* A column down the side of the picture rather than a sheet across it,
+   which hid most of the film being looked into. Opened between the top row
+   and the controls; wider or taller once a hand pulls its edges, and in two
+   columns of its own once wide enough for them. */
 .facts {
+  --facts-top: 88px;
   position: absolute;
+  top: var(--facts-top);
   right: var(--player-inset);
-  bottom: 124px;
   z-index: 3;
-  width: min(40rem, calc(100vw - 52px));
-  max-height: min(70vh, 640px);
+  width: min(24rem, calc(100% - var(--player-inset) * 2));
+  max-height: calc(100% - var(--facts-top) - 124px);
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-card);
@@ -1273,13 +1278,75 @@
   border-bottom: 1px solid var(--border);
   font-size: 14px;
   font-weight: 650;
-  cursor: grab;
+  cursor: move;
   user-select: none;
   touch-action: none;
 }
 
-.facts-head:active {
-  cursor: grabbing;
+/* What a hand pulls the window's size by: a thin band along each edge and a
+   square at each corner, each with the pointer the system draws for it. */
+.facts-edge {
+  position: absolute;
+  z-index: 1;
+  touch-action: none;
+}
+
+.facts-edge-n,
+.facts-edge-s {
+  left: 10px;
+  right: 10px;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.facts-edge-e,
+.facts-edge-w {
+  top: 10px;
+  bottom: 10px;
+  width: 5px;
+  cursor: ew-resize;
+}
+
+.facts-edge-ne,
+.facts-edge-nw,
+.facts-edge-se,
+.facts-edge-sw {
+  width: 10px;
+  height: 10px;
+}
+
+.facts-edge-n,
+.facts-edge-ne,
+.facts-edge-nw {
+  top: 0;
+}
+
+.facts-edge-s,
+.facts-edge-se,
+.facts-edge-sw {
+  bottom: 0;
+}
+
+.facts-edge-e,
+.facts-edge-ne,
+.facts-edge-se {
+  right: 0;
+}
+
+.facts-edge-w,
+.facts-edge-nw,
+.facts-edge-sw {
+  left: 0;
+}
+
+.facts-edge-nw,
+.facts-edge-se {
+  cursor: nwse-resize;
+}
+
+.facts-edge-ne,
+.facts-edge-sw {
+  cursor: nesw-resize;
 }
 
 .facts-blocks {
@@ -1332,8 +1399,8 @@
 
 @media (max-height: 40rem) {
   .facts {
-    bottom: 12px;
-    max-height: 80vh;
+    --facts-top: 12px;
+    max-height: calc(100% - 24px);
   }
 }
 
