@@ -11,6 +11,7 @@ use melyxar_core::library::LibraryKind;
 use melyxar_core::user::{
     DownmixMethod, HomeSection, Preferences, SubtitleMode, ThemeMode, WideGamutChoice,
 };
+use melyxar_core::work::{ResumeRules, LEAST_MAX_PERCENT, MOST_MIN_PERCENT, MOST_MIN_SECONDS};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
@@ -75,6 +76,19 @@ struct PreferencesView {
     /// How far the player's two step buttons jump, in seconds.
     step_back_seconds: i64,
     step_on_seconds: i64,
+    /// The longest a step, or the way back on resuming, may be, in seconds.
+    longest_step: i64,
+    /// How far back a film starts from where it was left, in seconds.
+    resume_rewind_seconds: i64,
+    /// When a work left partway counts as started, as watched, or as too
+    /// short to come back to, for every kind.
+    resume_rules: RulesView,
+    /// Whether each kind of library has rules of its own, and those it has.
+    resume_rules_per_kind: bool,
+    resume_rules_by_kind: Vec<KindRulesView>,
+    /// The bounds each rule is kept inside: the smallest share at most, the
+    /// largest share at least, and the length at most.
+    resume_bounds: RulesView,
     /// What is done with a film of wide gamut colour.
     wide_gamut: &'static str,
     /// Every choice offered for it, in the order a screen shows them.
@@ -132,6 +146,15 @@ struct PreferencesBody {
     step_back_seconds: Option<i64>,
     #[serde(default)]
     step_on_seconds: Option<i64>,
+    #[serde(default)]
+    resume_rewind_seconds: Option<i64>,
+    #[serde(default)]
+    resume_rules: Option<RulesView>,
+    #[serde(default)]
+    resume_rules_per_kind: Option<bool>,
+    /// Every kind given rules of its own, in place of those it had.
+    #[serde(default)]
+    resume_rules_by_kind: Option<Vec<KindRulesView>>,
     #[serde(default)]
     wide_gamut: Option<String>,
 }
@@ -244,6 +267,25 @@ async fn write(
     if let Some(seconds) = body.step_on_seconds {
         chosen.step_on_seconds = seconds;
     }
+    if let Some(seconds) = body.resume_rewind_seconds {
+        chosen.resume_rewind_seconds = seconds;
+    }
+    if let Some(rules) = body.resume_rules {
+        chosen.resume_rules = rules.into();
+    }
+    if let Some(per_kind) = body.resume_rules_per_kind {
+        chosen.resume_rules_per_kind = per_kind;
+    }
+    if let Some(by_kind) = body.resume_rules_by_kind {
+        chosen.resume_rules_by_kind = by_kind
+            .into_iter()
+            .map(|given| {
+                LibraryKind::parse(&given.kind)
+                    .map(|kind| (kind, given.rules.into()))
+                    .ok_or_else(|| ServerError::invalid_input("no kind of library goes by that name"))
+            })
+            .collect::<Result<_>>()?;
+    }
 
     let kept = melyxar_app::preferences::save(&state, who.id, chosen).await?;
     view(&state, &who, kept).await
@@ -252,6 +294,43 @@ async fn write(
 fn some_language(value: String) -> Option<String> {
     let trimmed = value.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+/// When a work left partway counts as started, as watched, or as too short to
+/// come back to, as a client reads and sends it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+struct RulesView {
+    min_percent: i64,
+    max_percent: i64,
+    min_seconds: i64,
+}
+
+impl From<ResumeRules> for RulesView {
+    fn from(rules: ResumeRules) -> Self {
+        Self {
+            min_percent: rules.min_percent,
+            max_percent: rules.max_percent,
+            min_seconds: rules.min_seconds,
+        }
+    }
+}
+
+impl From<RulesView> for ResumeRules {
+    fn from(rules: RulesView) -> Self {
+        Self {
+            min_percent: rules.min_percent,
+            max_percent: rules.max_percent,
+            min_seconds: rules.min_seconds,
+        }
+    }
+}
+
+/// The rules one kind of library was given.
+#[derive(Debug, Serialize, Deserialize)]
+struct KindRulesView {
+    kind: String,
+    #[serde(flatten)]
+    rules: RulesView,
 }
 
 /// Sections of the home page read from their names, all of them or none.
@@ -310,6 +389,23 @@ async fn view(
             .collect(),
         step_back_seconds: chosen.step_back_seconds,
         step_on_seconds: chosen.step_on_seconds,
+        longest_step: melyxar_core::user::LONGEST_STEP,
+        resume_rewind_seconds: chosen.resume_rewind_seconds,
+        resume_rules: chosen.resume_rules.into(),
+        resume_rules_per_kind: chosen.resume_rules_per_kind,
+        resume_rules_by_kind: chosen
+            .resume_rules_by_kind
+            .iter()
+            .map(|(kind, rules)| KindRulesView {
+                kind: kind.as_str().to_string(),
+                rules: (*rules).into(),
+            })
+            .collect(),
+        resume_bounds: RulesView {
+            min_percent: MOST_MIN_PERCENT,
+            max_percent: LEAST_MAX_PERCENT,
+            min_seconds: MOST_MIN_SECONDS,
+        },
         wide_gamut: chosen.wide_gamut.as_str(),
         wide_gamut_choices: WideGamutChoice::every()
             .iter()

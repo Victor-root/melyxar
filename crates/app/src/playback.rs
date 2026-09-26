@@ -18,7 +18,7 @@ use melyxar_core::segments::MediaSegment;
 use melyxar_core::thumbnails::Thumbnails;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::user::{DownmixMethod, WideGamutChoice};
-use melyxar_core::work::{state_for_position, PlaybackState, DEFAULT_WATCHED_THRESHOLD};
+use melyxar_core::work::{progress_after, PlaybackState};
 use melyxar_playback::decision::{decide, PlaybackRequest};
 
 use crate::{AppError, AppState, Result};
@@ -362,9 +362,16 @@ pub async fn plan(
         "playback decided"
     );
 
+    // Where the film was left, less the stretch this viewer likes to see
+    // again: a film picked up after a day starts a few seconds earlier than
+    // the frame it stopped on.
+    let rewind = preferences
+        .as_ref()
+        .map_or(0, |values| values.resume_rewind_seconds)
+        * 1_000;
     let resume_from = remembered
         .filter(|progress| progress.state == PlaybackState::InProgress)
-        .map(|progress| progress.position);
+        .map(|progress| Millis::new((progress.position.get() - rewind).max(0)));
 
     // Nothing here waits on them or makes them: a film that has none is a film
     // whose bar shows no pictures, and that is all.
@@ -1181,15 +1188,17 @@ pub async fn record_position(
         .await?
         .is_some_and(|progress| progress.marked_manually);
 
-    let state_now = state_for_position(
-        position,
-        duration,
-        DEFAULT_WATCHED_THRESHOLD,
-        marked_manually,
-    );
+    // Held to the rules of this viewer for this kind of library, which say
+    // when a film only glanced at starts again from the beginning and when
+    // one nearly finished counts as watched.
+    let rules = match database.library_kind_of_work(work_id).await? {
+        Some(kind) => who.preferences.resume_rules_for(kind),
+        None => who.preferences.resume_rules,
+    };
+    let (state_now, kept) = progress_after(position, duration, rules, marked_manually);
 
     Ok(database
-        .record_playback_progress(user_id, work_id, position, state_now, reported_at)
+        .record_playback_progress(user_id, work_id, kept, state_now, reported_at)
         .await?)
 }
 
@@ -3042,6 +3051,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_glance_is_not_carried_on_and_a_film_left_further_starts_a_little_earlier() {
+        // A film of two hours, of which five percent is six minutes.
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080), audio(id, "aac", 2, true)]
+            })
+            .await;
+        let database = state.database();
+        let work_id = database
+            .playable_source(source_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .work_id;
+        let who = crate::an_ordinary_account(user_id);
+        let resumes_at = || async {
+            plan(
+                &state,
+                &who,
+                &PlayRequest {
+                    source_id,
+                    profile: None,
+                    audio_track_id: None,
+                    subtitle: SubtitleAsked::Unsaid,
+                    preferred_video_codec: None,
+                    wide_gamut: None,
+                },
+            )
+            .await
+            .expect("a plan")
+            .resume_from
+        };
+
+        record_position(&state, &who, work_id, Millis::new(200_000), datetime!(2026-01-01 12:00 UTC))
+            .await
+            .expect("recorded");
+        assert_eq!(resumes_at().await, None, "three minutes in is a film only glanced at");
+
+        let mut preferences = database
+            .user(user_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .preferences;
+        preferences.resume_rewind_seconds = 15;
+        database
+            .save_preferences(user_id, &preferences)
+            .await
+            .expect("preferences saved");
+        record_position(&state, &who, work_id, Millis::new(1_800_000), datetime!(2026-01-01 12:05 UTC))
+            .await
+            .expect("recorded");
+        assert_eq!(
+            resumes_at().await,
+            Some(Millis::new(1_785_000)),
+            "picked up fifteen seconds before where it was left"
+        );
+    }
+
+    #[tokio::test]
     async fn a_film_watched_to_the_end_starts_again_from_the_beginning() {
         let (_directory, state, user_id, source_id) =
             state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
@@ -3119,7 +3188,7 @@ mod tests {
             &state,
             &crate::an_ordinary_account(user_id),
             work_id,
-            Millis::new(60_000),
+            Millis::new(1_200_000),
             datetime!(2026-01-01 12:00 UTC),
         )
         .await
@@ -3134,7 +3203,7 @@ mod tests {
                 .expect("present")
                 .state,
             PlaybackState::InProgress,
-            "a minute into a two hour film is not the end of it"
+            "twenty minutes into a two hour film is not the end of it"
         );
     }
 }

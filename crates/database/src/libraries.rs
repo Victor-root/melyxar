@@ -307,6 +307,25 @@ impl Database {
         Ok(libraries)
     }
 
+    /// The kind of library a work belongs to, which decides the rules its
+    /// progress is held to. Nothing for a work that is not there.
+    pub async fn library_kind_of_work(
+        &self,
+        work_id: melyxar_core::id::WorkId,
+    ) -> Result<Option<LibraryKind>> {
+        let kind: Option<(String,)> = sqlx::query_as(
+            "SELECT l.kind FROM works w JOIN libraries l ON l.id = w.library_id WHERE w.id = ?",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+        kind.map(|(kind,)| {
+            LibraryKind::parse(&kind)
+                .ok_or_else(|| DatabaseError::Corrupt(format!("library kind '{kind}' is unknown")))
+        })
+        .transpose()
+    }
+
     /// One library by name, used when reconciling the configuration.
     pub async fn library_by_name(&self, name: &str) -> Result<Option<Library>> {
         Ok(self
@@ -672,6 +691,37 @@ mod tests {
     /// One root of its own, for a second library alongside the first.
     fn roots_under(name: &str) -> Vec<(String, PathBuf)> {
         vec![(name.to_string(), PathBuf::from(format!("/mnt/one/{name}")))]
+    }
+
+    #[tokio::test]
+    async fn a_work_says_the_kind_of_library_it_belongs_to() {
+        let database = database().await;
+        let series = database
+            .create_library("Séries", LibraryKind::Series, "fr", &roots_under("series"))
+            .await
+            .expect("library created");
+        let work = database
+            .create_work(
+                series.id,
+                melyxar_core::work::WorkKind::Series,
+                "Quiet Harbour",
+                "quiet harbour",
+                None,
+            )
+            .await
+            .expect("work created");
+
+        assert_eq!(
+            database.library_kind_of_work(work.id).await.expect("read"),
+            Some(LibraryKind::Series)
+        );
+        assert_eq!(
+            database
+                .library_kind_of_work(melyxar_core::id::WorkId::new())
+                .await
+                .expect("read"),
+            None
+        );
     }
 
     #[tokio::test]
