@@ -5384,10 +5384,17 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 /* DEBUG ONLY, TO BE REMOVED with components/debug-journal.tsx: the tiny
    button that opens the technical journal from anywhere, drawn over
-   everything, the player and a filled screen included. */
+   everything, the player and a filled screen included.
+
+   A point in the corner rather than a sheet over the window: drawn over
+   everything, it is a layer the graphics card lays over each frame, and a
+   sheet the size of the window was a whole screen more to lay for a button
+   of twenty points. The journal it opens is fixed to the window all the
+   same. */
 .debug-layer {
   position: fixed;
-  inset: 0;
+  right: 0;
+  bottom: 0;
   z-index: 1000;
   pointer-events: none;
 }
