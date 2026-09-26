@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   frameStats,
   framesLost,
+  framesWhile,
   heldFor,
   heldUpByTheMainThread,
   passesOf,
@@ -73,5 +74,15 @@ describe("the main thread's share of a frame", () => {
     expect(heldUpByTheMainThread(drawn(3, 12), 16.7)).toBe(true);
     expect(heldUpByTheMainThread(drawn(1, 4), 16.7)).toBe(false);
     expect(heldUpByTheMainThread(undefined, 16.7)).toBe(false);
+  });
+});
+
+describe("the frames drawn while something moved", () => {
+  const drawn = (at: number) => ({ at, gap: 16.7, before: 1 });
+
+  it("keeps those shortly after a move and lets the rest go", () => {
+    const frames = [100, 120, 300, 320, 520, 700].map(drawn);
+    expect(framesWhile(frames, [110, 310], 150).map((frame) => frame.at)).toEqual([120, 320]);
+    expect(framesWhile(frames, [], 150)).toEqual([]);
   });
 });

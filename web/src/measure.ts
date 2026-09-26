@@ -18,6 +18,7 @@ import type { Drawn, Pass, Scrolled } from "./measure-report";
 import {
   frameStats,
   framesLost,
+  framesWhile,
   heldFor,
   heldUpByTheMainThread,
   passesOf,
@@ -60,7 +61,8 @@ interface Loaded {
 interface Recording {
   frames: Drawn[];
   scrolls: Scrolled[];
-  sideways: number;
+  /** When a row was scrolled sideways. */
+  sideways: number[];
   loaded: Loaded[];
   longFrames: LongFrame[];
   largestPaint: number;
@@ -112,7 +114,7 @@ function begin() {
   const now: Recording = {
     frames: [],
     scrolls: [],
-    sideways: 0,
+    sideways: [],
     loaded: [],
     longFrames: [],
     largestPaint: 0,
@@ -160,7 +162,7 @@ function begin() {
       if (box.classList.contains("shell-scroll")) {
         now.scrolls.push({ at: performance.now(), top: box.scrollTop });
       } else {
-        now.sideways += 1;
+        now.sideways.push(performance.now());
       }
     },
     { capture: true, passive: true },
@@ -375,7 +377,7 @@ function written(now: Recording): string {
   };
   const box = document.querySelector(".shell-scroll");
   say(
-    `page ${box ? box.scrollHeight - box.clientHeight : "?"} points of scrolling, sideways scrolls of rows ${now.sideways}`,
+    `page ${box ? box.scrollHeight - box.clientHeight : "?"} points of scrolling, sideways scrolls of rows ${now.sideways.length}`,
   );
   passes.forEach((pass: Pass, index) => {
     const inside = whileScrolling
@@ -389,6 +391,22 @@ function written(now: Recording): string {
       `pass ${index + 1} ${pass.direction} ${pass.startTop} -> ${pass.endTop} from ${seconds(pass.from)} for ${seconds(pass.to - pass.from)}: ${stats.frames} frames, ${stats.lost} lost, ${stats.stalls} stalls, p50 ${stats.p50.toFixed(1)}, p95 ${stats.p95.toFixed(1)}, worst ${ms(stats.worst)} | main thread per frame p50 ${percentile(held, 0.5).toFixed(1)}, p95 ${percentile(held, 0.95).toFixed(1)}, worst ${ms(held.length > 0 ? Math.max(...held) : 0)}`,
     );
   });
+
+  /* Rows scrolled sideways, which the passes above do not see: they only
+     follow the page up and down. */
+  const sideways = framesWhile(now.frames, now.sideways, WHILE_SCROLLING_MS).filter(
+    (drawn) => !whileScrolling.includes(drawn),
+  );
+  if (sideways.length > 0) {
+    const stats = frameStats(sideways.map((drawn) => drawn.gap), frame);
+    const held = sideways.map(heldFor);
+    const arrived = now.loaded.filter((loaded) =>
+      sideways.some((drawn) => loaded.at >= drawn.at - drawn.gap && loaded.at <= drawn.at),
+    ).length;
+    say(
+      `rows sideways: ${stats.frames} frames, ${stats.lost} lost, ${stats.stalls} stalls, p50 ${stats.p50.toFixed(1)}, p95 ${stats.p95.toFixed(1)}, worst ${ms(stats.worst)} | main thread per frame p50 ${percentile(held, 0.5).toFixed(1)}, p95 ${percentile(held, 0.95).toFixed(1)} | pictures arrived meanwhile ${arrived}`,
+    );
+  }
 
   say();
   say("--- worst frames while scrolling ---");

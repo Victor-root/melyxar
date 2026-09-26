@@ -8,9 +8,9 @@
  * right at every width without a single measurement being hard coded.
  */
 
-import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { PicturesAhead } from "./card";
+import { PicturesAhead, useFetchingAhead } from "./card";
 import type { CardShape } from "./card";
 
 interface GridProps {
@@ -27,20 +27,7 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
   const grid = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
-  /* The pictures below the screen fetched as soon as the browser has a
-     moment, which is once what is on screen has been drawn and asked for:
-     those were asked for first, so they still come first. See PicturesAhead. */
-  const [ahead, setAhead] = useState(false);
-  useEffect(() => {
-    const fetchAhead = () => startTransition(() => setAhead(true));
-    // Safari has no idle moments to offer, so it is given a second instead.
-    if (typeof window.requestIdleCallback === "function") {
-      const asked = window.requestIdleCallback(fetchAhead, { timeout: 2000 });
-      return () => window.cancelIdleCallback(asked);
-    }
-    const asked = setTimeout(fetchAhead, 1000);
-    return () => clearTimeout(asked);
-  }, []);
+  const ahead = useFetchingAhead();
 
   // The next page is fetched when the end comes into view rather than when the
   // viewer hits the bottom, so the grid grows before it runs out.

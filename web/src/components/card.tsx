@@ -18,7 +18,7 @@
  * rewrite when it comes rather than an adjustment.
  */
 
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, startTransition, useContext, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
@@ -60,14 +60,35 @@ const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
 /**
  * Whether cards fetch their pictures now rather than as they near the screen.
  *
- * A grid says so once the page it opened on has been drawn, and every picture
- * below the screen is fetched then, in the order of the grid. Fetched only as
- * they neared the screen instead, the pictures arrived while the page was
- * being scrolled, and each had to be put in place in the middle of it: the
- * stutter of a first scroll through a library that was gone the second time.
- * Only a grid says so: a row holds a couple of dozen cards, most in view.
+ * A grid or a row says so once the page it stands on has been drawn, and
+ * every picture off the screen is fetched then, in the order of the cards.
+ * Fetched only as they neared the screen instead, the pictures arrived while
+ * the page or the row was being scrolled, and each had to be put in place in
+ * the middle of it: the stutter of a first scroll through a library that was
+ * gone the second time.
  */
 export const PicturesAhead = createContext(false);
+
+/**
+ * Whether the cards a grid or a row holds fetch their pictures ahead yet:
+ * as soon as the browser has a moment, which is once what is on screen has
+ * been drawn and asked for. Those were asked for first, so they still come
+ * first.
+ */
+export function useFetchingAhead(): boolean {
+  const [ahead, setAhead] = useState(false);
+  useEffect(() => {
+    const fetchAhead = () => startTransition(() => setAhead(true));
+    // Safari has no idle moments to offer, so it is given a second instead.
+    if (typeof window.requestIdleCallback === "function") {
+      const asked = window.requestIdleCallback(fetchAhead, { timeout: 2000 });
+      return () => window.cancelIdleCallback(asked);
+    }
+    const asked = setTimeout(fetchAhead, 1000);
+    return () => clearTimeout(asked);
+  }, []);
+  return ahead;
+}
 
 export function Card({
   card,

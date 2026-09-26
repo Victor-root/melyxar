@@ -143,3 +143,16 @@ const ROOM_TO_SPARE = 0.6;
 export function heldUpByTheMainThread(previous: Drawn | undefined, frame: number): boolean {
   return previous !== undefined && heldFor(previous) > frame * ROOM_TO_SPARE;
 }
+
+/** The frames drawn while something moved: those that came no later than
+ *  `within` after one of the moments it moved, which are in order. */
+export function framesWhile(frames: Drawn[], moments: number[], within: number): Drawn[] {
+  let next = 0;
+  return frames.filter((drawn) => {
+    while (next + 1 < moments.length && moments[next + 1] <= drawn.at) {
+      next += 1;
+    }
+    const moved = moments[next];
+    return moved !== undefined && moved <= drawn.at && drawn.at - moved <= within;
+  });
+}
