@@ -2584,6 +2584,17 @@ button.seen-mark:not(.seen-mark-on):hover {
   opacity: 1;
 }
 
+/* Made only once the card is first reached (see card.tsx), so it arrives
+   already under the pointer: it fades in from nothing all the same. */
+@starting-style {
+  .card:hover .card-hover,
+  .card:has(:focus-visible) .card-hover,
+  .card:hover .select-mark,
+  .card:has(:focus-visible) .select-mark {
+    opacity: 0;
+  }
+}
+
 /* A finger has no hover: with the pointer that never arrives, the layer is
    simply always there, faintly, and everything on it can be pressed. */
 @media (hover: none) {

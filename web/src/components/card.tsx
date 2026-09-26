@@ -18,7 +18,7 @@
  * rewrite when it comes rather than an adjustment.
  */
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
@@ -114,6 +114,16 @@ export function Card({
     picturesChanged: marks.rowsHaveMoved,
   });
   const choosing = useChoosingPress(card.id);
+  /* The buttons that show only under the pointer are made the first time a
+     card is reached, by the pointer or the keyboard, and kept from then on.
+     Made on every card, invisible, they were near half of what a grid of a
+     few hundred films is made of, and the browser walks all of it for every
+     card that scrolls into view: measured, a fifth of what drawing the page
+     costs while it moves. Kept once made, the pointer going back and forth
+     over a card makes nothing again, and they still fade out as they did. */
+  const [reached, setReached] = useState(false);
+  const reach = () => setReached(true);
+  const shown = reached || menu.open;
 
   const unknown = card.identification === "unidentified" || card.identification === "pending";
   const seen = marks.seenOf(card);
@@ -144,6 +154,8 @@ export function Card({
       className={`card card-${shape}${here ? " card-here" : ""}${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " card-chosen" : ""}`}
       data-card={card.id}
       style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
+      onPointerEnter={reach}
+      onFocus={reach}
     >
       <div className="card-picture">
         {poster ? (
@@ -204,45 +216,47 @@ export function Card({
           />
         )}
 
-        <div className="card-hover">
-          {playable && (
-            <button
-              type="button"
-              className="card-play"
-              aria-label={t("work.play")}
-              title={t("work.play")}
-              onClick={stop(() => navigate(`/work/${card.id}?play`))}
-            >
-              <PlayIcon size={32} />
-            </button>
-          )}
+        {shown && (
+          <div className="card-hover">
+            {playable && (
+              <button
+                type="button"
+                className="card-play"
+                aria-label={t("work.play")}
+                title={t("work.play")}
+                onClick={stop(() => navigate(`/work/${card.id}?play`))}
+              >
+                <PlayIcon size={32} />
+              </button>
+            )}
 
-          <div className="card-corner">
-            <button
-              type="button"
-              className={`card-mark${favourite ? " card-mark-on" : ""}`}
-              aria-pressed={favourite}
-              aria-label={t(favourite ? "card.unfavourite" : "card.favourite")}
-              title={t(favourite ? "card.unfavourite" : "card.favourite")}
-              onClick={stop(() => marks.setFavourite(card, !favourite))}
-            >
-              <HeartIcon size={17} filled={favourite} />
-            </button>
-            <button
-              ref={kebab}
-              type="button"
-              className={`card-mark${menu.open ? " card-mark-on" : ""}`}
-              aria-label={t("card.more")}
-              title={t("card.more")}
-              aria-expanded={menu.open}
-              onClick={stop(() => menu.toggle(kebab.current))}
-            >
-              <MoreIcon size={17} />
-            </button>
+            <div className="card-corner">
+              <button
+                type="button"
+                className={`card-mark${favourite ? " card-mark-on" : ""}`}
+                aria-pressed={favourite}
+                aria-label={t(favourite ? "card.unfavourite" : "card.favourite")}
+                title={t(favourite ? "card.unfavourite" : "card.favourite")}
+                onClick={stop(() => marks.setFavourite(card, !favourite))}
+              >
+                <HeartIcon size={17} filled={favourite} />
+              </button>
+              <button
+                ref={kebab}
+                type="button"
+                className={`card-mark${menu.open ? " card-mark-on" : ""}`}
+                aria-label={t("card.more")}
+                title={t("card.more")}
+                aria-expanded={menu.open}
+                onClick={stop(() => menu.toggle(kebab.current))}
+              >
+                <MoreIcon size={17} />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        <SelectMark id={card.id} />
+        {(shown || choosing.selecting || choosing.chosen) && <SelectMark id={card.id} />}
 
         {/* How far in this film already is, drawn on the picture itself: it is
             the one thing that tells two cards of a row apart at a glance. */}
