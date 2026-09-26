@@ -548,10 +548,11 @@ struct HeroView {
     tagline: Option<String>,
     overview: Option<String>,
     genres: Vec<String>,
-    /// What the file itself holds, for the badges beside the title: how tall
+    /// What the file itself holds, for the badges beside the title: how large
     /// its picture is, which dynamic range it carries, and what its fullest
     /// soundtrack is. Raw as the file states it, because turning that into
     /// "4K" or "Dolby Atmos" is drawing rather than deciding.
+    width: Option<i64>,
     height: Option<i64>,
     hdr: Option<String>,
     sound: Option<String>,
@@ -626,6 +627,7 @@ async fn home(
                 tagline: entry.dressed.tagline.clone(),
                 overview: entry.dressed.overview.clone(),
                 genres: entry.dressed.genres.clone(),
+                width: entry.dressed.width,
                 height: entry.dressed.height,
                 hdr: entry.dressed.hdr.clone(),
                 sound: entry.dressed.sound.clone(),

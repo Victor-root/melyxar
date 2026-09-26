@@ -17,7 +17,9 @@ import {
   captionOf,
   containerName,
   howLong,
+  pictureName,
   whatIsLeft,
+  whatTheFileHolds,
   howLongSince,
   insideTheRange,
   nameOfPlayed,
@@ -282,5 +284,27 @@ describe("what is being played", () => {
     expect(captionOf({ ...episode, has_own_name: false }, said)).toBe(
       'work.season({"number":2}) · work.episode({"number":5})',
     );
+  });
+});
+
+describe("pictureName", () => {
+  it("names a picture wider than a screen by its width", () => {
+    // Stored with the black bands cut off: the height alone undersold both.
+    expect(pictureName(1920, 800)).toBe("1080p");
+    expect(pictureName(3840, 1600)).toBe("4K");
+    expect(pictureName(1280, 536)).toBe("720p");
+  });
+
+  it("names a picture narrower than a screen by its height", () => {
+    expect(pictureName(1440, 1080)).toBe("1080p");
+    expect(pictureName(720, 576)).toBe("SD");
+    expect(pictureName(null, null)).toBeNull();
+  });
+
+  it("puts no badge on a picture smaller than 720p", () => {
+    expect(whatTheFileHolds({ width: 1920, height: 800, hdr: null, sound: null })).toEqual([
+      "1080p",
+    ]);
+    expect(whatTheFileHolds({ width: 720, height: 576, hdr: null, sound: null })).toEqual([]);
   });
 });

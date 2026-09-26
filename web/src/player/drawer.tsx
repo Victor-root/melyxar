@@ -21,7 +21,7 @@ import { asClock } from "./clock";
 import type { Playback } from "./engine";
 import { PlayIcon } from "./icons";
 import { languageName } from "../languages";
-import { numberOfOne } from "../readable";
+import { numberOfOne, pictureName } from "../readable";
 import { heightAt, Thumbnail } from "./thumbnail";
 
 /** The sheets, in the order their tabs stand. Episodes only ever draws for a
@@ -121,20 +121,6 @@ function asRuntime(minutes: number, t: Props["t"]): string {
     : t("work.minutes", { count: minutes });
 }
 
-/** What a picture that many lines across is called on a box. */
-function pictureName(width: number): string | null {
-  if (width >= 3000) {
-    return "4K";
-  }
-  if (width >= 1900) {
-    return "1080p";
-  }
-  if (width >= 1200) {
-    return "720p";
-  }
-  return width > 0 ? "SD" : null;
-}
-
 /**
  * The one line under the title saying what is actually being played.
  *
@@ -146,7 +132,7 @@ function whatIsPlaying(plan: PlaybackPlan, language: string, t: Props["t"]): str
   const picture = plan.film.picture;
   const sound = plan.audio.find((track) => track.id === plan.chosen_audio_id);
   const said = [
-    picture ? pictureName(picture.width) : null,
+    picture ? pictureName(picture.width, picture.height) : null,
     picture?.hdr ? t(`facts.hdr.${picture.hdr}`) : null,
     picture?.codec.toUpperCase() ?? null,
     sound?.language ? languageName(sound.language, language) : null,

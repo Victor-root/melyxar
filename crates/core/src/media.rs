@@ -337,6 +337,24 @@ pub struct VideoDetails {
     pub hdr: Option<HdrFormat>,
 }
 
+/// The name a box gives a picture of that size: 4K, 1080p and the rest.
+///
+/// Whichever of its two sides says more. A film wider than a screen is
+/// stored with its black bands cut off, so a 1080p film can be 800 lines tall
+/// and a 4K film 1600: read by its height alone, the first was called 720p
+/// and the second 1440p, where every other player, and the file's own name,
+/// says 1080p and 4K. A picture filmed narrower than a screen keeps its full
+/// height and is named by it just the same.
+pub fn definition(width: i32, height: i32) -> &'static str {
+    match (width, height) {
+        (w, h) if w >= 3200 || h >= 2000 => "4K",
+        (w, h) if w >= 2400 || h >= 1400 => "1440p",
+        (w, h) if w >= 1800 || h >= 1000 => "1080p",
+        (w, h) if w >= 1200 || h >= 700 => "720p",
+        _ => "SD",
+    }
+}
+
 impl VideoDetails {
     /// How wide the picture is, once the margins are off.
     pub fn visible_width(&self) -> i32 {
@@ -373,13 +391,7 @@ impl VideoDetails {
 
     /// Short human readable summary, of the kind shown above the play button.
     pub fn summary(&self) -> String {
-        let definition = match self.visible_height() {
-            h if h >= 2000 => "4K",
-            h if h >= 1400 => "1440p",
-            h if h >= 1000 => "1080p",
-            h if h >= 700 => "720p",
-            _ => "SD",
-        };
+        let definition = definition(self.visible_width(), self.visible_height());
         let mut parts = vec![definition.to_string()];
         if let Some(hdr) = self.hdr {
             parts.push(
@@ -602,6 +614,19 @@ mod tests {
         assert_eq!(video(1200, "hevc", None).summary(), "1080p HEVC");
         assert_eq!(video(720, "h264", None).summary(), "720p H264");
         assert_eq!(video(576, "mpeg4", None).summary(), "SD MPEG4");
+    }
+
+    #[test]
+    fn a_picture_wider_than_a_screen_is_named_by_its_width() {
+        // Stored with the black bands cut off: the height alone undersold both.
+        assert_eq!(definition(1920, 800), "1080p");
+        assert_eq!(definition(3840, 1600), "4K");
+        assert_eq!(definition(1280, 536), "720p");
+        assert_eq!(definition(2560, 1070), "1440p");
+        // Narrower than a screen, it keeps its full height and is named by it.
+        assert_eq!(definition(1440, 1080), "1080p");
+        assert_eq!(definition(960, 720), "720p");
+        assert_eq!(definition(720, 576), "SD");
     }
 
     #[test]

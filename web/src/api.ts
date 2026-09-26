@@ -443,6 +443,7 @@ export type HeroItem = Card & {
   genres: string[];
   /** What the file itself holds, for the badges beside the title. Raw as the
       file states it: turning it into "4K" or "Dolby Atmos" is drawing. */
+  width: number | null;
   height: number | null;
   hdr: string | null;
   sound: string | null;

@@ -532,7 +532,7 @@ function pictureOf(version: Version): string {
     return containerName(version.container ?? "") || "";
   }
   return [
-    ...whatTheFileHolds({ height: video.height, hdr: video.hdr, sound: null }),
+    ...whatTheFileHolds({ width: video.width, height: video.height, hdr: video.hdr, sound: null }),
     video.codec.toUpperCase(),
   ].join(" ");
 }
