@@ -22,6 +22,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { keep, recall } from "../kept";
+import { useMarks } from "../marks";
 import type { HeroItem } from "../api";
 import { useShownPicture } from "./picture";
 import { howLong, whatTheFileHolds, whichEpisode } from "../readable";
@@ -348,12 +349,13 @@ function HeroBadges({ item }: { item: HeroItem }) {
  */
 function HeroProgress({ item }: { item: HeroItem }) {
   const { t } = useSettings();
+  const resume = useMarks().resumeOf(item);
 
-  if (item.resume_from_seconds === null || !item.runtime_minutes) {
+  if (resume === null || !item.runtime_minutes) {
     return null;
   }
   const whole = item.runtime_minutes * 60;
-  const done = Math.min(item.resume_from_seconds, whole);
+  const done = Math.min(resume, whole);
 
   return (
     <p className="progress-line">

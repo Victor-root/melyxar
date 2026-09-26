@@ -418,13 +418,11 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     chosen,
     choose: setChosen,
     version,
-    /* Only while the film is still under way as this page shows it: ticked
-       off or back to not started, it has nowhere to be picked up from, and
-       the button says so at once rather than a round trip later. */
+    /* Only while the film still has somewhere to be picked up from as this
+       page shows it: ticked off, it has none, and the button says so at once
+       rather than a round trip later. */
     resumeFrom:
-      work?.card && marks.seenOf(work.card) !== "in_progress"
-        ? null
-        : (plan?.resume_from_seconds ?? null),
+      work?.card && marks.resumeOf(work.card) === null ? null : (plan?.resume_from_seconds ?? null),
     plan,
     tracks,
     chooseTracks,
