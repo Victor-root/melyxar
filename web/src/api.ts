@@ -144,6 +144,8 @@ export type Seen = "not_started" | "in_progress" | "watched";
 export interface Card {
   id: string;
   title: string;
+  /** The letter it is filed under in a grid read by title, "#" for none. */
+  initial: string;
   year: number | null;
   runtime_minutes: number | null;
   rating: number | null;
