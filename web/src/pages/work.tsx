@@ -1145,8 +1145,8 @@ function CarryOn({ work }: { work: Work }) {
     card.kind === "episode" ? card.seen !== "watched" : card.unwatched === card.episodes,
   );
   const wording = t(untouched ? "work.start_series" : "work.carry_on", {
-    season: String(next.season).padStart(2, "0"),
-    episode: String(next.episode).padStart(2, "0"),
+    season: next.season,
+    episode: next.episode,
   });
 
   return (

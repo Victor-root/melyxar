@@ -215,8 +215,8 @@ const en: Dictionary = {
   // Shown instead of runtime when an episode file is unavailable.
   "work.not_on_disk": "File unavailable",
   // Series playback buttons include the starting episode.
-  "work.carry_on": "Resume at S{season}E{episode}",
-  "work.start_series": "Start with S{season}E{episode}",
+  "work.carry_on": "Resume at S{season} E{episode}",
+  "work.start_series": "Start with S{season} E{episode}",
   "work.next_episode": "Next episode",
   "work.all_watched": "All episodes watched",
   "work.left_to_watch": "{count} left",
@@ -1406,8 +1406,8 @@ const fr: Dictionary = {
   "work.episodes_none": "Aucun épisode disponible pour le moment",
   "work.seasons_none": "Aucune saison disponible pour le moment",
   "work.not_on_disk": "Fichier indisponible",
-  "work.carry_on": "Reprendre à S{season}E{episode}",
-  "work.start_series": "Commencer par S{season}E{episode}",
+  "work.carry_on": "Reprendre à S{season} E{episode}",
+  "work.start_series": "Commencer par S{season} E{episode}",
   "work.next_episode": "Épisode suivant",
   "work.all_watched": "Tous les épisodes ont été vus",
   "work.left_to_watch": "{count} à voir",
