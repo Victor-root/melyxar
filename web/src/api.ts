@@ -484,7 +484,12 @@ export interface Home {
   shelves: { kind: LibraryKind; cards: Card[]; fan: Card[] }[];
   works: number;
   awaiting_identification: number;
+  /** The sections this viewer shows below the banner, in their order. */
+  sections: HomeSection[];
 }
+
+/** One section of the home page below its banner. */
+export type HomeSection = "band" | "carry_on" | "up_next" | "recently_added" | "libraries";
 
 export interface Credit {
   /** Where their own page is. */
@@ -1408,6 +1413,10 @@ export interface ViewerPreferences {
   hidden_at_the_door: boolean;
   /** Every kind of library, in the order the home page lays them out. */
   home_order: LibraryKind[];
+  /** Every section of the home page below its banner, in its order, and
+   *  those it leaves off. */
+  home_sections: HomeSection[];
+  hidden_home_sections: HomeSection[];
   /** How far the player's two step buttons jump, in seconds. */
   step_back_seconds: number;
   step_on_seconds: number;

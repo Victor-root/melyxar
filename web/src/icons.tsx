@@ -242,6 +242,18 @@ export function BellIcon(props: IconProps) {
  * Moving about
  * ---------------------------------------------------------------------- */
 
+/** Six dots, for what a hand takes hold of to move a line. Filled rather
+ *  than stroked: dots drawn as rings read as holes at this size. */
+export function GripIcon(props: IconProps) {
+  return (
+    <Icon {...props} strokeWidth={0}>
+      {[9, 15].map((x) =>
+        [6, 12, 18].map((y) => <circle key={`${x}:${y}`} cx={x} cy={y} r="1.6" fill="currentColor" />),
+      )}
+    </Icon>
+  );
+}
+
 export function ChevronUpIcon(props: IconProps) {
   return (
     <Icon {...props}>

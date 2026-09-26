@@ -11,7 +11,7 @@
 import { useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../api";
-import type { Card, Home, Job, Library } from "../api";
+import type { Card, Home, HomeSection, Job, Library } from "../api";
 import { useAsked } from "../asking";
 import { keep, recall } from "../kept";
 import { useMarks } from "../marks";
@@ -30,6 +30,30 @@ export function howFarIn(seconds: number, runtimeMinutes: number | null): number
     return undefined;
   }
   return Math.min(1, seconds / (runtimeMinutes * 60));
+}
+
+/** One section of the home page as it is laid out, or the two rows of what
+ *  is under way when they follow each other: those two share a line while
+ *  both are short enough for one. */
+export type Laid = HomeSection | readonly [HomeSection, HomeSection];
+
+/** The sections in the order the viewer chose, the two rows of what is
+ *  under way paired when nothing stands between them. */
+export function laidOut(sections: readonly HomeSection[]): Laid[] {
+  const underWay = (section: HomeSection | undefined) =>
+    section === "carry_on" || section === "up_next";
+  const laid: Laid[] = [];
+  for (let place = 0; place < sections.length; place += 1) {
+    const section = sections[place];
+    const next = sections[place + 1];
+    if (underWay(section) && next !== undefined && underWay(next)) {
+      laid.push([section, next]);
+      place += 1;
+    } else {
+      laid.push(section);
+    }
+  }
+  return laid;
 }
 
 /** Everything the home screen is handed to draw itself and to be driven by. */

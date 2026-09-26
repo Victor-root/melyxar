@@ -104,25 +104,17 @@ export function kindsOnTheHomePage(order: LibraryKind[], libraries: Library[]): 
 }
 
 /**
- * The order with one kind swapped with its neighbour among those shown. The
- * kinds nobody sees keep their places, so a kind that comes back later finds
- * the place it had.
+ * The whole order once the kinds shown have been put in a new order among
+ * themselves. The kinds nobody sees keep their places, so a kind that comes
+ * back later finds the place it had.
  */
-export function movedOnTheHomePage(
+export function reorderedOnTheHomePage(
   order: LibraryKind[],
   shown: LibraryKind[],
-  kind: LibraryKind,
-  step: -1 | 1,
+  reordered: LibraryKind[],
 ): LibraryKind[] {
-  const from = shown.indexOf(kind);
-  const to = from + step;
-  if (from < 0 || to < 0 || to >= shown.length) {
-    return order;
-  }
-  const swapped = [...shown];
-  [swapped[from], swapped[to]] = [swapped[to], swapped[from]];
   let next = 0;
-  return order.map((one) => (shown.includes(one) ? swapped[next++] : one));
+  return order.map((one) => (shown.includes(one) ? reordered[next++] : one));
 }
 
 /** How the cards of a kind are laid out: on their side for what somebody

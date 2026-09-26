@@ -1970,18 +1970,77 @@
   border-top: 0;
 }
 
-.order-place {
-  width: 22px;
-  color: var(--accent-bright);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
 .order-name {
   flex: 1 1 auto;
   font-size: 14.5px;
   font-weight: 550;
+}
+
+/* A line left off the page it orders, still in the list so it keeps its
+   place. */
+.order-line-off .order-name,
+.order-line-off .line-mark {
+  opacity: 0.45;
+}
+
+/* A list put in order by hand. The lines step aside as one is dragged past
+   them, and the one let go glides into its place. */
+.sortable-line {
+  position: relative;
+  margin-inline: -8px;
+  padding-inline: 8px;
+  border-radius: var(--radius-control);
+  cursor: grab;
+  user-select: none;
+}
+
+.sortable-moving .sortable-line {
+  transition: transform var(--calm) var(--ease);
+}
+
+.sortable-moving .sortable-line.sortable-held {
+  z-index: 1;
+  border-top-color: transparent;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+  cursor: grabbing;
+  transition: none;
+}
+
+.sortable-landing {
+  z-index: 1;
+  transition: transform var(--calm) var(--ease);
+}
+
+.sortable-grip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-faint);
+  cursor: grab;
+  /* A finger on the grip drags the line rather than scrolling the page. */
+  touch-action: none;
+}
+
+.sortable-grip:hover {
+  color: var(--text-soft);
+}
+
+.sortable-held .sortable-grip {
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sortable-moving .sortable-line,
+  .sortable-landing {
+    transition: none;
+  }
 }
 
 /* --------------------------------------------------------------------------

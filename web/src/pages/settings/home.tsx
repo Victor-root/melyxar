@@ -1,6 +1,7 @@
 /*
- * How the home page opens: its banner, and the order the kinds of library
- * are laid out in.
+ * How the home page opens: its banner, which of its sections it shows and in
+ * what order, and the order the kinds of library are laid out in. Both orders
+ * are dragged into place.
  *
  * The banner's two numbers apply as they are dragged, on every page, because
  * they are written onto the document rather than passed down. The share of the
@@ -8,13 +9,14 @@
  * and it cannot be seen from a slider.
  */
 
-import type { LibraryKind } from "../../api";
+import type { HomeSection, LibraryKind } from "../../api";
 import { PageHead, Panel, Setting, Slider, Toggle } from "../../components/panel";
-import { ChevronDownIcon, ChevronUpIcon, HomeIcon, ImageIcon, KindIcon } from "../../icons";
+import { Sortable } from "../../components/sortable";
+import { HomeIcon, ImageIcon, KindIcon, SlidersIcon } from "../../icons";
 import {
   kindsOnTheHomePage,
-  movedOnTheHomePage,
   nameOfKind,
+  reorderedOnTheHomePage,
   useLibraries,
 } from "../../libraries";
 import { useMarks } from "../../marks";
@@ -30,7 +32,8 @@ export function MyHomePage() {
     <>
       <PageHead lead={t("me.home_lead")} />
       <Banner preferences={preferences} />
-      <HomeOrder preferences={preferences} />
+      <HomeSections preferences={preferences} />
+      <LibraryOrder preferences={preferences} />
     </>
   );
 }
@@ -123,10 +126,59 @@ function Banner({ preferences }: { preferences: Preferences }) {
 }
 
 /**
+ * The sections of the home page below its banner: in which order, and which
+ * of them it shows. A hidden section keeps its place in the list, so shown
+ * again it comes back where it was.
+ */
+function HomeSections({ preferences }: { preferences: Preferences }) {
+  const { t } = useSettings();
+  const marks = useMarks();
+  const { kept, change } = preferences;
+
+  if (!kept) {
+    return null;
+  }
+  const hidden = kept.hidden_home_sections;
+  const name = (section: HomeSection) => t(`home_section.${section}`);
+
+  // The home page is read again once the server holds the change, so it is
+  // already right when somebody goes back to it.
+  const show = (section: HomeSection, shown: boolean) =>
+    change({
+      hidden_home_sections: shown
+        ? hidden.filter((one) => one !== section)
+        : [...hidden, section],
+    }).then(marks.rowsHaveMoved);
+
+  return (
+    <Panel icon={SlidersIcon} title={t("settings.home_sections")} lead={t("settings.home_sections_why")}>
+      <Sortable
+        items={kept.home_sections}
+        keyOf={(section) => section}
+        nameOf={name}
+        onMove={(home_sections) => change({ home_sections }).then(marks.rowsHaveMoved)}
+        lineClass={(section) => (hidden.includes(section) ? "order-line-off" : undefined)}
+      >
+        {(section) => (
+          <>
+            <span className="order-name">{name(section)}</span>
+            <Toggle
+              label={t("settings.home_section_shown", { name: name(section) })}
+              checked={!hidden.includes(section)}
+              onChange={(shown) => show(section, shown)}
+            />
+          </>
+        )}
+      </Sortable>
+    </Panel>
+  );
+}
+
+/**
  * The order the home page lays the kinds of library out in, its tiles and its
  * rows alike. Only the kinds this account holds are offered.
  */
-function HomeOrder({ preferences }: { preferences: Preferences }) {
+function LibraryOrder({ preferences }: { preferences: Preferences }) {
   const { t } = useSettings();
   const marks = useMarks();
   const libraries = useLibraries();
@@ -137,50 +189,30 @@ function HomeOrder({ preferences }: { preferences: Preferences }) {
   }
   const shown = kindsOnTheHomePage(kept.home_order, libraries.all);
 
-  // The home page is read again once the server holds the new order, so it is
-  // already right when somebody goes back to it.
-  const move = (kind: LibraryKind, step: -1 | 1) =>
-    change({ home_order: movedOnTheHomePage(kept.home_order, shown, kind, step) }).then(
-      marks.rowsHaveMoved,
-    );
-
   return (
-    <Panel icon={HomeIcon} title={t("settings.home_order")} lead={t("settings.home_order_why")}>
+    <Panel icon={HomeIcon} title={t("settings.library_order")} lead={t("settings.library_order_why")}>
       {shown.length < 2 ? (
-        <p className="empty-line">{t("me.home_order_single")}</p>
+        <p className="empty-line">{t("me.library_order_single")}</p>
       ) : (
-        <ol className="order">
-          {shown.map((kind, place) => {
-            const name = nameOfKind(kind, libraries.all, t);
-            return (
-              <li key={kind} className="order-line">
-                <span className="order-place">{place + 1}</span>
-                <span className="line-mark" aria-hidden="true">
-                  <KindIcon kind={kind} size={18} />
-                </span>
-                <span className="order-name">{name}</span>
-                <button
-                  className="button button-small button-quiet"
-                  onClick={() => move(kind, -1)}
-                  disabled={place === 0}
-                  aria-label={t("settings.home_order_up", { kind: name })}
-                  title={t("settings.home_order_up", { kind: name })}
-                >
-                  <ChevronUpIcon size={16} />
-                </button>
-                <button
-                  className="button button-small button-quiet"
-                  onClick={() => move(kind, 1)}
-                  disabled={place === shown.length - 1}
-                  aria-label={t("settings.home_order_down", { kind: name })}
-                  title={t("settings.home_order_down", { kind: name })}
-                >
-                  <ChevronDownIcon size={16} />
-                </button>
-              </li>
-            );
-          })}
-        </ol>
+        <Sortable
+          items={shown}
+          keyOf={(kind) => kind}
+          nameOf={(kind) => nameOfKind(kind, libraries.all, t)}
+          onMove={(reordered: LibraryKind[]) =>
+            change({ home_order: reorderedOnTheHomePage(kept.home_order, shown, reordered) }).then(
+              marks.rowsHaveMoved,
+            )
+          }
+        >
+          {(kind) => (
+            <>
+              <span className="line-mark" aria-hidden="true">
+                <KindIcon kind={kind} size={18} />
+              </span>
+              <span className="order-name">{nameOfKind(kind, libraries.all, t)}</span>
+            </>
+          )}
+        </Sortable>
       )}
     </Panel>
   );
