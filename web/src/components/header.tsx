@@ -152,26 +152,34 @@ export function Header({
   const { account, leave } = useAccount();
   const branding = useBranding();
   const start = useRef<HTMLDivElement>(null);
+  const side = useRef<HTMLDivElement>(null);
 
-  /* Where the piece at the left end stops, written on the page: as wide as
-     the server's name and logo, and what rises into the band beside it
-     keeps clear of it rather than sliding under it. */
+  /* Where the piece at the left end stops and how wide the one at the right
+     end is, written on the page: the first as wide as the server's name and
+     logo, the second as the account's name and the search field opened in
+     it. What rises into the band between them keeps clear of both rather
+     than sliding under either. */
   useLayoutEffect(() => {
-    const piece = start.current;
-    if (!piece) {
+    const left = start.current;
+    const right = side.current;
+    if (!left || !right) {
       return;
     }
     const root = document.documentElement;
-    const measure = () =>
-      root.style.setProperty("--header-start-end", `${piece.getBoundingClientRect().right}px`);
+    const measure = () => {
+      root.style.setProperty("--header-start-end", `${left.getBoundingClientRect().right}px`);
+      root.style.setProperty("--header-side-width", `${right.getBoundingClientRect().width}px`);
+    };
     measure();
     const watching = new ResizeObserver(measure);
-    watching.observe(piece);
+    watching.observe(left);
+    watching.observe(right);
     window.addEventListener("resize", measure);
     return () => {
       watching.disconnect();
       window.removeEventListener("resize", measure);
       root.style.removeProperty("--header-start-end");
+      root.style.removeProperty("--header-side-width");
     };
   }, []);
   /* A scan is the one thing an administrator needs from wherever they happen
@@ -388,7 +396,7 @@ export function Header({
             Three of them read as three decisions about what goes with what,
             and there is only one: this end is what you press, the other is
             where you are. */}
-        <div className="header-piece header-side">
+        <div className="header-piece header-side" ref={side}>
           {/* What the server is doing, and only while it is doing it. It is
               the one thing here that is news rather than a way to somewhere:
               a scan that started ten minutes ago and is still going is worth

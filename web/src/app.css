@@ -1917,14 +1917,32 @@ input[type="radio"]:disabled {
  * because they are the bar, and a second lit bar in the page read as two
  * bars. Held in the middle of the page for the same reason: lined up under
  * the bar's left hand piece, the same glass read as a second row of it.
+ *
+ * Beside the name while a whole bar fits there, under it once it does not:
+ * squeezed in beside it, it folded into a column.
  */
 .browse-bar {
+  flex: 1 1 520px;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: var(--gap);
+}
+
+/* The name of the grid and its bar on one line, the bar in the middle of
+   what the name leaves: on a line of its own under the name it left the
+   width of the page empty on both sides. */
+.browse-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap) var(--gap-wide);
   margin-bottom: var(--gap-wide);
+}
+
+.browse-head .section-head {
+  margin: 0;
 }
 
 .browse-piece {
@@ -2062,6 +2080,39 @@ input[type="radio"]:disabled {
   --header-glow: var(--accent);
   border-color: var(--accent);
   color: var(--accent-contrast);
+}
+
+/* On a wide screen the name of the grid and its bar rise into the band of
+   the bar at the top, the way the head of an administration page does: the
+   name beside the piece at the left end, the bar in the room left before
+   the piece at the right end. Kept clear of both, which the header measures
+   as they grow: the server's name and logo at one end, the account and the
+   search field opened in it at the other. Narrower, the band has no room for
+   a bar this long, and both stay under it. */
+@media (min-width: 1680px) {
+  .browse-head {
+    --clear-of-start: max(0px, var(--header-start-end, 0px) + var(--gap-wide) - var(--gutter));
+    flex-wrap: nowrap;
+    height: var(--header-height);
+    max-width: calc(
+      100% - var(--header-side-width, 360px) - var(--gap-wide) - var(--clear-of-start)
+    );
+    margin: calc(-1 * (var(--header-height) + var(--gap-wide))) 0 var(--gap-wide)
+      var(--clear-of-start);
+  }
+
+  .browse-head .section-head {
+    flex: none;
+  }
+
+  .browse-head .browse-bar,
+  .browse-head .browse-piece {
+    flex-wrap: nowrap;
+  }
+
+  .browse-head .browse-bar {
+    min-width: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
