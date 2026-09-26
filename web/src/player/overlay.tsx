@@ -65,6 +65,7 @@ import type { Mark } from "./logo";
 import { QUALITIES, qualityName } from "./quality";
 import { CODECS, codecName } from "./codec";
 import { captionOf, type Wording } from "../readable";
+import { markTheOpening } from "./opening";
 import { FADES_AFTER_MS } from "./settings";
 import type { PlayerSettings } from "./settings";
 import { Thumbnail } from "./thumbnail";
@@ -204,6 +205,15 @@ export function Overlay(props: Props) {
      stylesheet alone because the panels and the bar answer to it too: a menu
      left open behind a faded bar is a menu nobody can shut. */
   const [away, setAway] = useState(false);
+  /* Said to the opening being followed, since controls going away uncover
+     the picture and the way the browser draws it can change with that. */
+  const wasAway = useRef(away);
+  useEffect(() => {
+    if (wasAway.current !== away) {
+      wasAway.current = away;
+      markTheOpening(playback.video.current, away ? "controls_away" : "controls_back");
+    }
+  }, [away, playback.video]);
   const stir = useRef<() => void>(() => {});
   /* Where the button that opened the panel stands, across the picture. A panel
      that always opens at one end of the screen leaves a viewer looking for the

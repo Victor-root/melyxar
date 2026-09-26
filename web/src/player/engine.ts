@@ -36,6 +36,7 @@ import type { Codec } from "./codec";
 import { rememberLoudness, storedLoudness } from "./loudness";
 import { clientProfile } from "./profile";
 import { learnFromWatching } from "./learning";
+import { markTheOpening } from "./opening";
 import { watchTheReading } from "./watch";
 import { sayHowItDecodes } from "./card";
 import type { Watching } from "./watch";
@@ -1591,6 +1592,7 @@ export function usePlayback({
         element.cancelVideoFrameCallback?.(pending);
         pending = null;
       }
+      markTheOpening(element, "uncovered");
       setMovingPicture(key);
     };
     if (!element.requestVideoFrameCallback) {

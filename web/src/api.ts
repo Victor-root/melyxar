@@ -771,6 +771,32 @@ export interface OpeningHitch {
    *  when the clock ran on under a picture that stood still, next to nothing
    *  when the clock itself stopped. Absent when it could not be read. */
   clock_ms: number | null;
+  /** How long the browser says the picture after the gap took to decode,
+   *  when it says. */
+  decoded_ms: number | null;
+  /** Whether the picture after the gap came out a different size, which is
+   *  the decoder having been set up again. */
+  resized: boolean;
+}
+
+/** Something that changed around the film while it opened. */
+export type PageChangeKind =
+  | "uncovered"
+  | "controls_away"
+  | "controls_back"
+  | "waiting"
+  | "stalled"
+  | "playing"
+  | "picture_resized"
+  | "box_resized"
+  | "fullscreen"
+  | "tab_hidden"
+  | "tab_shown";
+
+/** One such change, and when, from the first picture. */
+export interface PageChange {
+  what: PageChangeKind;
+  at_ms: number;
 }
 
 /** What the opening seconds of a film came to, picture by picture. */
@@ -803,6 +829,10 @@ export interface OpeningSeconds {
   /** Whether the film started with its sound on. The browser's clock runs
    *  on the sound, so a sound card slow to wake holds the pictures too. */
   sound_on: boolean;
+  /** What changed around the film while it opened, in order: a picture that
+   *  stops the moment something drawn over it goes away points at how the
+   *  browser puts video on the screen rather than at the film. */
+  page_changes: PageChange[];
 }
 
 /**

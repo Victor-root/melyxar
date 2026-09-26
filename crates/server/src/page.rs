@@ -251,6 +251,10 @@ enum Seen {
         /// runs on the sound, so a sound card slow to wake holds the
         /// pictures too.
         sound_on: bool,
+        /// What changed around the film while it opened, in order: a picture
+        /// that stops the moment something drawn over it goes away points at
+        /// how the browser puts video on the screen rather than at the film.
+        page_changes: Vec<PageChange>,
     },
     /// Playback stopped outright, in whatever words the failure carried, and
     /// whether the browser's own reader was handed the playlist instead.
@@ -433,6 +437,12 @@ struct OpeningHitch {
     /// itself when the clock ran on under a picture that stood still, next to
     /// nothing when the clock itself stopped.
     clock_ms: Option<u32>,
+    /// How long the browser says the picture after the gap took to decode,
+    /// when it says.
+    decoded_ms: Option<u32>,
+    /// Whether the picture after the gap came out a different size, which is
+    /// the decoder having been set up again.
+    resized: bool,
 }
 
 /// What kind of moment it was.
@@ -453,6 +463,63 @@ impl HitchKind {
             Self::Blind => "unseen",
         }
     }
+}
+
+/// Something that changed around the film while it opened, and when, from
+/// the first picture: before it when negative.
+#[derive(Debug, Deserialize)]
+struct PageChange {
+    what: PageChangeKind,
+    at_ms: i64,
+}
+
+/// What changed. A closed list: a page names one of these or is refused.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum PageChangeKind {
+    Uncovered,
+    ControlsAway,
+    ControlsBack,
+    Waiting,
+    Stalled,
+    Playing,
+    PictureResized,
+    BoxResized,
+    Fullscreen,
+    TabHidden,
+    TabShown,
+}
+
+impl PageChangeKind {
+    /// The words written in the journal.
+    fn as_words(self) -> &'static str {
+        match self {
+            Self::Uncovered => "uncovered",
+            Self::ControlsAway => "controls away",
+            Self::ControlsBack => "controls back",
+            Self::Waiting => "waiting",
+            Self::Stalled => "stalled",
+            Self::Playing => "playing",
+            Self::PictureResized => "picture resized",
+            Self::BoxResized => "box resized",
+            Self::Fullscreen => "fullscreen",
+            Self::TabHidden => "tab hidden",
+            Self::TabShown => "tab shown",
+        }
+    }
+}
+
+/// How many changes around a film are written, whatever a page sends.
+const CHANGES_WRITTEN: usize = 24;
+
+/// The changes around a film on one line, the first few only.
+fn changes_in_a_line(changes: &[PageChange]) -> String {
+    changes
+        .iter()
+        .take(CHANGES_WRITTEN)
+        .map(|change| format!("{} at {}ms", change.what.as_words(), change.at_ms))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// How many hitches are written one by one, whatever a page sends.
@@ -479,6 +546,12 @@ fn hitches_in_a_line(hitches: &[OpeningHitch]) -> String {
             }
             if let Some(clock) = hitch.clock_ms {
                 said.push_str(&format!(" clock moved {clock}ms"));
+            }
+            if let Some(decoded) = hitch.decoded_ms {
+                said.push_str(&format!(" decoded in {decoded}ms"));
+            }
+            if hitch.resized {
+                said.push_str(" picture resized");
             }
             said
         })
@@ -703,6 +776,7 @@ async fn what_the_page_saw(
             films_before_in_this_tab,
             page_age_ms,
             sound_on,
+            page_changes,
         } => tracing::debug!(
             session,
             source,
@@ -723,6 +797,7 @@ async fn what_the_page_saw(
             page_age_ms,
             sound_on,
             hitches = hitches_in_a_line(&first_hitches),
+            changes = changes_in_a_line(&page_changes),
             "how the first seconds of the film flowed"
         ),
         Seen::PlaybackRefused {
@@ -1022,14 +1097,16 @@ mod tests {
     #[test]
     fn the_opening_seconds_name_each_hitch_and_only_the_first_few() {
         let hitch = r#"{"kind":"held","at_ms":2042,"at_second":1227.41,"gap_ms":162,
-                        "pictures_lost":0,"busy_ms":80,"clock_ms":4}"#;
+                        "pictures_lost":0,"busy_ms":80,"clock_ms":4,"decoded_ms":31,
+                        "resized":true}"#;
         let said: FromThePage = serde_json::from_str(&format!(
             r#"{{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"the_opening_seconds",
                 "over_ms":15000,"pictures":360,"picture_ms":41.7,"held":12,"worst_held_ms":162,
                 "skipped":0,"pictures_lost":0,"blind":0,"worst_blind_ms":0,
                 "first_hitches":[{}],"pictures_dropped":0,"waited":0,
                 "busy_spells":null,"busy_ms":null,"films_before_in_this_tab":0,"page_age_ms":5321,
-                "sound_on":true}}"#,
+                "sound_on":true,"page_changes":[{{"what":"uncovered","at_ms":70}},
+                {{"what":"controls_away","at_ms":2600}},{{"what":"playing","at_ms":-12}}]}}"#,
             [hitch; 12].join(",")
         ))
         .expect("the opening seconds are a fact this module names");
@@ -1038,24 +1115,32 @@ mod tests {
             Seen::TheOpeningSeconds {
                 first_hitches,
                 busy_spells,
+                page_changes,
                 ..
             } => {
                 assert_eq!(busy_spells, None);
                 let line = hitches_in_a_line(&first_hitches);
                 assert_eq!(line.matches("held").count(), HITCHES_WRITTEN);
                 assert!(line.starts_with(
-                    "held 162ms at 2042ms (film 1227.410s) page busy 80ms clock moved 4ms"
+                    "held 162ms at 2042ms (film 1227.410s) page busy 80ms clock moved 4ms \
+                     decoded in 31ms picture resized"
                 ));
+                assert_eq!(
+                    changes_in_a_line(&page_changes),
+                    "uncovered at 70ms, controls away at 2600ms, playing at -12ms"
+                );
             }
             other => panic!("read as the wrong fact: {other:?}"),
         }
 
-        // A kind of hitch this module has no word for is refused.
+        // A kind of hitch this module has no word for is refused, and so is a
+        // change around the film it has no words for.
         assert!(serde_json::from_str::<OpeningHitch>(
             r#"{"kind":"anything","at_ms":0,"at_second":0,"gap_ms":0,"pictures_lost":0,
-                "busy_ms":0,"clock_ms":null}"#
+                "busy_ms":0,"clock_ms":null,"decoded_ms":null,"resized":false}"#
         )
         .is_err());
+        assert!(serde_json::from_str::<PageChange>(r#"{"what":"anything","at_ms":0}"#).is_err());
     }
 
     #[test]
