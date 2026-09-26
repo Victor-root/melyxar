@@ -3013,6 +3013,25 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--accent);
 }
 
+/* The margin an arrow stands in is the arrow's alone. The row reaches into
+   it for the glow of its end cards, and a card half way along the row used
+   to show through there, under the arrow: the pointer reached the card
+   rather than the arrow, and its buttons came up over the arrow they hid.
+   So on a side with more to see, the row is cut level with the heading's
+   edge, where the next card reads as going on beyond it. A clip, which
+   moves nothing and stops the pointer too. */
+.row-more-back > .row-track {
+  clip-path: inset(0 0 0 var(--row-side-air));
+}
+
+.row-more-on > .row-track {
+  clip-path: inset(0 var(--row-side-air) 0 0);
+}
+
+.row-more-back.row-more-on > .row-track {
+  clip-path: inset(0 var(--row-side-air));
+}
+
 /* Outside the row, in the page's own margin, and clear of the four pixels
    the row keeps for itself. */
 .row-arrow-back {

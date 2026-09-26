@@ -188,7 +188,7 @@ export function Row({
   };
 
   return (
-    <div className="row">
+    <div className={`row${canGoBack ? " row-more-back" : ""}${canGoOn ? " row-more-on" : ""}`}>
       {canGoBack && (
         <button
           className="row-arrow row-arrow-back"
