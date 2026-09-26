@@ -861,6 +861,60 @@
   outline: none;
 }
 
+/* What a key just did to the film, in the middle of the picture: the same
+   dark disc as the sound down the side, grown in and faded out by itself. */
+.player-key-said {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  pointer-events: none;
+  animation: player-key-said 700ms var(--ease) forwards;
+}
+
+@keyframes player-key-said {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-key-said {
+    animation-name: player-key-said-still;
+  }
+}
+
+@keyframes player-key-said-still {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%);
+  }
+}
+
 /* The sound said down the right of the picture when the keys change it:
    the bar above stood on its end, in the same track, the same accent and the
    same number, on the same dark pill the number stands on under a hand.
