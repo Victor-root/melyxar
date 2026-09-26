@@ -934,16 +934,24 @@
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
   pointer-events: none;
-  opacity: 0;
-  transform: translateY(-50%) scale(0.92);
-  transition:
-    opacity var(--quick) var(--ease),
-    transform var(--quick) var(--ease);
+  transform: translateY(-50%);
+  animation: player-sound-said-in var(--quick) var(--ease) both;
 }
 
-.player-sound-said[data-shown="yes"] {
-  opacity: 1;
-  transform: translateY(-50%) scale(1);
+.player-sound-said[data-leaving="yes"] {
+  animation: player-sound-said-out var(--quick) var(--ease) forwards;
+}
+
+@keyframes player-sound-said-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes player-sound-said-out {
+  to {
+    opacity: 0;
+  }
 }
 
 .player-sound-said-number {

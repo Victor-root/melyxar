@@ -242,12 +242,15 @@ export function Overlay(props: Props) {
   /* The sound said down the side of the picture for a moment, when the keys
      change it: the one change a viewer makes without looking at anything,
      and the one they want to see the end of. */
-  const [soundSaid, setSoundSaid] = useState(false);
+  const [soundSaid, setSoundSaid] = useState<"no" | "yes" | "leaving">("no");
   const soundSaidFor = useRef(0);
   const saySound = useRef(() => {
-    setSoundSaid(true);
+    setSoundSaid("yes");
     window.clearTimeout(soundSaidFor.current);
-    soundSaidFor.current = window.setTimeout(() => setSoundSaid(false), SOUND_SAID_FOR_MS);
+    soundSaidFor.current = window.setTimeout(
+      () => setSoundSaid((was) => (was === "yes" ? "leaving" : was)),
+      SOUND_SAID_FOR_MS,
+    );
   });
   useEffect(() => () => window.clearTimeout(soundSaidFor.current), []);
   /* What a key just did to the film, said in the middle of the picture. Only
@@ -463,7 +466,13 @@ export function Overlay(props: Props) {
           </div>
         </div>
       </div>
-      <SoundSaid playback={playback} shown={soundSaid} />
+      {soundSaid !== "no" && (
+        <SoundSaid
+          playback={playback}
+          leaving={soundSaid === "leaving"}
+          onGone={() => setSoundSaid("no")}
+        />
+      )}
       {keyed && (
         <KeySaid
           key={keyed.count}
@@ -482,17 +491,30 @@ export function Overlay(props: Props) {
  * and what it sounds like under it.
  *
  * On every press of a sound key, controls up or not: it is where the eye
- * looks for the answer to that key. Always there and faded rather than made
- * on each press, so it comes and goes without a jump.
+ * looks for the answer to that key.
+ *
+ * Made when it comes and taken away once it has faded, as what a key says
+ * in the middle is. Kept on the page at nothing and faded up instead, it
+ * never came up over a film filling the screen with the controls away,
+ * while the one in the middle did.
  */
-function SoundSaid({ playback, shown }: { playback: Playback; shown: boolean }) {
+function SoundSaid({
+  playback,
+  leaving,
+  onGone,
+}: {
+  playback: Playback;
+  leaving: boolean;
+  onGone: () => void;
+}) {
   const loud = playback.muted ? 0 : playback.loudness;
   return (
     <div
       className="player-sound-said"
-      data-shown={shown ? "yes" : "no"}
+      data-leaving={leaving ? "yes" : "no"}
       style={{ ["--share" as string]: `${loud}` }}
       aria-hidden="true"
+      onAnimationEnd={leaving ? onGone : undefined}
     >
       <span className="player-sound-said-number">{Math.round(loud * 100)}</span>
       <span className="player-sound-said-rail" />
