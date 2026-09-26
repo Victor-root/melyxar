@@ -2,7 +2,7 @@
  * A grid of a whole library, with what narrows it.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Library } from "../api";
@@ -161,6 +161,16 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
   }, [cards, showsLetters]);
   const lit = jumping ?? reading;
 
+  /* The cards made once for what the grid holds, so the letter lit beside it
+     changing as the page is scrolled redraws the letters and nothing else.
+     Made again at every render, the few hundred cards of a library were all
+     drawn again each time the top row reached another letter: measured,
+     most of what the page did while it was being scrolled. */
+  const drawn = useMemo(
+    () => cards.map((card) => <Card key={card.id} card={card} shape={shape} />),
+    [cards, shape],
+  );
+
   return (
     <main className="page">
       {/* What the grid is and how it is read, which on a wide screen rise
@@ -271,9 +281,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
       >
         <Selecting items={cards}>
           <Grid onReachEnd={loadMore} hasMore={more} shape={shape}>
-            {cards.map((card) => (
-              <Card key={card.id} card={card} shape={shape} />
-            ))}
+            {drawn}
           </Grid>
         </Selecting>
 
