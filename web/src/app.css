@@ -3809,7 +3809,7 @@ button.seen-mark:not(.seen-mark-on):hover {
   gap: var(--gap-wide);
 }
 
-.grid-with-letters:has(> .letters) {
+.grid-with-letters-kept {
   padding-right: calc(var(--letter-width) + 10px + var(--gap-wide));
 }
 
@@ -3893,7 +3893,7 @@ button.seen-mark:not(.seen-mark-on):hover {
     flex-direction: column-reverse;
   }
 
-  .grid-with-letters:has(> .letters) {
+  .grid-with-letters-kept {
     padding-right: 0;
   }
 

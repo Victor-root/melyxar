@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Library } from "../api";
 import { Card } from "../components/card";
@@ -48,6 +49,10 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
      by hand. */
   const held = useRef<{ letter: string; at: number } | null>(null);
   const showsLetters = !!filters && filters.initials.length > 1 && order === "title";
+  /* Only a library opened as such has letters, read by title: the favourites
+     and a search have none. */
+  const { id: opened } = useParams();
+  const keepsRoomForLetters = opened !== undefined && order === "title";
 
   const jumpTo = (letter: string) => {
     setJumping(letter);
@@ -256,7 +261,14 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
       {/* The grid and the letters beside it. A few hundred films is too long
           to scroll through and too short to search by hand every time, and the
           letter is the one thing anybody remembers about a title. */}
-      <div className="grid-with-letters" ref={holder}>
+      {/* The room for the letters is kept from the first drawing of a grid
+          read by title, before the server has said which letters there are:
+          taken only once it had, every card shrank at once as the page
+          arrived. */}
+      <div
+        className={`grid-with-letters${keepsRoomForLetters ? " grid-with-letters-kept" : ""}`}
+        ref={holder}
+      >
         <Selecting items={cards}>
           <Grid onReachEnd={loadMore} hasMore={more} shape={shape}>
             {cards.map((card) => (
