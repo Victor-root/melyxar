@@ -192,16 +192,16 @@ pub struct TrailerLink {
 
 /// The episode a page offers to play next, ready to be drawn.
 ///
-/// Whichever of a series the viewer has not watched comes first, and failing
-/// that nothing: a series watched through is one to start again from its own
-/// list rather than from a button that says "carry on".
+/// Where the viewer is in a series, or in one season of it, and failing that
+/// nothing: a series watched through is one to start again from its own list
+/// rather than from a button that says "carry on".
 async fn what_to_carry_on_with(
     state: &AppState,
     viewer: melyxar_core::id::UserId,
-    series_id: WorkId,
+    within: WorkId,
 ) -> Result<Option<CarryOn>> {
     let database = state.database();
-    let Some(episode) = database.where_to_resume(viewer, series_id).await? else {
+    let Some(episode) = database.where_to_resume(viewer, within).await? else {
         return Ok(None);
     };
     Ok(Some(as_carry_on(state, episode).await?))
@@ -402,18 +402,26 @@ pub async fn work_detail(
         images.extend(series_backdrop);
     }
 
-    // What a page offers to play next, from what it already knows. A series
-    // and a season both answer for the whole series: somebody who opens season
-    // one having watched it all means to carry on into season two, not to sit
-    // on a button that starts again where they already are.
+    // What a page offers to play next, from what it already knows. A season
+    // answers for itself first: somebody on the page of season twenty means
+    // season twenty, not the first episode of a series they never started
+    // from the beginning. Once it is watched through, it answers for the
+    // whole series, since somebody who opens season one having watched it
+    // all means to carry on into season two rather than to sit on a button
+    // that starts again where they already are.
     let carry_on_with = match work.kind {
         melyxar_core::work::WorkKind::Series => {
             what_to_carry_on_with(state, viewer, work.id).await?
         }
-        melyxar_core::work::WorkKind::Season => match work.parent_id {
-            Some(series_id) => what_to_carry_on_with(state, viewer, series_id).await?,
-            None => None,
-        },
+        melyxar_core::work::WorkKind::Season => {
+            match what_to_carry_on_with(state, viewer, work.id).await? {
+                Some(inside) => Some(inside),
+                None => match work.parent_id {
+                    Some(series_id) => what_to_carry_on_with(state, viewer, series_id).await?,
+                    None => None,
+                },
+            }
+        }
         // On an episode it is the one after this one, watched or not: somebody
         // at the end of an episode means the next one, not the next one they
         // happen to have missed.
