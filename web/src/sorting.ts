@@ -71,6 +71,16 @@ export function leftToSettle(lines: readonly Line[], from: number, to: number, m
   return held.top + moved - settles;
 }
 
+/**
+ * A whole order once the entries on the screen have been put in a new order
+ * among themselves. The ones nobody sees keep their places, so one that comes
+ * back later finds the place it had.
+ */
+export function reorderedAmong<T>(order: readonly T[], shown: readonly T[], reordered: readonly T[]): T[] {
+  let next = 0;
+  return order.map((one) => (shown.includes(one) ? reordered[next++] : one));
+}
+
 /** The list with one of its entries taken from one place and put at another. */
 export function movedWithin<T>(list: readonly T[], from: number, to: number): T[] {
   const reordered = [...list];

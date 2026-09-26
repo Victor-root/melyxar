@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { landingPlace, leftToSettle, movedWithin, stepAside } from "./sorting";
+import { landingPlace, leftToSettle, movedWithin, reorderedAmong, stepAside } from "./sorting";
 
 /** Five lines of fifty, one under the other. */
 const LINES = [0, 50, 100, 150, 200].map((top) => ({ top, height: 50 }));
@@ -48,5 +48,23 @@ describe("a line dropped", () => {
     expect(movedWithin(["a", "b", "c", "d"], 0, 2)).toEqual(["b", "c", "a", "d"]);
     expect(movedWithin(["a", "b", "c", "d"], 3, 1)).toEqual(["a", "d", "b", "c"]);
     expect(movedWithin(["a", "b"], 1, 1)).toEqual(["a", "b"]);
+  });
+});
+
+describe("an order of which only some entries are on the screen", () => {
+  const EVERY = ["movies", "series", "anime", "shows", "music"];
+
+  it("puts the entries on the screen in their new order, over the ones nobody sees", () => {
+    expect(reorderedAmong(EVERY, ["movies", "anime", "shows"], ["shows", "movies", "anime"])).toEqual([
+      "shows",
+      "series",
+      "movies",
+      "anime",
+      "music",
+    ]);
+  });
+
+  it("leaves the order alone when nothing moved", () => {
+    expect(reorderedAmong(EVERY, ["movies", "anime"], ["movies", "anime"])).toEqual(EVERY);
   });
 });

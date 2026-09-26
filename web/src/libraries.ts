@@ -103,20 +103,6 @@ export function kindsOnTheHomePage(order: LibraryKind[], libraries: Library[]): 
   );
 }
 
-/**
- * The whole order once the kinds shown have been put in a new order among
- * themselves. The kinds nobody sees keep their places, so a kind that comes
- * back later finds the place it had.
- */
-export function reorderedOnTheHomePage(
-  order: LibraryKind[],
-  shown: LibraryKind[],
-  reordered: LibraryKind[],
-): LibraryKind[] {
-  let next = 0;
-  return order.map((one) => (shown.includes(one) ? reordered[next++] : one));
-}
-
 /** How the cards of a kind are laid out: on their side for what somebody
  *  filmed and photographed themselves, which is mostly wider than tall and
  *  has no poster standing up; standing for everything else. */

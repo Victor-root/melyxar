@@ -1,10 +1,5 @@
 /*
- * The order of the libraries as the settings screen moves it.
- *
- * The kinds on the screen put in a new order must come out in that order,
- * whatever kinds hide between them in the full order. A slip here moves
- * nothing visible, or moves the wrong row, and looks like a drop that did
- * not take.
+ * The kinds of library a home page offers, and how their cards are laid out.
  */
 
 import { describe, expect, it } from "vitest";
@@ -12,7 +7,6 @@ import type { Library, LibraryKind } from "./api";
 import {
   cardShapeOf,
   kindsOnTheHomePage,
-  reorderedOnTheHomePage,
   nameOfKind,
   newestOfKind,
 } from "./libraries";
@@ -28,22 +22,6 @@ describe("the order of the home page", () => {
   it("shows only the kinds this account holds, never music", () => {
     const held = [library("anime"), library("music"), library("movies"), library("movies")];
     expect(kindsOnTheHomePage(EVERY, held)).toEqual(["movies", "anime"]);
-  });
-
-  it("puts the kinds on the screen in their new order, over the kinds nobody sees", () => {
-    const shown: LibraryKind[] = ["movies", "anime", "shows"];
-    expect(reorderedOnTheHomePage(EVERY, shown, ["shows", "movies", "anime"])).toEqual([
-      "shows",
-      "series",
-      "movies",
-      "anime",
-      "music",
-    ]);
-  });
-
-  it("leaves the order alone when nothing moved", () => {
-    const shown: LibraryKind[] = ["movies", "anime"];
-    expect(reorderedOnTheHomePage(EVERY, shown, shown)).toEqual(EVERY);
   });
 });
 
