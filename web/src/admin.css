@@ -672,6 +672,41 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A number with what it counts beside it, seconds or a share. */
+.field-with-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.field-unit {
+  /* As wide for a percent as for a second, so fields stacked in a panel
+     line up. */
+  min-width: 1.2em;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/* The rules of one kind of library, under its name. */
+.rules-of-a-kind {
+  display: flex;
+  flex-direction: column;
+}
+
+.rules-of-a-kind-name {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin: var(--gap) 0 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.rules-of-a-kind-name > svg {
+  color: var(--accent-bright);
+}
+
 /* A line along which a number is chosen, filled in the accent up to it: the
    player's sound, drawn in the theme's colours rather than over a picture. */
 .slider {

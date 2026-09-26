@@ -1277,6 +1277,15 @@ export interface WideGamutHandling {
 /** What a viewer wants done with a film of wide gamut colour. */
 export type WideGamutChoice = "automatic" | "always_convert" | "never_convert";
 
+/** When a work left partway counts as started, as watched, or as too short
+ *  to come back to: below the smallest share it starts again, from the
+ *  largest it is watched, shorter than the length it is never carried on. */
+export interface ResumeRules {
+  min_percent: number;
+  max_percent: number;
+  min_seconds: number;
+}
+
 /** When a film starts with subtitles nobody picked for it. */
 export type SubtitleMode = "always" | "smart" | "only_forced" | "from_the_file" | "never";
 
@@ -1426,6 +1435,18 @@ export interface ViewerPreferences {
   /** How far the player's two step buttons jump, in seconds. */
   step_back_seconds: number;
   step_on_seconds: number;
+  /** The longest a step, or the way back on resuming, may be, in seconds. */
+  longest_step: number;
+  /** How far back a film starts from where it was left, nought for none. */
+  resume_rewind_seconds: number;
+  /** When a work left partway counts as started, as watched, or as too
+   *  short to come back to, for every kind of library. */
+  resume_rules: ResumeRules;
+  /** Whether each kind of library has rules of its own, and those it has. */
+  resume_rules_per_kind: boolean;
+  resume_rules_by_kind: (ResumeRules & { kind: LibraryKind })[];
+  /** The smallest share at most, the largest at least, the length at most. */
+  resume_bounds: ResumeRules;
   /** What is done with a film of wide gamut colour. */
   wide_gamut: WideGamutChoice;
   wide_gamut_choices: WideGamutChoice[];
