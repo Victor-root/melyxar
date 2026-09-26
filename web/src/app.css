@@ -971,13 +971,17 @@
   bottom: 0;
   left: calc(var(--gap-section) / -2);
   width: 1px;
+  /* The rim of a way in to a library, quieter: the accent, faint, and the
+     light falling off it. A shadow drawn by filter rather than by box, so
+     the light fades out at both ends with the line instead of stopping. */
   background: linear-gradient(
     to bottom,
     transparent,
-    var(--border) 18%,
-    var(--border) 82%,
+    color-mix(in srgb, var(--accent) 45%, transparent) 18%,
+    color-mix(in srgb, var(--accent) 45%, transparent) 82%,
     transparent
   );
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 45%, transparent));
 }
 
 /* Above the row under it, whose track reaches up behind the heading to keep
