@@ -25,83 +25,90 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
 
   return (
     <main className="page">
-      <div className="section-head">
-        {/* A grid narrowed to a kind is that category, and says so: reaching
-            it from the band and being told "All" reads as a wrong turn. */}
-        <h1>
-          {favourites
-            ? t("nav.favourites")
-            : (library?.name ??
-              (narrowing.kind ? nameOfKind(narrowing.kind, libraries, t) : t("library.all")))}
-        </h1>
-        {/* What the library holds, not what has been scrolled to so far: a
-            grid that counts its own loaded cards tells the viewer how far
-            they have scrolled, which nobody asked. */}
-        {library && !search && !genre && decade === undefined && !unidentified && !favourites && (
-          <span className="count">{t("library.count", { count: library.works })}</span>
-        )}
-      </div>
-
-      {/* How the grid is read, in one piece of the glass the bar at the top is
-          made of: a row of loose system fields was the one place left that
-          looked like a form rather than like Melyxar. */}
-      <div className="browse-bar">
-        <div className="browse-piece">
-          <span className="browse-field">
-            <span className="browse-label">{t("library.sort")}</span>
-            <Picker
-              value={order}
-              options={ORDERS.map((value) => [value, t(`library.sort.${value}`)] as const)}
-              onPick={(value) => choose("order", value)}
-              label={t("library.sort")}
-            />
-            {/* Which way round, drawn as the way the arrow points rather than
-                written out: a sentence for an arrow's worth of meaning. */}
-            <button
-              type="button"
-              className={`browse-direction${descending ? " browse-direction-down" : ""}`}
-              onClick={() => choose("descending", descending ? null : "true")}
-              aria-pressed={descending}
-              aria-label={t("library.descending")}
-              title={t(descending ? "library.descending" : "library.ascending")}
-            >
-              <ArrowRightIcon size={16} />
-            </button>
-          </span>
-
-          {filters && filters.genres.length > 0 && (
-            <Narrower
-              label={t("library.filter.genre")}
-              value={genre ?? ""}
-              options={filters.genres.map((entry) => [entry.name, `${entry.name} (${entry.works})`])}
-              onPick={(value) => choose("genre", value || null)}
-            />
-          )}
-
-          {filters && filters.decades.length > 0 && (
-            <Narrower
-              label={t("library.filter.decade")}
-              value={decade === undefined ? "" : String(decade)}
-              options={filters.decades.map((entry) => [
-                String(entry.decade),
-                `${entry.decade}s (${entry.works})`,
-              ])}
-              onPick={(value) => choose("decade", value || null)}
-            />
+      {/* What the grid is and how it is read, which on a wide screen rise
+          together into the band of the bar at the top. */}
+      <div className="browse-head">
+        <div className="section-head">
+          {/* A grid narrowed to a kind is that category, and says so: reaching
+              it from the band and being told "All" reads as a wrong turn. */}
+          <h1>
+            {favourites
+              ? t("nav.favourites")
+              : (library?.name ??
+                (narrowing.kind ? nameOfKind(narrowing.kind, libraries, t) : t("library.all")))}
+          </h1>
+          {/* What the library holds, not what has been scrolled to so far: a
+              grid that counts its own loaded cards tells the viewer how far
+              they have scrolled, which nobody asked. */}
+          {library && !search && !genre && decade === undefined && !unidentified && !favourites && (
+            <span className="count">{t("library.count", { count: library.works })}</span>
           )}
         </div>
 
-        {awaitsNames && (
-          <button
-            type="button"
-            className={`browse-piece browse-alone${unidentified ? " browse-alone-on" : ""}`}
-            onClick={() => choose("unidentified", unidentified ? null : "true")}
-            aria-pressed={unidentified}
-          >
-            <IdentifyIcon size={16} />
-            {t("library.filter.unidentified")}
-          </button>
-        )}
+        {/* How the grid is read, in one piece of the glass the bar at the top is
+            made of: a row of loose system fields was the one place left that
+            looked like a form rather than like Melyxar. */}
+        <div className="browse-bar">
+          <div className="browse-piece">
+            <span className="browse-field">
+              <span className="browse-label">{t("library.sort")}</span>
+              <Picker
+                value={order}
+                options={ORDERS.map((value) => [value, t(`library.sort.${value}`)] as const)}
+                onPick={(value) => choose("order", value)}
+                label={t("library.sort")}
+              />
+              {/* Which way round, drawn as the way the arrow points rather than
+                  written out: a sentence for an arrow's worth of meaning. */}
+              <button
+                type="button"
+                className={`browse-direction${descending ? " browse-direction-down" : ""}`}
+                onClick={() => choose("descending", descending ? null : "true")}
+                aria-pressed={descending}
+                aria-label={t("library.descending")}
+                title={t(descending ? "library.descending" : "library.ascending")}
+              >
+                <ArrowRightIcon size={16} />
+              </button>
+            </span>
+
+            {filters && filters.genres.length > 0 && (
+              <Narrower
+                label={t("library.filter.genre")}
+                value={genre ?? ""}
+                options={filters.genres.map((entry) => [
+                  entry.name,
+                  `${entry.name} (${entry.works})`,
+                ])}
+                onPick={(value) => choose("genre", value || null)}
+              />
+            )}
+
+            {filters && filters.decades.length > 0 && (
+              <Narrower
+                label={t("library.filter.decade")}
+                value={decade === undefined ? "" : String(decade)}
+                options={filters.decades.map((entry) => [
+                  String(entry.decade),
+                  `${entry.decade}s (${entry.works})`,
+                ])}
+                onPick={(value) => choose("decade", value || null)}
+              />
+            )}
+          </div>
+
+          {awaitsNames && (
+            <button
+              type="button"
+              className={`browse-piece browse-alone${unidentified ? " browse-alone-on" : ""}`}
+              onClick={() => choose("unidentified", unidentified ? null : "true")}
+              aria-pressed={unidentified}
+            >
+              <IdentifyIcon size={16} />
+              {t("library.filter.unidentified")}
+            </button>
+          )}
+        </div>
       </div>
 
       {failed && <p className="notice">{t("error.unreachable")}</p>}
