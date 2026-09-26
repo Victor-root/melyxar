@@ -592,7 +592,7 @@ impl Database {
         row.map(|row| work_from_row(&row)).transpose()
     }
 
-    /// Where a viewer would pick a series back up.
+    /// Where a viewer would pick a series back up, or one season of it.
     ///
     /// An episode left halfway first, the one played last when there are
     /// several: somebody who stopped in the middle of one is in the middle of
@@ -602,25 +602,26 @@ impl Database {
     /// what somebody means by where they are. Nothing when every episode here
     /// has been watched, which is a series to start again rather than to
     /// carry on.
-    pub async fn where_to_resume(&self, viewer: UserId, series_id: WorkId) -> Result<Option<Work>> {
-        if let Some(halfway) = self.an_episode_left_halfway(viewer, series_id).await? {
+    pub async fn where_to_resume(&self, viewer: UserId, within: WorkId) -> Result<Option<Work>> {
+        if let Some(halfway) = self.an_episode_left_halfway(viewer, within).await? {
             return Ok(Some(halfway));
         }
-        self.an_episode_of(viewer, series_id, None, true).await
+        self.an_episode_of(viewer, within, None, true).await
     }
 
-    /// The episode of a series a viewer played last and stopped in the middle
-    /// of, when there is one with a file still behind it.
+    /// The episode of a series, or of one season of it, a viewer played last
+    /// and stopped in the middle of, when there is one with a file still
+    /// behind it.
     async fn an_episode_left_halfway(
         &self,
         viewer: UserId,
-        series_id: WorkId,
+        within: WorkId,
     ) -> Result<Option<Work>> {
         let row = sqlx::query(AssertSqlSafe(format!(
             "SELECT {} FROM works e
              JOIN works s ON s.id = e.parent_id
              JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
-             WHERE s.parent_id = ? AND e.kind = 'episode' AND p.state = 'in_progress'
+             WHERE ?2 IN (s.parent_id, s.id) AND e.kind = 'episode' AND p.state = 'in_progress'
                AND EXISTS (SELECT 1 FROM media_sources m
                             WHERE m.work_id = e.id AND m.missing_since IS NULL)
              ORDER BY p.last_played_at DESC
@@ -628,7 +629,7 @@ impl Database {
             what_a_work_is("e.")
         )))
         .bind(viewer.to_db_string())
-        .bind(series_id.to_db_string())
+        .bind(within.to_db_string())
         .fetch_optional(self.reader())
         .await?;
 
@@ -663,7 +664,8 @@ impl Database {
         Ok(Some((parse_id(&series)?, (season, episode))))
     }
 
-    /// One episode of a series, read in the order they are watched in.
+    /// One episode of a series, or of one season of it when that is what is
+    /// named, read in the order they are watched in.
     ///
     /// Written once because the two questions above are the same question
     /// asked with different bounds: the next one after a place, and the first
@@ -672,7 +674,7 @@ impl Database {
     async fn an_episode_of(
         &self,
         viewer: UserId,
-        series_id: WorkId,
+        within: WorkId,
         after: Option<(i32, i32)>,
         only_unwatched: bool,
     ) -> Result<Option<Work>> {
@@ -681,7 +683,7 @@ impl Database {
             "SELECT {} FROM works e
              JOIN works s ON s.id = e.parent_id
              LEFT JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
-             WHERE s.parent_id = ? AND e.kind = 'episode'
+             WHERE ?2 IN (s.parent_id, s.id) AND e.kind = 'episode'
                AND EXISTS (SELECT 1 FROM media_sources m
                             WHERE m.work_id = e.id AND m.missing_since IS NULL)
                AND (?3 = 0 OR (s.ordinal, e.ordinal) > (?4, ?5))
@@ -691,7 +693,7 @@ impl Database {
             what_a_work_is("e.")
         )))
         .bind(viewer.to_db_string())
-        .bind(series_id.to_db_string())
+        .bind(within.to_db_string())
         .bind(i64::from(after.is_some()))
         .bind(season)
         .bind(episode)
@@ -3536,6 +3538,42 @@ mod tests {
                 .map(|found| found.id),
             Some(episodes[2])
         );
+    }
+
+    #[tokio::test]
+    async fn a_season_is_picked_back_up_inside_itself() {
+        // Somebody on the page of a later season means that season, not the
+        // first episode of a series they never started from the beginning.
+        let (database, library_id, root_id) = library().await;
+        let viewer = a_viewer(&database).await;
+        let (series, seasons, episodes) = a_series(&database, library_id).await;
+        for (rank, episode) in episodes.iter().enumerate() {
+            a_file_behind(&database, root_id, *episode, &format!("{rank}.mkv")).await;
+        }
+        let resumed = |within: WorkId| {
+            let database = &database;
+            async move {
+                database
+                    .where_to_resume(viewer, within)
+                    .await
+                    .expect("read")
+                    .map(|found| found.id)
+            }
+        };
+
+        assert_eq!(resumed(seasons[1]).await, Some(episodes[2]), "its own first episode");
+        assert_eq!(resumed(series).await, Some(episodes[0]), "the series still starts at the start");
+
+        left_halfway(&database, viewer, episodes[1], melyxar_core::time::now()).await;
+        assert_eq!(
+            resumed(seasons[1]).await,
+            Some(episodes[2]),
+            "an episode left halfway in another season is not this season's"
+        );
+        assert_eq!(resumed(seasons[0]).await, Some(episodes[1]));
+
+        watched(&database, viewer, episodes[2]).await;
+        assert_eq!(resumed(seasons[1]).await, None, "a season watched through has nothing left");
     }
 
     #[tokio::test]
