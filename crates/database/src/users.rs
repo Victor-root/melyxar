@@ -1170,7 +1170,7 @@ mod tests {
             step_on_seconds: 30,
             wide_gamut: WideGamutChoice::NeverConvert,
             subtitle_mode: SubtitleMode::OnlyForced,
-            home_sections: vec![HomeSection::Libraries],
+            home_sections: vec![HomeSection::Newest(LibraryKind::Anime)],
             hidden_home_sections: vec![HomeSection::Band],
             ..Preferences::default()
         };
@@ -1207,13 +1207,11 @@ mod tests {
         assert_eq!(loaded.preferences.wide_gamut, WideGamutChoice::NeverConvert);
         assert_eq!(loaded.preferences.subtitle_mode, SubtitleMode::OnlyForced);
         assert_eq!(
-            loaded.preferences.home_sections,
-            vec![
-                HomeSection::Libraries,
+            loaded.preferences.home_sections[..3],
+            [
+                HomeSection::Newest(LibraryKind::Anime),
                 HomeSection::Band,
                 HomeSection::CarryOn,
-                HomeSection::UpNext,
-                HomeSection::RecentlyAdded,
             ]
         );
         assert_eq!(loaded.preferences.hidden_home_sections, vec![HomeSection::Band]);

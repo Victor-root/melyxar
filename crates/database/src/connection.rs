@@ -420,6 +420,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_one_section_of_library_rows_becomes_a_section_per_kind() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database opens");
+        crate::MIGRATOR
+            .run_to(51, &pool)
+            .await
+            .expect("migrated to just before a section per kind");
+        for (id, order, sections, hidden) in [
+            (
+                "untouched",
+                "movies,series",
+                "band,carry_on,up_next,recently_added,libraries",
+                "",
+            ),
+            (
+                "chosen",
+                "series,movies",
+                "recently_added,libraries,band,carry_on,up_next",
+                "libraries,up_next",
+            ),
+        ] {
+            sqlx::query(
+                "INSERT INTO users (id, name, created_at) VALUES (?, ?, '2026-09-26T00:00:00Z')",
+            )
+            .bind(id)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .expect("account written");
+            sqlx::query(
+                "INSERT INTO user_preferences (user_id, home_order, home_sections, hidden_home_sections)
+                 VALUES (?, ?, ?, ?)",
+            )
+            .bind(id)
+            .bind(order)
+            .bind(sections)
+            .bind(hidden)
+            .execute(&pool)
+            .await
+            .expect("preferences written");
+        }
+
+        crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+        let rows: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT user_id, home_sections, hidden_home_sections
+             FROM user_preferences ORDER BY user_id",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("read");
+        assert_eq!(
+            rows,
+            [
+                (
+                    "chosen",
+                    "recently_added,newest:series,newest:movies,band,carry_on,up_next",
+                    "newest:series,newest:movies,up_next",
+                ),
+                (
+                    "untouched",
+                    "band,carry_on,up_next,newest:movies,newest:series,recently_added",
+                    "",
+                ),
+            ]
+            .map(|(id, sections, hidden)| {
+                (id.to_string(), sections.to_string(), hidden.to_string())
+            })
+        );
+    }
+
+    #[tokio::test]
     async fn running_migrations_twice_changes_nothing() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("melyxar.db");

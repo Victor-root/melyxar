@@ -357,8 +357,7 @@ impl SubtitleMode {
 ///
 /// The banner is not one of them: it is the picture the page opens on, drawn
 /// edge to edge above everything else, and has its own switch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HomeSection {
     /// The tiles leading to each kind of library.
     Band,
@@ -366,22 +365,29 @@ pub enum HomeSection {
     CarryOn,
     /// The episode each started series is waiting on.
     UpNext,
+    /// The newest works of one kind of library. One section per kind rather
+    /// than one for them all, so each row can be moved and hidden on its own.
+    Newest(LibraryKind),
     /// Everything newest, whatever its kind.
     RecentlyAdded,
-    /// One row of the newest per kind of library, in the order of the kinds.
-    Libraries,
 }
 
 impl HomeSection {
-    /// Every section, in the order the home page had before anybody could
-    /// choose.
-    pub const fn every() -> [Self; 5] {
+    /// Every section, in the order a person meets them until they choose
+    /// another: the row of each library, in the order kinds are met, before
+    /// the row of everything newest, which mixes them all.
+    pub const fn every() -> [Self; 10] {
         [
             Self::Band,
             Self::CarryOn,
             Self::UpNext,
+            Self::Newest(LibraryKind::Movies),
+            Self::Newest(LibraryKind::Series),
+            Self::Newest(LibraryKind::Anime),
+            Self::Newest(LibraryKind::HomeMedia),
+            Self::Newest(LibraryKind::Shows),
+            Self::Newest(LibraryKind::Music),
             Self::RecentlyAdded,
-            Self::Libraries,
         ]
     }
 
@@ -390,8 +396,13 @@ impl HomeSection {
             Self::Band => "band",
             Self::CarryOn => "carry_on",
             Self::UpNext => "up_next",
+            Self::Newest(LibraryKind::Movies) => "newest:movies",
+            Self::Newest(LibraryKind::Series) => "newest:series",
+            Self::Newest(LibraryKind::Anime) => "newest:anime",
+            Self::Newest(LibraryKind::HomeMedia) => "newest:home_media",
+            Self::Newest(LibraryKind::Shows) => "newest:shows",
+            Self::Newest(LibraryKind::Music) => "newest:music",
             Self::RecentlyAdded => "recently_added",
-            Self::Libraries => "libraries",
         }
     }
 
@@ -907,40 +918,37 @@ mod tests {
 
     #[test]
     fn the_home_sections_always_hold_every_section_once() {
+        let anime = HomeSection::Newest(LibraryKind::Anime);
         let chosen = Preferences {
-            home_sections: vec![
-                HomeSection::Libraries,
-                HomeSection::Band,
-                HomeSection::Libraries,
-            ],
+            home_sections: vec![anime, HomeSection::Band, anime],
             hidden_home_sections: vec![HomeSection::UpNext, HomeSection::UpNext],
             ..Preferences::default()
         }
         .normalised();
+        assert_eq!(chosen.home_sections.len(), HomeSection::every().len());
         assert_eq!(
-            chosen.home_sections,
-            vec![
-                HomeSection::Libraries,
-                HomeSection::Band,
-                HomeSection::CarryOn,
-                HomeSection::UpNext,
-                HomeSection::RecentlyAdded,
-            ]
+            chosen.home_sections[..4],
+            [anime, HomeSection::Band, HomeSection::CarryOn, HomeSection::UpNext]
         );
         assert_eq!(chosen.hidden_home_sections, vec![HomeSection::UpNext]);
+        assert!(
+            !chosen.home_sections_shown().contains(&HomeSection::UpNext),
+            "a hidden section is left out of what is shown"
+        );
         assert_eq!(
-            chosen.home_sections_shown(),
-            vec![
-                HomeSection::Libraries,
-                HomeSection::Band,
-                HomeSection::CarryOn,
-                HomeSection::RecentlyAdded,
-            ],
-            "a hidden section keeps its place and is only left out"
+            chosen.home_sections_shown().len(),
+            HomeSection::every().len() - 1,
+            "and keeps its place in the order"
+        );
+        assert_eq!(
+            Preferences::default().home_sections.last(),
+            Some(&HomeSection::RecentlyAdded),
+            "the row of every library before the row that mixes them all"
         );
         for section in HomeSection::every() {
             assert_eq!(HomeSection::parse(section.as_str()), Some(section));
         }
+        assert_eq!(HomeSection::parse("libraries"), None);
     }
 
     #[test]
