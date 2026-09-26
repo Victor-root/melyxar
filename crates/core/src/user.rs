@@ -297,6 +297,62 @@ impl WideGamutChoice {
     }
 }
 
+/// When a film starts with subtitles nobody picked for it.
+///
+/// Whatever the mode, a subtitle chosen for a film, or turned off in it, is
+/// what that film starts with next time. The mode only speaks for a film
+/// nobody said anything about.
+///
+/// "Forced" subtitles are the few lines a film does not say in the language
+/// of its soundtrack: a sign, a letter, a scene in another tongue. They are
+/// looked for in the language heard first, since that is what they are made
+/// for, then in the language read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubtitleMode {
+    /// Whole subtitles in the language read, otherwise the forced ones.
+    #[default]
+    Always,
+    /// Whole subtitles in the language read when the film is heard in
+    /// another, otherwise the forced ones.
+    Smart,
+    /// Only ever the forced ones.
+    OnlyForced,
+    /// The track the file marks as default, otherwise as the smart mode.
+    FromTheFile,
+    /// Nothing, until asked for in the player.
+    Never,
+}
+
+impl SubtitleMode {
+    /// Every mode, in the order a screen offers them.
+    pub const fn every() -> [Self; 5] {
+        [
+            Self::Always,
+            Self::Smart,
+            Self::OnlyForced,
+            Self::FromTheFile,
+            Self::Never,
+        ]
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Always => "always",
+            Self::Smart => "smart",
+            Self::OnlyForced => "only_forced",
+            Self::FromTheFile => "from_the_file",
+            Self::Never => "never",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::every()
+            .into_iter()
+            .find(|mode| mode.as_str() == value)
+    }
+}
+
 /// Which colour scheme the interface uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -363,6 +419,8 @@ pub struct Preferences {
     /// Preferred audio language, applied when no per-series memory exists.
     pub preferred_audio_language: Option<String>,
     pub preferred_subtitle_language: Option<String>,
+    /// When a film starts with subtitles nobody picked for it.
+    pub subtitle_mode: SubtitleMode,
     pub theme_mode: ThemeMode,
     pub accent_color: String,
     /// Stylesheet applied to this person only.
@@ -413,6 +471,7 @@ impl Default for Preferences {
             interface_language: "en".to_string(),
             preferred_audio_language: None,
             preferred_subtitle_language: None,
+            subtitle_mode: SubtitleMode::default(),
             theme_mode: ThemeMode::default(),
             accent_color: DEFAULT_ACCENT_COLOR.to_string(),
             custom_css: None,
@@ -679,6 +738,15 @@ mod tests {
                 "{method:?} must force processing"
             );
         }
+    }
+
+    #[test]
+    fn subtitle_modes_round_trip_through_their_stored_form() {
+        for mode in SubtitleMode::every() {
+            assert_eq!(SubtitleMode::parse(mode.as_str()), Some(mode));
+        }
+        assert_eq!(SubtitleMode::parse("sometimes"), None);
+        assert_eq!(SubtitleMode::default(), SubtitleMode::Always);
     }
 
     #[test]

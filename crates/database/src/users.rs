@@ -8,7 +8,7 @@ use melyxar_core::id::{LibraryId, UserId};
 use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::user::{
-    DownmixMethod, Permissions, Preferences, ThemeMode, User, WideGamutChoice,
+    DownmixMethod, Permissions, Preferences, SubtitleMode, ThemeMode, User, WideGamutChoice,
 };
 use sqlx::{AssertSqlSafe, Row};
 
@@ -51,7 +51,7 @@ const WHAT_AN_ACCOUNT_IS: &str =
      u.max_age_rating,
      u.may_download, u.may_delete, u.may_delete_from_disk, u.max_sessions, u.created_at,
      p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
-     p.theme_mode, p.accent_color, p.custom_css, p.volume,
+     p.subtitle_mode, p.theme_mode, p.accent_color, p.custom_css, p.volume,
      p.downmix_method, p.downmix_gain,
      p.banner_height, p.banner_cut, p.banner_shown, p.banner_at_random,
      p.banner_fills_the_screen, p.header_hides_on_scroll,
@@ -386,7 +386,8 @@ impl Database {
         sqlx::query(
             "UPDATE user_preferences SET
                 interface_language = ?, preferred_audio_language = ?,
-                preferred_subtitle_language = ?, theme_mode = ?, accent_color = ?,
+                preferred_subtitle_language = ?, subtitle_mode = ?, theme_mode = ?,
+                accent_color = ?,
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
                 banner_height = ?, banner_cut = ?, banner_shown = ?, banner_at_random = ?,
                 banner_fills_the_screen = ?, header_hides_on_scroll = ?,
@@ -397,6 +398,7 @@ impl Database {
         .bind(&preferences.interface_language)
         .bind(&preferences.preferred_audio_language)
         .bind(&preferences.preferred_subtitle_language)
+        .bind(preferences.subtitle_mode.as_str())
         .bind(preferences.theme_mode.as_str())
         .bind(&preferences.accent_color)
         .bind(&preferences.custom_css)
@@ -477,8 +479,8 @@ async fn write_an_account(
                                        banner_height, banner_cut, banner_shown, banner_at_random,
                                        banner_fills_the_screen, header_hides_on_scroll,
                                        hidden_at_the_door, home_order, step_back_seconds,
-                                       step_on_seconds, wide_gamut)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       step_on_seconds, wide_gamut, subtitle_mode)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -498,6 +500,7 @@ async fn write_an_account(
     .bind(preferences.step_back_seconds)
     .bind(preferences.step_on_seconds)
     .bind(preferences.wide_gamut.as_str())
+    .bind(preferences.subtitle_mode.as_str())
     .execute(&mut **transaction)
     .await?;
 
@@ -572,6 +575,8 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             interface_language: row.try_get("interface_language")?,
             preferred_audio_language: row.try_get("preferred_audio_language")?,
             preferred_subtitle_language: row.try_get("preferred_subtitle_language")?,
+            subtitle_mode: SubtitleMode::parse(&row.try_get::<String, _>("subtitle_mode")?)
+                .unwrap_or_default(),
             theme_mode: ThemeMode::parse(&row.try_get::<String, _>("theme_mode")?)
                 .unwrap_or_default(),
             accent_color: row.try_get("accent_color")?,
@@ -1139,6 +1144,7 @@ mod tests {
             step_back_seconds: 0,
             step_on_seconds: 30,
             wide_gamut: WideGamutChoice::NeverConvert,
+            subtitle_mode: SubtitleMode::OnlyForced,
             ..Preferences::default()
         };
         database
@@ -1172,6 +1178,7 @@ mod tests {
         );
         assert_eq!(loaded.preferences.step_on_seconds, 30);
         assert_eq!(loaded.preferences.wide_gamut, WideGamutChoice::NeverConvert);
+        assert_eq!(loaded.preferences.subtitle_mode, SubtitleMode::OnlyForced);
         assert_eq!(
             loaded.preferences.home_order,
             vec![
