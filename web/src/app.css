@@ -1915,11 +1915,13 @@ input[type="radio"]:disabled {
  *
  * Rimmed at rest, lit only under a hand: the bar's own pieces stand lit
  * because they are the bar, and a second lit bar in the page read as two
- * bars.
+ * bars. Held in the middle of the page for the same reason: lined up under
+ * the bar's left hand piece, the same glass read as a second row of it.
  */
 .browse-bar {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: var(--gap);
   margin-bottom: var(--gap-wide);
