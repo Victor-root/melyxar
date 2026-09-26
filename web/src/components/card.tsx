@@ -116,13 +116,12 @@ export function Card({
   /* A series plays the episode it carries on with: its page works out which
      and hands over to it. */
   const playable = playsOnItsOwn(card);
-  /* Nothing once put back to not started, which forgets where it was left:
-     said at once, not after the next reading of the page. */
+  /* Gone once marked watched, which lets go of where it was left: said at
+     once, not after the next reading of the page. */
+  const resume = marks.resumeOf(card);
   const howFar =
     watched ??
-    (seen !== "not_started" && card.resume_from_seconds !== null && card.runtime_minutes
-      ? card.resume_from_seconds / (card.runtime_minutes * 60)
-      : undefined);
+    (resume !== null && card.runtime_minutes ? resume / (card.runtime_minutes * 60) : undefined);
 
   if (marks.goneOf(card.id)) {
     return null;

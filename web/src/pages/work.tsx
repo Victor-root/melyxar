@@ -1043,11 +1043,10 @@ function WhatHangsUnder({ work }: { work: Work }) {
  *  called, how it is rated, how long it runs and what it is about. */
 function EpisodeLine({ child }: { child: Child }) {
   const { t } = useSettings();
+  const marks = useMarks();
   const { card } = child;
-  const left =
-    card.resume_from_seconds !== null
-      ? whatIsLeft(card.resume_from_seconds, card.runtime_minutes, t)
-      : undefined;
+  const resume = marks.resumeOf(card);
+  const left = resume !== null ? whatIsLeft(resume, card.runtime_minutes, t) : undefined;
 
   return (
     <li className="episode-line">

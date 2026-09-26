@@ -21,10 +21,12 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 import type { ReactNode } from "react";
 import { api } from "./api";
 import type { Card, Seen } from "./api";
+import { markedWatched, whereaboutsOf } from "./watching";
+import type { Said, Whereabouts } from "./watching";
 
 /** What has been said about one work since the page was drawn. */
 interface Mark {
-  seen?: Seen;
+  watched?: Said;
   favourite?: boolean;
   /** On the server's own front shelf. Unlike the two above, nothing is known
       about this until somebody says it here: a card does not arrive saying
@@ -38,6 +40,8 @@ interface Mark {
 interface Marks {
   /** Where this viewer is in a work, their own answer winning. */
   seenOf: (card: Card) => Seen;
+  /** Where to carry on from, in seconds, and nothing when there is nowhere. */
+  resumeOf: (card: Card) => number | null;
   favouriteOf: (card: Card) => boolean;
   /** Whether this work was put on the front page from this page, and nothing
       at all when nobody has said. */
@@ -76,17 +80,19 @@ export function MarksProvider({ children }: { children: ReactNode }) {
 
   const setWatched = useCallback(
     (card: Card, watched: boolean) => {
-      const before: Seen = said[card.id]?.seen ?? card.seen;
-      say(card.id, { seen: watched ? "watched" : "not_started" });
+      const before = said[card.id]?.watched;
+      const sent = sentOf(card);
+      say(card.id, {
+        watched: { said: markedWatched(watched, whereaboutsOf(sent, before)), over: sent },
+      });
       /* A work ticked off is a work that has left the row of what is
-         unfinished, the one the series above it is waiting on is not the
-         same episode any more, and where it would be picked up again is
-         gone either way. Said once the server holds it: read again before,
-         a screen gets the answer from before the mark. */
+         unfinished, and the one the series above it is waiting on is not
+         the same episode any more. Said once the server holds it: read
+         again before, a screen gets the answer from before the mark. */
       api
         .setWatched(card.id, watched)
         .then(rowsHaveMoved)
-        .catch(() => say(card.id, { seen: before }));
+        .catch(() => say(card.id, { watched: before }));
     },
     [said, say, rowsHaveMoved],
   );
@@ -132,7 +138,8 @@ export function MarksProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Marks>(
     () => ({
-      seenOf: (card) => said[card.id]?.seen ?? card.seen,
+      seenOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).seen,
+      resumeOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).resume,
       favouriteOf: (card) => said[card.id]?.favourite ?? card.favourite,
       pinnedOf: (card) => said[card.id]?.pinned,
       goneOf: (id) => said[id]?.gone === true,
@@ -147,6 +154,11 @@ export function MarksProvider({ children }: { children: ReactNode }) {
   );
 
   return <MarksContext.Provider value={value}>{children}</MarksContext.Provider>;
+}
+
+/** Where the server said this viewer is in a work. */
+function sentOf(card: Card): Whereabouts {
+  return { seen: card.seen, resume: card.resume_from_seconds };
 }
 
 export function useMarks(): Marks {

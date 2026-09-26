@@ -132,7 +132,7 @@ export function useHomeScreen(libraries: Library[]): HomeScreen {
     if (!answer) {
       return null;
     }
-    const unfinished = (card: Card) => marks.seenOf(card) === "in_progress";
+    const unfinished = (card: Card) => marks.resumeOf(card) !== null;
     const drawn = recall<Home["hero"]>(lineup)?.value ?? answer.hero;
     return {
       ...answer,
