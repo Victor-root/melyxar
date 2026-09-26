@@ -25,7 +25,7 @@
  * that is there and says when tells the truth about where this is going.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Link,
@@ -478,7 +478,11 @@ export function Header({
             <Scope
               categories={categories}
               scope={scope}
-              onChoose={setScope}
+              onChoose={(chosen) => {
+                setScope(chosen);
+                // Narrowed, the question is still to be asked: back to the words.
+                field.current?.focus();
+              }}
               reachable={looking}
             />
           </form>
@@ -668,7 +672,7 @@ function Scope({
         {t("search.everywhere")}
       </ScopeLine>
       {categories.map((category) => (
-        <div key={category.kind}>
+        <Fragment key={category.kind}>
           <ScopeLine value={`kind:${category.kind}`} scope={scope} onChoose={onChoose}>
             <KindIcon kind={category.kind} size={16} />
             {nameOfKind(category.kind, category.libraries, t)}
@@ -685,7 +689,7 @@ function Scope({
                 {library.name}
               </ScopeLine>
             ))}
-        </div>
+        </Fragment>
       ))}
     </Dropdown>
   );
@@ -856,6 +860,12 @@ function Dropdown({
             className={`header-menu-list${listClassName ? ` ${listClassName}` : ""}`}
             ref={list}
             style={{ top: under.top, right: under.right }}
+            /* A press in the list leaves the focus where it was. Drawn at
+               the end of the page, the list is outside what opened it, and
+               a press taking the focus there read as leaving: the search
+               field, empty, folded away with its scope list under the hand
+               choosing from it. */
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => setOpen(false)}
           >
             {children}
