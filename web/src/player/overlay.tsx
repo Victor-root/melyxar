@@ -112,6 +112,9 @@ export type Turn = (typeof TURNS)[number];
 const ICON = 27;
 const PLAY_ICON = 34;
 
+/** How long the sound stays said down the side after the last press. */
+const SOUND_SAID_FOR_MS = 1500;
+
 /** How far the words can be shifted, and by how much at a time, in seconds. */
 const OFFSET_STEP = 0.5;
 const OFFSET_FURTHEST = 15;
@@ -217,6 +220,17 @@ export function Overlay(props: Props) {
     }
   }, [away, playback.video]);
   const stir = useRef<() => void>(() => {});
+  /* The sound said down the side of the picture for a moment, when the keys
+     change it while the controls are away: the one change a viewer makes
+     without looking at anything, and the one they want to see the end of. */
+  const [soundSaid, setSoundSaid] = useState(false);
+  const soundSaidFor = useRef(0);
+  const saySound = useRef(() => {
+    setSoundSaid(true);
+    window.clearTimeout(soundSaidFor.current);
+    soundSaidFor.current = window.setTimeout(() => setSoundSaid(false), SOUND_SAID_FOR_MS);
+  });
+  useEffect(() => () => window.clearTimeout(soundSaidFor.current), []);
   /* Where the button that opened the panel stands, across the picture. A panel
      that always opens at one end of the screen leaves a viewer looking for the
      link between the button they pressed and the list that appeared. */
@@ -329,16 +343,20 @@ export function Overlay(props: Props) {
           event.preventDefault();
           playback.stepBy(event.key === "ArrowLeft" ? -props.steps.back : props.steps.on);
           break;
+        /* The sound alone, without bringing the controls back over the film:
+           what it is now is said down the side instead. */
         case "ArrowUp":
         case "ArrowDown":
           event.preventDefault();
           loudness(event.key === "ArrowUp" ? 0.05 : -0.05);
-          break;
-        case "f":
-          fullscreen.toggle();
-          break;
+          saySound.current();
+          return;
         case "m":
           playback.setMuted(!playback.muted);
+          saySound.current();
+          return;
+        case "f":
+          fullscreen.toggle();
           break;
         default:
           return;
@@ -372,51 +390,84 @@ export function Overlay(props: Props) {
   };
 
   return (
-    <div
-      className="player-overlay"
-      data-away={away ? "yes" : "no"}
-      // A hand anywhere on the controls keeps them up, which matters most for
-      // the one place a pointer rests without moving: a menu being read.
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <div className="player-top">
-        <Place zone="top_left" surroundings={surroundings} />
-        <Place zone="top_right" surroundings={surroundings} />
-      </div>
+    <>
+      <div
+        className="player-overlay"
+        data-away={away ? "yes" : "no"}
+        // A hand anywhere on the controls keeps them up, which matters most for
+        // the one place a pointer rests without moving: a menu being read.
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <div className="player-top">
+          <Place zone="top_left" surroundings={surroundings} />
+          <Place zone="top_right" surroundings={surroundings} />
+        </div>
 
-      {props.panel && <Panels surroundings={surroundings} />}
+        {props.panel && <Panels surroundings={surroundings} />}
 
-      {/* All of it inside the bottom strip rather than floating over it: a
-          panel standing clear of the controls leaves a band of film between
-          the two and reads as two things, when what a viewer sees is one. The
-          strip grows upwards because it is anchored to the bottom.
+        {/* All of it inside the bottom strip rather than floating over it: a
+            panel standing clear of the controls leaves a band of film between
+            the two and reads as two things, when what a viewer sees is one. The
+            strip grows upwards because it is anchored to the bottom.
 
-          The sheet sits above the row that opens it rather than under it, so
-          that what it says lands on the picture. Under the row it lands at
-          the very bottom of the window, which on a wide film is the black
-          band the picture does not reach: a sheet you can see through, with
-          nothing behind it to see. */}
-      <div className="player-bottom" ref={bottomBar}>
-        {playback.plan && (
-          <Drawer
-            work={props.work}
-            plan={playback.plan}
-            playback={playback}
-            showing={isASheet(props.panel) ? props.panel : lastSheet}
-            open={isASheet(props.panel)}
-            language={props.language}
-            t={props.t}
-            onSelectEpisode={props.onSelectEpisode}
-          />
-        )}
-        <Seek surroundings={surroundings} thumbnails={thumbnails} />
-        <div className="player-row">
-          <Place zone="bottom_left" surroundings={surroundings} />
-          <Place zone="bottom_right" surroundings={surroundings} />
+            The sheet sits above the row that opens it rather than under it, so
+            that what it says lands on the picture. Under the row it lands at
+            the very bottom of the window, which on a wide film is the black
+            band the picture does not reach: a sheet you can see through, with
+            nothing behind it to see. */}
+        <div className="player-bottom" ref={bottomBar}>
+          {playback.plan && (
+            <Drawer
+              work={props.work}
+              plan={playback.plan}
+              playback={playback}
+              showing={isASheet(props.panel) ? props.panel : lastSheet}
+              open={isASheet(props.panel)}
+              language={props.language}
+              t={props.t}
+              onSelectEpisode={props.onSelectEpisode}
+            />
+          )}
+          <Seek surroundings={surroundings} thumbnails={thumbnails} />
+          <div className="player-row">
+            <Place zone="bottom_left" surroundings={surroundings} />
+            <Place zone="bottom_right" surroundings={surroundings} />
+          </div>
         </div>
       </div>
+      <SoundSaid playback={playback} shown={soundSaid && away} />
+    </>
+  );
+}
+
+/**
+ * How loud, down the right of the picture, the way a television says it:
+ * the sound bar of the controls stood on its end, with the number above it
+ * and what it sounds like under it.
+ *
+ * Drawn only while the controls are away, since with them up the bar at the
+ * bottom already says it. Always there and faded rather than made on each
+ * press, so it comes and goes without a jump.
+ */
+function SoundSaid({ playback, shown }: { playback: Playback; shown: boolean }) {
+  const loud = playback.muted ? 0 : playback.loudness;
+  return (
+    <div
+      className="player-sound-said"
+      data-shown={shown ? "yes" : "no"}
+      style={{ ["--share" as string]: `${loud}` }}
+      aria-hidden="true"
+    >
+      <span className="player-sound-said-number">{Math.round(loud * 100)}</span>
+      <span className="player-sound-said-rail" />
+      <VolumeIcon level={levelOf(loud)} size={22} />
     </div>
   );
+}
+
+/** What the sound icon shows for a share of the full sound. */
+function levelOf(loud: number): "off" | "low" | "middling" | "high" {
+  return loud === 0 ? "off" : loud < 0.34 ? "low" : loud < 0.67 ? "middling" : "high";
 }
 
 /** What every control is handed, which is the player and its surroundings. */
@@ -757,10 +808,7 @@ function Volume({ surroundings }: { surroundings: Surroundings }) {
         onClick={() => playback.setMuted(!playback.muted)}
         aria-label={t(playback.muted ? "player.unmute" : "player.mute")}
       >
-        <VolumeIcon
-          level={loud === 0 ? "off" : loud < 0.34 ? "low" : loud < 0.67 ? "middling" : "high"}
-          size={ICON}
-        />
+        <VolumeIcon level={levelOf(loud)} size={ICON} />
       </button>
       {/* The share is handed over as a bare number rather than as a width, so
           the stylesheet can work out where the handle actually stands: a
