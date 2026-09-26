@@ -79,10 +79,14 @@ export function MarksProvider({ children }: { children: ReactNode }) {
       const before: Seen = said[card.id]?.seen ?? card.seen;
       say(card.id, { seen: watched ? "watched" : "not_started" });
       /* A work ticked off is a work that has left the row of what is
-         unfinished, and the one the series above it is waiting on is not the
-         same episode any more. */
-      rowsHaveMoved();
-      api.setWatched(card.id, watched).catch(() => say(card.id, { seen: before }));
+         unfinished, the one the series above it is waiting on is not the
+         same episode any more, and where it would be picked up again is
+         gone either way. Said once the server holds it: read again before,
+         a screen gets the answer from before the mark. */
+      api
+        .setWatched(card.id, watched)
+        .then(rowsHaveMoved)
+        .catch(() => say(card.id, { seen: before }));
     },
     [said, say, rowsHaveMoved],
   );
