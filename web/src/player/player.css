@@ -113,8 +113,10 @@
   --text-soft: rgba(255, 255, 255, 0.72);
   --text-faint: rgba(255, 255, 255, 0.55);
 
-  /* What a panel is made of: the surface above, with the film showing
-     through it rather than hidden behind it. Every panel blurs what is
+  /* What the strip along the bottom and the buttons floating over the film
+     are made of: the surface above, with the film showing through it rather
+     than hidden behind it. The lists a button opens are the interface's own,
+     solid, since a list is read line by line. Every pane here blurs what is
      behind it, and that blur is only worth anything if something comes
      through to be blurred: at the nine tenths this once was, a panel was a
      black box and the blur was work nobody could see.
@@ -881,11 +883,6 @@
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-card);
-  border: 1px solid var(--border);
-  background: var(--player-panel);
-  color: var(--text);
-  backdrop-filter: blur(18px);
-  box-shadow: var(--shadow-raised);
   overflow: hidden;
   animation: player-menu-in var(--quick) var(--ease);
 }
@@ -954,18 +951,10 @@
   transition: background var(--quick) var(--ease);
 }
 
-.player-menu-line:hover {
-  background: var(--surface-hover);
-}
-
 /* A row that only ever says what a value is, with nothing to press: the
    pointer and the highlight both promise a click that would do nothing. */
 .player-menu-line-static {
   cursor: default;
-}
-
-.player-menu-line-static:hover {
-  background: transparent;
 }
 
 .player-menu-line:focus-visible {
@@ -1267,11 +1256,6 @@
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-card);
-  border: 1px solid var(--border);
-  background: var(--player-panel);
-  color: var(--text);
-  backdrop-filter: blur(18px);
-  box-shadow: var(--shadow-raised);
   overflow: hidden;
 }
 

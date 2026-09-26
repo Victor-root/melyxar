@@ -389,11 +389,6 @@
   transition: background var(--quick) var(--ease);
 }
 
-.quick-search-line:hover,
-.quick-search-line:focus-visible {
-  background: var(--surface-hover);
-}
-
 .quick-search-picture {
   flex: 0 0 auto;
   display: flex;
@@ -454,10 +449,6 @@
   color: var(--accent-bright);
   font-size: 13px;
   font-weight: 600;
-}
-
-.quick-search-all:hover {
-  background: var(--surface-hover);
 }
 
 /* Drawn by this interface rather than by the machine: a system menu inside a
@@ -771,12 +762,16 @@
   border-radius: var(--radius-card);
 }
 
-/* Every list the bar drops, dressed as the pieces of the bar are, rim and
-   glow of the accent, and solid rather than glass: a list is read line by
-   line rather than at a glance, and a bright picture showing through washed
-   its words out. */
+/* Every list this interface drops, the menu of a card and the panels of the
+   player included, dressed as the pieces of the bar are, rim and glow of the
+   accent, and solid rather than glass: a list is read line by line rather
+   than at a glance, and a bright picture showing through washed its words
+   out. One look for all of them, so a list is recognised wherever it
+   opens. */
 .header-menu-list,
-.quick-search {
+.quick-search,
+.player-menu,
+.facts {
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   --header-glow: color-mix(in srgb, var(--accent) 14%, transparent);
   background:
@@ -786,6 +781,10 @@
   box-shadow:
     var(--shadow-raised),
     0 0 14px 2px var(--accent-glow);
+}
+
+.header-menu-list,
+.quick-search {
   animation: header-menu-arrive var(--quick) var(--ease) both;
 }
 
@@ -827,14 +826,19 @@
    only deeper, and rimmed with it: the grey of the other lists read as a
    hole in a list of that colour. Its icon lights up the way a card's menu
    does. */
-.header-menu-line:hover:not(:disabled),
-.header-menu-line.active {
+.header-menu-line:hover:not(:disabled, [aria-disabled="true"]),
+.header-menu-line.active,
+.quick-search-line:hover,
+.quick-search-line:focus-visible,
+.quick-search-all:hover,
+.player-menu-line:hover:not(.player-menu-line-static) {
   background: color-mix(in srgb, var(--accent) 26%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-.header-menu-line:hover:not(:disabled) > svg,
-.header-menu-line.active > svg {
+.header-menu-line:hover:not(:disabled, [aria-disabled="true"]) > svg,
+.header-menu-line.active > svg,
+.player-menu-line:hover:not(.player-menu-line-static) > svg {
   color: var(--accent-bright);
 }
 
@@ -2743,7 +2747,7 @@ button.seen-mark:not(.seen-mark-on):hover {
   border: 1px solid var(--border-strong);
   background: var(--surface-raised);
   box-shadow: var(--shadow-raised);
-  animation: card-menu-arrive var(--quick) var(--ease) both;
+  animation: header-menu-arrive var(--quick) var(--ease) both;
 }
 
 .selection-count {
@@ -2787,68 +2791,16 @@ button.seen-mark:not(.seen-mark-on):hover {
   background: var(--accent-bright);
 }
 
-/* What the card offers beyond pressing it. */
-/* Drawn over the page, at the place the button was: a card clips what it
-   holds, so a menu inside one comes out cut in half. */
+/* What the card offers beyond pressing it: one of the bar's lists, lines
+   and all. Drawn over the page, at the place the button was: a card clips
+   what it holds, so a menu inside one comes out cut in half. */
 .card-menu {
-  position: fixed;
   z-index: 40;
   min-width: 210px;
   /* Long on purpose: everything this interface is meant to do is listed,
      wired or not. Taller than the window it scrolls rather than spilling. */
   max-height: min(70vh, 560px);
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  padding: 6px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-raised);
-  animation: card-menu-arrive var(--quick) var(--ease) both;
-}
-
-@keyframes card-menu-arrive {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-
-.card-menu-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-radius: var(--radius-control);
-  text-align: left;
-  color: var(--text-soft);
-  font-size: 13.5px;
-  white-space: nowrap;
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
-}
-
-.card-menu-line > svg {
-  flex: 0 0 auto;
-  color: var(--text-faint);
-}
-
-.card-menu-line:hover:not([aria-disabled="true"]) {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.card-menu-line:hover:not([aria-disabled="true"]) > svg {
-  color: var(--accent-bright);
-}
-
-.card-menu-line[aria-disabled="true"] {
-  color: var(--text-faint);
-  cursor: not-allowed;
-}
-
-.card-menu-line[aria-disabled="true"] > svg {
-  opacity: 0.55;
 }
 
 /* The name, and at its right what a row of half watched films is read for.
