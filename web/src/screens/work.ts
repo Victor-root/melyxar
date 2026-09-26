@@ -16,6 +16,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { PlaybackPlan, Version, Work } from "../api";
 import { useAsked } from "../asking";
+import { useMarks } from "../marks";
 import type { Trailer } from "../components/trailer";
 import { embedOf } from "../trailers";
 
@@ -201,6 +202,21 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     [id, again],
     id ? `work:${id}` : undefined,
   );
+
+  /* Read again, quietly, once a mark is kept, from this page or any other:
+     marked watched or not, a film has no place left to be picked up from,
+     and a button offering to carry on from there, or an episode's bar of how
+     far in, is one that lies. The plan follows the work it is asked about. */
+  const marks = useMarks();
+  const { rowsMoved } = marks;
+  const { look: lookAgain } = asked;
+  const rowsSeen = useRef(rowsMoved);
+  useEffect(() => {
+    if (rowsSeen.current !== rowsMoved) {
+      rowsSeen.current = rowsMoved;
+      lookAgain();
+    }
+  }, [rowsMoved, lookAgain]);
 
   /* A different film is a different copy list, so the copy being looked at
      goes back to the first one. */
@@ -402,7 +418,13 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     chosen,
     choose: setChosen,
     version,
-    resumeFrom: plan?.resume_from_seconds ?? null,
+    /* Only while the film is still under way as this page shows it: ticked
+       off or back to not started, it has nowhere to be picked up from, and
+       the button says so at once rather than a round trip later. */
+    resumeFrom:
+      work?.card && marks.seenOf(work.card) !== "in_progress"
+        ? null
+        : (plan?.resume_from_seconds ?? null),
     plan,
     tracks,
     chooseTracks,
