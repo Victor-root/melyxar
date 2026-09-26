@@ -995,19 +995,16 @@ mod tests {
             HomeSection::every().to_vec()
         );
 
-        viewer.preferences.home_sections = vec![HomeSection::Libraries, HomeSection::Band];
+        let films = HomeSection::Newest(LibraryKind::Movies);
+        viewer.preferences.home_sections = vec![films, HomeSection::Band];
         viewer.preferences.hidden_home_sections = vec![HomeSection::RecentlyAdded];
         viewer.preferences = viewer.preferences.normalised();
         let page = home(&state, None, &viewer).await.expect("read");
         assert_eq!(
-            page.sections,
-            vec![
-                HomeSection::Libraries,
-                HomeSection::Band,
-                HomeSection::CarryOn,
-                HomeSection::UpNext,
-            ]
+            page.sections[..4],
+            [films, HomeSection::Band, HomeSection::CarryOn, HomeSection::UpNext]
         );
+        assert!(!page.sections.contains(&HomeSection::RecentlyAdded));
         assert_eq!(
             page.recently_added.cards.len(),
             3,
