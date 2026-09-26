@@ -136,7 +136,7 @@ export function Card({
   return (
     <article
       className={`card card-${shape}${here ? " card-here" : ""}${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " card-chosen" : ""}`}
-      data-card
+      data-card={card.id}
       style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
     >
       <div className="card-picture">

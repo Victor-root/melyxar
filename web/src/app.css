@@ -160,9 +160,11 @@
     0 0 14px 2px var(--accent-glow);
 }
 
-/* The glass itself, which the bar of a grid is made of too. */
+/* The glass itself, which the bar of a grid and its letters are made of
+   too. */
 .header-piece,
-.browse-piece {
+.browse-piece,
+.letters {
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   /* A glow of the accent over the whole piece, even from end to end, laid on
      the glass the bar has always been. Follows the accent somebody chose. */
@@ -3809,36 +3811,62 @@ button.seen-mark:not(.seen-mark-on):hover {
   min-width: 0;
 }
 
+/*
+ * A rail of the bar's glass, lit under a hand as the bar is, and always
+ * whole on the screen: each letter is given an equal share of the height
+ * below the bar at the top, up to a comfortable press and down to a small
+ * one, so a library with every letter never runs off the bottom. Kept under
+ * the bar rather than behind it, since the piece at that end of it stands
+ * right above.
+ */
 .letters {
+  --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide));
+  --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 26px);
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  padding: 6px 4px;
+  border-radius: 18px;
+  /* Held where it already stands at the top of the grid, so it does not
+     shift under the hand the first time the page moves. */
   position: sticky;
-  top: var(--gap-wide);
+  top: calc(var(--header-height) + var(--gap-wide));
+  max-height: var(--letters-room);
+  overflow-y: auto;
+  scrollbar-width: none;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--quick) var(--ease);
+}
+
+.letters:hover,
+.letters:focus-within {
+  box-shadow:
+    var(--shadow-card),
+    0 0 14px 2px var(--accent-glow);
 }
 
 .letter {
-  min-width: 30px;
-  padding: 3px 6px;
-  border: 1px solid transparent;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: var(--letter);
   border-radius: var(--radius-pill);
-  background: none;
-  color: var(--text-faint);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.4;
-  text-align: center;
+  color: var(--text-soft);
+  font-size: min(12px, calc(var(--letter) * 0.6));
+  font-weight: 650;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
 }
 
 .letter:hover {
-  background: var(--surface-hover);
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-bright);
 }
 
-.letter-on {
+/* The letter being gone to, while the grid reads on as far as it. */
+.letter-on,
+.letter-on:hover {
   background: var(--accent);
-  border-color: var(--accent);
   color: var(--accent-contrast);
 }
 
@@ -3850,10 +3878,14 @@ button.seen-mark:not(.seen-mark-on):hover {
   }
 
   .letters {
+    --letter: 28px;
     position: static;
     flex-direction: row;
     flex-wrap: wrap;
+    justify-content: center;
     align-self: stretch;
+    max-height: none;
+    padding: 4px;
   }
 }
 
