@@ -76,6 +76,14 @@ export function ScrollBar({ holder }: { holder: React.RefObject<HTMLElement | nu
    * The parts watched are the box and whatever it holds at the time, and the
    * list is taken again whenever the box is handed something else, which is
    * what going from one screen to another does.
+   *
+   * A change of size is drawn straight from the observer, which the browser
+   * calls once the page has been laid out: the sizes read there are already
+   * known. Read from a frame of its own instead, they made the browser lay
+   * out the whole page ahead of time as a screen opened, forty milliseconds
+   * of it on a laptop, and then again once the rest of the frame had its
+   * turn. Watching a part starts with a call for it, which is what draws the
+   * mark the first time and each time the box holds something new.
    */
   useEffect(() => {
     const box = holder.current;
@@ -92,7 +100,7 @@ export function ScrollBar({ holder }: { holder: React.RefObject<HTMLElement | nu
       }
     };
 
-    const sizes = new ResizeObserver(soon);
+    const sizes = new ResizeObserver(draw);
     const watch = () => {
       sizes.disconnect();
       sizes.observe(box);
@@ -101,13 +109,9 @@ export function ScrollBar({ holder }: { holder: React.RefObject<HTMLElement | nu
       }
     };
     watch();
-    const swapped = new MutationObserver(() => {
-      watch();
-      soon();
-    });
+    const swapped = new MutationObserver(watch);
     swapped.observe(box, { childList: true });
     box.addEventListener("scroll", soon, { passive: true });
-    draw();
 
     return () => {
       box.removeEventListener("scroll", soon);
