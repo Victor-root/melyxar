@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useDragToScroll } from "../dragging";
+import { PicturesAhead, useFetchingAhead } from "./card";
 import { useSettings } from "../settings";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 
@@ -60,6 +61,7 @@ export function Row({
   const [canGoOn, setCanGoOn] = useState(false);
   // Held down and pulled, the way the player's own rows already worked.
   const drag = useDragToScroll(track);
+  const ahead = useFetchingAhead();
 
   const measure = useCallback(() => {
     const element = track.current;
@@ -204,7 +206,7 @@ export function Row({
         onKeyDown={onKeyDown}
         {...drag}
       >
-        {children}
+        <PicturesAhead.Provider value={ahead}>{children}</PicturesAhead.Provider>
       </div>
 
       {canGoOn && (
