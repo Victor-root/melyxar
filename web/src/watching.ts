@@ -10,19 +10,27 @@
 
 import type { Seen } from "./api";
 
-/** Where somebody is in a work: whether they watched it, and where to carry
- *  on from, in seconds, when there is anywhere. */
+/** Where somebody is in a work: whether they watched it, where to carry on
+ *  from, in seconds, when there is anywhere, and for a series or a season,
+ *  how many of its episodes are left. */
 export interface Whereabouts {
   seen: Seen;
   resume: number | null;
+  unwatched: number;
 }
 
-/** Where a work stands once marked watched or not, from where it stood. */
-export function markedWatched(watched: boolean, before: Whereabouts): Whereabouts {
+/** Where a work stands once marked watched or not, from where it stood. A
+ *  series or a season is marked through every episode under it, so all of
+ *  them are left or none is. */
+export function markedWatched(watched: boolean, before: Whereabouts, episodes: number): Whereabouts {
   if (watched) {
-    return { seen: "watched", resume: null };
+    return { seen: "watched", resume: null, unwatched: 0 };
   }
-  return { seen: before.resume !== null ? "in_progress" : "not_started", resume: before.resume };
+  return {
+    seen: before.resume !== null ? "in_progress" : "not_started",
+    resume: before.resume,
+    unwatched: episodes,
+  };
 }
 
 /** What was said about a work, and what the server had sent at the time. */
@@ -38,5 +46,10 @@ export interface Said {
  * wins over anything said before it.
  */
 export function whereaboutsOf(sent: Whereabouts, said: Said | undefined): Whereabouts {
-  return said && said.over.seen === sent.seen && said.over.resume === sent.resume ? said.said : sent;
+  return said &&
+    said.over.seen === sent.seen &&
+    said.over.resume === sent.resume &&
+    said.over.unwatched === sent.unwatched
+    ? said.said
+    : sent;
 }

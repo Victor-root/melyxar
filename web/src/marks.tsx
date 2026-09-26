@@ -42,6 +42,8 @@ interface Marks {
   seenOf: (card: Card) => Seen;
   /** Where to carry on from, in seconds, and nothing when there is nowhere. */
   resumeOf: (card: Card) => number | null;
+  /** How many episodes of a series or a season are left. */
+  unwatchedOf: (card: Card) => number;
   favouriteOf: (card: Card) => boolean;
   /** Whether this work was put on the front page from this page, and nothing
       at all when nobody has said. */
@@ -83,7 +85,10 @@ export function MarksProvider({ children }: { children: ReactNode }) {
       const before = said[card.id]?.watched;
       const sent = sentOf(card);
       say(card.id, {
-        watched: { said: markedWatched(watched, whereaboutsOf(sent, before)), over: sent },
+        watched: {
+          said: markedWatched(watched, whereaboutsOf(sent, before), card.episodes),
+          over: sent,
+        },
       });
       /* A work ticked off is a work that has left the row of what is
          unfinished, and the one the series above it is waiting on is not
@@ -140,6 +145,7 @@ export function MarksProvider({ children }: { children: ReactNode }) {
     () => ({
       seenOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).seen,
       resumeOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).resume,
+      unwatchedOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).unwatched,
       favouriteOf: (card) => said[card.id]?.favourite ?? card.favourite,
       pinnedOf: (card) => said[card.id]?.pinned,
       goneOf: (id) => said[id]?.gone === true,
@@ -158,7 +164,7 @@ export function MarksProvider({ children }: { children: ReactNode }) {
 
 /** Where the server said this viewer is in a work. */
 function sentOf(card: Card): Whereabouts {
-  return { seen: card.seen, resume: card.resume_from_seconds };
+  return { seen: card.seen, resume: card.resume_from_seconds, unwatched: card.unwatched };
 }
 
 export function useMarks(): Marks {

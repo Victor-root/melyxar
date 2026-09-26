@@ -676,19 +676,23 @@ impl Database {
         for row in &rows {
             let id: WorkId = parse_id(&row.try_get::<String, _>("id")?)?;
             let seen_text: String = row.try_get("seen")?;
+            let own = PlaybackState::parse(&seen_text).ok_or_else(|| {
+                DatabaseError::Corrupt(format!("playback state '{seen_text}' is unknown"))
+            })?;
+            let episodes: i64 = row.try_get("episodes")?;
+            let unwatched: i64 = row.try_get("unwatched")?;
             found.insert(
                 id,
                 CardState {
-                    seen: PlaybackState::parse(&seen_text).ok_or_else(|| {
-                        DatabaseError::Corrupt(format!("playback state '{seen_text}' is unknown"))
-                    })?,
+                    seen: melyxar_core::work::seen_through_episodes(episodes, unwatched)
+                        .unwrap_or(own),
                     resume_from: row
                         .try_get::<Option<i64>, _>("position_ms")?
                         .filter(|position| *position > 0)
                         .map(Millis::new),
                     favourite: crate::convert::int_to_bool(row.try_get::<i64, _>("favourite")?),
-                    episodes: row.try_get("episodes")?,
-                    unwatched: row.try_get("unwatched")?,
+                    episodes,
+                    unwatched,
                     source_id: row
                         .try_get::<Option<String>, _>("source_id")?
                         .map(|id| parse_id(&id))
@@ -1456,7 +1460,11 @@ mod tests {
 
         // A season and an episode are never met on their own in a grid, so
         // the series is the only card here to read.
-        async fn what_is_left(database: &Database, library: LibraryId, who: UserId) -> (i64, i64) {
+        async fn what_is_left(
+            database: &Database,
+            library: LibraryId,
+            who: UserId,
+        ) -> (i64, i64, PlaybackState) {
             let cards = grid_of(database, library, who).await;
             let series = cards
                 .iter()
@@ -1465,12 +1473,12 @@ mod tests {
                 .state
                 .clone()
                 .expect("a named viewer gets a state");
-            (series.episodes, series.unwatched)
+            (series.episodes, series.unwatched, series.seen)
         }
 
         assert_eq!(
             what_is_left(&database, library.id, who).await,
-            (3, 3),
+            (3, 3, PlaybackState::NotStarted),
             "nothing watched, everything left"
         );
 
@@ -1487,8 +1495,18 @@ mod tests {
 
         assert_eq!(
             what_is_left(&database, library.id, who).await,
-            (3, 2),
+            (3, 2, PlaybackState::InProgress),
             "the badge drops as episodes are watched"
+        );
+
+        database
+            .mark_watched(who, series.id, true)
+            .await
+            .expect("series marked");
+        assert_eq!(
+            what_is_left(&database, library.id, who).await,
+            (3, 0, PlaybackState::Watched),
+            "a series with nothing left is watched, though nobody plays a series itself"
         );
     }
 
