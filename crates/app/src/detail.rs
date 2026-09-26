@@ -11,7 +11,7 @@ use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::Work;
 use melyxar_database::browse::WorkCard;
 use melyxar_database::catalogue::{PlayableExtraVideo, SourceAnalysis};
-use melyxar_database::home::{Alike, Saga};
+use melyxar_database::home::Alike;
 use melyxar_database::images::StoredImage;
 
 use crate::{AppState, Result};
@@ -75,9 +75,10 @@ pub struct WorkDetail {
     /// series, which are what genres are written on.
     pub alike: Option<Alike>,
     /// The saga a film belongs to, with every film of it this account can
-    /// reach, then the films where its characters come back. Only for a
-    /// film, which is what sagas gather.
-    pub saga: Option<Saga>,
+    /// reach, then the films where its characters come back; or for a film
+    /// in no saga, those films alone. Only for a film, which is what sagas
+    /// gather.
+    pub saga: Option<SagaRow>,
 }
 
 /// The episode a page offers to play next, and where in it.
@@ -250,23 +251,38 @@ async fn as_carry_on(state: &AppState, episode: melyxar_core::work::Work) -> Res
     })
 }
 
+/// The row of films a film leads on to through its characters.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SagaRow {
+    /// The saga it is named after, and nothing for a film in no saga, whose
+    /// row holds only the films where its characters come back.
+    pub name: Option<String>,
+    pub cards: Vec<WorkCard>,
+}
+
 /// The saga a film belongs to, followed by the films where its leads come
-/// back as the same characters, the ones where they matter most first.
+/// back as the same characters, the ones where they matter most first. A
+/// film in no saga leads on the same way from its own cast.
 ///
-/// Nothing when that makes fewer than two films: a row holding only the page
-/// it stands on says nothing.
+/// Nothing for a saga with fewer than two films here: one film and what it
+/// leads to is not yet a saga, and the row would be named after one.
 async fn saga_and_its_kin(
     state: &AppState,
     who: &melyxar_core::user::User,
     work_id: WorkId,
-) -> Result<Option<Saga>> {
+) -> Result<Option<SagaRow>> {
     let database = state.database();
     let within = crate::reach::within(who);
-    let Some(mut saga) = database.saga_of(who.id, work_id, within.as_deref()).await? else {
-        return Ok(None);
+    let (name, mut cards) = match database.saga_of(who.id, work_id, within.as_deref()).await? {
+        Some(saga) if saga.cards.len() < 2 => return Ok(None),
+        Some(saga) => (Some(saga.name), saga.cards),
+        None => (None, Vec::new()),
     };
 
-    let films: Vec<WorkId> = saga.cards.iter().map(|card| card.id).collect();
+    let films: Vec<WorkId> = match name {
+        Some(_) => cards.iter().map(|card| card.id).collect(),
+        None => vec![work_id],
+    };
     let leads = database.roles_in(&films, melyxar_core::saga::LEADS).await?;
     let mut people: Vec<PersonId> = leads.iter().map(|role| role.person_id).collect();
     people.sort();
@@ -275,10 +291,9 @@ async fn saga_and_its_kin(
         .roles_elsewhere(&people, &films, within.as_deref())
         .await?;
     let kin = melyxar_core::saga::kin_of_a_saga(&leads, &elsewhere);
-    saga.cards
-        .extend(database.cards_in_order(who.id, &kin).await?);
+    cards.extend(database.cards_in_order(who.id, &kin).await?);
 
-    Ok((saga.cards.len() > 1).then_some(saga))
+    Ok((!cards.is_empty()).then_some(SagaRow { name, cards }))
 }
 
 /// Reads everything one page shows about one work.
@@ -858,9 +873,10 @@ mod tests {
             "Lone Lantern",
             2016,
             Some("Lantern Saga"),
-            &[],
+            &[hero],
         )
         .await;
+        let solo = identified(&database, library, "Kael Alone", 2020, None, &[hero]).await;
         let viewer = database
             .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
             .await
@@ -885,10 +901,15 @@ mod tests {
         assert_eq!(
             saga_of(rising).await,
             Some((
-                "Storm Saga".to_string(),
-                vec![rising, falling, reunion, gather]
+                Some("Storm Saga".to_string()),
+                vec![rising, falling, lantern, reunion, solo, gather]
             )),
             "its own films first, then where its hero comes back, the most present first"
+        );
+        assert_eq!(
+            saga_of(solo).await,
+            Some((None, vec![rising, falling, lantern, reunion, gather])),
+            "a film in no saga leads on from its own cast, itself left out"
         );
         assert_eq!(
             saga_of(pond).await,
@@ -898,7 +919,7 @@ mod tests {
         assert_eq!(
             saga_of(lantern).await,
             None,
-            "a saga of one here with nowhere to lead makes no row"
+            "a saga of one film here is not yet a saga, whatever it leads to"
         );
     }
 

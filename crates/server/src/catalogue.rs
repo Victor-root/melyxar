@@ -803,10 +803,12 @@ struct WorkView {
     saga: Option<SagaView>,
 }
 
-/// A saga, and the films of it this account can reach.
+/// A saga, and the films of it this account can reach, then the films where
+/// its characters come back.
 #[derive(Debug, Serialize)]
 struct SagaView {
-    name: String,
+    /// Nothing for a film in no saga, whose row holds only those films.
+    name: Option<String>,
     cards: Vec<CardView>,
 }
 
