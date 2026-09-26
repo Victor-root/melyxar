@@ -14,7 +14,7 @@
 
 use melyxar_core::id::{MediaSourceId, TrackId};
 use melyxar_core::media::{
-    normalise_language, AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, SubtitleDetails,
+    normalise_language, title_says_forced, AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, SubtitleDetails,
     SubtitleLayout, Track, TrackKind, VideoDetails,
 };
 use melyxar_core::time::Millis;
@@ -152,7 +152,9 @@ fn track_from_stream(stream: &ProbeStream, source_id: MediaSourceId) -> Option<T
             .filter(|value| !value.is_empty() && value != "und"),
         title: stream.tag("title").map(str::to_string),
         is_default: stream.has_disposition("default"),
-        is_forced: stream.has_disposition("forced"),
+        // Many files say a subtitle is forced only in its title.
+        is_forced: stream.has_disposition("forced")
+            || (stream.is_subtitle() && stream.tag("title").is_some_and(title_says_forced)),
         kind,
     })
 }
@@ -645,6 +647,29 @@ mod tests {
             TrackKind::Subtitle(subtitle) => assert!(subtitle.is_hearing_impaired),
             other => panic!("expected a subtitle track, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_subtitle_whose_title_says_forced_is_forced_without_the_flag() {
+        let file = analyse(
+            r#"{"streams":[
+                {"index":2,"codec_type":"subtitle","codec_name":"subrip",
+                 "tags":{"language":"fre","title":"Français (forcés)"}},
+                {"index":3,"codec_type":"subtitle","codec_name":"subrip",
+                 "tags":{"language":"fre","title":"Français"}},
+                {"index":1,"codec_type":"audio","codec_name":"aac","channels":2,
+                 "tags":{"title":"Forced"}}]}"#,
+        );
+        let forced = |index: i32| {
+            file.tracks
+                .iter()
+                .find(|track| track.stream_index == index)
+                .expect("a track")
+                .is_forced
+        };
+        assert!(forced(2));
+        assert!(!forced(3));
+        assert!(!forced(1), "only a subtitle can be forced");
     }
 
     #[test]

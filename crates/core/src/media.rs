@@ -186,6 +186,30 @@ pub fn normalise_language(value: &str) -> String {
     }
 }
 
+/// Words that say a subtitle is forced: it holds only the few lines a film
+/// does not say in the language of its soundtrack. English and French, with
+/// the accents and without, since a file name often loses them.
+const FORCED_WORDS: [&str; 9] = [
+    "forced", "force", "forces", "forcee", "forcees", "forcé", "forcée", "forcés", "forcées",
+];
+
+/// Whether one word, as a file name or a track title writes it, says a
+/// subtitle is forced.
+pub fn says_forced(word: &str) -> bool {
+    FORCED_WORDS.contains(&word.to_lowercase().as_str())
+}
+
+/// Whether the title a file gives a subtitle says it is forced.
+///
+/// Many files say so only there, "French (Forced)" or "Français forcés",
+/// and never set the flag the container has for it. The rule lives here
+/// because a file name next to a film is read by the same words.
+pub fn title_says_forced(title: &str) -> bool {
+    title
+        .split(|character: char| !character.is_alphanumeric())
+        .any(says_forced)
+}
+
 /// One chapter of a source, either read from the file or generated at a fixed
 /// interval when the file declares none.
 ///
@@ -484,6 +508,16 @@ impl SubtitleDetails {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_title_saying_forced_in_either_language_is_read_as_forced() {
+        for title in ["Forced", "French (Forced)", "Français forcés", "FR - Forcé", "forcees"] {
+            assert!(title_says_forced(title), "{title}");
+        }
+        for title in ["French", "Français (SDH)", "Commentary", "Enforcement", ""] {
+            assert!(!title_says_forced(title), "{title}");
+        }
+    }
 
     fn video(height: i32, codec: &str, hdr: Option<HdrFormat>) -> VideoDetails {
         VideoDetails {
