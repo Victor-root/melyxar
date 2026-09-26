@@ -622,8 +622,7 @@ function Marks({
 
 /** Marks a work watched or not, and says which it is. The page's own work
  *  has it among its marks, and every episode of a season's list has one
- *  of its own, smaller: the corner of a still is too small a place to be
- *  the only way to tick one off. */
+ *  of its own, smaller, in place of the corner of its still. */
 function SeenButton({ card, small = false }: { card: CardData; small?: boolean }) {
   const { t } = useSettings();
   const marks = useMarks();
@@ -1074,7 +1073,7 @@ function EpisodeLine({ child }: { child: Child }) {
 
   return (
     <li className="episode-line">
-      <Card card={card} shape="lying" named={false} />
+      <Card card={card} shape="lying" named={false} cornered={false} />
       <div className="episode-line-words">
         <div className="episode-line-head">
           <Link className="episode-line-name" to={`/work/${card.id}`}>

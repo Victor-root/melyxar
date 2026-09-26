@@ -75,6 +75,10 @@ export function Card({
   /** Whether the name is drawn under the picture. A line of a list says it
       beside the picture instead. */
   named = true,
+  /** Whether the corner that marks it watched is drawn. A line of a list
+      that has a watched button of its own beside the picture leaves it out,
+      rather than offer the same button twice. */
+  cornered = true,
   /** Whether this is the work the page is about, in a row of the ones around
       it: lit at rest, and what the row opens on. */
   here = false,
@@ -86,6 +90,7 @@ export function Card({
   note?: string;
   trailing?: string;
   named?: boolean;
+  cornered?: boolean;
   here?: boolean;
 }) {
   const { t } = useSettings();
@@ -190,12 +195,14 @@ export function Card({
             once there are none and for a film that was watched. One badge,
             the same one the player draws, and under the pointer the button
             that marks and unmarks. */}
-        <SeenMark
-          watched={seen === "watched"}
-          episodes={card.episodes}
-          unwatched={marks.unwatchedOf(card)}
-          onPress={(watched) => marks.setWatched(card, watched)}
-        />
+        {cornered && (
+          <SeenMark
+            watched={seen === "watched"}
+            episodes={card.episodes}
+            unwatched={marks.unwatchedOf(card)}
+            onPress={(watched) => marks.setWatched(card, watched)}
+          />
+        )}
 
         <div className="card-hover">
           {playable && (
