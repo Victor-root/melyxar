@@ -13,6 +13,7 @@
  * still armed after the reload that makes a load cold.
  */
 
+import { putOnTheClipboard } from "./clipboard";
 import type { Pass, Scrolled } from "./measure-report";
 import { frameStats, framesLost, passesOf, percentile } from "./measure-report";
 
@@ -192,9 +193,12 @@ function report(): string {
   const text = written(now);
   window.melyxar.last = text;
   console.log(text);
-  navigator.clipboard.writeText(text).then(
-    () => console.info("melyxar: the report is in the clipboard."),
-    () => console.info("melyxar: to copy the report, run copy(melyxar.last)."),
+  void putOnTheClipboard(text).then((copied) =>
+    console.info(
+      copied
+        ? "melyxar: the report is in the clipboard."
+        : "melyxar: to copy the report, run copy(melyxar.last).",
+    ),
   );
   return text;
 }
