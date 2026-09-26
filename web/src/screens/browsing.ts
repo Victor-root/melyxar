@@ -224,9 +224,14 @@ export function useBrowsing(): Browsing {
     // other.
   }, [choices, narrowing, setGathered]);
 
+  /* Kept under the library, so a grid walked back to has its letters and
+     its filters from its first drawing, as it has its cards: arriving a
+     moment after the grid, the letters took their room beside it and every
+     card shrank at once. */
   const filters = useAsked(
     (signal) => (id ? api.filters(id, signal) : Promise.resolve(null)),
     [id],
+    id ? `filters:${id}` : undefined,
   );
 
   /* The page after the last card, added to the grid. One at a time: whoever
