@@ -254,18 +254,18 @@ async fn as_carry_on(state: &AppState, episode: melyxar_core::work::Work) -> Res
 /// The row of films a film leads on to through its characters.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SagaRow {
-    /// The saga it is named after, and nothing for a film in no saga, whose
-    /// row holds only the films where its characters come back.
+    /// The saga it is named after, and nothing for a film in no saga or
+    /// alone of its saga here, whose row holds only the films where its
+    /// characters come back.
     pub name: Option<String>,
     pub cards: Vec<WorkCard>,
 }
 
 /// The saga a film belongs to, followed by the films where its leads come
 /// back as the same characters, the ones where they matter most first. A
-/// film in no saga leads on the same way from its own cast.
-///
-/// Nothing for a saga with fewer than two films here: one film and what it
-/// leads to is not yet a saga, and the row would be named after one.
+/// film in no saga leads on the same way from its own cast, and so does one
+/// alone of its saga here: a row named after a saga that shows one film of
+/// it does not read as a saga.
 async fn saga_and_its_kin(
     state: &AppState,
     who: &melyxar_core::user::User,
@@ -274,9 +274,8 @@ async fn saga_and_its_kin(
     let database = state.database();
     let within = crate::reach::within(who);
     let (name, mut cards) = match database.saga_of(who.id, work_id, within.as_deref()).await? {
-        Some(saga) if saga.cards.len() < 2 => return Ok(None),
-        Some(saga) => (Some(saga.name), saga.cards),
-        None => (None, Vec::new()),
+        Some(saga) if saga.cards.len() > 1 => (Some(saga.name), saga.cards),
+        _ => (None, Vec::new()),
     };
 
     let films: Vec<WorkId> = match name {
@@ -918,8 +917,8 @@ mod tests {
         );
         assert_eq!(
             saga_of(lantern).await,
-            None,
-            "a saga of one film here is not yet a saga, whatever it leads to"
+            Some((None, vec![rising, falling, reunion, solo, gather])),
+            "alone of its saga here, a film leads on from its own cast like one in no saga"
         );
     }
 
