@@ -215,8 +215,16 @@ macro_rules! initial_of_a_title {
 ///
 /// Written once because five queries now answer with cards, and a column one
 /// of them forgot is a card that cannot be read back at all.
+///
+/// The length is the provider's, and the file's own when the provider gave
+/// none: a video somebody filmed themselves, or a film nobody has named yet,
+/// has one all the same, and without it a card could not say how far into it
+/// somebody got.
 pub(crate) const WHAT_A_CARD_IS: &str = concat!(
-    "w.id, w.library_id, w.kind, w.title, w.release_year, w.runtime_ms,
+    "w.id, w.library_id, w.kind, w.title, w.release_year,
+     COALESCE(w.runtime_ms,
+              (SELECT max(s.duration_ms) FROM media_sources s WHERE s.work_id = w.id))
+         AS runtime_ms,
      w.community_rating, w.identification, w.identification_note,
      w.dominant_color, w.added_at, ",
     initial_of_a_title!(),
@@ -1258,6 +1266,60 @@ mod tests {
         assert_eq!(
             page.cards[0].state, None,
             "a read nobody asked for carries nobody's marks"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_card_without_a_length_from_the_provider_takes_the_file_s() {
+        let (database, films) =
+            library_of(&[("Quiet Harbour", 2019, 7.4), ("Amber Field", 2021, 8.1)]).await;
+        let root = database
+            .library_roots(films)
+            .await
+            .expect("roots read")
+            .remove(0);
+        let who = somebody(&database, "vera").await;
+        let cards = grid_of(&database, films, who).await;
+        let called = |title: &str| {
+            cards
+                .iter()
+                .find(|card| card.title == title)
+                .expect("a card")
+                .id
+        };
+        let (named, filmed) = (called("Quiet Harbour"), called("Amber Field"));
+        sqlx::query("UPDATE works SET runtime_ms = NULL WHERE id = ?")
+            .bind(filmed.to_db_string())
+            .execute(database.writer())
+            .await
+            .expect("length taken away");
+        for (work, name) in [(named, "named.mkv"), (filmed, "filmed.mkv")] {
+            database
+                .insert_source(work, root.id, Path::new(name), 900, now())
+                .await
+                .expect("copy recorded");
+        }
+        sqlx::query("UPDATE media_sources SET duration_ms = 754000")
+            .execute(database.writer())
+            .await
+            .expect("copies measured");
+
+        let runtime_of = |cards: &[WorkCard], id: WorkId| {
+            cards
+                .iter()
+                .find(|card| card.id == id)
+                .and_then(|card| card.runtime)
+        };
+        let cards = grid_of(&database, films, who).await;
+        assert_eq!(
+            runtime_of(&cards, filmed),
+            Some(Millis::new(754_000)),
+            "the file's length stands in for the one nobody gave"
+        );
+        assert_eq!(
+            runtime_of(&cards, named),
+            Some(Millis::new(2_019_000)),
+            "the provider's length is kept where there is one"
         );
     }
 
