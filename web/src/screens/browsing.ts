@@ -13,7 +13,7 @@
  * a grid drawn another way would still need exactly as it is.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { Card, Filters, LibraryKind } from "../api";
@@ -24,6 +24,13 @@ import { KINDS } from "../libraries";
 /** How many cards a jump reads at once, the most the server hands out: a
  *  jump is one wait, and the fewer questions it takes the shorter it is. */
 const PAGE_FOR_A_JUMP = 200;
+
+/** How many cards a grid reads on its own as soon as it opens, rather than as
+ *  it is scrolled: every library a household really has, and a few quick
+ *  questions to the server. Past this, the rest is read as the page nears
+ *  its end, since a hundred thousand cards read up front is a wait nobody
+ *  asked for. */
+const READ_AHEAD = 2000;
 
 /** The orderings a library can be read in. */
 export const ORDERS = ["title", "added_at", "release_year", "community_rating", "runtime"] as const;
@@ -254,8 +261,12 @@ export function useBrowsing(): Browsing {
           // where they are, which is what keeps the scroll position honest.
           // Unless the choices changed meanwhile, which starts a grid of its
           // own that this page is no part of.
+          // Drawn as time allows rather than at once: what is added goes below
+          // the screen, and drawn in one go it stalled whatever was moving.
           if (latest.current === from) {
-            setGathered({ choices, cards: [...from.cards, ...page.cards], next: page.next });
+            startTransition(() =>
+              setGathered({ choices, cards: [...from.cards, ...page.cards], next: page.next }),
+            );
           }
           return latest.current;
         })
@@ -270,6 +281,25 @@ export function useBrowsing(): Browsing {
     },
     [narrowing, choices, setGathered],
   );
+
+  /* The rest of the grid read straight after its first page, while the top
+     of it is being looked at. Read as the page was scrolled instead, each
+     page arrived while it moved and its cards were drawn in the middle of
+     the scroll: the stutter every sixty films that stopped once the whole
+     grid had been read. A page that could not be read is left to the end of
+     the grid to ask for again. */
+  useEffect(() => {
+    if (
+      gathered.choices !== choices ||
+      gathered.next === null ||
+      gathered.cards.length >= READ_AHEAD
+    ) {
+      return;
+    }
+    readOn(PAGE_FOR_A_JUMP).catch(() => {
+      // Asked again when the page nears its end.
+    });
+  }, [gathered, choices, readOn]);
 
   const loadMore = useCallback(() => {
     readOn().catch(() => {
