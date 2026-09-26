@@ -347,7 +347,7 @@ export function CardMenu({
 
   return createPortal(
     <div
-      className="card-menu"
+      className="header-menu-list card-menu"
       ref={holder}
       role="menu"
       style={{
@@ -364,7 +364,7 @@ export function CardMenu({
             key={entry.key}
             type="button"
             role="menuitem"
-            className="card-menu-line"
+            className={`header-menu-line${entry.later ? " header-menu-later" : ""}`}
             /* Said rather than disabled outright: a disabled button takes no
                pointer, so the very tooltip that explains why it is grey
                never appears. */
