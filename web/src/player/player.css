@@ -160,6 +160,17 @@
   pointer-events: none;
 }
 
+/* Two hundredths of black: nothing anybody sees, and enough for the browser
+   to count the picture as covered. Measured on the maintainer's laptop, a
+   layer this faint over the whole picture brought back what a small one on
+   its own did not. */
+.player-glaze {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.02);
+  pointer-events: none;
+}
+
 /* How the picture is fitted. Whole by default, which is what a film was shot
    for; the other two are for a film mastered with the bars baked in. */
 .player-video-auto {
