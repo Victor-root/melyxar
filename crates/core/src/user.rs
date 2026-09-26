@@ -7,6 +7,7 @@
 use crate::id::{DeviceId, LibraryId, UserId};
 use crate::library::LibraryKind;
 use crate::time::Timestamp;
+use crate::work::ResumeRules;
 
 /// The highest limit of simultaneous streams an account can be given.
 pub const MOST_SIMULTANEOUS_STREAMS: i32 = 20;
@@ -253,8 +254,15 @@ pub const DEFAULT_BANNER_CUT: f64 = 0.13;
 /// Two digits at most, because the length is written inside the button.
 pub const SHORTEST_STEP: i64 = 1;
 pub const LONGEST_STEP: i64 = 90;
-/// What the buttons jumped before anybody could choose.
-pub const DEFAULT_STEP: i64 = 10;
+/// What the button back jumps until somebody chooses: a line heard again.
+pub const DEFAULT_STEP_BACK: i64 = 10;
+/// What the button on jumps until somebody chooses: longer, since what is
+/// passed over is a stretch rather than a line.
+pub const DEFAULT_STEP_ON: i64 = 30;
+
+/// How far back a film starts from where it was left, at most, in seconds.
+/// The same bound as a step, since it is chosen from the same lengths.
+pub const LONGEST_REWIND: i64 = LONGEST_STEP;
 
 /// What a viewer wants done with a film of wide gamut colour.
 ///
@@ -527,6 +535,18 @@ pub struct Preferences {
     /// How far its button on jumps. Apart from the other, since a line heard
     /// again and a title sequence passed over are not the same length.
     pub step_on_seconds: i64,
+    /// How far back a film starts from where it was left, in seconds, so the
+    /// last moments seen are seen again. Nought starts it where it was left.
+    pub resume_rewind_seconds: i64,
+    /// When a work left partway counts as started, as watched, or as too
+    /// short to come back to.
+    pub resume_rules: ResumeRules,
+    /// Whether each kind of library has rules of its own, in place of the
+    /// ones above.
+    pub resume_rules_per_kind: bool,
+    /// The rules of the kinds given some. A kind never given any follows the
+    /// rules above until it is.
+    pub resume_rules_by_kind: Vec<(LibraryKind, ResumeRules)>,
     /// What is done with a film of wide gamut colour.
     pub wide_gamut: WideGamutChoice,
 }
@@ -556,8 +576,14 @@ impl Default for Preferences {
             home_order: LibraryKind::every().to_vec(),
             home_sections: HomeSection::every().to_vec(),
             hidden_home_sections: Vec::new(),
-            step_back_seconds: DEFAULT_STEP,
-            step_on_seconds: DEFAULT_STEP,
+            step_back_seconds: DEFAULT_STEP_BACK,
+            step_on_seconds: DEFAULT_STEP_ON,
+            // Nothing until somebody asks: where a film was left is where it
+            // starts, as it always did.
+            resume_rewind_seconds: 0,
+            resume_rules: ResumeRules::default(),
+            resume_rules_per_kind: false,
+            resume_rules_by_kind: Vec::new(),
             wide_gamut: WideGamutChoice::default(),
         }
     }
@@ -578,6 +604,17 @@ impl Preferences {
         self.banner_cut = self.banner_cut.clamp(0.0, 1.0);
         self.step_back_seconds = self.step_back_seconds.clamp(SHORTEST_STEP, LONGEST_STEP);
         self.step_on_seconds = self.step_on_seconds.clamp(SHORTEST_STEP, LONGEST_STEP);
+        self.resume_rewind_seconds = self.resume_rewind_seconds.clamp(0, LONGEST_REWIND);
+        self.resume_rules = self.resume_rules.normalised();
+        // One set per kind, the last one written winning.
+        let mut by_kind: Vec<(LibraryKind, ResumeRules)> = Vec::new();
+        for (kind, rules) in self.resume_rules_by_kind.into_iter().rev() {
+            if !by_kind.iter().any(|(held, _)| *held == kind) {
+                by_kind.push((kind, rules.normalised()));
+            }
+        }
+        by_kind.reverse();
+        self.resume_rules_by_kind = by_kind;
         if !is_an_accent_colour(&self.accent_color) {
             self.accent_color = DEFAULT_ACCENT_COLOR.to_string();
         }
@@ -610,6 +647,18 @@ impl Preferences {
         }
         self.hidden_home_sections = hidden;
         self
+    }
+
+    /// The rules a work of this kind of library is held to.
+    pub fn resume_rules_for(&self, kind: LibraryKind) -> ResumeRules {
+        match self.resume_rules_per_kind {
+            true => self
+                .resume_rules_by_kind
+                .iter()
+                .find(|(held, _)| *held == kind)
+                .map_or(self.resume_rules, |(_, rules)| *rules),
+            false => self.resume_rules,
+        }
     }
 
     /// The sections the home page shows, in the order it shows them.
@@ -914,6 +963,41 @@ mod tests {
         let usual = Preferences::default().normalised();
         assert_eq!(usual.banner_height, DEFAULT_BANNER_HEIGHT);
         assert_eq!(usual.banner_cut, DEFAULT_BANNER_CUT);
+    }
+
+    #[test]
+    fn a_kind_follows_the_rules_of_every_kind_until_it_is_given_its_own() {
+        let films = ResumeRules {
+            min_percent: 2,
+            max_percent: 95,
+            min_seconds: 600,
+        };
+        let mut chosen = Preferences {
+            resume_rules_by_kind: vec![
+                (LibraryKind::Movies, ResumeRules::default()),
+                (LibraryKind::Movies, films),
+            ],
+            ..Preferences::default()
+        }
+        .normalised();
+        assert_eq!(
+            chosen.resume_rules_by_kind,
+            vec![(LibraryKind::Movies, films)],
+            "one set per kind, the last written"
+        );
+        assert_eq!(
+            chosen.resume_rules_for(LibraryKind::Movies),
+            ResumeRules::default(),
+            "rules of their own count only once asked for"
+        );
+
+        chosen.resume_rules_per_kind = true;
+        assert_eq!(chosen.resume_rules_for(LibraryKind::Movies), films);
+        assert_eq!(
+            chosen.resume_rules_for(LibraryKind::Anime),
+            chosen.resume_rules,
+            "a kind never given rules follows those of every kind"
+        );
     }
 
     #[test]

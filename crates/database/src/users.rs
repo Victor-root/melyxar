@@ -7,6 +7,7 @@
 use melyxar_core::id::{LibraryId, UserId};
 use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{now, Timestamp};
+use melyxar_core::work::ResumeRules;
 use melyxar_core::user::{
     DownmixMethod, HomeSection, Permissions, Preferences, SubtitleMode, ThemeMode, User,
     WideGamutChoice,
@@ -57,7 +58,9 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.banner_height, p.banner_cut, p.banner_shown, p.banner_at_random,
      p.banner_fills_the_screen, p.header_hides_on_scroll,
      p.hidden_at_the_door, p.home_order, p.home_sections, p.hidden_home_sections,
-     p.step_back_seconds, p.step_on_seconds, p.wide_gamut";
+     p.step_back_seconds, p.step_on_seconds, p.resume_rewind_seconds,
+     p.resume_min_percent, p.resume_max_percent, p.resume_min_seconds,
+     p.resume_rules_per_kind, p.resume_rules_by_kind, p.wide_gamut";
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
@@ -394,7 +397,9 @@ impl Database {
                 banner_fills_the_screen = ?, header_hides_on_scroll = ?,
                 hidden_at_the_door = ?, home_order = ?, home_sections = ?,
                 hidden_home_sections = ?, step_back_seconds = ?,
-                step_on_seconds = ?, wide_gamut = ?
+                step_on_seconds = ?, resume_rewind_seconds = ?, resume_min_percent = ?,
+                resume_max_percent = ?, resume_min_seconds = ?, resume_rules_per_kind = ?,
+                resume_rules_by_kind = ?, wide_gamut = ?
              WHERE user_id = ?",
         )
         .bind(&preferences.interface_language)
@@ -419,6 +424,12 @@ impl Database {
         .bind(written_sections(&preferences.hidden_home_sections))
         .bind(preferences.step_back_seconds)
         .bind(preferences.step_on_seconds)
+        .bind(preferences.resume_rewind_seconds)
+        .bind(preferences.resume_rules.min_percent)
+        .bind(preferences.resume_rules.max_percent)
+        .bind(preferences.resume_rules.min_seconds)
+        .bind(preferences.resume_rules_per_kind)
+        .bind(written_rules(&preferences.resume_rules_by_kind))
         .bind(preferences.wide_gamut.as_str())
         .bind(id.to_db_string())
         .execute(self.writer())
@@ -455,6 +466,44 @@ fn written_sections(sections: &[HomeSection]) -> String {
 
 fn read_sections(stored: &str) -> Vec<HomeSection> {
     stored.split(',').filter_map(HomeSection::parse).collect()
+}
+
+/// The rules each kind of library was given, as they are kept: the kind, the
+/// smallest share, the largest and the seconds, parted by colons.
+fn written_rules(by_kind: &[(LibraryKind, ResumeRules)]) -> String {
+    by_kind
+        .iter()
+        .map(|(kind, rules)| {
+            format!(
+                "{}:{}:{}:{}",
+                kind.as_str(),
+                rules.min_percent,
+                rules.max_percent,
+                rules.min_seconds
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Read back the same way. A part that says nothing sensible is dropped
+/// rather than locking the account out, and its kind follows the rules of
+/// every kind.
+fn read_rules(stored: &str) -> Vec<(LibraryKind, ResumeRules)> {
+    stored
+        .split(',')
+        .filter_map(|part| {
+            let mut fields = part.split(':');
+            let kind = LibraryKind::parse(fields.next()?)?;
+            let mut number = || fields.next()?.parse::<i64>().ok();
+            let rules = ResumeRules {
+                min_percent: number()?,
+                max_percent: number()?,
+                min_seconds: number()?,
+            };
+            Some((kind, rules))
+        })
+        .collect()
 }
 
 /// Writes an account, its preferences and its grants, inside one transaction.
@@ -498,8 +547,12 @@ async fn write_an_account(
                                        banner_fills_the_screen, header_hides_on_scroll,
                                        hidden_at_the_door, home_order, step_back_seconds,
                                        step_on_seconds, wide_gamut, subtitle_mode,
-                                       home_sections, hidden_home_sections)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       home_sections, hidden_home_sections,
+                                       resume_rewind_seconds, resume_min_percent,
+                                       resume_max_percent, resume_min_seconds,
+                                       resume_rules_per_kind, resume_rules_by_kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -522,6 +575,12 @@ async fn write_an_account(
     .bind(preferences.subtitle_mode.as_str())
     .bind(written_sections(&preferences.home_sections))
     .bind(written_sections(&preferences.hidden_home_sections))
+    .bind(preferences.resume_rewind_seconds)
+    .bind(preferences.resume_rules.min_percent)
+    .bind(preferences.resume_rules.max_percent)
+    .bind(preferences.resume_rules.min_seconds)
+    .bind(preferences.resume_rules_per_kind)
+    .bind(written_rules(&preferences.resume_rules_by_kind))
     .execute(&mut **transaction)
     .await?;
 
@@ -620,6 +679,14 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             ),
             step_back_seconds: row.try_get("step_back_seconds")?,
             step_on_seconds: row.try_get("step_on_seconds")?,
+            resume_rewind_seconds: row.try_get("resume_rewind_seconds")?,
+            resume_rules: ResumeRules {
+                min_percent: row.try_get("resume_min_percent")?,
+                max_percent: row.try_get("resume_max_percent")?,
+                min_seconds: row.try_get("resume_min_seconds")?,
+            },
+            resume_rules_per_kind: row.try_get("resume_rules_per_kind")?,
+            resume_rules_by_kind: read_rules(&row.try_get::<String, _>("resume_rules_by_kind")?),
             wide_gamut: WideGamutChoice::parse(&row.try_get::<String, _>("wide_gamut")?)
                 .unwrap_or_default(),
         }
@@ -1172,6 +1239,21 @@ mod tests {
             subtitle_mode: SubtitleMode::OnlyForced,
             home_sections: vec![HomeSection::Newest(LibraryKind::Anime)],
             hidden_home_sections: vec![HomeSection::Band],
+            resume_rewind_seconds: 15,
+            resume_rules: ResumeRules {
+                min_percent: 3,
+                max_percent: 95,
+                min_seconds: 300,
+            },
+            resume_rules_per_kind: true,
+            resume_rules_by_kind: vec![(
+                LibraryKind::HomeMedia,
+                ResumeRules {
+                    min_percent: 0,
+                    max_percent: 99,
+                    min_seconds: 30,
+                },
+            )],
             ..Preferences::default()
         };
         database
@@ -1215,6 +1297,17 @@ mod tests {
             ]
         );
         assert_eq!(loaded.preferences.hidden_home_sections, vec![HomeSection::Band]);
+        assert_eq!(loaded.preferences.resume_rewind_seconds, 15);
+        assert_eq!(loaded.preferences.resume_rules.min_seconds, 300);
+        assert!(loaded.preferences.resume_rules_per_kind);
+        assert_eq!(
+            loaded.preferences.resume_rules_for(LibraryKind::HomeMedia),
+            ResumeRules {
+                min_percent: 0,
+                max_percent: 99,
+                min_seconds: 30,
+            }
+        );
         assert_eq!(
             loaded.preferences.home_order,
             vec![

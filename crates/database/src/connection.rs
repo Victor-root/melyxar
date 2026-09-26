@@ -495,6 +495,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_account_still_on_the_first_step_on_moves_to_thirty_seconds() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database opens");
+        crate::MIGRATOR
+            .run_to(52, &pool)
+            .await
+            .expect("migrated to just before the new step");
+        for (id, step_on) in [("untouched", 10), ("chosen", 45)] {
+            sqlx::query(
+                "INSERT INTO users (id, name, created_at) VALUES (?, ?, '2026-09-26T00:00:00Z')",
+            )
+            .bind(id)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .expect("account written");
+            sqlx::query("INSERT INTO user_preferences (user_id, step_on_seconds) VALUES (?, ?)")
+                .bind(id)
+                .bind(step_on)
+                .execute(&pool)
+                .await
+                .expect("preferences written");
+        }
+
+        crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+        let rows: Vec<(String, i64, i64)> = sqlx::query_as(
+            "SELECT user_id, step_on_seconds, resume_rewind_seconds
+             FROM user_preferences ORDER BY user_id",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("read");
+        assert_eq!(
+            rows,
+            vec![
+                ("chosen".to_string(), 45, 0),
+                ("untouched".to_string(), 30, 0),
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn running_migrations_twice_changes_nothing() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("melyxar.db");

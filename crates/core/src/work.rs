@@ -228,36 +228,82 @@ impl PlaybackState {
     }
 }
 
-/// Share of a work that has to be played before it counts as watched.
-pub const DEFAULT_WATCHED_THRESHOLD: f64 = 0.9;
+/// When a work left partway counts as started, as watched, or as too short
+/// to come back to. Chosen by each viewer, in Jellyfin's terms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResumeRules {
+    /// Below this share of the work, in percent, it was only glanced at: it
+    /// counts as not started, and starts again from the beginning.
+    pub min_percent: i64,
+    /// From this share on, in percent, it counts as watched.
+    pub max_percent: i64,
+    /// A work shorter than this, in seconds, is never offered to carry on:
+    /// past the smallest share it counts as watched.
+    pub min_seconds: i64,
+}
 
-/// Decides the state a reported position implies, without overriding a manual
-/// mark.
+impl Default for ResumeRules {
+    fn default() -> Self {
+        Self {
+            min_percent: 5,
+            max_percent: 90,
+            min_seconds: 120,
+        }
+    }
+}
+
+/// The widest each rule may be set to. The smallest share stops at half and
+/// the largest starts there, so the two can never cross; an hour is longer
+/// than any clip anybody means by short.
+pub const MOST_MIN_PERCENT: i64 = 50;
+pub const LEAST_MAX_PERCENT: i64 = 50;
+pub const MOST_MIN_SECONDS: i64 = 3_600;
+
+impl ResumeRules {
+    /// Brought inside the range each rule is kept in.
+    pub fn normalised(self) -> Self {
+        Self {
+            min_percent: self.min_percent.clamp(0, MOST_MIN_PERCENT),
+            max_percent: self.max_percent.clamp(LEAST_MAX_PERCENT, 100),
+            min_seconds: self.min_seconds.clamp(0, MOST_MIN_SECONDS),
+        }
+    }
+}
+
+/// The state a reported position leaves a work in, and the position kept.
+///
+/// A manual mark always wins. Without a known length any progress means the
+/// work was started. Otherwise, in this order: from the largest share on, or
+/// at the end, it is watched; below the smallest share it was only glanced
+/// at, and starts again from the beginning; a work too short to come back to
+/// is watched once past that smallest share; anything else is in progress.
 ///
 /// A pure function so it can be tested exhaustively and reused by every client.
-pub fn state_for_position(
+pub fn progress_after(
     position: Millis,
     duration: Option<Millis>,
-    threshold: f64,
+    rules: ResumeRules,
     manually_marked: bool,
-) -> PlaybackState {
+) -> (PlaybackState, Millis) {
     if manually_marked {
-        return PlaybackState::Watched;
+        return (PlaybackState::Watched, position);
     }
     let Some(duration) = duration.filter(|value| value.get() > 0) else {
-        // Without a known duration, any progress means the work was started.
-        return if position.get() > 0 {
-            PlaybackState::InProgress
-        } else {
-            PlaybackState::NotStarted
+        let state = match position.get() > 0 {
+            true => PlaybackState::InProgress,
+            false => PlaybackState::NotStarted,
         };
+        return (state, position);
     };
-    if position.ratio_of(duration) >= threshold {
-        PlaybackState::Watched
-    } else if position.get() > 0 {
-        PlaybackState::InProgress
+    let percent = position.ratio_of(duration) * 100.0;
+    if position >= duration || percent >= rules.max_percent as f64 {
+        (PlaybackState::Watched, position)
+    } else if position.get() <= 0 || percent < rules.min_percent as f64 {
+        (PlaybackState::NotStarted, Millis::ZERO)
+    } else if duration.get() < rules.min_seconds * 1_000 {
+        (PlaybackState::Watched, position)
     } else {
-        PlaybackState::NotStarted
+        (PlaybackState::InProgress, position)
     }
 }
 
@@ -425,47 +471,79 @@ mod tests {
         assert_eq!(PlaybackState::parse("halfway"), None);
     }
 
-    #[test]
-    fn a_position_past_the_threshold_counts_as_watched() {
-        let state = state_for_position(Millis::new(3_300_000), Some(HOUR), 0.9, false);
-        assert_eq!(state, PlaybackState::Watched);
+    const RULES: ResumeRules = ResumeRules {
+        min_percent: 5,
+        max_percent: 90,
+        min_seconds: 120,
+    };
+
+    fn after(position_ms: i64, duration: Option<Millis>) -> (PlaybackState, Millis) {
+        progress_after(Millis::new(position_ms), duration, RULES, false)
     }
 
     #[test]
-    fn a_position_below_the_threshold_stays_in_progress() {
-        let state = state_for_position(Millis::new(1_800_000), Some(HOUR), 0.9, false);
-        assert_eq!(state, PlaybackState::InProgress);
+    fn a_position_past_the_largest_share_counts_as_watched() {
+        assert_eq!(after(3_300_000, Some(HOUR)).0, PlaybackState::Watched);
+        assert_eq!(after(3_600_000, Some(HOUR)).0, PlaybackState::Watched);
     }
 
     #[test]
-    fn a_zero_position_means_not_started() {
-        let state = state_for_position(Millis::ZERO, Some(HOUR), 0.9, false);
-        assert_eq!(state, PlaybackState::NotStarted);
+    fn a_position_between_the_two_shares_is_in_progress_and_kept() {
+        assert_eq!(
+            after(1_800_000, Some(HOUR)),
+            (PlaybackState::InProgress, Millis::new(1_800_000))
+        );
     }
 
     #[test]
-    fn a_manual_mark_wins_over_the_automatic_threshold() {
-        let state = state_for_position(Millis::ZERO, Some(HOUR), 0.9, true);
-        assert_eq!(state, PlaybackState::Watched);
+    fn a_position_below_the_smallest_share_starts_again_from_the_beginning() {
+        // Five percent of an hour is three minutes.
+        assert_eq!(after(170_000, Some(HOUR)), (PlaybackState::NotStarted, Millis::ZERO));
+        assert_eq!(after(190_000, Some(HOUR)).0, PlaybackState::InProgress);
+        assert_eq!(after(0, Some(HOUR)), (PlaybackState::NotStarted, Millis::ZERO));
+    }
+
+    #[test]
+    fn a_work_too_short_to_come_back_to_is_watched_once_past_the_smallest_share() {
+        let clip = Some(Millis::new(100_000));
+        assert_eq!(after(30_000, clip).0, PlaybackState::Watched);
+        assert_eq!(after(2_000, clip), (PlaybackState::NotStarted, Millis::ZERO));
+        let longer = Some(Millis::new(121_000));
+        assert_eq!(after(30_000, longer).0, PlaybackState::InProgress);
+    }
+
+    #[test]
+    fn a_manual_mark_wins_over_every_rule() {
+        let marked = progress_after(Millis::ZERO, Some(HOUR), RULES, true);
+        assert_eq!(marked.0, PlaybackState::Watched);
     }
 
     #[test]
     fn an_unknown_duration_still_distinguishes_started_from_untouched() {
-        assert_eq!(
-            state_for_position(Millis::new(1000), None, 0.9, false),
-            PlaybackState::InProgress
-        );
-        assert_eq!(
-            state_for_position(Millis::ZERO, None, 0.9, false),
-            PlaybackState::NotStarted
-        );
+        assert_eq!(after(1000, None).0, PlaybackState::InProgress);
+        assert_eq!(after(0, None).0, PlaybackState::NotStarted);
     }
 
     #[test]
     fn a_zero_duration_is_treated_as_unknown_rather_than_dividing_by_zero() {
+        assert_eq!(after(1000, Some(Millis::ZERO)).0, PlaybackState::InProgress);
+    }
+
+    #[test]
+    fn rules_are_kept_inside_their_ranges_and_never_cross() {
+        let wild = ResumeRules {
+            min_percent: 80,
+            max_percent: 10,
+            min_seconds: -5,
+        }
+        .normalised();
         assert_eq!(
-            state_for_position(Millis::new(1000), Some(Millis::ZERO), 0.9, false),
-            PlaybackState::InProgress
+            wild,
+            ResumeRules {
+                min_percent: MOST_MIN_PERCENT,
+                max_percent: LEAST_MAX_PERCENT,
+                min_seconds: 0,
+            }
         );
     }
 
