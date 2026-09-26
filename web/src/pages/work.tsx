@@ -207,11 +207,21 @@ export function WorkPage() {
 
       {/* The saga first: the films this one follows on from and leads to
           are closer to it than anything sharing a genre. Opened on this one,
-          ringed, so it reads as a place in a run. */}
+          ringed, so it reads as a place in a run. A film in no saga has the
+          films where its characters come back, and is not among them. */}
       {work.saga && (
         <section className="section">
-          <RowHead mark={<CollectionIcon size={24} />} title={work.saga.name} />
-          <Row opensOn={work.saga.cards.findIndex((card) => card.id === work.id)}>
+          <RowHead
+            mark={<CollectionIcon size={24} />}
+            title={work.saga.name ?? t("work.same_characters")}
+          />
+          <Row
+            opensOn={
+              work.saga.name === null
+                ? undefined
+                : work.saga.cards.findIndex((card) => card.id === work.id)
+            }
+          >
             {work.saga.cards.map((card) => (
               <Card key={card.id} card={card} here={card.id === work.id} />
             ))}

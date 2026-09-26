@@ -1033,7 +1033,7 @@ mod tests {
                 .cards
                 .len(),
             1,
-            "a saga of one here is still its saga: the films sharing its characters may follow"
+            "a saga of one here is read back all the same: what it makes is the page's to say"
         );
         assert_eq!(
             database

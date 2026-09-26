@@ -193,6 +193,7 @@ const en: Dictionary = {
   "work.crew": "Crew",
   "work.media_info": "Media info",
   "work.saga": "Saga",
+  "work.same_characters": "With the same characters",
   "work.minutes": "{count} min",
   // Show longer runtimes in hours and minutes.
   "work.hours": "{hours}h",
@@ -1429,6 +1430,7 @@ const fr: Dictionary = {
   "work.crew": "Équipe",
   "work.media_info": "Informations du média",
   "work.saga": "Saga",
+  "work.same_characters": "Avec les mêmes personnages",
   "work.minutes": "{count} min",
   "work.hours": "{hours} h",
   "work.hours_minutes": "{hours} h {minutes} min",

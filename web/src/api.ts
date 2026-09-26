@@ -684,8 +684,10 @@ export interface Work {
    *  anything but a film or a series, and when nothing shares a genre. */
   alike: { genre: string; cards: Card[] } | null;
   /** The saga a film belongs to and every film of it here, the first to
-   *  come out first, this one among them. */
-  saga: { name: string; cards: Card[] } | null;
+   *  come out first, this one among them, then the films where its
+   *  characters come back. Without a name for a film in no saga, whose row
+   *  holds only those films. */
+  saga: { name: string | null; cards: Card[] } | null;
 }
 
 /** One person, and what of theirs this server holds. */
