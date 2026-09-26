@@ -18,7 +18,7 @@
  * rewrite when it comes rather than an adjustment.
  */
 
-import { useRef, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
@@ -56,6 +56,18 @@ const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
   standing: "(max-width: 700px) 40vw, (min-width: 1400px) 186px, 168px",
   lying: "(max-width: 700px) 70vw, (min-width: 1400px) 301px, 272px",
 };
+
+/**
+ * Whether cards fetch their pictures now rather than as they near the screen.
+ *
+ * A grid says so once the page it opened on has been drawn, and every picture
+ * below the screen is fetched then, in the order of the grid. Fetched only as
+ * they neared the screen instead, the pictures arrived while the page was
+ * being scrolled, and each had to be put in place in the middle of it: the
+ * stutter of a first scroll through a library that was gone the second time.
+ * Only a grid says so: a row holds a couple of dozen cards, most in view.
+ */
+export const PicturesAhead = createContext(false);
 
 export function Card({
   card,
@@ -96,6 +108,7 @@ export function Card({
   const { t } = useSettings();
   const navigate = useNavigate();
   const marks = useMarks();
+  const ahead = useContext(PicturesAhead);
   /* A lying card is nearly twice as wide as it is tall and a poster is two
      thirds as wide as it is tall: filling one with the other cuts a band out
      of the middle of the picture. So such a row is given something wide, and
@@ -164,7 +177,7 @@ export function Card({
             srcSet={poster.srcSet}
             sizes={ROOM_FOR_A_PICTURE[shape]}
             alt=""
-            loading="lazy"
+            loading={ahead ? "eager" : "lazy"}
             decoding="async"
             draggable={false}
             onError={itDidNotLoad}
