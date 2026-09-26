@@ -155,6 +155,14 @@
   height: var(--header-piece);
   padding: 0 5px;
   border-radius: var(--radius-pill);
+  box-shadow:
+    var(--shadow-card),
+    0 0 14px 2px var(--accent-glow);
+}
+
+/* The glass itself, which the bar of a grid is made of too. */
+.header-piece,
+.browse-piece {
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   /* A glow of the accent over the whole piece, even from end to end, laid on
      the glass the bar has always been. Follows the accent somebody chose. */
@@ -163,9 +171,6 @@
     linear-gradient(var(--header-glow), var(--header-glow)),
     var(--header-glass);
   backdrop-filter: blur(18px);
-  box-shadow:
-    var(--shadow-card),
-    0 0 14px 2px var(--accent-glow);
 }
 
 .brand {
@@ -860,44 +865,6 @@
 .header-menu-under {
   padding-left: 36px;
   font-size: 13px;
-}
-
-.choice {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--gap-tight);
-  font-size: 13px;
-  color: var(--text-soft);
-}
-
-.choice-label {
-  white-space: nowrap;
-}
-
-.choice select,
-.choice input[type="time"],
-.choice input[type="number"] {
-  padding: 6px 10px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-}
-
-/* A setting that is a count: narrow, and the digits lined up so that reading
-   two of them under each other compares them. */
-.choice input[type="number"] {
-  width: 6.5em;
-  font-variant-numeric: tabular-nums;
-}
-
-/* A setting switched off by the one above it. Still readable, so that what it
-   is set to can be seen before it is turned back on. */
-.choice input:disabled,
-.choice select:disabled {
-  opacity: 0.55;
 }
 
 /* --------------------------------------------------------------------------
@@ -1925,27 +1892,6 @@ input[type="radio"]:disabled {
   text-decoration: underline;
 }
 
-.toggle {
-  padding: 7px 14px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-soft);
-  font-size: 13px;
-  font-weight: 550;
-}
-
-.toggle:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.toggle-on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-}
-
 .pills {
   display: flex;
   flex-wrap: wrap;
@@ -1962,12 +1908,164 @@ input[type="radio"]:disabled {
   color: var(--text-soft);
 }
 
-.controls {
+/*
+ * How a grid is read: its order and its filters, in one piece of the glass
+ * the bar at the top is made of, and the one filter that is a yes or a no in
+ * a piece of its own beside it.
+ *
+ * Rimmed at rest, lit only under a hand: the bar's own pieces stand lit
+ * because they are the bar, and a second lit bar in the page read as two
+ * bars.
+ */
+.browse-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--gap);
   align-items: center;
+  gap: var(--gap);
   margin-bottom: var(--gap-wide);
+}
+
+.browse-piece {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  min-height: 42px;
+  padding: 4px;
+  border-radius: 21px;
+  color: var(--text);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--quick) var(--ease), background var(--quick) var(--ease);
+}
+
+.browse-piece:hover,
+.browse-piece:focus-within {
+  box-shadow:
+    var(--shadow-card),
+    0 0 14px 2px var(--accent-glow);
+}
+
+/* One thing it is read by: its name, faint, and what it is set to. Set apart
+   from the one before by a hairline, so three choices read as three. */
+.browse-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 12px;
+}
+
+.browse-field + .browse-field {
+  margin-left: 4px;
+  border-left: 1px solid var(--border);
+}
+
+/* Narrow, the piece runs onto a second line, and a hairline at the start of
+   a line separates it from nothing. */
+@media (max-width: 700px) {
+  .browse-field + .browse-field {
+    margin-left: 0;
+    border-left: none;
+  }
+}
+
+.browse-label {
+  color: var(--text-faint);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* The lists' own field, taken down to a word on the glass: no box of its
+   own inside the piece, which is the box. The hand and the open list tint it
+   the way the line under the hand in any of the bar's lists is tinted. */
+.browse-field .picker,
+.browse-field .picker:hover:not(:disabled),
+.browse-field .picker-open {
+  min-width: 0;
+  height: 32px;
+  gap: 6px;
+  padding: 0 10px;
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 550;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.browse-field .picker:hover:not(:disabled),
+.browse-field .picker-open {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* A filter that narrows the grid says so in the accent: "Any" in plain
+   words, "Action" in the colour of what is active. */
+.browse-field-on .picker,
+.browse-field-on .picker svg {
+  color: var(--accent-bright);
+}
+
+/* The two round presses inside the piece, the way round and the way out of
+   a filter: icons that take the accent under a hand, as the bar's do. */
+.browse-direction,
+.browse-clear {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.browse-direction:hover,
+.browse-clear:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-bright);
+}
+
+.browse-clear {
+  width: 26px;
+  height: 26px;
+  margin-right: 2px;
+}
+
+/* Up from A to Z, turned over to come back down. */
+.browse-direction svg {
+  transform: rotate(-90deg);
+  transition: transform var(--calm) var(--ease);
+}
+
+.browse-direction-down svg {
+  transform: rotate(90deg);
+}
+
+/* The yes-or-no filter: a piece of its own, and filled with the accent once
+   it is on, as anything switched on in this interface is. */
+.browse-alone {
+  gap: 8px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--text-soft);
+}
+
+.browse-alone:hover {
+  color: var(--text);
+}
+
+.browse-alone-on,
+.browse-alone-on:hover {
+  --header-glow: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browse-direction svg {
+    transition: none;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -3669,16 +3767,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   text-align: left;
 }
 
-.choice input[type="text"] {
-  padding: 6px 10px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-}
-
 /* --------------------------------------------------------------------------
  * Foot of the page
  * ----------------------------------------------------------------------- */
@@ -3974,7 +4062,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   /* Fingers are not mouse pointers: nothing important is reachable only by
      hovering, and the targets stay comfortable. */
   .header-link,
-  .toggle,
   .button {
     min-height: 40px;
   }
