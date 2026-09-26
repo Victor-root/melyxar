@@ -69,3 +69,12 @@ export function languageName(code: string, speaking: string): string {
   }
   return code;
 }
+
+/**
+ * The languages a library really holds, each under its own name, with "no
+ * preference" in front. Only the ones there are: a picker offering a language
+ * the collection does not carry is a picker that leads nowhere.
+ */
+export function languagesAmong(among: string[], speaking: string, none: string): [string, string][] {
+  return [["", none], ...among.map((code): [string, string] => [code, languageName(code, speaking)])];
+}
