@@ -270,6 +270,22 @@ impl ResumeRules {
     }
 }
 
+/// Where somebody is in a series or a season, read off its episodes: watched
+/// once none is left, started once one is, and nothing to say for a work
+/// holding no episode at all.
+///
+/// A series is never played itself, so no progress is ever written for it:
+/// read from its own row it would say not started for ever, however many of
+/// its episodes were watched.
+pub fn seen_through_episodes(episodes: i64, unwatched: i64) -> Option<PlaybackState> {
+    match (episodes, unwatched) {
+        (0, _) => None,
+        (_, 0) => Some(PlaybackState::Watched),
+        (all, left) if left < all => Some(PlaybackState::InProgress),
+        _ => Some(PlaybackState::NotStarted),
+    }
+}
+
 /// The state a reported position leaves a work in, and the position kept.
 ///
 /// Without a known length any progress means the work was started.
@@ -361,6 +377,14 @@ pub fn place_across(number: i32, lengths: &[SeasonLength]) -> Option<(i32, i32)>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_series_is_as_watched_as_its_episodes() {
+        assert_eq!(seen_through_episodes(0, 0), None);
+        assert_eq!(seen_through_episodes(12, 0), Some(PlaybackState::Watched));
+        assert_eq!(seen_through_episodes(12, 5), Some(PlaybackState::InProgress));
+        assert_eq!(seen_through_episodes(12, 12), Some(PlaybackState::NotStarted));
+    }
     use time::macros::datetime;
 
     fn lengths(counted: &[(i32, i32)]) -> Vec<SeasonLength> {

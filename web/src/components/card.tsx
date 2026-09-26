@@ -193,7 +193,7 @@ export function Card({
         <SeenMark
           watched={seen === "watched"}
           episodes={card.episodes}
-          unwatched={card.unwatched}
+          unwatched={marks.unwatchedOf(card)}
           onPress={(watched) => marks.setWatched(card, watched)}
         />
 
