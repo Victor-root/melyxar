@@ -405,7 +405,9 @@ function Episodes({
   return (
     <Strip along={across} picture={down}>
       {episodes.map(({ card, number, title }) => {
-        const poster = pictureSet(card.poster);
+        /* The episode's still, which its season's list draws too: a poster
+           is what an episode almost never has of its own. */
+        const still = pictureSet(card.wide.length > 0 ? card.wide : card.poster);
         const now = card.id === work.id;
         const canPlay = !now && card.source !== null;
         return (
@@ -418,10 +420,10 @@ function Episodes({
             }
           >
             <span className="player-drawer-frame" style={{ height: `${down}px` }}>
-              {poster ? (
+              {still ? (
                 <img
-                  src={poster.src}
-                  srcSet={poster.srcSet}
+                  src={still.src}
+                  srcSet={still.srcSet}
                   sizes={ROOM_FOR.card}
                   alt=""
                   loading="lazy"
