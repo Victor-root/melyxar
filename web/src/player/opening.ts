@@ -15,7 +15,7 @@
  * apart so it is never read as one.
  */
 
-import type { HitchKind, OpeningSeconds } from "../api";
+import type { HitchKind, OpeningSeconds, PageChange, PageChangeKind } from "../api";
 
 /** One picture as the browser says it reached the screen. */
 export interface Presented {
@@ -28,6 +28,12 @@ export interface Presented {
   /** Set when the film was paused or moved just before: the time since the
    *  picture before it says nothing about how smoothly it played. */
   afterABreak: boolean;
+  /** How long the browser says this picture took to decode, in milliseconds,
+   *  when it says. */
+  decodedMs: number | null;
+  /** The size the picture came out of the decoder at. */
+  across: number;
+  down: number;
 }
 
 /** Where the film's own clock stood at one moment on the page's clock. It
@@ -55,6 +61,7 @@ export type Opening = Omit<
   | "films_before_in_this_tab"
   | "page_age_ms"
   | "sound_on"
+  | "page_changes"
 >;
 
 /** How much longer than one picture a gap has to last to be a hitch. Half a
@@ -169,6 +176,8 @@ export function readTheOpening(
         pictures_lost: lost,
         busy_ms: Math.round(busyDuring(busy, before.shownAt, after.shownAt)),
         clock_ms: clockDuring(clock, before.shownAt, after.shownAt),
+        decoded_ms: after.decodedMs === null ? null : Math.round(after.decodedMs),
+        resized: after.across !== before.across || after.down !== before.down,
       });
     }
   }
@@ -181,6 +190,21 @@ const OPENING_MS = 15_000;
 /** Films this tab started before the one being followed: the first of them is
  *  the one started cold. */
 let filmsBefore = 0;
+
+/** The most changes around a film said for one opening. */
+const CHANGES_SAID = 24;
+
+/** Where each film being followed takes note of what the player changed
+ *  around it, which only the player knows it did. */
+const noting = new WeakMap<HTMLVideoElement, (what: PageChangeKind) => void>();
+
+/** Tells the opening being followed for this film, if any, that the player
+ *  changed something around it. Nothing when no opening is being followed. */
+export function markTheOpening(element: HTMLVideoElement | null, what: PageChangeKind) {
+  if (element) {
+    noting.get(element)?.(what);
+  }
+}
 
 function droppedSoFar(element: HTMLVideoElement): number {
   return element.getVideoPlaybackQuality?.().droppedVideoFrames ?? 0;
@@ -204,6 +228,12 @@ export function followTheOpening(
   const pictures: Presented[] = [];
   const busy: BusySpell[] = [];
   const clock: ClockReading[] = [];
+  const changes: { what: PageChangeKind; at: number }[] = [];
+  const note = (what: PageChangeKind) => {
+    if (changes.length < CHANGES_SAID) {
+      changes.push({ what, at: performance.now() });
+    }
+  };
   let soundOn = false;
   let reading = 0;
   let broken = false;
@@ -225,6 +255,34 @@ export function followTheOpening(
   element.addEventListener("seeking", aBreak);
   element.addEventListener("waiting", waiting);
 
+  /* What changed around the film while it opened, from the element, the
+     page and the player, each with when. */
+  noting.set(element, note);
+  const onElement: [string, PageChangeKind][] = [
+    ["waiting", "waiting"],
+    ["stalled", "stalled"],
+    ["playing", "playing"],
+    ["resize", "picture_resized"],
+  ];
+  const listeners = onElement.map(([event, what]) => {
+    const listener = () => note(what);
+    element.addEventListener(event, listener);
+    return [event, listener] as const;
+  });
+  const fullscreen = () => note("fullscreen");
+  const visibility = () => note(document.hidden ? "tab_hidden" : "tab_shown");
+  document.addEventListener("fullscreenchange", fullscreen);
+  document.addEventListener("visibilitychange", visibility);
+  let boxSeen = false;
+  const box = new ResizeObserver(() => {
+    // The first answer is the size it already had, not a change.
+    if (boxSeen) {
+      note("box_resized");
+    }
+    boxSeen = true;
+  });
+  box.observe(element);
+
   const watchingBusy = PerformanceObserver.supportedEntryTypes?.includes("longtask") ?? false;
   const busyWatcher = watchingBusy
     ? new PerformanceObserver((list) => {
@@ -245,6 +303,15 @@ export function followTheOpening(
     element.removeEventListener("pause", aBreak);
     element.removeEventListener("seeking", aBreak);
     element.removeEventListener("waiting", waiting);
+    for (const [event, listener] of listeners) {
+      element.removeEventListener(event, listener);
+    }
+    document.removeEventListener("fullscreenchange", fullscreen);
+    document.removeEventListener("visibilitychange", visibility);
+    box.disconnect();
+    if (noting.get(element) === note) {
+      noting.delete(element);
+    }
     if (said || pictures.length < 2) {
       return;
     }
@@ -261,6 +328,9 @@ export function followTheOpening(
       films_before_in_this_tab: filmsBeforeThis,
       page_age_ms: pageAge,
       sound_on: soundOn,
+      page_changes: changes.map(
+        (change): PageChange => ({ what: change.what, at_ms: Math.round(change.at - from) }),
+      ),
     });
   };
 
@@ -278,6 +348,10 @@ export function followTheOpening(
       presented: picture.presentedFrames,
       media: picture.mediaTime,
       afterABreak: broken,
+      decodedMs:
+        picture.processingDuration === undefined ? null : picture.processingDuration * 1000,
+      across: picture.width,
+      down: picture.height,
     });
     broken = false;
     if (shownAt - pictures[0].shownAt >= OPENING_MS) {

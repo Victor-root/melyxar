@@ -9,6 +9,9 @@ function smooth(count: number, rate: number, from = 0): Presented[] {
     presented: index + 1,
     media: (index * picture) / 1000,
     afterABreak: false,
+    decodedMs: null,
+    across: 1920,
+    down: 1080,
   }));
 }
 
@@ -50,8 +53,23 @@ describe("readTheOpening", () => {
         pictures_lost: 0,
         busy_ms: 80,
         clock_ms: 50,
+        decoded_ms: null,
+        resized: false,
       },
     ]);
+  });
+
+  it("says how long the picture after a hitch took to decode, and whether it came out resized", () => {
+    const pictures = smooth(100, 24);
+    for (let index = 50; index < pictures.length; index += 1) {
+      pictures[index].shownAt += 500;
+      pictures[index].across = 1280;
+      pictures[index].down = 720;
+    }
+    pictures[50].decodedMs = 412.6;
+    const [hitch] = readTheOpening(pictures, [], []).first_hitches;
+    expect(hitch.decoded_ms).toBe(413);
+    expect(hitch.resized).toBe(true);
   });
 
   it("counts pictures of the film that were never shown", () => {
