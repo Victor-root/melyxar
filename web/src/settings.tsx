@@ -22,7 +22,7 @@ import { initialLanguage, rememberLanguage, safeRead, safeWrite, translate } fro
 import type { Language } from "./i18n";
 import { colourTheWindow, markTheApp } from "./installing";
 import { markTheTab, vividOf } from "./mark";
-import { THE_USUAL_STEP } from "./player/steps";
+import { THE_USUAL_STEP_BACK, THE_USUAL_STEP_ON } from "./player/steps";
 
 export type ThemeChoice = "dark" | "light" | "system";
 
@@ -134,9 +134,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     () => safeRead(STORED_HEADER_HIDES) !== "no",
   );
   const [stepBack, setStepBackState] = useState(() =>
-    initialNumber(STORED_STEP_BACK, THE_USUAL_STEP),
+    initialNumber(STORED_STEP_BACK, THE_USUAL_STEP_BACK),
   );
-  const [stepOn, setStepOnState] = useState(() => initialNumber(STORED_STEP_ON, THE_USUAL_STEP));
+  const [stepOn, setStepOnState] = useState(() => initialNumber(STORED_STEP_ON, THE_USUAL_STEP_ON));
 
   // The theme is put on the document rather than passed down, so a stylesheet
   // can answer it without a single component knowing a colour.
