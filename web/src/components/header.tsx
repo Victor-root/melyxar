@@ -45,6 +45,7 @@ import { useAttention } from "../attention";
 import { sayPoint } from "../pages/admin/activity";
 import { KINDS, nameOfKind } from "../libraries";
 import { useBranding } from "../player/logo";
+import { FOR_ADMINISTRATORS } from "../buttons";
 import { useSettings } from "../settings";
 import { isSectioned } from "./sectioned";
 import { Face } from "./face";
@@ -131,7 +132,7 @@ export function Header({
   /** The box the page scrolls in, which is what the bar steps aside for. */
   scrolling: React.RefObject<HTMLDivElement | null>;
 }) {
-  const { t, headerHides, headerButtons, buttonsInTheMenu } = useSettings();
+  const { t, headerHides, headerButtons, buttonsInTheBar } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
   const [parameters] = useSearchParams();
@@ -381,7 +382,45 @@ export function Header({
   };
 
   const administrator = account?.is_administrator === true;
-  const inTheMenu = (button: HeaderButton) => buttonsInTheMenu.includes(button);
+  const inTheMenu = (button: HeaderButton) => !buttonsInTheBar.includes(button);
+  /* What only an administrator has any use for is nowhere for anybody else,
+     and a scan nowhere on a server with nothing to scan. */
+  const offered = headerButtons.filter(
+    (button) =>
+      (administrator || !FOR_ADMINISTRATORS.includes(button)) &&
+      (button !== "scan" || libraries.length > 0),
+  );
+
+  /* The press that starts a scan, on the bar or in the menu. Nothing to
+     start while something is already running, and the bar is saying so
+     meanwhile. */
+  const scanEntry = (inMenu: boolean) => {
+    if (jobs.length > 0) {
+      return null;
+    }
+    if (scan.refused && inMenu) {
+      return (
+        <span key="scan" className="header-menu-line header-menu-refused" role="alert">
+          {t(refusalKey(scan.refused))}
+        </span>
+      );
+    }
+    const said = scan.refused ? t(refusalKey(scan.refused)) : t("home.scan");
+    return (
+      <button
+        key="scan"
+        type="button"
+        className={inMenu ? "header-menu-line" : "header-icon"}
+        onClick={scan.start}
+        disabled={scan.starting}
+        title={inMenu ? undefined : said}
+        aria-label={inMenu ? undefined : said}
+      >
+        <RefreshIcon size={inMenu ? 16 : 22} />
+        {inMenu && said}
+      </button>
+    );
+  };
 
   return (
     <header className={`header${shown ? "" : " header-away"}`}>
@@ -443,7 +482,7 @@ export function Header({
               instead. A menu of five entries opened by one press is five
               presses for every one of them, and the name it used to hang
               under said nothing anybody needed to read twice. */}
-          {headerButtons.map((button) => {
+          {offered.map((button) => {
             if (button === "search") {
               /* Moved into the menu, the field still comes out here once
                  asked for, and goes back into the menu once let go. */
@@ -518,6 +557,9 @@ export function Header({
             if (button === "notifications") {
               return <Bell key={button} administrator={administrator} />;
             }
+            if (button === "scan") {
+              return scanEntry(false);
+            }
             return <Place key={button} place={button} inTheMenu={false} />;
           })}
 
@@ -566,18 +608,13 @@ export function Header({
             )}
 
           {/*
-            * Who is signed in, and under their name everything that is
-            * theirs to do rather than somewhere to go.
+            * Who is signed in, and under their name whatever this account
+            * chose to keep off the bar, then the way out.
             *
-            * The bar keeps what is looked at from any screen: the search,
-            * what is waiting, what was marked. The rest is opened when it
-            * is wanted, which is what stops a bar of eight icons reading as
-            * eight things somebody is expected to know.
-            *
-            * What the server is doing is under here too, and so is the
-            * press that starts it: it belongs to whoever runs the server,
-            * and their name is the one place on the bar that is already
-            * about them.
+            * By default the bar keeps what is looked at from any screen: the
+            * search, what was marked, what is waiting. The rest is opened
+            * when it is wanted, which is what stops a bar of eight icons
+            * reading as eight things somebody is expected to know.
             */}
           <Dropdown
             className="header-account"
@@ -593,10 +630,9 @@ export function Header({
               </>
             }
           >
-            {/* What was moved off the bar comes first, in the bar's order:
-                it is still what is looked at from any screen, one press
-                further. */}
-            {headerButtons.filter(inTheMenu).map((button) =>
+            {/* What is not on the bar, in the same order as the bar, and
+                leaving last whatever was chosen. */}
+            {offered.filter(inTheMenu).map((button) =>
               button === "search" ? (
                 <button key={button} type="button" className="header-menu-line" onClick={openSearch}>
                   <SearchIcon size={16} />
@@ -604,56 +640,12 @@ export function Header({
                 </button>
               ) : button === "notifications" ? (
                 <BellLine key={button} administrator={administrator} />
+              ) : button === "scan" ? (
+                scanEntry(true)
               ) : (
                 <Place key={button} place={button} inTheMenu />
               ),
             )}
-
-            {administrator && (
-              <>
-                {/* Nothing to start while something is already running, and
-                    the bar is saying so meanwhile. */}
-                {jobs.length === 0 &&
-                  (scan.refused ? (
-                    <span className="header-menu-line header-menu-refused" role="alert">
-                      {t(refusalKey(scan.refused))}
-                    </span>
-                  ) : (
-                    libraries.length > 0 && (
-                      <button
-                        type="button"
-                        className="header-menu-line"
-                        onClick={scan.start}
-                        disabled={scan.starting}
-                      >
-                        <RefreshIcon size={16} />
-                        {t("home.scan")}
-                      </button>
-                    )
-                  ))}
-                <NavLink to="/admin" className="header-menu-line">
-                  <SlidersIcon size={16} />
-                  {t("nav.administration")}
-                </NavLink>
-              </>
-            )}
-
-            {/* No engine behind this one yet either. Greyed, and when it is
-                coming is what the mouse is told rather than a second run of
-                words down the side of the list. */}
-            <span
-              className="header-menu-line header-menu-later"
-              aria-disabled="true"
-              title={t("nav.later")}
-            >
-              <ScreenCastIcon size={16} />
-              {t("nav.cast")}
-            </span>
-
-            <NavLink to="/settings" className="header-menu-line">
-              <GearIcon size={16} />
-              {t("nav.settings")}
-            </NavLink>
 
             <button type="button" className="header-menu-line" onClick={() => void leave()}>
               <LeaveIcon size={16} />
@@ -983,22 +975,69 @@ function Bell({ administrator }: { administrator: boolean }) {
   );
 }
 
-/** One of the two lists of what was marked, as an icon of the bar or as a
- *  line of the account's menu. */
-function Place({ place, inTheMenu }: { place: "favourites" | "watch_later"; inTheMenu: boolean }) {
+/** Where a button of the bar leads, and what it is called. */
+const PLACES = {
+  favourites: { to: "/favourites", name: "nav.favourites" },
+  watch_later: { to: "/watch-later", name: "nav.watch_later" },
+  administration: { to: "/admin", name: "nav.administration" },
+  settings: { to: "/settings", name: "nav.settings" },
+  cast: { to: null, name: "nav.cast" },
+} as const;
+
+function PlaceIcon({ place, size }: { place: keyof typeof PLACES; size: number }) {
+  switch (place) {
+    case "favourites":
+      return <HeartIcon size={size} filled={false} />;
+    case "watch_later":
+      return <ClockIcon size={size} />;
+    case "administration":
+      return <SlidersIcon size={size} />;
+    case "settings":
+      return <GearIcon size={size} />;
+    case "cast":
+      return <ScreenCastIcon size={size} />;
+  }
+}
+
+/**
+ * A button of the bar that leads somewhere, as an icon of the bar or as a
+ * line of the account's menu.
+ *
+ * Casting has no engine behind it yet: greyed, and when it is coming is what
+ * the mouse is told rather than a second run of words.
+ */
+function Place({ place, inTheMenu }: { place: keyof typeof PLACES; inTheMenu: boolean }) {
   const { t } = useSettings();
-  const favourites = place === "favourites";
-  const name = t(favourites ? "nav.favourites" : "nav.watch_later");
-  const size = inTheMenu ? 16 : 24;
+  const { to, name } = PLACES[place];
+  const said = t(name);
+  const icon = <PlaceIcon place={place} size={inTheMenu ? 16 : 24} />;
+  if (to === null) {
+    return inTheMenu ? (
+      <span className="header-menu-line header-menu-later" aria-disabled="true" title={t("nav.later")}>
+        {icon}
+        {said}
+      </span>
+    ) : (
+      <button
+        type="button"
+        className="header-icon"
+        disabled
+        title={t("nav.later")}
+        aria-label={`${said} (${t("nav.later")})`}
+      >
+        {icon}
+      </button>
+    );
+  }
   return (
     <NavLink
-      to={favourites ? "/favourites" : "/watch-later"}
+      to={to}
       className={inTheMenu ? "header-menu-line" : "header-icon"}
-      title={inTheMenu ? undefined : name}
-      aria-label={inTheMenu ? undefined : name}
+      title={inTheMenu ? undefined : said}
+      aria-label={inTheMenu ? undefined : said}
     >
-      {favourites ? <HeartIcon size={size} filled={false} /> : <ClockIcon size={size} />}
-      {inTheMenu && name}
+      {icon}
+      {inTheMenu && said}
     </NavLink>
   );
 }
