@@ -190,23 +190,20 @@
   padding-top: var(--gap);
 }
 
-/* The card a search led to, pulsing softly twice in the accent once it has
+/* The card a search led to, fading out and back in twice once it has
    scrolled into view, then back as it was. */
 .panel.found {
-  animation: found 1.8s var(--ease) 0.35s 1;
+  animation: found 1.6s ease-in-out 0.35s 1;
 }
 
 @keyframes found {
   0%,
   50%,
   100% {
-    box-shadow: var(--shadow-card);
+    opacity: 1;
   }
   25%,
   75% {
-    box-shadow:
-      var(--shadow-card),
-      0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent),
-      0 0 32px color-mix(in srgb, var(--accent) 35%, transparent);
+    opacity: 0.15;
   }
 }
