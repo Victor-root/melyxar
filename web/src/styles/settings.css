@@ -186,6 +186,10 @@
 .name-field .field-line {
   flex: 1;
   min-width: 0;
+}
+
+/* Room at the end for the count below, only where there is one. */
+.name-field:has(.name-left) .field-line {
   padding-right: 92px;
 }
 
