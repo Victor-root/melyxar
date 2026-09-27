@@ -97,6 +97,76 @@ pub(crate) fn an_ordinary_account(id: melyxar_core::id::UserId) -> melyxar_core:
     }
 }
 
+/// A server the way a test needs one: its data under `directory`, and one
+/// library called "Films" holding `kind` over these folders, declared the way
+/// the configuration file declares it.
+#[cfg(test)]
+pub(crate) async fn a_test_server(
+    directory: &std::path::Path,
+    kind: &str,
+    roots: Vec<(&str, std::path::PathBuf)>,
+) -> (
+    melyxar_config::Config,
+    melyxar_database::Database,
+    melyxar_core::library::Library,
+) {
+    use melyxar_config::{Config, Directories, LibraryConfig, RootConfig};
+
+    let config = Config {
+        directories: Directories {
+            data: directory.join("data"),
+            cache: directory.join("cache"),
+            transcodes: directory.join("cache/transcodes"),
+            ..Default::default()
+        },
+        libraries: vec![LibraryConfig {
+            name: "Films".into(),
+            kind: kind.into(),
+            metadata_language: "fr".into(),
+            roots: roots
+                .into_iter()
+                .map(|(label, path)| RootConfig {
+                    label: label.to_string(),
+                    path,
+                })
+                .collect(),
+        }],
+        ..Config::default()
+    };
+    startup::prepare_directories(&config).expect("directories prepared");
+
+    let database = melyxar_database::Database::open_in_memory()
+        .await
+        .expect("database opens");
+    startup::reconcile_libraries(&database, &config)
+        .await
+        .expect("libraries reconciled");
+    let library = database
+        .library_by_name("Films")
+        .await
+        .expect("read")
+        .expect("the library was declared");
+    (config, database, library)
+}
+
+/// Somebody to answer for, since what a page shows depends on who is looking
+/// at it.
+///
+/// The one account rather than a new one each time: a server has one until
+/// signing in arrives, and asking twice for a second would be asking for
+/// somebody who cannot exist.
+#[cfg(test)]
+pub(crate) async fn a_viewer(state: &AppState) -> melyxar_core::user::User {
+    let database = state.database();
+    if let Some((already, _)) = database.user_by_name("Viewer").await.expect("read") {
+        return already;
+    }
+    database
+        .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+        .await
+        .expect("account created")
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error(transparent)]

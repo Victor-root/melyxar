@@ -1434,8 +1434,6 @@ async fn analyse_one(database: &Database, analyser: &Path, file: &PendingFile) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use melyxar_config::{Config, Directories, LibraryConfig, RootConfig};
-    use melyxar_database::Database;
     use std::process::Command;
 
     /// A state whose only library points at the given folders.
@@ -1470,30 +1468,7 @@ mod tests {
         read_companion_files: bool,
         kind: &str,
     ) -> (AppState, Library) {
-        let config = Config {
-            directories: Directories {
-                data: directory.join("data"),
-                cache: directory.join("cache"),
-                transcodes: directory.join("cache/transcodes"),
-                ..Default::default()
-            },
-            libraries: vec![LibraryConfig {
-                name: "Films".into(),
-                kind: kind.into(),
-                metadata_language: "fr".into(),
-                roots: roots
-                    .into_iter()
-                    .map(|(label, path)| RootConfig {
-                        label: label.to_string(),
-                        path,
-                    })
-                    .collect(),
-            }],
-            ..Config::default()
-        };
-        crate::startup::prepare_directories(&config).expect("directories prepared");
-
-        let database = Database::open_in_memory().await.expect("database opens");
+        let (config, database, library) = crate::a_test_server(directory, kind, roots).await;
         // Reading what sits next to a film is a setting of the server, written
         // the way a screen writes it.
         let work = database.library_work().await.expect("read");
@@ -1504,14 +1479,6 @@ mod tests {
             })
             .await
             .expect("the settings are written");
-        crate::startup::reconcile_libraries(&database, &config)
-            .await
-            .expect("libraries reconciled");
-        let library = database
-            .library_by_name("Films")
-            .await
-            .expect("read")
-            .expect("the library was declared");
 
         let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
         (
@@ -1543,23 +1510,6 @@ mod tests {
             .await
             .expect("read")
             .expect("the library is still there")
-    }
-
-    /// Somebody to answer for, since what a page shows depends on who is
-    /// looking at it.
-    ///
-    /// The one account rather than a new one each time: a server has one until
-    /// signing in arrives, and asking twice for a second would be asking for
-    /// somebody who cannot exist.
-    async fn a_viewer(state: &AppState) -> melyxar_core::user::User {
-        let database = state.database();
-        if let Some((already, _)) = database.user_by_name("Viewer").await.expect("read") {
-            return already;
-        }
-        database
-            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
-            .await
-            .expect("account created")
     }
 
     /// Runs a scan the way the server does, and gives back what it did.
@@ -2044,7 +1994,7 @@ mod tests {
         assert_eq!(scan(&state, &library).await.added, 0, "it stays out");
         assert!(film("Quiet Harbour").await.is_none());
 
-        let viewer = a_viewer(&state).await;
+        let viewer = crate::a_viewer(&state).await;
         let amber = film("Amber Field").await.expect("scanned");
         assert!(
             crate::deletion::delete(&state, &viewer, &[amber], true)
@@ -2138,7 +2088,7 @@ mod tests {
                 limit: 50,
                 ..Default::default()
             },
-            &a_viewer(&state).await,
+            &crate::a_viewer(&state).await,
         )
         .await
         .expect("read");
@@ -2151,7 +2101,7 @@ mod tests {
             "the library opens on what is at its root"
         );
         assert_eq!(
-            crate::reach::counted_for(&state, &a_viewer(&state).await, Some(library.id))
+            crate::reach::counted_for(&state, &crate::a_viewer(&state).await, Some(library.id))
                 .await
                 .expect("counted")
                 .awaiting_identification,
@@ -2212,7 +2162,7 @@ mod tests {
             .await
             .expect("episode written")
             .id;
-        let viewer = a_viewer(&state).await;
+        let viewer = crate::a_viewer(&state).await;
         database
             .record_playback_progress(
                 viewer.id,
@@ -2416,7 +2366,7 @@ mod tests {
         let works = arrangement(&state, &library).await;
         let series = of_kind(&works, WorkKind::Series)[0].clone();
 
-        let page = crate::detail::work_detail(&state, &a_viewer(&state).await, series.id)
+        let page = crate::detail::work_detail(&state, &crate::a_viewer(&state).await, series.id)
             .await
             .expect("read")
             .expect("the series has a page");
@@ -2433,7 +2383,7 @@ mod tests {
         );
 
         let first_season = page.children[0].card.id;
-        let season_page = crate::detail::work_detail(&state, &a_viewer(&state).await, first_season)
+        let season_page = crate::detail::work_detail(&state, &crate::a_viewer(&state).await, first_season)
             .await
             .expect("read")
             .expect("the season has a page");
@@ -2467,7 +2417,7 @@ mod tests {
         );
 
         let episode = season_page.children[0].card.id;
-        let episode_page = crate::detail::work_detail(&state, &a_viewer(&state).await, episode)
+        let episode_page = crate::detail::work_detail(&state, &crate::a_viewer(&state).await, episode)
             .await
             .expect("read")
             .expect("the episode has a page");
@@ -2522,7 +2472,7 @@ mod tests {
         let (state, library) =
             series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
         scan(&state, &library).await;
-        let viewer = a_viewer(&state).await;
+        let viewer = crate::a_viewer(&state).await;
         let works = arrangement(&state, &library).await;
         let series = of_kind(&works, WorkKind::Series)[0].clone();
 

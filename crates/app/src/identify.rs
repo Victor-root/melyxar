@@ -1498,9 +1498,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use melyxar_config::{Config, Directories, LibraryConfig, RootConfig};
     use melyxar_core::work::{IdentificationState, WorkKind};
-    use melyxar_database::Database;
     use melyxar_metadata::provider::{Collection, Credit, Trailer};
     use std::sync::Mutex;
 
@@ -2076,35 +2074,12 @@ mod tests {
         kind: WorkKind,
     ) -> (tempfile::TempDir, AppState, Library, Work) {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let config = Config {
-            directories: Directories {
-                data: directory.path().join("data"),
-                cache: directory.path().join("cache"),
-                transcodes: directory.path().join("cache/transcodes"),
-                ..Default::default()
-            },
-            libraries: vec![LibraryConfig {
-                name: "Films".into(),
-                kind: holds.into(),
-                metadata_language: "fr".into(),
-                roots: vec![RootConfig {
-                    label: "disk-one".into(),
-                    path: directory.path().join("films"),
-                }],
-            }],
-            ..Config::default()
-        };
-        crate::startup::prepare_directories(&config).expect("directories prepared");
-
-        let database = Database::open_in_memory().await.expect("database opens");
-        crate::startup::reconcile_libraries(&database, &config)
-            .await
-            .expect("libraries reconciled");
-        let library = database
-            .library_by_name("Films")
-            .await
-            .expect("read")
-            .expect("declared");
+        let (config, database, library) = crate::a_test_server(
+            directory.path(),
+            holds,
+            vec![("disk-one", directory.path().join("films"))],
+        )
+        .await;
         let work = database
             .create_work(library.id, kind, title, &naming::sort_title(title), year)
             .await
@@ -2429,23 +2404,6 @@ mod tests {
             .await
             .expect("read");
         assert_eq!(seasons.len(), 2, "both seasons are still there");
-    }
-
-    /// Somebody to answer for, since what a page shows depends on who is
-    /// looking at it.
-    ///
-    /// The one account rather than a new one each time: a server has one until
-    /// signing in arrives, and asking twice for a second would be asking for
-    /// somebody who cannot exist.
-    async fn a_viewer(state: &AppState) -> melyxar_core::user::User {
-        let database = state.database();
-        if let Some((already, _)) = database.user_by_name("Viewer").await.expect("read") {
-            return already;
-        }
-        database
-            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
-            .await
-            .expect("account created")
     }
 
     async fn run(state: &AppState, provider: &Arc<StandIn>, library: &Library) -> IdentifyReport {
@@ -3947,7 +3905,7 @@ mod tests {
 
         run(&state, &provider, &library).await;
 
-        let detail = crate::detail::work_detail(&state, &a_viewer(&state).await, work.id)
+        let detail = crate::detail::work_detail(&state, &crate::a_viewer(&state).await, work.id)
             .await
             .expect("read")
             .expect("present");
@@ -4152,7 +4110,7 @@ mod tests {
 
         assert_eq!(run(&state, &provider, &library).await.identified, 1);
 
-        let detail = crate::detail::work_detail(&state, &a_viewer(&state).await, work.id)
+        let detail = crate::detail::work_detail(&state, &crate::a_viewer(&state).await, work.id)
             .await
             .expect("read")
             .expect("present");
@@ -4225,7 +4183,7 @@ mod tests {
         ));
         assert_eq!(run(&state, &silent, &library).await.identified, 1);
         assert!(
-            crate::detail::work_detail(&state, &a_viewer(&state).await, work.id)
+            crate::detail::work_detail(&state, &crate::a_viewer(&state).await, work.id)
                 .await
                 .expect("read")
                 .expect("present")
@@ -4242,7 +4200,7 @@ mod tests {
         assert_eq!(report.identified, 0);
         assert_eq!(report.synopses_filled, 1);
 
-        let detail = crate::detail::work_detail(&state, &a_viewer(&state).await, work.id)
+        let detail = crate::detail::work_detail(&state, &crate::a_viewer(&state).await, work.id)
             .await
             .expect("read")
             .expect("present");
