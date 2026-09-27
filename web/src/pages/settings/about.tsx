@@ -12,6 +12,7 @@ import { InfoIcon, MelyxarMark, ServerIcon, ShieldIcon, TagIcon } from "../../ic
 import { useSettings } from "../../settings";
 
 const REPOSITORY = "https://github.com/Victor-root/melyxar";
+const ISSUES = `${REPOSITORY}/issues`;
 const AUTHOR = "https://github.com/Victor-root";
 const LICENCE = "https://www.gnu.org/licenses/agpl-3.0.html";
 const PROVIDER = "https://www.themoviedb.org";
@@ -47,6 +48,11 @@ export function MyAbout() {
             {t("about.source")}
           </a>
         </div>
+        <Setting label={t("about.report")} why={t("about.report_why")}>
+          <a className="button button-small" href={ISSUES} target="_blank" rel="noopener noreferrer">
+            {t("about.report_open")}
+          </a>
+        </Setting>
       </Panel>
 
       <Panel icon={ServerIcon} title={t("about.server")}>
