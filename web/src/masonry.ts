@@ -4,8 +4,9 @@
  *
  * The page is a grid of fine rows, and each card spans as many of them as its
  * own height needs, measured whenever it changes. Where each goes is worked
- * out here rather than left to the grid: in the order the page gives them,
- * each under the column that ends highest, which is what fills the hole a
+ * out here rather than left to the grid: tallest first, so the longest cards
+ * stand side by side from left to right, and each under the column that ends
+ * highest, which is what fills the hole a
  * short card leaves under it with the next one. Columns ending about level
  * count as level, and then the leftmost wins, so the page reads left to right
  * rather than dropping a card in the middle for the sake of a few pixels.
@@ -42,26 +43,58 @@ export interface ToPlace {
 }
 
 /**
- * Where each card goes, in the order given.
+ * Where each card goes, answered in the order the cards were given.
  *
- * An ordinary card goes under the column ending highest, or under the
- * leftmost of those ending within `level` rows of it. A wide one starts below
- * everything placed so far, and everything after it starts below it.
+ * Between two wide cards, the ordinary ones are laid tallest first when there
+ * is more than one column, those of
+ * the same height in the order given; a wide card keeps its place, since it
+ * says where one part of the page ends and the next begins. Each ordinary
+ * card goes under the column ending highest, or under the leftmost of those
+ * ending within `level` rows of it. A wide one starts below everything placed
+ * so far, and everything after it starts below it.
  */
 export function placed(cards: ToPlace[], columns: number, level: number): Placed[] {
   const ends: number[] = new Array(Math.max(1, columns)).fill(0);
-  return cards.map((card) => {
+  const where: Placed[] = new Array(cards.length);
+  // In a single column nothing stands side by side, and the page keeps the
+  // order it was written in.
+  const order = ends.length === 1 ? cards.map((_, index) => index) : tallestFirst(cards);
+  for (const index of order) {
+    const card = cards[index];
     if (card.wide || ends.length === 1) {
       const row = Math.max(...ends);
       ends.fill(row + card.rows);
-      return { column: 0, row };
+      where[index] = { column: 0, row };
+      continue;
     }
     const highest = Math.min(...ends);
     const column = ends.findIndex((end) => end <= highest + level);
     const row = ends[column];
     ends[column] = row + card.rows;
-    return { column, row };
+    where[index] = { column, row };
+  }
+  return where;
+}
+
+/** The order cards are laid in: each run of ordinary cards tallest first,
+ *  every wide card where it stands. */
+function tallestFirst(cards: ToPlace[]): number[] {
+  const order: number[] = [];
+  let run: number[] = [];
+  const close = () => {
+    order.push(...run.sort((one, two) => cards[two].rows - cards[one].rows));
+    run = [];
+  };
+  cards.forEach((card, index) => {
+    if (card.wide) {
+      close();
+      order.push(index);
+    } else {
+      run.push(index);
+    }
   });
+  close();
+  return order;
 }
 
 /** Every card of a page: what stands on the page itself, and the cards of a
