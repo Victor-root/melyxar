@@ -165,9 +165,13 @@ pub struct LimitsConfig {
     pub concurrent_image_jobs: usize,
     /// Concurrent calls to a metadata provider.
     pub concurrent_metadata_requests: usize,
-    /// Playback sessions that are actually transcoding. Remuxing costs almost
-    /// nothing and is not counted here.
-    pub max_transcoding_sessions: usize,
+    /// Playback sessions that are actually transcoding, when the owner wants
+    /// a ceiling. None by default: how many a machine can carry depends on its
+    /// card and on what is being watched, and a guess written here turned
+    /// away the third viewer of a machine that could have served ten.
+    /// Remuxing costs almost nothing and is not counted here.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_transcoding_sessions: Option<usize>,
     /// Size the transcode directory may reach, in megabytes.
     pub transcode_quota_megabytes: u64,
 }
@@ -178,7 +182,7 @@ impl Default for LimitsConfig {
             concurrent_probes: 2,
             concurrent_image_jobs: 2,
             concurrent_metadata_requests: 4,
-            max_transcoding_sessions: 2,
+            max_transcoding_sessions: None,
             transcode_quota_megabytes: 8192,
         }
     }
@@ -349,7 +353,7 @@ impl Config {
                 "concurrent_probes must be at least one, otherwise no file is ever analysed".into(),
             ));
         }
-        if self.limits.max_transcoding_sessions == 0 {
+        if self.limits.max_transcoding_sessions == Some(0) {
             return Err(ConfigError::Invalid(
                 "max_transcoding_sessions must be at least one, otherwise nothing can be transcoded".into(),
             ));
@@ -456,7 +460,10 @@ mod tests {
 
         assert_eq!(config.logging.level, "debug");
         assert_eq!(config.limits.concurrent_probes, 4);
-        assert_eq!(config.limits.max_transcoding_sessions, 2);
+        assert_eq!(
+            config.limits.max_transcoding_sessions, None,
+            "no ceiling unless the owner writes one"
+        );
     }
 
     #[test]

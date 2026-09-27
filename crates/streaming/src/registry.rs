@@ -34,14 +34,14 @@ pub struct Sessions {
     live: Mutex<HashMap<SessionId, Arc<Session>>>,
     folder: PathBuf,
     tools: ToolPaths,
-    /// How many sessions may convert at once. Copying is not counted: it costs
-    /// almost nothing, and refusing it would turn a cheap request away for the
-    /// benefit of an expensive one.
-    most_at_once: usize,
+    /// How many sessions may convert at once, when the owner set a ceiling.
+    /// Copying is not counted: it costs almost nothing, and refusing it would
+    /// turn a cheap request away for the benefit of an expensive one.
+    most_at_once: Option<usize>,
 }
 
 impl Sessions {
-    pub fn new(folder: PathBuf, tools: ToolPaths, most_at_once: usize) -> Self {
+    pub fn new(folder: PathBuf, tools: ToolPaths, most_at_once: Option<usize>) -> Self {
         Self {
             live: Mutex::new(HashMap::new()),
             folder,
@@ -50,7 +50,8 @@ impl Sessions {
         }
     }
 
-    /// Opens a session, unless the machine is already doing as much as it can.
+    /// Opens a session, unless the machine is already doing as much as its
+    /// owner allowed.
     ///
     /// `expensive` is what the playback decision said: a stream being rebuilt
     /// counts against the limit, one being copied does not.
@@ -62,7 +63,7 @@ impl Sessions {
     ) -> Result<Arc<Session>> {
         let mut live = self.live.lock().await;
 
-        if expensive && live.len() >= self.most_at_once {
+        if expensive && self.most_at_once.is_some_and(|most| live.len() >= most) {
             // Told plainly rather than accepted and served badly: a machine
             // converting five films at once finishes none of them in time.
             return Err(StreamingError::TooManyAtOnce);
@@ -220,7 +221,7 @@ mod tests {
         // being watched, so being signed in cannot be the same thing as being
         // signed in as whoever opened it.
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().to_path_buf(), 2);
+        let sessions = sessions(directory.path().to_path_buf(), Some(2));
         let mine = sessions
             .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
             .await
@@ -246,7 +247,7 @@ mod tests {
         assert!(sessions.get(mine.id, a_watcher()).await.is_err());
     }
 
-    fn sessions(folder: PathBuf, most_at_once: usize) -> Sessions {
+    fn sessions(folder: PathBuf, most_at_once: Option<usize>) -> Sessions {
         Sessions::new(
             folder,
             ToolPaths::discover(None, None).expect("the tools are installed here"),
@@ -257,7 +258,7 @@ mod tests {
     #[tokio::test]
     async fn a_session_is_found_again_by_its_name_and_forgotten_once_closed() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), 2);
+        let sessions = sessions(directory.path().join("sessions"), Some(2));
 
         let session = sessions
             .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
@@ -280,7 +281,7 @@ mod tests {
     #[tokio::test]
     async fn a_machine_already_converting_all_it_can_says_so_rather_than_accepting() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), 1);
+        let sessions = sessions(directory.path().join("sessions"), Some(1));
 
         sessions
             .open(a_watcher(), recipe(directory.path().join("one.mkv")), true)
@@ -298,11 +299,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn with_no_ceiling_every_conversion_is_welcome() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let sessions = sessions(directory.path().join("sessions"), None);
+
+        for name in ["one.mkv", "two.mkv", "three.mkv"] {
+            sessions
+                .open(a_watcher(), recipe(directory.path().join(name)), true)
+                .await
+                .expect("nobody set a ceiling");
+        }
+        assert_eq!(sessions.live_count().await, 3);
+    }
+
+    #[tokio::test]
     async fn a_film_being_copied_is_never_turned_away() {
         // Copying costs almost nothing, so counting it against the limit would
         // refuse a cheap request for the benefit of an expensive one.
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), 1);
+        let sessions = sessions(directory.path().join("sessions"), Some(1));
 
         sessions
             .open(a_watcher(), recipe(directory.path().join("one.mkv")), true)
@@ -318,7 +333,7 @@ mod tests {
     #[tokio::test]
     async fn a_session_nobody_is_watching_any_more_is_swept_away() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), 4);
+        let sessions = sessions(directory.path().join("sessions"), Some(4));
 
         let session = sessions
             .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
@@ -342,7 +357,7 @@ mod tests {
     #[tokio::test]
     async fn a_session_being_used_is_not_swept_from_under_a_viewer() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), 4);
+        let sessions = sessions(directory.path().join("sessions"), Some(4));
         let session = sessions
             .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
             .await
@@ -368,7 +383,7 @@ mod tests {
         // segment of the film, which reaches a viewer as a browser that
         // cannot read it. Reported from a real library after a pause.
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), 4);
+        let sessions = sessions(directory.path().join("sessions"), Some(4));
         let session = sessions
             .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
             .await
@@ -395,7 +410,7 @@ mod tests {
         std::fs::write(folder.join("01a0-left-behind").join("segment-0.m4s"), b"x")
             .expect("an old segment");
 
-        let sessions = sessions(folder.clone(), 4);
+        let sessions = sessions(folder.clone(), Some(4));
         assert_eq!(sessions.sweep_what_a_previous_run_left().await, 1);
         assert!(!folder.join("01a0-left-behind").exists());
     }
@@ -403,7 +418,7 @@ mod tests {
     #[tokio::test]
     async fn closing_everything_leaves_nothing_live() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), 4);
+        let sessions = sessions(directory.path().join("sessions"), Some(4));
         sessions
             .open(a_watcher(), recipe(directory.path().join("one.mkv")), false)
             .await
