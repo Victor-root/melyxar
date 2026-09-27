@@ -25,6 +25,9 @@
 //! groups everything under it, whatever each file calls itself.
 
 use std::collections::BTreeSet;
+use std::path::Path;
+
+use melyxar_core::library::LibraryKind;
 
 use crate::naming::{self, LibrarySigns};
 
@@ -694,6 +697,127 @@ fn a_second_number(rest: &str, first: i32) -> Option<i32> {
     (rest.is_empty() && last >= first).then_some(last)
 }
 
+/// An episode as the path of its file tells it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EpisodeOnDisk {
+    /// What the file name said, filled in by a season folder where it said
+    /// nothing.
+    pub episode: ParsedEpisode,
+    /// The series it belongs to.
+    pub series: NamedSeries,
+    /// The season a folder above the file names, when one does.
+    pub season_folder: Option<i32>,
+}
+
+/// Reads which episode a file is and which series it belongs to, from its
+/// path relative to the root of its library.
+///
+/// The one reading the scan and a second reading of a name both go through,
+/// so a series named again later is named exactly the way it was the first
+/// time. Nothing when the path never says which episode this is, or which
+/// series.
+pub fn read_path(
+    relative_path: &Path,
+    kind: LibraryKind,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<EpisodeOnDisk> {
+    let file_name = relative_path.file_name()?.to_str()?;
+    let folders = folders_above(relative_path);
+    let season_folder = folders.iter().find_map(|folder| season_of_folder(folder));
+    let episode = read_file_name(kind, file_name, season_folder, current_year, signs)?;
+    let series = series_it_belongs_to(&episode, &folders, current_year, signs)?;
+    Some(EpisodeOnDisk {
+        episode,
+        series,
+        season_folder,
+    })
+}
+
+/// Reads which episode a file name is, in the shapes this library can hold.
+fn read_file_name(
+    kind: LibraryKind,
+    file_name: &str,
+    season_folder: Option<i32>,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<ParsedEpisode> {
+    parse_episode(file_name, current_year, signs)
+        // Anime releases carry no ordinary marker at all, and name the episode
+        // by a number after a dash or in brackets of its own. Read only in a
+        // library of anime, where that shape means nothing else.
+        .or_else(|| {
+            (kind == LibraryKind::Anime)
+                .then(|| parse_anime_episode(file_name, current_year, signs))
+                .flatten()
+        })
+        // Nothing in the name says which episode this is. Under a season
+        // folder, where the season and the series are already settled, a name
+        // opening on a number is that number: it is how a whole run taken off
+        // a disc is usually named, and reading it nowhere else keeps a film
+        // called by a number out of it.
+        .or_else(|| {
+            season_folder
+                .and_then(|_| episode_of_a_leading_number(file_name, current_year, signs))
+        })
+}
+
+/// The folders between a file and the root of its library, nearest first.
+fn folders_above(relative_path: &Path) -> Vec<&str> {
+    let Some(parent) = relative_path.parent() else {
+        return Vec::new();
+    };
+    let mut folders: Vec<&str> = parent
+        .components()
+        .filter_map(|part| part.as_os_str().to_str())
+        .collect();
+    folders.reverse();
+    folders
+}
+
+/// What names the series this file belongs to, and the year that name carries.
+///
+/// A season folder is the one mark that says without any doubt that what sits
+/// above it is a series, so where there is one, the folder holding it is the
+/// series and it is that folder which names it. Everything under it lands in
+/// the same series however each file happens to be named: two seasons ripped
+/// by two teams that write the title in two languages are still one series,
+/// and reading the file names first made two.
+///
+/// Where there is no season folder nothing has changed: a folder holding files
+/// in bulk groups nothing by itself, so the file name names the series, and
+/// the folder answers only when the name did not.
+fn series_it_belongs_to(
+    episode: &ParsedEpisode,
+    folders: &[&str],
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<NamedSeries> {
+    if let Some(named) = the_folder_of_the_series(folders)
+        .and_then(|folder| series_of_folder(folder, current_year, signs))
+    {
+        return Some(named);
+    }
+    if !episode.series.is_empty() {
+        return Some(NamedSeries {
+            title: episode.series.clone(),
+            year: episode.year,
+        });
+    }
+    folders
+        .iter()
+        .find_map(|folder| series_of_folder(folder, current_year, signs))
+}
+
+/// The folder that names the series: the one holding the nearest season
+/// folder, when the path goes through one at all.
+fn the_folder_of_the_series<'a>(folders: &[&'a str]) -> Option<&'a str> {
+    let season = folders
+        .iter()
+        .position(|folder| season_of_folder(folder).is_some())?;
+    folders.get(season + 1).copied()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1251,5 +1375,61 @@ mod tests {
         for name in ["Saison 1", "Season 01", "Specials", "S02", ""] {
             assert_eq!(folder(name), None, "{name}");
         }
+    }
+
+    /// Reads a path the way the scan does, in a library of that kind.
+    fn on_disk(path: &str, kind: LibraryKind) -> Option<(String, Option<i32>, i32)> {
+        let read = read_path(Path::new(path), kind, THIS_YEAR, &LibrarySigns::default())?;
+        let season = read.episode.season.or(read.season_folder);
+        Some((read.series.title, season, read.episode.first))
+    }
+
+    #[test]
+    fn a_season_folder_names_the_series_whatever_each_file_calls_it() {
+        // Two seasons named by two teams in two languages, under the one
+        // folder the owner made for the series.
+        for path in [
+            "Distant Signal/Season 1/Distant.Signal.S01E02.mkv",
+            "Distant Signal/Saison 2/Signal Lointain S02E02.mkv",
+        ] {
+            let (series, _, episode) = on_disk(path, LibraryKind::Series).expect("read");
+            assert_eq!(series, "Distant Signal", "{path}");
+            assert_eq!(episode, 2, "{path}");
+        }
+    }
+
+    #[test]
+    fn without_a_season_folder_the_file_names_the_series() {
+        assert_eq!(
+            on_disk("Everything/Distant.Signal.S01E02.mkv", LibraryKind::Series),
+            Some(("Distant Signal".to_string(), Some(1), 2))
+        );
+    }
+
+    #[test]
+    fn a_name_that_says_only_the_episode_takes_its_season_from_the_folder() {
+        assert_eq!(
+            on_disk("Distant Signal/Season 3/E04.mkv", LibraryKind::Series),
+            Some(("Distant Signal".to_string(), Some(3), 4))
+        );
+    }
+
+    #[test]
+    fn a_bare_leading_number_is_an_episode_only_under_a_season_folder() {
+        assert_eq!(
+            on_disk("Distant Signal/Season 1/07 - The Harbour.mkv", LibraryKind::Series),
+            Some(("Distant Signal".to_string(), Some(1), 7))
+        );
+        assert_eq!(on_disk("Films/07 - The Harbour.mkv", LibraryKind::Series), None);
+    }
+
+    #[test]
+    fn the_anime_shape_is_read_only_in_a_library_of_anime() {
+        let path = "Amber Field/[Group] Amber Field - 12 [1080p].mkv";
+        assert_eq!(
+            on_disk(path, LibraryKind::Anime),
+            Some(("Amber Field".to_string(), None, 12))
+        );
+        assert_eq!(on_disk(path, LibraryKind::Series), None);
     }
 }

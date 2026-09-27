@@ -95,6 +95,27 @@ fn looks_like_a_language(word: &str) -> bool {
     (word.len() == 2 || word.len() == 3) && word.chars().all(|c| c.is_ascii_alphabetic())
 }
 
+/// Reads a subtitle file as one belonging to a film, or says it belongs to
+/// another.
+///
+/// The convention is the film's own name followed by what the subtitle is:
+/// language, and whether it is forced or for viewers who are hard of hearing.
+/// Both paths are relative to the same root, and a subtitle in another folder
+/// belongs to another film.
+pub fn read_for(path: &Path, film: &Path) -> Option<SidecarSubtitle> {
+    if path.parent() != film.parent() {
+        return None;
+    }
+    let stem = film.file_stem()?.to_str()?;
+    let name = path.file_name()?.to_str()?;
+    let remainder = name.strip_prefix(stem)?;
+    let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default();
+    let remainder = remainder
+        .strip_suffix(&format!(".{extension}"))
+        .unwrap_or(remainder);
+    read(name, remainder)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,5 +192,18 @@ mod tests {
                 "the picker must not show French twice"
             );
         }
+    }
+
+    #[test]
+    fn a_subtitle_belongs_to_the_film_whose_name_it_carries_in_its_folder() {
+        let film = Path::new("Films/Quiet.Harbour.2019.mkv");
+        let found = read_for(Path::new("Films/Quiet.Harbour.2019.fr.forced.srt"), film)
+            .expect("the film's own subtitle");
+        assert_eq!(found.language.as_deref(), Some("fre"));
+        assert!(found.is_forced);
+
+        assert!(read_for(Path::new("Films/Quiet.Harbour.2019.srt"), film).is_some());
+        assert!(read_for(Path::new("Films/Other.Film.2019.fr.srt"), film).is_none());
+        assert!(read_for(Path::new("Elsewhere/Quiet.Harbour.2019.fr.srt"), film).is_none());
     }
 }
