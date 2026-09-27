@@ -241,7 +241,9 @@ export function Hero({ items }: { items: HeroItem[] }) {
             shown.year,
             shown.runtime_minutes ? howLong(shown.runtime_minutes, t) : null,
             ...shown.genres.slice(0, GENRES_NAMED),
-            shown.episodes > 0 ? t("card.unwatched", { count: shown.unwatched }) : null,
+            shown.episodes > 0 && shown.watched_marks
+              ? t("card.unwatched", { count: shown.unwatched })
+              : null,
             ]
               .filter(Boolean)
               .join(" · ")}

@@ -169,6 +169,9 @@ export interface Card {
      hover shows, which is why they travel with the card rather than being
      asked for one card at a time. */
   seen: Seen;
+  /** Whether its library keeps watched marks: where it does not, the card is
+      never marked and offers no button to mark it. */
+  watched_marks: boolean;
   /** Where they stopped, in seconds, only where they stopped partway. */
   resume_from_seconds: number | null;
   /** How long the copy it is carried on in lasts, in seconds, beside where
@@ -275,6 +278,11 @@ export interface Library {
   /** Whether its folders are watched, and it is scanned again as soon as
       something in them changes. */
   watch_in_real_time: boolean;
+  /** Whether it keeps where each account stopped, so a work is picked up
+      from there. */
+  keeps_resume_points: boolean;
+  /** Whether it keeps which works each account has watched. */
+  keeps_watched_marks: boolean;
   /** Where that watching stands, for a library that asked for it. */
   watch_state: "watching" | "starting" | "refused" | null;
   /** Why it was refused, as a word turned into a sentence here. */
@@ -1641,12 +1649,16 @@ export const api = {
     key_frames_during_scan: boolean;
     thumbnails_during_scan: boolean;
     watch_in_real_time: boolean;
+    keeps_resume_points: boolean;
+    keeps_watched_marks: boolean;
     metadata_language: string;
   }) =>
     put<{
       key_frames_during_scan: boolean;
       thumbnails_during_scan: boolean;
       watch_in_real_time: boolean;
+      keeps_resume_points: boolean;
+      keeps_watched_marks: boolean;
       metadata_language: string;
       changed: boolean;
       /** How many films went back in the queue, when the language changed. */

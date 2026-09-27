@@ -217,6 +217,20 @@ function LibraryPanel({
             {t(`admin.watch_refused.${library.watch_refusal}`)}
           </p>
         )}
+        <Setting label={t("settings.keeps_resume_points")} why={t("admin.resume_points_why")}>
+          <Toggle
+            label={t("settings.keeps_resume_points")}
+            checked={library.keeps_resume_points}
+            onChange={(keeps_resume_points) => editing.settle(library, { keeps_resume_points })}
+          />
+        </Setting>
+        <Setting label={t("settings.keeps_watched_marks")} why={t("admin.watched_marks_why")}>
+          <Toggle
+            label={t("settings.keeps_watched_marks")}
+            checked={library.keeps_watched_marks}
+            onChange={(keeps_watched_marks) => editing.settle(library, { keeps_watched_marks })}
+          />
+        </Setting>
       </div>
 
       {/* The folders it looks in. A log line shows only the label, but this is

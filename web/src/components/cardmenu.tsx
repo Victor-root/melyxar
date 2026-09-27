@@ -277,6 +277,7 @@ export function CardMenu({
     {
       key: seen === "watched" ? "mark_unwatched" : "mark_watched",
       mark: <TickIcon size={SHAPE} />,
+      allowed: card.watched_marks,
       act: () => marks.setWatched(card, seen !== "watched"),
     },
     {
