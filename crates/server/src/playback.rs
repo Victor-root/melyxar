@@ -54,6 +54,12 @@ pub fn router() -> Router<AppState> {
             "/api/v1/playback/watching/{work}/live",
             axum::routing::get(player_line),
         )
+        // Where a person says a file's opening and closing titles really
+        // are, over what its chapters and the listening said.
+        .route(
+            "/api/v1/playback/{id}/segments/{kind}",
+            axum::routing::put(correct_segment).delete(take_back_segment),
+        )
         .route(
             "/api/v1/system/playing/{device}/stop",
             axum::routing::post(stop_playing),
@@ -310,6 +316,18 @@ struct SegmentView {
     kind: &'static str,
     from_second: f64,
     to_second: f64,
+    /// Who said where it is: chapter, detected or manual. What the window
+    /// that corrects it shows beside it.
+    origin: &'static str,
+}
+
+fn segment_view(segment: &melyxar_core::segments::MediaSegment) -> SegmentView {
+    SegmentView {
+        kind: segment.kind.as_str(),
+        from_second: segment.start.as_seconds_f64(),
+        to_second: segment.end.as_seconds_f64(),
+        origin: segment.origin.as_str(),
+    }
 }
 
 /// One place the film changes scene.
@@ -465,15 +483,7 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
                 title: chapter.title.clone(),
             })
             .collect(),
-        segments: plan
-            .segments
-            .iter()
-            .map(|segment| SegmentView {
-                kind: segment.kind.as_str(),
-                from_second: segment.start.as_seconds_f64(),
-                to_second: segment.end.as_seconds_f64(),
-            })
-            .collect(),
+        segments: plan.segments.iter().map(segment_view).collect(),
         favourite: plan.favourite,
         rebuild: rebuild_view(plan),
         wide_gamut: film
@@ -1272,6 +1282,70 @@ async fn stop_playing(
     Ok(Json(serde_json::json!({ "stopping": true })))
 }
 
+/// What a person says about one kind of stretch in one file.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "said", rename_all = "snake_case")]
+enum CorrectionBody {
+    /// It runs from here to there.
+    Stretch { from_second: f64, to_second: f64 },
+    /// There is none of it in this file.
+    None,
+}
+
+/// What a player now offers to skip in the file, once it was corrected.
+#[derive(Debug, Serialize)]
+struct SegmentsView {
+    segments: Vec<SegmentView>,
+}
+
+fn kind_of_segment(value: &str) -> Result<melyxar_core::segments::SegmentKind> {
+    melyxar_core::segments::SegmentKind::parse(value)
+        .ok_or_else(|| ServerError::invalid_input("no stretch of that kind"))
+}
+
+/// Says where one kind of stretch is in one file, or that there is none.
+async fn correct_segment(
+    _: Administrator,
+    State(state): State<AppState>,
+    RoutePath((id, kind)): RoutePath<(String, String)>,
+    Json(body): Json<CorrectionBody>,
+) -> Result<Json<SegmentsView>> {
+    let correction = match body {
+        CorrectionBody::Stretch {
+            from_second,
+            to_second,
+        } => melyxar_app::segments::Correction::Stretch {
+            start: Millis::from_seconds_f64(from_second),
+            end: Millis::from_seconds_f64(to_second),
+        },
+        CorrectionBody::None => melyxar_app::segments::Correction::None,
+    };
+    let skipped = melyxar_app::segments::correct(
+        &state,
+        parse_source(&id)?,
+        kind_of_segment(&kind)?,
+        correction,
+    )
+    .await?;
+    Ok(Json(SegmentsView {
+        segments: skipped.iter().map(segment_view).collect(),
+    }))
+}
+
+/// Takes back what was said about one kind of stretch in one file.
+async fn take_back_segment(
+    _: Administrator,
+    State(state): State<AppState>,
+    RoutePath((id, kind)): RoutePath<(String, String)>,
+) -> Result<Json<SegmentsView>> {
+    let skipped =
+        melyxar_app::segments::take_back(&state, parse_source(&id)?, kind_of_segment(&kind)?)
+            .await?;
+    Ok(Json(SegmentsView {
+        segments: skipped.iter().map(segment_view).collect(),
+    }))
+}
+
 #[derive(Debug, Deserialize)]
 struct TracksBody {
     work_id: String,
@@ -1309,6 +1383,22 @@ async fn remember_tracks(
 mod tests {
     use super::*;
     use melyxar_core::id::{TrackId, WorkId};
+
+    #[test]
+    fn a_correction_says_a_stretch_or_that_there_is_none() {
+        let said: CorrectionBody =
+            serde_json::from_str(r#"{"said":"stretch","from_second":61.5,"to_second":150}"#)
+                .expect("read");
+        assert!(matches!(
+            said,
+            CorrectionBody::Stretch { from_second, to_second } if from_second == 61.5 && to_second == 150.0
+        ));
+        let said: CorrectionBody = serde_json::from_str(r#"{"said":"none"}"#).expect("read");
+        assert!(matches!(said, CorrectionBody::None));
+        assert!(serde_json::from_str::<CorrectionBody>(r#"{"said":"stretch"}"#).is_err());
+        assert!(kind_of_segment("intro").is_ok());
+        assert!(kind_of_segment("chorus").is_err());
+    }
 
     #[test]
     fn what_a_player_sends_to_open_a_session_is_read_whole() {
