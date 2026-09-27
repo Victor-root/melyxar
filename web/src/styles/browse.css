@@ -1,0 +1,293 @@
+/*
+ * How a grid is read: its order and its filters.
+ */
+
+/*
+ * How a grid is read: its order and its filters, in one piece of the glass
+ * the bar at the top is made of, and the one filter that is a yes or a no in
+ * a piece of its own beside it.
+ *
+ * Rimmed at rest, lit only under a hand: the bar's own pieces stand lit
+ * because they are the bar, and a second lit bar in the page read as two
+ * bars. Held in the middle of the page for the same reason: lined up under
+ * the bar's left hand piece, the same glass read as a second row of it.
+ *
+ * Beside the name while a whole bar fits there, under it once it does not:
+ * squeezed in beside it, it folded into a column.
+ */
+.browse-bar {
+  flex: 1 1 520px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--gap);
+}
+
+/* The name of the grid and its bar on one line, the bar in the middle of
+   what the name leaves: on a line of its own under the name it left the
+   width of the page empty on both sides. */
+.browse-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap) var(--gap-wide);
+  margin-bottom: var(--gap-wide);
+}
+
+.browse-head .section-head {
+  margin: 0;
+}
+
+.browse-piece {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  min-height: 42px;
+  padding: 4px;
+  border-radius: 21px;
+  color: var(--text);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--quick) var(--ease), background var(--quick) var(--ease);
+}
+
+.browse-piece:hover,
+.browse-piece:focus-within {
+  box-shadow:
+    var(--shadow-card),
+    0 0 14px 2px var(--accent-glow);
+}
+
+/* One thing it is read by: its name, faint, and what it is set to. Set apart
+   from the one before by a hairline, so three choices read as three. */
+.browse-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 12px;
+}
+
+.browse-field + .browse-field {
+  margin-left: 4px;
+  border-left: 1px solid var(--border);
+}
+
+/* Narrow, the piece runs onto a second line, and a hairline at the start of
+   a line separates it from nothing. */
+@media (max-width: 700px) {
+  .browse-field + .browse-field {
+    margin-left: 0;
+    border-left: none;
+  }
+}
+
+.browse-label {
+  color: var(--text-faint);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* The lists' own field, taken down to a word on the glass: no box of its
+   own inside the piece, which is the box. The hand and the open list tint it
+   the way the line under the hand in any of the bar's lists is tinted. */
+.browse-field .picker,
+.browse-field .picker:hover:not(:disabled),
+.browse-field .picker-open {
+  --picker-side: 10px;
+  /* Cut short, a value keeps a word's worth of letters beside its arrow (the
+     gap and the sixteen of the icon): a field with nothing left in it but
+     its arrow is a field nobody can read, and one narrower than its arrow
+     ran into the press beside it. */
+  min-width: calc(2.6em + 6px + 16px + 2 * var(--picker-side));
+  height: 32px;
+  gap: 6px;
+  padding: 0 var(--picker-side);
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 550;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.browse-field .picker:hover:not(:disabled),
+.browse-field .picker-open {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* A filter that narrows the grid says so in the accent: "Any" in plain
+   words, "Action" in the colour of what is active. */
+.browse-field-on .picker,
+.browse-field-on .picker svg {
+  color: var(--accent-bright);
+}
+
+/* The two round presses inside the piece, the way round and the way out of
+   a filter: icons that take the accent under a hand, as the bar's do. */
+.browse-direction,
+.browse-clear {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.browse-direction:hover,
+.browse-clear:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-bright);
+}
+
+.browse-clear {
+  width: 26px;
+  height: 26px;
+  margin-right: 2px;
+}
+
+/* Up from A to Z, turned over to come back down. */
+.browse-direction svg {
+  transform: rotate(-90deg);
+  transition: transform var(--calm) var(--ease);
+}
+
+.browse-direction-down svg {
+  transform: rotate(90deg);
+}
+
+/* The yes-or-no filter: a piece of its own, and filled with the accent once
+   it is on, as anything switched on in this interface is. */
+.browse-alone {
+  gap: 8px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--text-soft);
+}
+
+.browse-alone:hover {
+  color: var(--text);
+}
+
+.browse-alone-on,
+.browse-alone-on:hover {
+  --header-glow: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* On a wide screen the name of the grid and its bar rise into the band of
+   the bar at the top, the way the head of an administration page does: the
+   name beside the piece at the left end, the bar in the room left before
+   the piece at the right end. Kept clear of both, which the header measures
+   as they grow: the server's name and logo at one end, the account and the
+   search field opened in it at the other. Narrower, the band has no room for
+   a bar at all, and both stay under it.
+
+   How long the bar is depends on what it is set to and on whether the search
+   is open, so no width of the window says whether it fits. It gives ground
+   instead, measured against the room it is left: the names of its choices
+   first, which the values explain on their own, then the words of the
+   filter beside it, whose icon stays, and last the values themselves, cut
+   short rather than run under the title or the search. */
+@media (min-width: 1360px) {
+  .browse-head {
+    --clear-of-start: max(0px, var(--header-start-end, 0px) + var(--gap-wide) - var(--gutter));
+    flex-wrap: nowrap;
+    height: var(--header-height);
+    max-width: calc(
+      100% - var(--header-side-width, 360px) - var(--gap-wide) - var(--clear-of-start)
+    );
+    margin: calc(-1 * (var(--header-height) + var(--gap-wide))) 0 var(--gap-wide)
+      var(--clear-of-start);
+  }
+
+  .browse-head .section-head {
+    flex: none;
+  }
+
+  .browse-head .browse-bar,
+  .browse-head .browse-piece {
+    flex-wrap: nowrap;
+  }
+
+  .browse-head .browse-bar {
+    min-width: 0;
+    container-type: inline-size;
+  }
+
+  .browse-head .browse-piece {
+    min-width: 0;
+  }
+
+  .browse-head .browse-alone {
+    flex: none;
+  }
+
+  /* Each choice's name, value and presses laid straight into the piece, so
+     that giving ground weighs each of them against its own floor: grouped
+     in a box of their own, the box gave way whole and its presses ran out
+     over the choice beside it. The hairline between two choices is the
+     second one's to draw. */
+  .browse-head .browse-field {
+    display: contents;
+  }
+
+  .browse-head .browse-field + .browse-field::before {
+    content: "";
+    flex: none;
+    align-self: stretch;
+    width: 1px;
+    margin-left: 4px;
+    background: var(--border);
+  }
+
+  .browse-head .browse-label {
+    margin: 0 2px 0 12px;
+  }
+
+  @container (max-width: 780px) {
+    .browse-label {
+      display: none;
+    }
+
+    .browse-field + .browse-field::before {
+      margin-right: 4px;
+    }
+  }
+
+  @container (max-width: 620px) {
+    .browse-alone-words {
+      display: none;
+    }
+
+    .browse-alone {
+      padding: 0 12px;
+    }
+  }
+
+  /* The search open beside a bar with its filters set, on the narrowest
+     screen that has a band: the room between its words goes too. */
+  @container (max-width: 540px) {
+    .browse-field + .browse-field::before {
+      margin: 0 2px;
+    }
+
+    .browse-field .picker,
+    .browse-field .picker:hover:not(:disabled),
+    .browse-field .picker-open {
+      --picker-side: 6px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browse-direction svg {
+    transition: none;
+  }
+}

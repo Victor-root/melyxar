@@ -1,0 +1,285 @@
+/*
+ * Somebody's own settings.
+ */
+
+/* The reference film really playing, where it can really be seen.
+   Deliberately on the page rather than tucked away: a browser handed a film
+   nobody is shown never does the work of showing it, decodes a handful of
+   pictures a second without ever calling one of them late, and reports a
+   flawless measurement. A machine that cannot play AV1 at all passed that
+   way twice. */
+.device-test {
+  display: block;
+  width: 100%;
+  max-width: 32rem;
+  aspect-ratio: 16 / 9;
+  margin-top: var(--gap);
+  border-radius: var(--radius-card);
+  background: #000;
+}
+
+/* A native slider takes the colour of the browser unless it is told the one
+   this interface uses. */
+.settings input[type="range"] {
+  accent-color: var(--accent);
+  width: 160px;
+}
+
+/* --------------------------------------------------------------------------
+ * Somebody's own settings
+ * ----------------------------------------------------------------------- */
+
+.panel-notice-ok {
+  background: var(--ok-wash);
+}
+
+/* The accents on offer: each a disc of its own colour, the chosen one ringed
+   and ticked. The colour of each is the one thing here that is not a token,
+   since it is the choice itself. */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  transition: transform var(--quick) var(--ease);
+}
+
+.swatch:hover {
+  transform: scale(1.1);
+}
+
+.swatch-on {
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--swatch);
+}
+
+/* Any other colour: a disc of every colour, which opens the machine's own
+   picker. Its field is laid over the disc and made clear, so the press lands
+   on the field and the disc is what is seen. */
+.swatch-own {
+  background: conic-gradient(
+    from 0deg,
+    hsl(0 80% 55%),
+    hsl(60 80% 55%),
+    hsl(120 80% 45%),
+    hsl(180 80% 45%),
+    hsl(240 80% 60%),
+    hsl(300 80% 55%),
+    hsl(360 80% 55%)
+  );
+}
+
+.swatch-own input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.profile-face {
+  width: 76px;
+  height: 76px;
+  font-size: 28px;
+}
+
+.profile-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-name {
+  font-size: 19px;
+  font-weight: 650;
+}
+
+.profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin-top: 6px;
+}
+
+/* The server's name being typed, and what keeps it or gives back the one it
+   came with. */
+.name-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
+}
+
+.name-field {
+  position: relative;
+  display: flex;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.name-field .field-line {
+  flex: 1;
+  min-width: 0;
+  padding-right: 92px;
+}
+
+/* How many letters are left, inside the end of the field, going down as the
+   name grows. */
+.name-left {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* The server's logo as it stands, beside what changes it. Its own shape at
+   the height of the mark, so a wide one is seen wide. */
+.logo-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
+}
+
+.logo-choice-picture {
+  height: 32px;
+  width: auto;
+  max-width: 128px;
+  object-fit: contain;
+}
+
+/* The picture behind the sign in screen as it stands, in the shape of a
+   screen. */
+.door-choice-picture {
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-control);
+  object-fit: cover;
+}
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 50px;
+  border-top: 1px solid var(--border);
+}
+
+.order-line:first-child {
+  border-top: 0;
+}
+
+.order-name {
+  flex: 1 1 auto;
+  font-size: 14.5px;
+  font-weight: 550;
+}
+
+/* A line left off the page it orders, still in the list so it keeps its
+   place. */
+.order-line-off .order-name,
+.order-line-off .line-mark {
+  opacity: 0.45;
+}
+
+/* A list put in order by hand. The lines step aside as one is dragged past
+   them, and the one let go glides into its place. */
+.sortable-line {
+  position: relative;
+  margin-inline: -8px;
+  padding-inline: 8px;
+  border-radius: var(--radius-control);
+  cursor: grab;
+  user-select: none;
+}
+
+.sortable-moving .sortable-line {
+  transition: transform var(--calm) var(--ease);
+}
+
+.sortable-moving .sortable-line.sortable-held {
+  z-index: 1;
+  border-top-color: transparent;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+  cursor: grabbing;
+  transition: none;
+}
+
+.sortable-landing {
+  z-index: 1;
+  transition: transform var(--calm) var(--ease);
+}
+
+.sortable-grip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-faint);
+  cursor: grab;
+  /* A finger on the grip drags the line rather than scrolling the page. */
+  touch-action: none;
+}
+
+.sortable-grip:hover {
+  color: var(--text-soft);
+}
+
+.sortable-held .sortable-grip {
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sortable-moving .sortable-line,
+  .sortable-landing {
+    transition: none;
+  }
+}

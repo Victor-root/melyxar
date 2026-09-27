@@ -1,0 +1,253 @@
+/*
+ * Saying by hand what a work is, and deleting one.
+ */
+
+/* --------------------------------------------------------------------------
+ * Saying by hand what a work is
+ * ----------------------------------------------------------------------- */
+
+.identify-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.identify-said {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.identify-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.identify-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+/* Which work this is, by its files, at the head of every step. The name
+   first and read in full, the folder under it quieter; both long, so they
+   wrap rather than being cut. */
+.identify-files {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: var(--gap);
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.identify-files-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+}
+
+.identify-files-words {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.identify-file {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.identify-file-name {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.identify-file-folder {
+  color: var(--text-faint);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.identify-field input {
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+}
+
+.identify-field input:focus {
+  outline: none;
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
+}
+
+.identify-heading {
+  margin: 0 0 var(--gap);
+  font-size: 19px;
+  font-weight: 650;
+}
+
+/* Posters rather than a list of titles: two films of the same name and the
+   same year are told apart by their artwork and by nothing else. */
+.identify-found {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: var(--gap);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.identify-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  transition: transform var(--quick) var(--ease);
+}
+
+.identify-choice:hover {
+  transform: scale(1.035);
+}
+
+.identify-poster {
+  display: block;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.identify-choice:hover .identify-poster {
+  border-color: var(--accent);
+}
+
+.identify-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.identify-blank {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.identify-name {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.identify-year,
+.identify-original {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+/* The one that was chosen, large enough to be sure of before agreeing to it. */
+.identify-agreeing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-wide);
+}
+
+.identify-chosen {
+  display: flex;
+  gap: var(--gap-wide);
+}
+
+.identify-chosen .identify-poster {
+  flex: 0 0 160px;
+}
+
+.identify-chosen .identify-said {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.identify-chosen .identify-name {
+  font-size: 19px;
+}
+
+.identify-overview {
+  color: var(--text-soft);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The two ways a work can be deleted, each with what it means under it. */
+.delete-choices {
+  display: grid;
+  gap: var(--gap);
+  margin-top: var(--gap);
+}
+
+.delete-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--gap-tight);
+  align-items: start;
+  cursor: pointer;
+}
+
+.delete-choice > input {
+  margin-top: 3px;
+}
+
+.delete-choice > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Offered but shut: the server may not write to that disk. */
+.delete-choice-shut {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Whole paths, which are long: they wrap rather than push the panel wide. */
+.delete-files {
+  margin: 4px 0 0;
+  padding-left: 1.1em;
+  font-size: 13px;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.identify-also {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  cursor: pointer;
+}
+
+.identify-also input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}

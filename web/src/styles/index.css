@@ -1,0 +1,31 @@
+/*
+ * The look of the interface, one file per part of it. Every colour, spacing
+ * and radius comes from a token in theme.css; nothing here invents one.
+ *
+ * Read in this order and in no other: the pieces every screen shares first,
+ * then each part of the interface, then what narrow screens change. Two rules
+ * as precise as each other are settled by which comes last, so a file moved
+ * up or down this list can change what a screen looks like.
+ */
+
+@import "./pages.css";
+@import "./header.css";
+@import "./menus.css";
+@import "./panels.css";
+@import "./controls.css";
+@import "./sectioned.css";
+@import "./states.css";
+@import "./dialog.css";
+@import "./browse.css";
+@import "./cards.css";
+@import "./rows.css";
+@import "./band.css";
+@import "./work.css";
+@import "./hero.css";
+@import "./identify.css";
+@import "./own.css";
+@import "./pictures.css";
+@import "./subtitles.css";
+@import "./settings.css";
+@import "./feedback.css";
+@import "./narrow.css";

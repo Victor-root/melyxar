@@ -129,8 +129,8 @@ function TheLibrary() {
         {/* The bar stands over the page rather than beside it, so the page
             can be scrolled up behind it and read faintly through the glass.
             Where the two sit in the markup does not decide that on its own;
-            it is the bar's own fixed position, in app.css, that lifts it out
-            of the page. */}
+            it is the bar's own fixed position, in styles/header.css, that lifts
+            it out of the page. */}
         {/* DEBUG ONLY, TO BE REMOVED with components/debug-journal.tsx. */}
         <DebugJournal />
         <div className="shell">

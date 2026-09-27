@@ -1,0 +1,679 @@
+/*
+ * The bar at the top: its pieces of glass, the search, the account and its
+ * menu.
+ */
+
+/*
+ * The bar is not a bar.
+ *
+ * What stands over the page is a handful of pieces of glass with the page
+ * running between them, so a banner behind is a banner and not something seen
+ * through a lid. The bar itself therefore draws nothing: no wash, no blur, no
+ * line under it. Each piece carries all three.
+ *
+ * And it takes no press either. Were it to, the whole width of the screen
+ * down to sixty points would be a wall in front of whatever is up there,
+ * including the gaps where there is plainly nothing.
+ */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  pointer-events: none;
+  transition: transform var(--calm) var(--ease);
+}
+
+/* Stepped aside while a page is read down: slid up past the top of the
+   window, the glow around its pieces with it. Never while somebody is using
+   it, which is what holding a focus inside it says. */
+.header-away:not(:focus-within) {
+  transform: translateY(calc(-100% - 24px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header {
+    transition: none;
+  }
+}
+
+/* The name at one end, everything else at the other, and the page in between:
+   there is no middle any more, because what used to stand in it is now a
+   magnifier at the far end that grows a field when it is asked for. */
+.header-inner {
+  min-height: var(--header-height);
+  padding: 0 var(--gutter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+}
+
+/*
+ * One piece of it: the glass the whole width used to be, cut to the size of
+ * what it holds. The same wash, the same blur, the same hairline, so nothing
+ * about the material changed and only the shape of it did.
+ *
+ * All of them stand the same height whatever is inside, which is the whole of
+ * what makes several pieces read as one bar rather than as a row of things
+ * that happened to land near each other.
+ *
+ * Rimmed and lit in the accent, the same as the chevron over a library's fan
+ * of posters: a ring around the shape and a halo outside it, standing rather
+ * than waiting on the pointer, since these two pieces are the bar itself.
+ */
+.header-piece {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--header-piece);
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  box-shadow:
+    var(--shadow-card),
+    0 0 14px 2px var(--accent-glow);
+}
+
+/* The glass itself, which the bar of a grid and its letters are made of
+   too. */
+.header-piece,
+.browse-piece,
+.letters {
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  /* A glow of the accent over the whole piece, even from end to end, laid on
+     the glass the bar has always been. Follows the accent somebody chose. */
+  --header-glow: color-mix(in srgb, var(--accent) 22%, transparent);
+  background:
+    linear-gradient(var(--header-glow), var(--header-glow)),
+    var(--header-glass);
+  backdrop-filter: blur(18px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 4px;
+  font-weight: 700;
+  font-size: 17px;
+}
+
+/* The way back one page, and the way back to the front page: one bubble,
+   since both are ways out of wherever the page currently is. The back press
+   itself is drawn as a plain header-icon, the same as any other single mark
+   on the bar. */
+.header-start {
+  padding-left: 5px;
+}
+
+/* With the way back in it the piece is wider by a button, and it takes the
+   room from the edge of the screen rather than from the page beside it: the
+   gutter is air, and the page is what is being read. */
+.header-start-back {
+  margin-left: min(0px, var(--gap) - var(--gutter));
+}
+
+/* The name of the server, and the way back to its front page: there is no
+   other, which is why it is set apart rather than written like a word in a
+   sentence. */
+.brand-name {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* The administrator's own logo, at the height of the mark it stands in for
+   and in whatever shape it was drawn, up to a width that leaves the bar room
+   for the rest of it. */
+.brand-logo {
+  flex: none;
+  height: 28px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+}
+
+/* Served at sixty four pixels for a square of twenty eight: that is what
+   keeps it sharp on a dense screen, where one pixel of the page is two of the
+   screen. */
+/* The mark of Melyxar in the accent, cut to the logo's shape, under the
+   logo's own light and shade: hard light keeps the colour beneath where the
+   relief is a middle grey and lightens or darkens it from there. See mark.ts
+   for the colour beneath. */
+.melyxar-mark {
+  flex: none;
+  display: inline-block;
+  isolation: isolate;
+  background: var(--mark-colour);
+  -webkit-mask: var(--relief) center / contain no-repeat;
+  mask: var(--relief) center / contain no-repeat;
+}
+
+.melyxar-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  mix-blend-mode: hard-light;
+}
+
+.header-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+  color: var(--text-soft);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.header-link:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* The current place is marked with the accent, not with a faint underline. */
+.header-link.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/*
+ * The search, folded away.
+ *
+ * A magnifier like every other icon in its piece until somebody asks for it,
+ * and then a field that grows out of it leftwards. Nothing is added to the
+ * bar and nothing is taken off it: the field was always there, at no width.
+ *
+ * What holds it open is either the cursor being in it or words being in it.
+ * Words outlive the cursor, which is the point: they are the question the
+ * screen behind is answering, and a question that folds itself away the
+ * moment somebody presses a result is a question nobody can go back and
+ * change.
+ *
+ * Its outline is a shadow rather than a border. A border of one point is one
+ * point of width, and the magnifier has to stand exactly as wide as the icons
+ * beside it whether the field behind it is open or shut.
+ */
+.search {
+  --search-room: clamp(170px, 17vw, 250px);
+
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition:
+    gap var(--calm) var(--ease),
+    background var(--calm) var(--ease),
+    box-shadow var(--calm) var(--ease);
+}
+
+/* Open, the field is part of the bar rather than a box standing on it: no
+   wash of its own, no rim, nothing but the room it takes and the rule
+   between the words and what they are narrowed to. A box inside a piece of
+   glass is a piece of glass inside a piece of glass. */
+.search-open {
+  gap: 4px;
+}
+
+/* The magnifier goes on carrying the accent it wears while the field is open,
+   because from there on it is the button that sends the question. */
+.search-open .search-glass {
+  color: var(--text);
+}
+
+/* Shut, it is nothing at all rather than something small: a field a few
+   points wide reads as a field that broke. It clips its own words, so nothing
+   above it has to hide anything and the list the scope drops is free to hang
+   below the bar. */
+.search input {
+  width: 0;
+  min-width: 0;
+  padding: 9px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  opacity: 0;
+  transition:
+    width var(--calm) var(--ease),
+    opacity var(--quick) var(--ease);
+}
+
+.search-open input {
+  width: var(--search-room);
+  opacity: 1;
+}
+
+/* No ring, full stop. The field is opened by a press on the magnifier that
+   then moves the focus into it by hand, and a browser reads that exactly
+   like a tab landing there out of nowhere: it draws the ring it would draw
+   for a keyboard, every single time, for a field that was just pressed with
+   the pointer right in front of it. */
+.search input:focus-visible {
+  outline: none;
+}
+
+/* Left to the browser otherwise, which draws it at a strength that survives
+   the bar's own glass and dies the moment a bright picture sits behind it.
+   Said in the same ink as a greyed line, so it reads as a hint rather than
+   as the words themselves. */
+.search input::placeholder {
+  color: var(--text-soft);
+  opacity: 1;
+}
+
+/*
+ * The few results the field offers on its own, right under the bar, while
+ * the grid the enter key leads to waits behind a press.
+ *
+ * Drawn at the end of the page and placed against the window by hand, the
+ * same as every other list this bar drops: the piece it would otherwise sit
+ * inside is already frosted glass, and a panel frosting the inside of that
+ * frosts nothing at all.
+ */
+.quick-search {
+  position: fixed;
+  z-index: 30;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 96px));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: var(--radius-card);
+}
+
+.quick-search-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  color: inherit;
+  transition: background var(--quick) var(--ease);
+}
+
+.quick-search-picture {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 44px;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--card-color, var(--surface-raised));
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.quick-search-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.quick-search-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.quick-search-year {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.quick-search-empty {
+  padding: 10px 8px;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+/* A hairline of its own rather than a border on the link below it: a border
+   takes the link's own corner radius and rounds off at both ends, which on a
+   straight rule reads as a line that has been chewed. */
+.quick-search-divider {
+  margin: 4px 8px;
+  height: 1px;
+  background: var(--border);
+}
+
+.quick-search-all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  border-radius: var(--radius-control);
+  color: var(--accent-bright);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Drawn by this interface rather than by the machine: a system menu inside a
+   rounded field is the one thing on this bar that belongs to something else,
+   and it shows.
+
+   It fills its side of the field, from the rule down the middle out to the
+   edge, so what lights up under the pointer is the whole of the part that
+   can be pressed rather than a pill floating inside it. The rule and the word
+   both arrive with the field and leave with it. */
+.search-scope {
+  align-self: stretch;
+  display: flex;
+  border-left: 1px solid transparent;
+  transition: border-color var(--calm) var(--ease);
+}
+
+.search-open .search-scope {
+  border-left-color: var(--border);
+}
+
+.search-scope > .header-link {
+  height: 100%;
+  max-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+  font-size: 13px;
+  opacity: 0;
+  transition:
+    max-width var(--calm) var(--ease),
+    padding var(--calm) var(--ease),
+    opacity var(--quick) var(--ease);
+}
+
+.search-open .search-scope > .header-link {
+  max-width: 170px;
+  padding: 0 13px;
+  opacity: 1;
+}
+
+/* No wash here either, the same reasoning as the icons beside it: this end
+   of the field is glass too, and a grey pill lit inside it is a pill floating
+   inside a pill. */
+.search-scope > .header-link:hover {
+  background: none;
+  color: var(--text);
+}
+
+/* A field that grows while somebody watches is the point of it. A field that
+   grows for somebody who asked their system for less movement is not. */
+@media (prefers-reduced-motion: reduce) {
+  .search,
+  .search input,
+  .search-scope,
+  .search-scope > .header-link {
+    transition: none;
+  }
+}
+
+/* Where a picture of the account will go the day accounts carry one. Until
+   then the letters of the name, which is what tells two of them apart. */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  /* Square like everywhere else it is shown, its corners rounded in step
+     with how small it is here. */
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* A picture of somebody in place of their initials: the frame it sits in
+   stays the frame, and the picture fills it. */
+.face-picture {
+  overflow: hidden;
+  background: var(--surface-raised);
+}
+
+.face-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cropper {
+  display: grid;
+  justify-items: center;
+  gap: var(--gap);
+}
+
+/* The square the picture will be. Pulled by a finger as well as a mouse, so
+   the page is told not to scroll under it. */
+.cropper-frame {
+  position: relative;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: var(--surface-deep);
+  box-shadow: 0 0 0 1px var(--border-strong);
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+
+.cropper-frame img {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+}
+
+.cropper-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  width: min(320px, 100%);
+}
+
+.cropper-zoom .slider {
+  flex: 1;
+}
+
+/* Who is here, at the end of the piece, and the way into everything that is
+   theirs. The letters and the name go together more closely than any two
+   icons do, so they keep their own air while the glass around them is
+   shared. */
+.header-account {
+  margin-left: var(--gap-tight);
+  padding-left: var(--gap-tight);
+}
+
+/* A rule between who is here and everything that is not. The two ends of
+   this piece do different jobs, and a hairline says so where a gap of air
+   was only saying that the icons had run out. */
+.header-account::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 18%;
+  bottom: 18%;
+  width: 1px;
+  background: var(--border);
+}
+
+/* And no wash under the name, under the pointer or with the list open: the
+   piece it sits on is already glass, and a second one lit inside it is a
+   pill floating in a pill. What answers the pointer is the wording coming
+   up to full strength, as it does on every other name in this bar. */
+.header-account > .header-link {
+  gap: 9px;
+  padding: 3px 8px 3px 3px;
+  color: var(--text);
+}
+
+.header-account > .header-link:hover,
+.header-account > .header-link-on {
+  background: none;
+  color: var(--accent-bright);
+}
+
+.header-who {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* What the server is doing, in the bar, where the button that started it was.
+   Shaped like the button it replaces so the bar does not jump. */
+.header-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.header-busy-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  animation: header-busy-pulse 1.4s var(--ease) infinite;
+}
+
+@keyframes header-busy-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* A refusal sits where the button was, so it is read rather than hovered. */
+.header-refused {
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-bright);
+  font-size: 13px;
+  max-width: 340px;
+}
+
+/* A viewer who asked for less movement gets a steady dot rather than none:
+   the point is that something is happening, not that it blinks. */
+@media (prefers-reduced-motion: reduce) {
+  .header-busy-mark {
+    animation: none;
+  }
+}
+
+/* The one piece at the right hand end, holding what the server is doing,
+   what anybody can press, and who is here. It was three, and three pieces
+   read as three decisions about what belongs with what: there is one, which
+   is that this end of the bar is the end you press. */
+.header-side {
+  padding-right: 4px;
+}
+
+/* One icon. A function that is coming is greyed and says so rather than being
+   left out: one nobody can see is one nobody knows is coming. */
+.header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--text);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+/* Drawn at full strength with a heavier line than the icons of the page, and
+   lifted off the glass by a breath of shadow: the bar floats over whatever
+   picture is behind it, and a thin grey line over a busy still is a line
+   nobody finds. The room each one takes is the same, so the bar is not a
+   point taller for it. */
+.header-icon svg,
+.header-account > .header-link > svg {
+  stroke-width: 2.2;
+}
+
+:root[data-theme="dark"] .header-icon svg,
+:root[data-theme="dark"] .header-account > .header-link > svg {
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.5));
+}
+
+/* No wash, the same as the account's own name: the piece it sits on is
+   already glass, and a wash lit inside it is a pill floating in a pill. What
+   answers the pointer is the icon taking the accent, which also survives
+   being held over a bright picture better than a patch of dark ever did. */
+.header-icon:hover:not(:disabled) {
+  background: none;
+  color: var(--accent-bright);
+}
+
+/* Dimmed once, not twice. It was a faint colour at a little over half
+   opacity, which on a dark still reads as off and over a bright one reads as
+   nothing at all: the bar is glass, so what is behind it is whatever is
+   playing. The colour alone tells it from the ones that work, and it
+   survives being held over a white sky. */
+.header-icon:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* A word that opens a short list under it. */
+.header-menu {
+  position: relative;
+  /* A box of its own rather than a line of text: set on a line, the button
+     sat on its baseline with the room for the letters' tails left under it,
+     which lifted the picture of the account off the middle of the bar. */
+  display: flex;
+}
+
+.header-link-on {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* Drawn as the player's panels are: the same glass, the same blur behind it,
+   the same corner and the same room around the lines. Two menus in one
+   interface that answer alike and look unalike are two interfaces. */
+.header-menu-list {
+  /* Held against the window, since it is drawn at the end of the page
+     rather than inside the bar: where it goes is measured off whatever
+     opened it. The bar is fixed to the window too, so the two agree. */
+  position: fixed;
+  min-width: 190px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: var(--radius-card);
+}

@@ -1,0 +1,607 @@
+/*
+ * The page of one work: a film, a series and its seasons, a season and its
+ * episodes.
+ */
+
+/* --------------------------------------------------------------------------
+ * One film
+ * ----------------------------------------------------------------------- */
+
+/* The page is a picture before it is anything else: the backdrop runs the
+   whole way up behind the bar and gives way into the page the way the banner
+   of the home page does, sideways for the words and downwards for the rows. */
+.work {
+  position: relative;
+  isolation: isolate;
+  padding: 0 var(--gutter) var(--gap-section);
+}
+
+.work-backdrop {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: min(100dvh, 1100px);
+  z-index: -1;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 55%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent);
+}
+
+.work-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center var(--where-a-band-is-cut);
+}
+
+.work-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to right,
+      var(--surface-deep) 18%,
+      color-mix(in srgb, var(--surface-deep) 70%, transparent) 55%,
+      color-mix(in srgb, var(--surface-deep) 40%, transparent)
+    ),
+    linear-gradient(to top, var(--surface-deep), transparent 60%);
+}
+
+/* The top of the page: under the bar, and never taller than the window. */
+.work-top {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(var(--gap-wide), 3vw, 56px);
+  padding: calc(var(--header-height) + var(--gap)) 0 var(--gap-section);
+}
+
+.work-poster {
+  flex: none;
+  width: clamp(180px, 19vw, 300px);
+}
+
+.work-poster img,
+.work-poster-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-card);
+  object-fit: cover;
+  box-shadow: var(--shadow-raised);
+}
+
+/* An episode is shown by a still, lying down as every row shows it. */
+.work-poster-lying {
+  width: clamp(260px, 30vw, 480px);
+}
+
+.work-poster-lying img,
+.work-poster-lying .work-poster-empty {
+  aspect-ratio: 16 / 9;
+}
+
+.work-poster-empty {
+  display: grid;
+  place-items: center;
+  background: var(--work-color);
+  font-size: 64px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text) 35%, transparent);
+}
+
+.work-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+/* A ruler as tall as the room the top of the page has: the window under the
+   bar, less the air kept above and below. Nothing is drawn with it; the page
+   reads it to know how much of the synopsis fits. */
+.work-room {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: calc(100dvh - var(--header-height) - var(--gap) - var(--gap-section));
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.work-title {
+  margin: 0;
+  font-size: clamp(30px, 3.6vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.work-tagline {
+  margin: -6px 0 0;
+  color: var(--text-soft);
+  font-style: italic;
+  font-size: 16px;
+}
+
+/* What it is, on one line, the way the banner says it. */
+.work-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--gap-wide);
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+.work-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.work-rating svg {
+  color: var(--accent-bright);
+}
+
+/* Bordered rather than filled, like the badges of the banner: facts about the
+   work, not buttons. */
+.work-badge {
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-deep) 45%, transparent);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+}
+
+.work-badge-warning {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+
+.work-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+/* Which copy, which sound, which words: a word and a choice each, on one
+   line while there is room for it. */
+.work-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px var(--gap-wide);
+}
+
+.work-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14.5px;
+}
+
+.work-choice-label {
+  color: var(--text-faint);
+}
+
+.work-choice-value {
+  font-weight: 550;
+}
+
+.work-choice .picker {
+  min-width: 0;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  border-color: var(--border);
+  background: var(--panel-glass);
+  backdrop-filter: blur(12px);
+  font-weight: 550;
+}
+
+.work-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  margin-top: 4px;
+}
+
+/* Seen, liked and the menu: round, the way the marks of a card are, and
+   lit in the accent once they say yes. */
+.work-marks {
+  display: inline-flex;
+  gap: 10px;
+}
+
+.work-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel-glass);
+  backdrop-filter: blur(12px);
+  color: var(--text);
+  transition: transform var(--quick) var(--ease), background var(--quick) var(--ease);
+  /* Drawn on a layer of its own from the start rather than from the moment
+     the zoom begins. Lifted onto one only then, it was placed again on the
+     nearest whole pixel and the icon jumped sideways before growing. */
+  will-change: transform;
+}
+
+.work-mark:hover {
+  background: var(--surface-hover);
+  transform: scale(1.06);
+}
+
+.work-mark-small {
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+
+.work-mark-on {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  color: var(--accent-bright);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-mark:hover {
+    transform: none;
+  }
+}
+
+.work-progress {
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.work-progress .progress-bar {
+  width: 300px;
+}
+
+/* As wide as reads comfortably, and the whole column when the screen is too
+   short for it to fit otherwise. */
+.work-synopsis {
+  max-width: 78ch;
+}
+
+.work-body-wide .work-synopsis {
+  max-width: none;
+}
+
+.work-overview {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15.5px;
+  line-height: 1.65;
+  overflow: hidden;
+  /* A life written in paragraphs keeps them. */
+  white-space: pre-line;
+}
+
+/* Cut on a whole line, the dots saying there is more. */
+.work-overview[data-cut] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+
+.work-overview-empty {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* Who made it: the part on the left, the names beside it. */
+.work-credits {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 5px var(--gap-wide);
+  margin: 0;
+  font-size: 14.5px;
+}
+
+.work-credit {
+  display: contents;
+}
+
+.work-credit dt {
+  color: var(--text-faint);
+}
+
+.work-credit dd {
+  margin: 0;
+  color: var(--text);
+}
+
+.work-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+/* A picture cut out of the sheets the player's bar uses, as large as the
+   card allows in the film's own shape, on black where the two shapes
+   differ. The card is what the size is measured against. */
+.chapter-frame {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
+  background: var(--surface-deep);
+}
+
+.chapter-still {
+  width: min(100cqw, 100cqh * var(--film-shape));
+  aspect-ratio: var(--film-shape);
+  background-repeat: no-repeat;
+}
+
+/* The panels of what the file holds: a little narrower than the ones of the
+   administration, since there are one per track. */
+/* Each card as wide as what it says and no wider: stretched to a column,
+   a card of short facts was mostly empty on its right. A long path still
+   wraps inside the widest a card may be. */
+/* One card per track, every one the same width and the same height: as many
+   to a row as fit, and every row as tall as the tallest card of all, so four
+   soundtracks read as four alike things. */
+.panels.work-panels {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  grid-auto-rows: 1fr;
+}
+
+/* One to a row, alike heights say nothing and leave holes. */
+@media (max-width: 660px) {
+  .panels.work-panels {
+    grid-auto-rows: auto;
+  }
+}
+
+/* The file above its tracks, as a heading rather than a card: where it is,
+   then what it is, with what can be done to it at the right. */
+.media-file {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap);
+  margin-bottom: calc(var(--gap) * 1.25);
+}
+
+.media-file-words {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.media-file-path {
+  margin: 0 0 6px;
+  color: var(--text-soft);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.media-file-about {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: calc(var(--gap) * 1.25);
+  row-gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.media-file-label {
+  margin-right: 6px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.media-file-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
+}
+
+/* The title beside its mark rather than under it. */
+.panels.work-panels .panel-words {
+  flex-basis: auto;
+}
+
+/* The facts in two columns, every value starting at the same place: the
+   label column as wide as its longest label. */
+.panels.work-panels .work-facts-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--gap);
+  row-gap: 2px;
+}
+
+.panels.work-panels .fact-line {
+  display: contents;
+}
+
+.work-facts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+/* Narrow: the poster above, and the words under it across the whole width. */
+@media (max-width: 800px) {
+  .work-top {
+    flex-direction: column;
+  }
+
+  .work-poster {
+    width: min(220px, 50vw);
+  }
+}
+
+.fact-line {
+  display: flex;
+  gap: var(--gap-tight);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.fact-line dt {
+  color: var(--text-faint);
+  flex: none;
+  min-width: 40%;
+}
+
+.fact-line dd {
+  margin: 0;
+  color: var(--text);
+  min-width: 0;
+  word-break: break-word;
+}
+
+.work-link {
+  color: var(--accent-bright);
+}
+
+.work-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------------------
+   A series and its seasons, a season and its episodes.
+
+   Seasons are cards because a season is chosen by its picture, the way a film
+   is. Episodes are rows because an episode is chosen by its number and its
+   name, and there are twenty four of them under one season.
+   --------------------------------------------------------------------------- */
+
+.work-ancestry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin: 0 0 var(--gap-tight);
+  font-size: 14px;
+}
+
+.work-ancestor {
+  color: var(--text-soft);
+  text-decoration: none;
+}
+
+.work-ancestor:hover,
+.work-ancestor:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* The mark between two steps of the way back, drawn rather than written, so
+   no language has to carry a separator. */
+.work-ancestor + .work-ancestor::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: var(--gap-tight);
+  border-top: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+/* A season's episodes, one to a line: the still, and beside it what it is
+   called, how it is rated, how long it runs and what it is about. */
+.episode-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--gap-wide);
+}
+
+.episode-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-wide);
+}
+
+.episode-line > .card {
+  flex: 0 0 clamp(200px, 24vw, 320px);
+}
+
+.episode-line-words {
+  min-width: 0;
+  max-width: 72ch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--gap-tight);
+  padding-top: 2px;
+}
+
+.episode-line-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.episode-line-name {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.episode-line-name:hover,
+.episode-line-name:focus-visible {
+  text-decoration: underline;
+}
+
+/* A few lines of it, the rest on the episode's own page. */
+.episode-line-overview {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 700px) {
+  .episode-line {
+    flex-direction: column;
+  }
+
+  .episode-line > .card {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+.work-all-watched {
+  margin: var(--gap) 0 0;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* The name of what a carry on button would play, beside it rather than in it:
+   a button whose wording changes length every time it is drawn moves the ones
+   beside it. */
+.carry-on-title {
+  align-self: center;
+  color: var(--text-soft);
+  font-size: 14px;
+}

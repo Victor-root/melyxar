@@ -1,0 +1,341 @@
+/*
+ * What the home page opens on.
+ */
+
+/* --------------------------------------------------------------------------
+ * What the page opens on
+ * ----------------------------------------------------------------------- */
+
+/* Right up against the bar above it and out to both edges of the screen: the
+   banner is the picture, and a picture with a margin drawn round it is a
+   picture in a frame. It is drawn outside the page's own column for exactly
+   that, so nothing here has a width to undo. Rounded only underneath, where
+   it meets the page again. */
+.hero {
+  /*
+   * How the picture gives way to the page under it.
+   *
+   * Not a line and not a short feather at the very edge either: it thins out
+   * over the whole of its last third, holding almost full strength at first
+   * and letting go faster the lower it gets, which is the shape light has
+   * when it falls off. Written once here because two layers wear it, the
+   * picture and the wash over it, and a fade the two disagreed about would
+   * be two fades.
+   */
+  --hero-fade: linear-gradient(
+    to bottom,
+    #000 66%,
+    color-mix(in srgb, #000 88%, transparent) 78%,
+    color-mix(in srgb, #000 56%, transparent) 87%,
+    color-mix(in srgb, #000 24%, transparent) 94%,
+    transparent 100%
+  );
+
+  position: relative;
+  margin: 0;
+  /* Large enough to be the thing somebody meets, short enough that the first
+     row under it is on the screen at the same time: a banner that fills the
+     window is a banner that hides the library behind it. The height itself,
+     and why it is what it is, sits with the other measurements of the
+     interface. */
+  height: var(--hero-height);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  overflow: hidden;
+  isolation: isolate;
+  /* Kept as a layer of its own, which is what stops the fade below being
+     worked out again on every frame of a scroll. A fade is a pass over the
+     whole banner with an alpha to apply, and a banner that is part of the
+     page underneath pays for that pass every time the page moves a point:
+     measured while scrolling a 4K window, nine frames a second with this
+     line missing and fifty one with it. Drawn once and then only moved,
+     it costs its own picture in memory and nothing per frame. */
+  will-change: transform;
+  /* No surface of its own under the picture. It used to carry one, and
+     since a colour on the banner itself is not one of the layers the fade
+     below thins out, what the fade uncovered was that colour rather than
+     the page: a panel of flat grey ending on a line at the banner's foot,
+     which is the hard edge that kept being there however long the fade
+     was made. The work's own colour stands behind the picture instead, on
+     the layer that does fade. */
+  background: none;
+}
+
+/* The pictures, all of them, and the fade at the banner's foot worn once
+   over the lot: it fades out into what the banner is standing on rather
+   than stopping on a line against it, and what shows through where it thins
+   out is the same light the rows below are set on. The words and the two
+   ways through the banner are outside this box and keep their own full
+   strength throughout: nothing here is meant to touch them, only the
+   picture. */
+.hero-pictures {
+  position: absolute;
+  inset: 0;
+  mask-image: var(--hero-fade);
+  -webkit-mask-image: var(--hero-fade);
+}
+
+.hero-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: var(--card-color);
+  transition: opacity 700ms var(--ease);
+}
+
+.hero-backdrop-shown {
+  opacity: 1;
+}
+
+.hero-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center var(--where-a-band-is-cut);
+}
+
+/* The words have to be readable over whatever picture is behind them, and a
+   picture is never twice the same. Two washes rather than one: sideways for
+   the words, upwards so the row under the banner is not cut off by a hard
+   edge. It thins out with the picture it sits on, over the same stretch and
+   by the same fade: a solid strip of colour ending on a line is the harder
+   edge of the two, and the two going together is what reads as one picture
+   giving way rather than as two layers ending at once. */
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, var(--surface-deep) 6%, transparent 62%),
+    linear-gradient(to top, var(--surface-deep) 2%, transparent 42%);
+  mask-image: var(--hero-fade);
+  -webkit-mask-image: var(--hero-fade);
+  pointer-events: none;
+}
+
+.hero-words {
+  position: relative;
+  z-index: 1;
+  max-width: min(560px, 52%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  /* Lined up with the rows underneath rather than with the edge of the
+     screen: the banner spans the whole width, the words start where the page
+     starts.
+
+     At the top, the bar and a breath under it. The banner runs the whole way
+     up behind the bar now, so the top of the banner is not somewhere anything
+     can be written: what is written here is centred in what is left below it
+     rather than in the whole picture, which is where the middle of it really
+     looks to be. */
+  padding: calc(var(--header-height) + var(--gap-tight)) var(--gutter)
+    var(--gap-wide);
+}
+
+.hero-tagline {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.hero-title {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 52px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+/* A drawn title is an image, so it is given a height rather than a font size
+   and never blown up past what was fetched. */
+.hero-title-drawn img {
+  max-height: min(9vw, 96px);
+  max-width: 100%;
+  width: auto;
+  object-fit: contain;
+}
+
+/* What the film is and what the copy holds, on one line. Two lines cost the
+   synopsis one of its three, and the synopsis is the line somebody reads. */
+.hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--gap);
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-soft);
+}
+
+/* What the file holds: short, bordered rather than filled, so a row of three
+   of them reads as facts about the film and not as three buttons. */
+.hero-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.hero-badge {
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-deep) 45%, transparent);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  /* Written as their makers write them: 1080p is not 1080P, and a badge that
+     shouts a name back in the wrong case reads as a machine's own word. */
+  color: var(--text-soft);
+}
+
+/*
+ * The synopsis, as long as there is room for.
+ *
+ * Three lines was a number, and a number is wrong the moment anything else in
+ * the banner changes size: a work with a drawn title and a quotation above it
+ * leaves far less room than one with neither, and a banner set to fill the
+ * screen leaves several times as much. So the count is worked out from what
+ * is really there and written here as a number of lines, which is what keeps
+ * the last one a whole line rather than a row of half letters.
+ *
+ * Three until that sum has been done, which is what it was before and what a
+ * browser that never runs the sum still gets.
+ */
+.hero-overview {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: var(--hero-lines, 3);
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* A banner with no room for even one line of it drops the synopsis rather
+   than the buttons under it. It stays on the page all the same, at no height,
+   because it is what the sum above is measured against. */
+.hero-overview-no-room {
+  display: none;
+}
+
+.hero-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  margin-top: 4px;
+}
+
+/* How far in a work already is: a bar and what is left, under the buttons
+   that carry on with it, on the banner and on the page of the work alike. */
+.progress-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+.progress-bar {
+  width: 220px;
+  max-width: 48%;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+  overflow: hidden;
+}
+
+.progress-done {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* Where it is in the five, and the two ways through them, together in the
+   bottom corner: an arrow halfway down the banner stands between somebody
+   and the words they are reading. */
+.hero-steps {
+  position: absolute;
+  right: var(--gutter);
+  bottom: var(--gap-wide);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+/* The chevron alone: no disc, no outline. What was pressed was always the
+   chevron, and the disc behind it only made a button out of something that
+   reads as a direction. It stays legible over a bright picture by carrying
+   its own shadow rather than a background. */
+.hero-step {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: var(--text);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.65));
+  /* Always there. An arrow that appears under the pointer is an arrow nobody
+     knows about until they have already stopped looking for one, and on a
+     screen with no pointer at all it never appears. */
+  opacity: 0.7;
+  transition: opacity var(--quick) var(--ease), transform var(--quick) var(--ease);
+}
+
+.hero:hover .hero-step,
+.hero:has(:focus-visible) .hero-step {
+  opacity: 1;
+}
+
+.hero-step:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.hero-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 35%, transparent);
+  transition: background var(--quick) var(--ease), width var(--calm) var(--ease);
+}
+
+.hero-dot-on {
+  width: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+/* A picture that slides in under somebody reading it is a picture that reads
+   its own words out from under them. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-backdrop {
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero-words {
+    max-width: 100%;
+    padding-left: var(--gap-wide);
+  }
+
+  .hero::after {
+    background: linear-gradient(to top, var(--surface-deep) 12%, rgba(0, 0, 0, 0.45) 70%);
+  }
+}

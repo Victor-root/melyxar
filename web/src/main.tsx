@@ -5,7 +5,7 @@ import { App } from "./app";
 import { setUpMeasuring } from "./measure";
 import { SettingsProvider } from "./settings";
 import "./theme.css";
-import "./app.css";
+import "./styles/index.css";
 import "./door.css";
 import "./admin.css";
 
