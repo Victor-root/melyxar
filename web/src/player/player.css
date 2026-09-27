@@ -2285,5 +2285,5 @@
 .player-skip:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
 }

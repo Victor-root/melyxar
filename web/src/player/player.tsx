@@ -47,7 +47,6 @@ import type { Panel, Shape, Turn } from "./overlay";
 import { rememberSettings, storedSettings } from "./settings";
 import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
-import "./player.css";
 
 interface Watched {
   sourceId: string;
