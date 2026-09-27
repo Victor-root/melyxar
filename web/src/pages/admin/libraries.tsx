@@ -10,7 +10,7 @@
  * and is shown where it was typed.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api";
 import type { Library, LibraryKind, Root, SetAsideFile } from "../../api";
 import { useAsked, useTold } from "../../asking";
@@ -121,6 +121,16 @@ function LibraryPanel({
      is: a folder when one is named, the whole library otherwise. */
   const [removing, setRemoving] = useState<{ root?: string } | null>(null);
   const [takingBack, setTakingBack] = useState(false);
+  /* Folded to its head at first: a server with a library per kind and
+     several disks was a page of settings to scroll through to reach the one
+     library being looked for. What it says back to a press made from its
+     head, a question or a refusal, opens it. */
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (scan.refused) {
+      setOpen(true);
+    }
+  }, [scan.refused]);
 
   return (
     <Panel
@@ -128,6 +138,7 @@ function LibraryPanel({
       title={library.name}
       lead={`${t(`kind.${library.kind}`)} · ${howMany(library.works, "admin.works", t)}`}
       className="library-panel"
+      folding={{ open, toggle: () => setOpen((was) => !was) }}
       action={
         <>
           <button className="button button-small" onClick={scan.start} disabled={scan.starting}>
@@ -136,7 +147,10 @@ function LibraryPanel({
           </button>
           <button
             className="button button-small button-danger"
-            onClick={() => setRemoving(removing && !removing.root ? null : {})}
+            onClick={() => {
+              setRemoving(removing && !removing.root ? null : {});
+              setOpen(true);
+            }}
           >
             <DeleteIcon size={15} />
             {t("settings.remove_library")}

@@ -59,6 +59,7 @@ export function Panel({
   action,
   soon,
   className,
+  folding,
   children,
 }: {
   icon: ComponentType<IconProps>;
@@ -67,15 +68,25 @@ export function Panel({
   action?: ReactNode;
   soon?: boolean;
   className?: string;
+  /** For a panel among many of the same, folded down to its head until it
+   *  is asked for: whether it is open, and what opens and shuts it. Its
+   *  head, its words included, and the chevron at its end both do. */
+  folding?: { open: boolean; toggle: () => void };
   children?: ReactNode;
 }) {
+  const { t } = useSettings();
+  const shown = folding === undefined || folding.open;
   return (
-    <section className={`panel${soon ? " panel-soon" : ""}${className ? ` ${className}` : ""}`}>
+    <section
+      className={`panel${soon ? " panel-soon" : ""}${folding ? " panel-folding" : ""}${
+        className ? ` ${className}` : ""
+      }`}
+    >
       <header className="panel-head">
         <span className="panel-mark" aria-hidden="true">
           <PanelIcon size={20} />
         </span>
-        <div className="panel-words">
+        <div className="panel-words" onClick={folding?.toggle}>
           <h2>
             {title}
             {soon && <Soon />}
@@ -83,8 +94,20 @@ export function Panel({
           {lead && <p>{lead}</p>}
         </div>
         {action && <div className="panel-action">{action}</div>}
+        {folding && (
+          <button
+            type="button"
+            className="panel-fold"
+            aria-expanded={folding.open}
+            aria-label={t(folding.open ? "admin.fold" : "admin.unfold")}
+            title={t(folding.open ? "admin.fold" : "admin.unfold")}
+            onClick={folding.toggle}
+          >
+            <ChevronDownIcon size={18} />
+          </button>
+        )}
       </header>
-      {children && <div className="panel-body">{children}</div>}
+      {children && shown && <div className="panel-body">{children}</div>}
     </section>
   );
 }

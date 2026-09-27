@@ -411,6 +411,42 @@
   margin-left: auto;
 }
 
+/* A panel folded to its head: its words open it as well as its chevron,
+   which turns over once it is open. */
+.panel-folding .panel-words {
+  cursor: pointer;
+}
+
+.panel-fold {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-soft);
+  transition:
+    color var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+.panel-fold:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+}
+
+.panel-fold > svg {
+  transition: transform var(--quick) var(--ease);
+}
+
+.panel-fold[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
 .panel-body {
   display: flex;
   flex-direction: column;
