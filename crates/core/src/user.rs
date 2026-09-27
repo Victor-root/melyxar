@@ -421,6 +421,45 @@ impl HomeSection {
     }
 }
 
+/// One of the buttons grouped at the right end of the bar at the top.
+///
+/// Each can be moved into the account's menu, next to them, by whoever finds
+/// it in the way there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderButton {
+    Search,
+    Notifications,
+    Favourites,
+    WatchLater,
+}
+
+impl HeaderButton {
+    /// Every button, in the order the bar shows them.
+    pub const fn every() -> [Self; 4] {
+        [
+            Self::Search,
+            Self::Notifications,
+            Self::Favourites,
+            Self::WatchLater,
+        ]
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Search => "search",
+            Self::Notifications => "notifications",
+            Self::Favourites => "favourites",
+            Self::WatchLater => "watch_later",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::every()
+            .into_iter()
+            .find(|button| button.as_str() == value)
+    }
+}
+
 /// Which colour scheme the interface uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -515,6 +554,12 @@ pub struct Preferences {
     /// Whether the bar at the top slides away while a page is read down, and
     /// comes back at the first move up.
     pub header_hides_on_scroll: bool,
+    /// The buttons of the bar in the order it shows them. Always every
+    /// button, once each, in the bar or not.
+    pub header_buttons: Vec<HeaderButton>,
+    /// The buttons of the bar moved into the account's menu. Kept apart from
+    /// the order, so a button brought back comes back where it was.
+    pub buttons_in_the_menu: Vec<HeaderButton>,
     /// Whether this account is left off the list the sign in screen offers.
     ///
     /// The list is a deliberate disclosure, and this is the same choice made
@@ -570,6 +615,8 @@ impl Default for Preferences {
             banner_at_random: false,
             banner_fills_the_screen: false,
             header_hides_on_scroll: true,
+            header_buttons: HeaderButton::every().to_vec(),
+            buttons_in_the_menu: Vec::new(),
             // Shown by default: a household server is the ordinary case, and a
             // list with holes in it is of no use to anybody.
             hidden_at_the_door: false,
@@ -646,6 +693,20 @@ impl Preferences {
             }
         }
         self.hidden_home_sections = hidden;
+        let mut buttons: Vec<HeaderButton> = Vec::new();
+        for button in self.header_buttons.into_iter().chain(HeaderButton::every()) {
+            if !buttons.contains(&button) {
+                buttons.push(button);
+            }
+        }
+        self.header_buttons = buttons;
+        let mut in_the_menu: Vec<HeaderButton> = Vec::new();
+        for button in self.buttons_in_the_menu {
+            if !in_the_menu.contains(&button) {
+                in_the_menu.push(button);
+            }
+        }
+        self.buttons_in_the_menu = in_the_menu;
         self
     }
 
@@ -998,6 +1059,29 @@ mod tests {
             chosen.resume_rules,
             "a kind never given rules follows those of every kind"
         );
+    }
+
+    #[test]
+    fn the_header_buttons_always_hold_every_button_once() {
+        let chosen = Preferences {
+            header_buttons: vec![HeaderButton::WatchLater, HeaderButton::WatchLater],
+            buttons_in_the_menu: vec![HeaderButton::Favourites, HeaderButton::Favourites],
+            ..Preferences::default()
+        }
+        .normalised();
+        assert_eq!(
+            chosen.header_buttons,
+            [
+                HeaderButton::WatchLater,
+                HeaderButton::Search,
+                HeaderButton::Notifications,
+                HeaderButton::Favourites,
+            ]
+        );
+        assert_eq!(chosen.buttons_in_the_menu, vec![HeaderButton::Favourites]);
+        for button in HeaderButton::every() {
+            assert_eq!(HeaderButton::parse(button.as_str()), Some(button));
+        }
     }
 
     #[test]

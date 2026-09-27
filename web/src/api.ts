@@ -511,6 +511,9 @@ export type HomeSection =
   | "recently_added"
   | `newest:${LibraryKind}`;
 
+/** One of the buttons grouped at the right end of the bar at the top. */
+export type HeaderButton = "search" | "notifications" | "favourites" | "watch_later";
+
 export interface Credit {
   /** Where their own page is. */
   person_id: string;
@@ -1456,6 +1459,10 @@ export interface ViewerPreferences {
   banner_fills_the_screen: boolean;
   /** Whether the bar at the top slides away while a page is read down. */
   header_hides_on_scroll: boolean;
+  /** Every button at the right end of the bar, in its order, and those
+   *  moved into the account's menu. */
+  header_buttons: HeaderButton[];
+  buttons_in_the_menu: HeaderButton[];
   /** Whether this account is left off the list the sign in screen offers.
    *  Hidden, it still signs in: the name is typed rather than pressed. */
   hidden_at_the_door: boolean;

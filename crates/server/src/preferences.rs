@@ -9,7 +9,7 @@ use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_core::library::LibraryKind;
 use melyxar_core::user::{
-    DownmixMethod, HomeSection, Preferences, SubtitleMode, ThemeMode, WideGamutChoice,
+    DownmixMethod, HeaderButton, HomeSection, Preferences, SubtitleMode, ThemeMode, WideGamutChoice,
 };
 use melyxar_core::work::{ResumeRules, LEAST_MAX_PERCENT, MOST_MIN_PERCENT, MOST_MIN_SECONDS};
 use serde::{Deserialize, Serialize};
@@ -65,6 +65,10 @@ struct PreferencesView {
     banner_fills_the_screen: bool,
     /// Whether the bar at the top slides away while a page is read down.
     header_hides_on_scroll: bool,
+    /// Every button at the right end of the bar, in the order it shows them,
+    /// and those moved into the account's menu.
+    header_buttons: Vec<&'static str>,
+    buttons_in_the_menu: Vec<&'static str>,
     /// Whether this account is left off the list the sign in screen offers.
     hidden_at_the_door: bool,
     /// Every kind of library, in the order the home page lays them out.
@@ -134,6 +138,10 @@ struct PreferencesBody {
     banner_fills_the_screen: Option<bool>,
     #[serde(default)]
     header_hides_on_scroll: Option<bool>,
+    #[serde(default)]
+    header_buttons: Option<Vec<String>>,
+    #[serde(default)]
+    buttons_in_the_menu: Option<Vec<String>>,
     #[serde(default)]
     hidden_at_the_door: Option<bool>,
     #[serde(default)]
@@ -237,6 +245,12 @@ async fn write(
     }
     if let Some(hides) = body.header_hides_on_scroll {
         chosen.header_hides_on_scroll = hides;
+    }
+    if let Some(buttons) = body.header_buttons {
+        chosen.header_buttons = buttons_named(&buttons)?;
+    }
+    if let Some(buttons) = body.buttons_in_the_menu {
+        chosen.buttons_in_the_menu = buttons_named(&buttons)?;
     }
     if let Some(hidden) = body.hidden_at_the_door {
         chosen.hidden_at_the_door = hidden;
@@ -342,6 +356,15 @@ fn sections_named(names: &[String]) -> Result<Vec<HomeSection>> {
         .ok_or_else(|| ServerError::invalid_input("no section of the home page goes by that name"))
 }
 
+/// Buttons of the bar read from their names, all of them or none.
+fn buttons_named(names: &[String]) -> Result<Vec<HeaderButton>> {
+    names
+        .iter()
+        .map(|name| HeaderButton::parse(name))
+        .collect::<Option<_>>()
+        .ok_or_else(|| ServerError::invalid_input("no button of the bar goes by that name"))
+}
+
 async fn view(
     state: &AppState,
     who: &melyxar_core::user::User,
@@ -375,6 +398,16 @@ async fn view(
         banner_at_random: chosen.banner_at_random,
         banner_fills_the_screen: chosen.banner_fills_the_screen,
         header_hides_on_scroll: chosen.header_hides_on_scroll,
+        header_buttons: chosen
+            .header_buttons
+            .iter()
+            .map(|button| button.as_str())
+            .collect(),
+        buttons_in_the_menu: chosen
+            .buttons_in_the_menu
+            .iter()
+            .map(|button| button.as_str())
+            .collect(),
         hidden_at_the_door: chosen.hidden_at_the_door,
         home_order: chosen.home_order.iter().map(|kind| kind.as_str()).collect(),
         home_sections: chosen
