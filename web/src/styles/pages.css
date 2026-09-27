@@ -318,13 +318,6 @@
  * Foot of the page
  * ----------------------------------------------------------------------- */
 
-.footer {
-  padding: var(--gap-wide) var(--gutter);
-  border-top: 1px solid var(--border);
-  color: var(--text-faint);
-  font-size: 12px;
-}
-
 /* --------------------------------------------------------------------------
  * The shape of a page, before the page
  * ----------------------------------------------------------------------- */

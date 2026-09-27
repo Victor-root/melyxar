@@ -11,7 +11,7 @@ import { useEffect, useRef } from "react";
 import { useBranding } from "./player/logo";
 import { wearTheLogo } from "./installing";
 import { nameTheTab } from "./tab";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { api } from "./api";
 import { AttentionProvider } from "./attention";
 import { AdministrationLine } from "./live";
@@ -39,6 +39,7 @@ import { AdminJournal } from "./pages/admin/journal";
 import { AdminDiagnostics } from "./pages/admin/diagnostics";
 import { AdminSettings } from "./pages/admin/settings";
 import { MySettingsLayout } from "./pages/settings/layout";
+import { MyAbout } from "./pages/settings/about";
 import { MyProfile } from "./pages/settings/profile";
 import { MyAppearance } from "./pages/settings/appearance";
 import { MyHomePage } from "./pages/settings/home";
@@ -108,7 +109,6 @@ function TheLibrary() {
   /* The box the whole library scrolls in, held so the bar drawn over it can
      read where it stands. */
   const scrolling = useRef<HTMLDivElement>(null);
-  const location = useLocation();
   // Going back finds every page where it was left.
   useKeptPlaces(scrolling);
 
@@ -166,20 +166,10 @@ function TheLibrary() {
                 <Route path="home" element={<MyHomePage />} />
                 <Route path="playback" element={<MyPlayback />} />
                 <Route path="subtitles" element={<MySubtitles />} />
+                <Route path="about" element={<MyAbout />} />
               </Route>
               <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
             </Routes>
-            {/* Said once, on the home page, where the provider's pictures and
-                words are shown first. Not under a grid, which is read to its
-                end to find a film and where a line of small print only
-                stands in the way, nor on the tools and somebody's own
-                settings, which show none of them, nor on the page of a work
-                or of a person, which is meant to be the film alone. */}
-            {location.pathname === "/" && (
-              <footer className="footer">
-                <span>{t("attribution.tmdb")}</span>
-              </footer>
-            )}
           </div>
 
           {/* Outside the box it belongs to, because a bar drawn inside it

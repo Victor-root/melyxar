@@ -180,6 +180,20 @@ export const FINDABLE: FindableSection[] = [
     },
   },
   {
+    area: "settings",
+    path: "about",
+    name: "me.about",
+    files: ["pages/settings/about.tsx"],
+    named: [
+      ["about.server"],
+      ["about.server_name"],
+      ["about.version"],
+      ["about.api_version"],
+      ["about.licence", "about.licence_why"],
+      ["about.metadata", "attribution.tmdb"],
+    ],
+  },
+  {
     area: "admin",
     path: "",
     name: "admin.overview",

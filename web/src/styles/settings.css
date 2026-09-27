@@ -134,6 +134,29 @@
   padding: 0 2px;
 }
 
+/* What Melyxar is: its mark, who made it, and where its source lives. */
+.about-melyxar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.about-melyxar p {
+  flex: 1 1 260px;
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.about-melyxar a:not(.button) {
+  color: var(--accent-bright);
+}
+
+.about-value {
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
 .profile-card {
   display: flex;
   align-items: center;
