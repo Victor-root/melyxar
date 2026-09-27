@@ -27,7 +27,7 @@ import {
 } from "../../components/panel";
 import type { State } from "../../components/panel";
 import { refusalKey } from "../../i18n";
-import { DeleteIcon, FolderIcon, KindIcon, RefreshIcon } from "../../icons";
+import { DeleteIcon, FolderIcon, InfoIcon, KindIcon, RefreshIcon } from "../../icons";
 import type { IconProps } from "../../icons";
 import { languageName, METADATA_LANGUAGES } from "../../languages";
 import { EPISODIC, KINDS, useLibraries } from "../../libraries";
@@ -186,11 +186,19 @@ function LibraryPanel({
             onSettled={(name) => editing.rename(library, name)}
           />
         </Setting>
+        <h3 className="settings-heading">{t("admin.automatic_processing")}</h3>
         {/* What every arrival goes through, said rather than offered: going
             without any of it only ever costs, so there is nothing to choose. */}
-        <p className="setting-always">
-          {t(library.kind === "home_media" ? "admin.always_on_arrival_own" : "admin.always_on_arrival")}
-        </p>
+        <div className="setting-always">
+          <InfoIcon size={16} />
+          <div className="setting-always-words">
+            <span className="setting-always-title">{t("admin.always_done")}</span>
+            <span>
+              {t(library.kind === "home_media" ? "admin.always_on_arrival_own" : "admin.always_on_arrival")}
+            </span>
+          </div>
+        </div>
+        <h3 className="settings-heading">{t("admin.optional_processing")}</h3>
         <Setting label={t("settings.extract_subtitles")} why={t("admin.extract_subtitles_why")}>
           <Toggle
             label={t("settings.extract_subtitles")}
@@ -221,6 +229,7 @@ function LibraryPanel({
             onChange={(process_on_arrival) => editing.settle(library, { process_on_arrival })}
           />
         </Setting>
+        <h3 className="settings-heading">{t("admin.library_tracking")}</h3>
         <Setting
           label={t("settings.watch_in_real_time")}
           why={t(library.watch_state === "starting" ? "admin.watch_starting" : "admin.watch_why")}

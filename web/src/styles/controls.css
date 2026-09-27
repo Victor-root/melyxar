@@ -568,13 +568,33 @@ input[type="radio"]:disabled {
 /* What a panel says it always does, as opposed to what it offers: read, not
    set, so quieter than a notice and without a switch beside it. */
 .setting-always {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-tight);
   margin: 0;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--text-soft);
   font-size: 13.5px;
   line-height: 1.45;
+}
+
+.setting-always > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent-bright);
+}
+
+.setting-always-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setting-always-title {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .panel-notice {
