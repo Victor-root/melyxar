@@ -314,6 +314,12 @@
     height: 46px;
   }
 
+  /* Level with the foot of the words rather than their middle: centred, a
+     button stands higher than the line it belongs beside reads. */
+  .page-head-actions {
+    align-self: flex-end;
+  }
+
   /* The name keeps room to be read beside whatever the page offers. */
   .page-head-words {
     flex: 0 1 auto;
