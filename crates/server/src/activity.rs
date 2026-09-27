@@ -50,6 +50,8 @@ struct LineView {
     /// information, attention or trouble.
     level: &'static str,
     user_id: Option<String>,
+    /// Where the account's picture is served, when it has one.
+    user_avatar: Option<String>,
     work_id: Option<String>,
     /// What the browser said it was.
     device: Option<String>,
@@ -104,6 +106,7 @@ async fn activity(
                 kind: line.kind,
                 level: line.level.as_str(),
                 user_id: line.user.map(|user| user.to_string()),
+                user_avatar: line.avatar.as_deref().map(crate::images::face_url),
                 work_id: line.work.map(|work| work.to_string()),
                 device: line.device,
                 details: line.details,

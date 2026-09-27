@@ -70,9 +70,14 @@ function joined(parts: (string | null)[]): string | null {
   return kept.length > 0 ? kept.join(" · ") : null;
 }
 
+/** Who a line is about, by the name written into it. */
+export function whoOf(line: ActivityLine, t: Wording): string {
+  return text(line.details, "user_name") ?? t("activity.someone");
+}
+
 export function sayLine(line: ActivityLine, t: Wording): Said {
   const { details } = line;
-  const user = text(details, "user_name") ?? t("activity.someone");
+  const user = whoOf(line, t);
   const device = line.device ? deviceName(line.device, t, text(details, "browser")) : null;
 
   switch (line.kind) {

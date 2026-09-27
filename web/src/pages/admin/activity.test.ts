@@ -13,6 +13,7 @@ function line(kind: string, details: Record<string, unknown>, device: string | n
     kind,
     level: "information",
     user_id: null,
+    user_avatar: null,
     work_id: null,
     device,
     details,

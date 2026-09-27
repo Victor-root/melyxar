@@ -1491,6 +1491,8 @@ export interface ActivityLine {
   kind: string;
   level: "information" | "attention" | "trouble";
   user_id: string | null;
+  /** Where the account's picture is served, when it has one. */
+  user_avatar: string | null;
   work_id: string | null;
   /** What the browser said it was. */
   device: string | null;

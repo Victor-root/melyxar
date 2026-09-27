@@ -511,6 +511,8 @@ pub struct Entry {
     pub kind: String,
     pub level: Level,
     pub user: Option<UserId>,
+    /// Where the account's picture is stored, when it has one.
+    pub avatar: Option<String>,
     pub work: Option<WorkId>,
     pub device: Option<String>,
     /// Everything else the line says, as it was written.
@@ -543,6 +545,7 @@ pub async fn page(
             at: line.at,
             kind: line.kind,
             user: line.user_id,
+            avatar: line.user_avatar,
             work: line.work_id,
             device: line.device_name,
         })
