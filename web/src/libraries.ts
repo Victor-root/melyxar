@@ -31,6 +31,10 @@ export interface Libraries {
  *  kinds a search may be narrowed to. */
 export const KINDS: LibraryKind[] = ["movies", "series", "anime", "home_media", "shows", "music"];
 
+/** The kinds held in seasons and episodes, the only ones whose openings can
+ *  be found by comparing the episodes of a season. */
+export const EPISODIC: LibraryKind[] = ["series", "anime", "shows"];
+
 export const LibrariesContext = createContext<Libraries>({
   all: [],
   refresh: () => {},

@@ -272,11 +272,14 @@ export interface Library {
   kind: LibraryKind;
   works: number;
   version: number;
-  /** Whether a scan of this library reads every film for where it can be
-      started, rather than leaving it to the upkeep. */
-  key_frames_during_scan: boolean;
-  /** The same, for the pictures of the playback bar. */
-  thumbnails_during_scan: boolean;
+  /** Which heavy readings it wants: the subtitles made of words, the
+      pictures of the playback bar, the opening and closing titles. */
+  extract_subtitles: boolean;
+  make_thumbnails: boolean;
+  detect_openings: boolean;
+  /** Whether those are done as soon as a file arrives, rather than by their
+      scheduled tasks. */
+  process_on_arrival: boolean;
   /** Whether its folders are watched, and it is scanned again as soon as
       something in them changes. */
   watch_in_real_time: boolean;
@@ -1667,16 +1670,20 @@ export const api = {
   /* What a scan of one library does in one sitting. Both switches travel
      together, because they are one answer to one question on one screen. */
   setLibraryOptions: (library: string, options: {
-    key_frames_during_scan: boolean;
-    thumbnails_during_scan: boolean;
+    extract_subtitles: boolean;
+    make_thumbnails: boolean;
+    detect_openings: boolean;
+    process_on_arrival: boolean;
     watch_in_real_time: boolean;
     keeps_resume_points: boolean;
     keeps_watched_marks: boolean;
     metadata_language: string;
   }) =>
     put<{
-      key_frames_during_scan: boolean;
-      thumbnails_during_scan: boolean;
+      extract_subtitles: boolean;
+      make_thumbnails: boolean;
+      detect_openings: boolean;
+      process_on_arrival: boolean;
       watch_in_real_time: boolean;
       keeps_resume_points: boolean;
       keeps_watched_marks: boolean;

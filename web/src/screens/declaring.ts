@@ -63,8 +63,10 @@ export function useLibraryEditing(onChanged: () => void): LibraryEditing {
     setRefused(null);
     api
       .setLibraryOptions(library.id, {
-        key_frames_during_scan: wanted.key_frames_during_scan,
-        thumbnails_during_scan: wanted.thumbnails_during_scan,
+        extract_subtitles: wanted.extract_subtitles,
+        make_thumbnails: wanted.make_thumbnails,
+        detect_openings: wanted.detect_openings,
+        process_on_arrival: wanted.process_on_arrival,
         watch_in_real_time: wanted.watch_in_real_time,
         keeps_resume_points: wanted.keeps_resume_points,
         keeps_watched_marks: wanted.keeps_watched_marks,

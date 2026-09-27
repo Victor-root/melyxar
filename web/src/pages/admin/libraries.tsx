@@ -30,7 +30,7 @@ import { refusalKey } from "../../i18n";
 import { DeleteIcon, FolderIcon, KindIcon, RefreshIcon } from "../../icons";
 import type { IconProps } from "../../icons";
 import { languageName, METADATA_LANGUAGES } from "../../languages";
-import { KINDS, useLibraries } from "../../libraries";
+import { EPISODIC, KINDS, useLibraries } from "../../libraries";
 import { howMany } from "../../readable";
 import { useStartScan } from "../../running";
 import { useDeclaring, useLibraryEditing, useRemoving } from "../../screens/declaring";
@@ -186,18 +186,39 @@ function LibraryPanel({
             onSettled={(name) => editing.rename(library, name)}
           />
         </Setting>
-        <Setting label={t("settings.key_frames_during_scan")} why={t("admin.key_frames_why")}>
+        {/* What every arrival goes through, said rather than offered: going
+            without any of it only ever costs, so there is nothing to choose. */}
+        <p className="setting-always">
+          {t(library.kind === "home_media" ? "admin.always_on_arrival_own" : "admin.always_on_arrival")}
+        </p>
+        <Setting label={t("settings.extract_subtitles")} why={t("admin.extract_subtitles_why")}>
           <Toggle
-            label={t("settings.key_frames_during_scan")}
-            checked={library.key_frames_during_scan}
-            onChange={(key_frames_during_scan) => editing.settle(library, { key_frames_during_scan })}
+            label={t("settings.extract_subtitles")}
+            checked={library.extract_subtitles}
+            onChange={(extract_subtitles) => editing.settle(library, { extract_subtitles })}
           />
         </Setting>
-        <Setting label={t("settings.thumbnails_during_scan")} why={t("admin.thumbnails_scan_why")}>
+        <Setting label={t("settings.make_thumbnails")} why={t("admin.make_thumbnails_why")}>
           <Toggle
-            label={t("settings.thumbnails_during_scan")}
-            checked={library.thumbnails_during_scan}
-            onChange={(thumbnails_during_scan) => editing.settle(library, { thumbnails_during_scan })}
+            label={t("settings.make_thumbnails")}
+            checked={library.make_thumbnails}
+            onChange={(make_thumbnails) => editing.settle(library, { make_thumbnails })}
+          />
+        </Setting>
+        {EPISODIC.includes(library.kind) && (
+          <Setting label={t("settings.detect_openings")} why={t("admin.detect_openings_why")}>
+            <Toggle
+              label={t("settings.detect_openings")}
+              checked={library.detect_openings}
+              onChange={(detect_openings) => editing.settle(library, { detect_openings })}
+            />
+          </Setting>
+        )}
+        <Setting label={t("settings.process_on_arrival")} why={t("admin.process_on_arrival_why")}>
+          <Toggle
+            label={t("settings.process_on_arrival")}
+            checked={library.process_on_arrival}
+            onChange={(process_on_arrival) => editing.settle(library, { process_on_arrival })}
           />
         </Setting>
         <Setting

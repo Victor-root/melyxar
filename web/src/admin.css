@@ -909,6 +909,18 @@
 }
 
 /* A refusal or a word from the server, said inside the panel it is about. */
+/* What a panel says it always does, as opposed to what it offers: read, not
+   set, so quieter than a notice and without a switch beside it. */
+.setting-always {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text-soft);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
 .panel-notice {
   margin: 0;
   padding: 10px 12px;

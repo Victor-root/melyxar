@@ -394,8 +394,12 @@ pub(crate) fn provider_of(
 
 #[derive(Debug, Deserialize)]
 struct OptionsAsked {
-    key_frames_during_scan: bool,
-    thumbnails_during_scan: bool,
+    /// Which heavy readings the library wants, and whether they are done as
+    /// soon as a file arrives rather than by their scheduled tasks.
+    extract_subtitles: bool,
+    make_thumbnails: bool,
+    detect_openings: bool,
+    process_on_arrival: bool,
     /// Whether the library's folders are watched and scanned again as soon
     /// as something in them changes.
     watch_in_real_time: bool,
@@ -410,8 +414,10 @@ struct OptionsAsked {
 
 #[derive(Debug, Serialize)]
 struct OptionsView {
-    key_frames_during_scan: bool,
-    thumbnails_during_scan: bool,
+    extract_subtitles: bool,
+    make_thumbnails: bool,
+    detect_openings: bool,
+    process_on_arrival: bool,
     watch_in_real_time: bool,
     keeps_resume_points: bool,
     keeps_watched_marks: bool,
@@ -441,7 +447,7 @@ fn language_of(asked: &str) -> Result<String> {
     Ok(language)
 }
 
-/// Says what a scan of this library does, and what language it is described in.
+/// Says what this library does with its files, and what language it is described in.
 ///
 /// Everything travels together, because it is one screen and one answer:
 /// sending half of it would leave the other half to be guessed at, and the
@@ -455,8 +461,10 @@ async fn set_library_options(
     let library = library_of(&state, &id).await?;
     let language = language_of(&asked.metadata_language)?;
     let options = melyxar_core::library::LibraryOptions {
-        key_frames_during_scan: asked.key_frames_during_scan,
-        thumbnails_during_scan: asked.thumbnails_during_scan,
+        extract_subtitles: asked.extract_subtitles,
+        make_thumbnails: asked.make_thumbnails,
+        detect_openings: asked.detect_openings,
+        process_on_arrival: asked.process_on_arrival,
         watch_in_real_time: asked.watch_in_real_time,
         keeps_resume_points: asked.keeps_resume_points,
         keeps_watched_marks: asked.keeps_watched_marks,
@@ -483,20 +491,24 @@ async fn set_library_options(
     // behaves as it did before.
     tracing::debug!(
         library = library.name,
-        key_frames_during_scan = options.key_frames_during_scan,
-        thumbnails_during_scan = options.thumbnails_during_scan,
+        extract_subtitles = options.extract_subtitles,
+        make_thumbnails = options.make_thumbnails,
+        detect_openings = options.detect_openings,
+        process_on_arrival = options.process_on_arrival,
         watch_in_real_time = options.watch_in_real_time,
         keeps_resume_points = options.keeps_resume_points,
         keeps_watched_marks = options.keeps_watched_marks,
         metadata_language = language,
         changed,
         asked_about_again,
-        "what a scan of this library does was set"
+        "what this library does was set"
     );
 
     Ok(Json(OptionsView {
-        key_frames_during_scan: options.key_frames_during_scan,
-        thumbnails_during_scan: options.thumbnails_during_scan,
+        extract_subtitles: options.extract_subtitles,
+        make_thumbnails: options.make_thumbnails,
+        detect_openings: options.detect_openings,
+        process_on_arrival: options.process_on_arrival,
         watch_in_real_time: options.watch_in_real_time,
         keeps_resume_points: options.keeps_resume_points,
         keeps_watched_marks: options.keeps_watched_marks,
