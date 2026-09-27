@@ -169,6 +169,9 @@ interface Props {
   /** Opens the playback diagnostics, a window of their own beside the
    *  panels rather than one of them. */
   onFacts: () => void;
+  /** Opens the window where an administrator corrects the opening and
+   *  closing titles. Absent for anybody else, who is offered no such line. */
+  onSegments?: () => void;
   onClose: () => void;
   /** Steps to the episode after or before this one. Absent where there is
    *  none, which is when the button that asks for it draws nothing. */
@@ -1528,6 +1531,15 @@ function sheetFor(
                 shut();
               }}
             />
+            {surroundings.onSegments && (
+              <Line
+                label={t("segments.open")}
+                onPick={() => {
+                  surroundings.onSegments?.();
+                  shut();
+                }}
+              />
+            )}
           </>
         ),
       };
@@ -1748,12 +1760,16 @@ function Menu({
  */
 export function SkipStretch({
   playback,
+  segments,
   t,
 }: {
   playback: Playback;
+  /** What is offered to skip, which a correction made during the film
+   *  changes before the next plan is asked for. */
+  segments: PlaybackSegment[];
   t: (key: string, values?: Record<string, string | number>) => string;
 }) {
-  const inside = theStretchAt(playback.plan?.segments ?? [], playback.at);
+  const inside = theStretchAt(segments, playback.at);
   if (!inside) {
     return null;
   }
