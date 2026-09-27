@@ -215,6 +215,8 @@ struct PlaybackSettingsView {
     /// How far behind each viewer those segments stay whatever the ceiling
     /// says, in seconds.
     transcode_kept_behind_seconds: u32,
+    /// The codecs a converted film may come out in, best first.
+    transcode_video_codecs: Vec<String>,
 }
 
 /// What the server is set to do about wide gamut colour it cannot show a
@@ -255,6 +257,7 @@ async fn set_playback_settings(
             most_at_once: asked.max_transcoding_sessions,
             cache_megabytes: asked.transcode_cache_megabytes,
             kept_behind_seconds: asked.transcode_kept_behind_seconds,
+            video_codecs: asked.transcode_video_codecs,
         })
         .await
         .map_err(|error| crate::error::ServerError::internal(error.to_string()))?;
@@ -280,6 +283,7 @@ impl PlaybackSettingsView {
             max_transcoding_sessions: limits.most_at_once,
             transcode_cache_megabytes: limits.cache_megabytes,
             transcode_kept_behind_seconds: limits.kept_behind_seconds,
+            transcode_video_codecs: limits.video_codecs,
         }
     }
 }
