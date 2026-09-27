@@ -46,6 +46,8 @@ import { sayPoint } from "../pages/admin/activity";
 import { KINDS, nameOfKind } from "../libraries";
 import { useBranding } from "../player/logo";
 import { FOR_ADMINISTRATORS } from "../buttons";
+import { addressOf, find } from "../findable";
+import type { Area, Found } from "../findable";
 import { useSettings } from "../settings";
 import { isSectioned } from "./sectioned";
 import { Face } from "./face";
@@ -116,6 +118,24 @@ export function scopeToBrowse(scope: string): { kind?: LibraryKind; library?: st
   return {};
 }
 
+/** The settings a scope searches instead of the library, if it is one of
+ *  them. */
+function areaOf(scope: string): Area | null {
+  return scope === "area:settings" ? "settings" : scope === "area:admin" ? "admin" : null;
+}
+
+/** The scope a page opens the search on: its own settings on the pages of
+ *  settings and of the administration, the whole library anywhere else. */
+function scopeOfPage(pathname: string): string {
+  if (/^\/admin(\/|$)/.test(pathname)) {
+    return "area:admin";
+  }
+  if (/^\/settings(\/|$)/.test(pathname)) {
+    return "area:settings";
+  }
+  return "";
+}
+
 /** The categories this server really has, in the order they are offered. */
 function categoriesOf(libraries: Library[]): Category[] {
   return KINDS.map((kind) => ({
@@ -138,7 +158,18 @@ export function Header({
   const [parameters] = useSearchParams();
   const [query, setQuery] = useState(parameters.get("search") ?? "");
   const words = query.trim();
-  const [scope, setScope] = useState(parameters.get("in") ?? "");
+  const [scope, setScope] = useState(
+    () => parameters.get("in") ?? scopeOfPage(location.pathname),
+  );
+  const area = areaOf(scope);
+  /* Stepping into the settings or the administration searches them, and
+     stepping out of them the library again: a search on a page of settings
+     that answers with films is answering a question nobody asked there. A
+     scope chosen by hand elsewhere stays as it was. */
+  const pageScope = scopeOfPage(location.pathname);
+  useEffect(() => {
+    setScope((before) => (pageScope || areaOf(before) ? pageScope : before));
+  }, [pageScope]);
   /* Whether the field is out of its magnifier. Open already when the address
      carries a search: landing on a page of results with the words hidden
      inside an icon is a page answering a question nobody can see. */
@@ -155,6 +186,7 @@ export function Header({
   const searchForm = useRef<HTMLFormElement>(null);
   const { jobs } = useRunning();
   const { account, leave } = useAccount();
+  const administrator = account?.is_administrator === true;
   const branding = useBranding();
   const start = useRef<HTMLDivElement>(null);
   const side = useRef<HTMLDivElement>(null);
@@ -244,6 +276,15 @@ export function Header({
       return;
     }
     setQuickDismissed(true);
+    // Settings have no page of results: the enter key goes to the first one.
+    if (area) {
+      const first = foundSettings[0];
+      if (first) {
+        chooseQuickResult();
+        navigate(addressOf(first));
+      }
+      return;
+    }
     navigate(searchAddress(words, scope));
   };
 
@@ -307,7 +348,7 @@ export function Header({
   useEffect(() => setQuickDismissed(false), [words, scope]);
 
   useEffect(() => {
-    if (!looking || !words) {
+    if (!looking || !words || area) {
       setQuickResults(null);
       return;
     }
@@ -326,9 +367,14 @@ export function Header({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [words, scope, looking]);
+  }, [words, scope, looking, area]);
 
-  const quickOpen = looking && words !== "" && quickResults !== null && !quickDismissed;
+  /* The settings are found here and at once: a few hundred names in memory
+     need no server and no pause. */
+  const foundSettings: Found[] = area ? find(words, area, t, QUICK_RESULTS) : [];
+
+  const quickOpen =
+    looking && words !== "" && (area !== null || quickResults !== null) && !quickDismissed;
 
   /* Measured against the bar rather than against the field: the field grows
      while somebody watches, and a panel chasing that growth would jump under
@@ -381,7 +427,6 @@ export function Header({
     setQuery("");
   };
 
-  const administrator = account?.is_administrator === true;
   const inTheMenu = (button: HeaderButton) => !buttonsInTheBar.includes(button);
   /* What only an administrator has any use for is nowhere for anybody else,
      and a scan nowhere on a server with nothing to scan. */
@@ -528,7 +573,13 @@ export function Header({
                           event.currentTarget.blur();
                         }
                       }}
-                      placeholder={t("search.placeholder")}
+                      placeholder={t(
+                        area === "admin"
+                          ? "search.placeholder_admin"
+                          : area === "settings"
+                            ? "search.placeholder_settings"
+                            : "search.placeholder",
+                      )}
                       aria-label={t("nav.search")}
                       /* Out of the way of the tab key while it is folded away: a
                          field nobody can see is not a stop on the way round. */
@@ -539,6 +590,7 @@ export function Header({
                         the asking happens. */}
                     <Scope
                       categories={categories}
+                      administrator={administrator}
                       scope={scope}
                       onChoose={(chosen) => {
                         setScope(chosen);
@@ -568,14 +620,29 @@ export function Header({
               what is behind it becomes the backdrop of anything drawn inside
               the field, which is nothing at all. */}
           {quickOpen &&
-            quickResults &&
             createPortal(
               <div
                 className="quick-search"
                 ref={quickPanel}
                 style={{ top: quickUnder.top, left: quickUnder.left }}
               >
-                {quickResults.length === 0 ? (
+                {area ? (
+                  foundSettings.length === 0 ? (
+                    <p className="quick-search-empty">{t("search.no_setting")}</p>
+                  ) : (
+                    foundSettings.map((found) => (
+                      <Link
+                        key={`${found.path}:${found.key ?? ""}`}
+                        className="quick-search-line"
+                        to={addressOf(found)}
+                        onClick={chooseQuickResult}
+                      >
+                        <span className="quick-search-title">{found.said}</span>
+                        {found.key && <span className="quick-search-year">{found.section}</span>}
+                      </Link>
+                    ))
+                  )
+                ) : !quickResults ? null : quickResults.length === 0 ? (
                   <p className="quick-search-empty">{t("library.empty")}</p>
                 ) : (
                   <>
@@ -673,11 +740,14 @@ export function Header({
  */
 function Scope({
   categories,
+  administrator,
   scope,
   onChoose,
   reachable,
 }: {
   categories: Category[];
+  /** Whether the administration is offered as well as the settings. */
+  administrator: boolean;
   scope: string;
   onChoose: (scope: string) => void;
   /** Whether the field it belongs to is open. Folded away it is out of the
@@ -694,7 +764,11 @@ function Scope({
     const library = categories
       .flatMap((category) => category.libraries)
       .find((entry) => `library:${entry.id}` === value);
-    return library?.name ?? t("search.everywhere");
+    if (library) {
+      return library.name;
+    }
+    const area = areaOf(value);
+    return area ? t(area === "admin" ? "search.in_admin" : "search.in_settings") : t("search.everywhere");
   };
 
   return (
@@ -722,6 +796,17 @@ function Scope({
             ))}
         </Fragment>
       ))}
+      <div className="header-menu-divider" aria-hidden="true" />
+      <ScopeLine value="area:settings" scope={scope} onChoose={onChoose}>
+        <GearIcon size={16} />
+        {t("search.in_settings")}
+      </ScopeLine>
+      {administrator && (
+        <ScopeLine value="area:admin" scope={scope} onChoose={onChoose}>
+          <SlidersIcon size={16} />
+          {t("search.in_admin")}
+        </ScopeLine>
+      )}
     </Dropdown>
   );
 }

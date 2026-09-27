@@ -187,6 +187,11 @@ const en: Dictionary = {
   "library.loading": "Loading",
 
   "search.placeholder": "Search for a title",
+  "search.placeholder_settings": "Search for a setting",
+  "search.placeholder_admin": "Search the administration",
+  "search.in_settings": "Settings",
+  "search.in_admin": "Administration",
+  "search.no_setting": "No setting matches.",
 
   "work.play": "Play",
   "work.trailer": "Trailer",
@@ -1471,6 +1476,11 @@ const fr: Dictionary = {
   "library.loading": "Chargement",
 
   "search.placeholder": "Rechercher un titre",
+  "search.placeholder_settings": "Rechercher un paramètre",
+  "search.placeholder_admin": "Rechercher dans l’administration",
+  "search.in_settings": "Paramètres",
+  "search.in_admin": "Administration",
+  "search.no_setting": "Aucun paramètre ne correspond.",
 
   "work.play": "Lire",
   "work.trailer": "Bande-annonce",
