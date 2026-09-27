@@ -139,13 +139,6 @@
   will-change: transform;
 }
 
-/* Behind the pages, each piece stays where it is, under the panels' frosted
-   glass. */
-.door-shelf-still .door-piece {
-  animation: none;
-  will-change: auto;
-}
-
 /*
  * One line weight across the whole set.
  *
