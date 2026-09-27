@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addressOf, FINDABLE, find, folded } from "./findable";
+import { translate } from "./i18n";
 
 /** Every page of settings and of the administration, as written. */
 const PAGES = import.meta.glob("./pages/{admin,settings}/*.tsx", {
@@ -38,6 +39,20 @@ describe("FINDABLE", () => {
   });
 });
 
+describe("choices", () => {
+  it("lead to a card or setting of their section, and are worded", () => {
+    for (const section of FINDABLE) {
+      const names = section.named.map(([name]) => name);
+      for (const [target, words] of Object.entries(section.choices ?? {})) {
+        expect(names, section.path).toContain(target);
+        for (const word of words) {
+          expect(translate("en", word), word).not.toBe(word);
+        }
+      }
+    }
+  });
+});
+
 describe("find", () => {
   const words: Record<string, string> = {
     "admin.transcoding": "Transcodage",
@@ -45,6 +60,7 @@ describe("find", () => {
     "admin.limit_sessions_why": "La lecture directe et le remuxage ne comptent jamais.",
     "admin.codecs": "Formats de sortie",
     "admin.codecs_why": "Les formats dans lesquels une vidéo peut être convertie.",
+    "admin.codec.hevc": "HEVC (H.265)",
   };
   const t = (key: string) => words[key] ?? key;
 
@@ -69,6 +85,12 @@ describe("find", () => {
       find("video", "admin", t, 10).map((one) => one.key),
       "named nowhere, explained once",
     ).toEqual(["admin.codecs"]);
+  });
+
+  it("finds a card by one of its choices, said by that choice", () => {
+    expect(find("hevc", "admin", t, 10)).toMatchObject([
+      { key: "admin.codecs", said: "HEVC (H.265)", path: "transcoding" },
+    ]);
   });
 
   it("finds nothing for nothing", () => {
