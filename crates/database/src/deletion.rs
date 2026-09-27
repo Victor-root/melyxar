@@ -13,6 +13,7 @@ use melyxar_core::id::{LibraryId, LibraryRootId, MediaSourceId, WorkId};
 use melyxar_core::time::now;
 use sqlx::Row;
 
+use crate::catalogue::recount_children;
 use crate::convert::{parse_id, timestamp_to_text};
 use crate::libraries::{sweep_what_nothing_points_at, Removed};
 use crate::{Database, Result};
@@ -218,15 +219,7 @@ impl Database {
             .await?;
         // A parent deleted with its children is simply not there to count.
         for parent in parents {
-            sqlx::query(
-                "UPDATE works
-                    SET child_count = (SELECT count(*) FROM works AS child
-                                        WHERE child.parent_id = works.id)
-                  WHERE id = ?",
-            )
-            .bind(parent)
-            .execute(&mut *transaction)
-            .await?;
+            recount_children(&mut *transaction, parse_id(&parent)?).await?;
         }
         let swept = sweep_what_nothing_points_at(&mut transaction).await?;
         transaction.commit().await?;
