@@ -1240,9 +1240,9 @@
   margin: 0;
   padding: 12px 20px;
   border-radius: var(--radius-card);
-  background: rgba(16, 18, 22, 0.82);
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
   backdrop-filter: blur(14px);
-  color: #fff;
+  color: var(--text);
   font-size: 15px;
   text-align: center;
 }

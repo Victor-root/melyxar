@@ -1521,7 +1521,7 @@
   bottom: calc(100% - var(--ground));
   height: 52%;
   aspect-ratio: 16 / 9;
-  border: 3px solid #f2eee6;
+  border: 3px solid var(--print-edge);
   border-radius: 3px;
   overflow: hidden;
   background: var(--card-color);
@@ -2627,7 +2627,7 @@ button.seen-mark:not(.seen-mark-on):hover {
   height: 56px;
   border-radius: 50%;
   background: color-mix(in srgb, var(--accent) 90%, transparent);
-  color: #ffffff;
+  color: var(--accent-contrast);
   transition: transform var(--calm) var(--ease), background var(--quick) var(--ease);
 }
 
@@ -3013,8 +3013,8 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 .root-read_write,
 .root-read_only {
-  border-color: color-mix(in srgb, #48c78e 50%, transparent);
-  color: #48c78e;
+  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+  color: var(--ok);
 }
 
 .root-missing,
@@ -3470,15 +3470,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   .work-poster {
     width: min(220px, 50vw);
   }
-}
-
-.fact {
-  padding: 3px 10px;
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--surface-raised) 85%, transparent);
-  border: 1px solid var(--border);
-  font-size: 13px;
-  color: var(--text-soft);
 }
 
 /* --------------------------------------------------------------------------
