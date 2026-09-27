@@ -139,11 +139,24 @@
 .details-credits {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 8px;
 }
 
+.details-credits > .button {
+  align-self: flex-start;
+}
+
+.details-credits .order-line {
+  gap: 8px;
+  margin-inline: 0;
+  padding: 4px 0;
+  border-top: 0;
+}
+
 .details-credit {
+  flex: 1 1 auto;
+  min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 1.1fr) auto;
   gap: 8px;
