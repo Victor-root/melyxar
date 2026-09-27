@@ -83,7 +83,9 @@ impl Point {
     /// the count itself for a count of works.
     fn mark_now(&self, now: Timestamp) -> Option<i64> {
         match self {
-            Self::RefusedSignIns { .. } | Self::FailedTasks { .. } => Some(milliseconds(now)),
+            Self::RefusedSignIns { .. } | Self::FailedTasks { .. } => {
+                Some(milliseconds_reaching(now))
+            }
             Self::Unidentified { count } => Some(*count),
             // Seen or not, nothing to count: it is quiet while it lasts.
             Self::Worry(Worry::DiskNearlyFull { .. }) => Some(1),
@@ -99,8 +101,14 @@ fn disk_key(mount: &str) -> String {
     format!("{DISK_FULL}{mount}")
 }
 
-fn milliseconds(at: Timestamp) -> i64 {
-    i64::try_from(at.unix_timestamp_nanos() / 1_000_000).unwrap_or(i64::MAX)
+/// The first whole millisecond at or after an instant. What is seen is marked
+/// this way: an event is written down to a finer grain than a mark, and one
+/// that came in the same millisecond just before somebody looked would
+/// otherwise still count as news after they had seen it.
+fn milliseconds_reaching(at: Timestamp) -> i64 {
+    let nanos = at.unix_timestamp_nanos();
+    i64::try_from(nanos.div_euclid(1_000_000) + i128::from(nanos.rem_euclid(1_000_000) > 0))
+        .unwrap_or(i64::MAX)
 }
 
 fn from_milliseconds(mark: i64) -> Option<Timestamp> {
@@ -310,9 +318,20 @@ mod tests {
         mark_seen(&state, user).await.expect("marked");
         assert!(of_events(&points(&state, user).await.expect("read")).is_empty());
 
-        // A millisecond is the grain of the mark: the next refusal is later.
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        record(&state, refused()).await;
+        // The next refusal, written a moment after the mark rather than
+        // waited for, so how busy the machine is changes nothing.
+        state
+            .database()
+            .record_activity(&melyxar_database::activity::NewActivity {
+                at: melyxar_core::time::now() + time::Duration::seconds(1),
+                kind: SIGN_IN_REFUSED,
+                user_id: None,
+                work_id: None,
+                device_name: None,
+                details: None,
+            })
+            .await
+            .expect("recorded");
         assert_eq!(
             of_events(&points(&state, user).await.expect("read")),
             vec![Point::RefusedSignIns { count: 1 }]
@@ -334,6 +353,15 @@ mod tests {
             of_events(&points(&state, other).await.expect("read")),
             vec![Point::RefusedSignIns { count: 1 }]
         );
+    }
+
+    #[test]
+    fn a_mark_covers_everything_up_to_the_instant_it_was_made() {
+        let exact = Timestamp::from_unix_timestamp_nanos(1_700_000_000_123_000_000).expect("instant");
+        assert_eq!(milliseconds_reaching(exact), 1_700_000_000_123);
+        let within = exact + time::Duration::nanoseconds(400_000);
+        assert_eq!(milliseconds_reaching(within), 1_700_000_000_124);
+        assert!(from_milliseconds(milliseconds_reaching(within)).expect("instant") >= within);
     }
 
     #[test]
@@ -389,10 +417,10 @@ mod tests {
         let now = melyxar_core::time::now();
         let mut seen = HashMap::new();
         assert_eq!(counted_since(&seen, "failed_tasks", now), now - A_DAY);
-        seen.insert("failed_tasks".to_string(), milliseconds(now - time::Duration::hours(2)));
+        seen.insert("failed_tasks".to_string(), milliseconds_reaching(now - time::Duration::hours(2)));
         let since = counted_since(&seen, "failed_tasks", now);
-        assert_eq!(milliseconds(since), milliseconds(now - time::Duration::hours(2)));
-        seen.insert("failed_tasks".to_string(), milliseconds(now - time::Duration::days(3)));
+        assert_eq!(milliseconds_reaching(since), milliseconds_reaching(now - time::Duration::hours(2)));
+        seen.insert("failed_tasks".to_string(), milliseconds_reaching(now - time::Duration::days(3)));
         assert_eq!(counted_since(&seen, "failed_tasks", now), now - A_DAY);
     }
 }
