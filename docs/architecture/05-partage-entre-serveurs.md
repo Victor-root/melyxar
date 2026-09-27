@@ -33,29 +33,29 @@ Seules les œuvres de même type se rejoignent : une médiathèque distante d'an
 |---|---|---|
 | Tient | une copie locale du catalogue distant, ses comptes, leurs marques et leur progression | les fichiers, les fiches qui font foi, les images |
 | Fait | la navigation, la recherche, le relais de la lecture | FFmpeg, la décision de lecture, sous-titres, vignettes, génériques |
-| Voit | ce que ses comptes font | **qui lit quoi et où il en est**, comme pour un compte local |
+| Voit | ce que ses comptes font | **qui lit quoi et où il en est**, sans compte créé pour eux |
 
 **La copie locale du catalogue est indispensable.** La navigation tient ses budgets (quelques millisecondes à 100 000 œuvres) parce qu'elle ne lit que la base locale. Interroger l'autre serveur à chaque page la rendrait lente et dépendante d'internet. Le catalogue distant est donc recopié en arrière-plan, par différences (« qu'est-ce qui a changé depuis la dernière fois »), en s'appuyant sur le compteur de version que chaque médiathèque tient déjà. Les images sont recopiées de la même façon. Seule la lecture d'une vidéo va chez l'origine.
 
-## Les invités sont connus de l'origine
+## L'origine sait qui lit, sans compte fantôme
 
-L'administrateur d'origine doit savoir précisément ce qui se passe sur son serveur. Chaque compte du serveur qui reçoit est donc représenté chez l'origine par un **compte invité** :
+L'administrateur d'origine doit savoir précisément ce qui se passe sur son serveur. Pour cela, **aucun compte n'est créé chez l'origine** pour les personnes de l'autre serveur. Chaque lecture ouverte par le serveur qui reçoit dit simplement qui la demande : l'identifiant de la personne chez son serveur, et son nom affichable.
 
-- nommé avec son serveur (« Victor, serveur de Victor »), identifié par le couple serveur et identifiant du compte, **jamais par son nom** : deux Victor sur deux serveurs sont deux personnes (leçon de GlassKeep) ;
-- visible dans les lectures en cours, le journal et l'activité, avec ce qu'il regarde et où il en est, comme un compte local ;
-- soumis aux règles de l'origine : l'administrateur peut le limiter ou le couper, lui seul ou tout le serveur appairé ;
-- incapable de se connecter directement : il n'existe qu'à travers son serveur.
+- Les lectures en cours de l'origine montrent la personne, son serveur, ce qu'elle regarde et où elle en est (« Victor, serveur de Victor, à 42 minutes »), comme pour un compte local : la position arrive en continu pendant la lecture.
+- Le journal et l'activité gardent la même chose.
+- Une personne est reconnue par le couple serveur et identifiant, **jamais par son nom** : deux Victor sur deux serveurs sont deux personnes (leçon de GlassKeep). Un nom changé s'affiche à la lecture suivante.
+- Limiter ou couper une personne, ou tout un serveur appairé, est une simple règle de l'origine sur ce couple, consultée au démarrage de chaque lecture. Ce n'est pas un compte : rien ne s'ajoute à la liste des utilisateurs, rien ne peut s'y connecter, rien n'est à nettoyer au désappairage en dehors de ces règles.
 
-La progression vit aux deux endroits, chacun pour son usage : le serveur qui reçoit la garde pour ses rangées et ses marques, sans quoi la navigation dépendrait de l'autre ; l'origine la reçoit en direct pendant la lecture pour que son administrateur la voie.
+La progression des personnes de l'autre serveur vit chez leur serveur, qui en a besoin pour ses rangées et ses marques. L'origine la voit pendant la lecture et garde ce qui a été regardé dans son journal, sans tenir d'historique de reprise pour elles.
 
 ## La lecture passe par le serveur qui reçoit
 
-Le navigateur ne parle qu'à son serveur, qui ouvre une session de lecture chez l'origine au nom du compte invité, lui transmet ce que le navigateur sait lire, et relaie les morceaux de vidéo. Un seul site pour le navigateur (le cookie de connexion reste valable), l'origine n'est pas exposée aux appareils de l'autre maison, et le surcoût d'une étape est négligeable avec des morceaux de quatre secondes.
+Le navigateur ne parle qu'à son serveur, qui ouvre une session de lecture chez l'origine en disant pour qui, lui transmet ce que le navigateur sait lire, et relaie les morceaux de vidéo. Un seul site pour le navigateur (le cookie de connexion reste valable), l'origine n'est pas exposée aux appareils de l'autre maison, et le surcoût d'une étape est négligeable avec des morceaux de quatre secondes.
 
 ## Débit et transcodage
 
 - **Plafond de débit par partage, facultatif**, fixé par l'origine en autorisant la médiathèque. Le serveur qui reçoit en est informé et l'applique d'avance : la qualité proposée ne dépasse pas le plafond, et le lecteur dit pourquoi. C'est une exception assumée à la règle « la version n'est jamais choisie selon la connexion », limitée au contenu distant.
-- **Aucune limite de transcodage simultané par défaut**, pour les comptes locaux comme pour les invités. Une limite reste possible en option, et l'origine peut en fixer une propre à un partage.
+- **Aucune limite de transcodage simultané par défaut**, pour les comptes locaux comme pour les personnes d'un serveur appairé. Une limite reste possible en option, et l'origine peut en fixer une propre à un partage.
 
 ## Les fiches
 
@@ -69,14 +69,14 @@ Ne traversent jamais : la suppression sur disque, et toute action qui écrit ou 
 - Appairage par un **code à usage unique** affiché par un administrateur et saisi par l'autre ; chacun confirme. Chaque serveur a sa propre **paire de clés** et signe ses requêtes ; aucun secret n'est stocké en clair, seule une empreinte l'est, comme pour les sessions.
 - **Protection contre le rejeu** : une requête signée n'est acceptée qu'une fois, pas seulement dans une fenêtre de temps.
 - **Aucune adresse interne** acceptée comme adresse d'un serveur appairé, et aucune requête sortante déclenchée par une demande anonyme.
-- Rotation des clés sans réappairer ; désappairer retire la copie du catalogue et les comptes invités, sans toucher aux marques des comptes locaux sur leurs propres œuvres.
+- Rotation des clés sans réappairer ; désappairer retire la copie du catalogue et les règles propres à ce serveur, sans toucher aux marques des comptes locaux sur leurs propres œuvres.
 - Un **numéro de version du protocole** entre serveurs, indépendant de la version de Melyxar, pour que deux serveurs mis à jour à des dates différentes continuent de se parler et disent clairement ce qui leur manque.
 - L'origine n'envoie jamais un chemin complet de fichier, seulement ce dont l'autre a besoin pour afficher et demander la lecture.
 
 ## Ordre de construction envisagé
 
 1. Préalables : HTTPS (jalon 9) et une spécification stable de l'API.
-2. Appairage, autorisations, comptes invités.
+2. Appairage et autorisations.
 3. Copie du catalogue et médiathèque distante comme dossier, en lecture seule, œuvres distantes séparées des locales.
 4. Lecture relayée, avec plafond de débit.
 5. Réunion des œuvres présentes des deux côtés par identifiant du fournisseur.
