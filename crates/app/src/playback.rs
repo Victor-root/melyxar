@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use melyxar_core::id::{MediaSourceId, TrackId, WorkId};
+use melyxar_core::library::LibraryOptions;
 use melyxar_core::media::{Chapter, Track, TrackKind};
 use melyxar_core::media_log::file_name_of;
 use melyxar_core::segments::MediaSegment;
@@ -369,8 +370,14 @@ pub async fn plan(
         .as_ref()
         .map_or(0, |values| values.resume_rewind_seconds)
         * 1_000;
+    // Nowhere, in a library that keeps no resume points: a place kept before
+    // it stopped keeping them is not offered either.
+    let keeps_resume_points = database
+        .library_of_work(source.work_id)
+        .await?
+        .is_none_or(|(_, options)| options.keeps_resume_points);
     let resume_from = remembered
-        .filter(|progress| progress.position.get() > 0)
+        .filter(|progress| keeps_resume_points && progress.position.get() > 0)
         .map(|progress| Millis::new((progress.position.get() - rewind).max(0)));
 
     // Nothing here waits on them or makes them: a film that has none is a film
@@ -1158,6 +1165,16 @@ pub async fn mark_watched(
     watched: bool,
 ) -> Result<bool> {
     crate::reach::may_read_the_work(state, who, work_id).await?;
+    let keeps_watched_marks = state
+        .database()
+        .library_of_work(work_id)
+        .await?
+        .is_none_or(|(_, options)| options.keeps_watched_marks);
+    if !keeps_watched_marks {
+        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "the library of this work keeps no watched marks",
+        )));
+    }
     let written = state
         .database()
         .mark_watched(who.id, work_id, watched)
@@ -1190,12 +1207,16 @@ pub async fn record_position(
 
     // Held to the rules of this viewer for this kind of library, which say
     // when a film only glanced at starts again from the beginning and when
-    // one nearly finished counts as watched.
-    let rules = match database.library_kind_of_work(work_id).await? {
-        Some(kind) => who.preferences.resume_rules_for(kind),
-        None => who.preferences.resume_rules,
+    // one nearly finished counts as watched, and then to what that library
+    // keeps of a play at all.
+    let (rules, options) = match database.library_of_work(work_id).await? {
+        Some((kind, options)) => (who.preferences.resume_rules_for(kind), options),
+        None => (who.preferences.resume_rules, LibraryOptions::default()),
     };
-    let (state_now, kept) = progress_after(position, duration, rules, marked_manually);
+    let progress = progress_after(position, duration, rules, marked_manually);
+    let Some((state_now, kept)) = options.kept_of(progress) else {
+        return Ok(false);
+    };
 
     Ok(database
         .record_playback_progress(user_id, work_id, kept, state_now, reported_at)
@@ -3049,6 +3070,86 @@ mod tests {
         .await
         .expect("a plan");
         assert_eq!(plan.resume_from, Some(Millis::new(1_800_000)));
+    }
+
+    #[tokio::test]
+    async fn a_library_keeping_nothing_of_a_play_offers_no_place_and_takes_no_mark() {
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080), audio(id, "aac", 2, true)]
+            })
+            .await;
+        let database = state.database();
+        let work_id = database
+            .playable_source(source_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .work_id;
+        let library = database
+            .work(work_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .library_id;
+        let who = crate::an_ordinary_account(user_id);
+        let resumes_at = || async {
+            plan(
+                &state,
+                &who,
+                &PlayRequest {
+                    source_id,
+                    profile: None,
+                    audio_track_id: None,
+                    subtitle: SubtitleAsked::Unsaid,
+                    preferred_video_codec: None,
+                    wide_gamut: None,
+                },
+            )
+            .await
+            .expect("a plan")
+            .resume_from
+        };
+        record_position(&state, &who, work_id, Millis::new(1_800_000), datetime!(2026-01-01 12:00 UTC))
+            .await
+            .expect("recorded");
+
+        database
+            .set_library_options(
+                library,
+                LibraryOptions {
+                    keeps_resume_points: false,
+                    keeps_watched_marks: false,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("switched");
+        assert_eq!(
+            resumes_at().await,
+            None,
+            "a place kept before the library stopped keeping them is not offered"
+        );
+        assert!(
+            !record_position(&state, &who, work_id, Millis::new(2_400_000), datetime!(2026-01-01 12:05 UTC))
+                .await
+                .expect("heard"),
+            "nothing of a play is written where nothing is kept"
+        );
+        assert!(
+            mark_watched(&state, &who, work_id, true).await.is_err(),
+            "no mark is taken where none is kept"
+        );
+
+        database
+            .set_library_options(library, LibraryOptions::default())
+            .await
+            .expect("switched");
+        assert_eq!(
+            resumes_at().await,
+            Some(Millis::new(1_800_000)),
+            "turned back on, the place kept before is offered again"
+        );
     }
 
     #[tokio::test]

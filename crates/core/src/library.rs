@@ -7,6 +7,8 @@
 use std::path::PathBuf;
 
 use crate::id::{LibraryId, LibraryRootId};
+use crate::time::Millis;
+use crate::work::PlaybackState;
 
 /// What a library holds. Stored explicitly so that no part of the code has to
 /// assume "a film": music and television programmes reuse the same trunk with
@@ -142,7 +144,8 @@ pub struct LibraryRoot {
     pub path: PathBuf,
 }
 
-/// What a library has been told to do while it is being scanned.
+/// What a library has been told to do: while it is being scanned, and with
+/// what each account plays in it.
 ///
 /// The two heavy readings of a film are switches rather than rules, and both
 /// are off to begin with. Each of them reads every file of the library from
@@ -154,7 +157,7 @@ pub struct LibraryRoot {
 ///
 /// The other servers word the same choice the same way, and warn in their own
 /// documentation against ticking it on a large collection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LibraryOptions {
     /// Read each film for where its picture can be started during the scan.
     pub key_frames_during_scan: bool,
@@ -163,12 +166,55 @@ pub struct LibraryOptions {
     /// Watch the library's folders, and scan again as soon as something in
     /// them changes, rather than waiting for somebody or the night to ask.
     pub watch_in_real_time: bool,
+    /// Keep where each account stopped, so a work is picked up from there.
+    pub keeps_resume_points: bool,
+    /// Keep which works each account has watched, by hand or by playing them
+    /// through.
+    pub keeps_watched_marks: bool,
+}
+
+impl Default for LibraryOptions {
+    /// The heavy readings left to the night and the folders left unwatched,
+    /// and every play remembered, which is what a library always did.
+    fn default() -> Self {
+        Self {
+            key_frames_during_scan: false,
+            thumbnails_during_scan: false,
+            watch_in_real_time: false,
+            keeps_resume_points: true,
+            keeps_watched_marks: true,
+        }
+    }
 }
 
 impl LibraryOptions {
     /// Whether anything at all is left to the upkeep rather than done here.
     pub fn leaves_something_to_the_upkeep(self) -> bool {
         !self.key_frames_during_scan || !self.thumbnails_during_scan
+    }
+
+    /// What of a play this library keeps, from the state and position the
+    /// rules of resuming left it in. Nothing when it keeps neither.
+    ///
+    /// Without resume points, the position is let go of. Without watched
+    /// marks, a work played through is simply not started again: there is
+    /// nothing left to carry on, and nothing to mark.
+    pub fn kept_of(
+        self,
+        (state, position): (PlaybackState, Millis),
+    ) -> Option<(PlaybackState, Millis)> {
+        if !self.keeps_resume_points && !self.keeps_watched_marks {
+            return None;
+        }
+        let position = match self.keeps_resume_points {
+            true => position,
+            false => Millis::ZERO,
+        };
+        let state = match (state, self.keeps_watched_marks) {
+            (PlaybackState::Watched, false) => PlaybackState::NotStarted,
+            (state, _) => state,
+        };
+        Some((state, position))
     }
 }
 
@@ -216,12 +262,57 @@ mod tests {
         let in_one_sitting = LibraryOptions {
             key_frames_during_scan: true,
             thumbnails_during_scan: true,
-            watch_in_real_time: false,
+            ..usual
         };
         assert!(
             !in_one_sitting.leaves_something_to_the_upkeep(),
             "a scan that does both leaves the upkeep nothing to pick up"
         );
+    }
+
+    #[test]
+    fn a_library_nobody_configured_remembers_every_play() {
+        let usual = LibraryOptions::default();
+        let halfway = (PlaybackState::InProgress, Millis::new(600_000));
+        assert_eq!(usual.kept_of(halfway), Some(halfway));
+        let through = (PlaybackState::Watched, Millis::ZERO);
+        assert_eq!(usual.kept_of(through), Some(through));
+    }
+
+    #[test]
+    fn a_library_keeps_only_what_it_was_asked_to_keep_of_a_play() {
+        let halfway = (PlaybackState::InProgress, Millis::new(600_000));
+        let through = (PlaybackState::Watched, Millis::ZERO);
+
+        let marks_only = LibraryOptions {
+            keeps_resume_points: false,
+            ..LibraryOptions::default()
+        };
+        assert_eq!(
+            marks_only.kept_of(halfway),
+            Some((PlaybackState::InProgress, Millis::ZERO)),
+            "started, but with nowhere to be picked up from"
+        );
+        assert_eq!(marks_only.kept_of(through), Some(through));
+
+        let resume_only = LibraryOptions {
+            keeps_watched_marks: false,
+            ..LibraryOptions::default()
+        };
+        assert_eq!(resume_only.kept_of(halfway), Some(halfway));
+        assert_eq!(
+            resume_only.kept_of(through),
+            Some((PlaybackState::NotStarted, Millis::ZERO)),
+            "played through is nothing left to carry on, and no mark"
+        );
+
+        let neither = LibraryOptions {
+            keeps_resume_points: false,
+            keeps_watched_marks: false,
+            ..LibraryOptions::default()
+        };
+        assert_eq!(neither.kept_of(halfway), None);
+        assert_eq!(neither.kept_of(through), None);
     }
 
     #[test]

@@ -399,6 +399,10 @@ struct OptionsAsked {
     /// Whether the library's folders are watched and scanned again as soon
     /// as something in them changes.
     watch_in_real_time: bool,
+    /// Whether it keeps where each account stopped, and which works each
+    /// account has watched.
+    keeps_resume_points: bool,
+    keeps_watched_marks: bool,
     /// The language this library's films are described in, as a two letter
     /// code. Changing it asks the provider about every film again.
     metadata_language: String,
@@ -409,6 +413,8 @@ struct OptionsView {
     key_frames_during_scan: bool,
     thumbnails_during_scan: bool,
     watch_in_real_time: bool,
+    keeps_resume_points: bool,
+    keeps_watched_marks: bool,
     metadata_language: String,
     /// Whether anything really moved. A screen that sent what was already
     /// there gets a plain no rather than a second copy of the same answer.
@@ -452,6 +458,8 @@ async fn set_library_options(
         key_frames_during_scan: asked.key_frames_during_scan,
         thumbnails_during_scan: asked.thumbnails_during_scan,
         watch_in_real_time: asked.watch_in_real_time,
+        keeps_resume_points: asked.keeps_resume_points,
+        keeps_watched_marks: asked.keeps_watched_marks,
     };
     let changed = state
         .database()
@@ -478,6 +486,8 @@ async fn set_library_options(
         key_frames_during_scan = options.key_frames_during_scan,
         thumbnails_during_scan = options.thumbnails_during_scan,
         watch_in_real_time = options.watch_in_real_time,
+        keeps_resume_points = options.keeps_resume_points,
+        keeps_watched_marks = options.keeps_watched_marks,
         metadata_language = language,
         changed,
         asked_about_again,
@@ -488,6 +498,8 @@ async fn set_library_options(
         key_frames_during_scan: options.key_frames_during_scan,
         thumbnails_during_scan: options.thumbnails_during_scan,
         watch_in_real_time: options.watch_in_real_time,
+        keeps_resume_points: options.keeps_resume_points,
+        keeps_watched_marks: options.keeps_watched_marks,
         metadata_language: language,
         changed: changed || asked_about_again.is_some(),
         asked_about_again,

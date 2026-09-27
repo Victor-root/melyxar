@@ -215,20 +215,21 @@ impl Database {
     ) -> Result<bool> {
         let result = sqlx::query(
             "UPDATE libraries
-                SET key_frames_during_scan = ?, thumbnails_during_scan = ?,
-                    watch_in_real_time = ?, updated_at = ?
-              WHERE id = ?
-                AND (key_frames_during_scan <> ? OR thumbnails_during_scan <> ?
-                     OR watch_in_real_time <> ?)",
+                SET key_frames_during_scan = ?1, thumbnails_during_scan = ?2,
+                    watch_in_real_time = ?3, keeps_resume_points = ?4,
+                    keeps_watched_marks = ?5, updated_at = ?6
+              WHERE id = ?7
+                AND (key_frames_during_scan <> ?1 OR thumbnails_during_scan <> ?2
+                     OR watch_in_real_time <> ?3 OR keeps_resume_points <> ?4
+                     OR keeps_watched_marks <> ?5)",
         )
         .bind(options.key_frames_during_scan)
         .bind(options.thumbnails_during_scan)
         .bind(options.watch_in_real_time)
+        .bind(options.keeps_resume_points)
+        .bind(options.keeps_watched_marks)
         .bind(timestamp_to_text(now()))
         .bind(id.to_db_string())
-        .bind(options.key_frames_during_scan)
-        .bind(options.thumbnails_during_scan)
-        .bind(options.watch_in_real_time)
         .execute(self.writer())
         .await?;
         Ok(result.rows_affected() > 0)
@@ -273,7 +274,8 @@ impl Database {
     pub async fn list_libraries(&self) -> Result<Vec<Library>> {
         let rows = sqlx::query(
             "SELECT id, name, kind, metadata_language,
-                    key_frames_during_scan, thumbnails_during_scan, watch_in_real_time
+                    key_frames_during_scan, thumbnails_during_scan, watch_in_real_time,
+                    keeps_resume_points, keeps_watched_marks
              FROM libraries ORDER BY name COLLATE NOCASE",
         )
         .fetch_all(self.reader())
@@ -291,11 +293,7 @@ impl Database {
                 name: row.try_get("name")?,
                 kind,
                 metadata_language: row.try_get("metadata_language")?,
-                options: LibraryOptions {
-                    key_frames_during_scan: row.try_get("key_frames_during_scan")?,
-                    thumbnails_during_scan: row.try_get("thumbnails_during_scan")?,
-                    watch_in_real_time: row.try_get("watch_in_real_time")?,
-                },
+                options: options_from_row(&row)?,
                 roots: self.library_roots(id).await?,
             });
         }
@@ -308,22 +306,31 @@ impl Database {
     }
 
     /// The kind of library a work belongs to, which decides the rules its
-    /// progress is held to. Nothing for a work that is not there.
-    pub async fn library_kind_of_work(
+    /// progress is held to, and what that library keeps of a play. Nothing
+    /// for a work that is not there.
+    pub async fn library_of_work(
         &self,
         work_id: melyxar_core::id::WorkId,
-    ) -> Result<Option<LibraryKind>> {
-        let kind: Option<(String,)> = sqlx::query_as(
-            "SELECT l.kind FROM works w JOIN libraries l ON l.id = w.library_id WHERE w.id = ?",
+    ) -> Result<Option<(LibraryKind, LibraryOptions)>> {
+        let row = sqlx::query(
+            "SELECT l.kind, l.key_frames_during_scan, l.thumbnails_during_scan,
+                    l.watch_in_real_time, l.keeps_resume_points, l.keeps_watched_marks
+               FROM works w JOIN libraries l ON l.id = w.library_id
+              WHERE w.id = ?",
         )
         .bind(work_id.to_db_string())
         .fetch_optional(self.reader())
         .await?;
-        kind.map(|(kind,)| {
-            LibraryKind::parse(&kind)
-                .ok_or_else(|| DatabaseError::Corrupt(format!("library kind '{kind}' is unknown")))
-        })
-        .transpose()
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let kind: String = row.try_get("kind")?;
+        let kind = LibraryKind::parse(&kind)
+            .ok_or_else(|| DatabaseError::Corrupt(format!("library kind '{kind}' is unknown")))?;
+        Ok(Some((
+            kind,
+            options_from_row(&row)?,
+        )))
     }
 
     /// One library by name, used when reconciling the configuration.
@@ -664,6 +671,18 @@ impl Database {
 ///
 /// An unknown value reads as missing, the most cautious of the four: it stops
 /// a scan rather than letting it walk a root nobody vouched for.
+/// What a library was told to do, off a row that read every one of its
+/// switches.
+fn options_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<LibraryOptions> {
+    Ok(LibraryOptions {
+        key_frames_during_scan: row.try_get("key_frames_during_scan")?,
+        thumbnails_during_scan: row.try_get("thumbnails_during_scan")?,
+        watch_in_real_time: row.try_get("watch_in_real_time")?,
+        keeps_resume_points: row.try_get("keeps_resume_points")?,
+        keeps_watched_marks: row.try_get("keeps_watched_marks")?,
+    })
+}
+
 fn parse_access(value: &str) -> RootAccess {
     match value {
         "read_write" => RootAccess::ReadWrite,
@@ -712,12 +731,26 @@ mod tests {
             .expect("work created");
 
         assert_eq!(
-            database.library_kind_of_work(work.id).await.expect("read"),
-            Some(LibraryKind::Series)
+            database.library_of_work(work.id).await.expect("read"),
+            Some((LibraryKind::Series, LibraryOptions::default()))
+        );
+        let neither = LibraryOptions {
+            keeps_resume_points: false,
+            keeps_watched_marks: false,
+            ..LibraryOptions::default()
+        };
+        database
+            .set_library_options(series.id, neither)
+            .await
+            .expect("written");
+        assert_eq!(
+            database.library_of_work(work.id).await.expect("read"),
+            Some((LibraryKind::Series, neither)),
+            "a work is held to what its own library keeps of a play"
         );
         assert_eq!(
             database
-                .library_kind_of_work(melyxar_core::id::WorkId::new())
+                .library_of_work(melyxar_core::id::WorkId::new())
                 .await
                 .expect("read"),
             None
@@ -809,7 +842,7 @@ mod tests {
         let both = LibraryOptions {
             key_frames_during_scan: true,
             thumbnails_during_scan: true,
-            watch_in_real_time: false,
+            ..LibraryOptions::default()
         };
         assert!(
             database
@@ -834,8 +867,7 @@ mod tests {
 
         let only_one = LibraryOptions {
             key_frames_during_scan: true,
-            thumbnails_during_scan: false,
-            watch_in_real_time: false,
+            ..LibraryOptions::default()
         };
         assert!(database
             .set_library_options(library.id, only_one)
@@ -861,6 +893,23 @@ mod tests {
         assert_eq!(
             database.list_libraries().await.expect("listed")[0].options,
             watched
+        );
+
+        let remembering_nothing = LibraryOptions {
+            keeps_resume_points: false,
+            keeps_watched_marks: false,
+            ..watched
+        };
+        assert!(
+            database
+                .set_library_options(library.id, remembering_nothing)
+                .await
+                .expect("written"),
+            "what a library keeps of a play is a change of its own"
+        );
+        assert_eq!(
+            database.list_libraries().await.expect("listed")[0].options,
+            remembering_nothing
         );
     }
 

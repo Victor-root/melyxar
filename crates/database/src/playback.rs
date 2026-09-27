@@ -148,6 +148,9 @@ impl Database {
                     w.ordinal AS episode_number
              FROM playback_progress p
              JOIN works w ON w.id = p.work_id
+             -- A place kept before its library stopped keeping them is
+             -- nowhere to carry on from.
+             JOIN libraries l ON l.id = w.library_id AND l.keeps_resume_points
              LEFT JOIN works season ON season.id = w.parent_id AND w.kind = 'episode'
              LEFT JOIN works series ON series.id = season.parent_id
              WHERE p.user_id = ? AND p.position_ms > 0{inside}
@@ -344,10 +347,14 @@ impl Database {
                    FROM lately q
                    JOIN works e ON e.id = q.work_id AND e.kind = 'episode'
                    JOIN works s ON s.id = e.parent_id
+                   -- Watched marks are what this row is read from, so a
+                   -- library that keeps none has nothing up next.
+                   JOIN libraries l ON l.id = e.library_id AND l.keeps_watched_marks
                   WHERE s.parent_id IS NOT NULL{inside}
                   GROUP BY s.parent_id
                  HAVING sum(CASE WHEN q.state = 'watched' THEN 1 ELSE 0 END) > 0
-                    AND sum(CASE WHEN q.position_ms > 0 THEN 1 ELSE 0 END) = 0
+                    AND sum(CASE WHEN q.position_ms > 0 AND l.keeps_resume_points
+                                 THEN 1 ELSE 0 END) = 0
                   ORDER BY touched_at DESC
                   LIMIT ?3
              ),
@@ -814,6 +821,40 @@ mod tests {
         assert_eq!(waiting[0].series_title, "Amber Field");
         assert_eq!(waiting[0].season_number, Some(1));
         assert_eq!(waiting[0].episode_number, Some(2));
+    }
+
+    #[tokio::test]
+    async fn a_library_keeping_no_watched_marks_has_no_series_waiting() {
+        let (database, user_id, series, _, episodes) = one_series().await;
+        let library = database
+            .work(series)
+            .await
+            .expect("series read")
+            .expect("series present")
+            .library_id;
+        for episode in &episodes {
+            a_file_behind(&database, *episode, library).await;
+        }
+        database
+            .mark_watched(user_id, episodes[0], true)
+            .await
+            .expect("marked");
+        assert_eq!(database.up_next(user_id, None, 10).await.expect("read").len(), 1);
+
+        database
+            .set_library_options(
+                library,
+                melyxar_core::library::LibraryOptions {
+                    keeps_watched_marks: false,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("switched");
+        assert!(
+            database.up_next(user_id, None, 10).await.expect("read").is_empty(),
+            "up next is read from watched marks, and this library keeps none"
+        );
     }
 
     #[tokio::test]
@@ -1327,6 +1368,51 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_library_keeping_no_resume_points_has_nothing_to_carry_on() {
+        let (database, user_id, work_id, _) = one_film().await;
+        database
+            .record_playback_progress(
+                user_id,
+                work_id,
+                Millis::new(1_800_000),
+                PlaybackState::InProgress,
+                datetime!(2026-01-01 12:00 UTC),
+            )
+            .await
+            .expect("recorded");
+        let library = database
+            .work(work_id)
+            .await
+            .expect("film read")
+            .expect("film present")
+            .library_id;
+        let keeping = |keeps_resume_points| melyxar_core::library::LibraryOptions {
+            keeps_resume_points,
+            ..Default::default()
+        };
+
+        database
+            .set_library_options(library, keeping(false))
+            .await
+            .expect("switched");
+        assert!(database
+            .works_to_carry_on(user_id, None, 20)
+            .await
+            .expect("read")
+            .is_empty());
+
+        database
+            .set_library_options(library, keeping(true))
+            .await
+            .expect("switched");
+        assert_eq!(
+            database.works_to_carry_on(user_id, None, 20).await.expect("read").len(),
+            1,
+            "turned back on, the place kept before is offered again"
+        );
     }
 
     #[tokio::test]

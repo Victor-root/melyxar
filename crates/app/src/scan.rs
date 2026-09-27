@@ -1691,7 +1691,7 @@ mod tests {
                 melyxar_core::library::LibraryOptions {
                     key_frames_during_scan: true,
                     thumbnails_during_scan: true,
-                    watch_in_real_time: false,
+                    ..Default::default()
                 },
             )
             .await
