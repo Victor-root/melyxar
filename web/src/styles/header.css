@@ -27,8 +27,10 @@
 
 /* Stepped aside while a page is read down: slid up past the top of the
    window, the glow around its pieces with it. Never while somebody is using
-   it, which is what holding a focus inside it says. */
-.header-away:not(:focus-within) {
+   it: reaching into it from the keyboard, typing in the search, or with one
+   of its lists open. A link pressed with the mouse keeps the focus once the
+   page has changed, and that says nothing about being in use. */
+.header-away:not(:has(:focus-visible, [aria-expanded="true"])) {
   transform: translateY(calc(-100% - 24px));
 }
 
