@@ -421,35 +421,57 @@ impl HomeSection {
     }
 }
 
-/// One of the buttons grouped at the right end of the bar at the top.
-///
-/// Each can be moved into the account's menu, next to them, by whoever finds
-/// it in the way there.
+/// One of the buttons of the bar at the top, at its right end or in the
+/// account's menu next to them, wherever each person puts it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeaderButton {
     Search,
-    Notifications,
     Favourites,
     WatchLater,
+    Notifications,
+    /// Offered to administrators only, as the next one.
+    Scan,
+    Administration,
+    Cast,
+    Settings,
 }
 
 impl HeaderButton {
-    /// Every button, in the order the bar shows them.
-    pub const fn every() -> [Self; 4] {
+    /// Every button, in the order everybody starts with.
+    pub const fn every() -> [Self; 8] {
         [
             Self::Search,
-            Self::Notifications,
             Self::Favourites,
             Self::WatchLater,
+            Self::Notifications,
+            Self::Scan,
+            Self::Administration,
+            Self::Cast,
+            Self::Settings,
+        ]
+    }
+
+    /// The buttons on the bar until somebody chooses; the others are in the
+    /// menu.
+    pub const fn in_the_bar_at_first() -> [Self; 4] {
+        [
+            Self::Search,
+            Self::Favourites,
+            Self::WatchLater,
+            Self::Notifications,
         ]
     }
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Search => "search",
-            Self::Notifications => "notifications",
             Self::Favourites => "favourites",
             Self::WatchLater => "watch_later",
+            Self::Notifications => "notifications",
+            Self::Scan => "scan",
+            Self::Administration => "administration",
+            Self::Cast => "cast",
+            Self::Settings => "settings",
         }
     }
 
@@ -554,12 +576,12 @@ pub struct Preferences {
     /// Whether the bar at the top slides away while a page is read down, and
     /// comes back at the first move up.
     pub header_hides_on_scroll: bool,
-    /// The buttons of the bar in the order it shows them. Always every
-    /// button, once each, in the bar or not.
+    /// The buttons of the bar and of the account's menu, in the order both
+    /// show them. Always every button, once each.
     pub header_buttons: Vec<HeaderButton>,
-    /// The buttons of the bar moved into the account's menu. Kept apart from
-    /// the order, so a button brought back comes back where it was.
-    pub buttons_in_the_menu: Vec<HeaderButton>,
+    /// The buttons shown on the bar; the others are in the menu. Kept apart
+    /// from the order, so a button moved back comes back where it was.
+    pub buttons_in_the_bar: Vec<HeaderButton>,
     /// Whether this account is left off the list the sign in screen offers.
     ///
     /// The list is a deliberate disclosure, and this is the same choice made
@@ -616,7 +638,7 @@ impl Default for Preferences {
             banner_fills_the_screen: false,
             header_hides_on_scroll: true,
             header_buttons: HeaderButton::every().to_vec(),
-            buttons_in_the_menu: Vec::new(),
+            buttons_in_the_bar: HeaderButton::in_the_bar_at_first().to_vec(),
             // Shown by default: a household server is the ordinary case, and a
             // list with holes in it is of no use to anybody.
             hidden_at_the_door: false,
@@ -700,13 +722,13 @@ impl Preferences {
             }
         }
         self.header_buttons = buttons;
-        let mut in_the_menu: Vec<HeaderButton> = Vec::new();
-        for button in self.buttons_in_the_menu {
-            if !in_the_menu.contains(&button) {
-                in_the_menu.push(button);
+        let mut in_the_bar: Vec<HeaderButton> = Vec::new();
+        for button in self.buttons_in_the_bar {
+            if !in_the_bar.contains(&button) {
+                in_the_bar.push(button);
             }
         }
-        self.buttons_in_the_menu = in_the_menu;
+        self.buttons_in_the_bar = in_the_bar;
         self
     }
 
@@ -1065,20 +1087,20 @@ mod tests {
     fn the_header_buttons_always_hold_every_button_once() {
         let chosen = Preferences {
             header_buttons: vec![HeaderButton::WatchLater, HeaderButton::WatchLater],
-            buttons_in_the_menu: vec![HeaderButton::Favourites, HeaderButton::Favourites],
+            buttons_in_the_bar: vec![HeaderButton::Favourites, HeaderButton::Favourites],
             ..Preferences::default()
         }
         .normalised();
+        assert_eq!(chosen.header_buttons.len(), HeaderButton::every().len());
         assert_eq!(
-            chosen.header_buttons,
+            chosen.header_buttons[..3],
             [
                 HeaderButton::WatchLater,
                 HeaderButton::Search,
-                HeaderButton::Notifications,
                 HeaderButton::Favourites,
             ]
         );
-        assert_eq!(chosen.buttons_in_the_menu, vec![HeaderButton::Favourites]);
+        assert_eq!(chosen.buttons_in_the_bar, vec![HeaderButton::Favourites]);
         for button in HeaderButton::every() {
             assert_eq!(HeaderButton::parse(button.as_str()), Some(button));
         }

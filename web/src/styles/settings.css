@@ -224,7 +224,7 @@
   margin-inline: -8px;
   padding-inline: 8px;
   border-radius: var(--radius-control);
-  cursor: grab;
+  cursor: move;
   user-select: none;
 }
 
@@ -237,7 +237,7 @@
   border-top-color: transparent;
   background: var(--surface-raised);
   box-shadow: var(--shadow-raised);
-  cursor: grabbing;
+  cursor: move;
   transition: none;
 }
 
@@ -257,7 +257,7 @@
   border-radius: var(--radius-control);
   background: none;
   color: var(--text-faint);
-  cursor: grab;
+  cursor: move;
   /* A finger on the grip drags the line rather than scrolling the page. */
   touch-action: none;
 }
@@ -267,7 +267,7 @@
 }
 
 .sortable-held .sortable-grip {
-  cursor: grabbing;
+  cursor: move;
 }
 
 @media (prefers-reduced-motion: reduce) {

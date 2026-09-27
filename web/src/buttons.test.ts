@@ -3,7 +3,7 @@ import { buttonOrder, EVERY_HEADER_BUTTON, knownButtons } from "./buttons";
 
 describe("knownButtons", () => {
   it("keeps each known button once and drops the rest", () => {
-    expect(knownButtons(["favourites", "cast", "favourites", ""])).toEqual(["favourites"]);
+    expect(knownButtons(["favourites", "radio", "favourites", ""])).toEqual(["favourites"]);
   });
 });
 
@@ -12,8 +12,12 @@ describe("buttonOrder", () => {
     expect(buttonOrder(["watch_later", "watch_later"])).toEqual([
       "watch_later",
       "search",
-      "notifications",
       "favourites",
+      "notifications",
+      "scan",
+      "administration",
+      "cast",
+      "settings",
     ]);
   });
 

@@ -17,7 +17,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "./api";
-import { buttonOrder, knownButtons } from "./buttons";
+import { buttonOrder, EVERY_HEADER_BUTTON, IN_THE_BAR_AT_FIRST, knownButtons } from "./buttons";
 import type { HeaderButton, ViewerPreferences } from "./api";
 import { initialLanguage, rememberLanguage, safeRead, safeWrite, translate } from "./i18n";
 import type { Language } from "./i18n";
@@ -35,7 +35,7 @@ const STORED_BANNER_WHOLE = "melyxar.banner.whole";
 const STORED_BANNER_SHOWN = "melyxar.banner.shown";
 const STORED_HEADER_HIDES = "melyxar.header.hides";
 const STORED_HEADER_BUTTONS = "melyxar.header.buttons";
-const STORED_BUTTONS_IN_THE_MENU = "melyxar.header.in_the_menu";
+const STORED_BUTTONS_IN_THE_BAR = "melyxar.header.in_the_bar";
 const STORED_STEP_BACK = "melyxar.step.back";
 const STORED_STEP_ON = "melyxar.step.on";
 
@@ -88,12 +88,15 @@ interface Settings {
       comes back at the first move up. */
   headerHides: boolean;
   setHeaderHides: (hides: boolean) => void;
-  /** Every button at the right end of the bar, in the order it shows them. */
+  /** Every button of the bar and of the account's menu, in the order both
+      show them. */
   headerButtons: HeaderButton[];
   setHeaderButtons: (buttons: HeaderButton[]) => void;
-  /** The buttons of the bar moved into the account's menu. */
-  buttonsInTheMenu: HeaderButton[];
-  setButtonsInTheMenu: (buttons: HeaderButton[]) => void;
+  /** The buttons shown on the bar; the others are in the menu. */
+  buttonsInTheBar: HeaderButton[];
+  setButtonsInTheBar: (buttons: HeaderButton[]) => void;
+  /** Both back as everybody starts with them. */
+  resetHeaderButtons: () => void;
   /** How far the player's button back jumps, in seconds. */
   stepBack: number;
   setStepBack: (seconds: number) => void;
@@ -150,9 +153,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [headerButtons, setHeaderButtonsState] = useState(() =>
     buttonOrder(storedList(STORED_HEADER_BUTTONS)),
   );
-  const [buttonsInTheMenu, setButtonsInTheMenuState] = useState(() =>
-    knownButtons(storedList(STORED_BUTTONS_IN_THE_MENU)),
-  );
+  const [buttonsInTheBar, setButtonsInTheBarState] = useState(() => {
+    const stored = safeRead(STORED_BUTTONS_IN_THE_BAR);
+    return stored === null ? IN_THE_BAR_AT_FIRST : knownButtons(stored.split(","));
+  });
   const [stepBack, setStepBackState] = useState(() =>
     initialNumber(STORED_STEP_BACK, THE_USUAL_STEP_BACK),
   );
@@ -284,10 +288,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ header_buttons: buttons });
   }, []);
 
-  const setButtonsInTheMenu = useCallback((buttons: HeaderButton[]) => {
-    safeWrite(STORED_BUTTONS_IN_THE_MENU, buttons.join(","));
-    setButtonsInTheMenuState(buttons);
-    tellTheServer({ buttons_in_the_menu: buttons });
+  const setButtonsInTheBar = useCallback((buttons: HeaderButton[]) => {
+    safeWrite(STORED_BUTTONS_IN_THE_BAR, buttons.join(","));
+    setButtonsInTheBarState(buttons);
+    tellTheServer({ buttons_in_the_bar: buttons });
+  }, []);
+
+  const resetHeaderButtons = useCallback(() => {
+    safeWrite(STORED_HEADER_BUTTONS, EVERY_HEADER_BUTTON.join(","));
+    setHeaderButtonsState(EVERY_HEADER_BUTTON);
+    safeWrite(STORED_BUTTONS_IN_THE_BAR, IN_THE_BAR_AT_FIRST.join(","));
+    setButtonsInTheBarState(IN_THE_BAR_AT_FIRST);
+    tellTheServer({ header_buttons: EVERY_HEADER_BUTTON, buttons_in_the_bar: IN_THE_BAR_AT_FIRST });
   }, []);
 
   const setStepBack = useCallback((seconds: number) => {
@@ -329,9 +341,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const order = buttonOrder(chosen.header_buttons);
     safeWrite(STORED_HEADER_BUTTONS, order.join(","));
     setHeaderButtonsState(order);
-    const inTheMenu = knownButtons(chosen.buttons_in_the_menu);
-    safeWrite(STORED_BUTTONS_IN_THE_MENU, inTheMenu.join(","));
-    setButtonsInTheMenuState(inTheMenu);
+    const inTheBar = knownButtons(chosen.buttons_in_the_bar);
+    safeWrite(STORED_BUTTONS_IN_THE_BAR, inTheBar.join(","));
+    setButtonsInTheBarState(inTheBar);
     safeWrite(STORED_STEP_BACK, String(chosen.step_back_seconds));
     setStepBackState(chosen.step_back_seconds);
     safeWrite(STORED_STEP_ON, String(chosen.step_on_seconds));
@@ -358,8 +370,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setHeaderHides,
       headerButtons,
       setHeaderButtons,
-      buttonsInTheMenu,
-      setButtonsInTheMenu,
+      buttonsInTheBar,
+      setButtonsInTheBar,
+      resetHeaderButtons,
       stepBack,
       setStepBack,
       stepOn,
@@ -386,8 +399,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setHeaderHides,
       headerButtons,
       setHeaderButtons,
-      buttonsInTheMenu,
-      setButtonsInTheMenu,
+      buttonsInTheBar,
+      setButtonsInTheBar,
+      resetHeaderButtons,
       stepBack,
       setStepBack,
       stepOn,

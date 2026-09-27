@@ -9,21 +9,27 @@
 import type { HeaderButton } from "../../api";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
 import { Sortable } from "../../components/sortable";
+import { useAccount } from "../../account";
+import { FOR_ADMINISTRATORS } from "../../buttons";
 import {
   BellIcon,
   ClockIcon,
+  GearIcon,
   HeartIcon,
   PaletteIcon,
+  RefreshIcon,
+  ResetIcon,
+  ScreenCastIcon,
   SearchIcon,
   SlidersIcon,
   TickIcon,
 } from "../../icons";
 import { OFFERED_ACCENTS, useSettings } from "../../settings";
+import { reorderedAmong } from "../../sorting";
 import type { ThemeChoice } from "../../settings";
 
 export function MyAppearance() {
-  const { t, language, setLanguage, theme, setTheme, accent, setAccent, headerHides, setHeaderHides } =
-    useSettings();
+  const { t, language, setLanguage, theme, setTheme, accent, setAccent } = useSettings();
 
   return (
     <>
@@ -88,41 +94,69 @@ export function MyAppearance() {
             </label>
           </div>
         </Setting>
-        <Setting label={t("settings.header_hides")} why={t("settings.header_hides_why")}>
-          <Toggle label={t("settings.header_hides")} checked={headerHides} onChange={setHeaderHides} />
-        </Setting>
       </Panel>
 
-      <HeaderButtons />
+      <TopBar />
     </>
   );
 }
 
 const BUTTON_NAMES: Record<HeaderButton, string> = {
   search: "nav.search",
-  notifications: "nav.notifications",
   favourites: "nav.favourites",
   watch_later: "nav.watch_later",
+  notifications: "nav.notifications",
+  scan: "home.scan",
+  administration: "nav.administration",
+  cast: "nav.cast",
+  settings: "nav.settings",
 };
 
 /**
- * The buttons at the right end of the bar: in which order, and which of them
- * stay on it. A hidden one moves into the account's menu and keeps its place
- * in the list, so shown again it comes back where it was.
+ * Everything about the bar at the top in one place: whether it steps aside
+ * while a page is read down, and its buttons, in which order and which of
+ * them stay on it. A hidden one moves into the account's menu and keeps its
+ * place in the list, so shown again it comes back where it was.
  */
-function HeaderButtons() {
-  const { t, headerButtons, setHeaderButtons, buttonsInTheMenu, setButtonsInTheMenu } =
-    useSettings();
+function TopBar() {
+  const {
+    t,
+    headerHides,
+    setHeaderHides,
+    headerButtons,
+    setHeaderButtons,
+    buttonsInTheBar,
+    setButtonsInTheBar,
+    resetHeaderButtons,
+  } = useSettings();
+  const { account } = useAccount();
   const name = (button: HeaderButton) => t(BUTTON_NAMES[button]);
+  const offered =
+    account?.is_administrator === true
+      ? headerButtons
+      : headerButtons.filter((button) => !FOR_ADMINISTRATORS.includes(button));
 
   return (
-    <Panel icon={SlidersIcon} title={t("settings.header_buttons")} lead={t("settings.header_buttons_why")}>
+    <Panel
+      icon={SlidersIcon}
+      title={t("settings.header")}
+      lead={t("settings.header_buttons_why")}
+      action={
+        <button type="button" className="button button-small" onClick={resetHeaderButtons}>
+          <ResetIcon size={14} />
+          {t("settings.header_buttons_reset")}
+        </button>
+      }
+    >
+      <Setting label={t("settings.header_hides")} why={t("settings.header_hides_why")}>
+        <Toggle label={t("settings.header_hides")} checked={headerHides} onChange={setHeaderHides} />
+      </Setting>
       <Sortable
-        items={headerButtons}
+        items={offered}
         keyOf={(button) => button}
         nameOf={name}
-        onMove={setHeaderButtons}
-        lineClass={(button) => (buttonsInTheMenu.includes(button) ? "order-line-off" : undefined)}
+        onMove={(reordered) => setHeaderButtons(reorderedAmong(headerButtons, offered, reordered))}
+        lineClass={(button) => (buttonsInTheBar.includes(button) ? undefined : "order-line-off")}
       >
         {(button) => (
           <>
@@ -132,12 +166,12 @@ function HeaderButtons() {
             <span className="order-name">{name(button)}</span>
             <Toggle
               label={t("settings.header_button_shown", { name: name(button) })}
-              checked={!buttonsInTheMenu.includes(button)}
+              checked={buttonsInTheBar.includes(button)}
               onChange={(shown) =>
-                setButtonsInTheMenu(
+                setButtonsInTheBar(
                   shown
-                    ? buttonsInTheMenu.filter((one) => one !== button)
-                    : [...buttonsInTheMenu, button],
+                    ? [...buttonsInTheBar, button]
+                    : buttonsInTheBar.filter((one) => one !== button),
                 )
               }
             />
@@ -159,5 +193,13 @@ function ButtonMark({ button }: { button: HeaderButton }) {
       return <HeartIcon size={18} filled={false} />;
     case "watch_later":
       return <ClockIcon size={18} />;
+    case "scan":
+      return <RefreshIcon size={18} />;
+    case "administration":
+      return <SlidersIcon size={18} />;
+    case "cast":
+      return <ScreenCastIcon size={18} />;
+    case "settings":
+      return <GearIcon size={18} />;
   }
 }

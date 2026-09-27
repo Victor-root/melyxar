@@ -65,10 +65,10 @@ struct PreferencesView {
     banner_fills_the_screen: bool,
     /// Whether the bar at the top slides away while a page is read down.
     header_hides_on_scroll: bool,
-    /// Every button at the right end of the bar, in the order it shows them,
-    /// and those moved into the account's menu.
+    /// Every button of the bar and of the account's menu, in the order both
+    /// show them, and those shown on the bar.
     header_buttons: Vec<&'static str>,
-    buttons_in_the_menu: Vec<&'static str>,
+    buttons_in_the_bar: Vec<&'static str>,
     /// Whether this account is left off the list the sign in screen offers.
     hidden_at_the_door: bool,
     /// Every kind of library, in the order the home page lays them out.
@@ -141,7 +141,7 @@ struct PreferencesBody {
     #[serde(default)]
     header_buttons: Option<Vec<String>>,
     #[serde(default)]
-    buttons_in_the_menu: Option<Vec<String>>,
+    buttons_in_the_bar: Option<Vec<String>>,
     #[serde(default)]
     hidden_at_the_door: Option<bool>,
     #[serde(default)]
@@ -249,8 +249,8 @@ async fn write(
     if let Some(buttons) = body.header_buttons {
         chosen.header_buttons = buttons_named(&buttons)?;
     }
-    if let Some(buttons) = body.buttons_in_the_menu {
-        chosen.buttons_in_the_menu = buttons_named(&buttons)?;
+    if let Some(buttons) = body.buttons_in_the_bar {
+        chosen.buttons_in_the_bar = buttons_named(&buttons)?;
     }
     if let Some(hidden) = body.hidden_at_the_door {
         chosen.hidden_at_the_door = hidden;
@@ -403,8 +403,8 @@ async fn view(
             .iter()
             .map(|button| button.as_str())
             .collect(),
-        buttons_in_the_menu: chosen
-            .buttons_in_the_menu
+        buttons_in_the_bar: chosen
+            .buttons_in_the_bar
             .iter()
             .map(|button| button.as_str())
             .collect(),
