@@ -1,5 +1,6 @@
 /*
- * The setting a search led to, brought into view and lit for a moment.
+ * The setting a search led to: its card brought into view, and pulsing
+ * softly twice so the eye lands on it.
  *
  * The search says which one in the address, by the key it is named by. It is
  * looked for among the names of the settings and cards drawn on the page, and
@@ -15,9 +16,6 @@ import { useSettings } from "../settings";
 /** How long a page is given to draw the setting asked for. */
 const WAITED_FOR_MS = 5000;
 
-/** How long it stays lit once found. */
-const LIT_FOR_MS = 2400;
-
 /** What a setting and a card are named by on a page. */
 const NAMES = ".setting-label, .panel-head h2";
 
@@ -32,18 +30,20 @@ export function useFindOnArrival(page: RefObject<HTMLElement | null>): void {
       return;
     }
     const wanted = folded(t(key));
-    let lit = 0;
     const look = () => {
       const named = [...holder.querySelectorAll(NAMES)].find(
         (name) => folded(name.textContent ?? "").startsWith(wanted),
       );
-      const around = named?.closest(".setting, .panel");
-      if (!around) {
+      const card = named?.closest(".panel");
+      if (!card) {
         return false;
       }
-      around.scrollIntoView({ block: "center", behavior: "smooth" });
-      around.classList.add("found");
-      lit = window.setTimeout(() => around.classList.remove("found"), LIT_FOR_MS);
+      card.scrollIntoView({ block: "center", behavior: "smooth" });
+      // Taken off once the pulse is over, so it can be played again.
+      card.addEventListener("animationend", () => card.classList.remove("found"), {
+        once: true,
+      });
+      card.classList.add("found");
       return true;
     };
     // Asked for once, whatever happens: the address forgets it, so going back
@@ -59,7 +59,7 @@ export function useFindOnArrival(page: RefObject<HTMLElement | null>): void {
       );
     if (look()) {
       forget();
-      return () => window.clearTimeout(lit);
+      return;
     }
     const drawn = new MutationObserver(() => {
       if (look()) {
@@ -76,7 +76,6 @@ export function useFindOnArrival(page: RefObject<HTMLElement | null>): void {
     return () => {
       drawn.disconnect();
       window.clearTimeout(given);
-      window.clearTimeout(lit);
     };
   }, [key, page, t, setParameters]);
 }
