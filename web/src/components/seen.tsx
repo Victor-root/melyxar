@@ -27,13 +27,11 @@
 import { useSettings } from "../settings";
 import { TickIcon } from "../icons";
 
-/** Past this, a count is written as "so many and more": four figures folded
- *  into a corner are four figures nobody reads. */
-const TOO_MANY_TO_WRITE = 99;
-
-/** How many characters the banner holds before it is widened. A tick and one
- *  or two figures sit in the corner as it is; "100+" does not. */
+/** How many figures the banner holds before it is widened, and before it is
+ *  widened again. A tick and one or two figures sit in the corner as it is;
+ *  three need a larger corner, and four a larger one still. */
 const FITS_IN_THE_CORNER = 2;
+const FITS_IN_A_LARGER_CORNER = 3;
 
 export function SeenMark({
   watched,
@@ -53,17 +51,19 @@ export function SeenMark({
   const said = counting
     ? t("card.unwatched", { count: unwatched })
     : t(watched ? "card.mark_unwatched" : "card.mark_watched");
-  const written = counting
-    ? unwatched > TOO_MANY_TO_WRITE
-      ? `${TOO_MANY_TO_WRITE}+`
-      : String(unwatched)
-    : "";
+  const written = counting ? String(unwatched) : "";
   const inside = counting ? written : <TickIcon size={14} />;
   const marked = counting || watched;
   /* Widened for what does not fit, rather than widened for everything: the
      corner is a triangle, so what room there is narrows as it goes down, and
-     a banner sized for "99+" on every card is a banner too big for a tick. */
-  const long = written.length > FITS_IN_THE_CORNER ? "yes" : undefined;
+     a banner sized for four figures on every card is a banner too big for a
+     tick. */
+  const long =
+    written.length > FITS_IN_A_LARGER_CORNER
+      ? "longer"
+      : written.length > FITS_IN_THE_CORNER
+        ? "yes"
+        : undefined;
 
   if (!onPress) {
     return marked ? (
