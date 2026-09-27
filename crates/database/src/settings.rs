@@ -191,8 +191,6 @@ pub struct LibraryWork {
     /// believes it without being asked is a server that takes a stranger's
     /// word over a provider's. Only identifiers are ever taken from one.
     pub read_companion_files: bool,
-    /// Whether the little pictures of the playback bar are made at all.
-    pub thumbnails_enabled: bool,
     /// How far apart in the film two of them stand.
     pub thumbnails_every_seconds: i64,
     /// Height of one, in pixels. The width follows the film's shape.
@@ -230,7 +228,6 @@ impl Database {
                     maintenance_enabled, maintenance_message, maintenance_until,
                     read_companion_files, write_companion_files, watched_threshold,
                     activity_retention_days, check_for_updates, tone_mapping_disabled,
-                    thumbnails_enabled,
                     thumbnails_every_seconds, thumbnails_height, thumbnails_columns,
                     thumbnails_rows, updated_at
              FROM server_settings WHERE id = 1",
@@ -262,7 +259,6 @@ impl Database {
             tone_mapping_disabled: int_to_bool(row.try_get("tone_mapping_disabled")?),
             work: LibraryWork {
                 read_companion_files: int_to_bool(row.try_get("read_companion_files")?),
-                thumbnails_enabled: int_to_bool(row.try_get("thumbnails_enabled")?),
                 thumbnails_every_seconds: row.try_get("thumbnails_every_seconds")?,
                 thumbnails_height: row.try_get("thumbnails_height")?,
                 thumbnails_columns: row.try_get("thumbnails_columns")?,
@@ -480,13 +476,12 @@ impl Database {
         let work = work.brought_into_range();
         sqlx::query(
             "UPDATE server_settings SET
-                read_companion_files = ?, thumbnails_enabled = ?,
+                read_companion_files = ?,
                 thumbnails_every_seconds = ?, thumbnails_height = ?,
                 thumbnails_columns = ?, thumbnails_rows = ?, updated_at = ?
              WHERE id = 1",
         )
         .bind(bool_to_int(work.read_companion_files))
-        .bind(bool_to_int(work.thumbnails_enabled))
         .bind(work.thumbnails_every_seconds)
         .bind(work.thumbnails_height)
         .bind(work.thumbnails_columns)
@@ -656,7 +651,6 @@ mod tests {
         );
         // What the configuration file used to carry, so a server coming up on
         // this migration behaves exactly as it did the moment before.
-        assert!(settings.work.thumbnails_enabled);
         assert_eq!(settings.work.thumbnails_every_seconds, 10);
         assert_eq!(settings.work.thumbnails_height, 180);
         assert_eq!(settings.work.thumbnails_columns, 10);
@@ -741,7 +735,6 @@ mod tests {
         let kept = database
             .save_library_work(LibraryWork {
                 read_companion_files: true,
-                thumbnails_enabled: true,
                 thumbnails_every_seconds: 5,
                 thumbnails_height: 240,
                 thumbnails_columns: 8,

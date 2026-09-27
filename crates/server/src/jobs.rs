@@ -673,8 +673,6 @@ async fn run_every_task(
 struct WorkView {
     /// Read the description files some collections keep next to a film.
     read_companion_files: bool,
-    /// Whether the thumbnails of the playback bar are made at all.
-    thumbnails_enabled: bool,
     /// How far apart in the film two of them stand.
     thumbnails_every_seconds: i64,
     thumbnails_height: i64,
@@ -685,7 +683,6 @@ struct WorkView {
 fn work_view(work: melyxar_app::settings::LibraryWork) -> WorkView {
     WorkView {
         read_companion_files: work.read_companion_files,
-        thumbnails_enabled: work.thumbnails_enabled,
         thumbnails_every_seconds: work.thumbnails_every_seconds,
         thumbnails_height: work.thumbnails_height,
         thumbnails_columns: work.thumbnails_columns,
@@ -724,7 +721,6 @@ async fn set_library_work(
         .database()
         .save_library_work(melyxar_app::settings::LibraryWork {
             read_companion_files: asked.read_companion_files,
-            thumbnails_enabled: asked.thumbnails_enabled,
             thumbnails_every_seconds: asked.thumbnails_every_seconds,
             thumbnails_height: asked.thumbnails_height,
             thumbnails_columns: asked.thumbnails_columns,
@@ -735,7 +731,6 @@ async fn set_library_work(
 
     tracing::debug!(
         read_companion_files = kept.read_companion_files,
-        thumbnails_enabled = kept.thumbnails_enabled,
         thumbnails_every_seconds = kept.thumbnails_every_seconds,
         thumbnails_height = kept.thumbnails_height,
         thumbnails_columns = kept.thumbnails_columns,

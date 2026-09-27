@@ -415,7 +415,6 @@ export interface ScheduledTasks {
 export interface LibraryWork {
   /** Read the description files some collections keep next to a film. */
   read_companion_files: boolean;
-  thumbnails_enabled: boolean;
   thumbnails_every_seconds: number;
   thumbnails_height: number;
   thumbnails_columns: number;

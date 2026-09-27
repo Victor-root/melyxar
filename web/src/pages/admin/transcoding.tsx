@@ -183,20 +183,12 @@ export function AdminTranscoding() {
 
       {work.kept && (
         <Panel icon={ImageIcon} title={t("settings.thumbnails")} lead={t("settings.thumbnails_why")}>
-          <Setting label={t("settings.thumbnails_on")}>
-            <Toggle
-              label={t("settings.thumbnails_on")}
-              checked={work.kept.thumbnails_enabled}
-              onChange={(thumbnails_enabled) => work.setTo({ thumbnails_enabled })}
-            />
-          </Setting>
           <Setting label={t("settings.thumbnails_every")}>
             <NumberField
               label={t("settings.thumbnails_every")}
               value={work.kept.thumbnails_every_seconds}
               min={1}
               max={600}
-              disabled={!work.kept.thumbnails_enabled}
               onPick={(thumbnails_every_seconds) => work.setTo({ thumbnails_every_seconds })}
             />
           </Setting>
@@ -206,7 +198,6 @@ export function AdminTranscoding() {
               value={work.kept.thumbnails_height}
               min={1}
               max={1080}
-              disabled={!work.kept.thumbnails_enabled}
               onPick={(thumbnails_height) => work.setTo({ thumbnails_height })}
             />
           </Setting>
@@ -221,7 +212,6 @@ export function AdminTranscoding() {
               value={work.kept.thumbnails_columns}
               min={1}
               max={20}
-              disabled={!work.kept.thumbnails_enabled}
               onPick={(thumbnails_columns) => work.setTo({ thumbnails_columns })}
             />
             <span className="setting-times" aria-hidden="true">×</span>
@@ -230,7 +220,6 @@ export function AdminTranscoding() {
               value={work.kept.thumbnails_rows}
               min={1}
               max={20}
-              disabled={!work.kept.thumbnails_enabled}
               onPick={(thumbnails_rows) => work.setTo({ thumbnails_rows })}
             />
           </Setting>
