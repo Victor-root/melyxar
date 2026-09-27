@@ -1,0 +1,199 @@
+/*
+ * Panels of glass, the one surface every screen lays its content on.
+ */
+
+/* --------------------------------------------------------------------------
+ * Panels
+ * ----------------------------------------------------------------------- */
+
+/* Panels side by side while each has room to breathe, one under the other
+   once they would not. */
+.panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  gap: calc(var(--gap) * 1.5);
+}
+
+/* The air between the blocks of a page, said once for every page rather than
+   by each pair of neighbours: blocks set side by side in a grid take their
+   spacing from the grid, and a margin on one of them there would lift it out
+   of line with the other. */
+.sectioned-page > :not(.page-head) + * {
+  margin-top: calc(var(--gap) * 1.5);
+}
+
+.panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 18px;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border);
+  background: var(--panel-glass);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-card);
+}
+
+/* A hairline of the accent along the top, strongest in the middle: the
+   same light the tiles of the home page are rimmed with, said once. */
+.panel::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 55%, transparent),
+    transparent
+  );
+}
+
+/* The buttons of a panel go under its name, to the right, once the two no
+   longer fit side by side. */
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.panel-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-bright);
+}
+
+.panel-words {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.panel-words h2 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.panel-words p {
+  margin: 2px 0 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.panel-action {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
+  max-width: 100%;
+  margin-left: auto;
+}
+
+/* A panel folded to its head: its words open it as well as its chevron,
+   which turns over once it is open. */
+.panel-folding .panel-words {
+  cursor: pointer;
+}
+
+.panel-fold {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-soft);
+  transition:
+    color var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+.panel-fold:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+}
+
+.panel-fold > svg {
+  transition: transform var(--quick) var(--ease);
+}
+
+.panel-fold[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin-top: 16px;
+}
+
+/* A panel whose rows are settings: the rows keep their own air, and the
+   hairline between them is what separates them. */
+.panel-body:has(> .setting) {
+  gap: 0;
+  margin-top: 8px;
+}
+
+/* Drawn and not yet wired: all there, and plainly asleep. The mark goes
+   grey so the accent keeps meaning something that works. */
+.panel-soon .panel-mark {
+  border-color: var(--border);
+  background: var(--surface-hover);
+  color: var(--text-faint);
+}
+
+.panel-soon .panel-body {
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+}
+
+.panel-soon::before {
+  display: none;
+}
+
+/* The word saying so. */
+.soon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* A line in a panel that leads somewhere else, at its foot. */
+.panel-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: var(--gap);
+}

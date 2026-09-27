@@ -1,0 +1,753 @@
+/*
+ * The grid of cards, and the letters beside it.
+ */
+
+/* --------------------------------------------------------------------------
+ * The grid of cards
+ * ----------------------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-width), 1fr));
+  gap: var(--gap-wide) var(--gap);
+}
+
+@media (min-width: 1400px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(var(--card-width-wide), 1fr));
+  }
+}
+
+/* Cards on their side need columns as much wider as a row gives them. */
+.grid-lying {
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--card-width) * 1.62), 1fr));
+}
+
+@media (min-width: 1400px) {
+  .grid-lying {
+    grid-template-columns: repeat(auto-fill, minmax(calc(var(--card-width-wide) * 1.62), 1fr));
+  }
+}
+
+/* Text that only a screen reader needs: taken out of the page without being
+   taken out of the accessibility tree, which display:none would do. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.card {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* The browser skips drawing what is off screen, which is what keeps a
+     library of thousands scrolling smoothly without a virtualisation
+     library and the hand measured heights one needs. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+  transition: transform var(--calm) var(--ease);
+}
+
+/* Except in a row, which holds a couple of dozen cards at most. Skipped
+   there, each card was styled, laid out and drawn only at the moment it came
+   into view, which is while the page is being scrolled: on a first visit
+   every row arriving on screen stalled a frame or two for it. Measured on a
+   home page full of posters, slowed four times: the worst frame of a first
+   scroll went from 200 ms to 50 ms once rows are drawn up front, for a cost
+   paid once, as the page opens. The thousands of a library's grid keep the
+   skipping, which is where it pays. */
+.row-track > .card {
+  content-visibility: visible;
+}
+
+/* The whole card grows a little under the pointer, picture and words
+   together, the way every button in this interface does. It used to be the
+   picture alone that grew, inside a card that stayed where it was, which
+   read as a picture swelling in its own frame rather than as a card coming
+   forward.
+
+   Grown rather than reflowed: a transform moves nothing around it, so the
+   grid under the pointer stays exactly where it was. Lifted above its
+   neighbours while it is grown, or the one it grows over would be drawn on
+   top of it.
+
+   Held forward for a hand on the keyboard, and while the card's menu is
+   open, but not for a button merely clicked: a click leaves the button
+   focused, and the card stayed grown after the pointer had left it. */
+.card:hover,
+.card:has(:focus-visible, [aria-expanded="true"]) {
+  transform: scale(1.035);
+  z-index: 3;
+}
+
+.card-picture {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--card-color);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--calm) var(--ease);
+}
+
+/* An episode and a film left halfway lie down: a still is a wide picture, and
+   a row of them that stood up would be a row of cropped middles. */
+.card-lying {
+  contain-intrinsic-size: auto 190px;
+}
+
+.card-lying .card-picture {
+  aspect-ratio: 16 / 9;
+}
+
+/* The rim a library tile wears under the pointer, on every card: one even
+   line of accent just inside the picture's edge, covering that edge rather
+   than sitting beside it, so it comes out the same thickness all the way
+   round at any zoom. Nothing at rest: a page of a hundred posters each
+   wearing the accent is a page wearing nothing else. Over everything the
+   picture holds, and never in the way of a hand. */
+.card-picture::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1.5px transparent;
+  pointer-events: none;
+  transition: box-shadow var(--quick) var(--ease);
+}
+
+/* Coming forward, and lit while it is: the rim, and light falling off it
+   with no edge of its own, the way a library tile lights up. */
+.card:hover .card-picture::after,
+.card:has(:focus-visible, [aria-expanded="true"]) .card-picture::after {
+  box-shadow: inset 0 0 0 1.5px var(--accent-bright);
+}
+
+.card:hover .card-picture,
+.card:has(:focus-visible, [aria-expanded="true"]) .card-picture {
+  box-shadow:
+    var(--shadow-raised),
+    0 0 8px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 0 26px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover,
+  .card:has(:focus-visible, [aria-expanded="true"]) {
+    transform: none;
+  }
+}
+
+/* The card of the work the page is about, among the ones around it: ringed
+   in the accent at rest, so it is found without looking for it. */
+.card-here .card-picture {
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 2px var(--accent);
+}
+
+.card-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The whole picture leads to the work. Under everything drawn on top of it,
+   which is what makes those buttons and not parts of a link. */
+.card-open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+/* A work with no picture: its first letter in the lettering of the name of
+   the server, on a dark ground the accent lights faintly from above, rather
+   than a heavy grey letter on flat grey that read as a card that failed to
+   load. */
+.card-initial {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--accent) var(--no-picture-glow), transparent),
+      transparent 70%
+    ),
+    linear-gradient(
+      color-mix(in srgb, var(--surface-deep) 40%, var(--card-color)),
+      color-mix(in srgb, var(--surface-deep) 75%, var(--card-color))
+    );
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: 52px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text) 30%, transparent);
+}
+
+.card-flag {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface-deep) 90%, transparent);
+  font-size: 11px;
+  color: var(--text-soft);
+  border: 1px solid var(--border-strong);
+}
+
+/* A film nobody could name is something to see to, and says so in the
+   colour this interface keeps for that, with the mark of the filter that
+   gathers them: found at a glance, without the card looking broken. */
+.card-flag-attention {
+  background: color-mix(in srgb, var(--surface-deep) 88%, var(--attention));
+  border-color: color-mix(in srgb, var(--attention) 55%, transparent);
+  color: var(--attention);
+}
+
+/* Where somebody is with a work: a banner folded over the corner of the
+   picture, holding either how many episodes are left or a tick. Drawn by the
+   interface and by the player alike, which is why it carries no name of
+   either.
+
+   Cut to a triangle by the corner itself: the picture already hides what runs
+   past its rounded edge, so the banner follows that edge rather than sitting
+   square over it.
+
+   At rest it is there only when it has something to say. Under the pointer it
+   is the button that marks and unmarks, and appears on cards that had nothing
+   to say, since marking a film watched has to be reachable without a menu. */
+.seen-mark {
+  position: absolute;
+  /* Bled a couple of pixels past the picture's own top and right edges,
+     which the picture's rounded overflow then clips back to its own curve.
+     Flush at 0/0 left a hairline of the page behind showing through at the
+     rounded corner itself, where the banner's straight edge and the
+     picture's arc are antialiased by two different passes that do not quite
+     agree on which pixel is the last one. */
+  top: -2px;
+  right: -2px;
+  z-index: 3;
+  display: block;
+  width: calc(var(--seen-corner, 46px) + 2px);
+  height: calc(var(--seen-corner, 46px) + 2px);
+  padding: 0;
+  border: none;
+  /* The corner itself: the top edge and the right edge, closed by the slant
+     between them. */
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  /* Grey where nobody has watched it: the banner that appears when the
+     pointer arrives says what pressing it would do without pretending the
+     film is already watched. Grey rather than a darker shade of the
+     background, which over a dark poster is no colour at all. */
+  background: color-mix(in srgb, var(--text) 42%, var(--surface-deep));
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  transition:
+    opacity var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+/* Room for a long count. The corner narrows as it goes down, so what room
+   there is has to come from the corner being larger, not from the words
+   being moved. */
+.seen-mark[data-long="yes"] {
+  --seen-corner: 58px;
+}
+
+/* What is written sits in the corner's own angle, where it is thickest, and
+   far enough in from both edges not to touch them. Offset by the same 2px
+   the banner itself now bleeds by, so the words stay where they were against
+   the picture's real corner. */
+.seen-mark-said {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
+}
+
+/* Shown at once rather than faded in. The corner under it is cut out of the
+   picture in the same instant, which cannot be faded, and a banner fading in
+   over a corner already cut away flashed the page behind through it before
+   the grey arrived. It still fades out: leaving, the picture is whole again
+   under it at once, and there is nothing behind it to flash. */
+.card:hover .seen-mark,
+.card:has(:focus-visible, [aria-expanded="true"]) .seen-mark,
+.seen-mark-on {
+  opacity: 1;
+  transition:
+    opacity 0s,
+    background var(--quick) var(--ease);
+}
+
+/* Nothing but the banner in the corner it is folded over. The rounded edge
+   is smoothed once for every layer stacked under it, the card's colour, the
+   poster and the shade drawn over it under the pointer, and in the pixels
+   that edge only half covers each of those showed through the banner: a
+   thread of poster along the curve and along both straight edges. So under
+   a banner the whole corner it covers is cut out of all of them, stopping
+   a few points short of its slant so the cut never shows beside it. */
+.card-picture:has(.seen-mark-on),
+.card:hover .card-picture:has(.seen-mark),
+.card:has(:focus-visible, [aria-expanded="true"]) .card-picture:has(.seen-mark) {
+  --under-the-banner: 42px;
+
+  background: linear-gradient(
+    225deg,
+    transparent calc(var(--under-the-banner) / 1.4142),
+    var(--card-color) 0
+  );
+}
+
+.card .card-picture:has(.seen-mark[data-long="yes"]) {
+  --under-the-banner: 54px;
+}
+
+.card-picture:has(.seen-mark-on) :is(img, .card-initial, .card-hover),
+.card:hover .card-picture:has(.seen-mark) :is(img, .card-initial, .card-hover),
+.card:has(:focus-visible, [aria-expanded="true"]) .card-picture:has(.seen-mark) :is(img, .card-initial, .card-hover) {
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--under-the-banner)) 0,
+    100% var(--under-the-banner),
+    100% 100%,
+    0 100%
+  );
+}
+
+.seen-mark-on {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+button.seen-mark-on:hover {
+  background: var(--accent-bright);
+}
+
+/* And the accent once the pointer is on the banner itself: what it is about
+   to become, shown before it is pressed. */
+button.seen-mark:not(.seen-mark-on):hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* A finger has no pointer: the button is simply always reachable. */
+@media (hover: none) {
+  button.seen-mark {
+    opacity: 1;
+  }
+}
+
+/* Everything the hover offers, in one layer over the picture.
+
+   The layer itself never takes a press, only the buttons on it do: it covers
+   the whole picture, and a picture whose card no longer opens when pressed
+   anywhere but on its buttons is a card that looks broken. */
+.card-hover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.55),
+    rgba(0, 0, 0, 0.1) 45%,
+    rgba(0, 0, 0, 0.35)
+  );
+  transition: opacity var(--calm) var(--ease);
+  pointer-events: none;
+}
+
+.card-hover button {
+  pointer-events: auto;
+}
+
+.card:hover .card-hover,
+.card:has(:focus-visible, [aria-expanded="true"]) .card-hover {
+  opacity: 1;
+}
+
+/* Made only once the card is first reached (see card.tsx), so it arrives
+   already under the pointer: it fades in from nothing all the same. */
+@starting-style {
+  .card:hover .card-hover,
+  .card:has(:focus-visible) .card-hover,
+  .card:hover .select-mark,
+  .card:has(:focus-visible) .select-mark {
+    opacity: 0;
+  }
+}
+
+/* A finger has no hover: with the pointer that never arrives, the layer is
+   simply always there, faintly, and everything on it can be pressed. */
+@media (hover: none) {
+  .card-hover {
+    opacity: 1;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent 40%);
+  }
+
+  .card-play {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+/* One disc of accent with a white triangle in it, and nothing else: no ring,
+   no shadow, no second colour. It is the one control a hand goes to without
+   looking, and everything added to it only makes it harder to see. */
+.card-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.86);
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 90%, transparent);
+  color: var(--accent-contrast);
+  transition: transform var(--calm) var(--ease), background var(--quick) var(--ease);
+}
+
+.card:hover .card-play,
+.card:has(:focus-visible, [aria-expanded="true"]) .card-play {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.card-play:hover {
+  background: var(--accent-bright);
+}
+
+/* The marks: watched at the top right, liked and the rest at the bottom. */
+.card-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-deep) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  color: var(--text);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.card-mark:hover {
+  background: var(--surface-raised);
+}
+
+.card-mark-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.card-mark-on:hover {
+  background: var(--accent-bright);
+}
+
+.card-corner {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+/* The round mark that chooses a card, at the corner the other marks leave
+   free. Under the pointer only, until something is chosen: from then on
+   every card wears it, since every press is now a choice. */
+.select-mark {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-deep) 70%, transparent);
+  border: 2px solid color-mix(in srgb, var(--text) 70%, transparent);
+  color: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--quick) var(--ease), background var(--quick) var(--ease);
+}
+
+.card:hover .select-mark,
+.card:has(:focus-visible, [aria-expanded="true"]) .select-mark,
+.own-cell:hover .select-mark,
+.own-cell:focus-within .select-mark,
+.selecting .select-mark {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.select-mark:hover {
+  color: var(--text-soft);
+}
+
+.select-mark-on,
+.select-mark-on:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* A chosen card is ringed, so a grid of them reads at a glance. */
+.card-chosen .card-picture,
+.own-chosen .own-picture {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+/* While choosing, a press chooses: the button that would play instead is
+   taken away rather than left to be pressed by mistake. */
+.selecting .card-play {
+  display: none;
+}
+
+/* What can be done with the chosen cards, at the foot of the window. */
+.selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--gap-wide);
+  z-index: 30;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-tight);
+  max-width: calc(100vw - 32px);
+  padding: 8px 10px 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+  animation: header-menu-arrive var(--quick) var(--ease) both;
+}
+
+.selection-count {
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+/* Drawn on the picture itself: it is the one thing that tells two cards of a
+   row apart at a glance. Above the hover layer, since how far in something is
+   does not stop being true under the pointer. */
+.card-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  z-index: 3;
+  background: rgba(0, 0, 0, 0.55);
+  transition: background var(--quick) var(--ease);
+}
+
+.card-progress-done {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: background var(--quick) var(--ease);
+}
+
+/* Under the pointer the line becomes part of the rim lit around the card:
+   how far in it is, drawn as that rim running thicker along the foot, in
+   its colour. The dark track under it goes, since the rim itself already
+   says where the whole length ends; left in, it stood between the rim and
+   the picture as a strip of its own. */
+.card:hover .card-progress,
+.card:has(:focus-visible, [aria-expanded="true"]) .card-progress {
+  background: transparent;
+}
+
+.card:hover .card-progress-done,
+.card:has(:focus-visible, [aria-expanded="true"]) .card-progress-done {
+  background: var(--accent-bright);
+}
+
+/* What the card offers beyond pressing it: one of the bar's lists, lines
+   and all. Drawn over the page, at the place the button was: a card clips
+   what it holds, so a menu inside one comes out cut in half. */
+.card-menu {
+  z-index: 40;
+  min-width: 210px;
+  /* Long on purpose: everything this interface is meant to do is listed,
+     wired or not. Taller than the window it scrolls rather than spilling. */
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+}
+
+/* The name, and at its right what a row of half watched films is read for.
+   The name takes whatever is left rather than a share of it, so a long title
+   is cut instead of squeezing the minutes out of the line. */
+.card-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-tight);
+  margin-top: 6px;
+}
+
+.card-title {
+  min-width: 0;
+  /* A file name is often one long word with no space in it. Unbroken, it
+     stretched its card past its neighbours, and the picture with it. */
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-trailing {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.card-year {
+  font-size: 12px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The grid with the letters beside it. The letters stand fixed on the
+   screen, so jumping to another one never means scrolling back up first, and
+   the grid keeps their width free at its side. */
+.grid-with-letters {
+  --letter-width: 28px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-wide);
+}
+
+.grid-with-letters-kept {
+  padding-right: calc(var(--letter-width) + 10px + var(--gap-wide));
+}
+
+.grid-with-letters > :first-child {
+  flex: 1;
+  /* Without this a grid of wide cards refuses to shrink and pushes the
+     letters off the screen. */
+  min-width: 0;
+}
+
+/*
+ * A rail of the bar's glass, lit under a hand as the bar is, and always
+ * whole on the screen: each letter is given an equal share of the height
+ * below the bar at the top, up to a comfortable press and down to a small
+ * one, so a library with every letter never runs off the bottom. Kept under
+ * the bar rather than behind it, since the piece at that end of it stands
+ * right above.
+ *
+ * Fixed to the screen rather than carried along with the grid: held inside
+ * the grid, it was pushed back up by the end of it, and moved under the hand
+ * at the bottom of every library.
+ */
+.letters {
+  --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide));
+  --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 26px);
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 4px;
+  border-radius: 18px;
+  /* Level with the top of the grid, so it stands where the grid begins and
+     never moves once the page does. */
+  position: fixed;
+  z-index: 5;
+  top: calc(var(--header-height) + var(--gap-wide));
+  right: var(--gutter);
+  max-height: var(--letters-room);
+  overflow-y: auto;
+  scrollbar-width: none;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--quick) var(--ease);
+}
+
+.letters:hover,
+.letters:focus-within {
+  box-shadow:
+    var(--shadow-card),
+    0 0 14px 2px var(--accent-glow);
+}
+
+.letter {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--letter-width);
+  height: var(--letter);
+  border-radius: var(--radius-pill);
+  color: var(--text-soft);
+  font-size: min(12px, calc(var(--letter) * 0.6));
+  font-weight: 650;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.letter:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-bright);
+}
+
+/* The letter of the titles at the top of the screen, and the one being gone
+   to while the grid reads on as far as it. */
+.letter-on,
+.letter-on:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* Narrow: the letters go above the grid rather than beside it, where a column
+   would leave the cards no room at all. */
+@media (max-width: 700px) {
+  .grid-with-letters {
+    flex-direction: column-reverse;
+  }
+
+  .grid-with-letters-kept {
+    padding-right: 0;
+  }
+
+  .letters {
+    --letter: 28px;
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-self: stretch;
+    max-height: none;
+    padding: 4px;
+  }
+}

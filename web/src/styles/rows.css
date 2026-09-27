@@ -1,0 +1,183 @@
+/*
+ * The rows of the home page.
+ */
+
+/* --------------------------------------------------------------------------
+ * Libraries on the home page
+ * ----------------------------------------------------------------------- */
+
+/* A row that scrolls sideways rather than spilling onto four lines. A section
+   of a home page is a suggestion, and a suggestion four lines tall is a page
+   to scroll past before reaching the next one. */
+.row {
+  /* The room kept above the cards for the light a card gives off under the
+     pointer: the track scrolls sideways, so it clips whatever reaches past
+     it, and the glow used to stop dead along the top of the row. Taken back
+     by a margin of the same size, so nothing on the page moves for it. */
+  --row-air: 30px;
+  /* The same room at the sides, where the glow of the first and the last
+     card used to be cut off square. Taken out of the page's margin, never
+     wider than it: a phone's narrow margin gives what it has, and the
+     screen's edge does the rest. */
+  --row-side-air: min(var(--row-air), var(--gutter));
+
+  position: relative;
+}
+
+.row-track {
+  display: flex;
+  gap: var(--gap);
+  overflow-x: auto;
+  /* Room for the focus ring, for a card grown under the pointer and for the
+     light it gives off, all of which a hidden overflow would otherwise clip. */
+  padding: var(--row-air) var(--row-side-air) var(--gap-tight);
+  margin: calc(var(--row-air) * -1) calc(var(--row-side-air) * -1) calc(var(--gap-tight) * -1);
+  scrollbar-width: none;
+  /* A hand pulling a row of posters is not a hand selecting their titles,
+     and the blue wash that appeared under one was the whole reason the drag
+     felt broken. */
+  user-select: none;
+  cursor: grab;
+}
+
+/* While the hand is pulling, a closed hand for a pointer. There is no
+   snapping to turn off: a row that pulls itself a little further the moment
+   it is let go is a row that does not do what the hand did. */
+.row-track[data-dragging="yes"],
+.player-drawer-row[data-dragging="yes"] {
+  cursor: grabbing;
+}
+
+/* A picture dragged out of the page as a picture is the browser's own idea,
+   and it fights every row here. */
+.row-track img,
+.row-track a,
+.player-drawer-row img {
+  -webkit-user-drag: none;
+}
+
+.row-track::-webkit-scrollbar {
+  display: none;
+}
+
+.row-track > * {
+  flex: 0 0 var(--card-width);
+}
+
+/* A still is a wide picture: a row of them at a poster's width would be a row
+   of cropped middles. */
+.row-track > .card-lying {
+  flex-basis: calc(var(--card-width) * 1.62);
+}
+
+
+@media (min-width: 1400px) {
+  .row-track > * {
+    flex-basis: var(--card-width-wide);
+  }
+
+  .row-track > .card-lying {
+    flex-basis: calc(var(--card-width-wide) * 1.62);
+  }
+}
+
+/* Beside the row, not on top of it.
+ *
+ * They used to sit over the first and last poster, each under a veil of
+ * background fading out sideways. The veil is what put a seam down both ends
+ * of every row: a fade that reaches nothing after forty pixels still ends
+ * somewhere, and over a dark poster that end reads as a line. The margin at
+ * each side of the page is empty and exactly wide enough, so that is where
+ * they go, with nothing painted over the cards at all.
+ *
+ * In the accent, like every other way through in this interface. A grey
+ * chevron over a wall of posters is a chevron nobody finds. */
+.row-arrow {
+  position: absolute;
+  /* Level with the cards rather than with the air kept above them, less the
+     few points it always reached above them for the focus ring. */
+  top: calc(var(--row-air) - 8px);
+  bottom: var(--gap-tight);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  /* All of the page's margin bar the four pixels the row keeps for a card
+     grown under the pointer. The chevron is centred in what is left, so it
+     stands off the cards rather than against them. */
+  width: calc(var(--gutter) - 4px);
+  border: none;
+  background: none;
+  color: var(--accent-bright);
+  transition: transform var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+/* The chevron takes the margin it is given rather than a size of its own: the
+   margin narrows with the window, and an icon wider than it would be back
+   over the posters, which is the whole thing this moved away from. */
+.row-arrow > svg {
+  width: min(24px, calc(var(--gutter) - 10px));
+  height: auto;
+}
+
+.row-arrow:hover {
+  transform: scale(1.15);
+  color: var(--accent);
+}
+
+/* The margin an arrow stands in is the arrow's alone. The row reaches into
+   it for the glow of its end cards, and a card half way along the row used
+   to show through there, under the arrow: the pointer reached the card
+   rather than the arrow, and its buttons came up over the arrow they hid.
+   So on a side with more to see, the row is cut level with the heading's
+   edge, where the next card reads as going on beyond it. A clip, which
+   moves nothing and stops the pointer too. */
+.row-more-back > .row-track {
+  clip-path: inset(0 0 0 var(--row-side-air));
+}
+
+.row-more-on > .row-track {
+  clip-path: inset(0 var(--row-side-air) 0 0);
+}
+
+.row-more-back.row-more-on > .row-track {
+  clip-path: inset(0 var(--row-side-air));
+}
+
+/* Outside the row, in the page's own margin, and clear of the four pixels
+   the row keeps for itself. */
+.row-arrow-back {
+  right: calc(100% + 4px);
+}
+
+.row-arrow-on {
+  left: calc(100% + 4px);
+}
+
+/* Nothing to hover on a touch screen, and a finger swipes the row anyway. */
+@media (hover: none) {
+  .row-arrow {
+    display: none;
+  }
+}
+
+/* The state of each disk, shown where the maintainer asked to see it. */
+.root-state {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+}
+
+.root-read_write,
+.root-read_only {
+  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+  color: var(--ok);
+}
+
+.root-missing,
+.root-unreadable {
+  border-color: color-mix(in srgb, var(--accent-bright) 60%, transparent);
+  color: var(--accent-bright);
+}

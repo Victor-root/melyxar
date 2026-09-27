@@ -1,0 +1,212 @@
+/*
+ * Figures and the colour of a state, wherever a state is said.
+ */
+
+/* --------------------------------------------------------------------------
+ * Figures and states
+ * ----------------------------------------------------------------------- */
+
+.stat {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.stat-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+  color: var(--text-soft);
+}
+
+.stat-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stat-label {
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.stat-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stat-note {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  gap: var(--gap);
+}
+
+.state-ok {
+  color: var(--ok);
+}
+
+.state-attention {
+  color: var(--attention);
+}
+
+.state-trouble {
+  color: var(--trouble);
+}
+
+.state-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.state-pill.state-ok {
+  background: var(--ok-wash);
+}
+
+.state-pill.state-attention {
+  background: var(--attention-wash);
+}
+
+.state-pill.state-trouble {
+  background: var(--trouble-wash);
+}
+
+/* A bar that fills as work is done. */
+.meter {
+  position: relative;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+}
+
+.meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+  transition: width var(--calm) var(--ease);
+}
+
+/* A list of lines inside a panel, each on its own row with a hairline. */
+.lines {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The name keeps room to be read, and what stands at the end goes under it,
+   to the right, once both no longer fit. */
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 48px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.line:first-child {
+  border-top: 0;
+}
+
+.line-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+  color: var(--text-soft);
+}
+
+.line-words {
+  display: flex;
+  flex: 1 1 140px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.line-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-note {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-end {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  margin-left: auto;
+  align-items: center;
+  gap: var(--gap-tight);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.line-figure {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.empty-line {
+  margin: 0;
+  padding: var(--gap) 0;
+  color: var(--text-faint);
+  font-size: 13.5px;
+}

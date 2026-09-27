@@ -1,0 +1,591 @@
+/*
+ * The controls every screen shares: choices, buttons, pills, a setting on
+ * its line and the switches, pickers and sliders it holds.
+ */
+
+/* --------------------------------------------------------------------------
+ * One choice among several
+ * ----------------------------------------------------------------------- */
+
+/* Drawn here rather than left to the browser, whose own disc wears its own
+   colours: a ring that fills with the accent once chosen, around a dot. The
+   dot is painted from the centre of the ring rather than placed inside it,
+   so it stays centred at any zoom. */
+input[type="radio"] {
+  appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color var(--quick) var(--ease),
+    background var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+input[type="radio"]:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+input[type="radio"]:checked {
+  border-color: var(--accent);
+  background: radial-gradient(circle, var(--accent-contrast) 0 3.5px, var(--accent) 4.5px);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+input[type="radio"]:focus-visible {
+  outline: none;
+  border-color: var(--accent-bright);
+}
+
+input[type="radio"]:disabled {
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+ * Buttons and pills
+ * ----------------------------------------------------------------------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  padding: 9px 18px;
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 550;
+  transition: background var(--quick) var(--ease), transform var(--quick) var(--ease);
+}
+
+/* It grows a little under the pointer. Small enough not to push anything
+   about, large enough to answer the hand before the click. */
+.button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  transform: scale(1.04);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button:hover:not(:disabled),
+  .button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.button-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+/* It keeps its colour under the pointer: it is already the loudest thing on
+   the banner, and a second red says nothing the growing has not said. The
+   same shape of selector as the rule above, or that one wins on being one
+   pseudo-class longer and paints the accent button grey. */
+.button-accent:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+/* The ring in the accent would vanish on a button filled with it. */
+.button-accent:focus-visible {
+  outline-color: var(--accent-contrast);
+}
+
+.button-large {
+  gap: 10px;
+  padding: 12px 26px;
+  font-size: 16px;
+}
+
+.button-small {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.play-mark {
+  width: 0;
+  height: 0;
+  border-left: 11px solid currentColor;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+}
+
+.link-button {
+  color: var(--accent-bright);
+  font-weight: 600;
+  padding: 2px 0;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+  margin: var(--gap) 0;
+}
+
+.pill {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+/* Why a setting exists, in one line. Faint on purpose: it answers a question
+   somebody only asks once. */
+.settings-why {
+  margin: 0 0 var(--gap);
+  color: var(--text-faint);
+  font-size: 13px;
+  max-width: 62ch;
+}
+
+/* --------------------------------------------------------------------------
+ * A setting on its line, and its controls
+ * ----------------------------------------------------------------------- */
+
+/* The words take the room they need to read as sentences, and the control
+   goes under them, to the right, once both no longer fit on one line: a
+   long explanation squeezed into a column a word wide is not read. */
+.setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap) var(--gap-wide);
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.setting:first-child {
+  border-top: 0;
+}
+
+.setting-words {
+  display: flex;
+  flex: 1 1 300px;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.setting-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 550;
+}
+
+.setting-why {
+  max-width: 68ch;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.setting-control {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--gap-tight);
+  max-width: 100%;
+  margin-left: auto;
+}
+
+.setting-soon .setting-control {
+  opacity: 0.5;
+}
+
+@media (max-width: 640px) {
+  .setting {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--gap);
+  }
+}
+
+/* A switch: a track, and a knob that crosses it. */
+.switch {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-hover);
+  transition:
+    background var(--calm) var(--ease),
+    border-color var(--calm) var(--ease),
+    box-shadow var(--calm) var(--ease);
+}
+
+.switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-soft);
+  transition:
+    transform var(--calm) var(--ease),
+    background var(--calm) var(--ease);
+}
+
+.switch[aria-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 12px -2px var(--accent-glow);
+}
+
+.switch[aria-checked="true"] .switch-knob {
+  transform: translateX(18px);
+  background: var(--accent-contrast);
+}
+
+.switch:disabled,
+.picker:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* A field that opens a list. */
+.picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 200px;
+  max-width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  transition:
+    border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+.picker svg {
+  flex: none;
+  color: var(--text-soft);
+  transition: transform var(--calm) var(--ease);
+}
+
+.picker-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+}
+
+.picker-open {
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
+}
+
+.picker-open svg {
+  transform: rotate(180deg);
+}
+
+.picker-list {
+  max-height: min(340px, 60vh);
+  overflow-y: auto;
+}
+
+.picker-list .header-menu-line {
+  justify-content: space-between;
+  gap: var(--gap-wide);
+}
+
+.picker-line-words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A field typed into: the picker's shape, and a cursor. */
+.field-line {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  transition:
+    border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+.field-line:focus {
+  outline: none;
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
+}
+
+.field-line:disabled {
+  opacity: 0.45;
+}
+
+.field-number {
+  width: 96px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A number with what it counts beside it, seconds or a share. */
+.field-with-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.field-unit {
+  /* As wide for a percent as for a second, so fields stacked in a panel
+     line up. */
+  min-width: 1.2em;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/* The rules of one kind of library, under its name. */
+.rules-of-a-kind {
+  display: flex;
+  flex-direction: column;
+}
+
+.rules-of-a-kind-name {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin: var(--gap) 0 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.rules-of-a-kind-name > svg {
+  color: var(--accent-bright);
+}
+
+/* A line along which a number is chosen, filled in the accent up to it: the
+   player's sound, drawn in the theme's colours rather than over a picture. */
+.slider {
+  --slider-rail: 8px;
+  --slider-rail-hovered: 11px;
+  --slider-handle-across: 7px;
+  --slider-handle-down: 16px;
+  --slider-handle-grow: 1.5;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Where the middle of the handle stands, worked out here where the share
+   is known: a browser keeps its handle inside the rail at both ends. */
+.slider-rail {
+  --slider-handle-middle: calc(
+    var(--slider-handle-across) / 2 + var(--share, 0) * (100% - var(--slider-handle-across))
+  );
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 200px;
+  height: 28px;
+}
+
+.slider-rail::before,
+.slider-rail::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  height: var(--slider-rail);
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+  transition: height var(--quick) var(--ease);
+}
+
+.slider-rail::before {
+  width: 100%;
+  background: var(--surface-hover);
+}
+
+/* Stops exactly at the middle of the handle, so the two never drift apart
+   towards either end. */
+.slider-rail::after {
+  width: var(--slider-handle-middle);
+  background: var(--accent);
+}
+
+.slider-rail:hover::before,
+.slider-rail:hover::after,
+.slider-rail:has(input:focus-visible)::before,
+.slider-rail:has(input:focus-visible)::after {
+  height: var(--slider-rail-hovered);
+}
+
+/* Above the two pieces drawn behind it, or the accent runs over the handle. */
+.slider-rail input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+/* A setting already chosen is a line; the handle stands up under a hand. */
+.slider-rail input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: var(--slider-handle-across);
+  height: var(--slider-handle-down);
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+  transform: scaleY(0.55);
+  transition:
+    transform var(--calm) var(--ease),
+    background var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+.slider-rail input::-moz-range-thumb {
+  width: var(--slider-handle-across);
+  height: var(--slider-handle-down);
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+  transform: scaleY(0.55);
+  transition:
+    transform var(--calm) var(--ease),
+    background var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+.slider-rail:hover input::-webkit-slider-thumb,
+.slider-rail input:focus-visible::-webkit-slider-thumb {
+  transform: scaleY(var(--slider-handle-grow));
+  background: var(--text);
+  box-shadow: var(--shadow-card);
+}
+
+.slider-rail:hover input::-moz-range-thumb,
+.slider-rail input:focus-visible::-moz-range-thumb {
+  transform: scaleY(var(--slider-handle-grow));
+  background: var(--text);
+  box-shadow: var(--shadow-card);
+}
+
+.slider-rail input:disabled {
+  cursor: not-allowed;
+}
+
+.slider-rail:has(input:disabled) {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* What it comes to, standing over the handle while a hand is on it. */
+.slider-said {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: var(--slider-handle-middle);
+  z-index: 2;
+  transform: translateX(-50%) scale(0.86);
+  transform-origin: bottom center;
+  min-width: 40px;
+  padding: 7px 11px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity var(--quick) var(--ease),
+    transform var(--quick) var(--ease);
+}
+
+.slider-rail:hover .slider-said,
+.slider-rail input:focus-visible ~ .slider-said {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.slider-value {
+  min-width: 7ch;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* A refusal or a word from the server, said inside the panel it is about. */
+/* What a panel says it always does, as opposed to what it offers: read, not
+   set, so quieter than a notice and without a switch beside it. */
+.setting-always {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text-soft);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.panel-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--attention-wash);
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+.panel-notice-trouble {
+  background: var(--trouble-wash);
+}

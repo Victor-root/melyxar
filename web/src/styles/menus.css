@@ -1,0 +1,115 @@
+/*
+ * Every list the interface drops, from the bar, from a card or from the
+ * player.
+ */
+
+/* Every list this interface drops, the menu of a card and the panels of the
+   player included, dressed as the pieces of the bar are, rim and glow of the
+   accent, and solid rather than glass: a list is read line by line rather
+   than at a glance, and a bright picture showing through washed its words
+   out. One look for all of them, so a list is recognised wherever it
+   opens. */
+.header-menu-list,
+.quick-search,
+.player-menu,
+.player-window {
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  --header-glow: color-mix(in srgb, var(--accent) 14%, transparent);
+  background:
+    linear-gradient(var(--header-glow), var(--header-glow)),
+    var(--surface-raised);
+  color: var(--text);
+  box-shadow:
+    var(--shadow-raised),
+    0 0 14px 2px var(--accent-glow);
+}
+
+.header-menu-list,
+.quick-search {
+  animation: header-menu-arrive var(--quick) var(--ease) both;
+}
+
+/* The scope's own list clears the piece it is dropped from rather than the
+   field inside it: the field stands shorter than the glass around it, and a
+   list hung off the field alone comes out through the glass. */
+.search-scope .header-menu-list {
+  top: calc(100% + 12px);
+}
+
+@keyframes header-menu-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* And the lines in it are the player's lines: the same gap, the same room
+   either side, the same size of word. */
+.header-menu-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  padding: 9px 10px;
+  border-radius: var(--radius-control);
+  text-align: left;
+  color: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.header-menu-line:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: -2px;
+}
+
+/* The line under the hand in the accent the list is already tinted with,
+   only deeper, and rimmed with it: the grey of the other lists read as a
+   hole in a list of that colour. Its icon lights up the way a card's menu
+   does. */
+.header-menu-line:hover:not(:disabled, [aria-disabled="true"]),
+.header-menu-line.active,
+.quick-search-line:hover,
+.quick-search-line:focus-visible,
+.quick-search-all:hover,
+.player-menu-line:hover:not(.player-menu-line-static) {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.header-menu-line:hover:not(:disabled, [aria-disabled="true"]) > svg,
+.header-menu-line.active > svg,
+.player-menu-line:hover:not(.player-menu-line-static) > svg {
+  color: var(--accent-bright);
+}
+
+/* A press that has nothing behind it yet, and a press waiting on a scan
+   that is already under way: greyed, and left in the list rather than taken
+   out of it, so the list is the same list every time it is opened. */
+.header-menu-line:disabled,
+.header-menu-later {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* The server's answer when it would not start one, said in the list where
+   the press was. */
+.header-menu-refused {
+  color: var(--accent-bright);
+  white-space: normal;
+  max-width: 260px;
+}
+
+/* The one already chosen, said in the accent: a list where nothing is marked
+   is a list somebody has to remember their own answer to. */
+.header-menu-line-on {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+
+/* A library under the kind it belongs to, stepped in past the kind's own
+   icon so the two read as a list and a sub-list. */
+.header-menu-under {
+  padding-left: 36px;
+  font-size: 13px;
+}

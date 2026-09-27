@@ -1,0 +1,116 @@
+/*
+ * A panel over the page.
+ */
+
+/* --------------------------------------------------------------------------
+ * A panel over the page
+ * ----------------------------------------------------------------------- */
+
+/* What is behind it is dimmed rather than hidden: the panel is a step in the
+   page, not a place somebody has been taken to. */
+.modal-over {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: var(--gap-wide);
+  background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
+}
+
+.modal {
+  /* The buttons of the head, which are what decides how tall it is. */
+  --modal-step: 34px;
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: min(860px, 100%);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+
+.modal-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--gap) var(--gap-wide);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.modal-title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.modal-step {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: var(--modal-step);
+  height: var(--modal-step);
+  border-radius: var(--radius-control);
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.modal-step:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* The one part that scrolls, so the title and the action stay where they
+   were put however long what is between them turns out to be. */
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--gap-wide);
+}
+
+/* A trailer is a picture before anything else: as wide as the window lets a
+   picture of the usual shape be once the head of the panel is under it, and
+   nothing around it. */
+.modal-trailer {
+  width: min(
+    1280px,
+    100%,
+    (100dvh - 2 * var(--gap-wide) - var(--modal-step) - 2 * var(--gap) - 1px) * 16 / 9
+  );
+  max-height: none;
+}
+
+.modal-trailer .modal-body {
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface-deep);
+}
+
+.trailer-picture {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+}
+
+.trailer-notice {
+  margin: 0;
+  padding: var(--gap-wide);
+}
+
+.modal-foot {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  gap: var(--gap);
+  padding: var(--gap) var(--gap-wide);
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
+}

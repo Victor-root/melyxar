@@ -1,0 +1,400 @@
+/*
+ * The frame every screen stands in: the box that scrolls, the bar showing
+ * where the page stands, pages and their sections, the foot, and the shape a
+ * page takes before it arrives.
+ */
+
+/* The window itself never scrolls. The bar holds the top of the screen and
+   everything under it is one box that scrolls. */
+.shell {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* It scrolls without a bar of the browser's own, because a bar of the
+   browser's own keeps a strip of the window to itself and everything in
+   here is cut off before that strip: a banner meant to run to both edges of
+   the screen could never reach the right one. The bar that shows where the
+   page stands is drawn over the top instead, by the interface, and takes no
+   width from anything. */
+.shell-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+.shell-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* A page walked back to, kept out of sight for the moment it takes to stand
+   where it was left again: seen growing into its place, it flashed higher up
+   and then jumped. */
+.shell-scroll[data-putting-back] {
+  visibility: hidden;
+}
+
+/*
+ * The bar that says where in the page somebody is.
+ *
+ * Over the page rather than beside it, so nothing gives up any width to it.
+ * Under the pieces of the header, which are what a hand goes for at the top
+ * right hand corner, and over everything else.
+ */
+.scrollbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  width: var(--scrollbar-width);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--quick) var(--ease);
+}
+
+/* Only where there is more page than screen. */
+.scrollbar-long {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The accent itself, not a shade of it, set right against the edge of the
+   screen: a hair of page showing between the two read as a bar that missed
+   its place. Air is left on the page side only, by a border it does not
+   paint, which keeps it a rounded bar rather than a stripe. */
+.scrollbar-mark {
+  width: 100%;
+  border: 2px solid transparent;
+  border-right-width: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  background-clip: content-box;
+  transition: background var(--quick) var(--ease);
+  /* Moved on every frame of a scroll: on a layer of its own, moving it is
+     the compositor's business and redraws nothing. */
+  will-change: transform;
+}
+
+.scrollbar-mark:hover {
+  background: var(--accent-bright);
+  background-clip: content-box;
+}
+
+/* --------------------------------------------------------------------------
+ * Pages and sections
+ * ----------------------------------------------------------------------- */
+
+/*
+ * A page of plain rows, which starts under the bar rather than behind it.
+ *
+ * The scroll itself keeps no room for the bar any more: a page that opens on
+ * a picture, the home page and a work, wants that picture to run all the way
+ * to the top of the window and the bar to float on it. So the room is kept
+ * here instead, by the pages that have nothing up there to put behind it.
+ */
+.page {
+  padding: calc(var(--header-height) + var(--gap-wide)) var(--gutter)
+    var(--gap-section);
+}
+
+/* The band sits almost against the foot of the banner: the two are read as
+   one block, here is what you were watching and here is where to go next.
+   The bar's room is not kept here either, since the banner above already
+   ran the whole way up behind it. Without a banner, turned off or with
+   nothing complete enough to stand in it, the page keeps the room every
+   other page keeps, or the band would start under the bar. */
+.hero + .page-home,
+.page-home:has(> .skeleton-hero) {
+  padding-top: var(--gap-tight);
+}
+
+/*
+ * Where the library's light stands.
+ *
+ * The painting itself is the door's, and this page wears the same one: it
+ * is the same server and there is no reason for its two screens to be set
+ * on two different lights. What is said here is only where it stands.
+ *
+ * Fixed to the window rather than to the page: the page runs on for several
+ * screens of rows, and a background sized to the page would have run out
+ * long before the scroll did. Held a step behind ordinary content and
+ * taking no press, the same as the door's own.
+ */
+.home-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  animation: door-arrive-slowly 1100ms var(--ease) 200ms forwards;
+}
+
+.section {
+  margin-bottom: var(--gap-section);
+}
+
+/*
+ * Two rows that stand side by side when both are short enough to.
+ *
+ * What was left halfway and what is waiting on a next episode are often a
+ * card or two each, and a row of one card on a wide screen is one card and
+ * a field of background. Put next to each other they fill the line, and
+ * they stay two rows with a heading each: this is where they are drawn, not
+ * what they are.
+ *
+ * Nothing works out whether they fit. Each one is as wide as what it holds,
+ * and the line wraps when the two of them no longer go on it, which is the
+ * browser answering a question about its own window rather than this
+ * stylesheet guessing at it. Below the wrap each row is back to the whole
+ * width, so a row long enough to be put on its own is a row that scrolls,
+ * exactly as it did before.
+ */
+.rows-together {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-section);
+  margin-bottom: var(--gap-section);
+}
+
+.rows-together > .section {
+  /* As wide as it needs and no wider, until there is not the room, and then
+     as narrow as it is given: that second half is what lets a row hand its
+     overflow to its own scroll instead of pushing the page wide. */
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* And a hairline down the air between them, only while they really are on
+   one line: on two, the same line would run down the side of a row with
+   nothing on the other side of it. Faded out at both ends rather than cut
+   off, so it reads as air between two things and not as a rule ruled
+   between them. */
+.rows-sharing > .section + .section {
+  position: relative;
+}
+
+.rows-sharing > .section + .section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--gap-section) / -2);
+  width: 1px;
+  /* The rim of a way in to a library, quieter: the accent, faint, and the
+     light falling off it. A shadow drawn by filter rather than by box, so
+     the light fades out at both ends with the line instead of stopping. */
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--accent) 45%, transparent) 18%,
+    color-mix(in srgb, var(--accent) 45%, transparent) 82%,
+    transparent
+  );
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+
+/* Above the row under it, whose track reaches up behind the heading to keep
+   room for a card's glow: a press on the heading is a press on the heading. */
+.section-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+
+.section-head h1,
+.section-head h2,
+.section h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* The mark beside a heading says what the row is at a glance, and says it in
+   the accent because that is what the accent is for: what is active, what is
+   in progress, what is worth reaching for first. */
+.section-head h2 > svg {
+  color: var(--accent-bright);
+}
+
+.section h2 {
+  margin-bottom: var(--gap);
+}
+
+/* A heading with a whole grid behind it. The chevron is what says so, and it
+   leans in as the pointer arrives rather than appearing out of nothing. */
+.section-through {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.section-through > svg {
+  position: relative;
+  top: 1px;
+  color: var(--accent-bright);
+  transition: transform var(--quick) var(--ease);
+}
+
+.section-through:hover > svg {
+  transform: translateX(3px);
+}
+
+/* The same thing said in words, at the far right of the row, for whoever does
+   not read chevrons. */
+.section-all {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-soft);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.section-all:hover {
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-through:hover > svg {
+    transform: none;
+  }
+}
+
+.count {
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.notice {
+  color: var(--text-soft);
+  padding: var(--gap) 0;
+}
+
+.report-text {
+  width: 100%;
+  min-width: 0;
+  padding: var(--gap);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+  resize: vertical;
+}
+
+.empty {
+  text-align: center;
+  padding: 15vh var(--gap-wide);
+}
+
+.empty h1 {
+  margin: 0 0 var(--gap-tight);
+}
+
+.empty p {
+  color: var(--text-soft);
+  margin: 0 0 var(--gap-wide);
+}
+
+/* What is running, shown on a page that is otherwise about something else.
+   Held to a readable width and laid out normally, because the block around it
+   on the empty home page is centred. */
+/* Work in progress on the home page, lined up with the rows of films under
+   it. On the screen of a library with nothing in it yet, where everything is
+   centred, it is centred too and kept narrow. */
+.empty .jobs {
+  max-width: 560px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+/* --------------------------------------------------------------------------
+ * Foot of the page
+ * ----------------------------------------------------------------------- */
+
+.footer {
+  padding: var(--gap-wide) var(--gutter);
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+/* --------------------------------------------------------------------------
+ * The shape of a page, before the page
+ * ----------------------------------------------------------------------- */
+
+/* A spinner says something is happening. This says what is about to be there,
+   which is what stops everything jumping into place when it arrives. */
+.skeleton {
+  border-radius: var(--radius-card);
+  background: linear-gradient(
+    100deg,
+    var(--surface) 30%,
+    var(--surface-hover) 50%,
+    var(--surface) 70%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-sweep 1.4s linear infinite;
+}
+
+@keyframes skeleton-sweep {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+/* Exactly the height of the banner it stands in for, from the same token: a
+   block a different size is a page that jumps the moment the picture lands. */
+.skeleton-hero {
+  height: var(--hero-height);
+  margin: calc(var(--gap-wide) * -1) calc(var(--gap-wide) * -1) var(--gap-section);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+
+.skeleton-heading {
+  width: 210px;
+  height: 22px;
+  margin-bottom: var(--gap);
+  border-radius: var(--radius-control);
+}
+
+.skeleton-card {
+  flex: 0 0 var(--card-width);
+  aspect-ratio: 2 / 3;
+}
+
+@media (min-width: 1400px) {
+  .skeleton-card {
+    flex-basis: var(--card-width-wide);
+  }
+}
+
+/* Standing still rather than sweeping, for anybody who asked for less
+   movement: the shape is the point, the sweep is only a hint that it is not
+   the page yet. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

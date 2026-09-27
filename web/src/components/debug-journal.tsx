@@ -3,8 +3,8 @@
  * opens the technical journal over whatever is on screen, so it can be read,
  * filtered, copied and emptied without leaving the page, the film or the
  * filled screen being debugged. Not part of the interface: it goes once the
- * debugging it is for is over, with its styles in app.css and its words in
- * i18n.ts, all marked the same way.
+ * debugging it is for is over, with its styles in styles/feedback.css and
+ * its words in i18n.ts, all marked the same way.
  *
  * Shown to administrators only, since nobody else may read the journal.
  * Drawn on top of everything, the player included, and inside whatever

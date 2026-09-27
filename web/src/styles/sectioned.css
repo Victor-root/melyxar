@@ -1,0 +1,304 @@
+/*
+ * A page built of sections down the side, which the administration and
+ * somebody's own settings both are, and the head of such a page.
+ */
+
+/* --------------------------------------------------------------------------
+ * The page and its side list
+ * ----------------------------------------------------------------------- */
+
+.sectioned {
+  --side-width: 256px;
+  display: grid;
+  grid-template-columns: var(--side-width) minmax(0, 1fr);
+  gap: var(--gap-wide);
+  align-items: start;
+  padding: calc(var(--header-height) + var(--gap)) var(--gutter) var(--gap-section);
+}
+
+/* Held in view while the page runs on under it: the list is how anybody knows
+   where they are and where else they could be. */
+.side {
+  position: sticky;
+  top: calc(var(--header-height) + var(--gap));
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--header-height) - var(--gap) * 2);
+  padding: 10px;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border);
+  background: var(--panel-glass);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-card);
+}
+
+.side-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.side-list::-webkit-scrollbar {
+  display: none;
+}
+
+.side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.side-group-name {
+  padding: 0 12px 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.side-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 10px 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  color: var(--text-soft);
+  font-size: 14.5px;
+  font-weight: 550;
+  transition:
+    background var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.side-line svg {
+  flex: none;
+  color: var(--text-faint);
+  transition: color var(--quick) var(--ease);
+}
+
+.side-line-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-line:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.side-line:hover svg {
+  color: var(--text-soft);
+}
+
+/* Where somebody is, in the accent: washed from the edge the mark stands on,
+   rimmed, and the mark itself lit. */
+.side-line.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 24%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent)
+  );
+}
+
+.side-line.active svg {
+  color: var(--accent-bright);
+}
+
+.side-line.active::before {
+  content: "";
+  position: absolute;
+  left: -11px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.side-foot {
+  margin-top: var(--gap);
+  padding: var(--gap) 12px 4px;
+  border-top: 1px solid var(--border);
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.side-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectioned-page {
+  min-width: 0;
+  /* What the panels inside measure themselves against: the room the page
+     really has, once the side list has taken its share. */
+  container-type: inline-size;
+}
+
+/* On a narrow screen the list is a strip across the top, scrolled sideways,
+   and the page runs under it the whole width. */
+@media (max-width: 900px) {
+  .sectioned {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--gap);
+  }
+
+  .side {
+    position: static;
+    max-height: none;
+    padding: 6px;
+  }
+
+  .side-list {
+    flex-direction: row;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .side-group {
+    flex-direction: row;
+  }
+
+  .side-group-name,
+  .side-foot,
+  .side-line .soon {
+    display: none;
+  }
+
+  .side-line {
+    flex: none;
+    min-height: 38px;
+  }
+
+  .side-line.active::before {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * The head of a page
+ * ----------------------------------------------------------------------- */
+
+.page-head {
+  margin-bottom: var(--gap-wide);
+}
+
+.page-head-line {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-head-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: radial-gradient(
+    circle at 30% 20%,
+    color-mix(in srgb, var(--accent) 38%, transparent),
+    color-mix(in srgb, var(--accent) 10%, transparent)
+  );
+  color: var(--accent-bright);
+  box-shadow: 0 0 24px -6px var(--accent-glow);
+}
+
+.page-head-words {
+  flex: 1 1 460px;
+  min-width: 0;
+}
+
+.page-head-words h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.page-head-words p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 14.5px;
+}
+
+.page-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+}
+
+/* On a wide screen the head of the page rises into the band of the bar at
+   the top, between its two pieces, and the first block of the page starts
+   level with the side list: the band was room nothing used. Kept clear of
+   the piece at the right end, which is as wide as the account it names, and
+   of the one at the left end, as wide as the server's name and logo: moved
+   along past it when it reaches over the page (the header says where it
+   stops). */
+@media (min-width: 1280px) {
+  .page-head {
+    --clear-of-start: max(
+      0px,
+      var(--header-start-end, 0px) + var(--gap) - var(--gutter) - var(--side-width) -
+        var(--gap-wide)
+    );
+    display: flex;
+    align-items: center;
+    height: var(--header-height);
+    max-width: calc(100% - 360px - var(--clear-of-start));
+    margin: calc(-1 * (var(--header-height) + var(--gap))) 0 var(--gap) var(--clear-of-start);
+  }
+
+  .page-head-line {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .page-head-mark {
+    width: 46px;
+    height: 46px;
+  }
+
+  /* The name keeps room to be read beside whatever the page offers. */
+  .page-head-words {
+    flex: 0 1 auto;
+    min-width: 260px;
+  }
+
+  .page-head-words h1 {
+    font-size: 24px;
+  }
+
+  /* Two lines at most, which the band holds under the name. */
+  .page-head-words p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.35;
+  }
+
+  .page-head-actions {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+}

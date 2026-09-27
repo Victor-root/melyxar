@@ -1,0 +1,74 @@
+/*
+ * Narrow screens. Last, since each rule here overrides one written above for
+ * a wide screen.
+ */
+
+/* --------------------------------------------------------------------------
+ * Narrow screens
+ * ----------------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  :root {
+    --card-width: 132px;
+    --gap-wide: 16px;
+    --gap-section: 32px;
+  }
+
+  /* One row still, because the search is a magnifier now and no longer asks
+     for a row of its own. What goes instead is the reading matter: the name
+     beside the account, and on a really narrow screen the name of the server
+     too, both of which are said again by the mark next to them. */
+  .header-inner {
+    padding: 0 var(--gap);
+    gap: var(--gap-tight);
+  }
+
+  .header-who {
+    display: none;
+  }
+
+  .search {
+    --search-room: min(46vw, 250px);
+  }
+
+  .work-inner {
+    flex-direction: column;
+    gap: var(--gap-wide);
+    padding-top: min(20vh, 150px);
+  }
+
+  .work-poster {
+    flex: none;
+  }
+
+  .work-poster img,
+  .work-poster-empty {
+    width: 150px;
+  }
+
+  /* Fingers are not mouse pointers: nothing important is reachable only by
+     hovering, and the targets stay comfortable. */
+  .header-link,
+  .button {
+    min-height: 40px;
+  }
+
+  /* Except the one inside the search field, whose height is the field's: made
+     taller than that it stands proud of the icons it sits among. */
+  .search-scope > .header-link {
+    min-height: 0;
+  }
+}
+
+/* Narrower still, and the name of the server goes the way the name of the
+   account went: the mark beside it says the same thing, and a bar that runs
+   off the side of the screen says nothing at all. */
+@media (max-width: 560px) {
+  .brand {
+    padding: 0 9px;
+  }
+
+  .brand-name {
+    display: none;
+  }
+}
