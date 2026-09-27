@@ -32,6 +32,7 @@ import type {
 import { BACKGROUNDS, COLOURS, DEFAULT_APPEARANCE, EDGES, HEIGHTS, SIZES } from "./appearance";
 import type { Appearance } from "./appearance";
 import type { Arrangement, Control, Zone } from "./arrangement";
+import { chapterStep } from "./chapters";
 import { asClock } from "./clock";
 import { Drawer, SHEETS } from "./drawer";
 import type { SheetName } from "./drawer";
@@ -213,17 +214,6 @@ function endsAt(remaining: number, speed: number): Date | null {
     return null;
   }
   return new Date(Date.now() + (remaining / speed) * 1000);
-}
-
-/** The chapter a moment is inside, and the one before and after it. */
-function chapterAround(chapters: PlaybackChapter[], at: number): number {
-  let index = -1;
-  for (let i = 0; i < chapters.length; i += 1) {
-    if (chapters[i].at_second <= at + 0.25) {
-      index = i;
-    }
-  }
-  return index;
 }
 
 export function Overlay(props: Props) {
@@ -664,19 +654,13 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
       if (surroundings.chapters.length === 0) {
         return null;
       }
-      const on = chapterAround(surroundings.chapters, surroundings.at);
       const back = control === "previous_chapter";
-      // Back goes to the start of this chapter unless it has only just begun,
-      // which is what every player does and what a hand expects: one press to
-      // replay the scene, two to reach the one before.
-      const justBegun = on >= 0 && surroundings.at - surroundings.chapters[on].at_second < 3;
-      const wanted = back ? (justBegun ? on - 1 : on) : on + 1;
-      const there = surroundings.chapters[wanted];
+      const step = chapterStep(surroundings.chapters, surroundings.at, surroundings.length, back);
       return (
         <button
           className="player-button"
-          onClick={() => playback.goTo(there ? there.at_second : back ? 0 : surroundings.length)}
-          disabled={back ? on < 0 && surroundings.at < 3 : wanted >= surroundings.chapters.length}
+          onClick={() => playback.goTo(step.to)}
+          disabled={!step.possible}
           aria-label={t(back ? "player.previous_chapter" : "player.next_chapter")}
         >
           {back ? <PreviousChapterIcon size={ICON} /> : <NextChapterIcon size={ICON} />}

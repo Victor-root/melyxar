@@ -17,6 +17,7 @@ import type { Credit, PlaybackChapter, PlaybackPlan, Work } from "../api";
 import { pictureSet } from "../api";
 import { useDragToScroll } from "../dragging";
 import { SeenMark } from "../components/seen";
+import { chapterAt } from "./chapters";
 import { asClock } from "./clock";
 import type { Playback } from "./engine";
 import { PlayIcon } from "./icons";
@@ -262,7 +263,7 @@ function Chapters({
   if (chapters.length === 0) {
     return <p className="player-drawer-nothing">{t("player.no_chapters")}</p>;
   }
-  const inside = whichChapter(chapters, playback.at);
+  const inside = chapterAt(chapters, playback.at);
   /* The frame is exactly as tall as the thumbnails really are, so a film in
      scope does not sit in a widescreen box with grey above and below it. A
      film nobody has read for thumbnails keeps a widescreen frame, which is
@@ -327,16 +328,6 @@ function everyFewMinutes(length: number): PlaybackChapter[] {
   return marks;
 }
 
-/** Which chapter a moment falls inside, or none at all before the first. */
-function whichChapter(chapters: PlaybackChapter[], at: number): number {
-  let inside = -1;
-  for (let index = 0; index < chapters.length; index += 1) {
-    if (chapters[index].at_second <= at + 0.25) {
-      inside = index;
-    }
-  }
-  return inside;
-}
 
 /** Who is in it and who made it, faces first. */
 function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number }) {
