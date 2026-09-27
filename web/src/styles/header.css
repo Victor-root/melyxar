@@ -349,10 +349,11 @@
   font-size: 14px;
 }
 
-/* A hairline of its own rather than a border on the link below it: a border
+/* A hairline of its own rather than a border on the line below it: a border
    takes the link's own corner radius and rounds off at both ends, which on a
    straight rule reads as a line that has been chewed. */
-.quick-search-divider {
+.quick-search-divider,
+.header-menu-divider {
   margin: 4px 8px;
   height: 1px;
   background: var(--border);

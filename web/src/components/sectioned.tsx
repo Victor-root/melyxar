@@ -15,6 +15,7 @@ import type { ComponentType, ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import type { IconProps } from "../icons";
 import { useMasonry } from "../masonry";
+import { useFindOnArrival } from "./finding";
 import { useSettings } from "../settings";
 
 export interface Section {
@@ -66,6 +67,7 @@ export function Sectioned({
   const location = useLocation();
   const page = useRef<HTMLElement>(null);
   useMasonry(page);
+  useFindOnArrival(page);
   const every = groups.flatMap((group) => group.sections);
   const here =
     every.find(
