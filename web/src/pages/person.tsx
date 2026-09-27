@@ -18,6 +18,7 @@ import { useFittedText } from "../fitting";
 import { FilmIcon, SeriesIcon } from "../icons";
 import { readableDay, todayOf, yearsBetween } from "../readable";
 import { useSettings } from "../settings";
+import { PageBackdrop } from "../components/backdrop";
 
 export function PersonPage() {
   const { id } = useParams();
@@ -49,7 +50,7 @@ export function PersonPage() {
 
   return (
     <>
-      <div className="home-backdrop drift" aria-hidden="true" />
+      <PageBackdrop />
       <main className="work person">
         <AboutThem person={person} />
 

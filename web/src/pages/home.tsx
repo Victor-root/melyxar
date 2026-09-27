@@ -28,6 +28,7 @@ import { cardShapeOf, newestOfKind, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { BinocularsIcon, CameraIcon, EyeIcon, KindIcon } from "../icons";
 import { lengthOfAPlay } from "../watching";
+import { PageBackdrop } from "../components/backdrop";
 
 /** Where the row of everything newest leads, which is the same grid read in
  *  the same order. */
@@ -40,7 +41,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   if (failed) {
     return (
       <>
-        <div className="home-backdrop drift" aria-hidden="true" />
+        <PageBackdrop />
         <main className="page">
           <p className="notice">{t("error.unreachable")}</p>
           <button className="button" onClick={again}>
@@ -61,7 +62,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   if (home.works === 0) {
     return (
       <>
-        <div className="home-backdrop drift" aria-hidden="true" />
+        <PageBackdrop />
         <main className="page">
           <section className="empty">
             <h1>{t("home.empty.title")}</h1>
@@ -192,7 +193,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
 
   return (
     <>
-      <div className="home-backdrop drift" aria-hidden="true" />
+      <PageBackdrop />
 
       {/* Outside the page rather than inside it: the banner is the picture,
           and a picture held inside a column that stops short of both edges of
@@ -313,7 +314,7 @@ function HomeSkeleton() {
   const { bannerShown } = useSettings();
   return (
     <>
-      <div className="home-backdrop drift" aria-hidden="true" />
+      <PageBackdrop />
       <main className="page page-home" aria-busy="true">
         {bannerShown && <div className="skeleton skeleton-hero" />}
         {[0, 1].map((row) => (

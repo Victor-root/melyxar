@@ -9,7 +9,8 @@ use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_core::library::LibraryKind;
 use melyxar_core::user::{
-    DownmixMethod, HeaderButton, HomeSection, Preferences, SubtitleMode, ThemeMode, WideGamutChoice,
+    Backdrop, DownmixMethod, HeaderButton, HomeSection, Preferences, SubtitleMode, ThemeMode,
+    WideGamutChoice,
 };
 use melyxar_core::work::{ResumeRules, LEAST_MAX_PERCENT, MOST_MIN_PERCENT, MOST_MIN_SECONDS};
 use serde::{Deserialize, Serialize};
@@ -69,6 +70,10 @@ struct PreferencesView {
     /// show them, and those shown on the bar.
     header_buttons: Vec<&'static str>,
     buttons_in_the_bar: Vec<&'static str>,
+    /// What is drawn behind the pages, light or none, and which painting of
+    /// light, from one.
+    backdrop: &'static str,
+    backdrop_light: i64,
     /// Whether this account is left off the list the sign in screen offers.
     hidden_at_the_door: bool,
     /// Every kind of library, in the order the home page lays them out.
@@ -142,6 +147,10 @@ struct PreferencesBody {
     header_buttons: Option<Vec<String>>,
     #[serde(default)]
     buttons_in_the_bar: Option<Vec<String>>,
+    #[serde(default)]
+    backdrop: Option<String>,
+    #[serde(default)]
+    backdrop_light: Option<i64>,
     #[serde(default)]
     hidden_at_the_door: Option<bool>,
     #[serde(default)]
@@ -251,6 +260,14 @@ async fn write(
     }
     if let Some(buttons) = body.buttons_in_the_bar {
         chosen.buttons_in_the_bar = buttons_named(&buttons)?;
+    }
+    if let Some(backdrop) = body.backdrop {
+        chosen.backdrop = Backdrop::parse(&backdrop)
+            .ok_or_else(|| ServerError::invalid_input("no backdrop goes by that name"))?;
+    }
+    // Brought into range when kept, like the banner.
+    if let Some(light) = body.backdrop_light {
+        chosen.backdrop_light = light;
     }
     if let Some(hidden) = body.hidden_at_the_door {
         chosen.hidden_at_the_door = hidden;
@@ -408,6 +425,8 @@ async fn view(
             .iter()
             .map(|button| button.as_str())
             .collect(),
+        backdrop: chosen.backdrop.as_str(),
+        backdrop_light: chosen.backdrop_light,
         hidden_at_the_door: chosen.hidden_at_the_door,
         home_order: chosen.home_order.iter().map(|kind| kind.as_str()).collect(),
         home_sections: chosen

@@ -6,11 +6,12 @@
  * machine is the same choice on the next.
  */
 
-import type { HeaderButton } from "../../api";
+import type { Backdrop, HeaderButton } from "../../api";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
 import { Sortable } from "../../components/sortable";
 import { useAccount } from "../../account";
 import { FOR_ADMINISTRATORS } from "../../buttons";
+import { LIGHTS } from "../../lights";
 import {
   BellIcon,
   ClockIcon,
@@ -94,9 +95,55 @@ export function MyAppearance() {
             </label>
           </div>
         </Setting>
+        <BackdropChoice />
       </Panel>
 
       <TopBar />
+    </>
+  );
+}
+
+/**
+ * What is drawn behind the pages: nothing, or light, and then which of the
+ * paintings of light, each shown as it would be, shrunk into a tile and in
+ * the accent in force.
+ */
+function BackdropChoice() {
+  const { t, backdrop, setBackdrop, backdropLight, setBackdropLight } = useSettings();
+
+  return (
+    <>
+      <Setting label={t("settings.backdrop")} why={t("settings.backdrop_why")}>
+        <Picker<Backdrop>
+          label={t("settings.backdrop")}
+          value={backdrop}
+          onPick={setBackdrop}
+          options={[
+            ["light", t("backdrop.light")],
+            ["none", t("backdrop.none")],
+          ]}
+        />
+      </Setting>
+      {backdrop === "light" && (
+        <div className="lights" role="radiogroup" aria-label={t("settings.backdrop_light")}>
+          {LIGHTS.map((light) => {
+            const chosen = light === backdropLight;
+            return (
+              <button
+                key={light}
+                type="button"
+                role="radio"
+                aria-checked={chosen}
+                className={`light-choice${chosen ? " light-choice-on" : ""}`}
+                onClick={() => setBackdropLight(light)}
+              >
+                <span className="light-tile drift" data-light={light} aria-hidden="true" />
+                <span className="light-name">{t(`backdrop.light.${light}`)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }

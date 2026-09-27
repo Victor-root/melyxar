@@ -18,10 +18,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import { api } from "./api";
 import { buttonOrder, EVERY_HEADER_BUTTON, IN_THE_BAR_AT_FIRST, knownButtons } from "./buttons";
-import type { HeaderButton, ViewerPreferences } from "./api";
+import type { Backdrop, HeaderButton, ViewerPreferences } from "./api";
 import { initialLanguage, rememberLanguage, safeRead, safeWrite, translate } from "./i18n";
 import type { Language } from "./i18n";
 import { colourTheWindow, markTheApp } from "./installing";
+import { LIGHTS } from "./lights";
 import { markTheTab, vividOf } from "./mark";
 import { THE_USUAL_STEP_BACK, THE_USUAL_STEP_ON } from "./player/steps";
 
@@ -36,6 +37,8 @@ const STORED_BANNER_SHOWN = "melyxar.banner.shown";
 const STORED_HEADER_HIDES = "melyxar.header.hides";
 const STORED_HEADER_BUTTONS = "melyxar.header.buttons";
 const STORED_BUTTONS_IN_THE_BAR = "melyxar.header.in_the_bar";
+const STORED_BACKDROP = "melyxar.backdrop";
+const STORED_BACKDROP_LIGHT = "melyxar.backdrop.light";
 const STORED_STEP_BACK = "melyxar.step.back";
 const STORED_STEP_ON = "melyxar.step.on";
 
@@ -97,6 +100,12 @@ interface Settings {
   setButtonsInTheBar: (buttons: HeaderButton[]) => void;
   /** Both back as everybody starts with them. */
   resetHeaderButtons: () => void;
+  /** What is drawn behind the pages. */
+  backdrop: Backdrop;
+  setBackdrop: (backdrop: Backdrop) => void;
+  /** Which painting of light, from one. Kept while none is drawn. */
+  backdropLight: number;
+  setBackdropLight: (light: number) => void;
   /** How far the player's button back jumps, in seconds. */
   stepBack: number;
   setStepBack: (seconds: number) => void;
@@ -123,6 +132,11 @@ function initialAccent(): string {
 /** A list this browser kept, its names parted by commas. */
 function storedList(key: string): string[] {
   return (safeRead(key) ?? "").split(",");
+}
+
+/** One of the paintings of light, the first for anything else. */
+function lightOf(light: number): number {
+  return LIGHTS.includes(light) ? light : 1;
 }
 
 /** A number this browser kept, or the one the stylesheet already carries. */
@@ -157,6 +171,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const stored = safeRead(STORED_BUTTONS_IN_THE_BAR);
     return stored === null ? IN_THE_BAR_AT_FIRST : knownButtons(stored.split(","));
   });
+  const [backdrop, setBackdropState] = useState<Backdrop>(() =>
+    safeRead(STORED_BACKDROP) === "none" ? "none" : "light",
+  );
+  const [backdropLight, setBackdropLightState] = useState(() =>
+    lightOf(Number(safeRead(STORED_BACKDROP_LIGHT))),
+  );
   const [stepBack, setStepBackState] = useState(() =>
     initialNumber(STORED_STEP_BACK, THE_USUAL_STEP_BACK),
   );
@@ -302,6 +322,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ header_buttons: EVERY_HEADER_BUTTON, buttons_in_the_bar: IN_THE_BAR_AT_FIRST });
   }, []);
 
+  const setBackdrop = useCallback((chosen: Backdrop) => {
+    safeWrite(STORED_BACKDROP, chosen);
+    setBackdropState(chosen);
+    tellTheServer({ backdrop: chosen });
+  }, []);
+
+  const setBackdropLight = useCallback((light: number) => {
+    safeWrite(STORED_BACKDROP_LIGHT, String(light));
+    setBackdropLightState(light);
+    tellTheServer({ backdrop_light: light });
+  }, []);
+
   const setStepBack = useCallback((seconds: number) => {
     safeWrite(STORED_STEP_BACK, String(seconds));
     setStepBackState(seconds);
@@ -344,6 +376,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const inTheBar = knownButtons(chosen.buttons_in_the_bar);
     safeWrite(STORED_BUTTONS_IN_THE_BAR, inTheBar.join(","));
     setButtonsInTheBarState(inTheBar);
+    const backdrop = chosen.backdrop === "none" ? "none" : "light";
+    safeWrite(STORED_BACKDROP, backdrop);
+    setBackdropState(backdrop);
+    const light = lightOf(chosen.backdrop_light);
+    safeWrite(STORED_BACKDROP_LIGHT, String(light));
+    setBackdropLightState(light);
     safeWrite(STORED_STEP_BACK, String(chosen.step_back_seconds));
     setStepBackState(chosen.step_back_seconds);
     safeWrite(STORED_STEP_ON, String(chosen.step_on_seconds));
@@ -373,6 +411,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       buttonsInTheBar,
       setButtonsInTheBar,
       resetHeaderButtons,
+      backdrop,
+      setBackdrop,
+      backdropLight,
+      setBackdropLight,
       stepBack,
       setStepBack,
       stepOn,
@@ -402,6 +444,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       buttonsInTheBar,
       setButtonsInTheBar,
       resetHeaderButtons,
+      backdrop,
+      setBackdrop,
+      backdropLight,
+      setBackdropLight,
       stepBack,
       setStepBack,
       stepOn,

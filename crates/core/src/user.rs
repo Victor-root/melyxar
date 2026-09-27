@@ -305,6 +305,41 @@ impl WideGamutChoice {
     }
 }
 
+/// What is drawn behind the pages of the interface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Backdrop {
+    /// Light and dust in the accent, one of several paintings.
+    #[default]
+    Light,
+    /// The plain surface of the theme.
+    None,
+}
+
+impl Backdrop {
+    /// Every choice, in the order a screen offers them.
+    pub const fn every() -> [Self; 2] {
+        [Self::Light, Self::None]
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Light => "light",
+            Self::None => "none",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::every()
+            .into_iter()
+            .find(|choice| choice.as_str() == value)
+    }
+}
+
+/// How many paintings of light there are to choose from, numbered from one.
+/// The first is the one the interface always wore.
+pub const LIGHTS: i64 = 10;
+
 /// When a film starts with subtitles nobody picked for it.
 ///
 /// Whatever the mode, a subtitle chosen for a film, or turned off in it, is
@@ -582,6 +617,11 @@ pub struct Preferences {
     /// The buttons shown on the bar; the others are in the menu. Kept apart
     /// from the order, so a button moved back comes back where it was.
     pub buttons_in_the_bar: Vec<HeaderButton>,
+    /// What is drawn behind the pages.
+    pub backdrop: Backdrop,
+    /// Which painting of light, from one to [`LIGHTS`]. Kept while no light
+    /// is drawn, so the one chosen comes back with it.
+    pub backdrop_light: i64,
     /// Whether this account is left off the list the sign in screen offers.
     ///
     /// The list is a deliberate disclosure, and this is the same choice made
@@ -639,6 +679,8 @@ impl Default for Preferences {
             header_hides_on_scroll: true,
             header_buttons: HeaderButton::every().to_vec(),
             buttons_in_the_bar: HeaderButton::in_the_bar_at_first().to_vec(),
+            backdrop: Backdrop::default(),
+            backdrop_light: 1,
             // Shown by default: a household server is the ordinary case, and a
             // list with holes in it is of no use to anybody.
             hidden_at_the_door: false,
@@ -674,6 +716,7 @@ impl Preferences {
         self.step_back_seconds = self.step_back_seconds.clamp(SHORTEST_STEP, LONGEST_STEP);
         self.step_on_seconds = self.step_on_seconds.clamp(SHORTEST_STEP, LONGEST_STEP);
         self.resume_rewind_seconds = self.resume_rewind_seconds.clamp(0, LONGEST_REWIND);
+        self.backdrop_light = self.backdrop_light.clamp(1, LIGHTS);
         self.resume_rules = self.resume_rules.normalised();
         // One set per kind, the last one written winning.
         let mut by_kind: Vec<(LibraryKind, ResumeRules)> = Vec::new();
@@ -980,6 +1023,26 @@ mod tests {
         }
         assert_eq!(WideGamutChoice::parse("sometimes"), None);
         assert_eq!(WideGamutChoice::default(), WideGamutChoice::Automatic);
+    }
+
+    #[test]
+    fn backdrops_round_trip_through_their_stored_form() {
+        for backdrop in Backdrop::every() {
+            assert_eq!(Backdrop::parse(backdrop.as_str()), Some(backdrop));
+        }
+        assert_eq!(Backdrop::parse("stars"), None);
+        assert_eq!(Backdrop::default(), Backdrop::Light);
+    }
+
+    #[test]
+    fn a_painting_of_light_is_one_of_those_there_are() {
+        let mut chosen = Preferences {
+            backdrop_light: 0,
+            ..Preferences::default()
+        };
+        assert_eq!(chosen.clone().normalised().backdrop_light, 1);
+        chosen.backdrop_light = LIGHTS + 4;
+        assert_eq!(chosen.normalised().backdrop_light, LIGHTS);
     }
 
     #[test]
