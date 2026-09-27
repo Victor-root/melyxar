@@ -457,8 +457,7 @@ const en: Dictionary = {
   "settings.not_kept": "Could not save this setting.",
   "settings.thumbnails": "Preview thumbnails",
   "settings.thumbnails_why":
-    "Generate previews for the playback timeline. Each file must be processed, so this runs as a background task rather than during the initial scan.",
-  "settings.thumbnails_on": "Generate thumbnails",
+    "The shape of the previews shown over the playback bar, for the whole server. Whether a library generates them is chosen in its own settings.",
   "settings.thumbnails_every": "Interval (seconds)",
   "settings.thumbnails_height": "Height (pixels)",
   "settings.thumbnails_columns": "Columns per sheet",
@@ -1735,8 +1734,7 @@ const fr: Dictionary = {
   "settings.not_kept": "Impossible d’enregistrer ce paramètre.",
   "settings.thumbnails": "Vignettes d’aperçu",
   "settings.thumbnails_why":
-    "Génère les aperçus de la barre de lecture. Chaque fichier doit être traité : cette opération est donc exécutée en arrière-plan après l’analyse initiale.",
-  "settings.thumbnails_on": "Générer les vignettes",
+    "La forme des aperçus affichés au survol de la barre de lecture, pour tout le serveur. Chaque médiathèque choisit dans ses paramètres si elle les génère.",
   "settings.thumbnails_every": "Intervalle (secondes)",
   "settings.thumbnails_height": "Hauteur (pixels)",
   "settings.thumbnails_columns": "Colonnes par planche",

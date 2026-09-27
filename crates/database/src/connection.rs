@@ -419,6 +419,54 @@ mod tests {
         );
     }
 
+    /// A server brought to just before the switch over every library's
+    /// thumbnails went, with that switch as given and two libraries both
+    /// asking for them; what they ask for once it has gone.
+    async fn libraries_after_the_switch_went(switch: i64) -> Vec<i64> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database opens");
+        crate::MIGRATOR
+            .run_to(62, &pool)
+            .await
+            .expect("migrated to just before the switch goes");
+        sqlx::query("UPDATE server_settings SET thumbnails_enabled = ? WHERE id = 1")
+            .bind(switch)
+            .execute(&pool)
+            .await
+            .expect("switch set");
+        for id in ["films", "series"] {
+            sqlx::query(
+                "INSERT INTO libraries (id, name, kind, created_at, updated_at)
+                 VALUES (?, ?, 'movies', '2026-09-27T00:00:00Z', '2026-09-27T00:00:00Z')",
+            )
+            .bind(id)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .expect("library written");
+        }
+
+        crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+        sqlx::query_scalar("SELECT make_thumbnails FROM libraries ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .expect("read")
+    }
+
+    #[tokio::test]
+    async fn a_server_that_made_no_thumbnails_still_makes_none_once_libraries_choose() {
+        assert_eq!(libraries_after_the_switch_went(0).await, [0, 0]);
+        assert_eq!(
+            libraries_after_the_switch_went(1).await,
+            [1, 1],
+            "a server that made them leaves each library as it was"
+        );
+    }
+
     #[tokio::test]
     async fn the_one_section_of_library_rows_becomes_a_section_per_kind() {
         let pool = SqlitePoolOptions::new()

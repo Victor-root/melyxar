@@ -72,7 +72,8 @@ impl WhatIsOnDisk {
 /// The name of that description inside a folder of sheets.
 const WHAT_IT_IS: &str = "made.json";
 
-/// The shape this server is set to make them in, when it makes them at all.
+/// The shape this server is set to make them in. Whether a film gets them is
+/// its library's choice.
 ///
 /// Read from the settings rather than from the configuration file, so that
 /// changing it is a switch on a screen rather than a terminal, a text editor
@@ -81,9 +82,6 @@ const WHAT_IT_IS: &str = "made.json";
 /// is an answer that makes the wrong thing.
 pub async fn wanted(state: &AppState) -> Option<Layout> {
     let asked = state.database().library_work().await.ok()?;
-    if !asked.thumbnails_enabled {
-        return None;
-    }
     // Every value is brought into a range that can work on its way into the
     // settings, so nothing here has to guard against a nought. Guarded anyway,
     // because a database somebody has edited by hand is still a database.
@@ -426,16 +424,6 @@ mod tests {
         let (_directory, folder, made) = a_folder_of_sheets(1).await;
         std::fs::remove_file(folder.join(WHAT_IT_IS)).expect("removed");
         assert_eq!(already_on_disk(&folder, made.layout()).await, None);
-    }
-
-    #[tokio::test]
-    async fn a_server_told_not_to_make_them_makes_none() {
-        let state = state_with(melyxar_database::settings::LibraryWork {
-            thumbnails_enabled: false,
-            ..as_it_comes().await
-        })
-        .await;
-        assert_eq!(wanted(&state).await, None);
     }
 
     #[tokio::test]
