@@ -499,7 +499,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     // a library has asked its own scan to do them. Started here because only a
     // server runs long enough to reach an hour of the morning: a report or a
     // scan from a terminal is over in minutes.
-    let upkeep = melyxar_app::upkeep::keep_the_upkeep_running(&state);
+    let upkeep = melyxar_app::schedule::keep_the_schedule(&state);
 
     // What the machine spends, for the curves of the administration. Only a
     // server has anybody to show them to.

@@ -30,6 +30,7 @@ pub mod own;
 pub mod people;
 pub mod playback;
 pub mod sessions;
+pub mod schedule;
 pub mod settings;
 pub mod synthetic;
 pub mod users;

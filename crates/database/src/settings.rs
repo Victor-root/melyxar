@@ -119,9 +119,10 @@ pub struct ServerSettings {
 /// What the server does with the films of a library, and when.
 ///
 /// Kept together because they are one screen and one answer: how deeply a scan
-/// reads what sits next to a film, what the thumbnails of the playback bar look
-/// like, and when the upkeep that makes them runs. All three used to live in
-/// the configuration file, which meant a terminal and a restart to change one.
+/// reads what sits next to a film, and what the thumbnails of the playback bar
+/// look like. Both used to live in the configuration file, which meant a
+/// terminal and a restart to change one. When each task runs is kept with the
+/// scheduled tasks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LibraryWork {
     /// Read the description files some collections keep next to a film.
@@ -139,18 +140,7 @@ pub struct LibraryWork {
     /// How many stand on one sheet.
     pub thumbnails_columns: i64,
     pub thumbnails_rows: i64,
-    /// Whether the upkeep runs on its own of a night.
-    pub upkeep_nightly: bool,
-    /// When it does, in minutes since midnight, UTC.
-    ///
-    /// UTC because it is the only clock a server can read with certainty, and
-    /// minutes because an offset is not always a whole hour. Whatever shows it
-    /// turns it into the time of whoever is looking.
-    pub upkeep_at_utc_minutes: i64,
 }
-
-/// Minutes in a day, which is the one thing a time of day has to stay inside.
-const MINUTES_IN_A_DAY: i64 = 24 * 60;
 
 impl LibraryWork {
     /// The same settings with every value brought back into a range that can
@@ -166,7 +156,6 @@ impl LibraryWork {
             thumbnails_height: self.thumbnails_height.clamp(1, 1080),
             thumbnails_columns: self.thumbnails_columns.clamp(1, 20),
             thumbnails_rows: self.thumbnails_rows.clamp(1, 20),
-            upkeep_at_utc_minutes: self.upkeep_at_utc_minutes.rem_euclid(MINUTES_IN_A_DAY),
             ..self
         }
     }
@@ -183,7 +172,7 @@ impl Database {
                     activity_retention_days, check_for_updates, tone_mapping_disabled,
                     thumbnails_enabled,
                     thumbnails_every_seconds, thumbnails_height, thumbnails_columns,
-                    thumbnails_rows, upkeep_nightly, upkeep_at_utc_minutes, updated_at
+                    thumbnails_rows, updated_at
              FROM server_settings WHERE id = 1",
         )
         .fetch_one(self.reader())
@@ -218,8 +207,6 @@ impl Database {
                 thumbnails_height: row.try_get("thumbnails_height")?,
                 thumbnails_columns: row.try_get("thumbnails_columns")?,
                 thumbnails_rows: row.try_get("thumbnails_rows")?,
-                upkeep_nightly: int_to_bool(row.try_get("upkeep_nightly")?),
-                upkeep_at_utc_minutes: row.try_get("upkeep_at_utc_minutes")?,
             },
             updated_at: parse_timestamp(&row.try_get::<String, _>("updated_at")?)?,
         })
@@ -383,8 +370,7 @@ impl Database {
             "UPDATE server_settings SET
                 read_companion_files = ?, thumbnails_enabled = ?,
                 thumbnails_every_seconds = ?, thumbnails_height = ?,
-                thumbnails_columns = ?, thumbnails_rows = ?,
-                upkeep_nightly = ?, upkeep_at_utc_minutes = ?, updated_at = ?
+                thumbnails_columns = ?, thumbnails_rows = ?, updated_at = ?
              WHERE id = 1",
         )
         .bind(bool_to_int(work.read_companion_files))
@@ -393,8 +379,6 @@ impl Database {
         .bind(work.thumbnails_height)
         .bind(work.thumbnails_columns)
         .bind(work.thumbnails_rows)
-        .bind(bool_to_int(work.upkeep_nightly))
-        .bind(work.upkeep_at_utc_minutes)
         .bind(timestamp_to_text(now()))
         .execute(self.writer())
         .await?;
@@ -565,12 +549,6 @@ mod tests {
         assert_eq!(settings.work.thumbnails_height, 180);
         assert_eq!(settings.work.thumbnails_columns, 10);
         assert_eq!(settings.work.thumbnails_rows, 10);
-        assert!(settings.work.upkeep_nightly);
-        assert_eq!(
-            settings.work.upkeep_at_utc_minutes,
-            3 * 60,
-            "three in the morning, the hour the other servers settle on for the same work"
-        );
         assert!(settings.show_user_picker);
         // Nothing of the branding is set until an administrator sets it: the
         // screen falls back on what this server ships with, and what it ships
@@ -656,16 +634,12 @@ mod tests {
                 thumbnails_height: 240,
                 thumbnails_columns: 8,
                 thumbnails_rows: 8,
-                upkeep_nightly: false,
-                upkeep_at_utc_minutes: 90,
             })
             .await
             .expect("work saved");
 
         assert_eq!(kept, database.library_work().await.expect("read back"));
         assert_eq!(kept.thumbnails_every_seconds, 5);
-        assert!(!kept.upkeep_nightly);
-        assert_eq!(kept.upkeep_at_utc_minutes, 90);
         assert_eq!(
             database
                 .server_settings()
@@ -680,9 +654,8 @@ mod tests {
     #[tokio::test]
     async fn a_shape_that_cannot_work_is_brought_back_rather_than_refused() {
         // A nought anywhere in the shape means every film read for ever with
-        // no picture to show for it, and a time of day outside a day means an
-        // upkeep that never comes round. A screen with a defect must not be
-        // able to leave a server in either state.
+        // no picture to show for it. A screen with a defect must not be able
+        // to leave a server in that state.
         let database = Database::open_in_memory().await.expect("database opens");
         let kept = database
             .save_library_work(LibraryWork {
@@ -690,7 +663,6 @@ mod tests {
                 thumbnails_height: 0,
                 thumbnails_columns: 0,
                 thumbnails_rows: 0,
-                upkeep_at_utc_minutes: -30,
                 ..database.library_work().await.expect("read")
             })
             .await
@@ -700,11 +672,6 @@ mod tests {
         assert_eq!(kept.thumbnails_height, 1);
         assert_eq!(kept.thumbnails_columns, 1);
         assert_eq!(kept.thumbnails_rows, 1);
-        assert_eq!(
-            kept.upkeep_at_utc_minutes,
-            23 * 60 + 30,
-            "half an hour before midnight, which is what half an hour before              midnight is"
-        );
         assert_eq!(kept, database.library_work().await.expect("read back"));
     }
 

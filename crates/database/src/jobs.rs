@@ -129,6 +129,18 @@ impl Database {
         Ok(row.0 > 0)
     }
 
+    /// Whether a job of this kind is under way on anything at all, which is
+    /// what a task valid for every library is under way as.
+    pub async fn has_unfinished_job_of_kind(&self, kind: JobKind) -> Result<bool> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(*) FROM jobs WHERE kind = ? AND state IN ('queued', 'running')",
+        )
+        .bind(kind.as_str())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0 > 0)
+    }
+
     pub async fn mark_job_running(&self, id: JobId) -> Result<()> {
         sqlx::query(
             "UPDATE jobs SET state = ?, started_at = ?, attempts = attempts + 1 WHERE id = ?",
@@ -573,6 +585,17 @@ mod tests {
                 .expect("read"),
             "another library is another subject"
         );
+        assert!(
+            database
+                .has_unfinished_job_of_kind(JobKind::ScanLibrary)
+                .await
+                .expect("read"),
+            "a scan is under way somewhere"
+        );
+        assert!(!database
+            .has_unfinished_job_of_kind(JobKind::IdentifyWork)
+            .await
+            .expect("read"));
 
         database
             .finish_job(job.id, JobState::Succeeded, None)
@@ -580,6 +603,10 @@ mod tests {
             .expect("job finished");
         assert!(!database
             .has_unfinished_job(JobKind::ScanLibrary, Some("films"))
+            .await
+            .expect("read"));
+        assert!(!database
+            .has_unfinished_job_of_kind(JobKind::ScanLibrary)
             .await
             .expect("read"));
     }

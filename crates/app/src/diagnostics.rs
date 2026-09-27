@@ -173,22 +173,30 @@ pub struct CatalogueReport {
     pub with_thumbnails: i64,
 }
 
-/// When the two heavy readings of a film happen, and where.
+/// When the scheduled tasks run, and which libraries read their files as they
+/// arrive.
 ///
 /// The counts above say how much is left; this says what is going to do it.
-/// Without it, a server whose nightly run is switched off and one that simply
-/// has not reached three in the morning look exactly alike, and both look like
-/// a server that has forgotten.
+/// Without it, a server whose tasks are switched off and one that simply has
+/// not reached three in the morning look exactly alike, and both look like a
+/// server that has forgotten.
 #[derive(Debug, Clone, Serialize)]
 pub struct UpkeepReport {
-    /// Whether the upkeep runs on its own.
-    pub nightly: bool,
-    /// The time of day it starts, in minutes since midnight, UTC, which is the
-    /// clock a server can read with certainty.
-    pub at_utc_minutes: i64,
+    /// Each scheduled task, in the order they run.
+    pub scheduled: Vec<TaskSchedule>,
     /// Libraries whose files are read as soon as they arrive, by name. These
     /// do not wait for the scheduled tasks.
     pub on_arrival: Vec<String>,
+}
+
+/// Whether one scheduled task runs on its own, and when.
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskSchedule {
+    pub task: &'static str,
+    pub on_its_own: bool,
+    /// The time of day it starts, in minutes since midnight, UTC, which is the
+    /// clock a server can read with certainty.
+    pub at_utc_minutes: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -331,7 +339,6 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
 
     let journal_mode = database.journal_mode().await?;
     let libraries = database.list_libraries().await?;
-    let work = database.library_work().await?;
 
     let counts: std::collections::HashMap<_, _> =
         database.file_counts_by_root().await?.into_iter().collect();
@@ -437,8 +444,15 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
         accounts: database.user_count().await?,
         libraries: libraries.len(),
         upkeep: UpkeepReport {
-            nightly: work.upkeep_nightly,
-            at_utc_minutes: work.upkeep_at_utc_minutes,
+            scheduled: crate::schedule::status(state)
+                .await?
+                .into_iter()
+                .map(|status| TaskSchedule {
+                    task: status.task.as_str(),
+                    on_its_own: status.runs_on_schedule,
+                    at_utc_minutes: status.at_utc_minutes,
+                })
+                .collect(),
             on_arrival: libraries
                 .iter()
                 .filter(|library| library.options.process_on_arrival)
@@ -979,17 +993,20 @@ pub fn render_text(report: &Diagnostics) -> String {
     // What is going to do the reading, next to how much of it is left. A
     // server whose nightly run is switched off and one that has not yet
     // reached the hour look exactly alike from the counts above.
-    line!(
-        if report.upkeep.nightly { "+" } else { "!" },
-        match report.upkeep.nightly {
-            true => format!(
-                "the upkeep runs on its own at {:02}:{:02} UTC",
-                report.upkeep.at_utc_minutes / 60,
-                report.upkeep.at_utc_minutes % 60
-            ),
-            false => "the upkeep never runs on its own; it waits for the button".to_string(),
-        },
-    );
+    for task in &report.upkeep.scheduled {
+        line!(
+            if task.on_its_own { "+" } else { "!" },
+            match task.on_its_own {
+                true => format!(
+                    "{} runs on its own at {:02}:{:02} UTC",
+                    task.task,
+                    task.at_utc_minutes / 60,
+                    task.at_utc_minutes % 60
+                ),
+                false => format!("{} never runs on its own; it waits for the button", task.task),
+            },
+        );
+    }
     if !report.upkeep.on_arrival.is_empty() {
         line!(
             "+",
@@ -1381,8 +1398,15 @@ mod tests {
         let state = state_with_root(directory.path(), media).await;
 
         let report = collect(&state).await.expect("report collected");
-        assert!(report.upkeep.nightly, "a server nobody configured runs it");
-        assert_eq!(report.upkeep.at_utc_minutes, 3 * 60);
+        assert_eq!(report.upkeep.scheduled.len(), 6);
+        assert!(
+            report
+                .upkeep
+                .scheduled
+                .iter()
+                .all(|task| task.on_its_own && task.at_utc_minutes == 3 * 60),
+            "a server nobody configured runs every task at three"
+        );
         assert!(
             report.upkeep.on_arrival.is_empty(),
             "no library has been told to read its files as they arrive"
