@@ -14,6 +14,8 @@ function library(id: string, name: string): Library {
     key_frames_during_scan: false,
     thumbnails_during_scan: false,
     watch_in_real_time: false,
+    keeps_resume_points: true,
+    keeps_watched_marks: true,
     watch_state: null,
     watch_refusal: null,
     metadata_language: "fr",

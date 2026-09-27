@@ -594,7 +594,7 @@ function Marks({
 
   return (
     <span className="work-marks">
-      <SeenButton card={card} />
+      {card.watched_marks && <SeenButton card={card} />}
       <button
         type="button"
         className={`work-mark${favourite ? " work-mark-on" : ""}`}
@@ -1080,7 +1080,7 @@ function EpisodeLine({ child }: { child: Child }) {
           <Link className="episode-line-name" to={`/work/${card.id}`}>
             {nameOfChild(child, t)}
           </Link>
-          <SeenButton card={card} small />
+          {card.watched_marks && <SeenButton card={card} small />}
         </div>
         <p className="work-facts">
           {card.rating !== null && (
@@ -1184,10 +1184,14 @@ function CarryOn({ work }: { work: Work }) {
   const untouched = work.children.every(({ card }) =>
     card.kind === "episode" ? card.seen !== "watched" : card.unwatched === card.episodes,
   );
-  const wording = t(untouched ? "work.start_series" : "work.carry_on", {
-    season: next.season,
-    episode: next.episode,
-  });
+  /* A library keeping no watched marks cannot tell either apart, so the
+     button only says which episode it plays. */
+  const key = work.card?.watched_marks === false
+    ? "work.play_episode"
+    : untouched
+      ? "work.start_series"
+      : "work.carry_on";
+  const wording = t(key, { season: next.season, episode: next.episode });
 
   return (
     <>

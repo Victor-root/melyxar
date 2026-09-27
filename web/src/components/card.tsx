@@ -241,7 +241,7 @@ export function Card({
             once there are none and for a film that was watched. One badge,
             the same one the player draws, and under the pointer the button
             that marks and unmarks. */}
-        {cornered && (
+        {cornered && card.watched_marks && (
           <SeenMark
             watched={seen === "watched"}
             episodes={card.episodes}
