@@ -7,7 +7,7 @@
 //! on one would skip the wrong stretch of the other.
 
 use melyxar_core::id::MediaSourceId;
-use melyxar_core::segments::{what_is_skipped, MediaSegment, SegmentKind};
+use melyxar_core::segments::{what_is_skipped, MediaSegment, SegmentKind, SegmentOrigin};
 use melyxar_core::time::Millis;
 
 use crate::{AppError, AppState, Result};
@@ -21,10 +21,29 @@ pub enum Correction {
     None,
 }
 
-/// The stretches a player offers to skip in this file.
-pub async fn skipped_in(state: &AppState, source_id: MediaSourceId) -> Result<Vec<MediaSegment>> {
+/// What a player offers to skip in one file, and which kinds a person
+/// spoke for there: a kind corrected to none is offered nowhere, and still
+/// has a correction to take back.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Stretches {
+    pub skipped: Vec<MediaSegment>,
+    pub corrected: Vec<SegmentKind>,
+}
+
+/// The stretches of one file, as a player offers them.
+pub async fn stretches_of(state: &AppState, source_id: MediaSourceId) -> Result<Stretches> {
     let said = state.database().segments_of_source(source_id).await?;
-    Ok(what_is_skipped(&said))
+    let mut corrected: Vec<SegmentKind> = said
+        .iter()
+        .filter(|segment| segment.origin == SegmentOrigin::Manual)
+        .map(|segment| segment.kind)
+        .collect();
+    corrected.sort();
+    corrected.dedup();
+    Ok(Stretches {
+        skipped: what_is_skipped(&said),
+        corrected,
+    })
 }
 
 /// Says where one kind of stretch is in one file, or that there is none, and
@@ -38,7 +57,7 @@ pub async fn correct(
     source_id: MediaSourceId,
     kind: SegmentKind,
     correction: Correction,
-) -> Result<Vec<MediaSegment>> {
+) -> Result<Stretches> {
     let database = state.database();
     let source = database
         .playable_source(source_id)
@@ -65,7 +84,7 @@ pub async fn correct(
         end_ms = end.get(),
         "a stretch was corrected by hand"
     );
-    skipped_in(state, source_id).await
+    stretches_of(state, source_id).await
 }
 
 /// Takes back what a person said about one kind of stretch in one file, and
@@ -74,12 +93,12 @@ pub async fn take_back(
     state: &AppState,
     source_id: MediaSourceId,
     kind: SegmentKind,
-) -> Result<Vec<MediaSegment>> {
+) -> Result<Stretches> {
     let database = state.database();
     database
         .playable_source(source_id)
         .await?
         .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("media source")))?;
     database.forget_segment_correction(source_id, kind).await?;
-    skipped_in(state, source_id).await
+    stretches_of(state, source_id).await
 }

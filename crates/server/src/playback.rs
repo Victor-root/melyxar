@@ -219,6 +219,8 @@ struct PlanView {
     /// skip exactly that. Empty for a file that says nothing about them, which
     /// is most of them.
     segments: Vec<SegmentView>,
+    /// The kinds of stretch a person corrected by hand in this file.
+    corrected_segments: Vec<&'static str>,
     /// Whether this viewer has marked the film as one they like.
     favourite: bool,
     /// What the file itself holds, beside what is being made of it.
@@ -484,6 +486,11 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
             })
             .collect(),
         segments: plan.segments.iter().map(segment_view).collect(),
+        corrected_segments: plan
+            .corrected_segments
+            .iter()
+            .map(|kind| kind.as_str())
+            .collect(),
         favourite: plan.favourite,
         rebuild: rebuild_view(plan),
         wide_gamut: film
@@ -1292,10 +1299,19 @@ enum CorrectionBody {
     None,
 }
 
-/// What a player now offers to skip in the file, once it was corrected.
+/// What a player now offers to skip in the file, once it was corrected, and
+/// which kinds a person spoke for there.
 #[derive(Debug, Serialize)]
 struct SegmentsView {
     segments: Vec<SegmentView>,
+    corrected_segments: Vec<&'static str>,
+}
+
+fn segments_view(stretches: &melyxar_app::segments::Stretches) -> SegmentsView {
+    SegmentsView {
+        segments: stretches.skipped.iter().map(segment_view).collect(),
+        corrected_segments: stretches.corrected.iter().map(|kind| kind.as_str()).collect(),
+    }
 }
 
 fn kind_of_segment(value: &str) -> Result<melyxar_core::segments::SegmentKind> {
@@ -1327,9 +1343,7 @@ async fn correct_segment(
         correction,
     )
     .await?;
-    Ok(Json(SegmentsView {
-        segments: skipped.iter().map(segment_view).collect(),
-    }))
+    Ok(Json(segments_view(&skipped)))
 }
 
 /// Takes back what was said about one kind of stretch in one file.
@@ -1341,9 +1355,7 @@ async fn take_back_segment(
     let skipped =
         melyxar_app::segments::take_back(&state, parse_source(&id)?, kind_of_segment(&kind)?)
             .await?;
-    Ok(Json(SegmentsView {
-        segments: skipped.iter().map(segment_view).collect(),
-    }))
+    Ok(Json(segments_view(&skipped)))
 }
 
 #[derive(Debug, Deserialize)]
@@ -1529,6 +1541,7 @@ mod tests {
 
         PlayPlan {
             segments: Vec::new(),
+            corrected_segments: Vec::new(),
             source_id,
             work_id: WorkId::new(),
             path: "Quiet.Harbour.2019.mkv".into(),
