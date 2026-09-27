@@ -318,9 +318,6 @@ export interface Playback {
   /** The words on screen at this instant, one entry per line, stripped of any
    *  tag a subtitle file carried and no browser here is drawing. */
   shownWords: string[];
-  /** Whether this viewer has marked the film as one they like. */
-  favourite: boolean;
-  setFavourite: (liked: boolean) => void;
   /** Whether the film starts again by itself when it ends. */
   repeat: boolean;
   setRepeat: (on: boolean) => void;
@@ -410,13 +407,7 @@ export function usePlayback({
      decide here: the strip of controls stands over the same part of the
      picture, and only this page knows when that is true. */
   const [shownWords, setShownWords] = useState<string[]>([]);
-  /* Whether this viewer likes the film, and whether the film starts itself
-     again when it ends. Both begin as the server's answer and are then this
-     page's to change. */
-  const [favourite, setFavouriteState] = useState(false);
-  /* Whether the server has ever said, which is not the same as it having said
-     no: before the first answer the button is simply unlit. */
-  const favouriteKnown = useRef<boolean | null>(null);
+  /* Whether the film starts itself again when it ends. */
   const [repeat, setRepeatState] = useState(false);
   /* How far the words are shifted against the picture, in seconds, and how far
      they are shifted at this moment.
@@ -587,13 +578,6 @@ export function usePlayback({
         setPlan(answer);
         setPlanFor(quality.key);
         setCodecFor(codec.key);
-        // Only from the first answer. Later ones carry the same mark, and the
-        // viewer may have pressed the button since: taking the server's word
-        // again would undo it in front of them.
-        if (!opened.current || favouriteKnown.current === null) {
-          favouriteKnown.current = answer.favourite;
-          setFavouriteState(answer.favourite);
-        }
         setFailed(null);
       })
       .catch((error) => {
@@ -1439,21 +1423,6 @@ export function usePlayback({
     setReadyPicture(pictureKey);
   }, [speed, pictureKey, goTo, enterLoadingStage, stream]);
 
-  /* What the server said when the film was asked for, and this page's answer
-     from then on. Told to the server and kept whatever it says back: a mark
-     that could not be saved is worth a button that stays where the viewer put
-     it rather than one that springs back under their hand. */
-  const setFavourite = useCallback(
-    (liked: boolean) => {
-      setFavouriteState(liked);
-      api.setFavourite(workId, liked).catch(() => {
-        // Said nowhere: it is a mark on a film, and interrupting somebody
-        // watching one to report it would cost more than it is worth.
-      });
-    },
-    [workId],
-  );
-
   const setRepeat = useCallback((on: boolean) => {
     setRepeatState(on);
     const element = video.current;
@@ -1671,8 +1640,6 @@ export function usePlayback({
     words,
     shownWords,
     holdTheWords,
-    favourite,
-    setFavourite,
     repeat,
     setRepeat,
     wordsOffset,

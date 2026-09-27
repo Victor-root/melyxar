@@ -137,13 +137,6 @@ pub struct PlayPlan {
     /// The kinds of stretch a person corrected by hand in this file, which
     /// the window that corrects them offers to take back.
     pub corrected_segments: Vec<melyxar_core::segments::SegmentKind>,
-    /// Whether this viewer has marked this film as one they like.
-    ///
-    /// Carried on the plan rather than asked for on its own, for the same
-    /// reason as the rest of it: the player asks the server one question when
-    /// a film starts, and a button that fills in a moment after the rest is a
-    /// button somebody presses twice.
-    pub favourite: bool,
 }
 
 /// How the picture is rebuilt, when it is.
@@ -397,12 +390,6 @@ pub async fn plan(
     let stretches = crate::segments::stretches_of(state, source.id)
         .await
         .unwrap_or_default();
-    // Never a reason to refuse to play: a film whose mark could not be read is
-    // a film with the button unlit, and pressing it says so plainly.
-    let favourite = database
-        .is_a_favourite(user_id, source.work_id)
-        .await
-        .unwrap_or(false);
 
     Ok(PlayPlan {
         source_id: source.id,
@@ -422,7 +409,6 @@ pub async fn plan(
         chapters,
         segments: stretches.skipped,
         corrected_segments: stretches.corrected,
-        favourite,
     })
 }
 

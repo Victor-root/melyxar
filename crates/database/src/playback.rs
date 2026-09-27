@@ -545,16 +545,6 @@ impl Database {
         Ok(())
     }
 
-    /// Whether this viewer has marked a work as one they like.
-    pub async fn is_a_favourite(&self, user_id: UserId, work_id: WorkId) -> Result<bool> {
-        let row = sqlx::query("SELECT 1 FROM favorites WHERE user_id = ? AND work_id = ?")
-            .bind(user_id.to_db_string())
-            .bind(work_id.to_db_string())
-            .fetch_optional(self.reader())
-            .await?;
-        Ok(row.is_some())
-    }
-
     /// Marks a work as one this viewer likes, or takes the mark off.
     ///
     /// Says what the answer is now rather than what it was, because that is
@@ -1215,6 +1205,17 @@ mod tests {
         assert!(!playable.missing);
     }
 
+    /// Whether the film's card, which is what every screen draws the mark
+    /// from, says this viewer likes it.
+    async fn liked(database: &Database, user_id: UserId, work_id: WorkId) -> bool {
+        database
+            .card_of(user_id, work_id)
+            .await
+            .expect("read")
+            .and_then(|card| card.state)
+            .is_some_and(|state| state.favourite)
+    }
+
     #[tokio::test]
     async fn a_film_somebody_likes_is_marked_and_unmarked_and_says_so_either_way() {
         // Said as it is now rather than as it was, because a button is drawn
@@ -1223,10 +1224,7 @@ mod tests {
         let (database, user_id, work_id, _) = one_film().await;
 
         assert!(
-            !database
-                .is_a_favourite(user_id, work_id)
-                .await
-                .expect("read"),
+            !liked(&database, user_id, work_id).await,
             "nobody has said anything about this film"
         );
 
@@ -1234,30 +1232,21 @@ mod tests {
             .set_favourite(user_id, work_id, true)
             .await
             .expect("marked"));
-        assert!(database
-            .is_a_favourite(user_id, work_id)
-            .await
-            .expect("read"));
+        assert!(liked(&database, user_id, work_id).await);
 
         // Marking what is already marked is not an error and not a second row.
         assert!(database
             .set_favourite(user_id, work_id, true)
             .await
             .expect("marked again"));
-        assert!(database
-            .is_a_favourite(user_id, work_id)
-            .await
-            .expect("read"));
+        assert!(liked(&database, user_id, work_id).await);
 
         assert!(!database
             .set_favourite(user_id, work_id, false)
             .await
             .expect("unmarked"));
         assert!(
-            !database
-                .is_a_favourite(user_id, work_id)
-                .await
-                .expect("read"),
+            !liked(&database, user_id, work_id).await,
             "and taking the mark off leaves nothing behind"
         );
 
