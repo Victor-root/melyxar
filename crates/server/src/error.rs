@@ -233,10 +233,11 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::Unauthenticated => StatusCode::UNAUTHORIZED,
         ErrorCode::Forbidden | ErrorCode::PathNotAllowed => StatusCode::FORBIDDEN,
         ErrorCode::TooManyAttempts | ErrorCode::TooManyStreams => StatusCode::TOO_MANY_REQUESTS,
-        // Both will work again once a disk is plugged back in or a tool is
-        // installed, which is what tells a client to say so rather than to
-        // announce a failure of the server itself.
-        ErrorCode::RootUnavailable | ErrorCode::DependencyMissing => {
+        // Each will work again once a disk is plugged back in, a tool is
+        // installed or a film being converted ends, which is what tells a
+        // client to say so rather than to announce a failure of the server
+        // itself.
+        ErrorCode::RootUnavailable | ErrorCode::DependencyMissing | ErrorCode::NoRoomLeft => {
             StatusCode::SERVICE_UNAVAILABLE
         }
         // The file is there and is the problem: nothing about the server will
@@ -258,6 +259,11 @@ impl From<melyxar_app::playback::StreamingError> for ServerError {
             Failure::TooManyAtOnce => {
                 Self::busy("this server is already converting all it can at once")
             }
+            Failure::NoRoomLeft => Self::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                ErrorCode::NoRoomLeft,
+                "the transcode cache is full of what the films being watched still need",
+            ),
             other => Self::internal(other.to_string()),
         }
     }

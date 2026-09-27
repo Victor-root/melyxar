@@ -424,8 +424,8 @@ export interface LibraryWork {
 
 /**
  * How the whole server plays films, for every viewer rather than any one of
- * them: what it does about wide gamut colour it cannot show a client, and how
- * many films it may convert at once.
+ * them: what it does about wide gamut colour it cannot show a client, and what
+ * it allows the films it converts.
  */
 export interface PlaybackSettings {
   /** Never convert such colour, even where a client cannot show it correctly.
@@ -436,6 +436,12 @@ export interface PlaybackSettings {
   /** How many films the server may convert at once; null for no ceiling,
       which is where every server starts. */
   max_transcoding_sessions: number | null;
+  /** How much of the disk the segments of those films may fill, in
+      megabytes; null for no ceiling. */
+  transcode_cache_megabytes: number | null;
+  /** How far behind each viewer those segments stay whatever the ceiling
+      says, in seconds. */
+  transcode_kept_behind_seconds: number;
 }
 
 export interface Filters {

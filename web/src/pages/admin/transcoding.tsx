@@ -1,7 +1,7 @@
 /*
  * How a film is made into what a screen can play: the card that does it, the
- * pictures of the playback bar, the colours of a wide gamut film, and how many
- * films it may convert at once.
+ * pictures of the playback bar, the colours of a wide gamut film, and what the
+ * films it converts are allowed: how many at once, and how much of the disk.
  */
 
 import { NumberField, PageHead, Panel, Setting, Stat, Toggle } from "../../components/panel";
@@ -17,6 +17,10 @@ import { useOverview } from "./layout";
 
 /** The ceiling a server is given when one is first switched on. */
 const A_FIRST_CEILING = 2;
+/** The room the cache is given when a ceiling is first switched on, in
+    gigabytes. */
+const A_FIRST_ROOM_GB = 8;
+const MEGABYTES_IN_A_GB = 1024;
 
 export function AdminTranscoding() {
   const { t } = useSettings();
@@ -84,9 +88,48 @@ export function AdminTranscoding() {
               />
             </Setting>
           )}
-          <Setting label={t("admin.limit_room")} why={t("admin.limit_room_why")} soon>
-            <input className="field-line field-number" disabled value="–" readOnly />
-          </Setting>
+          {playback.kept && (
+            <>
+              <Setting label={t("admin.limit_room")} why={t("admin.limit_room_why")}>
+                <Toggle
+                  label={t("admin.limit_room")}
+                  checked={playback.kept.transcode_cache_megabytes !== null}
+                  onChange={(limited) =>
+                    playback.setTo({
+                      transcode_cache_megabytes: limited ? A_FIRST_ROOM_GB * MEGABYTES_IN_A_GB : null,
+                    })
+                  }
+                />
+                <NumberField
+                  label={t("admin.limit_room_most")}
+                  value={Math.round(
+                    (playback.kept.transcode_cache_megabytes ?? A_FIRST_ROOM_GB * MEGABYTES_IN_A_GB) /
+                      MEGABYTES_IN_A_GB,
+                  )}
+                  min={1}
+                  max={1000}
+                  disabled={playback.kept.transcode_cache_megabytes === null}
+                  onPick={(gigabytes) =>
+                    playback.setTo({ transcode_cache_megabytes: gigabytes * MEGABYTES_IN_A_GB })
+                  }
+                />
+                <span className="setting-unit">{t("admin.gigabytes")}</span>
+              </Setting>
+              {/* Asked only once there is a ceiling to keep under: without
+                  one, nothing is ever given up. */}
+              <Setting label={t("admin.limit_kept_behind")} why={t("admin.limit_kept_behind_why")}>
+                <NumberField
+                  label={t("admin.limit_kept_behind")}
+                  value={Math.round(playback.kept.transcode_kept_behind_seconds / 60)}
+                  min={3}
+                  max={30}
+                  disabled={playback.kept.transcode_cache_megabytes === null}
+                  onPick={(minutes) => playback.setTo({ transcode_kept_behind_seconds: minutes * 60 })}
+                />
+                <span className="setting-unit">{t("admin.minutes")}</span>
+              </Setting>
+            </>
+          )}
         </Panel>
       </div>
 

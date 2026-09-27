@@ -68,7 +68,7 @@ pub mod picture {
 /// crate what the server is set to do, and never reaches past it to the
 /// storage.
 pub mod settings {
-    pub use melyxar_database::settings::LibraryWork;
+    pub use melyxar_database::settings::{LibraryWork, TranscodingLimits};
 }
 
 /// What a metadata provider is and what it answers.

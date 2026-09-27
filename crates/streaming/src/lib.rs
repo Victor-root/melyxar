@@ -33,6 +33,8 @@ pub enum StreamingError {
     TooSlow,
     #[error("too many films are being converted at once")]
     TooManyAtOnce,
+    #[error("the transcode cache is full even once what was watched is removed")]
+    NoRoomLeft,
 }
 
 pub type Result<T> = std::result::Result<T, StreamingError>;

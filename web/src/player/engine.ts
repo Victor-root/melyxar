@@ -139,6 +139,8 @@ function wording(error: unknown): string {
       return "player.not_described";
     case "too_many_streams":
       return "player.too_many_streams";
+    case "no_room_left":
+      return "player.no_room";
     default:
       return "error.unreachable";
   }

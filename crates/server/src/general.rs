@@ -9,6 +9,7 @@
 
 use axum::extract::State;
 use axum::{Json, Router};
+use melyxar_app::settings::TranscodingLimits;
 use melyxar_app::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -207,56 +208,80 @@ struct PlaybackSettingsView {
     /// no ceiling at all.
     #[serde(default)]
     max_transcoding_sessions: Option<u32>,
+    /// How much of the disk the segments of those films may fill, in
+    /// megabytes. None, the default, is no ceiling at all.
+    #[serde(default)]
+    transcode_cache_megabytes: Option<u32>,
+    /// How far behind each viewer those segments stay whatever the ceiling
+    /// says, in seconds.
+    transcode_kept_behind_seconds: u32,
 }
 
 /// What the server is set to do about wide gamut colour it cannot show a
-/// client, and how many films it may convert at once.
+/// client, and what it allows the films it converts.
 async fn playback_settings(
     State(state): State<AppState>,
     _: crate::account::Administrator,
 ) -> Result<Json<PlaybackSettingsView>> {
     let database = state.database();
-    Ok(Json(PlaybackSettingsView {
-        tone_mapping_disabled: database
+    Ok(Json(PlaybackSettingsView::of(
+        database
             .tone_mapping_disabled()
             .await
             .map_err(|error| crate::error::ServerError::internal(error.to_string()))?,
-        max_transcoding_sessions: database
-            .transcoding_ceiling()
+        database
+            .transcoding_limits()
             .await
             .map_err(|error| crate::error::ServerError::internal(error.to_string()))?,
-    }))
+    )))
 }
 
 /// Changes how the whole server plays films: the conversion of wide gamut
-/// colour, and the ceiling on conversions at once.
+/// colour, and what it allows the films it converts.
 async fn set_playback_settings(
     State(state): State<AppState>,
     _: crate::account::Administrator,
     Json(asked): Json<PlaybackSettingsView>,
 ) -> Result<Json<PlaybackSettingsView>> {
-    // A ceiling of nought would refuse every film that needs converting.
-    if asked.max_transcoding_sessions == Some(0) {
-        return Err(crate::error::ServerError::invalid_input(
-            "the ceiling on conversions at once must be at least one",
-        ));
-    }
     let database = state.database();
     database
         .set_tone_mapping_disabled(asked.tone_mapping_disabled)
         .await
         .map_err(|error| crate::error::ServerError::internal(error.to_string()))?;
-    database
-        .set_transcoding_ceiling(asked.max_transcoding_sessions)
+    // Brought back into range rather than refused, and answered as kept, so
+    // the screen shows what the server really holds.
+    let limits = database
+        .set_transcoding_limits(TranscodingLimits {
+            most_at_once: asked.max_transcoding_sessions,
+            cache_megabytes: asked.transcode_cache_megabytes,
+            kept_behind_seconds: asked.transcode_kept_behind_seconds,
+        })
         .await
         .map_err(|error| crate::error::ServerError::internal(error.to_string()))?;
 
     tracing::debug!(
         tone_mapping_disabled = asked.tone_mapping_disabled,
-        max_transcoding_sessions = asked.max_transcoding_sessions,
+        max_transcoding_sessions = limits.most_at_once,
+        transcode_cache_megabytes = limits.cache_megabytes,
+        transcode_kept_behind_seconds = limits.kept_behind_seconds,
         "the server's playback settings were changed"
     );
-    Ok(Json(asked))
+    Ok(Json(PlaybackSettingsView::of(
+        asked.tone_mapping_disabled,
+        limits,
+    )))
+}
+
+impl PlaybackSettingsView {
+    /// The settings as the screen reads them.
+    fn of(tone_mapping_disabled: bool, limits: TranscodingLimits) -> Self {
+        Self {
+            tone_mapping_disabled,
+            max_transcoding_sessions: limits.most_at_once,
+            transcode_cache_megabytes: limits.cache_megabytes,
+            transcode_kept_behind_seconds: limits.kept_behind_seconds,
+        }
+    }
 }
 
 #[cfg(test)]
