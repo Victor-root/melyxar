@@ -144,25 +144,28 @@ pub struct LibraryRoot {
     pub path: PathBuf,
 }
 
-/// What a library has been told to do: while it is being scanned, and with
-/// what each account plays in it.
+/// What a library has been told to do: with the files that arrive in it, and
+/// with what each account plays in it.
 ///
-/// The two heavy readings of a film are switches rather than rules, and both
-/// are off to begin with. Each of them reads every file of the library from
-/// end to end, which is the difference between a scan that ends before dinner
-/// and one that is still going in the morning. Off, the work is not dropped:
-/// it belongs to the upkeep that runs of a night, where nobody is waiting on
-/// it. On, a scan does the lot in one sitting, which is what somebody with a
-/// machine to spare and a small library wants.
-///
-/// The other servers word the same choice the same way, and warn in their own
-/// documentation against ticking it on a large collection.
+/// The three heavy readings of a film are each a switch, on to begin with:
+/// what a library does not want, its tasks pass by and nothing of it waits.
+/// When they are done is one more switch. Off, they are left to the scheduled
+/// tasks, where nobody is waiting on them; on, a file is read through as soon
+/// as it arrives, which is what somebody with a small library and a machine to
+/// spare wants. The quick readings, the look up and where a jump can land,
+/// always follow an arrival and have no switch: nobody gains by going without.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LibraryOptions {
-    /// Read each film for where its picture can be started during the scan.
-    pub key_frames_during_scan: bool,
-    /// Make the thumbnails of the playback bar during the scan.
-    pub thumbnails_during_scan: bool,
+    /// Pull the subtitles made of words out of the films that carry them.
+    pub extract_subtitles: bool,
+    /// Make the thumbnails of the playback bar.
+    pub make_thumbnails: bool,
+    /// Listen to the seasons for their opening and closing titles. Only ever
+    /// asked of a library of series.
+    pub detect_openings: bool,
+    /// Do the heavy readings above as soon as a file arrives, rather than
+    /// leaving them to the scheduled tasks.
+    pub process_on_arrival: bool,
     /// Watch the library's folders, and scan again as soon as something in
     /// them changes, rather than waiting for somebody or the night to ask.
     pub watch_in_real_time: bool,
@@ -174,12 +177,14 @@ pub struct LibraryOptions {
 }
 
 impl Default for LibraryOptions {
-    /// The heavy readings left to the night and the folders left unwatched,
-    /// and every play remembered, which is what a library always did.
+    /// Every heavy reading wanted and left to the scheduled tasks, the
+    /// folders left unwatched, and every play remembered.
     fn default() -> Self {
         Self {
-            key_frames_during_scan: false,
-            thumbnails_during_scan: false,
+            extract_subtitles: true,
+            make_thumbnails: true,
+            detect_openings: true,
+            process_on_arrival: false,
             watch_in_real_time: false,
             keeps_resume_points: true,
             keeps_watched_marks: true,
@@ -188,11 +193,6 @@ impl Default for LibraryOptions {
 }
 
 impl LibraryOptions {
-    /// Whether anything at all is left to the upkeep rather than done here.
-    pub fn leaves_something_to_the_upkeep(self) -> bool {
-        !self.key_frames_during_scan || !self.thumbnails_during_scan
-    }
-
     /// What of a play this library keeps, from the state and position the
     /// rules of resuming left it in. Nothing when it keeps neither.
     ///
@@ -250,24 +250,13 @@ mod tests {
     }
 
     #[test]
-    fn a_library_nobody_configured_leaves_the_heavy_readings_to_the_night() {
-        // The switch the other servers warn about in their documentation:
-        // ticked on a large collection, a scan that took minutes takes days.
-        // Off is the answer for the library that needs the setting at all.
+    fn a_library_nobody_configured_wants_every_reading_and_leaves_them_to_the_schedule() {
+        // Ticked on a large collection, reading every film as it arrives turns
+        // an import of minutes into one of days: off is the answer for the
+        // library that needs the setting at all.
         let usual = LibraryOptions::default();
-        assert!(!usual.key_frames_during_scan);
-        assert!(!usual.thumbnails_during_scan);
-        assert!(usual.leaves_something_to_the_upkeep());
-
-        let in_one_sitting = LibraryOptions {
-            key_frames_during_scan: true,
-            thumbnails_during_scan: true,
-            ..usual
-        };
-        assert!(
-            !in_one_sitting.leaves_something_to_the_upkeep(),
-            "a scan that does both leaves the upkeep nothing to pick up"
-        );
+        assert!(usual.extract_subtitles && usual.make_thumbnails && usual.detect_openings);
+        assert!(!usual.process_on_arrival);
     }
 
     #[test]

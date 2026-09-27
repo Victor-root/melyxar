@@ -147,11 +147,14 @@ struct LibraryView {
     /// Bumped whenever anything in the library moves. A client keeps it and
     /// asks whether it changed instead of fetching everything again.
     version: i64,
-    /// Whether a scan of this library reads every film for where its picture
-    /// can be started, rather than leaving it to the upkeep.
-    key_frames_during_scan: bool,
-    /// The same for the thumbnails of the playback bar.
-    thumbnails_during_scan: bool,
+    /// Which heavy readings it wants: the subtitles made of words, the
+    /// thumbnails of the playback bar, the opening and closing titles.
+    extract_subtitles: bool,
+    make_thumbnails: bool,
+    detect_openings: bool,
+    /// Whether those are done as soon as a file arrives, rather than by
+    /// their scheduled tasks.
+    process_on_arrival: bool,
     /// Whether its folders are watched, and it is scanned again as soon as
     /// something in them changes.
     watch_in_real_time: bool,
@@ -211,8 +214,10 @@ async fn libraries(
                 kind: library.kind.as_str(),
                 works: library.works,
                 version: library.version,
-                key_frames_during_scan: library.options.key_frames_during_scan,
-                thumbnails_during_scan: library.options.thumbnails_during_scan,
+                extract_subtitles: library.options.extract_subtitles,
+                make_thumbnails: library.options.make_thumbnails,
+                detect_openings: library.options.detect_openings,
+                process_on_arrival: library.options.process_on_arrival,
                 watch_in_real_time: library.options.watch_in_real_time,
                 keeps_resume_points: library.options.keeps_resume_points,
                 keeps_watched_marks: library.options.keeps_watched_marks,

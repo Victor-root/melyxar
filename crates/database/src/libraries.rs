@@ -203,7 +203,7 @@ impl Database {
         })
     }
 
-    /// Changes what a scan of this library does in one sitting.
+    /// Changes what this library does with its files and with each play.
     ///
     /// Answers whether anything moved, so a caller can tell a real change from
     /// the same value written again: turning a reading on is worth starting
@@ -215,16 +215,18 @@ impl Database {
     ) -> Result<bool> {
         let result = sqlx::query(
             "UPDATE libraries
-                SET key_frames_during_scan = ?1, thumbnails_during_scan = ?2,
-                    watch_in_real_time = ?3, keeps_resume_points = ?4,
-                    keeps_watched_marks = ?5, updated_at = ?6
-              WHERE id = ?7
-                AND (key_frames_during_scan <> ?1 OR thumbnails_during_scan <> ?2
-                     OR watch_in_real_time <> ?3 OR keeps_resume_points <> ?4
-                     OR keeps_watched_marks <> ?5)",
+                SET extract_subtitles = ?1, make_thumbnails = ?2, detect_openings = ?3,
+                    process_on_arrival = ?4, watch_in_real_time = ?5,
+                    keeps_resume_points = ?6, keeps_watched_marks = ?7, updated_at = ?8
+              WHERE id = ?9
+                AND (extract_subtitles <> ?1 OR make_thumbnails <> ?2 OR detect_openings <> ?3
+                     OR process_on_arrival <> ?4 OR watch_in_real_time <> ?5
+                     OR keeps_resume_points <> ?6 OR keeps_watched_marks <> ?7)",
         )
-        .bind(options.key_frames_during_scan)
-        .bind(options.thumbnails_during_scan)
+        .bind(options.extract_subtitles)
+        .bind(options.make_thumbnails)
+        .bind(options.detect_openings)
+        .bind(options.process_on_arrival)
         .bind(options.watch_in_real_time)
         .bind(options.keeps_resume_points)
         .bind(options.keeps_watched_marks)
@@ -274,8 +276,8 @@ impl Database {
     pub async fn list_libraries(&self) -> Result<Vec<Library>> {
         let rows = sqlx::query(
             "SELECT id, name, kind, metadata_language,
-                    key_frames_during_scan, thumbnails_during_scan, watch_in_real_time,
-                    keeps_resume_points, keeps_watched_marks
+                    extract_subtitles, make_thumbnails, detect_openings, process_on_arrival,
+                    watch_in_real_time, keeps_resume_points, keeps_watched_marks
              FROM libraries ORDER BY name COLLATE NOCASE",
         )
         .fetch_all(self.reader())
@@ -313,8 +315,8 @@ impl Database {
         work_id: melyxar_core::id::WorkId,
     ) -> Result<Option<(LibraryKind, LibraryOptions)>> {
         let row = sqlx::query(
-            "SELECT l.kind, l.key_frames_during_scan, l.thumbnails_during_scan,
-                    l.watch_in_real_time, l.keeps_resume_points, l.keeps_watched_marks
+            "SELECT l.kind, l.extract_subtitles, l.make_thumbnails, l.detect_openings,
+                    l.process_on_arrival, l.watch_in_real_time, l.keeps_resume_points, l.keeps_watched_marks
                FROM works w JOIN libraries l ON l.id = w.library_id
               WHERE w.id = ?",
         )
@@ -675,8 +677,10 @@ impl Database {
 /// switches.
 fn options_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<LibraryOptions> {
     Ok(LibraryOptions {
-        key_frames_during_scan: row.try_get("key_frames_during_scan")?,
-        thumbnails_during_scan: row.try_get("thumbnails_during_scan")?,
+        extract_subtitles: row.try_get("extract_subtitles")?,
+        make_thumbnails: row.try_get("make_thumbnails")?,
+        detect_openings: row.try_get("detect_openings")?,
+        process_on_arrival: row.try_get("process_on_arrival")?,
         watch_in_real_time: row.try_get("watch_in_real_time")?,
         keeps_resume_points: row.try_get("keeps_resume_points")?,
         keeps_watched_marks: row.try_get("keeps_watched_marks")?,
@@ -827,7 +831,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn what_a_scan_of_a_library_does_is_kept_and_read_back() {
+    async fn what_a_library_does_is_kept_and_read_back() {
         let database = database().await;
         let library = database
             .create_library("Films", LibraryKind::Movies, "fr", &roots())
@@ -836,12 +840,11 @@ mod tests {
         assert_eq!(
             library.options,
             LibraryOptions::default(),
-            "a library nobody has configured leaves the heavy readings to the night"
+            "a library nobody has configured leaves the heavy readings to the schedule"
         );
 
         let both = LibraryOptions {
-            key_frames_during_scan: true,
-            thumbnails_during_scan: true,
+            process_on_arrival: true,
             ..LibraryOptions::default()
         };
         assert!(
@@ -866,8 +869,9 @@ mod tests {
         );
 
         let only_one = LibraryOptions {
-            key_frames_during_scan: true,
-            ..LibraryOptions::default()
+            extract_subtitles: false,
+            detect_openings: false,
+            ..both
         };
         assert!(database
             .set_library_options(library.id, only_one)
@@ -876,7 +880,7 @@ mod tests {
         assert_eq!(
             database.list_libraries().await.expect("listed")[0].options,
             only_one,
-            "the two switches are two answers, not one"
+            "each reading is an answer of its own"
         );
 
         let watched = LibraryOptions {

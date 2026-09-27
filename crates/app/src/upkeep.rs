@@ -99,16 +99,19 @@ impl UpkeepTask {
         }
     }
 
-    /// Whether this reading has anything to say about this library at all.
+    /// Whether this reading is to be done on this library at all.
     ///
-    /// Only the listening answers no, and only for a library of films: an
-    /// opening is what every episode of a season shares, and a film has no
-    /// season and no neighbours. A row that would read nought of nought for
-    /// ever is noise on a screen whose whole point is to be read at a glance.
+    /// Where a jump can land always is: it costs next to nothing and a film
+    /// goes wrong without it. The three heavy ones are each the library's own
+    /// choice, and the listening never is for a library of films: an opening
+    /// is what every episode of a season shares, and a film has no season and
+    /// no neighbours. What a library does not want waits for nothing.
     pub fn applies_to(self, library: &Library) -> bool {
         match self {
-            Self::KeyFrames | Self::Subtitles | Self::Thumbnails => true,
-            Self::Openings => library.kind.is_episodic(),
+            Self::KeyFrames => true,
+            Self::Subtitles => library.options.extract_subtitles,
+            Self::Thumbnails => library.options.make_thumbnails,
+            Self::Openings => library.kind.is_episodic() && library.options.detect_openings,
         }
     }
 
@@ -121,23 +124,19 @@ impl UpkeepTask {
         matches!(self, Self::Openings)
     }
 
-    /// Whether this library has asked its scan to do this one itself.
+    /// Whether this reading follows a file's arrival, rather than waiting for
+    /// its scheduled task.
     ///
-    /// The words never are. The other two switches exist for a small library
-    /// on a machine with time to spare, where waiting for the scan to do
-    /// everything is the simpler thing to want. The words are different: they
-    /// are only ever needed by somebody watching, the film asks for them
-    /// itself if the upkeep has not got there yet, and nothing at all is lost
-    /// by leaving them to the night. A switch here would be a setting with no
-    /// question behind it.
-    pub fn is_done_during_the_scan_of(self, library: &Library) -> bool {
+    /// Where a jump can land always does: it is quick, and a film arriving
+    /// without it is a film whose bar lands seconds early until the night.
+    /// The heavy ones do when the library asked for its files to be read as
+    /// they arrive, and only the ones it wants at all.
+    pub fn follows_an_arrival_in(self, library: &Library) -> bool {
         match self {
-            Self::KeyFrames => library.options.key_frames_during_scan,
-            Self::Thumbnails => library.options.thumbnails_during_scan,
-            // Neither the words nor the titles are. A scan has to be over
-            // quickly, and listening to a whole season is the furthest thing
-            // from quick there is here.
-            Self::Subtitles | Self::Openings => false,
+            Self::KeyFrames => true,
+            Self::Subtitles | Self::Thumbnails | Self::Openings => {
+                library.options.process_on_arrival && self.applies_to(library)
+            }
         }
     }
 }
@@ -222,7 +221,7 @@ pub async fn what_is_left(state: &AppState) -> Result<Vec<WhatIsLeft>> {
                 library_name: library.name.clone(),
                 waiting,
                 done,
-                during_the_scan: task.is_done_during_the_scan_of(&library),
+                during_the_scan: task.follows_an_arrival_in(&library),
                 under_way: database
                     .has_unfinished_job(task.job_kind(), Some(&library.id.to_string()))
                     .await?,
@@ -1032,23 +1031,33 @@ mod tests {
     }
 
     #[test]
-    fn a_library_answers_for_each_task_whether_its_scan_does_it() {
+    fn a_library_answers_for_each_task_whether_it_is_done_and_when() {
         let mut library = melyxar_core::library::Library {
             id: LibraryId::new(),
-            name: "Films".to_string(),
-            kind: melyxar_core::library::LibraryKind::Movies,
+            name: "Series".to_string(),
+            kind: melyxar_core::library::LibraryKind::Series,
             metadata_language: "fr".to_string(),
             options: melyxar_core::library::LibraryOptions::default(),
             roots: Vec::new(),
         };
-        assert!(!UpkeepTask::KeyFrames.is_done_during_the_scan_of(&library));
-        assert!(!UpkeepTask::Thumbnails.is_done_during_the_scan_of(&library));
-
-        library.options.key_frames_during_scan = true;
-        assert!(UpkeepTask::KeyFrames.is_done_during_the_scan_of(&library));
+        assert!(UpkeepTask::ALL.iter().all(|task| task.applies_to(&library)));
+        assert!(UpkeepTask::KeyFrames.follows_an_arrival_in(&library));
         assert!(
-            !UpkeepTask::Thumbnails.is_done_during_the_scan_of(&library),
-            "the two switches are two answers, not one"
+            !UpkeepTask::Thumbnails.follows_an_arrival_in(&library),
+            "the heavy readings wait for their task unless asked otherwise"
         );
+
+        library.options.process_on_arrival = true;
+        library.options.make_thumbnails = false;
+        assert!(UpkeepTask::Subtitles.follows_an_arrival_in(&library));
+        assert!(UpkeepTask::Openings.follows_an_arrival_in(&library));
+        assert!(!UpkeepTask::Thumbnails.applies_to(&library));
+        assert!(
+            !UpkeepTask::Thumbnails.follows_an_arrival_in(&library),
+            "what a library does not want is done neither now nor later"
+        );
+
+        library.kind = melyxar_core::library::LibraryKind::Movies;
+        assert!(!UpkeepTask::Openings.applies_to(&library), "a film has no season");
     }
 }

@@ -186,9 +186,9 @@ pub struct UpkeepReport {
     /// The time of day it starts, in minutes since midnight, UTC, which is the
     /// clock a server can read with certainty.
     pub at_utc_minutes: i64,
-    /// Libraries whose own scan does at least one of the two readings, by
-    /// name. These do not wait for the night.
-    pub during_the_scan: Vec<String>,
+    /// Libraries whose files are read as soon as they arrive, by name. These
+    /// do not wait for the scheduled tasks.
+    pub on_arrival: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -439,11 +439,9 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
         upkeep: UpkeepReport {
             nightly: work.upkeep_nightly,
             at_utc_minutes: work.upkeep_at_utc_minutes,
-            during_the_scan: libraries
+            on_arrival: libraries
                 .iter()
-                .filter(|library| {
-                    library.options.key_frames_during_scan || library.options.thumbnails_during_scan
-                })
+                .filter(|library| library.options.process_on_arrival)
                 .map(|library| library.name.clone())
                 .collect(),
         },
@@ -992,12 +990,12 @@ pub fn render_text(report: &Diagnostics) -> String {
             false => "the upkeep never runs on its own; it waits for the button".to_string(),
         },
     );
-    if !report.upkeep.during_the_scan.is_empty() {
+    if !report.upkeep.on_arrival.is_empty() {
         line!(
             "+",
             format!(
-                "read during the scan of: {}",
-                report.upkeep.during_the_scan.join(", ")
+                "read as files arrive in: {}",
+                report.upkeep.on_arrival.join(", ")
             ),
         );
     }
@@ -1386,8 +1384,8 @@ mod tests {
         assert!(report.upkeep.nightly, "a server nobody configured runs it");
         assert_eq!(report.upkeep.at_utc_minutes, 3 * 60);
         assert!(
-            report.upkeep.during_the_scan.is_empty(),
-            "no library has been told to do the readings in one sitting"
+            report.upkeep.on_arrival.is_empty(),
+            "no library has been told to read its files as they arrive"
         );
         assert!(render_text(&report).contains("03:00 UTC"));
 
@@ -1403,8 +1401,7 @@ mod tests {
             .set_library_options(
                 library.id,
                 melyxar_core::library::LibraryOptions {
-                    key_frames_during_scan: true,
-                    thumbnails_during_scan: false,
+                    process_on_arrival: true,
                     ..Default::default()
                 },
             )
@@ -1412,7 +1409,7 @@ mod tests {
             .expect("written");
 
         let named = collect(&state).await.expect("report collected");
-        assert_eq!(named.upkeep.during_the_scan, vec![library.name.clone()]);
+        assert_eq!(named.upkeep.on_arrival, vec![library.name.clone()]);
         assert!(render_text(&named).contains(&library.name));
     }
 
