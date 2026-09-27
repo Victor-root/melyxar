@@ -160,6 +160,9 @@ pub struct BrowseRequest {
     /// Only the works this viewer marked. Needs a viewer, and answers nothing
     /// without one: a favourite belongs to somebody or it is not one.
     pub favourites_only: bool,
+    /// Only the works this viewer put aside to watch later. Needs a viewer
+    /// in the same way.
+    pub watch_later_only: bool,
     /// Only the works of libraries of one kind, whichever libraries those are.
     ///
     /// A row of films on a home page means every film on the server, and a
@@ -308,6 +311,7 @@ impl Default for BrowseRequest {
             unidentified_only: false,
             identified_only: false,
             favourites_only: false,
+            watch_later_only: false,
             library_kind: None,
             catalogued_only: false,
             viewer: None,
@@ -389,6 +393,8 @@ pub struct CardState {
     /// that, a place three quarters of the way in drew as a full bar.
     pub resume_length: Option<Millis>,
     pub favourite: bool,
+    /// Whether this viewer put it aside to watch later.
+    pub watch_later: bool,
     /// Episodes below this one, for a series or a season. Nothing for a film,
     /// which holds none.
     pub episodes: i64,
@@ -472,6 +478,12 @@ impl Database {
                                WHERE fav.work_id = w.id AND fav.user_id = ?)",
             );
         }
+        if request.watch_later_only {
+            sql.push_str(
+                " AND EXISTS (SELECT 1 FROM watchlist later
+                               WHERE later.work_id = w.id AND later.user_id = ?)",
+            );
+        }
         // Asked the same way and for the same reason: a join would sit ahead
         // of the where clause and shift every bound value after it.
         if request.library_kind.is_some() {
@@ -548,6 +560,9 @@ impl Database {
         // them without naming a viewer asks about an account that is not
         // there, which is how it comes back empty.
         if request.favourites_only {
+            query = query.bind(request.viewer.map(|viewer| viewer.to_db_string()));
+        }
+        if request.watch_later_only {
             query = query.bind(request.viewer.map(|viewer| viewer.to_db_string()));
         }
         if let Some(kind) = request.library_kind {
@@ -648,6 +663,7 @@ impl Database {
                          ELSE 'not_started' END AS seen,
                     CASE WHEN l.keeps_resume_points THEN p.position_ms END AS position_ms,
                     f.work_id IS NOT NULL AS favourite,
+                    later.work_id IS NOT NULL AS watch_later,
                     -- The copy a play button on the card would start: the
                     -- biggest one still on the disk, the same one every other
                     -- play button in this server means.
@@ -684,6 +700,7 @@ impl Database {
              JOIN libraries l ON l.id = w.library_id
              LEFT JOIN playback_progress p ON p.work_id = w.id AND p.user_id = ?1
              LEFT JOIN favorites f ON f.work_id = w.id AND f.user_id = ?1
+             LEFT JOIN watchlist later ON later.work_id = w.id AND later.user_id = ?1
              WHERE w.id IN ({places})"
         )))
         .bind(viewer.to_db_string());
@@ -725,6 +742,9 @@ impl Database {
                         .filter(|length| *length > 0)
                         .map(Millis::new),
                     favourite: crate::convert::int_to_bool(row.try_get::<i64, _>("favourite")?),
+                    watch_later: crate::convert::int_to_bool(
+                        row.try_get::<i64, _>("watch_later")?,
+                    ),
                     episodes,
                     unwatched,
                     source_id: row
@@ -745,6 +765,7 @@ impl Database {
                 resume_from: None,
                 resume_length: None,
                 favourite: false,
+                watch_later: false,
                 episodes: 0,
                 unwatched: 0,
                 source_id: None,
@@ -1463,6 +1484,74 @@ mod tests {
         assert!(
             nobody.cards.is_empty(),
             "asked without a viewer, it asks about an account that is not there"
+        );
+    }
+
+    #[tokio::test]
+    async fn what_is_put_aside_for_later_is_a_list_of_its_own_per_account() {
+        let (database, films) =
+            library_of(&[("Quiet Harbour", 2019, 7.4), ("Amber Field", 2021, 8.1)]).await;
+        let who = somebody(&database, "vera").await;
+        let other = somebody(&database, "mattis").await;
+        let grid = grid_of(&database, films, who).await;
+        let (later, liked) = (grid[1].id, grid[0].id);
+        database
+            .set_watch_later(who, later, true)
+            .await
+            .expect("put aside");
+        database
+            .set_favourite(who, liked, true)
+            .await
+            .expect("favourite set");
+
+        let only_later = |viewer| BrowseRequest {
+            library_id: Some(films),
+            watch_later_only: true,
+            viewer: Some(viewer),
+            ..Default::default()
+        };
+        let mine = database
+            .browse_works(&only_later(who))
+            .await
+            .expect("grid read");
+        assert_eq!(
+            mine.cards.iter().map(|card| card.id).collect::<Vec<_>>(),
+            vec![later],
+            "a favourite is not something put aside, nor the other way round"
+        );
+        assert!(mine.cards[0].state.as_ref().expect("a viewer").watch_later);
+        assert!(
+            database
+                .browse_works(&only_later(other))
+                .await
+                .expect("grid read")
+                .cards
+                .is_empty(),
+            "one account's list is not the other's"
+        );
+
+        database
+            .set_watch_later(who, later, true)
+            .await
+            .expect("put aside twice");
+        database
+            .set_watch_later(who, later, false)
+            .await
+            .expect("taken off");
+        assert!(
+            database
+                .browse_works(&only_later(who))
+                .await
+                .expect("grid read")
+                .cards
+                .is_empty()
+        );
+        assert!(
+            !grid_of(&database, films, who).await[1]
+                .state
+                .as_ref()
+                .expect("a viewer")
+                .watch_later
         );
     }
 

@@ -85,7 +85,7 @@ Fait depuis : la fiche refaite sur la disposition d'Emby avec l'identité de Mel
 
 Fait depuis aussi : l'onglet porte le nom de ce qui est en lecture, et Melyxar s'installe comme une application, sur ordinateur comme sur téléphone, avec une icône dessinée par le serveur dans la couleur du logo de la personne.
 
-Reste : la liste « à voir plus tard » (sa table existe, rien ne s'en sert encore) et la spécification OpenAPI. Faits depuis : la correction manuelle depuis l'interface, et un canal temps réel pour l'administration (journal et lectures en cours), pas encore pour le reste de l'interface.
+Reste : la spécification OpenAPI. Faite depuis : la liste « À voir plus tard », par compte, depuis le menu de chaque titre et avec sa page à elle. Faits depuis : la correction manuelle depuis l'interface, et un canal temps réel pour l'administration (journal et lectures en cours), pas encore pour le reste de l'interface.
 
 Vérifié dans l'environnement de travail, sur de vrais films : la grille et la fiche s'affichent sans une seule erreur de console, le défilement continu passe de soixante à cent quarante-cinq cartes sans doublon puis annonce la fin, les flèches du clavier se déplacent d'une carte et d'une rangée, le contour de sélection est visible, et rien ne déborde de l'écran à quatre cents pixels de large.
 

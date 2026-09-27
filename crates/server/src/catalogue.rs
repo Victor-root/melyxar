@@ -39,6 +39,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(set_favourite),
         )
         .route(
+            "/api/v1/works/{id}/watch-later",
+            axum::routing::put(set_watch_later),
+        )
+        .route(
             "/api/v1/works/{id}/watched",
             axum::routing::put(set_watched),
         )
@@ -307,6 +311,10 @@ struct BrowseParams {
     /// sorts, filters and pages exactly like everything else.
     #[serde(default)]
     favourites: bool,
+    /// Only what this account put aside to watch later, a view in the same
+    /// way.
+    #[serde(default)]
+    watch_later: bool,
     /// Only the libraries of one kind, whichever libraries those are. What
     /// the search's scope filter narrows by, and what a row of one kind is
     /// read from: a collection of films spread over four disks is four
@@ -363,6 +371,8 @@ struct CardView {
     /// How long the copy it is carried on in lasts, beside where it stopped.
     resume_length_seconds: Option<i64>,
     favourite: bool,
+    /// Whether this account put it aside to watch later.
+    watch_later: bool,
     /// Episodes below, and how many of those are left to watch. Both nothing
     /// for a film, which holds none.
     episodes: i64,
@@ -400,6 +410,7 @@ async fn works(
         unidentified_only: params.unidentified,
         identified_only: false,
         favourites_only: params.favourites,
+        watch_later_only: params.watch_later,
         library_kind: params.kind,
         catalogued_only: false,
         // A letter nobody could mean is refused rather than quietly ignored:
@@ -460,6 +471,7 @@ fn card_view(card: &WorkCard) -> CardView {
             .and_then(|state| state.resume_length)
             .map(|length| length.get() / 1_000),
         favourite: card.state.as_ref().is_some_and(|state| state.favourite),
+        watch_later: card.state.as_ref().is_some_and(|state| state.watch_later),
         episodes: card.state.as_ref().map_or(0, |state| state.episodes),
         unwatched: card.state.as_ref().map_or(0, |state| state.unwatched),
         source: card
@@ -1037,6 +1049,32 @@ async fn set_favourite(
     let favourite =
         melyxar_app::playback::set_favourite(&state, &who, work_id, body.favourite).await?;
     Ok(Json(FavouriteView { favourite }))
+}
+
+/// Whether a viewer means to watch a work later.
+#[derive(Debug, Deserialize)]
+struct WatchLaterBody {
+    watch_later: bool,
+}
+
+/// Where it is now, which is what a button is drawn from.
+#[derive(Debug, Serialize)]
+struct WatchLaterView {
+    watch_later: bool,
+}
+
+/// Puts a work on this viewer's list of what to watch later, or takes it
+/// off, and answers where it is now as a favourite does.
+async fn set_watch_later(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+    Json(body): Json<WatchLaterBody>,
+) -> Result<Json<WatchLaterView>> {
+    let work_id = parse_work(&id)?;
+    let watch_later =
+        melyxar_app::playback::set_watch_later(&state, &who, work_id, body.watch_later).await?;
+    Ok(Json(WatchLaterView { watch_later }))
 }
 
 /// Whether this work is to stand on the server's own shelf.
