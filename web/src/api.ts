@@ -373,37 +373,37 @@ export const REFRESH_MODES: RefreshMode[] = [
   "everything",
 ];
 
-/** One of the readings the upkeep is made of, on one library. */
-export interface UpkeepTask {
-  task: "key_frames" | "subtitles" | "thumbnails" | "openings";
-  library: string;
-  library_name: string;
-  /** Films still waiting, or seasons when this one counts seasons. Nought
-      means there is nothing to start. */
-  waiting: number;
-  done: number;
-  /** Whether the two numbers above count seasons rather than files. Listening
-      for the titles a season shares is done season by season. */
+/** One of the six scheduled tasks, each covering every library. */
+export type TaskName = "scan" | "identify" | "key_frames" | "subtitles" | "thumbnails" | "openings";
+
+/** Where one scheduled task stands. */
+export interface ScheduledTask {
+  task: TaskName;
+  /** Whether it runs by itself every day, and when, in minutes since
+      midnight **in UTC**: the server keeps the one clock it can read with
+      certainty, and this side turns it into the time of whoever looks. */
+  runs_on_schedule: boolean;
+  at_utc_minutes: number;
+  /** When it next runs by itself, as an instant. Absent when it never does. */
+  next_run: string | null;
+  /** What it has waiting over every library. Absent for the scan, which
+      cannot know what a disk holds until it has walked it. */
+  waiting: number | null;
+  /** Whether that number counts seasons rather than files. */
   counts_seasons: boolean;
-  /** Whether the scan of that library does this reading itself. */
-  during_the_scan: boolean;
-  /** Whether it is running right now. */
   under_way: boolean;
-  /** When it last ran to an end here, as an instant, or nothing when it never
-      has. A reading that never ran and one that ran last night and found
-      nothing look alike without it. */
+  /** When it last ran, how that ended, and how long it took. A task that
+      never ran and one that ran last night and found nothing look alike
+      without them. */
   last_run: string | null;
-  /** How that run ended, in the words every other job uses. */
   last_run_state: string | null;
   last_run_seconds: number | null;
 }
 
-export interface Upkeep {
-  tasks: UpkeepTask[];
-  /** When it next runs on its own, as an instant: shown in the hour of whoever
-      reads it rather than in the server's. Absent when it never does. */
+export interface ScheduledTasks {
+  tasks: ScheduledTask[];
+  /** The soonest any task runs by itself. */
   next_run: string | null;
-  settings: LibraryWork;
 }
 
 /**
@@ -420,10 +420,6 @@ export interface LibraryWork {
   thumbnails_height: number;
   thumbnails_columns: number;
   thumbnails_rows: number;
-  upkeep_nightly: boolean;
-  /** Minutes since midnight, **in UTC**. The server keeps the one clock it can
-      read with certainty; this side turns it into the time of whoever looks. */
-  upkeep_at_utc_minutes: number;
 }
 
 /**
@@ -1692,10 +1688,14 @@ export const api = {
       /** How many films went back in the queue, when the language changed. */
       asked_about_again: number | null;
     }>(`/api/v1/libraries/${library}/options`, options),
-  /* The two readings that go through every film, what each has left, and when
-     the server will next do them on its own. */
-  upkeep: (signal?: AbortSignal) => get<Upkeep>("/api/v1/upkeep", signal),
-  runUpkeep: () => post<{ started: number }>("/api/v1/upkeep/run"),
+  /* The six scheduled tasks: when each runs by itself, what it has waiting,
+     how it last went. Saying when one runs answers every task, as the screen
+     draws them. */
+  tasks: (signal?: AbortSignal) => get<ScheduledTasks>("/api/v1/tasks", signal),
+  scheduleTask: (task: TaskName, runs_on_schedule: boolean, at_utc_minutes: number) =>
+    put<ScheduledTasks>(`/api/v1/tasks/${task}/schedule`, { runs_on_schedule, at_utc_minutes }),
+  runTask: (task: TaskName) => post<{ started: boolean }>(`/api/v1/tasks/${task}/run`),
+  runEveryTask: () => post<{ started: boolean }>("/api/v1/tasks/run"),
   /* What the server does with a library. Everything travels together, because
      it is one screen and one answer, and what comes back is what was kept:
      a shape that cannot hold a thumbnail is brought into range rather than
@@ -1754,8 +1754,6 @@ export const api = {
     get<PlaybackSettings>("/api/v1/settings/playback", signal),
   setPlaybackSettings: (settings: PlaybackSettings) =>
     put<PlaybackSettings>("/api/v1/settings/playback", settings),
-  runUpkeepTask: (library: string, task: string) =>
-    post<{ job_id: string }>(`/api/v1/libraries/${library}/upkeep/${task}`),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
   forgetFinishedJobs: () => remove<{ forgotten: number }>("/api/v1/jobs/finished"),
   /* For the films the rules could not name: what a person could have meant,

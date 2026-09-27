@@ -9,13 +9,14 @@
  * answer too many, and the wrong one is always the one somebody reads.
  *
  * What finished is this screen's own business, and is asked for again whenever
- * the work being watched comes to an end. So is the upkeep, which is the one
- * thing here that is not a job at all: it is the work nobody has started yet.
+ * the work being watched comes to an end. So are the scheduled tasks, which
+ * are the one thing here that is not a job at all: they are what runs over
+ * every library, and a run of one is several jobs.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import type { Job, RefreshMode, Upkeep, UpkeepTask } from "../api";
+import type { Job, RefreshMode, ScheduledTasks, TaskName } from "../api";
 import { refusalOf, useAsked } from "../asking";
 import { useRunning } from "../running";
 
@@ -25,20 +26,14 @@ export interface ActivityScreen {
   running: Job[];
   /** What finished, newest first. */
   recent: Job[];
-  /** What the upkeep still has to do, or nothing until the server has said. */
-  upkeep: Upkeep | null;
-  /** The readings with something left, which is what a button to start them
-      all is offered for. */
-  waiting: UpkeepTask[];
+  /** The scheduled tasks, or nothing until the server has said. */
+  tasks: ScheduledTasks | null;
   /** Whether the server could not be asked. */
   failed: boolean;
   /** Why the server refused what was last started, as a code to be worded. */
   refused: string | null;
-  /** How many readings the last press of "start the upkeep" set going, or
-      nothing when it has not been pressed since. A count rather than a
-      sentence: nought started and three started are two different answers,
-      and wording them is the screen's business. */
-  started: number | null;
+  /** Whether the last press set every task going, so the screen says so. */
+  started: boolean;
   /** How much a scan started from here goes over. Held for the whole screen
       rather than asked once per button: somebody choosing "everything again"
       is choosing it for what they are about to press, and having to choose it
@@ -48,10 +43,12 @@ export interface ActivityScreen {
   /** Starting one piece of work on one library, and watching it at once
       rather than leaving it to the slow beat. */
   startOn: (asked: Promise<unknown>) => Promise<void>;
-  /** Starting every reading the upkeep has waiting. */
-  startTheUpkeep: () => Promise<void>;
-  /** Starting one reading of the upkeep on one library. */
-  startOneReading: (task: UpkeepTask) => Promise<void>;
+  /** Starting every task, one after the other. */
+  startEveryTask: () => Promise<void>;
+  /** Starting one task over every library. */
+  startTask: (task: TaskName) => Promise<void>;
+  /** Saying whether a task runs by itself every day, and when. */
+  schedule: (task: TaskName, runs_on_schedule: boolean, at_utc_minutes: number) => void;
   /** Stopping one job. */
   cancel: (job: string) => void;
   /** Emptying the list of what finished. */
@@ -61,21 +58,43 @@ export interface ActivityScreen {
 export function useActivityScreen(): ActivityScreen {
   const { jobs: running, watch, finished } = useRunning();
   const [refused, setRefused] = useState<string | null>(null);
-  const [started, setStarted] = useState<number | null>(null);
+  const [started, setStarted] = useState(false);
   const [mode, setMode] = useState<RefreshMode>("what_is_missing");
 
   /* On the way in, and again each time the work being watched comes to an
      end: that is exactly when something has moved from running to finished,
-     and when what the upkeep has left has just gone down. */
+     and when what the tasks have left has just gone down. */
   const jobs = useAsked((signal) => api.jobs(signal), [finished]);
-  const upkeep = useAsked((signal) => api.upkeep(signal), [finished]);
+  const asked = useAsked((signal) => api.tasks(signal), [finished]);
+  /* What is shown, which a change made here writes into at once, before the
+     server has answered, and which the server's answer then replaces. */
+  const [tasks, setTasks] = useState<ScheduledTasks | null>(null);
+  const answer = asked.answer;
+  useEffect(() => {
+    if (answer) {
+      setTasks(answer);
+    }
+  }, [answer]);
+
+  /* A task ends a moment after its last job does, once it has written down
+     how the whole run went. Looked at again on a short beat while one is
+     under way, so its line never stays running after it has ended. */
+  const lookAgain = asked.look;
+  const busy = tasks?.tasks.some((task) => task.under_way) ?? false;
+  useEffect(() => {
+    if (!busy) {
+      return;
+    }
+    const beat = window.setInterval(lookAgain, 3_000);
+    return () => window.clearInterval(beat);
+  }, [busy, lookAgain]);
 
   const startOn = useCallback(
-    async (asked: Promise<unknown>) => {
+    async (asking: Promise<unknown>) => {
       setRefused(null);
-      setStarted(null);
+      setStarted(false);
       try {
-        await asked;
+        await asking;
         watch();
       } catch (error) {
         setRefused(refusalOf(error));
@@ -84,25 +103,55 @@ export function useActivityScreen(): ActivityScreen {
     [watch],
   );
 
-  const askUpkeepAgain = upkeep.again;
-  const startTheUpkeep = useCallback(async () => {
+  const askTasksAgain = asked.again;
+  const startEveryTask = useCallback(async () => {
     setRefused(null);
     try {
-      const { started: howMany } = await api.runUpkeep();
-      setStarted(howMany);
+      await api.runEveryTask();
+      setStarted(true);
       watch();
-      askUpkeepAgain();
+      askTasksAgain();
     } catch (error) {
       setRefused(refusalOf(error));
     }
-  }, [askUpkeepAgain, watch]);
+  }, [askTasksAgain, watch]);
 
-  const startOneReading = useCallback(
-    async (task: UpkeepTask) => {
-      await startOn(api.runUpkeepTask(task.library, task.task));
-      askUpkeepAgain();
+  const startTask = useCallback(
+    async (task: TaskName) => {
+      setTasks((before) =>
+        before && {
+          ...before,
+          tasks: before.tasks.map((one) => (one.task === task ? { ...one, under_way: true } : one)),
+        },
+      );
+      await startOn(api.runTask(task));
+      askTasksAgain();
     },
-    [askUpkeepAgain, startOn],
+    [askTasksAgain, startOn],
+  );
+
+  const schedule = useCallback(
+    (task: TaskName, runs_on_schedule: boolean, at_utc_minutes: number) => {
+      setRefused(null);
+      const before = tasks;
+      setTasks(
+        (now) =>
+          now && {
+            ...now,
+            tasks: now.tasks.map((one) =>
+              one.task === task ? { ...one, runs_on_schedule, at_utc_minutes } : one,
+            ),
+          },
+      );
+      api
+        .scheduleTask(task, runs_on_schedule, at_utc_minutes)
+        .then(setTasks)
+        .catch((error) => {
+          setTasks(before);
+          setRefused(refusalOf(error));
+        });
+    },
+    [tasks],
   );
 
   const cancel = useCallback(
@@ -120,16 +169,16 @@ export function useActivityScreen(): ActivityScreen {
   return {
     running,
     recent: jobs.answer?.recent ?? [],
-    upkeep: upkeep.answer,
-    waiting: upkeep.answer?.tasks.filter((task) => task.waiting > 0) ?? [],
-    failed: jobs.failure !== null || upkeep.failure !== null,
+    tasks,
+    failed: jobs.failure !== null || asked.failure !== null,
     refused,
     started,
     mode,
     setMode,
     startOn,
-    startTheUpkeep,
-    startOneReading,
+    startEveryTask,
+    startTask,
+    schedule,
     cancel,
     forgetFinished,
   };

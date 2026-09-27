@@ -313,8 +313,8 @@ function WorkUnderWay({ job }: { job: Job }) {
 function TasksPanel() {
   const { t, language } = useSettings();
   const { jobs, finished } = useRunning();
-  const upkeep = useAsked((signal) => api.upkeep(signal), [finished]);
-  const next = upkeep.answer?.next_run ?? null;
+  const tasks = useAsked((signal) => api.tasks(signal), [finished]);
+  const next = tasks.answer?.next_run ?? null;
 
   return (
     <Panel icon={TasksIcon} title={t("admin.tasks")} lead={t("admin.tasks_lead")}>
@@ -330,9 +330,9 @@ function TasksPanel() {
             <ClockIcon size={18} />
           </span>
           <span className="line-words">
-            <span className="line-name">{t("upkeep.title")}</span>
+            <span className="line-name">{t("tasks.title")}</span>
             <span className="line-note">
-              {upkeep.answer &&
+              {tasks.answer &&
                 (next
                   ? t("admin.upkeep_next", {
                       when: new Date(next).toLocaleTimeString(language, {
@@ -340,7 +340,7 @@ function TasksPanel() {
                         minute: "2-digit",
                       }),
                     })
-                  : t("upkeep.nightly_off"))}
+                  : t("tasks.none_scheduled"))}
             </span>
           </span>
         </div>
