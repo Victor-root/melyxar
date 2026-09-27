@@ -11,6 +11,7 @@ import { Grid } from "../components/grid";
 import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
 import { ArrowRightIcon, CloseIcon, IdentifyIcon } from "../icons";
+import { useMarks } from "../marks";
 import { letterOfTheTopRow } from "../letters";
 import { cardShapeOf, nameOfKind } from "../libraries";
 import { ORDERS, useBrowsing } from "../screens/browsing";
@@ -18,10 +19,17 @@ import { useSettings } from "../settings";
 
 export function LibraryPage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
-  const { narrowing, choose, cards, more, loadMore, reach, loading, failed, filters } =
+  const { narrowing, choose, cards: read, more, loadMore, reach, loading, failed, filters } =
     useBrowsing();
   const { order, descending, genre, decade, search, unidentified, favourites, watchLater } =
     narrowing;
+  /* A view of what this account marked holds what is marked now, not what
+     was marked when the server was asked: a card taken off it here, or by
+     being watched, leaves at once rather than at the next reading. Every
+     other grid holds what the server read, whatever its marks. */
+  const marks = useMarks();
+  const keeps = favourites ? marks.favouriteOf : watchLater ? marks.watchLaterOf : null;
+  const cards = useMemo(() => (keeps ? read.filter(keeps) : read), [read, keeps]);
   const library = libraries.find((entry) => entry.id === narrowing.library);
   const shape = cardShapeOf(library?.kind ?? narrowing.kind);
   /* What somebody filmed themselves is never waiting for a name, so there is
