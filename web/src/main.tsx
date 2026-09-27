@@ -4,10 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./app";
 import { setUpMeasuring } from "./measure";
 import { SettingsProvider } from "./settings";
-import "./theme.css";
 import "./styles/index.css";
-import "./door.css";
-import "./admin.css";
 
 // First, so that an armed recorder sees the page from its very start.
 setUpMeasuring();

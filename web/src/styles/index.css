@@ -2,12 +2,16 @@
  * The look of the interface, one file per part of it. Every colour, spacing
  * and radius comes from a token in theme.css; nothing here invents one.
  *
- * Read in this order and in no other: the pieces every screen shares first,
- * then each part of the interface, then what narrow screens change. Two rules
- * as precise as each other are settled by which comes last, so a file moved
- * up or down this list can change what a screen looks like.
+ * The one place the stylesheets are brought in, read in this order and in no
+ * other: the tokens, the pieces every screen shares, each part of the
+ * interface, what narrow screens change, then the door, the administration
+ * and the player. Two rules as precise as each other are settled by which
+ * comes last, so a file moved up or down this list can change what a screen
+ * looks like. A stylesheet brought in from a component instead would land
+ * wherever that component happens to be imported.
  */
 
+@import "../theme.css";
 @import "./pages.css";
 @import "./header.css";
 @import "./menus.css";
@@ -29,3 +33,6 @@
 @import "./settings.css";
 @import "./feedback.css";
 @import "./narrow.css";
+@import "../door.css";
+@import "../admin.css";
+@import "../player/player.css";
