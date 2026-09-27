@@ -25,6 +25,10 @@ export interface FindableSection {
   /** Its cards and settings: the key of each one's name, and of what it says
    *  of itself under it when it says anything. */
   named: Named[];
+  /** Words drawn from a list rather than written on the page, which lead to
+   *  the card or setting they are chosen in: the choices of a list, the
+   *  lines of a card. Keyed by that card or setting's name. */
+  choices?: Record<string, string[]>;
 }
 
 export const FINDABLE: FindableSection[] = [
@@ -55,6 +59,19 @@ export const FINDABLE: FindableSection[] = [
       ["settings.header", "settings.header_buttons_why"],
       ["settings.header_hides", "settings.header_hides_why"],
     ],
+    choices: {
+      "nav.theme": ["theme.system", "theme.dark", "theme.light"],
+      "settings.header": [
+        "nav.search",
+        "nav.favourites",
+        "nav.watch_later",
+        "nav.notifications",
+        "home.scan",
+        "nav.administration",
+        "nav.cast",
+        "nav.settings",
+      ],
+    },
   },
   {
     area: "settings",
@@ -71,6 +88,14 @@ export const FINDABLE: FindableSection[] = [
       ["settings.home_sections", "settings.home_sections_why"],
       ["settings.library_order", "settings.library_order_why"],
     ],
+    choices: {
+      "settings.home_sections": [
+        "home_section.band",
+        "home_section.carry_on",
+        "home_section.up_next",
+        "home_section.recently_added",
+      ],
+    },
   },
   {
     area: "settings",
@@ -92,6 +117,25 @@ export const FINDABLE: FindableSection[] = [
       ["settings.resume_rewind", "settings.resume_rewind_why"],
       ["settings.resume_per_kind", "settings.resume_per_kind_why"],
     ],
+    choices: {
+      "settings.downmix": [
+        "downmix.none",
+        "downmix.centre_and_bass_split",
+        "downmix.night_dialogue",
+        "downmix.intensity_preserving",
+        "downmix.broadcast_standard",
+      ],
+      "settings.wide_gamut": [
+        "wide_gamut.automatic",
+        "wide_gamut.always_convert",
+        "wide_gamut.never_convert",
+      ],
+      "settings.resuming": [
+        "settings.resume_min_percent",
+        "settings.resume_max_percent",
+        "settings.resume_min_seconds",
+      ],
+    },
   },
   {
     area: "settings",
@@ -109,6 +153,15 @@ export const FINDABLE: FindableSection[] = [
       ["player.subtitle_background"],
       ["player.subtitle_height"],
     ],
+    choices: {
+      "settings.subtitle_mode": [
+        "subtitle_mode.smart",
+        "subtitle_mode.from_the_file",
+        "subtitle_mode.only_forced",
+        "subtitle_mode.always",
+        "subtitle_mode.never",
+      ],
+    },
   },
   {
     area: "admin",
@@ -186,6 +239,9 @@ export const FINDABLE: FindableSection[] = [
       ["settings.thumbnails_height"],
       ["admin.thumbnails_grid", "settings.thumbnails_shape_why"],
     ],
+    choices: {
+      "admin.codecs": ["admin.codec.av1", "admin.codec.hevc", "admin.codec.h264"],
+    },
   },
   {
     area: "admin",
@@ -227,6 +283,14 @@ export const FINDABLE: FindableSection[] = [
       ["admin.brake_after"],
       ["admin.access", "admin.access_lead"],
     ],
+    choices: {
+      "admin.access": [
+        "admin.access.proxy",
+        "admin.access.self_signed",
+        "admin.access.provided",
+        "admin.access.automatic",
+      ],
+    },
   },
   {
     area: "admin",
@@ -283,6 +347,9 @@ export const FINDABLE: FindableSection[] = [
       ["activity.title", "activity.kept_lead"],
       ["activity.kept", "activity.kept_why"],
     ],
+    choices: {
+      "admin.door_background": ["admin.door_background.abstract", "admin.door_background.library"],
+    },
   },
 ];
 
@@ -309,8 +376,8 @@ export function folded(words: string): string {
 }
 
 /**
- * The settings and sections of one area whose name, or name and explanation
- * together, hold every word asked: those named by the words first, the ones
+ * The settings and sections of one area whose name, one of their choices, or
+ * name and explanation together, hold every word asked: those named by the words first, the ones
  * beginning with the first word leading, then those only their explanation
  * speaks of, each in the order the pages show them. A section is found by its
  * own name as well, before what it holds.
@@ -346,6 +413,13 @@ export function find(
       const found = { area, path: section.path, said, section: name, key };
       if (matches(said)) {
         byName.push(found);
+        seen.add(place);
+        continue;
+      }
+      // Found by one of its choices, it is said by that choice.
+      const choice = (section.choices?.[key] ?? []).map(t).find(matches);
+      if (choice) {
+        byName.push({ ...found, said: choice });
         seen.add(place);
       } else if (why && matches(`${said} ${t(why)}`)) {
         byWhy.push(found);
