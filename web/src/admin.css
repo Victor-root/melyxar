@@ -208,6 +208,15 @@
   flex-direction: column;
 }
 
+/* A part of the settings of a panel, under its own small title. */
+.settings-heading {
+  margin: 22px 0 8px;
+}
+
+.settings-heading:first-child {
+  margin-top: 0;
+}
+
 /* A sentence said inside a panel, between what it holds. */
 .panel-say {
   margin: 0;
@@ -647,6 +656,11 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--gap);
+}
+
+/* The small capitals over a part of a panel: what follows, in one word. */
+.library-folders-head,
+.settings-heading {
   color: var(--text-faint);
   font-size: 11.5px;
   font-weight: 650;
