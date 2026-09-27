@@ -353,4 +353,5 @@ Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
 - Import ponctuel de l'historique de visionnage et des favoris depuis une installation Jellyfin existante.
 - Recherche et téléchargement de sous-titres en ligne, sur demande explicite.
 - Contrôle à distance d'une session de lecture depuis un autre appareil, sans priorité.
+- Partage de médiathèques entre deux serveurs appairés, après le jalon 9 : voir [05-partage-entre-serveurs.md](05-partage-entre-serveurs.md).
 - Interface ambitieuse, surveillance des dossiers en temps réel.
