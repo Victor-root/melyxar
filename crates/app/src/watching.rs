@@ -911,6 +911,7 @@ mod tests {
             thumbnails: None,
             chapters: Vec::new(),
             segments: Vec::new(),
+            corrected_segments: Vec::new(),
             favourite: false,
         })
     }

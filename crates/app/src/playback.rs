@@ -134,6 +134,9 @@ pub struct PlayPlan {
     /// appears a moment after the film starts is a button somebody has already
     /// scrolled past.
     pub segments: Vec<MediaSegment>,
+    /// The kinds of stretch a person corrected by hand in this file, which
+    /// the window that corrects them offers to take back.
+    pub corrected_segments: Vec<melyxar_core::segments::SegmentKind>,
     /// Whether this viewer has marked this film as one they like.
     ///
     /// Carried on the plan rather than asked for on its own, for the same
@@ -391,7 +394,7 @@ pub async fn plan(
         .unwrap_or_default();
     // And the same again: most files name none, and a film with no skip button
     // is every film anybody watched before there was one.
-    let segments = crate::segments::skipped_in(state, source.id)
+    let stretches = crate::segments::stretches_of(state, source.id)
         .await
         .unwrap_or_default();
     // Never a reason to refuse to play: a film whose mark could not be read is
@@ -417,7 +420,8 @@ pub async fn plan(
         rebuild,
         thumbnails,
         chapters,
-        segments,
+        segments: stretches.skipped,
+        corrected_segments: stretches.corrected,
         favourite,
     })
 }
@@ -3260,10 +3264,11 @@ mod tests {
         let answered = correct(&state, source_id, SegmentKind::Intro, stretch(60_000, 150_000))
             .await
             .expect("corrected");
-        assert_eq!(answered, skipped().await, "the answer is what the player is offered");
-        assert_eq!(answered.len(), 1);
-        assert_eq!(answered[0].origin, SegmentOrigin::Manual);
-        assert_eq!(answered[0].start, Millis::new(60_000));
+        assert_eq!(answered.skipped, skipped().await, "the answer is what the player is offered");
+        assert_eq!(answered.skipped.len(), 1);
+        assert_eq!(answered.skipped[0].origin, SegmentOrigin::Manual);
+        assert_eq!(answered.skipped[0].start, Millis::new(60_000));
+        assert_eq!(answered.corrected, vec![SegmentKind::Intro]);
 
         assert!(
             correct(&state, source_id, SegmentKind::Intro, stretch(150_000, 60_000))
@@ -3278,15 +3283,18 @@ mod tests {
             "and so is one ending after the film"
         );
 
-        correct(&state, source_id, SegmentKind::Intro, Correction::None)
+        let none = correct(&state, source_id, SegmentKind::Intro, Correction::None)
             .await
             .expect("none said");
         assert!(skipped().await.is_empty(), "none is never offered");
+        assert_eq!(none.corrected, vec![SegmentKind::Intro], "and is still a correction");
 
-        assert!(take_back(&state, source_id, SegmentKind::Intro)
-            .await
-            .expect("taken back")
-            .is_empty());
+        assert_eq!(
+            take_back(&state, source_id, SegmentKind::Intro)
+                .await
+                .expect("taken back"),
+            crate::segments::Stretches::default()
+        );
     }
 
     #[tokio::test]
