@@ -1052,7 +1052,7 @@ async fn set_favourite(
 ) -> Result<Json<FavouriteView>> {
     let work_id = parse_work(&id)?;
     let favourite =
-        melyxar_app::playback::set_favourite(&state, &who, work_id, body.favourite).await?;
+        melyxar_app::marks::set_favourite(&state, &who, work_id, body.favourite).await?;
     Ok(Json(FavouriteView { favourite }))
 }
 
@@ -1078,7 +1078,7 @@ async fn set_watch_later(
 ) -> Result<Json<WatchLaterView>> {
     let work_id = parse_work(&id)?;
     let watch_later =
-        melyxar_app::playback::set_watch_later(&state, &who, work_id, body.watch_later).await?;
+        melyxar_app::marks::set_watch_later(&state, &who, work_id, body.watch_later).await?;
     Ok(Json(WatchLaterView { watch_later }))
 }
 
@@ -1135,7 +1135,7 @@ async fn set_watched(
     Json(body): Json<WatchedBody>,
 ) -> Result<Json<WatchedView>> {
     let work_id = parse_work(&id)?;
-    let watched = melyxar_app::playback::mark_watched(&state, &who, work_id, body.watched).await?;
+    let watched = melyxar_app::marks::mark_watched(&state, &who, work_id, body.watched).await?;
     Ok(Json(WatchedView { watched }))
 }
 

@@ -1051,7 +1051,7 @@ async fn record_progress(
     let work_id = parse_work(&body.work_id)?;
     let position = Millis::from_seconds_f64(body.position_seconds);
 
-    let kept = melyxar_app::playback::record_position(
+    let kept = melyxar_app::marks::record_position(
         &state,
         &who,
         work_id,
