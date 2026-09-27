@@ -572,7 +572,7 @@ async fn follow_what_moved(state: &AppState, library: &Library) -> Result<usize>
     let moved = database.moved_files(library.id).await?;
     for file in &moved {
         let no_longer_used = database.follow_moved_file(file).await?;
-        forget_pictures(state, no_longer_used).await;
+        crate::images::forget_the_pictures(state, &no_longer_used).await;
         crate::libraries::forget_the_thumbnails_of(state, &[file.gone]).await;
         tracing::debug!(
             file = %file.here.display(),
@@ -767,26 +767,10 @@ async fn reread_names_of_nameless_series(
 /// removed here, where the folder they live in is known.
 pub(crate) async fn join_work_into(state: &AppState, from: WorkId, into: WorkId) -> Result<()> {
     let no_longer_used = state.database().merge_work_into(from, into).await?;
-    forget_pictures(state, no_longer_used).await;
+    crate::images::forget_the_pictures(state, &no_longer_used).await;
     Ok(())
 }
 
-/// Takes pictures nothing points at any more out of the cache.
-pub(crate) async fn forget_pictures(state: &AppState, no_longer_used: Vec<String>) {
-    let images = state.config().directories.images();
-    for path in no_longer_used {
-        tokio::fs::remove_file(images.join(path)).await.ok();
-    }
-}
-
-/// Takes one copy away from the film it sits on, as a film of its own.
-///
-/// Copies are put together on their own, by the rules that read names and by
-/// what the provider answers, and both can be wrong about a file. Whoever is
-/// looking at the page can see that two copies are not the same film at all,
-/// and this is how they say so: the copy leaves, named after its own file, and
-/// waits to be looked up like any film a scan has just found.
-///
 /// Reads one file again for what it says about itself.
 ///
 /// A scan opens only a file whose size or date has changed on disk, which is
@@ -863,6 +847,14 @@ pub async fn read_copy_again(state: &AppState, source_id: MediaSourceId) -> Resu
     Ok(Some(started.id))
 }
 
+/// Takes one copy away from the film it sits on, as a film of its own.
+///
+/// Copies are put together on their own, by the rules that read names and by
+/// what the provider answers, and both can be wrong about a file. Whoever is
+/// looking at the page can see that two copies are not the same film at all,
+/// and this is how they say so: the copy leaves, named after its own file, and
+/// waits to be looked up like any film a scan has just found.
+///
 /// Answers nothing when the film holds this one copy and no other, which is a
 /// film to identify again rather than one to take apart.
 pub async fn detach_copy(state: &AppState, source_id: MediaSourceId) -> Result<Option<WorkId>> {
