@@ -142,11 +142,36 @@
   gap: 8px;
 }
 
+/* The page is a board of cards packed under one another, each as tall as it
+   needs: fine rows that every card spans as many of as its height asks,
+   counted by the page as it lays out (see masonry.ts). Anything on the page
+   is wide and takes a whole row; the cards gathered in a group of panels are
+   the ordinary ones, set side by side while they have room and fitted into
+   whatever a shorter neighbour leaves free. */
 .sectioned-page {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  /* ROW_STEP in masonry.ts: the two are one number. */
+  grid-auto-rows: 4px;
+  column-gap: calc(var(--gap) * 1.5);
+  align-items: start;
   min-width: 0;
   /* What the panels inside measure themselves against: the room the page
      really has, once the side list has taken its share. */
   container-type: inline-size;
+}
+
+.sectioned-page > * {
+  grid-column: 1 / -1;
+}
+
+/* A group of panels lays its cards on the page itself, as ordinary ones. */
+.sectioned-page > .panels {
+  display: contents;
+}
+
+.sectioned-page > .panels > * {
+  grid-column: auto;
 }
 
 /* On a narrow screen the list is a strip across the top, scrolled sideways,
