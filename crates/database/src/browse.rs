@@ -379,6 +379,12 @@ pub struct CardState {
     /// of nothing is where everybody starts, and a button offering to carry on
     /// from the very beginning says the wrong thing.
     pub resume_from: Option<Millis>,
+    /// How long the copy it is carried on in lasts, which is what the place
+    /// it stopped is a share of. Read beside the place, and only where there
+    /// is one. The length a card shows is the provider's, and a file holding
+    /// two of its episodes back to back runs twice as long: measured against
+    /// that, a place three quarters of the way in drew as a full bar.
+    pub resume_length: Option<Millis>,
     pub favourite: bool,
     /// Episodes below this one, for a series or a season. Nothing for a film,
     /// which holds none.
@@ -658,7 +664,14 @@ impl Database {
                             AND coalesce(q.state, 'not_started') <> 'watched'
                             AND (e.parent_id = w.id
                                  OR e.parent_id IN (SELECT id FROM works WHERE parent_id = w.id)))
-                    ELSE 0 END AS unwatched
+                    ELSE 0 END AS unwatched,
+                    -- How long the copy a play button starts lasts, for a
+                    -- work somebody stopped partway through, and only then.
+                    CASE WHEN p.position_ms > 0 THEN
+                        (SELECT s.duration_ms FROM media_sources s
+                          WHERE s.work_id = w.id AND s.missing_since IS NULL
+                          ORDER BY s.size_bytes DESC LIMIT 1)
+                    END AS resume_length_ms
              FROM works w
              LEFT JOIN playback_progress p ON p.work_id = w.id AND p.user_id = ?1
              LEFT JOIN favorites f ON f.work_id = w.id AND f.user_id = ?1
@@ -690,6 +703,10 @@ impl Database {
                         .try_get::<Option<i64>, _>("position_ms")?
                         .filter(|position| *position > 0)
                         .map(Millis::new),
+                    resume_length: row
+                        .try_get::<Option<i64>, _>("resume_length_ms")?
+                        .filter(|length| *length > 0)
+                        .map(Millis::new),
                     favourite: crate::convert::int_to_bool(row.try_get::<i64, _>("favourite")?),
                     episodes,
                     unwatched,
@@ -708,6 +725,7 @@ impl Database {
             card.state = Some(found.remove(&card.id).unwrap_or(CardState {
                 seen: PlaybackState::NotStarted,
                 resume_from: None,
+                resume_length: None,
                 favourite: false,
                 episodes: 0,
                 unwatched: 0,
@@ -1182,7 +1200,33 @@ mod tests {
             .expect("a named viewer gets a state");
         assert_eq!(state.seen, PlaybackState::InProgress);
         assert_eq!(state.resume_from, Some(Millis::new(920_000)));
+        assert_eq!(state.resume_length, None, "no copy measured, no length");
         assert!(state.favourite);
+
+        // Two episodes back to back in one file: twice the provider's length.
+        let root = database
+            .library_roots(films)
+            .await
+            .expect("roots read")
+            .remove(0);
+        database
+            .insert_source(film, root.id, Path::new("both.mkv"), 900, now())
+            .await
+            .expect("copy recorded");
+        sqlx::query("UPDATE media_sources SET duration_ms = 1320000")
+            .execute(database.writer())
+            .await
+            .expect("copy measured");
+        let state = grid_of(&database, films, who).await[0]
+            .state
+            .clone()
+            .expect("a named viewer gets a state");
+        assert_eq!(
+            state.resume_length,
+            Some(Millis::new(1_320_000)),
+            "the place is a share of the copy it is carried on in"
+        );
+        assert_eq!(fresh.resume_length, None, "nothing to measure a fresh card against");
     }
 
     #[tokio::test]

@@ -25,11 +25,11 @@ import type { Starter } from "../running";
  * is not a fraction. Capped, because a position past the end is a report that
  * arrived oddly and not a film watched twice over.
  */
-export function howFarIn(seconds: number, runtimeMinutes: number | null): number | undefined {
-  if (!runtimeMinutes || runtimeMinutes <= 0) {
+export function howFarIn(seconds: number, length: number | null): number | undefined {
+  if (!length || length <= 0) {
     return undefined;
   }
-  return Math.min(1, seconds / (runtimeMinutes * 60));
+  return Math.min(1, seconds / length);
 }
 
 /** The kind of library a section shows the newest of, when it is one of

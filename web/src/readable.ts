@@ -261,13 +261,13 @@ export function howLong(minutes: number, t: Wording): string {
  *  read for, and what the bar under a play button says. */
 export function whatIsLeft(
   seconds: number,
-  runtimeMinutes: number | null,
+  length: number | null,
   t: Wording,
 ): string | undefined {
-  if (!runtimeMinutes || runtimeMinutes <= 0) {
+  if (!length || length <= 0) {
     return undefined;
   }
-  const left = Math.max(Math.round(runtimeMinutes - seconds / 60), 0);
+  const left = Math.max(Math.round((length - seconds) / 60), 0);
   return left === 0 ? undefined : t("home.hero.left", { time: howLong(left, t) });
 }
 

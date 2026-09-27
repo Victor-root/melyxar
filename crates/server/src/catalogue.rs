@@ -350,6 +350,8 @@ struct CardView {
     seen: &'static str,
     /// Where they stopped, in seconds, only where they stopped partway.
     resume_from_seconds: Option<i64>,
+    /// How long the copy it is carried on in lasts, beside where it stopped.
+    resume_length_seconds: Option<i64>,
     favourite: bool,
     /// Episodes below, and how many of those are left to watch. Both nothing
     /// for a film, which holds none.
@@ -438,6 +440,11 @@ fn card_view(card: &WorkCard) -> CardView {
             .as_ref()
             .and_then(|state| state.resume_from)
             .map(|position| position.get() / 1_000),
+        resume_length_seconds: card
+            .state
+            .as_ref()
+            .and_then(|state| state.resume_length)
+            .map(|length| length.get() / 1_000),
         favourite: card.state.as_ref().is_some_and(|state| state.favourite),
         episodes: card.state.as_ref().map_or(0, |state| state.episodes),
         unwatched: card.state.as_ref().map_or(0, |state| state.unwatched),

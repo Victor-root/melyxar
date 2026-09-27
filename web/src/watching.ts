@@ -8,7 +8,7 @@
  * rules; these are what a screen shows before its answer comes back.
  */
 
-import type { Seen } from "./api";
+import type { Card, Seen } from "./api";
 
 /** Where somebody is in a work: whether they watched it, where to carry on
  *  from, in seconds, when there is anywhere, and for a series or a season,
@@ -52,4 +52,21 @@ export function whereaboutsOf(sent: Whereabouts, said: Said | undefined): Wherea
     said.over.unwatched === sent.unwatched
     ? said.said
     : sent;
+}
+
+/**
+ * How long what a work is carried on in lasts, in seconds, which is what the
+ * place it stopped is a share of: the copy's own length, and the one the
+ * provider gives only when the copy was never measured. The provider's is
+ * what a card says a work runs for, and a file holding two of its episodes
+ * back to back runs twice as long: a place three quarters of the way into
+ * that file drew as a full bar.
+ */
+export function lengthOfAPlay(
+  card: Pick<Card, "resume_length_seconds" | "runtime_minutes">,
+): number | null {
+  if (card.resume_length_seconds !== null && card.resume_length_seconds > 0) {
+    return card.resume_length_seconds;
+  }
+  return card.runtime_minutes && card.runtime_minutes > 0 ? card.runtime_minutes * 60 : null;
 }
