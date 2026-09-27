@@ -312,19 +312,23 @@ pub enum Backdrop {
     /// Light and dust in the accent, one of several paintings.
     #[default]
     Light,
+    /// The drawn shelf of things a media server holds, the door's other
+    /// background, held still.
+    Library,
     /// The plain surface of the theme.
     None,
 }
 
 impl Backdrop {
     /// Every choice, in the order a screen offers them.
-    pub const fn every() -> [Self; 2] {
-        [Self::Light, Self::None]
+    pub const fn every() -> [Self; 3] {
+        [Self::Light, Self::Library, Self::None]
     }
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Light => "light",
+            Self::Library => "library",
             Self::None => "none",
         }
     }

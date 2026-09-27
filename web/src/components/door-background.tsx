@@ -332,9 +332,14 @@ const SHELF: Piece[] = [
   { what: "bar", x: "69%", y: "82%", wide: 236, turn: -3, lift: -15, over: 16, from: -6, needs: 1100 },
 ];
 
-function DrawnLibrary() {
+/**
+ * Held still behind the pages of the interface, where panels of frosted
+ * glass stand over it: a piece moving under a blur has the blur worked out
+ * again on every frame, which is what the light behind them stopped doing.
+ */
+export function DrawnLibrary({ still = false }: { still?: boolean }) {
   return (
-    <div className="door-shelf" aria-hidden="true">
+    <div className={`door-shelf${still ? " door-shelf-still" : ""}`} aria-hidden="true">
       {SHELF.map((piece, at) => {
         const [wide, tall] = DRAWN[piece.what].box;
         return (

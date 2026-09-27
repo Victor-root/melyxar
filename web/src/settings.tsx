@@ -134,6 +134,11 @@ function storedList(key: string): string[] {
   return (safeRead(key) ?? "").split(",");
 }
 
+/** A backdrop there is, light for anything else. */
+function backdropOf(stored: string | null): Backdrop {
+  return stored === "none" || stored === "library" ? stored : "light";
+}
+
 /** One of the paintings of light, the first for anything else. */
 function lightOf(light: number): number {
   return LIGHTS.includes(light) ? light : 1;
@@ -172,7 +177,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return stored === null ? IN_THE_BAR_AT_FIRST : knownButtons(stored.split(","));
   });
   const [backdrop, setBackdropState] = useState<Backdrop>(() =>
-    safeRead(STORED_BACKDROP) === "none" ? "none" : "light",
+    backdropOf(safeRead(STORED_BACKDROP)),
   );
   const [backdropLight, setBackdropLightState] = useState(() =>
     lightOf(Number(safeRead(STORED_BACKDROP_LIGHT))),
@@ -376,7 +381,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const inTheBar = knownButtons(chosen.buttons_in_the_bar);
     safeWrite(STORED_BUTTONS_IN_THE_BAR, inTheBar.join(","));
     setButtonsInTheBarState(inTheBar);
-    const backdrop = chosen.backdrop === "none" ? "none" : "light";
+    const backdrop = backdropOf(chosen.backdrop);
     safeWrite(STORED_BACKDROP, backdrop);
     setBackdropState(backdrop);
     const light = lightOf(chosen.backdrop_light);
