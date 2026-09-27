@@ -83,7 +83,7 @@ export function SystemPanel({ card }: { card: string | null }) {
       icon={ChipIcon}
       title={t("admin.system")}
       lead={t("admin.system_lead")}
-      className="panel-system"
+      wide
       action={
         <Picker<Reach>
           label={t("admin.reach")}
