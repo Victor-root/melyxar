@@ -1359,6 +1359,72 @@
 }
 
 /* --------------------------------------------------------------------------
+ * The scheduled tasks
+ * ----------------------------------------------------------------------- */
+
+/* One task to a row: what it does on the left, read in full, and on the
+   right when it runs by itself and what it has waiting, which fall under the
+   words once both no longer fit side by side. */
+.task-lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.task-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap) var(--gap-wide);
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.task-line:first-child {
+  border-top: none;
+}
+
+.task-line-words {
+  flex: 1 1 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.task-line-why {
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.task-line-controls {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--gap-tight);
+  margin-left: auto;
+}
+
+.task-line-when,
+.task-line-now {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.task-line-when .field-time {
+  width: 7.5rem;
+  height: 34px;
+}
+
+.task-line-waiting {
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
  * The work of the server
  * ----------------------------------------------------------------------- */
 

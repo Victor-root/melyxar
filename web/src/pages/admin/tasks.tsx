@@ -4,12 +4,12 @@
  * What is running is taken from the one place that watches it, rather than
  * asked for again here: two answers to one question is one answer too many,
  * and the wrong one is always the one somebody reads. What finished and what
- * the upkeep has left are asked for again whenever the work being watched
- * comes to an end.
+ * the scheduled tasks have left are asked for again whenever the work being
+ * watched comes to an end.
  */
 
 import { api, REFRESH_MODES } from "../../api";
-import type { Job, RefreshMode, UpkeepTask } from "../../api";
+import type { Job, RefreshMode, ScheduledTask } from "../../api";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
 import { refusalKey } from "../../i18n";
 import {
@@ -25,7 +25,6 @@ import { useLibraries } from "../../libraries";
 import { asLocalTime, asUtcMinutes, outOfAHundred, whenItIs } from "../../readable";
 import type { Wording } from "../../readable";
 import { useActivityScreen } from "../../screens/activity";
-import { useLibraryWork } from "../../screens/settings";
 import { useSettings } from "../../settings";
 
 export function AdminTasks() {
@@ -33,21 +32,20 @@ export function AdminTasks() {
   const {
     running,
     recent,
-    upkeep,
-    waiting,
+    tasks,
     failed,
     refused,
     started,
     mode,
     setMode,
     startOn,
-    startTheUpkeep,
-    startOneReading,
+    startEveryTask,
+    startTask,
+    schedule,
     cancel,
     forgetFinished,
   } = useActivityScreen();
   const { all: libraries } = useLibraries();
-  const work = useLibraryWork();
 
   return (
     <>
@@ -55,15 +53,9 @@ export function AdminTasks() {
 
       {/* A button that fails in silence is the same thing as a button that
           does nothing, and sends somebody to a terminal. */}
-      {(refused || failed || started !== null) && (
+      {(refused || failed || started) && (
         <p className={`panel-notice${refused || failed ? " panel-notice-trouble" : ""}`}>
-          {refused
-            ? t(refusalKey(refused))
-            : failed
-              ? t("error.unreachable")
-              : started! > 0
-                ? t("upkeep.started", { count: started! })
-                : t("upkeep.nothing_started")}
+          {refused ? t(refusalKey(refused)) : failed ? t("error.unreachable") : t("tasks.started")}
         </p>
       )}
 
@@ -117,58 +109,29 @@ export function AdminTasks() {
 
       <Panel
         icon={ClockIcon}
-        title={t("upkeep.title")}
-        lead={t("upkeep.why")}
+        title={t("tasks.title")}
+        lead={t("tasks.why")}
         action={
-          waiting.length > 0 && (
-            <button className="button button-small button-accent" onClick={startTheUpkeep}>
-              <PlayIcon size={14} />
-              {t("upkeep.run_all")}
-            </button>
-          )
+          <button className="button button-small button-accent" onClick={startEveryTask}>
+            <PlayIcon size={14} />
+            {t("tasks.run_all")}
+          </button>
         }
       >
-        {work.kept && (
-          <div className="settings-lines">
-            <Setting label={t("settings.upkeep_nightly")} why={t("settings.upkeep_why")}>
-              <Toggle
-                label={t("settings.upkeep_nightly")}
-                checked={work.kept.upkeep_nightly}
-                onChange={(upkeep_nightly) => work.setTo({ upkeep_nightly })}
-              />
-            </Setting>
-            {/* Chosen and shown in the time of this browser. The server keeps
-                it in universal time, the only clock it can read with
-                certainty, so the hour shown here shifts by one when the clocks
-                change until somebody sets it again. */}
-            <Setting label={t("admin.upkeep_hour")} why={t("settings.upkeep_at_why")}>
-              <input
-                type="time"
-                className="field-line field-time"
-                aria-label={t("admin.upkeep_hour")}
-                value={asLocalTime(work.kept.upkeep_at_utc_minutes)}
-                disabled={!work.kept.upkeep_nightly}
-                onChange={(event) =>
-                  work.setTo({ upkeep_at_utc_minutes: asUtcMinutes(event.target.value) })
-                }
-              />
-            </Setting>
-          </div>
-        )}
-
-        {upkeep && (
+        {tasks && (
           <>
             <p className="panel-say">
-              {upkeep.next_run
-                ? t("upkeep.next_run", { when: whenItIs(upkeep.next_run) })
-                : t("upkeep.nightly_off")}
+              {tasks.next_run
+                ? t("tasks.next_run", { when: whenItIs(tasks.next_run) })
+                : t("tasks.none_scheduled")}
             </p>
-            <div className="lines">
-              {upkeep.tasks.map((task) => (
-                <UpkeepLine
-                  key={`${task.library}-${task.task}`}
+            <div className="task-lines">
+              {tasks.tasks.map((task) => (
+                <TaskLine
+                  key={task.task}
                   task={task}
-                  onStart={() => startOneReading(task)}
+                  onStart={() => startTask(task.task)}
+                  onSchedule={(runs, at) => schedule(task.task, runs, at)}
                 />
               ))}
             </div>
@@ -253,61 +216,100 @@ function JobCard({ job, onCancel }: { job: Job; onCancel?: () => void }) {
   );
 }
 
-/** One reading the upkeep does, on one library. */
-function UpkeepLine({ task, onStart }: { task: UpkeepTask; onStart: () => void }) {
+/** One scheduled task: what it does, when it runs by itself, what it has
+ *  waiting, and a button to run it now. */
+function TaskLine({
+  task,
+  onStart,
+  onSchedule,
+}: {
+  task: ScheduledTask;
+  onStart: () => void;
+  onSchedule: (runs_on_schedule: boolean, at_utc_minutes: number) => void;
+}) {
   const { t } = useSettings();
+  const name = t(`task.${task.task}`);
   return (
-    <div className="line">
-      <span className="line-words">
-        <span className="line-name">
-          {t(`upkeep.${task.task}`)} · {task.library_name}
-        </span>
-        {/* When it last ran, beside how much is left: a reading that never
-            ran and one that ran last night and found nothing look alike from
-            a count alone. */}
-        <span className="line-note">
-          {lastRun(task, t)}
-          {task.during_the_scan && ` · ${t("upkeep.during_the_scan")}`}
-        </span>
-      </span>
-      <span className="line-end">
-        {/* Counted in whatever the reading is really done in: listening for
-            the titles a season shares is done season by season. */}
-        <span>
-          {task.waiting > 0
-            ? t(task.counts_seasons ? "upkeep.waiting_seasons" : "upkeep.waiting", {
-                count: task.waiting,
-              })
-            : t("upkeep.nothing_waiting")}
-        </span>
-        {task.under_way ? (
-          <span className="state-pill state-ok">
-            <span className="state-dot" aria-hidden="true" />
-            {t("upkeep.under_way")}
-          </span>
-        ) : (
-          task.waiting > 0 && (
+    <div className="task-line">
+      <div className="task-line-words">
+        <span className="line-name">{name}</span>
+        {/* What it does, in words anybody can follow: six lines nobody
+            understands are six switches nobody dares touch. */}
+        <span className="task-line-why">{t(`task.${task.task}_why`)}</span>
+        {/* When it last ran, beside how much is left: a task that never ran
+            and one that ran last night and found nothing look alike from a
+            count alone. */}
+        <span className="line-note">{lastRun(task, t)}</span>
+      </div>
+
+      <div className="task-line-controls">
+        {/* Chosen and shown in the time of this browser. The server keeps it
+            in universal time, the only clock it can read with certainty, so
+            the hour shown here shifts by one when the clocks change until
+            somebody sets it again. */}
+        <div className="task-line-when">
+          <Toggle
+            label={`${name} · ${t("tasks.daily")}`}
+            checked={task.runs_on_schedule}
+            onChange={(runs) => onSchedule(runs, task.at_utc_minutes)}
+          />
+          <span>{t("tasks.daily")}</span>
+          <input
+            type="time"
+            className="field-line field-time"
+            aria-label={`${name} · ${t("tasks.daily")}`}
+            value={asLocalTime(task.at_utc_minutes)}
+            disabled={!task.runs_on_schedule}
+            onChange={(event) =>
+              event.target.value && onSchedule(true, asUtcMinutes(event.target.value))
+            }
+          />
+        </div>
+        <div className="task-line-now">
+          {/* Counted in whatever the task really works in: listening for the
+              titles a season shares is done season by season. Nothing for
+              the scan, which cannot know what a disk holds until it looks. */}
+          {task.waiting !== null && (
+            <span className="task-line-waiting">
+              {task.waiting > 0
+                ? t(task.counts_seasons ? "tasks.waiting_seasons" : "tasks.waiting", {
+                    count: task.waiting,
+                  })
+                : t("tasks.nothing_waiting")}
+            </span>
+          )}
+          {task.under_way ? (
+            <span className="state-pill state-ok">
+              <span className="state-dot" aria-hidden="true" />
+              {t("tasks.under_way")}
+            </span>
+          ) : (
             <button className="button button-small" onClick={onStart}>
-              {t("upkeep.run")}
+              <PlayIcon size={13} />
+              {t("tasks.run")}
             </button>
-          )
-        )}
-      </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 /*
- * When a reading last ran, in one short phrase, with the time it took: a
- * reading that took four seconds and one that took four hours are two
- * different answers to "did the upkeep run last night".
+ * When a task last ran, in one short phrase, with the time it took and how
+ * it ended when it did not go well: a task that took four seconds and one
+ * that took four hours are two different answers to "did it run last night".
  */
-function lastRun(task: UpkeepTask, t: Wording): string {
+function lastRun(task: ScheduledTask, t: Wording): string {
   if (!task.last_run) {
-    return t("upkeep.never_run");
+    return t("tasks.never_run");
   }
   const when = whenItIs(task.last_run);
-  return task.last_run_seconds === null
-    ? t("upkeep.last_run_unknown", { when })
-    : t("upkeep.last_run", { when, seconds: task.last_run_seconds });
+  const said =
+    task.last_run_seconds === null
+      ? t("tasks.last_run_unknown", { when })
+      : t("tasks.last_run", { when, seconds: task.last_run_seconds });
+  return task.last_run_state && task.last_run_state !== "succeeded"
+    ? `${said} · ${t(`jobs.state.${task.last_run_state}`)}`
+    : said;
 }
