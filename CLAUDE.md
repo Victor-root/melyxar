@@ -49,6 +49,14 @@ Toute nouvelle décision d'architecture est ajoutée au README des décisions av
   - Les données et les images d'une liste sont chargées d'avance quand l'écran s'ouvre, jamais au milieu d'un défilement, avec un plafond pour les très grandes collections.
   - Les longues grilles gardent `content-visibility` ; pas de calque plein écran posé par-dessus la page pour un petit élément.
   - Un changement de fluidité se mesure avant d'être gardé, avec l'enregistreur intégré (`melyxar.measure()` puis `melyxar.report()` dans la console) ou le banc d'essai. Ce qui n'améliore pas la mesure est retiré entièrement.
+- **Organisation du code :**
+  - Chaque fichier a une responsabilité qu'on peut dire en une phrase. Du code nouveau va dans le fichier qui porte cette responsabilité, pas dans celui qu'on était en train de modifier.
+  - Découper quand des fonctions sans rapport se croisent dans un même fichier ou partagent de moins en moins d'aides, jamais pour le seul nombre de lignes. Beaucoup de fichiers Rust sont longs à cause de leurs tests, et c'est voulu.
+  - Un calcul pur (lecture d'un nom, d'un chemin, formule) vit dans la brique basse qui le concerne, avec ses tests, pas dans l'orchestrateur ni dans un composant d'interface.
+  - Avant d'écrire une aide, chercher si elle existe déjà. Un même morceau de code (requête, calcul, mise en forme) écrit deux fois est fusionné.
+  - Les tests suivent le code qu'ils testent. Les briques de préparation communes à plusieurs fichiers de tests sont écrites une fois.
+  - Styles : chaque règle va dans le fichier de sa partie sous `web/src/styles/`. Tout est chargé par `styles/index.css`, jamais depuis un composant, car l'ordre y décide du résultat.
+  - Signaler, sans l'appliquer d'office, toute demande qui brouillerait une frontière ou alourdirait un module déjà chargé, avec l'endroit où le code aurait sa place.
 - Pas de code mort, pas de contournement temporaire, pas de commentaire inutile. Nettoyer entièrement toute tentative abandonnée.
 - Vérifier les usages réels avant de supprimer, déplacer ou remplacer du code.
 - Avant chaque commit : **toujours** compiler et relire le diff complet. Les tests, eux, se dosent selon ce qui bouge, parce qu'une suite complète prend plusieurs minutes et qu'on ne la paie que quand elle peut trouver quelque chose :
