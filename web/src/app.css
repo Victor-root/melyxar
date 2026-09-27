@@ -771,7 +771,7 @@
 .header-menu-list,
 .quick-search,
 .player-menu,
-.facts {
+.player-window {
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   --header-glow: color-mix(in srgb, var(--accent) 14%, transparent);
   background:
