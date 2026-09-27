@@ -532,7 +532,7 @@ async fn place_what_was_numbered_across(
     let no_longer_used = database
         .place_episodes(library_id, series_id, &moves)
         .await?;
-    crate::scan::forget_pictures(state, no_longer_used).await;
+    crate::images::forget_the_pictures(state, &no_longer_used).await;
     tracing::info!(
         moved = moves.len(),
         "episodes numbered across the series were put in the seasons the provider counts"

@@ -379,14 +379,11 @@ pub async fn choose_picture(
 /// arguing with them.
 pub async fn forget_picture(state: &AppState, work_id: WorkId, kind: PictureKind) -> Result<()> {
     let kind = Kind::of(kind);
-    let root = state.config().directories.images();
     let no_longer_used = state
         .database()
         .replace_images(kind.owner_kind(), &work_id.to_db_string(), kind.as_str(), &[])
         .await?;
-    for path in no_longer_used {
-        tokio::fs::remove_file(root.join(path)).await.ok();
-    }
+    forget_the_pictures(state, &no_longer_used).await;
     state.database().lock_field(work_id, kind.as_str()).await?;
     Ok(())
 }
@@ -615,9 +612,7 @@ async fn write_every_size(
     let no_longer_used = database
         .replace_images(kind.owner_kind(), owner_id, kind.as_str(), &prepared)
         .await?;
-    for path in no_longer_used {
-        tokio::fs::remove_file(root.join(path)).await.ok();
-    }
+    forget_the_pictures(state, &no_longer_used).await;
 
     Ok(Some(Prepared { colour }))
 }
@@ -683,6 +678,57 @@ fn scaled_height(width: u32, source_width: i32, source_height: i32) -> i32 {
         return 0;
     }
     ((width as i64 * source_height as i64) / source_width as i64) as i32
+}
+
+
+/// Throws away pictures nothing points at any more: those of works that have
+/// gone, and those a work has just been given better ones than.
+///
+/// The posters, the backdrops, the title images and the faces of a cast, in
+/// every size they were prepared in. Left behind, they would grow without
+/// bound, and nothing would ever come looking for them again.
+///
+/// Each file is named rather than its folder swept, because the row that named
+/// it is the only thing that ever knew it was ours. The folder is then removed
+/// if the last file in it has gone, which is what stops the cache filling with
+/// empty folders.
+///
+/// Never a failure of what asked for it: a picture that stays behind costs a
+/// little room and nothing else.
+pub(crate) async fn forget_the_pictures(state: &AppState, paths: &[String]) -> usize {
+    let root = state.config().directories.images();
+    let mut gone = 0;
+    let mut folders: Vec<std::path::PathBuf> = Vec::new();
+
+    for path in paths {
+        let file = root.join(path);
+        // A path from the database, but never trusted as one: a row that
+        // pointed outside the cache must not let a removal reach outside it.
+        if !file.starts_with(&root) {
+            tracing::warn!("a stored picture sat outside the cache and was left alone");
+            continue;
+        }
+        match tokio::fs::remove_file(&file).await {
+            Ok(()) => gone += 1,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                tracing::debug!(%error, "a picture was left behind in the cache");
+                continue;
+            }
+        }
+        if let Some(folder) = file.parent().map(Path::to_path_buf) {
+            if !folders.contains(&folder) {
+                folders.push(folder);
+            }
+        }
+    }
+
+    // Only ever the ones that are now empty: remove_dir refuses the rest, which
+    // is exactly the check wanted and one nothing can race.
+    for folder in folders {
+        let _ = tokio::fs::remove_dir(&folder).await;
+    }
+    gone
 }
 
 #[cfg(test)]

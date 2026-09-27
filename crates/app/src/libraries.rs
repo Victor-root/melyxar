@@ -289,7 +289,7 @@ pub async fn remove(state: &AppState, library_id: LibraryId) -> Result<Removed> 
     let sources = state.database().source_ids_of_library(library_id).await?;
     let went = state.database().delete_library(library_id).await?;
     let sheets = forget_the_thumbnails_of(state, &sources).await;
-    let pictures = forget_the_pictures(state, &went.swept.picture_paths).await;
+    let pictures = crate::images::forget_the_pictures(state, &went.swept.picture_paths).await;
 
     tell_what_went(
         &library.name,
@@ -320,7 +320,7 @@ pub async fn remove_root(
     let sources = state.database().source_ids_of_root(root_id).await?;
     let went = state.database().delete_root(root_id).await?;
     let sheets = forget_the_thumbnails_of(state, &sources).await;
-    let pictures = forget_the_pictures(state, &went.swept.picture_paths).await;
+    let pictures = crate::images::forget_the_pictures(state, &went.swept.picture_paths).await;
     if went.works > 0 {
         state.database().bump_library_version(library_id).await?;
     }
@@ -475,56 +475,6 @@ pub(crate) async fn forget_the_thumbnails_of(state: &AppState, sources: &[MediaS
                 tracing::debug!(%error, "sheets of thumbnails left behind in the cache")
             }
         }
-    }
-    gone
-}
-
-/// Throws away the pictures of everything that has just gone.
-///
-/// The posters, the backdrops, the title images and the faces of a cast, in
-/// every size they were prepared in. This is the heaviest thing a removal
-/// leaves behind and the one that would grow without bound: a film's pictures
-/// are of no use to anybody once the film is not here, and nothing would ever
-/// come looking for them again.
-///
-/// Each file is named rather than its folder swept, because the row that named
-/// it is the only thing that ever knew it was ours. The folder is then removed
-/// if the last file in it has gone, which is what stops the cache filling with
-/// empty folders.
-///
-/// Never a failure of the removal, for the same reason as the sheets above.
-pub(crate) async fn forget_the_pictures(state: &AppState, paths: &[String]) -> usize {
-    let root = state.config().directories.images();
-    let mut gone = 0;
-    let mut folders: Vec<std::path::PathBuf> = Vec::new();
-
-    for path in paths {
-        let file = root.join(path);
-        // A path from the database, but never trusted as one: a row that
-        // pointed outside the cache must not let a removal reach outside it.
-        if !file.starts_with(&root) {
-            tracing::warn!("a stored picture sat outside the cache and was left alone");
-            continue;
-        }
-        match tokio::fs::remove_file(&file).await {
-            Ok(()) => gone += 1,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                tracing::debug!(%error, "a picture was left behind in the cache");
-                continue;
-            }
-        }
-        if let Some(folder) = file.parent().map(Path::to_path_buf) {
-            if !folders.contains(&folder) {
-                folders.push(folder);
-            }
-        }
-    }
-
-    // Only ever the ones that are now empty: remove_dir refuses the rest, which
-    // is exactly the check wanted and one nothing can race.
-    for folder in folders {
-        let _ = tokio::fs::remove_dir(&folder).await;
     }
     gone
 }
