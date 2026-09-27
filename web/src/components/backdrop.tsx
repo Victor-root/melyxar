@@ -19,7 +19,7 @@ export function PageBackdrop() {
   if (backdrop === "library") {
     return (
       <div className="home-backdrop" aria-hidden="true">
-        <DrawnLibrary still />
+        <DrawnLibrary />
       </div>
     );
   }

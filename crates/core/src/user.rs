@@ -313,7 +313,7 @@ pub enum Backdrop {
     #[default]
     Light,
     /// The drawn shelf of things a media server holds, the door's other
-    /// background, held still.
+    /// background.
     Library,
     /// The plain surface of the theme.
     None,
