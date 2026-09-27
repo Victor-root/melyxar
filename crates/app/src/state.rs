@@ -84,7 +84,6 @@ impl AppState {
             Arc::new(Sessions::new(
                 config.directories.transcodes.clone(),
                 tools,
-                config.limits.max_transcoding_sessions,
             ))
         });
 
