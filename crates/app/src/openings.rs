@@ -40,7 +40,7 @@ use melyxar_core::media::{Track, TrackKind};
 use melyxar_core::media_log::file_name_of as name_of_file;
 use melyxar_core::segments::{MediaSegment, SegmentKind, SegmentOrigin};
 use melyxar_core::time::Millis;
-use melyxar_database::catalogue::{EpisodeToListenTo, SeasonToListenTo};
+use melyxar_database::openings::{EpisodeToListenTo, SeasonToListenTo};
 use melyxar_ffmpeg::AskedToStop;
 use melyxar_jobs::JobHandle;
 use melyxar_sound::{what_they_have_in_common, Listened, Stretch};
