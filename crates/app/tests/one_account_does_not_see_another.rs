@@ -286,7 +286,7 @@ async fn nothing_about_a_work_out_of_reach_can_be_written_either() {
 
     // Liking it, and where somebody got to in it. Both are writes against a
     // work, and a right that only holds for reading is not a right.
-    assert!(melyxar_app::playback::set_favourite(
+    assert!(melyxar_app::marks::set_favourite(
         &here.state,
         &here.granted_the_films,
         here.a_series,
@@ -294,7 +294,7 @@ async fn nothing_about_a_work_out_of_reach_can_be_written_either() {
     )
     .await
     .is_err());
-    assert!(melyxar_app::playback::record_position(
+    assert!(melyxar_app::marks::record_position(
         &here.state,
         &here.granted_the_films,
         here.a_series,
@@ -306,7 +306,7 @@ async fn nothing_about_a_work_out_of_reach_can_be_written_either() {
 
     // The same two against the library they were granted go through.
     assert!(
-        melyxar_app::playback::set_favourite(
+        melyxar_app::marks::set_favourite(
             &here.state,
             &here.granted_the_films,
             here.a_film,
