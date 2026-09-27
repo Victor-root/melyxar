@@ -18,8 +18,9 @@
 import { useState } from "react";
 import { api } from "../api";
 import type { Candidate, SearchCriteria } from "../api";
-import { refusalOf } from "../asking";
+import { refusalOf, useAsked } from "../asking";
 import { refusalKey } from "../i18n";
+import { FilmIcon } from "../icons";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
 
@@ -31,10 +32,6 @@ export function IdentifyDialog({
   /** What the work is called now, which is the first thing worth searching
       and what the field opens on. */
   title,
-  /** Where the file is, when the screen that opened this knows: it is what
-      somebody reads to work out what the film actually is, and it is often
-      the only clue there is. */
-  path,
   onClose,
   /** Said once the work has been named, so the screen underneath reads it
       again rather than keeping what it had. */
@@ -42,7 +39,6 @@ export function IdentifyDialog({
 }: {
   workId: string;
   title: string;
-  path?: string;
   onClose: () => void;
   onIdentified: () => void;
 }) {
@@ -54,6 +50,13 @@ export function IdentifyDialog({
   const [replacePictures, setReplacePictures] = useState(true);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
+  /* The files the work is made of, whole: what somebody reads to know which
+     one this is, and often the only clue to what the film actually is. Only
+     an administrator identifies, and only an administrator is sent paths. */
+  const work = useAsked((signal) => api.work(workId, signal));
+  const files = (work.answer?.versions ?? [])
+    .map((version) => version.path)
+    .filter((path): path is string => path !== null);
 
   const field = (which: keyof SearchCriteria) => ({
     value: asked[which] ?? "",
@@ -114,6 +117,30 @@ export function IdentifyDialog({
         ) : undefined
       }
     >
+      {/* Above every step, so the work being named never goes out of sight
+          while the results are being read. */}
+      {files.length > 0 && (
+        <div className="identify-files">
+          <span className="identify-files-mark" aria-hidden="true">
+            <FilmIcon size={18} />
+          </span>
+          <div className="identify-files-words">
+            <span className="identify-label">
+              {t(files.length > 1 ? "identify.paths" : "identify.path")}
+            </span>
+            {files.map((path) => {
+              const cut = path.lastIndexOf("/");
+              return (
+                <span key={path} className="identify-file">
+                  <span className="identify-file-name">{path.slice(cut + 1)}</span>
+                  {cut > 0 && <span className="identify-file-folder">{path.slice(0, cut)}</span>}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {refused && <p className="notice">{t(refusalKey(refused))}</p>}
 
       {step === "asking" && (
@@ -125,13 +152,6 @@ export function IdentifyDialog({
           }}
         >
           <p className="identify-said">{t("identify.how")}</p>
-
-          {path && (
-            <p className="identify-path">
-              <span className="identify-label">{t("identify.path")}</span>
-              <span className="identify-file">{path}</span>
-            </p>
-          )}
 
           <label className="identify-field">
             <span className="identify-label">{t("identify.name")}</span>

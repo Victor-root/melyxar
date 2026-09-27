@@ -3612,19 +3612,57 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--text-soft);
 }
 
-/* Where the file is. Shown because it is often the only clue to what a film
-   actually is, and it is long, so it wraps rather than being cut. */
-.identify-path {
+/* Which work this is, by its files, at the head of every step. The name
+   first and read in full, the folder under it quieter; both long, so they
+   wrap rather than being cut. */
+.identify-files {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: var(--gap);
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.identify-files-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+}
+
+.identify-files-words {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin: 0;
+  gap: 6px;
+  min-width: 0;
 }
 
 .identify-file {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.identify-file-name {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.identify-file-folder {
   color: var(--text-faint);
-  font-size: 13px;
-  word-break: break-all;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
 }
 
 .identify-field input {
