@@ -534,7 +534,11 @@ impl Database {
             "INSERT INTO work_translations (work_id, language, tagline, overview)
              VALUES (?, ?, ?, ?)
              ON CONFLICT (work_id, language) DO UPDATE SET
-                tagline = coalesce(work_translations.tagline, excluded.tagline),
+                tagline = CASE WHEN EXISTS (
+                              SELECT 1 FROM work_locked_fields
+                               WHERE work_id = excluded.work_id AND field = 'tagline')
+                          THEN work_translations.tagline
+                          ELSE coalesce(work_translations.tagline, excluded.tagline) END,
                 overview = excluded.overview",
         )
         .bind(work_id.to_db_string())
@@ -750,14 +754,14 @@ impl Database {
                 sort_title = CASE WHEN ?1 THEN sort_title ELSE ?3 END,
                 release_year = CASE WHEN ?4 THEN release_year ELSE ?5 END,
                 runtime_ms = CASE WHEN ?6 THEN runtime_ms ELSE ?7 END,
-                community_rating = ?8,
-                age_rating_label = ?9,
-                identification = ?10,
+                community_rating = CASE WHEN ?8 THEN community_rating ELSE ?9 END,
+                age_rating_label = CASE WHEN ?10 THEN age_rating_label ELSE ?11 END,
+                identification = ?12,
                 -- Named at last, so whatever the last failure was stops being
                 -- shown next to a film that now has a title.
                 identification_note = NULL,
-                updated_at = ?11
-             WHERE id = ?12",
+                updated_at = ?13
+             WHERE id = ?14",
         )
         .bind(keeps("title"))
         .bind(&found.title)
@@ -766,7 +770,9 @@ impl Database {
         .bind(found.release_year)
         .bind(keeps("runtime"))
         .bind(found.runtime.map(Millis::get))
+        .bind(keeps("community_rating"))
         .bind(found.community_rating)
+        .bind(keeps("age_rating"))
         .bind(found.age_rating_label.as_deref())
         .bind(state.as_str())
         .bind(&moment)
@@ -785,26 +791,35 @@ impl Database {
             set_external_id(&mut transaction, work_id, "imdb", imdb_id).await?;
         }
 
-        if !keeps("overview") {
-            sqlx::query(
-                "INSERT INTO work_translations (work_id, language, title, tagline, overview)
-                 VALUES (?, ?, ?, ?, ?)
-                 ON CONFLICT (work_id, language) DO UPDATE SET
-                    title = excluded.title,
-                    tagline = excluded.tagline,
-                    overview = excluded.overview",
-            )
-            .bind(work_id.to_db_string())
-            .bind(&found.language)
-            .bind(&found.title)
-            .bind(found.tagline.as_deref())
-            .bind(found.overview.as_deref())
-            .execute(&mut *transaction)
-            .await?;
-        }
+        // Each text of the language kept apart: a synopsis somebody wrote
+        // keeps it, while the title beside it still follows the provider.
+        sqlx::query(
+            "INSERT INTO work_translations (work_id, language, title, tagline, overview)
+             VALUES (?1, ?2, CASE WHEN ?3 THEN NULL ELSE ?4 END,
+                     CASE WHEN ?5 THEN NULL ELSE ?6 END, CASE WHEN ?7 THEN NULL ELSE ?8 END)
+             ON CONFLICT (work_id, language) DO UPDATE SET
+                title = CASE WHEN ?3 THEN work_translations.title ELSE excluded.title END,
+                tagline = CASE WHEN ?5 THEN work_translations.tagline ELSE excluded.tagline END,
+                overview = CASE WHEN ?7 THEN work_translations.overview
+                                ELSE excluded.overview END",
+        )
+        .bind(work_id.to_db_string())
+        .bind(&found.language)
+        .bind(keeps("title"))
+        .bind(&found.title)
+        .bind(keeps("tagline"))
+        .bind(found.tagline.as_deref())
+        .bind(keeps("overview"))
+        .bind(found.overview.as_deref())
+        .execute(&mut *transaction)
+        .await?;
 
-        replace_links(&mut transaction, work_id, &GENRES, &found.genres).await?;
-        replace_links(&mut transaction, work_id, &STUDIOS, &found.studios).await?;
+        if !keeps("genres") {
+            replace_links(&mut transaction, work_id, &GENRES, &found.genres).await?;
+        }
+        if !keeps("studios") {
+            replace_links(&mut transaction, work_id, &STUDIOS, &found.studios).await?;
+        }
 
         let people =
             replace_credits(&mut transaction, work_id, &found.provider, &found.credits).await?;
@@ -816,6 +831,7 @@ impl Database {
 
         for field in [
             "title",
+            "tagline",
             "overview",
             "release_year",
             "runtime",
@@ -1007,7 +1023,7 @@ async fn set_external_id(
 ///
 /// Written out rather than built, so no statement here is ever assembled from
 /// anything that came from outside.
-struct LinkStatements {
+pub(crate) struct LinkStatements {
     select: &'static str,
     insert: &'static str,
     clear: &'static str,
@@ -1015,7 +1031,7 @@ struct LinkStatements {
     list: &'static str,
 }
 
-const GENRES: LinkStatements = LinkStatements {
+pub(crate) const GENRES: LinkStatements = LinkStatements {
     select: "SELECT id FROM genres WHERE name = ? COLLATE NOCASE",
     insert: "INSERT INTO genres (id, name) VALUES (?, ?)",
     clear: "DELETE FROM work_genres WHERE work_id = ?",
@@ -1025,7 +1041,7 @@ const GENRES: LinkStatements = LinkStatements {
            WHERE work_genres.work_id = ? ORDER BY genres.name",
 };
 
-const STUDIOS: LinkStatements = LinkStatements {
+pub(crate) const STUDIOS: LinkStatements = LinkStatements {
     select: "SELECT id FROM studios WHERE name = ? COLLATE NOCASE",
     insert: "INSERT INTO studios (id, name) VALUES (?, ?)",
     clear: "DELETE FROM work_studios WHERE work_id = ?",
@@ -1039,7 +1055,7 @@ const STUDIOS: LinkStatements = LinkStatements {
 ///
 /// The names themselves are shared, so a genre is created once and reused; the
 /// links are rebuilt, which is how a film that lost a genre loses it here too.
-async fn replace_links(
+pub(crate) async fn replace_links(
     transaction: &mut Transaction<'_, Sqlite>,
     work_id: WorkId,
     statements: &LinkStatements,

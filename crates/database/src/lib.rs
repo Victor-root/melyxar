@@ -19,6 +19,7 @@ pub mod browse;
 pub mod calibration;
 pub mod catalogue;
 pub mod deletion;
+pub mod hand_edits;
 pub mod home;
 pub mod images;
 pub mod jobs;

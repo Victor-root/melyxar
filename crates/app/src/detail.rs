@@ -313,13 +313,7 @@ pub async fn work_detail(
     }
     let viewer = who.id;
 
-    let language = database
-        .list_libraries()
-        .await?
-        .into_iter()
-        .find(|library| library.id == work.library_id)
-        .map(|library| library.metadata_language)
-        .unwrap_or_else(|| "fr".to_string());
+    let language = crate::hand_edits::language_of(state, work.library_id).await?;
 
     // The text of the language the library speaks, falling back to English,
     // which is what a provider answers with when it has nothing else.
