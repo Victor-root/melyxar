@@ -84,7 +84,7 @@ export interface NameAtTheDoor {
  *  Read as a word rather than matched on, so that a server newer than this
  *  interface naming a third one is drawn with the usual rather than with
  *  nothing at all. */
-export type LoginBackgroundStyle = "abstract" | "library";
+export type LoginBackgroundStyle = "abstract" | "library" | "picture";
 
 /** What this server calls itself and wears, before anybody has signed in.
  *
@@ -98,10 +98,10 @@ export type ServerIdentity = Pick<Branding, "server_name" | "logo" | "logo_icon"
  *  server would be given back. */
 export interface ServerSettings extends ServerIdentity {
   default_name: string;
-  /** Which drawn background the sign in screen wears when no picture is
-   *  there. */
+  /** Which background the sign in screen wears. */
   door_background: LoginBackgroundStyle;
-  /** Where the picture behind the sign in screen is, when there is one. */
+  /** Where the picture sent for it is, when there is one, kept even while
+   *  another background is chosen. */
   door_picture: string | null;
   /** The line under the server's name, or nothing for Melyxar's own. */
   door_slogan: string | null;
@@ -116,7 +116,8 @@ export interface Branding {
   logo: string | null;
   /** The same logo as a square icon, for the tab of the browser. */
   logo_icon: string | null;
-  /** A picture behind the sign in screen, which wins over the drawn one. */
+  /** The picture behind the sign in screen, while it is the chosen
+   *  background. */
   login_background_path: string | null;
   login_background_style: LoginBackgroundStyle;
   /** The line under the server's name as the administrator wrote it, or
