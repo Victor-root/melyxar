@@ -16,7 +16,7 @@ import { useLayoutEffect } from "react";
 import type { RefObject } from "react";
 
 /** The height of one fine row, in pixels, as the stylesheet sets it. */
-export const ROW_STEP = 4;
+export const ROW_STEP = 1;
 
 /** How many fine rows a card of this height, margins included, spans, the
  *  gap under it included so the next card keeps its distance. */
@@ -151,7 +151,10 @@ export function useMasonry(page: RefObject<HTMLElement | null>): void {
           (entry.borderBoxSize[0]?.blockSize ?? card.offsetHeight) +
           (parseFloat(around.marginTop) || 0) +
           (parseFloat(around.marginBottom) || 0);
-        rows.set(card, rowsFor(height, gap));
+        // A card may ask for no gap under it, as the title of a page does:
+        // the side list and the first card start level with each other.
+        const after = around.getPropertyValue("--board-gap-after").trim();
+        rows.set(card, rowsFor(height, after === "" ? gap : parseFloat(after) || 0));
       }
       // Laid out again whole: one card growing moves every card after it,
       // and the page changing width changes how many columns there are.
