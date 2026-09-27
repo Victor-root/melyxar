@@ -135,8 +135,29 @@ pub fn next_occurrence_of_utc_minutes(minutes: i64) -> Timestamp {
     next_occurrence_of_utc_minutes_after(now(), minutes)
 }
 
+/// Whether this is a day of the calendar written year, month, day, the one
+/// way a day is written anywhere in this server.
+pub fn is_a_day(value: &str) -> bool {
+    time::Date::parse(value, time::macros::format_description!("[year]-[month]-[day]")).is_ok()
+}
+
+/// The year of a day written year, month, day.
+pub fn year_of_day(value: &str) -> Option<i32> {
+    is_a_day(value).then(|| value[..4].parse().ok()).flatten()
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_day_is_a_real_one_written_year_month_day() {
+        assert!(is_a_day("2019-03-12"));
+        assert!(!is_a_day("2019-02-30"));
+        assert!(!is_a_day("12/03/2019"));
+        assert!(!is_a_day(""));
+        assert_eq!(year_of_day("2019-03-12"), Some(2019));
+        assert_eq!(year_of_day("2019"), None);
+    }
+
     use super::*;
 
     #[test]

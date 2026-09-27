@@ -1292,6 +1292,8 @@ mod tests {
             tagline: None,
             overview: None,
             release_year: Some(2019),
+            release_date: None,
+            end_date: None,
             runtime: None,
             community_rating: None,
             age_rating_label: None,

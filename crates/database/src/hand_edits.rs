@@ -5,25 +5,38 @@
 //! written in the language of the library, which is the one its pages read
 //! first.
 
-use melyxar_core::id::WorkId;
+use melyxar_core::id::{CreditId, PersonId, WorkId};
 use melyxar_core::time::now;
-use sqlx::Row;
+use sqlx::{Row, Sqlite, Transaction};
 
 use crate::convert::timestamp_to_text;
 use crate::metadata::{replace_links, GENRES, STUDIOS};
 use crate::{Database, Result};
 
 /// The fields a person may write, by the name their lock goes by.
-pub const EDITABLE_FIELDS: [&str; 8] = [
+pub const EDITABLE_FIELDS: [&str; 11] = [
     "title",
     "tagline",
     "overview",
     "release_year",
+    "release_date",
+    "end_date",
     "community_rating",
     "age_rating",
     "genres",
     "studios",
+    "credits",
 ];
+
+/// One person credited on a work, as a person reads and writes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WrittenCredit {
+    pub name: String,
+    /// actor, director, writer, producer or composer.
+    pub role: String,
+    /// Who they play, for an actor.
+    pub character: Option<String>,
+}
 
 /// What describes a work, as a person reads and writes it.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -32,10 +45,16 @@ pub struct WrittenDetails {
     pub tagline: Option<String>,
     pub overview: Option<String>,
     pub release_year: Option<i32>,
+    /// The day it came out, and for a series the day it ended, each written
+    /// year, month, day.
+    pub release_date: Option<String>,
+    pub end_date: Option<String>,
     pub community_rating: Option<f64>,
     pub age_rating_label: Option<String>,
     pub genres: Vec<String>,
     pub studios: Vec<String>,
+    /// Everybody credited, in the order the page shows them.
+    pub credits: Vec<WrittenCredit>,
 }
 
 impl Database {
@@ -47,7 +66,8 @@ impl Database {
         language: &str,
     ) -> Result<Option<WrittenDetails>> {
         let Some(row) = sqlx::query(
-            "SELECT w.title, w.release_year, w.community_rating, w.age_rating_label,
+            "SELECT w.title, w.release_year, w.release_date, w.end_date,
+                    w.community_rating, w.age_rating_label,
                     coalesce(t.tagline, e.tagline) AS tagline,
                     coalesce(t.overview, e.overview) AS overview
              FROM works w
@@ -68,10 +88,22 @@ impl Database {
             tagline: row.try_get("tagline")?,
             overview: row.try_get("overview")?,
             release_year: row.try_get("release_year")?,
+            release_date: row.try_get("release_date")?,
+            end_date: row.try_get("end_date")?,
             community_rating: row.try_get("community_rating")?,
             age_rating_label: row.try_get("age_rating_label")?,
             genres: self.work_genres(work_id).await?,
             studios: self.work_studios(work_id).await?,
+            credits: self
+                .work_credits(work_id)
+                .await?
+                .into_iter()
+                .map(|credit| WrittenCredit {
+                    name: credit.name,
+                    role: credit.role,
+                    character: credit.character,
+                })
+                .collect(),
         }))
     }
 
@@ -93,13 +125,16 @@ impl Database {
         let moment = timestamp_to_text(now());
 
         sqlx::query(
-            "UPDATE works SET title = ?, sort_title = ?, release_year = ?,
-                              community_rating = ?, age_rating_label = ?, updated_at = ?
+            "UPDATE works SET title = ?, sort_title = ?, release_year = ?, release_date = ?,
+                              end_date = ?, community_rating = ?, age_rating_label = ?,
+                              updated_at = ?
              WHERE id = ?",
         )
         .bind(&details.title)
         .bind(sort_title)
         .bind(details.release_year)
+        .bind(details.release_date.as_deref())
+        .bind(details.end_date.as_deref())
         .bind(details.community_rating)
         .bind(details.age_rating_label.as_deref())
         .bind(&moment)
@@ -125,6 +160,7 @@ impl Database {
 
         replace_links(&mut transaction, work_id, &GENRES, &details.genres).await?;
         replace_links(&mut transaction, work_id, &STUDIOS, &details.studios).await?;
+        write_credits(&mut transaction, work_id, &details.credits, &moment).await?;
 
         for field in EDITABLE_FIELDS {
             let query = match locked.contains(&field) {
@@ -144,6 +180,60 @@ impl Database {
         transaction.commit().await?;
         Ok(())
     }
+}
+
+/// Replaces who is credited on a work with the people a person listed.
+///
+/// Each name is someone this server already knows when it knows somebody by
+/// exactly that name, so their photo and their page come with them; anybody
+/// else is added, known by no provider.
+async fn write_credits(
+    transaction: &mut Transaction<'_, Sqlite>,
+    work_id: WorkId,
+    credits: &[WrittenCredit],
+    moment: &str,
+) -> Result<()> {
+    sqlx::query("DELETE FROM credits WHERE work_id = ?")
+        .bind(work_id.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
+
+    for (ordinal, credit) in credits.iter().enumerate() {
+        let known: Option<(String,)> =
+            sqlx::query_as("SELECT id FROM people WHERE name = ? ORDER BY created_at LIMIT 1")
+                .bind(&credit.name)
+                .fetch_optional(&mut **transaction)
+                .await?;
+        let person_id = match known {
+            Some((id,)) => id,
+            None => {
+                let id = PersonId::new().to_db_string();
+                sqlx::query(
+                    "INSERT INTO people (id, name, sort_name, created_at) VALUES (?, ?, ?, ?)",
+                )
+                .bind(&id)
+                .bind(&credit.name)
+                .bind(credit.name.to_lowercase())
+                .bind(moment)
+                .execute(&mut **transaction)
+                .await?;
+                id
+            }
+        };
+        sqlx::query(
+            "INSERT INTO credits (id, work_id, person_id, role, character_name, ordinal)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(CreditId::new().to_db_string())
+        .bind(work_id.to_db_string())
+        .bind(&person_id)
+        .bind(&credit.role)
+        .bind(credit.character.as_deref())
+        .bind(ordinal as i64)
+        .execute(&mut **transaction)
+        .await?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -183,12 +273,22 @@ mod tests {
             tagline: Some("La mer ne rend rien.".to_string()),
             overview: Some("Un port, une nuit.".to_string()),
             release_year: Some(2019),
+            release_date: Some("2019-03-12".to_string()),
+            end_date: None,
             runtime: None,
             community_rating: Some(7.4),
             age_rating_label: Some("12".to_string()),
             genres: vec!["Drame".to_string()],
             studios: vec!["Invented Pictures".to_string()],
-            credits: Vec::new(),
+            credits: vec![crate::metadata::CreditRecord {
+                external_id: "1".to_string(),
+                name: "Alix Moreau".to_string(),
+                sort_name: "alix moreau".to_string(),
+                role: "actor".to_string(),
+                character: Some("Camille".to_string()),
+                ordinal: 0,
+                photo_path: None,
+            }],
             collection: None,
             trailers: Vec::new(),
         }
@@ -200,10 +300,24 @@ mod tests {
             tagline: Some("Rien ne revient.".to_string()),
             overview: Some("Écrit à la main.".to_string()),
             release_year: Some(2020),
+            release_date: Some("2020-06-01".to_string()),
+            end_date: Some("2021-01-15".to_string()),
             community_rating: Some(9.0),
             age_rating_label: Some("16".to_string()),
             genres: vec!["Mystère".to_string(), "Drame".to_string()],
             studios: vec!["Studio Imaginaire".to_string()],
+            credits: vec![
+                WrittenCredit {
+                    name: "Alix Moreau".to_string(),
+                    role: "actor".to_string(),
+                    character: Some("Lou".to_string()),
+                },
+                WrittenCredit {
+                    name: "Nora Vidal".to_string(),
+                    role: "director".to_string(),
+                    character: None,
+                },
+            ],
         }
     }
 
@@ -229,6 +343,10 @@ mod tests {
         expected.genres.sort();
         assert_eq!(read, expected);
         assert_eq!(database.locked_fields(work).await.expect("read"), vec!["title"]);
+        assert_eq!(
+            database.work_days(work).await.expect("read"),
+            (Some("2020-06-01".to_string()), Some("2021-01-15".to_string()))
+        );
         assert_eq!(
             database.work(work).await.expect("read").expect("present").sort_title,
             "port tranquille"
@@ -269,9 +387,34 @@ mod tests {
             .expect("read")
             .expect("present");
         assert_eq!(followed.title, "Quiet Harbour");
+        assert_eq!(followed.release_date.as_deref(), Some("2019-03-12"));
+        assert_eq!(followed.end_date, None);
         assert_eq!(followed.overview.as_deref(), Some("Un port, une nuit."));
         assert_eq!(followed.genres, vec!["Drame"]);
+        assert_eq!(followed.credits.len(), 1);
+        assert_eq!(followed.credits[0].character.as_deref(), Some("Camille"));
         assert_eq!(followed.age_rating_label.as_deref(), Some("12"));
+    }
+
+    #[tokio::test]
+    async fn a_person_already_known_by_that_name_is_credited_rather_than_made_again() {
+        let (database, work) = a_film().await;
+        database
+            .apply_identification(work, &what_the_provider_says(), false)
+            .await
+            .expect("identified");
+        let before = database.work_credits(work).await.expect("read")[0].person_id;
+
+        database
+            .write_details(work, "fr", &written(), "port tranquille", &["credits"])
+            .await
+            .expect("written");
+
+        let credits = database.work_credits(work).await.expect("read");
+        assert_eq!(credits.len(), 2);
+        let alix = credits.iter().find(|credit| credit.name == "Alix Moreau").expect("kept");
+        assert_eq!(alix.person_id, before, "the same person, with the photo they had");
+        assert_eq!(alix.character.as_deref(), Some("Lou"));
     }
 
     #[tokio::test]

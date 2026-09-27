@@ -53,6 +53,7 @@ import {
   whatIsLeft,
   whatTheFileHolds,
 } from "../readable";
+import { whenItCameOut } from "../readable";
 import type { Wording } from "../readable";
 import { elsewhere, groupCrew, useWorkScreen } from "../screens/work";
 import type { Tracks } from "../screens/work";
@@ -277,7 +278,7 @@ function TopOfTheWork({
   screen: ReturnType<typeof useWorkScreen>;
   holdsOthers: boolean;
 }) {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
   const navigate = useNavigate();
   const work = screen.work as Work;
   const version = work.versions[screen.chosen];
@@ -310,7 +311,7 @@ function TopOfTheWork({
   ]);
 
   const facts = [
-    work.year !== null ? String(work.year) : null,
+    whenItCameOut(work, language, t),
     work.kind === "series" && work.children.length > 0
       ? howMany(work.children.length, "work.season_count", t)
       : null,

@@ -145,6 +145,7 @@ export function useWorkMenu(
       {writingDetails && (
         <DetailsDialog
           workId={card.id}
+          series={card.kind === "series"}
           onClose={() => setWritingDetails(false)}
           onChanged={after.detailsChanged}
         />

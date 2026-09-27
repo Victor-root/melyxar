@@ -129,3 +129,69 @@
   background: transparent;
   box-shadow: none;
 }
+
+.identify-field input:disabled {
+  opacity: 0.55;
+}
+
+/* Everybody credited, a line each: the name widest, the role, who they
+   play, and the button taking them off. */
+.details-credits {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.details-credit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 1.1fr) auto;
+  gap: 8px;
+  width: 100%;
+}
+
+.details-credit select {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+}
+
+.details-credit select:focus {
+  outline: none;
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
+}
+
+.details-credit input {
+  min-width: 0;
+}
+
+.details-credit-off {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.details-credit-off:hover {
+  color: var(--trouble);
+  border-color: currentColor;
+}
+
+@media (max-width: 640px) {
+  .details-credit {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
+  .details-credit input:first-child {
+    grid-column: 1 / -1;
+  }
+}

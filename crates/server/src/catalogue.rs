@@ -785,6 +785,10 @@ struct WorkView {
     tagline: Option<String>,
     overview: Option<String>,
     year: Option<i32>,
+    /// The day it came out, and for a series the day it ended, each written
+    /// year, month, day.
+    release_date: Option<String>,
+    end_date: Option<String>,
     runtime_minutes: Option<i64>,
     rating: Option<f64>,
     age_rating: Option<String>,
@@ -1150,6 +1154,8 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         tagline: detail.tagline.clone(),
         overview: detail.overview.clone(),
         year: detail.work.release_year,
+        release_date: detail.release_date.clone(),
+        end_date: detail.end_date.clone(),
         // The runtime of the film, not the length of any one copy of it. A
         // file a few seconds short is still that film, and a page that shows
         // the file length shows a different number for each version.

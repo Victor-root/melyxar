@@ -173,6 +173,10 @@ pub struct IdentifiedWork {
     pub tagline: Option<String>,
     pub overview: Option<String>,
     pub release_year: Option<i32>,
+    /// The day it came out, and for a series the day it ended, each written
+    /// year, month, day.
+    pub release_date: Option<String>,
+    pub end_date: Option<String>,
     pub runtime: Option<Millis>,
     pub community_rating: Option<f64>,
     pub age_rating_label: Option<String>,
@@ -760,7 +764,9 @@ impl Database {
                 -- Named at last, so whatever the last failure was stops being
                 -- shown next to a film that now has a title.
                 identification_note = NULL,
-                updated_at = ?13
+                updated_at = ?13,
+                release_date = CASE WHEN ?15 THEN release_date ELSE ?16 END,
+                end_date = CASE WHEN ?17 THEN end_date ELSE ?18 END
              WHERE id = ?14",
         )
         .bind(keeps("title"))
@@ -777,6 +783,10 @@ impl Database {
         .bind(state.as_str())
         .bind(&moment)
         .bind(work_id.to_db_string())
+        .bind(keeps("release_date"))
+        .bind(found.release_date.as_deref())
+        .bind(keeps("end_date"))
+        .bind(found.end_date.as_deref())
         .execute(&mut *transaction)
         .await?;
 
@@ -821,8 +831,13 @@ impl Database {
             replace_links(&mut transaction, work_id, &STUDIOS, &found.studios).await?;
         }
 
-        let people =
-            replace_credits(&mut transaction, work_id, &found.provider, &found.credits).await?;
+        let people = match keeps("credits") {
+            true => Vec::new(),
+            false => {
+                replace_credits(&mut transaction, work_id, &found.provider, &found.credits)
+                    .await?
+            }
+        };
 
         if let Some(collection) = &found.collection {
             attach_to_collection(&mut transaction, work_id, &found.provider, collection).await?;
@@ -834,6 +849,8 @@ impl Database {
             "tagline",
             "overview",
             "release_year",
+            "release_date",
+            "end_date",
             "runtime",
             "community_rating",
             "age_rating",
@@ -921,6 +938,19 @@ impl Database {
             ))
         })
         .transpose()
+    }
+
+    /// The day a work came out and the day it ended, each written year,
+    /// month, day, when they are known.
+    pub async fn work_days(&self, work_id: WorkId) -> Result<(Option<String>, Option<String>)> {
+        let row = sqlx::query("SELECT release_date, end_date FROM works WHERE id = ?")
+            .bind(work_id.to_db_string())
+            .fetch_optional(self.reader())
+            .await?;
+        match row {
+            Some(row) => Ok((row.try_get("release_date")?, row.try_get("end_date")?)),
+            None => Ok((None, None)),
+        }
     }
 
     /// Genres of a work, in order.
@@ -1440,6 +1470,8 @@ mod tests {
             tagline: Some("La mer ne rend rien.".to_string()),
             overview: Some("Un port, une nuit.".to_string()),
             release_year: Some(2019),
+            release_date: None,
+            end_date: None,
             runtime: Some(Millis::new(118 * 60_000)),
             community_rating: Some(7.4),
             age_rating_label: Some("12".to_string()),

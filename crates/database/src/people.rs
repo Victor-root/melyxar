@@ -151,6 +151,8 @@ mod tests {
             tagline: None,
             overview: None,
             release_year: Some(year),
+            release_date: None,
+            end_date: None,
             runtime: None,
             community_rating: None,
             age_rating_label: None,

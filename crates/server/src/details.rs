@@ -5,7 +5,7 @@
 
 use axum::extract::{Path, State};
 use axum::{Json, Router};
-use melyxar_app::hand_edits::{WrittenDetails, EDITABLE_FIELDS};
+use melyxar_app::hand_edits::{WrittenCredit, WrittenDetails, EDITABLE_FIELDS, ROLES};
 use melyxar_app::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -27,12 +27,28 @@ struct DetailsView {
     tagline: Option<String>,
     overview: Option<String>,
     release_year: Option<i32>,
+    /// Year, month, day.
+    release_date: Option<String>,
+    end_date: Option<String>,
     community_rating: Option<f64>,
     age_rating: Option<String>,
     genres: Vec<String>,
     studios: Vec<String>,
+    /// Everybody credited, in the order the page shows them.
+    credits: Vec<CreditView>,
     /// The fields no look up changes any more.
     locked: Vec<String>,
+    /// The roles somebody may be credited in. Only sent.
+    #[serde(default, skip_deserializing)]
+    roles: Vec<&'static str>,
+}
+
+/// One person credited, and who they play when they act.
+#[derive(Debug, Serialize, Deserialize)]
+struct CreditView {
+    name: String,
+    role: String,
+    character: Option<String>,
 }
 
 async fn read(
@@ -62,10 +78,21 @@ async fn write(
         tagline: given.tagline,
         overview: given.overview,
         release_year: given.release_year,
+        release_date: given.release_date,
+        end_date: given.end_date,
         community_rating: given.community_rating,
         age_rating_label: given.age_rating,
         genres: given.genres,
         studios: given.studios,
+        credits: given
+            .credits
+            .into_iter()
+            .map(|credit| WrittenCredit {
+                name: credit.name,
+                role: credit.role,
+                character: credit.character,
+            })
+            .collect(),
     };
     if !melyxar_app::hand_edits::write(&state, work_id, details, &given.locked).await? {
         return Err(ServerError::not_found("work"));
@@ -86,10 +113,22 @@ fn view(details: WrittenDetails, locked: Vec<String>) -> DetailsView {
         tagline: details.tagline,
         overview: details.overview,
         release_year: details.release_year,
+        release_date: details.release_date,
+        end_date: details.end_date,
         community_rating: details.community_rating,
         age_rating: details.age_rating_label,
         genres: details.genres,
         studios: details.studios,
+        credits: details
+            .credits
+            .into_iter()
+            .map(|credit| CreditView {
+                name: credit.name,
+                role: credit.role,
+                character: credit.character,
+            })
+            .collect(),
         locked,
+        roles: ROLES.to_vec(),
     }
 }

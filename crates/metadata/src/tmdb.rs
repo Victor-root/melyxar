@@ -432,6 +432,9 @@ struct DetailsResponse {
     overview: Option<String>,
     #[serde(default, alias = "first_air_date")]
     release_date: Option<String>,
+    /// When the last episode of a series went out. Absent for a film.
+    #[serde(default)]
+    last_air_date: Option<String>,
     #[serde(default)]
     runtime: Option<i64>,
     /// A series says how long its episodes run rather than how long it does,
@@ -795,6 +798,8 @@ fn details_from(raw: DetailsResponse, language: &str) -> Details {
         tagline: raw.tagline.filter(|value| !value.trim().is_empty()),
         overview: raw.overview.filter(|value| !value.trim().is_empty()),
         release_year: year_of(raw.release_date.as_deref()),
+        release_date: day_of(raw.release_date.as_deref()),
+        end_date: day_of(raw.last_air_date.as_deref()),
         // A film says how long it runs. A series says how long its episodes
         // run, as a list, because the answer has changed over the years; the
         // first is the one a page means by "an episode of this".
@@ -874,6 +879,13 @@ fn season_from(raw: RawSeason, season_number: i32) -> SeasonDetails {
 /// The year a date string carries.
 fn year_of(date: Option<&str>) -> Option<i32> {
     date?.get(..4)?.parse().ok()
+}
+
+/// A day as the provider writes it, year, month, day, or nothing for an
+/// empty answer or one in any other shape.
+fn day_of(date: Option<&str>) -> Option<String> {
+    date.filter(|date| melyxar_core::time::is_a_day(date))
+        .map(str::to_string)
 }
 
 /// The languages pictures are asked for.
