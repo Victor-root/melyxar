@@ -13,7 +13,7 @@
 use std::path::{Path, PathBuf};
 
 use melyxar_core::id::{LibraryId, LibraryRootId, MediaSourceId};
-use melyxar_core::library::{Library, LibraryKind, LibraryRoot, RootAccess};
+use melyxar_core::library::{Library, LibraryKind, LibraryOptions, LibraryRoot, RootAccess};
 pub use melyxar_database::deletion::SetAsideFile;
 pub use melyxar_database::libraries::{Removed, WouldGo};
 
@@ -118,6 +118,9 @@ pub struct Asked {
     /// The folders it looks in. Several is the ordinary case: a collection
     /// spread across four disks is one library, not four.
     pub roots: Vec<PathBuf>,
+    /// What it does with its files and with each play, chosen before the
+    /// first scan rather than after it: that scan is the one that counts.
+    pub options: LibraryOptions,
 }
 
 /// Declares a library and starts a scan of it.
@@ -156,10 +159,20 @@ pub async fn create(state: &AppState, asked: Asked) -> Result<Library> {
         roots.push((label_for(state, &path, already_taken).await?, path));
     }
 
-    let library = state
+    let mut library = state
         .database()
         .create_library(&name, asked.kind, &language, &roots)
         .await?;
+    // Written before the first scan, which reads them: whether a file is read
+    // through as it arrives, and whether the folders are watched.
+    state
+        .database()
+        .set_library_options(library.id, asked.options)
+        .await?;
+    library.options = asked.options;
+    if asked.options.watch_in_real_time {
+        state.folder_watch().follow_the_libraries(state).await;
+    }
     // Tested for real rather than read off the permission bits, and written
     // down now so the screen shows the state of a root it has just been given
     // rather than the most cautious guess.
@@ -763,6 +776,7 @@ mod tests {
             kind: LibraryKind::Movies,
             language: "fr".to_string(),
             roots,
+            options: LibraryOptions::default(),
         }
     }
 
@@ -789,6 +803,40 @@ mod tests {
             RootAccess::ReadWrite,
             "what a root allows is tested by trying, and written down at once"
         );
+    }
+
+    #[tokio::test]
+    async fn what_a_library_does_is_chosen_as_it_is_declared() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let state = state_on(directory.path()).await;
+        let chosen = LibraryOptions {
+            extract_subtitles: false,
+            make_thumbnails: false,
+            process_on_arrival: true,
+            keeps_watched_marks: false,
+            ..LibraryOptions::default()
+        };
+
+        let library = create(
+            &state,
+            Asked {
+                options: chosen,
+                ..asked("Films", vec![folder(directory.path(), "Films")])
+            },
+        )
+        .await
+        .expect("the library is declared");
+
+        assert_eq!(library.options, chosen);
+        let stored = state
+            .database()
+            .list_libraries()
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|one| one.id == library.id)
+            .expect("written down");
+        assert_eq!(stored.options, chosen);
     }
 
     #[tokio::test]

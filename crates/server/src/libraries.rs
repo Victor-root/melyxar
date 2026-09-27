@@ -126,6 +126,10 @@ struct NewLibrary {
     metadata_language: String,
     /// The folders it looks in. Several is the ordinary case.
     roots: Vec<String>,
+    /// What it does with its files and with each play. The usual ones when
+    /// left out.
+    #[serde(default)]
+    options: melyxar_core::library::LibraryOptions,
 }
 
 #[derive(Debug, Serialize)]
@@ -154,6 +158,7 @@ async fn create(
             kind,
             language: asked.metadata_language,
             roots: asked.roots.into_iter().map(Into::into).collect(),
+            options: asked.options,
         },
     )
     .await?;

@@ -14,7 +14,7 @@
 
 import { useCallback, useState } from "react";
 import { api } from "../api";
-import type { Library, WouldGo } from "../api";
+import type { Library, LibraryChoices, LibraryKind, WouldGo } from "../api";
 import { refusalAbout, useAsked, useTold } from "../asking";
 
 /** Turns whatever the server refused about a library into a sentence's key. */
@@ -176,17 +176,34 @@ export function useRemoving(
   };
 }
 
+/** What a library does until somebody chooses otherwise, the same as the
+ *  server's: every heavy reading wanted and left to the night, the folders
+ *  left unwatched, and every play remembered. */
+const USUAL_CHOICES: LibraryChoices = {
+  extract_subtitles: true,
+  make_thumbnails: true,
+  detect_openings: true,
+  process_on_arrival: false,
+  watch_in_real_time: false,
+  keeps_resume_points: true,
+  keeps_watched_marks: true,
+};
+
 /** A library being declared, and what it is made of so far. */
 export interface Declaring {
   name: string;
   setName: (name: string) => void;
-  kind: string;
-  setKind: (kind: string) => void;
+  kind: LibraryKind;
+  setKind: (kind: LibraryKind) => void;
   /** The language the films are described in. The interface language to begin
       with: somebody who reads this in French is the likeliest to want their
       films described in it. */
   metadata: string;
   setMetadata: (language: string) => void;
+  /** What it will do with its files and with each play, the usual choices
+      to begin with. */
+  choices: LibraryChoices;
+  choose: (changes: Partial<LibraryChoices>) => void;
   roots: string[];
   addRoot: (path: string) => void;
   dropRoot: (path: string) => void;
@@ -200,13 +217,18 @@ export function useDeclaring(
   onRefused: (key: string) => void,
 ): Declaring {
   const [name, setName] = useState("");
-  const [kind, setKind] = useState("movies");
+  const [kind, setKind] = useState<LibraryKind>("movies");
   const [metadata, setMetadata] = useState<string>(language);
+  const [choices, setChoices] = useState<LibraryChoices>(USUAL_CHOICES);
+  const choose = useCallback(
+    (changes: Partial<LibraryChoices>) => setChoices((was) => ({ ...was, ...changes })),
+    [],
+  );
   const [roots, setRoots] = useState<string[]>([]);
 
   const told = useTold(async () => {
     try {
-      await api.createLibrary({ name, kind, metadata_language: metadata, roots });
+      await api.createLibrary({ name, kind, metadata_language: metadata, roots, options: choices });
       onDone();
     } catch (error) {
       onRefused(refusal(error));
@@ -229,6 +251,8 @@ export function useDeclaring(
     setKind,
     metadata,
     setMetadata,
+    choices,
+    choose,
     roots,
     addRoot,
     dropRoot,

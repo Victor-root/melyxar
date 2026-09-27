@@ -12,7 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../../api";
-import type { Library, LibraryKind, Root, SetAsideFile } from "../../api";
+import type { Library, LibraryChoices, LibraryKind, Root, SetAsideFile } from "../../api";
 import { useAsked, useTold } from "../../asking";
 import { FolderPicker } from "../../components/folders";
 import { Modal } from "../../components/modal";
@@ -186,81 +186,13 @@ function LibraryPanel({
             onSettled={(name) => editing.rename(library, name)}
           />
         </Setting>
-        <h3 className="settings-heading">{t("admin.automatic_processing")}</h3>
-        {/* What every arrival goes through, said rather than offered: going
-            without any of it only ever costs, so there is nothing to choose. */}
-        <div className="setting-always">
-          <InfoIcon size={16} />
-          <div className="setting-always-words">
-            <span className="setting-always-title">{t("admin.always_done")}</span>
-            <span>
-              {t(library.kind === "home_media" ? "admin.always_on_arrival_own" : "admin.always_on_arrival")}
-            </span>
-          </div>
-        </div>
-        <h3 className="settings-heading">{t("admin.optional_processing")}</h3>
-        <Setting label={t("settings.extract_subtitles")} why={t("admin.extract_subtitles_why")}>
-          <Toggle
-            label={t("settings.extract_subtitles")}
-            checked={library.extract_subtitles}
-            onChange={(extract_subtitles) => editing.settle(library, { extract_subtitles })}
-          />
-        </Setting>
-        <Setting label={t("settings.make_thumbnails")} why={t("admin.make_thumbnails_why")}>
-          <Toggle
-            label={t("settings.make_thumbnails")}
-            checked={library.make_thumbnails}
-            onChange={(make_thumbnails) => editing.settle(library, { make_thumbnails })}
-          />
-        </Setting>
-        {EPISODIC.includes(library.kind) && (
-          <Setting label={t("settings.detect_openings")} why={t("admin.detect_openings_why")}>
-            <Toggle
-              label={t("settings.detect_openings")}
-              checked={library.detect_openings}
-              onChange={(detect_openings) => editing.settle(library, { detect_openings })}
-            />
-          </Setting>
-        )}
-        <Setting label={t("settings.process_on_arrival")} why={t("admin.process_on_arrival_why")}>
-          <Toggle
-            label={t("settings.process_on_arrival")}
-            checked={library.process_on_arrival}
-            onChange={(process_on_arrival) => editing.settle(library, { process_on_arrival })}
-          />
-        </Setting>
-        <h3 className="settings-heading">{t("admin.library_tracking")}</h3>
-        <Setting
-          label={t("settings.watch_in_real_time")}
-          why={t(library.watch_state === "starting" ? "admin.watch_starting" : "admin.watch_why")}
-        >
-          <Toggle
-            label={t("settings.watch_in_real_time")}
-            checked={library.watch_in_real_time}
-            onChange={(watch_in_real_time) => editing.settle(library, { watch_in_real_time })}
-          />
-        </Setting>
-        {/* Said where the switch is: a switch left on that watches nothing
-            is a library that silently stopped growing on its own. */}
-        {library.watch_refusal && (
-          <p className="panel-notice panel-notice-trouble">
-            {t(`admin.watch_refused.${library.watch_refusal}`)}
-          </p>
-        )}
-        <Setting label={t("settings.keeps_resume_points")} why={t("admin.resume_points_why")}>
-          <Toggle
-            label={t("settings.keeps_resume_points")}
-            checked={library.keeps_resume_points}
-            onChange={(keeps_resume_points) => editing.settle(library, { keeps_resume_points })}
-          />
-        </Setting>
-        <Setting label={t("settings.keeps_watched_marks")} why={t("admin.watched_marks_why")}>
-          <Toggle
-            label={t("settings.keeps_watched_marks")}
-            checked={library.keeps_watched_marks}
-            onChange={(keeps_watched_marks) => editing.settle(library, { keeps_watched_marks })}
-          />
-        </Setting>
+        <LibraryChoicesFields
+          kind={library.kind}
+          choices={library}
+          onChange={(changes) => editing.settle(library, changes)}
+          watchWhy={library.watch_state === "starting" ? "admin.watch_starting" : undefined}
+          watchRefusal={library.watch_refusal}
+        />
       </div>
 
       {/* The folders it looks in. A log line shows only the label, but this is
@@ -508,6 +440,109 @@ function Removal({
  * a library that cannot be scanned, and asking twice for what one form can
  * carry is worse than waiting for it.
  */
+/**
+ * What a library does with its files and with each play: what is always done,
+ * what may be, and what is kept of each play. The same fields when a library
+ * is declared and once it exists, since the first scan is the one that counts.
+ */
+function LibraryChoicesFields({
+  kind,
+  choices,
+  onChange,
+  watchWhy,
+  watchRefusal,
+}: {
+  kind: LibraryKind;
+  choices: LibraryChoices;
+  onChange: (changes: Partial<LibraryChoices>) => void;
+  /** Said under the watching of the folders in place of what it does, while
+   *  it is being set up. */
+  watchWhy?: string;
+  /** Why the folders could not be watched, said where the switch is. */
+  watchRefusal?: string | null;
+}) {
+  const { t } = useSettings();
+  return (
+    <>
+      <h3 className="settings-heading">{t("admin.automatic_processing")}</h3>
+      {/* What every arrival goes through, said rather than offered: going
+          without any of it only ever costs, so there is nothing to choose. */}
+      <div className="setting-always">
+        <InfoIcon size={16} />
+        <div className="setting-always-words">
+          <span className="setting-always-title">{t("admin.always_done")}</span>
+          <span>
+            {t(kind === "home_media" ? "admin.always_on_arrival_own" : "admin.always_on_arrival")}
+          </span>
+        </div>
+      </div>
+      <h3 className="settings-heading">{t("admin.optional_processing")}</h3>
+      <Setting label={t("settings.extract_subtitles")} why={t("admin.extract_subtitles_why")}>
+        <Toggle
+          label={t("settings.extract_subtitles")}
+          checked={choices.extract_subtitles}
+          onChange={(extract_subtitles) => onChange({ extract_subtitles })}
+        />
+      </Setting>
+      <Setting label={t("settings.make_thumbnails")} why={t("admin.make_thumbnails_why")}>
+        <Toggle
+          label={t("settings.make_thumbnails")}
+          checked={choices.make_thumbnails}
+          onChange={(make_thumbnails) => onChange({ make_thumbnails })}
+        />
+      </Setting>
+      {EPISODIC.includes(kind) && (
+        <Setting label={t("settings.detect_openings")} why={t("admin.detect_openings_why")}>
+          <Toggle
+            label={t("settings.detect_openings")}
+            checked={choices.detect_openings}
+            onChange={(detect_openings) => onChange({ detect_openings })}
+          />
+        </Setting>
+      )}
+      <Setting label={t("settings.process_on_arrival")} why={t("admin.process_on_arrival_why")}>
+        <Toggle
+          label={t("settings.process_on_arrival")}
+          checked={choices.process_on_arrival}
+          onChange={(process_on_arrival) => onChange({ process_on_arrival })}
+        />
+      </Setting>
+      <h3 className="settings-heading">{t("admin.library_tracking")}</h3>
+      <Setting
+        label={t("settings.watch_in_real_time")}
+        why={t(watchWhy ?? "admin.watch_why")}
+      >
+        <Toggle
+          label={t("settings.watch_in_real_time")}
+          checked={choices.watch_in_real_time}
+          onChange={(watch_in_real_time) => onChange({ watch_in_real_time })}
+        />
+      </Setting>
+      {/* Said where the switch is: a switch left on that watches nothing
+          is a library that silently stopped growing on its own. */}
+      {watchRefusal && (
+        <p className="panel-notice panel-notice-trouble">
+          {t(`admin.watch_refused.${watchRefusal}`)}
+        </p>
+      )}
+      <Setting label={t("settings.keeps_resume_points")} why={t("admin.resume_points_why")}>
+        <Toggle
+          label={t("settings.keeps_resume_points")}
+          checked={choices.keeps_resume_points}
+          onChange={(keeps_resume_points) => onChange({ keeps_resume_points })}
+        />
+      </Setting>
+      <Setting label={t("settings.keeps_watched_marks")} why={t("admin.watched_marks_why")}>
+        <Toggle
+          label={t("settings.keeps_watched_marks")}
+          checked={choices.keeps_watched_marks}
+          onChange={(keeps_watched_marks) => onChange({ keeps_watched_marks })}
+        />
+      </Setting>
+    </>
+  );
+}
+
 function NewLibrary({
   onDone,
   onCancel,
@@ -518,8 +553,21 @@ function NewLibrary({
   onRefused: (key: string) => void;
 }) {
   const { t, language } = useSettings();
-  const { name, setName, kind, setKind, metadata, setMetadata, roots, addRoot, dropRoot, busy, create } =
-    useDeclaring(language, onDone, onRefused);
+  const {
+    name,
+    setName,
+    kind,
+    setKind,
+    metadata,
+    setMetadata,
+    choices,
+    choose,
+    roots,
+    addRoot,
+    dropRoot,
+    busy,
+    create,
+  } = useDeclaring(language, onDone, onRefused);
   const [picking, setPicking] = useState(false);
 
   return (
@@ -556,6 +604,7 @@ function NewLibrary({
             onPick={setMetadata}
           />
         </Setting>
+        <LibraryChoicesFields kind={kind} choices={choices} onChange={choose} />
       </div>
 
       <div className="library-folders">

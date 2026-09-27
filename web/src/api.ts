@@ -267,6 +267,19 @@ export interface Root {
   id: string;
 }
 
+/** What a library does with its files and with each play, as its settings
+ *  and its declaration choose it. */
+export type LibraryChoices = Pick<
+  Library,
+  | "extract_subtitles"
+  | "make_thumbnails"
+  | "detect_openings"
+  | "process_on_arrival"
+  | "watch_in_real_time"
+  | "keeps_resume_points"
+  | "keeps_watched_marks"
+>;
+
 export interface Library {
   id: string;
   name: string;
@@ -1742,6 +1755,7 @@ export const api = {
     kind: string;
     metadata_language: string;
     roots: string[];
+    options: LibraryChoices;
   }) => post<{ id: string; name: string; scanning: boolean }>("/api/v1/libraries", library),
   renameLibrary: (library: string, name: string) =>
     put<{ name: string }>(`/api/v1/libraries/${library}/name`, { name }),
