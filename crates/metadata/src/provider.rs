@@ -164,6 +164,10 @@ pub struct Details {
     pub tagline: Option<String>,
     pub overview: Option<String>,
     pub release_year: Option<i32>,
+    /// The day it came out, and for a series the day its last episode did,
+    /// each written year, month, day.
+    pub release_date: Option<String>,
+    pub end_date: Option<String>,
     pub runtime: Option<Millis>,
     pub community_rating: Option<f64>,
     /// Age rating as the country writes it, and the country it came from.

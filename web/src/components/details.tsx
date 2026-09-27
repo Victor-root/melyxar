@@ -1,6 +1,6 @@
 /*
- * Writing a work's details by hand: its title, what is said about it, its
- * year and ratings, its genres and studios.
+ * Writing a work's details by hand: its title, what is said about it, when
+ * it came out, its ratings, its genres and studios, and who is in it.
  *
  * Each field carries a lock. A field somebody changes is locked as they type,
  * because what they wrote is what they want kept, and a locked field is left
@@ -11,21 +11,24 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "../api";
-import type { DetailField, WrittenDetails } from "../api";
+import type { DetailField, WrittenCredit, WrittenDetails } from "../api";
 import { refusalOf, useAsked } from "../asking";
 import { refusalKey } from "../i18n";
-import { CloseIcon, LockIcon } from "../icons";
+import { CloseIcon, DeleteIcon, LockIcon } from "../icons";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
 
 export function DetailsDialog({
   workId,
+  /** Whether the work is a series, the one kind that has a day it ended. */
+  series,
   onClose,
   /** Said once the details are kept, so the screens showing the work read it
       again. */
   onChanged,
 }: {
   workId: string;
+  series: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -136,9 +139,42 @@ export function DetailsDialog({
           </Field>
 
           <div className="details-row">
-            <Field label={t("details.year")} lock={lock("release_year")}>
-              <input type="number" min={1850} max={2200} step={1} {...number("release_year")} />
+            <Field label={t("details.release_date")} lock={lock("release_date")}>
+              <input
+                type="date"
+                value={written.release_date ?? ""}
+                onChange={(event) => {
+                  const day = event.target.value || null;
+                  change("release_date", day);
+                  // The day says the year, which follows it on the server too.
+                  if (day) {
+                    change("release_year", Number(day.slice(0, 4)));
+                  }
+                }}
+              />
             </Field>
+            {series && (
+              <Field label={t("details.end_date")} lock={lock("end_date")}>
+                <input
+                  type="date"
+                  value={written.end_date ?? ""}
+                  onChange={(event) => change("end_date", event.target.value || null)}
+                />
+              </Field>
+            )}
+            <Field label={t("details.year")} lock={lock("release_year")}>
+              <input
+                type="number"
+                min={1850}
+                max={2200}
+                step={1}
+                disabled={written.release_date !== null}
+                {...number("release_year")}
+              />
+            </Field>
+          </div>
+
+          <div className="details-row">
             <Field label={t("details.rating")} lock={lock("community_rating")}>
               <input type="number" min={0} max={10} step={0.1} {...number("community_rating")} />
             </Field>
@@ -159,6 +195,14 @@ export function DetailsDialog({
               names={written.studios}
               label={t("details.studios")}
               onChange={(studios) => change("studios", studios)}
+            />
+          </Field>
+
+          <Field label={t("details.credits")} lock={lock("credits")}>
+            <Credits
+              credits={written.credits}
+              roles={written.roles}
+              onChange={(credits) => change("credits", credits)}
             />
           </Field>
 
@@ -200,6 +244,79 @@ function Lock({ locked, onToggle }: { locked: boolean; onToggle: () => void }) {
       <LockIcon size={14} />
       <span>{t(locked ? "details.lock_on" : "details.lock_off")}</span>
     </button>
+  );
+}
+
+/**
+ * Everybody credited, one line each: their name, their role, who they play
+ * when they act, and a button taking them off. The order is the page's.
+ */
+function Credits({
+  credits,
+  roles,
+  onChange,
+}: {
+  credits: WrittenCredit[];
+  roles: string[];
+  onChange: (credits: WrittenCredit[]) => void;
+}) {
+  const { t } = useSettings();
+  const put = (at: number, changed: Partial<WrittenCredit>) =>
+    onChange(credits.map((credit, index) => (index === at ? { ...credit, ...changed } : credit)));
+
+  return (
+    <div className="details-credits">
+      {credits.map((credit, at) => (
+        <div key={at} className="details-credit">
+          <input
+            type="text"
+            aria-label={t("details.person")}
+            placeholder={t("details.person")}
+            value={credit.name}
+            onChange={(event) => put(at, { name: event.target.value })}
+          />
+          <select
+            aria-label={t("details.role")}
+            value={credit.role}
+            onChange={(event) =>
+              put(at, {
+                role: event.target.value,
+                character: event.target.value === "actor" ? credit.character : null,
+              })
+            }
+          >
+            {roles.map((role) => (
+              <option key={role} value={role}>
+                {t(`credit.${role}`)}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            aria-label={t("details.character")}
+            placeholder={credit.role === "actor" ? t("details.character") : ""}
+            disabled={credit.role !== "actor"}
+            value={credit.character ?? ""}
+            onChange={(event) => put(at, { character: event.target.value || null })}
+          />
+          <button
+            type="button"
+            className="details-credit-off"
+            aria-label={t("details.remove", { name: credit.name })}
+            onClick={() => onChange(credits.filter((_, index) => index !== at))}
+          >
+            <DeleteIcon size={15} />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="button button-small"
+        onClick={() => onChange([...credits, { name: "", role: "actor", character: null }])}
+      >
+        {t("details.add_person")}
+      </button>
+    </div>
   );
 }
 

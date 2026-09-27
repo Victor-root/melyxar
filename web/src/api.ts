@@ -195,16 +195,31 @@ export interface WrittenDetails {
   tagline: string | null;
   overview: string | null;
   release_year: number | null;
+  /** The day it came out, and for a series the day it ended, year, month,
+   *  day. */
+  release_date: string | null;
+  end_date: string | null;
   community_rating: number | null;
   age_rating: string | null;
   genres: string[];
   studios: string[];
+  /** Everybody credited, in the order the page shows them. */
+  credits: WrittenCredit[];
   /** The fields no look up changes any more, by the name of the field. */
   locked: DetailField[];
+  /** The roles somebody may be credited in, as the server says them. */
+  roles: string[];
+}
+
+/** One person credited on a work, and who they play when they act. */
+export interface WrittenCredit {
+  name: string;
+  role: string;
+  character: string | null;
 }
 
 /** A field of a work that may be written by hand, and locked. */
-export type DetailField = Exclude<keyof WrittenDetails, "locked">;
+export type DetailField = Exclude<keyof WrittenDetails, "locked" | "roles">;
 
 export interface Candidate {
   external_id: string;
@@ -702,6 +717,10 @@ export interface Work {
   tagline: string | null;
   overview: string | null;
   year: number | null;
+  /** The day it came out, and for a series the day it ended, year, month,
+   *  day. */
+  release_date: string | null;
+  end_date: string | null;
   runtime_minutes: number | null;
   rating: number | null;
   age_rating: string | null;

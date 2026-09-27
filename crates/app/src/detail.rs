@@ -30,6 +30,10 @@ pub struct WorkDetail {
     /// Title, tagline and synopsis in the language the library was asked for.
     pub tagline: Option<String>,
     pub overview: Option<String>,
+    /// The day it came out, and for a series the day it ended, each written
+    /// year, month, day.
+    pub release_date: Option<String>,
+    pub end_date: Option<String>,
     pub genres: Vec<String>,
     pub studios: Vec<String>,
     /// Who is credited, leads first, then the parts behind the camera.
@@ -322,6 +326,8 @@ pub async fn work_detail(
         None => database.work_translation(work_id, "en").await?,
     };
 
+    let (release_date, end_date) = database.work_days(work_id).await?;
+
     let runs_the_server = who.permissions.is_administrator;
     let mut versions = Vec::new();
     for source in database.sources_of_work(work_id).await? {
@@ -522,6 +528,8 @@ pub async fn work_detail(
         previous_episode,
         tagline: texts.as_ref().and_then(|(_, tagline, _)| tagline.clone()),
         overview: texts.as_ref().and_then(|(_, _, overview)| overview.clone()),
+        release_date,
+        end_date,
         genres: database.work_genres(work_id).await?,
         studios: database.work_studios(work_id).await?,
         credits,
@@ -713,6 +721,8 @@ mod tests {
                         tagline: None,
                         overview: Some(overview.to_string()),
                         release_year: Some(2019),
+                        release_date: None,
+                        end_date: None,
                         runtime: None,
                         community_rating: None,
                         age_rating_label: None,
@@ -765,6 +775,8 @@ mod tests {
                     tagline: None,
                     overview: None,
                     release_year: Some(year),
+                    release_date: None,
+                    end_date: None,
                     runtime: None,
                     community_rating: None,
                     age_rating_label: None,

@@ -20,6 +20,7 @@ import {
   pictureName,
   whatIsLeft,
   whatTheFileHolds,
+  whenItCameOut,
   howLongSince,
   insideTheRange,
   nameOfPlayed,
@@ -306,5 +307,23 @@ describe("pictureName", () => {
       "1080p",
     ]);
     expect(whatTheFileHolds({ width: 720, height: 576, hdr: null, sound: null })).toEqual([]);
+  });
+});
+
+describe("whenItCameOut", () => {
+  const t = (key: string, values?: Record<string, string | number>) =>
+    key === "work.ran" ? `${values?.from} to ${values?.to}` : key;
+  const film = { kind: "movie", year: 2019, release_date: null, end_date: null };
+
+  it("says the day when it is known, and the year otherwise", () => {
+    expect(whenItCameOut({ ...film, release_date: "2019-03-12" }, "en", t)).toBe("March 12, 2019");
+    expect(whenItCameOut(film, "en", t)).toBe("2019");
+    expect(whenItCameOut({ ...film, year: null }, "en", t)).toBeNull();
+  });
+
+  it("says the years a series ran once it has ended in another year", () => {
+    const series = { kind: "series", year: 2019, release_date: "2019-03-12", end_date: "2023-06-01" };
+    expect(whenItCameOut(series, "en", t)).toBe("2019 to 2023");
+    expect(whenItCameOut({ ...series, end_date: "2019-12-01" }, "en", t)).toBe("2019");
   });
 });

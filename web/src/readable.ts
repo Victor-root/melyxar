@@ -171,6 +171,23 @@ export function readableDay(day: string, language: string): string | null {
   });
 }
 
+/**
+ * When a work came out: the day when it is known, the year otherwise, and
+ * for a series that has ended in another year, the years it ran.
+ */
+export function whenItCameOut(
+  work: { kind: string; year: number | null; release_date: string | null; end_date: string | null },
+  language: string,
+  t: Wording,
+): string | null {
+  if (work.kind === "series" && work.end_date && work.year !== null) {
+    const ended = Number(work.end_date.slice(0, 4));
+    return ended === work.year ? String(work.year) : t("work.ran", { from: work.year, to: ended });
+  }
+  const day = work.release_date && readableDay(work.release_date, language);
+  return day || (work.year !== null ? String(work.year) : null);
+}
+
 /** The whole years from one day to another, both written year, month and
  *  day: how old somebody is, or was. */
 export function yearsBetween(from: string, to: string): number | null {
