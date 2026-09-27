@@ -2145,6 +2145,64 @@ impl Database {
             .collect()
     }
 
+    /// Says by hand where one kind of stretch is in one file, over whatever
+    /// the file's chapters and the listening said of that kind.
+    ///
+    /// An empty stretch, starting where it ends, says there is none of that
+    /// kind here. One correction per kind: a second replaces the first.
+    pub async fn correct_segment(
+        &self,
+        source_id: MediaSourceId,
+        kind: SegmentKind,
+        start: Millis,
+        end: Millis,
+    ) -> Result<()> {
+        let mut transaction = self.begin().await?;
+        sqlx::query(
+            "DELETE FROM media_segments WHERE source_id = ? AND kind = ? AND origin = 'manual'",
+        )
+        .bind(source_id.to_db_string())
+        .bind(kind.as_str())
+        .execute(&mut *transaction)
+        .await?;
+        let corrected = MediaSegment {
+            kind,
+            start,
+            end,
+            origin: SegmentOrigin::Manual,
+        };
+        insert_segment(&mut *transaction, source_id, &corrected).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// Takes back a correction by hand, so the file's chapters and the
+    /// listening speak for that kind again.
+    ///
+    /// The file goes back in the queue of the listening too: a listening that
+    /// ran while the correction stood kept nothing of that kind for it, and
+    /// only listening again finds it.
+    pub async fn forget_segment_correction(
+        &self,
+        source_id: MediaSourceId,
+        kind: SegmentKind,
+    ) -> Result<()> {
+        let mut transaction = self.begin().await?;
+        sqlx::query(
+            "DELETE FROM media_segments WHERE source_id = ? AND kind = ? AND origin = 'manual'",
+        )
+        .bind(source_id.to_db_string())
+        .bind(kind.as_str())
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query("DELETE FROM media_source_openings WHERE source_id = ?")
+            .bind(source_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
     /// Records what a work is called at an external provider.
     ///
     /// Replaces the identifier already held for that provider, since a work
@@ -6331,6 +6389,72 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_correction_by_hand_is_one_per_kind_and_taken_back_whole() {
+        let (database, library_id, root_id) = library().await;
+        let seasons = a_series_ready_to_be_listened_to(
+            &database,
+            library_id,
+            root_id,
+            "Distant Signal",
+            &[(1, &[1])],
+        )
+        .await;
+        let file = files_of(&database, seasons[0]).await[0];
+        database
+            .store_openings(file, &[a_found_opening()])
+            .await
+            .expect("kept");
+        let manual = |segments: Vec<MediaSegment>| {
+            segments
+                .into_iter()
+                .filter(|segment| segment.origin == SegmentOrigin::Manual)
+                .map(|segment| (segment.kind, segment.start.get(), segment.end.get()))
+                .collect::<Vec<_>>()
+        };
+
+        database
+            .correct_segment(file, SegmentKind::Intro, Millis::new(28_000), Millis::new(88_000))
+            .await
+            .expect("corrected");
+        database
+            .correct_segment(file, SegmentKind::Intro, Millis::new(29_000), Millis::new(89_000))
+            .await
+            .expect("corrected again");
+        database
+            .correct_segment(file, SegmentKind::Recap, Millis::ZERO, Millis::ZERO)
+            .await
+            .expect("none said");
+        let said = database.segments_of_source(file).await.expect("read");
+        assert_eq!(
+            manual(said.clone()),
+            vec![(SegmentKind::Recap, 0, 0), (SegmentKind::Intro, 29_000, 89_000)],
+            "the second correction replaced the first, and none is a correction too"
+        );
+        assert!(
+            said.contains(&a_found_opening()),
+            "what the listening found stays behind the correction"
+        );
+
+        database
+            .forget_segment_correction(file, SegmentKind::Intro)
+            .await
+            .expect("forgotten");
+        assert_eq!(
+            manual(database.segments_of_source(file).await.expect("read")),
+            vec![(SegmentKind::Recap, 0, 0)],
+            "only that kind is taken back"
+        );
+        assert_eq!(
+            database
+                .count_seasons_listened_to(library_id)
+                .await
+                .expect("read"),
+            0,
+            "the file is back in the queue of the listening"
+        );
     }
 
     #[tokio::test]

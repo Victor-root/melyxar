@@ -158,6 +158,34 @@ pub fn segments_from_chapters(chapters: &[Chapter], duration: Option<Millis>) ->
     found
 }
 
+/// The stretches a player offers to skip, out of everything said about a file.
+///
+/// Kind by kind, the word that counts is the most trusted one: a person over
+/// the file's own chapters, the chapters over what listening found. A person
+/// who said there is none of a kind leaves an empty stretch, which silences
+/// the other two for that kind and is never offered itself.
+pub fn what_is_skipped(said: &[MediaSegment]) -> Vec<MediaSegment> {
+    fn trust(origin: SegmentOrigin) -> u8 {
+        match origin {
+            SegmentOrigin::Manual => 2,
+            SegmentOrigin::Chapter => 1,
+            SegmentOrigin::Detected => 0,
+        }
+    }
+    let mut kept: Vec<MediaSegment> = said
+        .iter()
+        .filter(|segment| {
+            !said.iter().any(|other| {
+                other.kind == segment.kind && trust(other.origin) > trust(segment.origin)
+            })
+        })
+        .filter(|segment| segment.end > segment.start)
+        .copied()
+        .collect();
+    kept.sort_by_key(|segment| segment.start);
+    kept
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,5 +302,38 @@ mod tests {
         );
         assert_eq!(read.len(), 1);
         assert_eq!((read[0].start.get(), read[0].end.get()), (0, 90_000));
+    }
+
+    fn said(kind: SegmentKind, start: i64, end: i64, origin: SegmentOrigin) -> MediaSegment {
+        MediaSegment {
+            kind,
+            start: Millis::new(start),
+            end: Millis::new(end),
+            origin,
+        }
+    }
+
+    #[test]
+    fn a_person_is_believed_over_the_file_and_the_file_over_the_listening() {
+        let heard = said(SegmentKind::Intro, 60_000, 150_000, SegmentOrigin::Detected);
+        let named = said(SegmentKind::Intro, 62_000, 152_000, SegmentOrigin::Chapter);
+        let corrected = said(SegmentKind::Intro, 58_000, 148_000, SegmentOrigin::Manual);
+        let credits = said(SegmentKind::Outro, 1_300_000, 1_380_000, SegmentOrigin::Detected);
+
+        assert_eq!(what_is_skipped(&[credits, heard]), vec![heard, credits]);
+        assert_eq!(what_is_skipped(&[heard, named, credits]), vec![named, credits]);
+        assert_eq!(
+            what_is_skipped(&[heard, named, corrected, credits]),
+            vec![corrected, credits],
+            "kind by kind: the credits nobody corrected are still skipped"
+        );
+    }
+
+    #[test]
+    fn a_person_saying_there_is_none_silences_the_rest_of_that_kind() {
+        let heard = said(SegmentKind::Intro, 60_000, 150_000, SegmentOrigin::Detected);
+        let none = said(SegmentKind::Intro, 0, 0, SegmentOrigin::Manual);
+        let credits = said(SegmentKind::Outro, 1_300_000, 1_380_000, SegmentOrigin::Detected);
+        assert_eq!(what_is_skipped(&[heard, none, credits]), vec![credits]);
     }
 }

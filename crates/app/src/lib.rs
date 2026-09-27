@@ -34,6 +34,7 @@ pub mod playback;
 pub mod reach;
 pub mod preferences;
 pub mod scan;
+pub mod segments;
 pub mod server;
 pub mod startup;
 pub mod state;

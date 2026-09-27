@@ -391,8 +391,7 @@ pub async fn plan(
         .unwrap_or_default();
     // And the same again: most files name none, and a film with no skip button
     // is every film anybody watched before there was one.
-    let segments = database
-        .segments_of_source(source.id)
+    let segments = crate::segments::skipped_in(state, source.id)
         .await
         .unwrap_or_default();
     // Never a reason to refuse to play: a film whose mark could not be read is
@@ -3223,6 +3222,71 @@ mod tests {
 
         mark_watched(&state, &who, work_id, true).await.expect("marked");
         assert!(!put_aside().await, "marked watched by hand, the same");
+    }
+
+    #[tokio::test]
+    async fn a_stretch_corrected_by_hand_is_what_the_player_offers_to_skip() {
+        use crate::segments::{correct, take_back, Correction};
+        use melyxar_core::segments::{SegmentKind, SegmentOrigin};
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080), audio(id, "aac", 2, true)]
+            })
+            .await;
+        let who = crate::an_ordinary_account(user_id);
+        let skipped = || async {
+            plan(
+                &state,
+                &who,
+                &PlayRequest {
+                    source_id,
+                    profile: None,
+                    audio_track_id: None,
+                    subtitle: SubtitleAsked::Unsaid,
+                    preferred_video_codec: None,
+                    wide_gamut: None,
+                },
+            )
+            .await
+            .expect("a plan")
+            .segments
+        };
+        let stretch = |start, end| Correction::Stretch {
+            start: Millis::new(start),
+            end: Millis::new(end),
+        };
+
+        let answered = correct(&state, source_id, SegmentKind::Intro, stretch(60_000, 150_000))
+            .await
+            .expect("corrected");
+        assert_eq!(answered, skipped().await, "the answer is what the player is offered");
+        assert_eq!(answered.len(), 1);
+        assert_eq!(answered[0].origin, SegmentOrigin::Manual);
+        assert_eq!(answered[0].start, Millis::new(60_000));
+
+        assert!(
+            correct(&state, source_id, SegmentKind::Intro, stretch(150_000, 60_000))
+                .await
+                .is_err(),
+            "a stretch running backwards is a slip of the hand"
+        );
+        assert!(
+            correct(&state, source_id, SegmentKind::Intro, stretch(0, 999_000_000))
+                .await
+                .is_err(),
+            "and so is one ending after the film"
+        );
+
+        correct(&state, source_id, SegmentKind::Intro, Correction::None)
+            .await
+            .expect("none said");
+        assert!(skipped().await.is_empty(), "none is never offered");
+
+        assert!(take_back(&state, source_id, SegmentKind::Intro)
+            .await
+            .expect("taken back")
+            .is_empty());
     }
 
     #[tokio::test]
