@@ -278,6 +278,32 @@ impl Database {
         Ok(())
     }
 
+    /// How many films the server may convert at once, or none for no ceiling.
+    ///
+    /// Read each time a film is opened, so its own small query for the same
+    /// reason as the switch above.
+    pub async fn transcoding_ceiling(&self) -> Result<Option<u32>> {
+        let value: Option<i64> = sqlx::query_scalar(
+            "SELECT max_transcoding_sessions FROM server_settings WHERE id = 1",
+        )
+        .fetch_one(self.reader())
+        .await?;
+        Ok(value.and_then(|most| u32::try_from(most).ok()))
+    }
+
+    /// Sets how many films the server may convert at once, or takes the
+    /// ceiling away.
+    pub async fn set_transcoding_ceiling(&self, most: Option<u32>) -> Result<()> {
+        sqlx::query(
+            "UPDATE server_settings SET max_transcoding_sessions = ?, updated_at = ? WHERE id = 1",
+        )
+        .bind(most.map(i64::from))
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
     /// What the server is called, on its own for the same reason as the
     /// switch above.
     pub async fn set_server_name(&self, name: &str) -> Result<()> {
@@ -673,6 +699,21 @@ mod tests {
         assert_eq!(kept.thumbnails_columns, 1);
         assert_eq!(kept.thumbnails_rows, 1);
         assert_eq!(kept, database.library_work().await.expect("read back"));
+    }
+
+    #[tokio::test]
+    async fn a_server_converts_without_a_ceiling_until_one_is_set() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.transcoding_ceiling().await.expect("read"), None);
+
+        database
+            .set_transcoding_ceiling(Some(3))
+            .await
+            .expect("set");
+        assert_eq!(database.transcoding_ceiling().await.expect("read"), Some(3));
+
+        database.set_transcoding_ceiling(None).await.expect("taken away");
+        assert_eq!(database.transcoding_ceiling().await.expect("read"), None);
     }
 
     #[tokio::test]

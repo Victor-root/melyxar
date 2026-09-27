@@ -165,13 +165,6 @@ pub struct LimitsConfig {
     pub concurrent_image_jobs: usize,
     /// Concurrent calls to a metadata provider.
     pub concurrent_metadata_requests: usize,
-    /// Playback sessions that are actually transcoding, when the owner wants
-    /// a ceiling. None by default: how many a machine can carry depends on its
-    /// card and on what is being watched, and a guess written here turned
-    /// away the third viewer of a machine that could have served ten.
-    /// Remuxing costs almost nothing and is not counted here.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_transcoding_sessions: Option<usize>,
     /// Size the transcode directory may reach, in megabytes.
     pub transcode_quota_megabytes: u64,
 }
@@ -182,7 +175,6 @@ impl Default for LimitsConfig {
             concurrent_probes: 2,
             concurrent_image_jobs: 2,
             concurrent_metadata_requests: 4,
-            max_transcoding_sessions: None,
             transcode_quota_megabytes: 8192,
         }
     }
@@ -353,11 +345,6 @@ impl Config {
                 "concurrent_probes must be at least one, otherwise no file is ever analysed".into(),
             ));
         }
-        if self.limits.max_transcoding_sessions == Some(0) {
-            return Err(ConfigError::Invalid(
-                "max_transcoding_sessions must be at least one, otherwise nothing can be transcoded".into(),
-            ));
-        }
         if self.transcode.enabled_video_codecs.is_empty() {
             return Err(ConfigError::Invalid(
                 "transcode.enabled_video_codecs must name at least one codec, otherwise nothing can be transcoded".into(),
@@ -460,22 +447,18 @@ mod tests {
 
         assert_eq!(config.logging.level, "debug");
         assert_eq!(config.limits.concurrent_probes, 4);
-        assert_eq!(
-            config.limits.max_transcoding_sessions, None,
-            "no ceiling unless the owner writes one"
-        );
     }
 
     #[test]
     fn a_file_still_carrying_a_setting_that_has_moved_still_starts_the_server() {
-        // The thumbnails, the upkeep and the description files are settings of
-        // the server now, changed on a screen. A file written before that
+        // The thumbnails, the upkeep, the description files and the ceiling on
+        // transcodes are settings of the server now, changed on a screen. A file written before that
         // still holds their old sections, and a server that refused to start
-        // over three lines nobody can see any more would be a server somebody
+        // over lines nobody can see any more would be a server somebody
         // has to fix from a terminal to reach the screen that replaced them.
         let text = format!(
             "{MINIMAL}\n[thumbnails]\nevery_seconds = 5\n\n[tasks]\nnightly_upkeep = false\n\n\
-             [scan]\nread_companion_files = true\n"
+             [scan]\nread_companion_files = true\n\n[limits]\nmax_transcoding_sessions = 2\n"
         );
         assert!(
             Config::parse(&text).is_ok(),
@@ -560,7 +543,7 @@ mod tests {
 
     #[test]
     fn a_zero_limit_is_refused_rather_than_silently_doing_nothing() {
-        let text = format!("{MINIMAL}\n[limits]\nconcurrent_probes = 0\nconcurrent_image_jobs = 1\nconcurrent_metadata_requests = 1\nmax_transcoding_sessions = 1\ntranscode_quota_megabytes = 1024\n");
+        let text = format!("{MINIMAL}\n[limits]\nconcurrent_probes = 0\nconcurrent_image_jobs = 1\nconcurrent_metadata_requests = 1\ntranscode_quota_megabytes = 1024\n");
         assert!(Config::parse(&text).is_err());
     }
 

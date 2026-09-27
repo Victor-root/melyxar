@@ -549,7 +549,10 @@ pub async fn open_session(
     }
 
     let expensive = plan.decision.method.is_expensive();
-    let session = sessions.open(who.id, recipe, expensive).await?;
+    let most_at_once = state.database().transcoding_ceiling().await?;
+    let session = sessions
+        .open(who.id, recipe, expensive, most_at_once)
+        .await?;
     say_how_the_film_was_cut(&session);
 
     // The upkeep normally pulled these out of the film long before anybody
@@ -2242,6 +2245,7 @@ mod tests {
                     if_the_card_refuses: Vec::new(),
                 },
                 false,
+                None,
             )
             .await
             .expect("a session");
@@ -2276,6 +2280,7 @@ mod tests {
                     if_the_card_refuses: Vec::new(),
                 },
                 false,
+                None,
             )
             .await
             .expect("a session");

@@ -203,37 +203,57 @@ struct PlaybackSettingsView {
     /// layer is converted regardless, since left alone it looks broken rather
     /// than merely washed out.
     tone_mapping_disabled: bool,
+    /// How many films the server may convert at once. None, the default, is
+    /// no ceiling at all.
+    #[serde(default)]
+    max_transcoding_sessions: Option<u32>,
 }
 
 /// What the server is set to do about wide gamut colour it cannot show a
-/// client, and every film like it.
+/// client, and how many films it may convert at once.
 async fn playback_settings(
     State(state): State<AppState>,
     _: crate::account::Administrator,
 ) -> Result<Json<PlaybackSettingsView>> {
+    let database = state.database();
     Ok(Json(PlaybackSettingsView {
-        tone_mapping_disabled: state
-            .database()
+        tone_mapping_disabled: database
             .tone_mapping_disabled()
+            .await
+            .map_err(|error| crate::error::ServerError::internal(error.to_string()))?,
+        max_transcoding_sessions: database
+            .transcoding_ceiling()
             .await
             .map_err(|error| crate::error::ServerError::internal(error.to_string()))?,
     }))
 }
 
-/// Turns the conversion of wide gamut colour on or off for the whole server.
+/// Changes how the whole server plays films: the conversion of wide gamut
+/// colour, and the ceiling on conversions at once.
 async fn set_playback_settings(
     State(state): State<AppState>,
     _: crate::account::Administrator,
     Json(asked): Json<PlaybackSettingsView>,
 ) -> Result<Json<PlaybackSettingsView>> {
-    state
-        .database()
+    // A ceiling of nought would refuse every film that needs converting.
+    if asked.max_transcoding_sessions == Some(0) {
+        return Err(crate::error::ServerError::invalid_input(
+            "the ceiling on conversions at once must be at least one",
+        ));
+    }
+    let database = state.database();
+    database
         .set_tone_mapping_disabled(asked.tone_mapping_disabled)
+        .await
+        .map_err(|error| crate::error::ServerError::internal(error.to_string()))?;
+    database
+        .set_transcoding_ceiling(asked.max_transcoding_sessions)
         .await
         .map_err(|error| crate::error::ServerError::internal(error.to_string()))?;
 
     tracing::debug!(
         tone_mapping_disabled = asked.tone_mapping_disabled,
+        max_transcoding_sessions = asked.max_transcoding_sessions,
         "the server's playback settings were changed"
     );
     Ok(Json(asked))

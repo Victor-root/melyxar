@@ -1,6 +1,7 @@
 /*
  * How a film is made into what a screen can play: the card that does it, the
- * pictures of the playback bar, and the colours of a wide gamut film.
+ * pictures of the playback bar, the colours of a wide gamut film, and how many
+ * films it may convert at once.
  */
 
 import { NumberField, PageHead, Panel, Setting, Stat, Toggle } from "../../components/panel";
@@ -13,6 +14,9 @@ import {
 import { useLibraryWork, usePlaybackSettings } from "../../screens/settings";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
+
+/** The ceiling a server is given when one is first switched on. */
+const A_FIRST_CEILING = 2;
 
 export function AdminTranscoding() {
   const { t } = useSettings();
@@ -56,10 +60,30 @@ export function AdminTranscoding() {
           </div>
         </Panel>
 
-        <Panel icon={PlaybackIcon} title={t("admin.limits")} lead={t("admin.limits_lead")} soon>
-          <Setting label={t("admin.limit_sessions")} why={t("admin.limit_sessions_why")} soon>
-            <input className="field-line field-number" disabled value="–" readOnly />
-          </Setting>
+        <Panel icon={PlaybackIcon} title={t("admin.limits")} lead={t("admin.limits_lead")}>
+          {playback.kept && (
+            <Setting label={t("admin.limit_sessions")} why={t("admin.limit_sessions_why")}>
+              <Toggle
+                label={t("admin.limit_sessions")}
+                checked={playback.kept.max_transcoding_sessions !== null}
+                onChange={(limited) =>
+                  playback.setTo({
+                    max_transcoding_sessions: limited ? A_FIRST_CEILING : null,
+                  })
+                }
+              />
+              {/* Shown greyed while there is no ceiling, so what switching it
+                  on would set can be read beforehand. */}
+              <NumberField
+                label={t("admin.limit_sessions_most")}
+                value={playback.kept.max_transcoding_sessions ?? A_FIRST_CEILING}
+                min={1}
+                max={32}
+                disabled={playback.kept.max_transcoding_sessions === null}
+                onPick={(max_transcoding_sessions) => playback.setTo({ max_transcoding_sessions })}
+              />
+            </Setting>
+          )}
           <Setting label={t("admin.limit_room")} why={t("admin.limit_room_why")} soon>
             <input className="field-line field-number" disabled value="–" readOnly />
           </Setting>

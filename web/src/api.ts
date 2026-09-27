@@ -423,8 +423,9 @@ export interface LibraryWork {
 }
 
 /**
- * What the server is set to do about wide gamut colour it cannot show a
- * client, for every viewer of this server rather than any one of them.
+ * How the whole server plays films, for every viewer rather than any one of
+ * them: what it does about wide gamut colour it cannot show a client, and how
+ * many films it may convert at once.
  */
 export interface PlaybackSettings {
   /** Never convert such colour, even where a client cannot show it correctly.
@@ -432,6 +433,9 @@ export interface PlaybackSettings {
       converted regardless, since left alone it looks broken rather than
       merely washed out. */
   tone_mapping_disabled: boolean;
+  /** How many films the server may convert at once; null for no ceiling,
+      which is where every server starts. */
+  max_transcoding_sessions: number | null;
 }
 
 export interface Filters {

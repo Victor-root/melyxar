@@ -29,41 +29,49 @@ use crate::{Result, StreamingError};
 /// heartbeat covers a pause.
 pub const KEPT_WHILE_IDLE: Duration = Duration::from_secs(120);
 
+/// A session being served, and whether it is rebuilding the film rather than
+/// copying it.
+struct Live {
+    session: Arc<Session>,
+    expensive: bool,
+}
+
 /// Every session this server is serving.
 pub struct Sessions {
-    live: Mutex<HashMap<SessionId, Arc<Session>>>,
+    live: Mutex<HashMap<SessionId, Live>>,
     folder: PathBuf,
     tools: ToolPaths,
-    /// How many sessions may convert at once, when the owner set a ceiling.
-    /// Copying is not counted: it costs almost nothing, and refusing it would
-    /// turn a cheap request away for the benefit of an expensive one.
-    most_at_once: Option<usize>,
 }
 
 impl Sessions {
-    pub fn new(folder: PathBuf, tools: ToolPaths, most_at_once: Option<usize>) -> Self {
+    pub fn new(folder: PathBuf, tools: ToolPaths) -> Self {
         Self {
             live: Mutex::new(HashMap::new()),
             folder,
             tools,
-            most_at_once,
         }
     }
 
-    /// Opens a session, unless the machine is already doing as much as its
-    /// owner allowed.
+    /// Opens a session, unless the machine is already converting as many as
+    /// its owner allowed.
     ///
     /// `expensive` is what the playback decision said: a stream being rebuilt
-    /// counts against the limit, one being copied does not.
+    /// counts against the ceiling, one being copied does not, since it costs
+    /// almost nothing and refusing it would turn a cheap request away for the
+    /// benefit of an expensive one. `most_at_once` is the ceiling, asked of the
+    /// settings on every opening so a change applies to the next film; none
+    /// means there is no ceiling at all.
     pub async fn open(
         &self,
         watcher: melyxar_core::id::UserId,
         recipe: Recipe,
         expensive: bool,
+        most_at_once: Option<u32>,
     ) -> Result<Arc<Session>> {
         let mut live = self.live.lock().await;
 
-        if expensive && self.most_at_once.is_some_and(|most| live.len() >= most) {
+        let converting = live.values().filter(|kept| kept.expensive).count();
+        if expensive && most_at_once.is_some_and(|most| converting >= most as usize) {
             // Told plainly rather than accepted and served badly: a machine
             // converting five films at once finishes none of them in time.
             return Err(StreamingError::TooManyAtOnce);
@@ -80,7 +88,13 @@ impl Sessions {
             )
             .await?,
         );
-        live.insert(id, Arc::clone(&session));
+        live.insert(
+            id,
+            Live {
+                session: Arc::clone(&session),
+                expensive,
+            },
+        );
         tracing::info!(session = %id, live = live.len(), "playback session opened");
         Ok(session)
     }
@@ -101,8 +115,8 @@ impl Sessions {
             .lock()
             .await
             .get(&id)
-            .filter(|session| session.watcher == watcher)
-            .cloned()
+            .filter(|kept| kept.session.watcher == watcher)
+            .map(|kept| Arc::clone(&kept.session))
             .ok_or(StreamingError::NoSuchSession)
     }
 
@@ -116,8 +130,8 @@ impl Sessions {
             .lock()
             .await
             .get(&id)
-            .filter(|session| session.watcher == watcher)
-            .cloned();
+            .filter(|kept| kept.session.watcher == watcher)
+            .map(|kept| Arc::clone(&kept.session));
         if let Some(session) = session {
             self.live.lock().await.remove(&id);
             session.close().await;
@@ -137,11 +151,11 @@ impl Sessions {
         {
             let mut live = self.live.lock().await;
             let mut keeping = HashMap::new();
-            for (id, session) in live.drain() {
-                if session.idle_for().await >= idle_for {
-                    going.push(session);
+            for (id, kept) in live.drain() {
+                if kept.session.idle_for().await >= idle_for {
+                    going.push(kept.session);
                 } else {
-                    keeping.insert(id, session);
+                    keeping.insert(id, kept);
                 }
             }
             *live = keeping;
@@ -157,7 +171,13 @@ impl Sessions {
 
     /// Closes everything, which is what a server does on its way out.
     pub async fn close_all(&self) {
-        let all: Vec<Arc<Session>> = self.live.lock().await.drain().map(|(_, s)| s).collect();
+        let all: Vec<Arc<Session>> = self
+            .live
+            .lock()
+            .await
+            .drain()
+            .map(|(_, kept)| kept.session)
+            .collect();
         for session in all {
             session.close().await;
         }
@@ -221,9 +241,9 @@ mod tests {
         // being watched, so being signed in cannot be the same thing as being
         // signed in as whoever opened it.
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().to_path_buf(), Some(2));
+        let sessions = sessions(directory.path().to_path_buf());
         let mine = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, None)
             .await
             .expect("session opened");
 
@@ -247,21 +267,20 @@ mod tests {
         assert!(sessions.get(mine.id, a_watcher()).await.is_err());
     }
 
-    fn sessions(folder: PathBuf, most_at_once: Option<usize>) -> Sessions {
+    fn sessions(folder: PathBuf) -> Sessions {
         Sessions::new(
             folder,
             ToolPaths::discover(None, None).expect("the tools are installed here"),
-            most_at_once,
         )
     }
 
     #[tokio::test]
     async fn a_session_is_found_again_by_its_name_and_forgotten_once_closed() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), Some(2));
+        let sessions = sessions(directory.path().join("sessions"));
 
         let session = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, None)
             .await
             .expect("a session");
         assert_eq!(sessions.live_count().await, 1);
@@ -281,16 +300,16 @@ mod tests {
     #[tokio::test]
     async fn a_machine_already_converting_all_it_can_says_so_rather_than_accepting() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), Some(1));
+        let sessions = sessions(directory.path().join("sessions"));
 
         sessions
-            .open(a_watcher(), recipe(directory.path().join("one.mkv")), true)
+            .open(a_watcher(), recipe(directory.path().join("one.mkv")), true, Some(1))
             .await
             .expect("the first fits");
         assert!(
             matches!(
                 sessions
-                    .open(a_watcher(), recipe(directory.path().join("two.mkv")), true)
+                    .open(a_watcher(), recipe(directory.path().join("two.mkv")), true, Some(1))
                     .await,
                 Err(StreamingError::TooManyAtOnce)
             ),
@@ -301,11 +320,11 @@ mod tests {
     #[tokio::test]
     async fn with_no_ceiling_every_conversion_is_welcome() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), None);
+        let sessions = sessions(directory.path().join("sessions"));
 
         for name in ["one.mkv", "two.mkv", "three.mkv"] {
             sessions
-                .open(a_watcher(), recipe(directory.path().join(name)), true)
+                .open(a_watcher(), recipe(directory.path().join(name)), true, None)
                 .await
                 .expect("nobody set a ceiling");
         }
@@ -313,30 +332,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_film_being_copied_is_never_turned_away() {
-        // Copying costs almost nothing, so counting it against the limit would
-        // refuse a cheap request for the benefit of an expensive one.
+    async fn a_film_being_copied_is_never_turned_away_nor_counted() {
+        // Copying costs almost nothing, so counting it against the ceiling
+        // would refuse a cheap request for the benefit of an expensive one.
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), Some(1));
+        let sessions = sessions(directory.path().join("sessions"));
 
         sessions
-            .open(a_watcher(), recipe(directory.path().join("one.mkv")), true)
+            .open(a_watcher(), recipe(directory.path().join("one.mkv")), false, Some(1))
             .await
-            .expect("the expensive one fits");
+            .expect("a copy is welcome");
         sessions
-            .open(a_watcher(), recipe(directory.path().join("two.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("two.mkv")), true, Some(1))
+            .await
+            .expect("the copy holds no place a conversion needs");
+        sessions
+            .open(a_watcher(), recipe(directory.path().join("three.mkv")), false, Some(1))
             .await
             .expect("a copy is welcome all the same");
-        assert_eq!(sessions.live_count().await, 2);
+        assert_eq!(sessions.live_count().await, 3);
     }
 
     #[tokio::test]
     async fn a_session_nobody_is_watching_any_more_is_swept_away() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), Some(4));
+        let sessions = sessions(directory.path().join("sessions"));
 
         let session = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, None)
             .await
             .expect("a session");
         let folder = session.folder().to_path_buf();
@@ -357,9 +380,9 @@ mod tests {
     #[tokio::test]
     async fn a_session_being_used_is_not_swept_from_under_a_viewer() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), Some(4));
+        let sessions = sessions(directory.path().join("sessions"));
         let session = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, None)
             .await
             .expect("a session");
 
@@ -383,9 +406,9 @@ mod tests {
         // segment of the film, which reaches a viewer as a browser that
         // cannot read it. Reported from a real library after a pause.
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), Some(4));
+        let sessions = sessions(directory.path().join("sessions"));
         let session = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, None)
             .await
             .expect("a session");
 
@@ -410,7 +433,7 @@ mod tests {
         std::fs::write(folder.join("01a0-left-behind").join("segment-0.m4s"), b"x")
             .expect("an old segment");
 
-        let sessions = sessions(folder.clone(), Some(4));
+        let sessions = sessions(folder.clone());
         assert_eq!(sessions.sweep_what_a_previous_run_left().await, 1);
         assert!(!folder.join("01a0-left-behind").exists());
     }
@@ -418,13 +441,13 @@ mod tests {
     #[tokio::test]
     async fn closing_everything_leaves_nothing_live() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let sessions = sessions(directory.path().join("sessions"), Some(4));
+        let sessions = sessions(directory.path().join("sessions"));
         sessions
-            .open(a_watcher(), recipe(directory.path().join("one.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("one.mkv")), false, None)
             .await
             .expect("a session");
         sessions
-            .open(a_watcher(), recipe(directory.path().join("two.mkv")), false)
+            .open(a_watcher(), recipe(directory.path().join("two.mkv")), false, None)
             .await
             .expect("another");
 
