@@ -28,6 +28,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use melyxar_core::library::LibraryKind;
+use melyxar_core::work::{place_across, SeasonLength};
 
 use crate::naming::{self, LibrarySigns};
 
@@ -707,6 +708,58 @@ pub struct EpisodeOnDisk {
     pub series: NamedSeries,
     /// The season a folder above the file names, when one does.
     pub season_folder: Option<i32>,
+}
+
+/// The season a series has when nobody wrote a season anywhere.
+pub const THE_ONLY_SEASON: i32 = 1;
+
+/// Where an episode sits inside its series.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Filing {
+    pub season: i32,
+    /// Its number inside that season: the first it holds, for a file holding
+    /// several.
+    pub number: i32,
+    /// The number its file gave it across the whole series, for an anime
+    /// episode whose name and folders never said a season.
+    pub across: Option<i32>,
+}
+
+impl EpisodeOnDisk {
+    /// Where this episode goes in its series, given how many episodes the
+    /// provider counts in each of its seasons.
+    ///
+    /// The one answer the scan files a new episode by and the one an episode
+    /// already filed is checked against, so the two can never disagree.
+    pub fn filing(&self, kind: LibraryKind, lengths: &[SeasonLength]) -> Filing {
+        let read = &self.episode;
+        let across = (kind == LibraryKind::Anime
+            && read.season.is_none()
+            && self.season_folder.is_none()
+            && !read.holds_several())
+        .then_some(read.first);
+        let (season, number) = match across {
+            // Where the seasons the provider counted put it, and until the
+            // series has been described, the number as written in its one
+            // season.
+            Some(across) => place_across(across, lengths).unwrap_or((THE_ONLY_SEASON, across)),
+            // The name first, the season folder to fill in wherever it sits
+            // above the file, and the one season a series has when nobody ever
+            // wrote a season anywhere: a show with a single season is written
+            // without one, and that is what it means.
+            None => (
+                read.season
+                    .or(self.season_folder)
+                    .unwrap_or(THE_ONLY_SEASON),
+                read.first,
+            ),
+        };
+        Filing {
+            season,
+            number,
+            across,
+        }
+    }
 }
 
 /// Reads which episode a file is and which series it belongs to, from its
@@ -1431,5 +1484,94 @@ mod tests {
             Some(("Amber Field".to_string(), None, 12))
         );
         assert_eq!(on_disk(path, LibraryKind::Series), None);
+    }
+
+    /// Where a path files its episode, in a library of that kind.
+    fn filed(path: &str, kind: LibraryKind, lengths: &[SeasonLength]) -> Filing {
+        read_path(Path::new(path), kind, THIS_YEAR, &LibrarySigns::default())
+            .expect("read")
+            .filing(kind, lengths)
+    }
+
+    #[test]
+    fn an_episode_is_filed_by_its_name_then_its_folder_then_the_only_season() {
+        assert_eq!(
+            filed(
+                "Distant Signal/Season 3/Distant.Signal.S02E04.mkv",
+                LibraryKind::Series,
+                &[]
+            ),
+            Filing {
+                season: 2,
+                number: 4,
+                across: None
+            },
+            "the name before the folder"
+        );
+        assert_eq!(
+            filed("Distant Signal/Season 3/E04.mkv", LibraryKind::Series, &[]),
+            Filing {
+                season: 3,
+                number: 4,
+                across: None
+            }
+        );
+        assert_eq!(
+            filed(
+                "Distant Signal/Distant Signal E04.mkv",
+                LibraryKind::Series,
+                &[]
+            ),
+            Filing {
+                season: THE_ONLY_SEASON,
+                number: 4,
+                across: None
+            }
+        );
+    }
+
+    #[test]
+    fn an_anime_episode_numbered_across_goes_where_the_counted_seasons_put_it() {
+        let path = "Amber Field/Amber Field - 29.mkv";
+        assert_eq!(
+            filed(path, LibraryKind::Anime, &[]),
+            Filing {
+                season: THE_ONLY_SEASON,
+                number: 29,
+                across: Some(29)
+            },
+            "until the seasons are counted, as written in its one season"
+        );
+        let counted = [
+            SeasonLength {
+                season: 1,
+                episodes: 28,
+            },
+            SeasonLength {
+                season: 2,
+                episodes: 12,
+            },
+        ];
+        assert_eq!(
+            filed(path, LibraryKind::Anime, &counted),
+            Filing {
+                season: 2,
+                number: 1,
+                across: Some(29)
+            }
+        );
+        assert_eq!(
+            filed(
+                "Amber Field/Season 2/Amber Field - 01.mkv",
+                LibraryKind::Anime,
+                &counted
+            ),
+            Filing {
+                season: 2,
+                number: 1,
+                across: None
+            },
+            "a season folder says the number is inside its season"
+        );
     }
 }

@@ -20,8 +20,9 @@ use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::media::{SubtitleDetails, Track, TrackKind};
 use melyxar_core::media_log::{file_name_of, MediaPath};
 use melyxar_core::refresh::RefreshMode;
-use melyxar_core::work::{place_across, WorkKind};
+use melyxar_core::work::{SeasonLength, WorkKind};
 use melyxar_database::catalogue::{LocalExtraVideo, SourceAnalysis, StoredSource};
+use melyxar_database::numbering::EpisodeMove;
 use melyxar_database::Database;
 use melyxar_jobs::{JobHandle, StartedJob};
 use melyxar_library::scan::{walk, FoundFile, KnownFile, ScanError};
@@ -55,6 +56,9 @@ pub struct ScanReport {
     /// Works that turned out to be another copy of a film already here, and
     /// whose files joined it rather than standing as a film of their own.
     pub merged: usize,
+    /// Episodes moved to where their files now say they go in their series,
+    /// because the rules that read a season and a number improved.
+    pub refiled: usize,
     pub extras: usize,
     /// Subtitle files attached to the film they sit next to.
     pub external_subtitles: usize,
@@ -81,6 +85,7 @@ impl ScanReport {
             || self.pictured > 0
             || self.renamed > 0
             || self.merged > 0
+            || self.refiled > 0
     }
 }
 
@@ -416,6 +421,7 @@ pub async fn scan_library(
     let reread = reread_names_of_nameless_works(state, library).await?;
     report.renamed = reread.renamed;
     report.merged = reread.merged;
+    report.refiled = reread.refiled;
     analyse_pending(state, library, handle, &mut report).await?;
     // After the analysis, which is what says where in a video its picture is.
     if library.kind == LibraryKind::HomeMedia {
@@ -444,6 +450,7 @@ pub async fn scan_library(
         missing = report.missing,
         restored = report.restored,
         moved = report.moved,
+        refiled = report.refiled,
         unchanged = report.unchanged,
         analysed = report.analysed,
         pictured = report.pictured,
@@ -656,8 +663,122 @@ pub(crate) async fn reread_names_of_nameless_works(
     reread_names_of_nameless_series(state, library, year, &signs, &mut done).await?;
     if library.kind.is_episodic() {
         done.merged += file_what_belonged_to_nothing(state, library, &signs).await?;
+        done.refiled = file_episodes_again(state, library, year, &signs).await?;
     }
     Ok(done)
+}
+
+/// Puts every episode back where its files now say it goes in its series.
+///
+/// The scan files an episode once, when its file first turns up, and never
+/// looks at a file again that has not changed on the disk. The rules that
+/// read a season and a number out of a path improve, and without this an
+/// episode filed wrongly once stays in the wrong season, or under the wrong
+/// number, for as long as the library exists.
+///
+/// Only inside the series it is under. Which series a folder names is read
+/// again for the series nobody has named, above; one a provider named is
+/// named by it now, and a folder read differently is no reason to take its
+/// episodes away from it.
+///
+/// An episode moves with everything it holds, since it is the same episode:
+/// where each person was in it, what they watched and kept. One landing where
+/// another already stood is the same episode twice and the two become one,
+/// and a season left with nothing in it goes, all of which `place_episodes`
+/// does for the provider's counting already.
+///
+/// An episode whose files disagree is left where it is: nothing says which
+/// of them is right.
+async fn file_episodes_again(
+    state: &AppState,
+    library: &Library,
+    year: i32,
+    signs: &naming::LibrarySigns,
+) -> Result<usize> {
+    let database = state.database();
+    let filed = database.filed_episodes(library.id).await?;
+    let mut refiled = 0;
+
+    for of_one_series in filed.chunk_by(|one, two| one.series == two.series) {
+        let series = of_one_series[0].series;
+        // Asked for only when an episode is numbered across its series, which
+        // only ever happens in a library of anime.
+        let mut lengths: Option<Vec<SeasonLength>> = None;
+        let mut moves = Vec::new();
+
+        for files in of_one_series.chunk_by(|one, two| one.id == two.id) {
+            let current = &files[0];
+            let mut agreed: Option<(episode::Filing, i32)> = None;
+            let mut disagree = false;
+            for file in files {
+                let Some(on_disk) =
+                    episode::read_path(&file.relative_path, library.kind, year, signs)
+                else {
+                    disagree = true;
+                    break;
+                };
+                let mut filing = on_disk.filing(library.kind, &[]);
+                if filing.across.is_some() {
+                    if lengths.is_none() {
+                        lengths = Some(database.season_lengths(series).await?);
+                    }
+                    filing = on_disk.filing(library.kind, lengths.as_deref().unwrap_or_default());
+                }
+                let span = on_disk.episode.last - on_disk.episode.first;
+                match agreed {
+                    None => agreed = Some((filing, span)),
+                    Some(said) if said == (filing, span) => {}
+                    Some(_) => {
+                        disagree = true;
+                        break;
+                    }
+                }
+            }
+            let Some((filing, span)) = agreed.filter(|_| !disagree) else {
+                continue;
+            };
+            if (filing.season, filing.number, filing.across)
+                == (current.season, current.ordinal, current.absolute_number)
+            {
+                continue;
+            }
+
+            // A name that was only ever the number follows the number.
+            let renamed = (current.title
+                == crate::episodes::name_of_episode(current.ordinal, current.ordinal + span))
+            .then(|| {
+                let title = crate::episodes::name_of_episode(filing.number, filing.number + span);
+                let sort_title = naming::sort_title(&title);
+                (title, sort_title)
+            });
+            let season_title = crate::episodes::name_of_season(filing.season);
+            tracing::info!(
+                file = %current.relative_path.display(),
+                was_season = current.season,
+                was_episode = current.ordinal,
+                season = filing.season,
+                episode = filing.number,
+                "an episode reads as another place in its series now, and was moved there"
+            );
+            moves.push(EpisodeMove {
+                episode: current.id,
+                season: filing.season,
+                season_sort_title: naming::sort_title(&season_title),
+                season_title,
+                ordinal: filing.number,
+                absolute_number: filing.across,
+                renamed,
+            });
+        }
+
+        if moves.is_empty() {
+            continue;
+        }
+        let no_longer_used = database.place_episodes(library.id, series, &moves).await?;
+        crate::images::forget_the_pictures(state, &no_longer_used).await;
+        refiled += moves.len();
+    }
+    Ok(refiled)
 }
 
 /// Files again every episode a scan could not place under a series, now that
@@ -887,6 +1008,8 @@ pub(crate) struct Reread {
     pub renamed: usize,
     /// Works that turned out to be one already in the library.
     pub merged: usize,
+    /// Episodes moved to where their files now say they go in their series.
+    pub refiled: usize,
 }
 
 /// What the names of this library carry, read off the library itself.
@@ -961,21 +1084,10 @@ async fn episode_work_for(
     signs: &naming::LibrarySigns,
 ) -> Result<Option<WorkId>> {
     let year = melyxar_core::time::current_year();
-    let Some(episode::EpisodeOnDisk {
-        episode: read,
-        series: named,
-        season_folder: from_a_season_folder,
-    }) = episode::read_path(relative_path, library.kind, year, signs)
-    else {
+    let Some(on_disk) = episode::read_path(relative_path, library.kind, year, signs) else {
         return Ok(None);
     };
-    // An anime episode whose name and folders never said a season is numbered
-    // across the whole series rather than inside one of its seasons.
-    let across = (library.kind == LibraryKind::Anime
-        && read.season.is_none()
-        && from_a_season_folder.is_none()
-        && !read.holds_several())
-    .then_some(read.first);
+    let (read, named) = (&on_disk.episode, &on_disk.series);
 
     let database = state.database();
     let series_sort = naming::sort_title(&named.title);
@@ -1001,22 +1113,17 @@ async fn episode_work_for(
         }
     };
 
-    let (season, number) = match across {
-        // Where the seasons the provider counted put it, and until the series
-        // has been described, the number as written in its one season.
-        Some(across) => place_across(across, &database.season_lengths(series.id).await?)
-            .unwrap_or((THE_ONLY_SEASON, across)),
-        // The name first, the season folder to fill in wherever it sits above
-        // the file, and the one season a series has when nobody ever wrote a
-        // season anywhere: a show with a single season is written without
-        // one, and that is what it means.
-        None => (
-            read.season
-                .or(from_a_season_folder)
-                .unwrap_or(THE_ONLY_SEASON),
-            read.first,
-        ),
-    };
+    // The seasons the provider counted matter only to an episode numbered
+    // across its series, so they are asked for only then.
+    let mut filing = on_disk.filing(library.kind, &[]);
+    if filing.across.is_some() {
+        filing = on_disk.filing(library.kind, &database.season_lengths(series.id).await?);
+    }
+    let episode::Filing {
+        season,
+        number,
+        across,
+    } = filing;
 
     let season_work = child_at(
         state,
@@ -1090,9 +1197,6 @@ async fn child_at(
         }
     })
 }
-
-/// The season a series has when nobody wrote a season anywhere.
-const THE_ONLY_SEASON: i32 = 1;
 
 /// Attaches trailers and other clips to the film they sit next to.
 async fn attach_companions(
@@ -1861,6 +1965,250 @@ mod tests {
         assert_eq!(seasons.len(), 1);
         assert_eq!(seasons[0].ordinal, Some(1));
         assert_eq!(of_kind(&works, WorkKind::Episode).len(), 2);
+    }
+
+    /// Files an episode somewhere else in its series, the way an older
+    /// reading of its name would have.
+    async fn filed_elsewhere(
+        state: &AppState,
+        library: &Library,
+        episode: WorkId,
+        season: i32,
+        ordinal: i32,
+    ) {
+        let series = state
+            .database()
+            .filed_episodes(library.id)
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|filed| filed.id == episode)
+            .expect("filed")
+            .series;
+        let season_title = crate::episodes::name_of_season(season);
+        state
+            .database()
+            .place_episodes(
+                library.id,
+                series,
+                &[EpisodeMove {
+                    episode,
+                    season,
+                    season_sort_title: naming::sort_title(&season_title),
+                    season_title,
+                    ordinal,
+                    absolute_number: None,
+                    renamed: None,
+                }],
+            )
+            .await
+            .expect("placed");
+    }
+
+    /// Where each episode of the library sits, as (season, episode) by file.
+    async fn filing_by_file(state: &AppState, library: &Library) -> Vec<(String, i32, i32)> {
+        let mut filed: Vec<(String, i32, i32)> = state
+            .database()
+            .filed_episodes(library.id)
+            .await
+            .expect("read")
+            .into_iter()
+            .map(|filed| {
+                (
+                    filed.relative_path.display().to_string(),
+                    filed.season,
+                    filed.ordinal,
+                )
+            })
+            .collect();
+        filed.sort();
+        filed
+    }
+
+    #[tokio::test]
+    async fn an_episode_filed_wrongly_goes_back_where_its_file_says_with_what_each_viewer_had() {
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Season 1/Distant.Signal.S01E01.mkv",
+            b"x",
+        );
+        write(
+            &media,
+            "Distant Signal/Season 1/Distant.Signal.S01E02.mkv",
+            b"xx",
+        );
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let second = of_kind(&arrangement(&state, &library).await, WorkKind::Episode)[1].id;
+
+        // Filed by an older reading in a season of its own, under the wrong
+        // number, and watched partway there.
+        filed_elsewhere(&state, &library, second, 3, 7).await;
+        let viewer = crate::a_viewer(&state).await;
+        state
+            .database()
+            .record_playback_progress(
+                viewer.id,
+                second,
+                melyxar_core::time::Millis::new(600_000),
+                melyxar_core::work::PlaybackState::InProgress,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("recorded");
+
+        let report = scan(&state, &library).await;
+
+        assert_eq!(report.refiled, 1);
+        assert_eq!(
+            filing_by_file(&state, &library).await,
+            [
+                (
+                    "Distant Signal/Season 1/Distant.Signal.S01E01.mkv".to_string(),
+                    1,
+                    1
+                ),
+                (
+                    "Distant Signal/Season 1/Distant.Signal.S01E02.mkv".to_string(),
+                    1,
+                    2
+                ),
+            ]
+        );
+        let works = arrangement(&state, &library).await;
+        assert_eq!(
+            of_kind(&works, WorkKind::Season).len(),
+            1,
+            "the season it was taken out of held nothing else, and went"
+        );
+        let progress = state
+            .database()
+            .playback_progress(viewer.id, second)
+            .await
+            .expect("read")
+            .expect("still there");
+        assert_eq!(
+            progress.position,
+            melyxar_core::time::Millis::new(600_000),
+            "the same episode, so where the viewer was in it comes along"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_library_filed_right_moves_nothing() {
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Season 2/Distant.Signal.S02E05.mkv",
+            b"x",
+        );
+        write(&media, "Distant Signal/Episode 3.mkv", b"xx");
+        write(&media, "Distant Signal/Season 3/E04.mkv", b"xxx");
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media)]).await;
+        scan(&state, &library).await;
+        let before = filing_by_file(&state, &library).await;
+
+        let report = scan(&state, &library).await;
+
+        assert_eq!(report.refiled, 0);
+        assert_eq!(filing_by_file(&state, &library).await, before);
+    }
+
+    #[tokio::test]
+    async fn an_episode_whose_files_disagree_stays_where_it_is() {
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(
+            &media,
+            "Distant Signal/Season 1/Distant.Signal.S01E01.mkv",
+            b"x",
+        );
+        let (state, library) =
+            series_state_with_roots(directory.path(), vec![("disk-one", media.clone())]).await;
+        scan(&state, &library).await;
+        let first = of_kind(&arrangement(&state, &library).await, WorkKind::Episode)[0].id;
+        // A second file on the same episode that reads as another one.
+        write(
+            &media,
+            "Distant Signal/Season 1/Distant.Signal.S01E05.mkv",
+            b"xx",
+        );
+        state
+            .database()
+            .insert_source(
+                first,
+                library.roots[0].id,
+                Path::new("Distant Signal/Season 1/Distant.Signal.S01E05.mkv"),
+                2,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("written down");
+        filed_elsewhere(&state, &library, first, 1, 9).await;
+
+        let report = scan(&state, &library).await;
+
+        assert_eq!(report.refiled, 0, "nothing says which of the two is right");
+        assert_eq!(
+            state
+                .database()
+                .work(first)
+                .await
+                .expect("read")
+                .expect("kept")
+                .ordinal,
+            Some(9)
+        );
+    }
+
+    #[tokio::test]
+    async fn an_anime_episode_placed_by_the_counted_seasons_stays_there() {
+        let directory = tempfile::tempdir().expect("temporary folder");
+        let media = directory.path().join("media");
+        write(&media, "Amber Field/Amber Field - 29.mkv", b"x");
+        let (state, library) =
+            state_of_kind(directory.path(), vec![("disk-one", media)], false, "anime").await;
+        scan(&state, &library).await;
+        let series = of_kind(&arrangement(&state, &library).await, WorkKind::Series)[0].id;
+        state
+            .database()
+            .set_season_lengths(
+                series,
+                &[
+                    SeasonLength {
+                        season: 1,
+                        episodes: 28,
+                    },
+                    SeasonLength {
+                        season: 2,
+                        episodes: 12,
+                    },
+                ],
+            )
+            .await
+            .expect("counted");
+
+        // Put by the counting where the provider says it goes, and read again
+        // by every scan after that without moving.
+        assert_eq!(scan(&state, &library).await.refiled, 1);
+        assert_eq!(scan(&state, &library).await.refiled, 0);
+        let numbered = state
+            .database()
+            .episodes_numbered_across(series)
+            .await
+            .expect("read");
+        assert_eq!(
+            numbered
+                .iter()
+                .map(|episode| (episode.absolute_number, episode.season, episode.ordinal))
+                .collect::<Vec<_>>(),
+            [(29, 2, 1)]
+        );
     }
 
     #[tokio::test]

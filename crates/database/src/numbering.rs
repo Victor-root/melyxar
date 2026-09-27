@@ -8,6 +8,7 @@
 //! either one changes.
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::time::now;
@@ -38,8 +39,23 @@ pub struct EpisodeMove {
     pub season_title: String,
     pub season_sort_title: String,
     pub ordinal: i32,
+    /// The number its file gave it across the whole series, if it gave one.
+    pub absolute_number: Option<i32>,
     /// A new name, for an episode whose name was only ever its number.
     pub renamed: Option<(String, String)>,
+}
+
+/// An episode filed under a season of a series, with one of its files and
+/// where it sits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FiledEpisode {
+    pub id: WorkId,
+    pub series: WorkId,
+    pub season: i32,
+    pub ordinal: i32,
+    pub absolute_number: Option<i32>,
+    pub title: String,
+    pub relative_path: PathBuf,
 }
 
 impl Database {
@@ -115,6 +131,44 @@ impl Database {
         .collect()
     }
 
+    /// Every episode of a library filed under a season of a series, once for
+    /// each of its files still on the disk, a series after another.
+    ///
+    /// Read in one go for the whole library: it is what the paths are checked
+    /// against after every scan, and a query per series would be one per
+    /// series of the collection each time.
+    pub async fn filed_episodes(&self, library_id: LibraryId) -> Result<Vec<FiledEpisode>> {
+        sqlx::query(
+            "SELECT episode.id, series.id AS series, season.ordinal AS season,
+                    episode.ordinal, episode.absolute_number, episode.title,
+                    s.relative_path
+             FROM works series
+             JOIN works season ON season.parent_id = series.id
+             JOIN works episode ON episode.parent_id = season.id
+             JOIN media_sources s ON s.work_id = episode.id
+             WHERE series.library_id = ? AND series.kind = 'series'
+               AND season.ordinal IS NOT NULL AND episode.ordinal IS NOT NULL
+               AND s.missing_since IS NULL
+             ORDER BY series.id, episode.id",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?
+        .iter()
+        .map(|row| {
+            Ok(FiledEpisode {
+                id: parse_id(&row.try_get::<String, _>("id")?)?,
+                series: parse_id(&row.try_get::<String, _>("series")?)?,
+                season: row.try_get("season")?,
+                ordinal: row.try_get("ordinal")?,
+                absolute_number: row.try_get("absolute_number")?,
+                title: row.try_get("title")?,
+                relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
+            })
+        })
+        .collect()
+    }
+
     /// Puts episodes of a series where they belong, in one go.
     ///
     /// Every episode is moved before anything is compared, because two of
@@ -159,13 +213,14 @@ impl Database {
             };
             let (title, sort_title) = placed.renamed.clone().unzip();
             sqlx::query(
-                "UPDATE works SET parent_id = ?, ordinal = ?,
+                "UPDATE works SET parent_id = ?, ordinal = ?, absolute_number = ?,
                         title = coalesce(?, title), sort_title = coalesce(?, sort_title),
                         updated_at = ?
                  WHERE id = ?",
             )
             .bind(season.to_db_string())
             .bind(placed.ordinal)
+            .bind(placed.absolute_number)
             .bind(title)
             .bind(sort_title)
             .bind(&moment)
@@ -327,13 +382,14 @@ mod tests {
         (series.id, season.id)
     }
 
-    fn a_move(episode: WorkId, season: i32, ordinal: i32) -> EpisodeMove {
+    fn a_move(episode: &NumberedAcross, season: i32, ordinal: i32) -> EpisodeMove {
         EpisodeMove {
-            episode,
+            episode: episode.id,
             season,
             season_title: format!("Season {season}"),
             season_sort_title: format!("season {season}"),
             ordinal,
+            absolute_number: Some(episode.absolute_number),
             renamed: Some((format!("Episode {ordinal}"), format!("episode {ordinal}"))),
         }
     }
@@ -405,7 +461,7 @@ mod tests {
             .expect("read");
 
         database
-            .place_episodes(library_id, series, &[a_move(found[2].id, 2, 1)])
+            .place_episodes(library_id, series, &[a_move(&found[2], 2, 1)])
             .await
             .expect("placed");
 
@@ -459,7 +515,7 @@ mod tests {
             .place_episodes(
                 library_id,
                 series,
-                &[a_move(found[0].id, 1, 2), a_move(found[1].id, 1, 1)],
+                &[a_move(&found[0], 1, 2), a_move(&found[1], 1, 1)],
             )
             .await
             .expect("placed");
@@ -500,7 +556,7 @@ mod tests {
             .expect("read");
 
         database
-            .place_episodes(library_id, series, &[a_move(found[0].id, 2, 1)])
+            .place_episodes(library_id, series, &[a_move(&found[0], 2, 1)])
             .await
             .expect("placed");
 
@@ -518,5 +574,115 @@ mod tests {
             database.work(season_one).await.expect("read").is_none(),
             "a season left with nothing in it goes"
         );
+    }
+
+    #[tokio::test]
+    async fn filed_episodes_come_with_a_line_for_each_file_on_the_disk() {
+        let (database, library_id, root_id) = library().await;
+        let (series, _) = numbered_across(&database, library_id, root_id, &[1, 2]).await;
+        let found = database
+            .episodes_numbered_across(series)
+            .await
+            .expect("read");
+        database
+            .insert_source(
+                found[0].id,
+                root_id,
+                &PathBuf::from("Amber Field/Amber Field - 01 [1080p].mkv"),
+                12,
+                now(),
+            )
+            .await
+            .expect("second file written down");
+        let gone = database
+            .insert_source(
+                found[1].id,
+                root_id,
+                &PathBuf::from("Amber Field - 02 [old].mkv"),
+                12,
+                now(),
+            )
+            .await
+            .expect("file written down");
+        database
+            .mark_source_missing(gone)
+            .await
+            .expect("marked missing");
+
+        let filed = database.filed_episodes(library_id).await.expect("read");
+        let mut lines: Vec<(WorkId, i32, i32, Option<i32>, String)> = filed
+            .iter()
+            .map(|episode| {
+                assert_eq!(episode.series, series);
+                (
+                    episode.id,
+                    episode.season,
+                    episode.ordinal,
+                    episode.absolute_number,
+                    episode.relative_path.display().to_string(),
+                )
+            })
+            .collect();
+        lines.sort_by(|one, two| one.4.cmp(&two.4));
+        assert_eq!(
+            lines,
+            [
+                (
+                    found[0].id,
+                    1,
+                    1,
+                    Some(1),
+                    "Amber Field - 1.mkv".to_string()
+                ),
+                (
+                    found[1].id,
+                    1,
+                    2,
+                    Some(2),
+                    "Amber Field - 2.mkv".to_string()
+                ),
+                (
+                    found[0].id,
+                    1,
+                    1,
+                    Some(1),
+                    "Amber Field/Amber Field - 01 [1080p].mkv".to_string()
+                ),
+            ],
+            "a file gone from the disk is not read again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_move_writes_the_number_across_the_series_it_is_given() {
+        let (database, library_id, root_id) = library().await;
+        let (series, _) = numbered_across(&database, library_id, root_id, &[3]).await;
+        let found = database
+            .episodes_numbered_across(series)
+            .await
+            .expect("read");
+
+        database
+            .place_episodes(
+                library_id,
+                series,
+                &[EpisodeMove {
+                    absolute_number: None,
+                    ..a_move(&found[0], 2, 3)
+                }],
+            )
+            .await
+            .expect("placed");
+
+        assert!(
+            database
+                .episodes_numbered_across(series)
+                .await
+                .expect("read")
+                .is_empty(),
+            "an episode its file numbers inside its season is no longer numbered across"
+        );
+        let filed = database.filed_episodes(library_id).await.expect("read");
+        assert_eq!((filed[0].season, filed[0].ordinal), (2, 3));
     }
 }
