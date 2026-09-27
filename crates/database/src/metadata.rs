@@ -243,6 +243,7 @@ impl Database {
             "SELECT {} FROM works
              WHERE library_id = ? AND identification IN ('pending', 'unidentified')
                AND kind IN ('movie', 'series')
+               AND coalesce(identification_note, '') <> 'cleared_by_hand'
              ORDER BY added_at",
             crate::catalogue::what_a_work_is("")
         )))
@@ -688,8 +689,10 @@ impl Database {
         let mut transaction = self.begin().await?;
         sqlx::query(
             "UPDATE works SET title = ?, sort_title = ?, release_year = ?,
-                -- The old reason spoke of the old title.
-                identification_note = NULL,
+                -- The old reason spoke of the old title, except that a person
+                -- took the provider's answer away, which still holds.
+                identification_note = CASE WHEN identification_note = 'cleared_by_hand'
+                                           THEN identification_note END,
                 updated_at = ?
              WHERE id = ?",
         )
@@ -725,6 +728,71 @@ impl Database {
             .execute(self.writer())
             .await?;
         Ok(())
+    }
+
+    /// Takes away everything a provider said about a work and about what
+    /// hangs under it, and the locks written by hand with it, leaving the work
+    /// named as it was before, to be read off its files again.
+    ///
+    /// Answers with the pictures no longer used, whose files the caller
+    /// removes.
+    pub async fn clear_identification(&self, work_id: WorkId) -> Result<Vec<String>> {
+        const TREE: &str = "WITH RECURSIVE tree(id) AS (
+                SELECT ?1 UNION ALL SELECT w.id FROM works w JOIN tree ON w.parent_id = tree.id)";
+        let mut transaction = self.begin().await?;
+        let id = work_id.to_db_string();
+
+        let pictures: Vec<String> = sqlx::query(AssertSqlSafe(format!(
+            "{TREE} SELECT relative_path FROM images
+             WHERE owner_kind = 'work' AND owner_id IN (SELECT id FROM tree)"
+        )))
+        .bind(&id)
+        .fetch_all(&mut *transaction)
+        .await?
+        .iter()
+        .map(|row| row.try_get::<String, _>("relative_path"))
+        .collect::<std::result::Result<_, _>>()?;
+
+        for statement in [
+            "DELETE FROM images WHERE owner_kind = 'work' AND owner_id IN (SELECT id FROM tree)",
+            "DELETE FROM work_external_ids WHERE work_id IN (SELECT id FROM tree)",
+            "DELETE FROM work_translations WHERE work_id IN (SELECT id FROM tree)",
+            "DELETE FROM work_genres WHERE work_id IN (SELECT id FROM tree)",
+            "DELETE FROM work_studios WHERE work_id IN (SELECT id FROM tree)",
+            "DELETE FROM credits WHERE work_id IN (SELECT id FROM tree)",
+            "DELETE FROM work_locked_fields WHERE work_id IN (SELECT id FROM tree)",
+            "DELETE FROM work_field_provenance WHERE work_id IN (SELECT id FROM tree)",
+            "DELETE FROM extra_videos
+             WHERE work_id IN (SELECT id FROM tree) AND remote_url IS NOT NULL",
+            // Only the collections a provider made: one a person put together
+            // is theirs.
+            "DELETE FROM collection_items
+             WHERE work_id IN (SELECT id FROM tree)
+               AND collection_id IN (SELECT id FROM collections WHERE origin = 'provider')",
+            "UPDATE works SET community_rating = NULL, critic_rating = NULL, runtime_ms = NULL,
+                              age_rating_label = NULL, release_date = NULL, end_date = NULL,
+                              dominant_color = NULL
+             WHERE id IN (SELECT id FROM tree)",
+        ] {
+            sqlx::query(AssertSqlSafe(format!("{TREE} {statement}")))
+                .bind(&id)
+                .execute(&mut *transaction)
+                .await?;
+        }
+
+        sqlx::query(
+            "UPDATE works SET identification = ?, identification_note = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(IdentificationState::Unidentified.as_str())
+        .bind(IdentificationNote::ClearedByHand.as_str())
+        .bind(timestamp_to_text(now()))
+        .bind(&id)
+        .execute(&mut *transaction)
+        .await?;
+
+        transaction.commit().await?;
+        Ok(pictures)
     }
 
     /// Writes down everything a provider said about a work.
@@ -1715,6 +1783,75 @@ mod tests {
             .await
             .expect("read");
         assert_eq!(count.0, 2, "two films sharing two genres make two genres");
+    }
+
+    #[tokio::test]
+    async fn clearing_what_a_provider_said_leaves_the_work_as_the_disk_named_it() {
+        let (database, work) = work_in_library().await;
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("identified");
+        database.lock_field(work.id, "title").await.expect("locked");
+        database
+            .replace_images(
+                "work",
+                &work.id.to_db_string(),
+                "poster",
+                &[crate::images::StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: work.id.to_db_string(),
+                    image_kind: "poster".to_string(),
+                    relative_path: "works/x/poster-200.webp".to_string(),
+                    width: Some(200),
+                    height: Some(300),
+                    fingerprint: "abc".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("picture stored");
+
+        let gone = database.clear_identification(work.id).await.expect("cleared");
+
+        assert_eq!(gone, vec!["works/x/poster-200.webp"]);
+        let cleared = database.work(work.id).await.expect("read").expect("present");
+        assert_eq!(cleared.identification, IdentificationState::Unidentified);
+        assert_eq!(cleared.identification_note, Some(IdentificationNote::ClearedByHand));
+        assert_eq!(cleared.age_rating_label, None);
+        assert_eq!(cleared.runtime, None);
+        assert!(database.work_external_ids(work.id).await.expect("read").is_empty());
+        assert!(database.work_genres(work.id).await.expect("read").is_empty());
+        assert!(database.work_credits(work.id).await.expect("read").is_empty());
+        assert!(database.locked_fields(work.id).await.expect("read").is_empty());
+        assert_eq!(database.work_translation(work.id, "fr").await.expect("read"), None);
+        assert!(
+            database
+                .works_awaiting_identification(work.library_id)
+                .await
+                .expect("read")
+                .is_empty(),
+            "named wrongly once, it is not handed to the same guess again"
+        );
+
+        database
+            .rename_work(work.id, "Quiet Harbour", "quiet harbour", Some(2019))
+            .await
+            .expect("renamed");
+        assert_eq!(
+            database.work(work.id).await.expect("read").expect("present").identification_note,
+            Some(IdentificationNote::ClearedByHand),
+            "a name read again off the disk does not undo what a person asked"
+        );
+
+        database
+            .apply_identification(work.id, &found(), true)
+            .await
+            .expect("named by hand");
+        assert_eq!(
+            database.work(work.id).await.expect("read").expect("present").identification_note,
+            None
+        );
     }
 
     #[tokio::test]

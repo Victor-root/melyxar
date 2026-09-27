@@ -22,16 +22,20 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { api } from "../api";
 import type { Card } from "../api";
 import { useAccount } from "../account";
+import { refusalAbout } from "../asking";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 import { isCatalogued, playsOnItsOwn } from "../works";
 import { DeleteDialog } from "./deletion";
 import { IdentifyDialog } from "./identify";
 import { DetailsDialog } from "./details";
+import { ForgetIdentityDialog } from "./forgetting";
 import { PicturesDialog } from "./pictures";
 import { useSelection } from "./selection";
+import { useToast } from "./toasts";
 import {
   ClockIcon,
   CollectionIcon,
@@ -106,6 +110,25 @@ export function useWorkMenu(
   const [identifying, setIdentifying] = useState(false);
   const [choosingPictures, setChoosingPictures] = useState(false);
   const [writingDetails, setWritingDetails] = useState(false);
+  const [forgetting, setForgetting] = useState(false);
+  const { t } = useSettings();
+  const toast = useToast();
+
+  /* Asked straight away, with nothing to choose first; what came of it is
+     said in the corner. */
+  const refresh = async () => {
+    try {
+      const { outcome } = await api.refreshWork(card.id);
+      toast(
+        outcome === "described"
+          ? { state: "ok", title: t("refresh.done", { title: card.title }) }
+          : { state: "attention", title: t(`refresh.${outcome}`), detail: t(`refresh.${outcome}_why`) },
+      );
+      after.identified();
+    } catch (error) {
+      toast({ state: "trouble", title: t("refresh.failed"), detail: t(refusalAbout(error, "refresh")) });
+    }
+  };
   const [deleting, setDeleting] = useState(false);
   const shut = useCallback(() => setFrom(null), []);
 
@@ -123,6 +146,8 @@ export function useWorkMenu(
           onIdentify={() => setIdentifying(true)}
           onEditImages={() => setChoosingPictures(true)}
           onEditDetails={() => setWritingDetails(true)}
+          onForgetIdentity={() => setForgetting(true)}
+          onRefresh={refresh}
           onDelete={() => setDeleting(true)}
           onClose={shut}
         />
@@ -150,6 +175,14 @@ export function useWorkMenu(
           onChanged={after.detailsChanged}
         />
       )}
+      {forgetting && (
+        <ForgetIdentityDialog
+          workId={card.id}
+          title={card.title}
+          onClose={() => setForgetting(false)}
+          onForgotten={after.identified}
+        />
+      )}
       {deleting && (
         <DeleteDialog
           works={[card]}
@@ -173,6 +206,8 @@ export function CardMenu({
   onIdentify,
   onEditImages,
   onEditDetails,
+  onForgetIdentity,
+  onRefresh,
   onDelete,
   onClose,
 }: {
@@ -195,6 +230,11 @@ export function CardMenu({
   /** Opens the window its details are written in by hand, for the same
       reason again. */
   onEditDetails: () => void;
+  /** Asks before taking away what a provider said about it, for the same
+      reason again. */
+  onForgetIdentity: () => void;
+  /** Asks the provider again about it. */
+  onRefresh: () => void;
   /** Opens the question put before this work is deleted, for the same
       reason again. */
   onDelete: () => void;
@@ -343,14 +383,17 @@ export function CardMenu({
     {
       key: "forget_identity",
       mark: <ForgetIcon size={SHAPE} />,
-      allowed: account?.is_administrator === true,
-      later: true,
+      allowed:
+        account?.is_administrator === true &&
+        (card.kind === "movie" || card.kind === "series") &&
+        (card.identification === "identified" || card.identification === "manual"),
+      act: onForgetIdentity,
     },
     {
       key: "refresh",
       mark: <RefreshIcon size={SHAPE} />,
-      allowed: account?.is_administrator === true,
-      later: true,
+      allowed: account?.is_administrator === true && catalogued,
+      act: onRefresh,
     },
     {
       /* Says what it will do rather than always the same thing. Nothing is

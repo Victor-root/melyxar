@@ -16,7 +16,9 @@ use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::job::{JobKind, JobPriority, JobState, JobStep};
 use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::refresh::RefreshMode;
-use melyxar_core::work::{place_across, IdentificationNote, SeasonLength, Work, WorkKind};
+use melyxar_core::work::{
+    place_across, IdentificationNote, IdentificationState, SeasonLength, Work, WorkKind,
+};
 use melyxar_database::metadata::{
     CollectionRecord, CreditRecord, IdentifiedWork, RemoteTrailerRecord,
 };
@@ -106,27 +108,13 @@ where
             break;
         }
 
-        match identify_one(state, provider, library, &work).await? {
+        let outcome = identify_one(state, provider, library, &work).await?;
+        record_outcome(state, work.id, outcome).await?;
+        match outcome {
             Outcome::Identified => report.identified += 1,
-            Outcome::Unknown(note) => {
-                database.mark_work_unidentified(work.id).await?;
-                database.set_identification_note(work.id, note).await?;
-                report.unidentified += 1;
-            }
-            // Nothing about the film is written down, only why nobody has got
-            // round to it: without that, a work that is still waiting looks
-            // exactly like one that has never been tried.
-            Outcome::Postponed(note) => {
-                database.set_identification_note(work.id, note).await?;
-                report.postponed += 1;
-            }
-            // Every other work would meet the same wall, and none of them are
-            // the problem. Stopping here says what is actually wrong.
-            Outcome::Refused => {
-                return Err(AppError::Domain(melyxar_core::Error::invalid_input(
-                    "the metadata provider refused the key; check it in the configuration",
-                )))
-            }
+            Outcome::Unknown(_) => report.unidentified += 1,
+            Outcome::Postponed(_) => report.postponed += 1,
+            Outcome::Refused => unreachable!("a refusal is an error, returned above"),
         }
         handle.advance(1).await;
     }
@@ -362,6 +350,7 @@ where
     Ok(filled)
 }
 
+#[derive(Debug, Clone, Copy)]
 enum Outcome {
     Identified,
     Unknown(IdentificationNote),
@@ -371,6 +360,32 @@ enum Outcome {
     /// The provider refused the key. Nothing is wrong with this work, and
     /// nothing will be right with the next one either.
     Refused,
+}
+
+/// Writes down what asking about one work came to, when it was not a name.
+async fn record_outcome(state: &AppState, work_id: WorkId, outcome: Outcome) -> Result<()> {
+    let database = state.database();
+    match outcome {
+        Outcome::Identified => {}
+        Outcome::Unknown(note) => {
+            database.mark_work_unidentified(work_id).await?;
+            database.set_identification_note(work_id, note).await?;
+        }
+        // Nothing about the film is written down, only why nobody has got
+        // round to it: without that, a work that is still waiting looks
+        // exactly like one that has never been tried.
+        Outcome::Postponed(note) => {
+            database.set_identification_note(work_id, note).await?;
+        }
+        // Every other work would meet the same wall, and none of them are the
+        // problem. Stopping here says what is actually wrong.
+        Outcome::Refused => {
+            return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+                "the metadata provider refused the key; check it in the configuration",
+            )))
+        }
+    }
+    Ok(())
 }
 
 async fn identify_one<P>(
@@ -1493,13 +1508,7 @@ pub async fn identify_by_hand<P>(
 where
     P: MetadataProvider + 'static,
 {
-    let library = state
-        .database()
-        .list_libraries()
-        .await?
-        .into_iter()
-        .find(|library| library.id == library_id)
-        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("library")))?;
+    let library = library_of(state, library_id).await?;
 
     let kind = state
         .database()
@@ -1530,6 +1539,121 @@ where
     .await?;
 
     state.database().bump_library_version(library_id).await?;
+    Ok(())
+}
+
+
+/// The library a work is in.
+async fn library_of(state: &AppState, library_id: LibraryId) -> Result<Library> {
+    state
+        .database()
+        .list_libraries()
+        .await?
+        .into_iter()
+        .find(|library| library.id == library_id)
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("library")))
+}
+
+/// The work a provider describes that this one is part of: itself for a film
+/// or a series, the series for one of its seasons or episodes.
+async fn described_work(state: &AppState, work_id: WorkId) -> Result<Work> {
+    let database = state.database();
+    let mut work = database
+        .work(work_id)
+        .await?
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("work")))?;
+    while let Some(parent) = work.parent_id {
+        work = database
+            .work(parent)
+            .await?
+            .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("work")))?;
+    }
+    Ok(work)
+}
+
+/// What asking the provider again about one work came to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refreshed {
+    /// Described again, every field written by hand kept as it was.
+    Described,
+    /// Nothing the provider knows carries its name.
+    NotFound,
+    /// The provider could not be asked just now.
+    Postponed,
+}
+
+/// Asks the provider again about one work, as a whole library is asked,
+/// leaving every locked field and picture as it is.
+///
+/// A work already named is described again from the answer it was named by,
+/// a match a person chose staying a choice. One not named yet is looked for,
+/// which is also what gives back to the automatic look up a work somebody had
+/// taken its name away from. A season or an episode is described with its
+/// series, which is the one answer the provider gives about it.
+pub async fn refresh_one<P>(state: &AppState, provider: &Arc<P>, work_id: WorkId) -> Result<Refreshed>
+where
+    P: MetadataProvider + 'static,
+{
+    let work = described_work(state, work_id).await?;
+    let library = library_of(state, work.library_id).await?;
+
+    let known = known_id(&state.database().work_external_ids(work.id).await?, provider.name());
+    let outcome = match (work.identification, known, Catalogue::of(work.kind)) {
+        (IdentificationState::Manual, Some(external_id), Some(catalogue)) => {
+            match provider.details(catalogue, &external_id, &library.metadata_language).await {
+                Ok(details) => {
+                    let details = fill_in_the_synopsis(
+                        provider.as_ref(),
+                        catalogue,
+                        details,
+                        &library.metadata_language,
+                    )
+                    .await;
+                    record_what_was_found(state, provider, &library, work.id, catalogue, &details, true, true)
+                        .await?;
+                    Outcome::Identified
+                }
+                Err(error) => postpone(&work, &error),
+            }
+        }
+        _ => identify_one(state, provider, &library, &work).await?,
+    };
+    record_outcome(state, work.id, outcome).await?;
+    state.database().bump_library_version(library.id).await?;
+    tracing::info!(work = %work.title, outcome = ?outcome, "metadata asked for again by hand");
+
+    Ok(match outcome {
+        Outcome::Identified => Refreshed::Described,
+        Outcome::Unknown(_) => Refreshed::NotFound,
+        Outcome::Postponed(_) | Outcome::Refused => Refreshed::Postponed,
+    })
+}
+
+/// Takes away everything a provider said about a film or a series and what
+/// hangs under it, its pictures and the fields written by hand with it, and
+/// names it again after its files.
+///
+/// Named wrongly once, it is left out of every automatic look up from then
+/// on, which would only make the same guess again: it is named again by hand,
+/// or by asking for its metadata again.
+pub async fn clear_identification(state: &AppState, work_id: WorkId) -> Result<()> {
+    let database = state.database();
+    let work = database
+        .work(work_id)
+        .await?
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("work")))?;
+    if Catalogue::of(work.kind).is_none() {
+        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "only a film or a series is named by a provider",
+        )));
+    }
+    let library = library_of(state, work.library_id).await?;
+
+    let pictures = database.clear_identification(work_id).await?;
+    crate::images::forget_the_pictures(state, &pictures).await;
+    crate::scan::reread_names_of_nameless_works(state, &library).await?;
+    database.bump_library_version(library.id).await?;
+    tracing::info!(work = %work.title, "what the provider said was taken away by hand");
     Ok(())
 }
 
@@ -3670,6 +3794,66 @@ mod tests {
                 .map(|(_, id)| id.as_str()),
             Some("111")
         );
+    }
+
+    #[tokio::test]
+    async fn asking_again_keeps_a_hand_choice_and_every_locked_field() {
+        let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("999", "Quiet Harbour", Some(2019))],
+            vec![
+                details("999", "Quiet Harbour", Some(2019)),
+                details("111", "Quiet Harbour", Some(2019)),
+            ],
+        ));
+        identify_by_hand(&state, &provider, library.id, work.id, "111", true)
+            .await
+            .expect("chosen by hand");
+        let database = state.database();
+        database
+            .rename_work(work.id, "Le Port", "port", Some(2019))
+            .await
+            .expect("renamed");
+        database.lock_field(work.id, "title").await.expect("locked");
+
+        let refreshed = refresh_one(&state, &provider, work.id).await.expect("asked again");
+
+        assert_eq!(refreshed, Refreshed::Described);
+        let stored = database.work(work.id).await.expect("read").expect("present");
+        assert_eq!(stored.identification, IdentificationState::Manual);
+        assert_eq!(stored.title, "Le Port");
+        assert_eq!(
+            known_id(&database.work_external_ids(work.id).await.expect("read"), "tmdb").as_deref(),
+            Some("111"),
+            "the film somebody chose, not the one a search would find"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_work_whose_name_was_taken_away_waits_until_somebody_asks_again() {
+        let (_directory, state, library, work) = state_with_work("Quiet Harbour", Some(2019)).await;
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("999", "Quiet Harbour", Some(2019))],
+            vec![details("999", "Quiet Harbour", Some(2019))],
+        ));
+        assert_eq!(run(&state, &provider, &library).await.identified, 1);
+
+        clear_identification(&state, work.id).await.expect("cleared");
+        let database = state.database();
+        let cleared = database.work(work.id).await.expect("read").expect("present");
+        assert_eq!(cleared.identification, IdentificationState::Unidentified);
+        assert!(database.work_external_ids(work.id).await.expect("read").is_empty());
+        assert_eq!(
+            run(&state, &provider, &library).await.identified,
+            0,
+            "the automatic look up does not make the same guess again"
+        );
+
+        let refreshed = refresh_one(&state, &provider, work.id).await.expect("asked again");
+        assert_eq!(refreshed, Refreshed::Described);
+        let named = database.work(work.id).await.expect("read").expect("present");
+        assert_eq!(named.identification, IdentificationState::Identified);
+        assert_eq!(named.identification_note, None);
     }
 
     fn trailer(name: &str, language: Option<&str>, official: bool) -> Trailer {

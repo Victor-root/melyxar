@@ -50,7 +50,13 @@ pub fn router() -> Router<AppState> {
             "/api/v1/works/{id}/candidates",
             axum::routing::get(candidates),
         )
-        .route("/api/v1/works/{id}/identify", axum::routing::post(choose))
+        // One name, two verbs: naming the work by hand, and taking away what
+        // any provider said about it.
+        .route(
+            "/api/v1/works/{id}/identify",
+            axum::routing::post(choose).delete(clear),
+        )
+        .route("/api/v1/works/{id}/refresh", axum::routing::post(refresh))
         .route(
             "/api/v1/copies/{id}/detach",
             axum::routing::post(detach_copy),
@@ -318,6 +324,40 @@ async fn choose(
 #[derive(Debug, Serialize)]
 struct ChosenView {
     identified: bool,
+}
+
+/// Takes away what a provider said about a film or a series.
+async fn clear(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<ChosenView>> {
+    melyxar_app::identify::clear_identification(&state, parse_work(&id)?).await?;
+    Ok(Json(ChosenView { identified: false }))
+}
+
+/// What asking the provider again came to: described, not_found or
+/// postponed.
+#[derive(Debug, Serialize)]
+struct RefreshedView {
+    outcome: &'static str,
+}
+
+/// Asks the provider again about one work, keeping every locked field.
+async fn refresh(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<RefreshedView>> {
+    let provider = provider_of(&state)?;
+    let outcome = melyxar_app::identify::refresh_one(&state, &provider, parse_work(&id)?).await?;
+    Ok(Json(RefreshedView {
+        outcome: match outcome {
+            melyxar_app::identify::Refreshed::Described => "described",
+            melyxar_app::identify::Refreshed::NotFound => "not_found",
+            melyxar_app::identify::Refreshed::Postponed => "postponed",
+        },
+    }))
 }
 
 /// Takes one copy away from the film it sits on, as a film of its own.
