@@ -159,25 +159,3 @@
     display: none;
   }
 }
-
-/* The state of each disk, shown where the maintainer asked to see it. */
-.root-state {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  align-self: flex-start;
-  border: 1px solid var(--border);
-  color: var(--text-soft);
-}
-
-.root-read_write,
-.root-read_only {
-  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
-  color: var(--ok);
-}
-
-.root-missing,
-.root-unreadable {
-  border-color: color-mix(in srgb, var(--accent-bright) 60%, transparent);
-  color: var(--accent-bright);
-}

@@ -31,12 +31,6 @@
     --search-room: min(46vw, 250px);
   }
 
-  .work-inner {
-    flex-direction: column;
-    gap: var(--gap-wide);
-    padding-top: min(20vh, 150px);
-  }
-
   .work-poster {
     flex: none;
   }
