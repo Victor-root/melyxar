@@ -446,30 +446,8 @@ where
         Err(error) => return Ok(postpone(work, &error)),
     };
 
-    let people = database
-        .apply_identification(
-            work.id,
-            &to_record(&details, provider.name(), language),
-            false,
-        )
-        .await
-        .map_err(AppError::from)?;
-
-    // The pictures follow at once, from what the provider already told us:
-    // asking a second time for the same film would be a request for nothing.
-    crate::images::store_provider_images(state, provider.as_ref(), work.id, &details).await;
-    crate::images::store_person_photos(state, provider, &people).await;
-
-    // A series is not done when it has a name: what a viewer opens next is its
-    // seasons and then its episodes, and those are described by the same
-    // provider in answers of their own.
-    if catalogue == Catalogue::Series {
-        if library.kind == LibraryKind::Anime {
-            place_what_was_numbered_across(state, library.id, work.id, &details.season_lengths)
-                .await?;
-        }
-        fill_in_the_seasons_of(state, provider, work.id, &details.external_id, language).await?;
-    }
+    record_what_was_found(state, provider, library, work.id, catalogue, &details, false, true)
+        .await?;
 
     tracing::debug!(
         work = %details.title,
@@ -477,6 +455,56 @@ where
         "work identified"
     );
     Ok(Outcome::Identified)
+}
+
+/// Writes down what the provider said about a work, then what follows from
+/// it: its pictures when they are wanted, the faces of its cast, and for a
+/// series its seasons and their episodes.
+///
+/// The pictures come from what the provider has just said: asking it a second
+/// time for the same work would be a request for nothing. A series is not done
+/// when it has a name, since what a viewer opens next is its seasons and then
+/// its episodes, which the same provider describes in answers of their own.
+///
+/// `chosen_by_hand` marks a match a person picked, which a later refresh must
+/// never undo.
+#[allow(clippy::too_many_arguments)]
+async fn record_what_was_found<P>(
+    state: &AppState,
+    provider: &Arc<P>,
+    library: &Library,
+    work_id: WorkId,
+    catalogue: Catalogue,
+    details: &Details,
+    chosen_by_hand: bool,
+    with_pictures: bool,
+) -> Result<()>
+where
+    P: MetadataProvider + 'static,
+{
+    let language = &library.metadata_language;
+    let people = state
+        .database()
+        .apply_identification(
+            work_id,
+            &to_record(details, provider.name(), language),
+            chosen_by_hand,
+        )
+        .await?;
+
+    if with_pictures {
+        crate::images::store_provider_images(state, provider.as_ref(), work_id, details).await;
+    }
+    crate::images::store_person_photos(state, provider, &people).await;
+
+    if catalogue == Catalogue::Series {
+        if library.kind == LibraryKind::Anime {
+            place_what_was_numbered_across(state, library.id, work_id, &details.season_lengths)
+                .await?;
+        }
+        fill_in_the_seasons_of(state, provider, work_id, &details.external_id, language).await?;
+    }
+    Ok(())
 }
 
 /// Puts every episode a file numbered across the series into the season the
@@ -1449,40 +1477,19 @@ where
         .await
         .map_err(|error| AppError::Domain(melyxar_core::Error::invalid_input(error.to_string())))?;
 
-    let people = state
-        .database()
-        .apply_identification(
-            work_id,
-            &to_record(&details, provider.name(), &library.metadata_language),
-            true,
-        )
-        .await?;
-
-    // A film someone identified by hand gets its pictures like any other: the
-    // provider has just described it, so asking again would be a request for
-    // nothing. Unless the pictures it already holds are to be kept, which is
-    // the whole of what a picture chosen by hand is.
-    if replace_pictures {
-        crate::images::store_provider_images(state, provider.as_ref(), work_id, &details).await;
-    }
-    crate::images::store_person_photos(state, provider, &people).await;
-
-    // A series named by hand is described down to its episodes, the same as
-    // one the look up named.
-    if catalogue == Catalogue::Series {
-        if library.kind == LibraryKind::Anime {
-            place_what_was_numbered_across(state, library_id, work_id, &details.season_lengths)
-                .await?;
-        }
-        fill_in_the_seasons_of(
-            state,
-            provider,
-            work_id,
-            &details.external_id,
-            &library.metadata_language,
-        )
-        .await?;
-    }
+    // Unless the pictures it already holds are to be kept, which is the whole
+    // of what a picture chosen by hand is.
+    record_what_was_found(
+        state,
+        provider,
+        &library,
+        work_id,
+        catalogue,
+        &details,
+        true,
+        replace_pictures,
+    )
+    .await?;
 
     state.database().bump_library_version(library_id).await?;
     Ok(())
