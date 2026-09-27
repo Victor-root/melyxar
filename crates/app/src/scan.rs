@@ -707,26 +707,14 @@ async fn reread_names_of_nameless_series(
     let database = state.database();
 
     for series in database.series_named_after_their_folder(library.id).await? {
-        let file_name = series
-            .relative_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default();
-        let folders = folders_above(&series.relative_path);
-        let from_a_season_folder = folders
-            .iter()
-            .find_map(|folder| episode::season_of_folder(folder));
         // Nothing to read the name from the way it was read the first time, so
         // nothing is written: a name changed by a different reading would be a
         // guess, and a guess here renames a series nobody asked about.
-        let Some(read) =
-            read_an_episode(library.kind, file_name, from_a_season_folder, year, signs)
+        let Some(read) = episode::read_path(&series.relative_path, library.kind, year, signs)
         else {
             continue;
         };
-        let Some(named) = the_series(&read, &folders, year, signs) else {
-            continue;
-        };
+        let named = read.series;
         if named.title == series.title && named.year == series.release_year {
             continue;
         }
@@ -879,7 +867,7 @@ pub async fn detach_copy(state: &AppState, source_id: MediaSourceId) -> Result<O
     let detached = database
         .detach_source(
             source_id,
-            work_kind_for(library.kind),
+            library.kind.work_kind(),
             &parsed.title,
             &naming::sort_title(&parsed.title),
             parsed.year,
@@ -949,7 +937,7 @@ async fn work_for(
     let work = database
         .create_work(
             library.id,
-            work_kind_for(library.kind),
+            library.kind.work_kind(),
             &parsed.title,
             &sort_title,
             parsed.year,
@@ -972,22 +960,13 @@ async fn episode_work_for(
     relative_path: &Path,
     signs: &naming::LibrarySigns,
 ) -> Result<Option<WorkId>> {
-    let file_name = relative_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or_default();
     let year = melyxar_core::time::current_year();
-    let folders = folders_above(relative_path);
-    let from_a_season_folder = folders
-        .iter()
-        .find_map(|folder| episode::season_of_folder(folder));
-
-    let Some(read) = read_an_episode(library.kind, file_name, from_a_season_folder, year, signs)
+    let Some(episode::EpisodeOnDisk {
+        episode: read,
+        series: named,
+        season_folder: from_a_season_folder,
+    }) = episode::read_path(relative_path, library.kind, year, signs)
     else {
-        return Ok(None);
-    };
-
-    let Some(named) = the_series(&read, &folders, year, signs) else {
         return Ok(None);
     };
     // An anime episode whose name and folders never said a season is numbered
@@ -1068,35 +1047,6 @@ async fn episode_work_for(
     Ok(Some(episode_work.id))
 }
 
-/// Reads which episode a file is, the one way the scan and a second reading
-/// of its name both use.
-fn read_an_episode(
-    kind: LibraryKind,
-    file_name: &str,
-    from_a_season_folder: Option<i32>,
-    year: i32,
-    signs: &naming::LibrarySigns,
-) -> Option<episode::ParsedEpisode> {
-    episode::parse_episode(file_name, year, signs)
-        // Anime releases carry no ordinary marker at all, and name the episode
-        // by a number after a dash or in brackets of its own. Read only in a
-        // library of anime, where that shape means nothing else.
-        .or_else(|| {
-            (kind == LibraryKind::Anime)
-                .then(|| episode::parse_anime_episode(file_name, year, signs))
-                .flatten()
-        })
-        // Nothing in the name says which episode this is. Under a season
-        // folder, where the season and the series are already settled, a name
-        // opening on a number is that number: it is how a whole run taken off
-        // a disc is usually named, and reading it nowhere else keeps a film
-        // called by a number out of it.
-        .or_else(|| {
-            from_a_season_folder
-                .and_then(|_| episode::episode_of_a_leading_number(file_name, year, signs))
-        })
-}
-
 /// The child of a work sitting at that number, written down if it is not there.
 ///
 /// The name is only worked out when one has to be written, because naming a
@@ -1144,78 +1094,6 @@ async fn child_at(
 /// The season a series has when nobody wrote a season anywhere.
 const THE_ONLY_SEASON: i32 = 1;
 
-/// The folders between a file and the root of its library, nearest first.
-fn folders_above(relative_path: &Path) -> Vec<&str> {
-    let Some(parent) = relative_path.parent() else {
-        return Vec::new();
-    };
-    let mut folders: Vec<&str> = parent
-        .components()
-        .filter_map(|part| part.as_os_str().to_str())
-        .collect();
-    folders.reverse();
-    folders
-}
-
-/// What names the series this file belongs to, and the year that name carries.
-///
-/// A season folder is the one mark that says without any doubt that what sits
-/// above it is a series, so where there is one, the folder holding it is the
-/// series and it is that folder which names it. Everything under it lands in
-/// the same series however each file happens to be named: two seasons ripped
-/// by two teams that write the title in two languages are still one series,
-/// and reading the file names first made two.
-///
-/// Where there is no season folder nothing has changed: a folder holding files
-/// in bulk groups nothing by itself, so the file name names the series, and
-/// the folder answers only when the name did not.
-fn the_series(
-    read: &episode::ParsedEpisode,
-    folders: &[&str],
-    current_year: i32,
-    signs: &naming::LibrarySigns,
-) -> Option<episode::NamedSeries> {
-    if let Some(named) = the_folder_of_the_series(folders)
-        .and_then(|folder| episode::series_of_folder(folder, current_year, signs))
-    {
-        return Some(named);
-    }
-    if !read.series.is_empty() {
-        return Some(episode::NamedSeries {
-            title: read.series.clone(),
-            year: read.year,
-        });
-    }
-    folders
-        .iter()
-        .find_map(|folder| episode::series_of_folder(folder, current_year, signs))
-}
-
-/// The folder that names the series: the one holding the nearest season
-/// folder, when the path goes through one at all.
-fn the_folder_of_the_series<'a>(folders: &[&'a str]) -> Option<&'a str> {
-    let season = folders
-        .iter()
-        .position(|folder| episode::season_of_folder(folder).is_some())?;
-    folders.get(season + 1).copied()
-}
-
-/// The kind of work a file in this library stands for when nothing better is
-/// known about it.
-///
-/// A film is one file to one work. In an episodic library this is only reached
-/// by a file whose name never said which episode it is: it is an episode all
-/// the same, belonging to no season, and it is met on its own in the grid
-/// rather than disappearing behind a series it was never attached to.
-fn work_kind_for(kind: LibraryKind) -> WorkKind {
-    match kind {
-        LibraryKind::Movies => WorkKind::Movie,
-        LibraryKind::Series | LibraryKind::Anime | LibraryKind::Shows => WorkKind::Episode,
-        LibraryKind::Music => WorkKind::Song,
-        LibraryKind::HomeMedia => WorkKind::Video,
-    }
-}
-
 /// Attaches trailers and other clips to the film they sit next to.
 async fn attach_companions(
     database: &Database,
@@ -1242,7 +1120,11 @@ async fn attach_companions(
         if kind == "sample" {
             continue;
         }
-        let Some(owner) = film_of(companion, media) else {
+        let Some(owner) = melyxar_library::scan::film_of(
+            companion,
+            media,
+            melyxar_core::time::current_year(),
+        ) else {
             tracing::debug!(
                 file = %file_name_of(&companion.relative_path),
                 "a companion clip matches no film next to it and was left alone"
@@ -1269,45 +1151,6 @@ async fn attach_companions(
     Ok(())
 }
 
-/// The film a companion clip belongs to, among the files sitting beside it.
-///
-/// The name of the clip is the name of the film plus a marker, so taking the
-/// marker off gives the film back. Two readings are tried: the exact name,
-/// which is the convention, and failing that the title and year, which catches
-/// a clip that dropped the technical tags.
-fn film_of(companion: &FoundFile, media: &[FoundFile]) -> Option<PathBuf> {
-    let file_name = companion.relative_path.file_name()?.to_str()?;
-    let base = naming::without_companion_marker(file_name)?;
-    let folder = companion.relative_path.parent();
-
-    let neighbours = media
-        .iter()
-        .filter(|file| file.relative_path.parent() == folder);
-
-    let exact = neighbours.clone().find(|file| {
-        file.relative_path.file_name().and_then(|n| n.to_str()) == Some(base.as_str())
-    });
-    if let Some(file) = exact {
-        return Some(file.relative_path.clone());
-    }
-
-    let year = melyxar_core::time::current_year();
-    let wanted = naming::parse(&base, year);
-    neighbours
-        .filter(|file| {
-            file.relative_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| naming::parse(name, year))
-                .is_some_and(|parsed| {
-                    parsed.year == wanted.year
-                        && naming::sort_title(&parsed.title) == naming::sort_title(&wanted.title)
-                })
-        })
-        .map(|file| file.relative_path.clone())
-        .next()
-}
-
 /// Reads the description files sitting next to the media, when the server was
 /// asked to.
 ///
@@ -1329,20 +1172,10 @@ async fn read_companion_files(
     let stored = database.sources_of_root(root_id).await?;
 
     for source in &stored {
-        let Some(stem) = source.relative_path.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        let folder = source.relative_path.parent();
-
-        // Either a file carrying the film's own name, or the one some tools
-        // write under a fixed name in a folder holding a single film.
-        let Some(path) = companion_files.iter().find(|path| {
-            path.parent() == folder
-                && path
-                    .file_stem()
-                    .and_then(|value| value.to_str())
-                    .is_some_and(|value| value == stem || value.eq_ignore_ascii_case("movie"))
-        }) else {
+        let Some(path) = companion_files
+            .iter()
+            .find(|path| melyxar_library::companion::describes(path, &source.relative_path))
+        else {
             continue;
         };
 
@@ -1397,34 +1230,9 @@ async fn attach_subtitles(
     let had_subtitles = database.sources_with_external_subtitles(root_id).await?;
 
     for source in &stored {
-        let Some(stem) = source.relative_path.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        let folder = source.relative_path.parent();
-
         let mut tracks = Vec::new();
         for path in subtitles {
-            if path.parent() != folder {
-                continue;
-            }
-            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            // The convention is the film's own name followed by what the
-            // subtitle is: language, and whether it is forced or for viewers
-            // who are hard of hearing.
-            let Some(remainder) = name.strip_prefix(stem) else {
-                continue;
-            };
-            let remainder = remainder
-                .strip_suffix(&format!(
-                    ".{}",
-                    path.extension()
-                        .and_then(|value| value.to_str())
-                        .unwrap_or_default()
-                ))
-                .unwrap_or(remainder);
-            let Some(found) = sidecar::read(name, remainder) else {
+            let Some(found) = sidecar::read_for(path, &source.relative_path) else {
                 continue;
             };
 

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use crate::id::{LibraryId, LibraryRootId};
 use crate::time::Millis;
-use crate::work::PlaybackState;
+use crate::work::{PlaybackState, WorkKind};
 
 /// What a library holds. Stored explicitly so that no part of the code has to
 /// assume "a film": music and television programmes reuse the same trunk with
@@ -76,6 +76,23 @@ impl LibraryKind {
     /// What people filmed themselves is in none.
     pub fn is_catalogued(self) -> bool {
         !matches!(self, Self::HomeMedia)
+    }
+
+    /// The kind of work a file in this library stands for when nothing better
+    /// is known about it.
+    ///
+    /// A film is one file to one work. In an episodic library this is only
+    /// reached by a file whose name never said which episode it is: it is an
+    /// episode all the same, belonging to no season, and it is met on its own
+    /// in the grid rather than disappearing behind a series it was never
+    /// attached to.
+    pub fn work_kind(self) -> WorkKind {
+        match self {
+            Self::Movies => WorkKind::Movie,
+            Self::Series | Self::Anime | Self::Shows => WorkKind::Episode,
+            Self::Music => WorkKind::Song,
+            Self::HomeMedia => WorkKind::Video,
+        }
     }
 }
 

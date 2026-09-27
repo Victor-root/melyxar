@@ -134,6 +134,19 @@ fn find_ignoring_case(haystack: &str, needle: &str) -> Option<usize> {
     haystack.to_lowercase().find(&needle.to_lowercase())
 }
 
+/// Whether a description file describes this film: one carrying the film's own
+/// name, or the one some tools write under a fixed name in a folder holding a
+/// single film. Both paths are relative to the same root.
+pub fn describes(path: &Path, film: &Path) -> bool {
+    let name = path.file_stem().and_then(|value| value.to_str());
+    let stem = film.file_stem().and_then(|value| value.to_str());
+    path.parent() == film.parent()
+        && match (name, stem) {
+            (Some(name), Some(stem)) => name == stem || name.eq_ignore_ascii_case("movie"),
+            _ => false,
+        }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,5 +250,14 @@ mod tests {
     fn an_empty_tag_says_nothing() {
         let ids = read_ids("<movie><tmdbid></tmdbid></movie>");
         assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn a_description_file_describes_the_film_it_is_named_after_or_its_folder() {
+        let film = Path::new("Quiet Harbour/Quiet.Harbour.2019.mkv");
+        assert!(describes(Path::new("Quiet Harbour/Quiet.Harbour.2019.nfo"), film));
+        assert!(describes(Path::new("Quiet Harbour/movie.nfo"), film));
+        assert!(!describes(Path::new("Quiet Harbour/Other.Film.nfo"), film));
+        assert!(!describes(Path::new("Elsewhere/Quiet.Harbour.2019.nfo"), film));
     }
 }

@@ -258,6 +258,44 @@ pub fn diff(found: &[FoundFile], known: &[KnownFile]) -> ScanDiff {
     result
 }
 
+/// The film a companion clip belongs to, among the files sitting beside it.
+///
+/// The name of the clip is the name of the film plus a marker, so taking the
+/// marker off gives the film back. Two readings are tried: the exact name,
+/// which is the convention, and failing that the title and year, which catches
+/// a clip that dropped the technical tags.
+pub fn film_of(companion: &FoundFile, media: &[FoundFile], current_year: i32) -> Option<PathBuf> {
+    let file_name = companion.relative_path.file_name()?.to_str()?;
+    let base = naming::without_companion_marker(file_name)?;
+    let folder = companion.relative_path.parent();
+
+    let neighbours = media
+        .iter()
+        .filter(|file| file.relative_path.parent() == folder);
+
+    let exact = neighbours.clone().find(|file| {
+        file.relative_path.file_name().and_then(|n| n.to_str()) == Some(base.as_str())
+    });
+    if let Some(file) = exact {
+        return Some(file.relative_path.clone());
+    }
+
+    let wanted = naming::parse(&base, current_year);
+    neighbours
+        .filter(|file| {
+            file.relative_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| naming::parse(name, current_year))
+                .is_some_and(|parsed| {
+                    parsed.year == wanted.year
+                        && naming::sort_title(&parsed.title) == naming::sort_title(&wanted.title)
+                })
+        })
+        .map(|file| file.relative_path.clone())
+        .next()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,5 +658,34 @@ mod tests {
             .files
             .iter()
             .any(|file| file.relative_path == Path::new("Quiet.Harbour.2019.mkv")));
+    }
+
+    fn found(relative: &str) -> FoundFile {
+        FoundFile {
+            relative_path: PathBuf::from(relative),
+            size_bytes: 1,
+            modified_at: now(),
+            companion_kind: naming::is_companion_clip(relative),
+        }
+    }
+
+    #[test]
+    fn a_clip_belongs_to_the_film_it_is_named_after_in_its_folder() {
+        let media = [
+            found("Films/Quiet.Harbour.2019.1080p.mkv"),
+            found("Films/Other.Film.2020.mkv"),
+            found("Elsewhere/Quiet.Harbour.2019.mkv"),
+        ];
+        assert_eq!(
+            film_of(&found("Films/Quiet.Harbour.2019.1080p-trailer.mkv"), &media, 2026),
+            Some(PathBuf::from("Films/Quiet.Harbour.2019.1080p.mkv")),
+            "the exact name"
+        );
+        assert_eq!(
+            film_of(&found("Films/Quiet Harbour (2019)-trailer.mkv"), &media, 2026),
+            Some(PathBuf::from("Films/Quiet.Harbour.2019.1080p.mkv")),
+            "the title and the year, the tags dropped"
+        );
+        assert_eq!(film_of(&found("Films/Nothing.Here-trailer.mkv"), &media, 2026), None);
     }
 }
