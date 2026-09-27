@@ -419,6 +419,43 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn a_door_that_had_a_picture_keeps_it_as_its_chosen_background() {
+        for (picture, style, expected) in [
+            (Some("door.webp"), "library", "picture"),
+            (None, "library", "library"),
+        ] {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .expect("database opens");
+            crate::MIGRATOR
+                .run_to(63, &pool)
+                .await
+                .expect("migrated to just before the picture is a background");
+            sqlx::query(
+                "UPDATE server_settings SET login_background_path = ?, login_background_style = ?
+                 WHERE id = 1",
+            )
+            .bind(picture)
+            .bind(style)
+            .execute(&pool)
+            .await
+            .expect("door set");
+
+            crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+            let chosen: String = sqlx::query_scalar(
+                "SELECT login_background_style FROM server_settings WHERE id = 1",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("read");
+            assert_eq!(chosen, expected, "{picture:?}");
+        }
+    }
+
     /// A server brought to just before the switch over every library's
     /// thumbnails went, with that switch as given and two libraries both
     /// asking for them; what they ask for once it has gone.

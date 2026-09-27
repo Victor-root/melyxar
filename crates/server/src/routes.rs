@@ -334,6 +334,9 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
         .await
         .map_err(|error| crate::error::ServerError::internal(error.to_string()))?;
 
+    let door_picture = settings
+        .door_picture_shown()
+        .map(crate::images::door_picture_url);
     Ok(Json(PublicBranding {
         server_name: settings.server_name,
         logo: settings.logo_path.as_deref().map(crate::images::logo_url),
@@ -341,10 +344,7 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
             .logo_path
             .as_deref()
             .map(crate::installing::logo_icon_url),
-        login_background_path: settings
-            .login_background_path
-            .as_deref()
-            .map(crate::images::door_picture_url),
+        login_background_path: door_picture,
         login_background_style: settings.login_background.as_str(),
         door_slogan: settings.door_slogan,
         setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,

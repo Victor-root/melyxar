@@ -126,8 +126,9 @@ pub async fn remove_logo(state: &AppState) -> Result<(), Trouble> {
 
 pub use melyxar_database::settings::LoginBackground;
 
-/// What stands behind the sign in screen: a picture the administrator put
-/// there, which wins, and the drawn background worn when there is none.
+/// What stands behind the sign in screen, as the administrator sets it: the
+/// chosen background, and the picture sent for it, kept even while another is
+/// chosen.
 pub struct Door {
     pub picture: Option<String>,
     pub background: LoginBackground,
@@ -163,8 +164,7 @@ pub async fn set_door_slogan(state: &AppState, asked: &str) -> Result<(), Troubl
     Ok(())
 }
 
-/// Which drawn background the sign in screen wears when no picture was put
-/// there.
+/// Which background the sign in screen wears.
 pub async fn set_door_background(
     state: &AppState,
     background: LoginBackground,
@@ -188,8 +188,8 @@ pub async fn set_door_picture(state: &AppState, bytes: &[u8]) -> Result<String, 
     Ok(name)
 }
 
-/// Takes the picture away from behind the sign in screen, which puts the
-/// drawn background back.
+/// Takes the picture away from behind the sign in screen. Still chosen, the
+/// background is then drawn in the default way until another is sent.
 pub async fn remove_door_picture(state: &AppState) -> Result<(), Trouble> {
     if let Some(before) = state.database().set_door_picture(None).await? {
         tokio::fs::remove_file(state.config().directories.uploads().join(before))

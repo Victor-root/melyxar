@@ -234,8 +234,8 @@ function ServerPanel() {
   );
 }
 
-/** What stands behind the sign in screen: one of the drawn backgrounds, and a
- *  picture that wins over it while it is there. */
+/** What stands behind the sign in screen: one of the drawn backgrounds, or a
+ *  picture sent for it, whose row shows only once it is the one chosen. */
 function DoorPanel() {
   const { t } = useSettings();
   const toast = useToast();
@@ -270,16 +270,14 @@ function DoorPanel() {
     <Panel icon={EnterIcon} title={t("admin.door")} lead={t("admin.door_lead")}>
       {shown && (
         <>
-          <Setting
-            label={t("admin.door_background")}
-            why={t(shown.door_picture ? "admin.door_background_under" : "admin.door_background_why")}
-          >
+          <Setting label={t("admin.door_background")} why={t("admin.door_background_why")}>
             <Picker
               label={t("admin.door_background")}
               value={shown.door_background}
               options={[
                 ["abstract", t("admin.door_background.abstract")],
                 ["library", t("admin.door_background.library")],
+                ["picture", t("admin.door_picture")],
               ]}
               onPick={(background: LoginBackgroundStyle) =>
                 change(() => api.setDoorBackground(background))
@@ -287,6 +285,46 @@ function DoorPanel() {
               disabled={sending}
             />
           </Setting>
+          {shown.door_background === "picture" && (
+            <Setting label={t("admin.door_picture")} why={t("admin.door_picture_why")}>
+              <div className="logo-choice">
+                {shown.door_picture && (
+                  <img className="door-choice-picture" src={shown.door_picture} alt="" aria-hidden="true" />
+                )}
+                <input
+                  ref={chooser}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  hidden
+                  onChange={(event) => {
+                    const image = event.target.files?.[0];
+                    // Emptied, so choosing the same file again is still a choice.
+                    event.target.value = "";
+                    if (image) {
+                      change(() => api.setDoorPicture(image));
+                    }
+                  }}
+                />
+                <button
+                  className="button button-small"
+                  disabled={sending}
+                  onClick={() => chooser.current?.click()}
+                >
+                  {t(shown.door_picture ? "admin.logo_change" : "admin.logo_choose")}
+                </button>
+                {shown.door_picture && (
+                  <button
+                    className="button button-small button-quiet"
+                    disabled={sending}
+                    onClick={() => change(api.removeDoorPicture)}
+                  >
+                    {t("admin.logo_remove")}
+                  </button>
+                )}
+                {sending && <span className="line-note">{t("settings.avatar_busy")}</span>}
+              </div>
+            </Setting>
+          )}
           <Setting label={t("admin.door_slogan")} why={t("admin.door_slogan_why")}>
             <form
               className="name-choice"
@@ -323,44 +361,6 @@ function DoorPanel() {
                 {t("admin.server_name_default")}
               </button>
             </form>
-          </Setting>
-          <Setting label={t("admin.door_picture")} why={t("admin.door_picture_why")}>
-            <div className="logo-choice">
-              {shown.door_picture && (
-                <img className="door-choice-picture" src={shown.door_picture} alt="" aria-hidden="true" />
-              )}
-              <input
-                ref={chooser}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                hidden
-                onChange={(event) => {
-                  const image = event.target.files?.[0];
-                  // Emptied, so choosing the same file again is still a choice.
-                  event.target.value = "";
-                  if (image) {
-                    change(() => api.setDoorPicture(image));
-                  }
-                }}
-              />
-              <button
-                className="button button-small"
-                disabled={sending}
-                onClick={() => chooser.current?.click()}
-              >
-                {t(shown.door_picture ? "admin.logo_change" : "admin.logo_choose")}
-              </button>
-              {shown.door_picture && (
-                <button
-                  className="button button-small button-quiet"
-                  disabled={sending}
-                  onClick={() => change(api.removeDoorPicture)}
-                >
-                  {t("admin.logo_remove")}
-                </button>
-              )}
-              {sending && <span className="line-note">{t("settings.avatar_busy")}</span>}
-            </div>
           </Setting>
         </>
       )}

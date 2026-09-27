@@ -8,11 +8,8 @@ use crate::convert::{
 };
 use crate::{Database, Result};
 
-/// What is drawn behind the sign in screen when no picture was put there.
-///
-/// A picture an administrator uploaded wins over either of these, which is why
-/// this says nothing about one: there is nothing left to choose once somebody
-/// has said what they want behind their own door.
+/// What stands behind the sign in screen: one of the drawn backgrounds, or a
+/// picture the administrator sent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LoginBackground {
     /// Light and dust in the accent colour, moving slowly. What a server
@@ -23,6 +20,10 @@ pub enum LoginBackground {
     /// episode, a reel of film, a player bar, a note, a waveform, a
     /// clapperboard.
     Library,
+    /// The picture the administrator sent. The picture is kept apart, so a
+    /// drawn background chosen for a while does not throw it away; until one
+    /// is sent, the default is drawn in its place.
+    Picture,
 }
 
 impl LoginBackground {
@@ -31,6 +32,7 @@ impl LoginBackground {
         match self {
             Self::Abstract => "abstract",
             Self::Library => "library",
+            Self::Picture => "picture",
         }
     }
 
@@ -46,6 +48,7 @@ impl LoginBackground {
         match word {
             "abstract" => Some(Self::Abstract),
             "library" => Some(Self::Library),
+            "picture" => Some(Self::Picture),
             _ => None,
         }
     }
@@ -114,6 +117,16 @@ pub struct ServerSettings {
     /// What the server does to a library on its own, and in what shape.
     pub work: LibraryWork,
     pub updated_at: Timestamp,
+}
+
+impl ServerSettings {
+    /// The picture the sign in screen shows: the one sent, while it is the
+    /// chosen background. Kept but not chosen, it shows nothing.
+    pub fn door_picture_shown(&self) -> Option<&str> {
+        (self.login_background == LoginBackground::Picture)
+            .then_some(self.login_background_path.as_deref())
+            .flatten()
+    }
 }
 
 /// How far behind each viewer segments stay when nobody chose, in seconds.
@@ -718,6 +731,8 @@ mod tests {
         // thing and the database would hold another.
         assert_eq!(LoginBackground::Abstract.as_str(), "abstract");
         assert_eq!(LoginBackground::Library.as_str(), "library");
+        assert_eq!(LoginBackground::Picture.as_str(), "picture");
+        assert_eq!(LoginBackground::from_word("picture"), LoginBackground::Picture);
     }
 
     #[tokio::test]
@@ -814,6 +829,26 @@ mod tests {
             .await
             .expect("taken away");
         assert_eq!(database.transcoding_limits().await.expect("read"), usual);
+    }
+
+    #[tokio::test]
+    async fn the_door_shows_its_picture_only_while_it_is_the_chosen_background() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        database.set_door_picture(Some("door.webp")).await.expect("sent");
+        database
+            .set_door_background(LoginBackground::Library)
+            .await
+            .expect("chosen");
+        let settings = database.server_settings().await.expect("read");
+        assert_eq!(settings.door_picture_shown(), None, "kept, not chosen");
+        assert_eq!(settings.login_background_path.as_deref(), Some("door.webp"));
+
+        database
+            .set_door_background(LoginBackground::Picture)
+            .await
+            .expect("chosen");
+        let settings = database.server_settings().await.expect("read");
+        assert_eq!(settings.door_picture_shown(), Some("door.webp"));
     }
 
     #[test]
