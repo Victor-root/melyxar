@@ -360,11 +360,19 @@ pub async fn scan_library(
         }
 
         // Every scan tests the root for real rather than trusting what was
-        // recorded earlier: a disk can go away between two scans.
-        let access = melyxar_library::check_root_access(&root.path);
+        // recorded earlier: a disk can go away between two scans. Both go
+        // through the disk, which can take minutes on a large one, so they
+        // run where waiting on a disk holds no other work up.
+        let (label, path, kind) = (root.label.clone(), root.path.clone(), library.kind);
+        let (access, walked) = tokio::task::spawn_blocking(move || {
+            let access = melyxar_library::check_root_access(&path);
+            (access, walk(&label, &path, kind))
+        })
+        .await
+        .unwrap_or_else(|failure| std::panic::resume_unwind(failure.into_panic()));
         database.set_root_access(root.id, access).await?;
 
-        let outcome = match walk(&root.label, &root.path, library.kind) {
+        let outcome = match walked {
             Ok(outcome) => outcome,
             Err(ScanError::RootUnusable { state }) => {
                 tracing::warn!(
