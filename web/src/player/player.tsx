@@ -43,7 +43,7 @@ import { useFullscreen } from "./fullscreen";
 import type { Fullscreen } from "./fullscreen";
 import { markFor, useBranding } from "./logo";
 import { Overlay, SkipStretch } from "./overlay";
-import type { Panel, Shape, Turn } from "./overlay";
+import type { Panel, Shape, Turn } from "./panels";
 import { rememberSettings, storedSettings } from "./settings";
 import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
