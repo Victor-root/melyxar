@@ -8,7 +8,7 @@
  * next look up gives the field back to the provider.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "../api";
 import type { DetailField, WrittenCredit, WrittenDetails } from "../api";
@@ -17,6 +17,7 @@ import { refusalKey } from "../i18n";
 import { CloseIcon, DeleteIcon, LockIcon } from "../icons";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
+import { Sortable } from "./sortable";
 
 export function DetailsDialog({
   workId,
@@ -249,7 +250,8 @@ function Lock({ locked, onToggle }: { locked: boolean; onToggle: () => void }) {
 
 /**
  * Everybody credited, one line each: their name, their role, who they play
- * when they act, and a button taking them off. The order is the page's.
+ * when they act, and a button taking them off. Dragged by the line, or moved
+ * by its grip from the keyboard, into the order the page shows them in.
  */
 function Credits({
   credits,
@@ -261,54 +263,82 @@ function Credits({
   onChange: (credits: WrittenCredit[]) => void;
 }) {
   const { t } = useSettings();
-  const put = (at: number, changed: Partial<WrittenCredit>) =>
-    onChange(credits.map((credit, index) => (index === at ? { ...credit, ...changed } : credit)));
+  /* A name for each line that stays with it while it moves, which its
+     place in the list cannot be, nor what is typed in it. */
+  const named = useRef({ next: 0, keys: new Map<WrittenCredit, string>() });
+  const keyOf = (credit: WrittenCredit) => {
+    const held = named.current;
+    let key = held.keys.get(credit);
+    if (key === undefined) {
+      key = `credit-${held.next++}`;
+      held.keys.set(credit, key);
+    }
+    return key;
+  };
+  const put = (at: WrittenCredit, changed: Partial<WrittenCredit>) =>
+    onChange(
+      credits.map((credit) => {
+        if (credit !== at) {
+          return credit;
+        }
+        const next = { ...credit, ...changed };
+        named.current.keys.set(next, keyOf(credit));
+        return next;
+      }),
+    );
 
   return (
     <div className="details-credits">
-      {credits.map((credit, at) => (
-        <div key={at} className="details-credit">
-          <input
-            type="text"
-            aria-label={t("details.person")}
-            placeholder={t("details.person")}
-            value={credit.name}
-            onChange={(event) => put(at, { name: event.target.value })}
-          />
-          <select
-            aria-label={t("details.role")}
-            value={credit.role}
-            onChange={(event) =>
-              put(at, {
-                role: event.target.value,
-                character: event.target.value === "actor" ? credit.character : null,
-              })
-            }
-          >
-            {roles.map((role) => (
-              <option key={role} value={role}>
-                {t(`credit.${role}`)}
-              </option>
-            ))}
-          </select>
-          <input
-            type="text"
-            aria-label={t("details.character")}
-            placeholder={credit.role === "actor" ? t("details.character") : ""}
-            disabled={credit.role !== "actor"}
-            value={credit.character ?? ""}
-            onChange={(event) => put(at, { character: event.target.value || null })}
-          />
-          <button
-            type="button"
-            className="details-credit-off"
-            aria-label={t("details.remove", { name: credit.name })}
-            onClick={() => onChange(credits.filter((_, index) => index !== at))}
-          >
-            <DeleteIcon size={15} />
-          </button>
-        </div>
-      ))}
+      <Sortable
+        items={credits}
+        keyOf={keyOf}
+        nameOf={(credit) => credit.name}
+        onMove={onChange}
+      >
+        {(credit) => (
+          <div className="details-credit">
+            <input
+              type="text"
+              aria-label={t("details.person")}
+              placeholder={t("details.person")}
+              value={credit.name}
+              onChange={(event) => put(credit, { name: event.target.value })}
+            />
+            <select
+              aria-label={t("details.role")}
+              value={credit.role}
+              onChange={(event) =>
+                put(credit, {
+                  role: event.target.value,
+                  character: event.target.value === "actor" ? credit.character : null,
+                })
+              }
+            >
+              {roles.map((role) => (
+                <option key={role} value={role}>
+                  {t(`credit.${role}`)}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              aria-label={t("details.character")}
+              placeholder={credit.role === "actor" ? t("details.character") : ""}
+              disabled={credit.role !== "actor"}
+              value={credit.character ?? ""}
+              onChange={(event) => put(credit, { character: event.target.value || null })}
+            />
+            <button
+              type="button"
+              className="details-credit-off"
+              aria-label={t("details.remove", { name: credit.name })}
+              onClick={() => onChange(credits.filter((held) => held !== credit))}
+            >
+              <DeleteIcon size={15} />
+            </button>
+          </div>
+        )}
+      </Sortable>
       <button
         type="button"
         className="button button-small"
