@@ -17,7 +17,8 @@ import { FolderIcon, LockIcon, PlaybackIcon, ServerIcon } from "../../icons";
 import type { IconProps } from "../../icons";
 import { useJournalNews } from "../../live";
 import { useSettings } from "../../settings";
-import { familyOf, sayLine, whenItHappened } from "./activity";
+import { Face } from "../../components/face";
+import { familyOf, sayLine, whenItHappened, whoOf } from "./activity";
 
 const FAMILY_ICONS: Record<ActivityFamily, ComponentType<IconProps>> = {
   access: LockIcon,
@@ -96,7 +97,11 @@ export function useActivity(families: ActivityFamily[], most?: number): Followin
   return { lines, more, failed, older };
 }
 
-/** The lines themselves, each with its family, what happened and when. */
+/** The lines themselves, each with who or what it is about, what happened
+ *  and when. A line about somebody wears their face, which is what the eye
+ *  looks for first down a list of who did what; one about the server or a
+ *  library, or about an account since removed, wears the mark of its
+ *  family. */
 export function ActivityLines({ lines }: { lines: ActivityLine[] }) {
   const { t, language } = useSettings();
   const now = new Date();
@@ -109,14 +114,18 @@ export function ActivityLines({ lines }: { lines: ActivityLine[] }) {
       {lines.map((line) => {
         const said = sayLine(line, t);
         const FamilyIcon = FAMILY_ICONS[familyOf(line.kind)];
+        const state = line.level === "information" ? "" : ` state-${line.level}`;
         return (
           <div className="line activity-line" key={line.id}>
-            <span
-              className={`line-mark${line.level === "information" ? "" : ` state-${line.level}`}`}
-              aria-hidden="true"
-            >
-              <FamilyIcon size={17} />
-            </span>
+            {line.user_id ? (
+              <span className={`line-mark line-mark-face${state}`}>
+                <Face name={whoOf(line, t)} avatar={line.user_avatar} className="account-face" />
+              </span>
+            ) : (
+              <span className={`line-mark${state}`} aria-hidden="true">
+                <FamilyIcon size={17} />
+              </span>
+            )}
             <span className="line-words">
               <span className="line-name">{said.title}</span>
               {said.note && <span className="line-note">{said.note}</span>}

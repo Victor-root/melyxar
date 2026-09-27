@@ -2699,6 +2699,16 @@
   color: var(--trouble);
 }
 
+/* A face covers the wash its state would have, so the state rings it
+   instead: a refused sign in still reads as one at a glance. */
+.line-mark-face.state-attention {
+  box-shadow: 0 0 0 2px var(--attention);
+}
+
+.line-mark-face.state-trouble {
+  box-shadow: 0 0 0 2px var(--trouble);
+}
+
 /* A whole line that leads somewhere. */
 .line-link {
   color: inherit;

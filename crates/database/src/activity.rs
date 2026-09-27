@@ -32,6 +32,10 @@ pub struct Activity {
     pub kind: String,
     /// Absent once the account is gone.
     pub user_id: Option<UserId>,
+    /// The picture the account wears now, when it has one: read with the
+    /// line rather than written into it, so a changed picture shows on every
+    /// line at once.
+    pub user_avatar: Option<String>,
     /// Absent once the work is gone.
     pub work_id: Option<WorkId>,
     pub device_name: Option<String>,
@@ -93,19 +97,22 @@ impl Database {
     ) -> Result<Vec<Activity>> {
         let mut conditions = Vec::new();
         if !kinds.is_empty() {
-            conditions.push(format!("kind IN ({})", placeholders(kinds.len())));
+            conditions.push(format!("a.kind IN ({})", placeholders(kinds.len())));
         }
         if before.is_some() {
-            conditions.push("id < ?".to_string());
+            conditions.push("a.id < ?".to_string());
         }
         let filter = match conditions.is_empty() {
             true => String::new(),
             false => format!("WHERE {}", conditions.join(" AND ")),
         };
         let sql = format!(
-            "SELECT id, occurred_at, user_id, kind, work_id, device_name, details
-               FROM activity_log {filter}
-              ORDER BY id DESC
+            "SELECT a.id, a.occurred_at, a.user_id, u.avatar_path, a.kind, a.work_id,
+                    a.device_name, a.details
+               FROM activity_log a
+               LEFT JOIN users u ON u.id = a.user_id
+               {filter}
+              ORDER BY a.id DESC
               LIMIT ?"
         );
         let mut query = sqlx::query(AssertSqlSafe(sql));
@@ -128,6 +135,7 @@ impl Database {
                         .as_deref()
                         .map(parse_id)
                         .transpose()?,
+                    user_avatar: row.try_get("avatar_path")?,
                     work_id: row
                         .try_get::<Option<String>, _>("work_id")?
                         .as_deref()
@@ -289,10 +297,23 @@ mod tests {
         assert_eq!(page[0].user_id, Some(user.id));
         assert_eq!(page[0].device_name.as_deref(), Some("a browser"));
         assert_eq!(page[0].details.as_deref(), Some(r#"{"user_name":"somebody"}"#));
+        assert_eq!(page[0].user_avatar, None);
+
+        database
+            .set_avatar(user.id, Some("a-face.webp"))
+            .await
+            .expect("pictured");
+        let page = database.activity_page(&[], None, 10).await.expect("read");
+        assert_eq!(
+            page[0].user_avatar.as_deref(),
+            Some("a-face.webp"),
+            "the line wears the picture the account wears now"
+        );
 
         database.delete_user(user.id).await.expect("removed");
         let page = database.activity_page(&[], None, 10).await.expect("read");
         assert_eq!(page[0].user_id, None, "the line outlives the account");
+        assert_eq!(page[0].user_avatar, None);
     }
 
     #[tokio::test]
