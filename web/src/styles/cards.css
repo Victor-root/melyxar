@@ -272,6 +272,10 @@
   --seen-corner: 58px;
 }
 
+.seen-mark[data-long="longer"] {
+  --seen-corner: 68px;
+}
+
 /* What is written sits in the corner's own angle, where it is thickest, and
    far enough in from both edges not to touch them. Offset by the same 2px
    the banner itself now bleeds by, so the words stay where they were against
@@ -321,6 +325,10 @@
 
 .card .card-picture:has(.seen-mark[data-long="yes"]) {
   --under-the-banner: 54px;
+}
+
+.card .card-picture:has(.seen-mark[data-long="longer"]) {
+  --under-the-banner: 64px;
 }
 
 .card-picture:has(.seen-mark-on) :is(img, .card-initial, .card-hover),
