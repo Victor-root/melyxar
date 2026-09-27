@@ -357,6 +357,9 @@ export function usePlayback({
 }): Playback {
   const video = useRef<HTMLVideoElement>(null);
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
+  /* The film the server was last told is being watched on this device, which
+     it only learns from a plan asked for by the player. */
+  const [watchedOnTheServer, setWatchedOnTheServer] = useState<string | null>(null);
   /* Which rung of the ladder the plan in hand answers for.
      The plan and the quality are two halves of one question and they do not
      arrive together: asked for a lighter picture, the answer for the old one
@@ -576,6 +579,7 @@ export function usePlayback({
         }
         // Together, always: what is produced is decided on the three of them.
         setPlan(answer);
+        setWatchedOnTheServer(workId);
         setPlanFor(quality.key);
         setCodecFor(codec.key);
         setFailed(null);
@@ -589,7 +593,7 @@ export function usePlayback({
         }
       });
     return () => controller.abort();
-  }, [sourceId, audioId, subtitleId, fromTheStart, startAt, quality, codec, wideGamut, choiceSerial]);
+  }, [sourceId, workId, audioId, subtitleId, fromTheStart, startAt, quality, codec, wideGamut, choiceSerial]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
   /* The codec the picture is really being rebuilt into, and how fast the film
@@ -1302,12 +1306,22 @@ export function usePlayback({
   /* Held open for as long as the film is: its end is how the server knows
      the player is gone, however it went, and it is how the server says stop
      the moment it is asked. A browser ties it again by itself when the
-     network drops it. */
+     network drops it, but not when the server refused it.
+
+     Opened once the plan is back, since asking for it is what tells the
+     server this film is on: opened alongside, the line reaches the server
+     first and is refused for a film this device left a moment ago, which is
+     every film played again soon after it was closed, or for the episode
+     before, still the one on record. */
+  const lineOpen = watchedOnTheServer === workId;
   useEffect(() => {
+    if (!lineOpen) {
+      return;
+    }
     const line = api.playerLine(workId);
     line.addEventListener("stop", heardToStop);
     return () => line.close();
-  }, [workId, heardToStop]);
+  }, [workId, lineOpen, heardToStop]);
 
   /* Sent whatever the position, because it is also how the server knows
      where the film is and whether it stands still: a position worth
