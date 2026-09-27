@@ -30,25 +30,25 @@ export function AdminMetadata() {
         <p className="panel-notice">{t("settings.asked_about_again", { count: outcome.count })}</p>
       )}
 
-      <Panel icon={TagIcon} title={t("settings.metadata_language")} lead={t("settings.metadata_language_why")}>
-        {libraries.map((library) => (
-          <Setting
-            key={library.id}
-            label={library.name}
-            why={t(`kind.${library.kind}`)}
-          >
-            <KindIcon kind={library.kind} size={18} />
-            <Picker
-              label={t("settings.metadata_language")}
-              value={library.metadata_language}
-              options={languages}
-              onPick={(metadata_language) => settle(library, { metadata_language })}
-            />
-          </Setting>
-        ))}
-      </Panel>
-
       <div className="panels">
+        <Panel icon={TagIcon} title={t("settings.metadata_language")} lead={t("settings.metadata_language_why")}>
+          {libraries.map((library) => (
+            <Setting
+              key={library.id}
+              label={library.name}
+              why={t(`kind.${library.kind}`)}
+            >
+              <KindIcon kind={library.kind} size={18} />
+              <Picker
+                label={t("settings.metadata_language")}
+                value={library.metadata_language}
+                options={languages}
+                onPick={(metadata_language) => settle(library, { metadata_language })}
+              />
+            </Setting>
+          ))}
+        </Panel>
+
         {work.kept && (
           <Panel icon={FolderIcon} title={t("settings.companion_files")} lead={t("settings.companion_files_why")}>
             <Setting label={t("settings.read_companion_files")}>
