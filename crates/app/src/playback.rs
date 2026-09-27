@@ -19,7 +19,7 @@ use melyxar_core::segments::MediaSegment;
 use melyxar_core::thumbnails::Thumbnails;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::user::{DownmixMethod, WideGamutChoice};
-use melyxar_core::work::progress_after;
+use melyxar_core::work::{progress_after, PlaybackState};
 use melyxar_playback::decision::{decide, PlaybackRequest};
 
 use crate::{AppError, AppState, Result};
@@ -1152,6 +1152,20 @@ pub async fn set_favourite(
         .await?)
 }
 
+/// Puts a work on this viewer's list of what to watch later, or takes it off.
+pub async fn set_watch_later(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    work_id: WorkId,
+    later: bool,
+) -> Result<bool> {
+    crate::reach::may_read_the_work(state, who, work_id).await?;
+    Ok(state
+        .database()
+        .set_watch_later(who.id, work_id, later)
+        .await?)
+}
+
 /// Marks a work watched by hand, or puts it back to unwatched.
 ///
 /// A season and a series answer for their episodes, which is the storage's
@@ -1175,15 +1189,17 @@ pub async fn mark_watched(
             "the library of this work keeps no watched marks",
         )));
     }
-    let written = state
-        .database()
-        .mark_watched(who.id, work_id, watched)
-        .await?;
+    let database = state.database();
+    let written = database.mark_watched(who.id, work_id, watched).await?;
     if written == 0 {
         return Err(AppError::Domain(melyxar_core::Error::new(
             melyxar_core::error::ErrorCode::NotFound,
             "no work with that identifier",
         )));
+    }
+    // Watched is what later was waiting for.
+    if watched {
+        database.set_watch_later(who.id, work_id, false).await?;
     }
     Ok(watched)
 }
@@ -1213,6 +1229,13 @@ pub async fn record_position(
         Some((kind, options)) => (who.preferences.resume_rules_for(kind), options),
         None => (who.preferences.resume_rules, LibraryOptions::default()),
     };
+    // Played through takes it off the list of what to watch later, as the
+    // play says and whatever a mark by hand says: a film marked watched and
+    // put back on the list to see again stays there until it is seen again.
+    let (played, _) = progress_after(position, duration, rules, false);
+    if played == PlaybackState::Watched {
+        database.set_watch_later(user_id, work_id, false).await?;
+    }
     let progress = progress_after(position, duration, rules, marked_manually);
     let Some((state_now, kept)) = options.kept_of(progress) else {
         return Ok(false);
@@ -3150,6 +3173,56 @@ mod tests {
             Some(Millis::new(1_800_000)),
             "turned back on, the place kept before is offered again"
         );
+    }
+
+    #[tokio::test]
+    async fn a_film_seen_leaves_the_list_of_what_to_watch_later() {
+        // A film of two hours.
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080), audio(id, "aac", 2, true)]
+            })
+            .await;
+        let database = state.database();
+        let work_id = database
+            .playable_source(source_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .work_id;
+        let who = crate::an_ordinary_account(user_id);
+        let put_aside = || async {
+            database
+                .card_of(user_id, work_id)
+                .await
+                .expect("read")
+                .and_then(|card| card.state)
+                .expect("a viewer")
+                .watch_later
+        };
+
+        set_watch_later(&state, &who, work_id, true).await.expect("put aside");
+        record_position(&state, &who, work_id, Millis::new(1_800_000), datetime!(2026-01-01 12:00 UTC))
+            .await
+            .expect("recorded");
+        assert!(put_aside().await, "a quarter in is not seen yet");
+
+        record_position(&state, &who, work_id, Millis::new(7_000_000), datetime!(2026-01-01 14:00 UTC))
+            .await
+            .expect("recorded");
+        assert!(!put_aside().await, "played through, it was watched later");
+
+        set_watch_later(&state, &who, work_id, true).await.expect("put aside again");
+        record_position(&state, &who, work_id, Millis::new(900_000), datetime!(2026-01-02 12:00 UTC))
+            .await
+            .expect("recorded");
+        assert!(
+            put_aside().await,
+            "watched before and put back on the list: it stays until seen again"
+        );
+
+        mark_watched(&state, &who, work_id, true).await.expect("marked");
+        assert!(!put_aside().await, "marked watched by hand, the same");
     }
 
     #[tokio::test]

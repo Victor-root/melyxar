@@ -569,27 +569,45 @@ impl Database {
         work_id: WorkId,
         liked: bool,
     ) -> Result<bool> {
-        match liked {
-            true => {
-                sqlx::query(
-                    "INSERT INTO favorites (user_id, work_id, created_at) VALUES (?, ?, ?)
-                     ON CONFLICT (user_id, work_id) DO NOTHING",
-                )
-                .bind(user_id.to_db_string())
-                .bind(work_id.to_db_string())
-                .bind(timestamp_to_text(now()))
-                .execute(self.writer())
-                .await?;
-            }
-            false => {
-                sqlx::query("DELETE FROM favorites WHERE user_id = ? AND work_id = ?")
-                    .bind(user_id.to_db_string())
-                    .bind(work_id.to_db_string())
-                    .execute(self.writer())
-                    .await?;
-            }
+        self.keep_on_a_list("favorites", user_id, work_id, liked)
+            .await
+    }
+
+    /// Puts a work on the list of what this viewer means to watch later, or
+    /// takes it off. Answers as a favourite does, and for the same reasons.
+    pub async fn set_watch_later(
+        &self,
+        user_id: UserId,
+        work_id: WorkId,
+        later: bool,
+    ) -> Result<bool> {
+        self.keep_on_a_list("watchlist", user_id, work_id, later)
+            .await
+    }
+
+    /// Puts a work on one of a viewer's own lists, or takes it off.
+    async fn keep_on_a_list(
+        &self,
+        list: &'static str,
+        user_id: UserId,
+        work_id: WorkId,
+        kept: bool,
+    ) -> Result<bool> {
+        let statement = match kept {
+            true => format!(
+                "INSERT INTO {list} (user_id, work_id, created_at) VALUES (?, ?, ?)
+                 ON CONFLICT (user_id, work_id) DO NOTHING"
+            ),
+            false => format!("DELETE FROM {list} WHERE user_id = ? AND work_id = ?"),
+        };
+        let mut query = sqlx::query(AssertSqlSafe(statement))
+            .bind(user_id.to_db_string())
+            .bind(work_id.to_db_string());
+        if kept {
+            query = query.bind(timestamp_to_text(now()));
         }
-        Ok(liked)
+        query.execute(self.writer()).await?;
+        Ok(kept)
     }
 
     /// Marks a work watched, or puts it back to unwatched, by hand.
