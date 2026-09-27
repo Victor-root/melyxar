@@ -64,6 +64,7 @@ export const FINDABLE: FindableSection[] = [
       "nav.theme": ["theme.system", "theme.dark", "theme.light"],
       "settings.backdrop": [
         "backdrop.light",
+        "backdrop.library",
         "backdrop.none",
         "backdrop.light.1",
         "backdrop.light.2",

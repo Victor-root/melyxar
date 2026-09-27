@@ -120,6 +120,7 @@ function BackdropChoice() {
           onPick={setBackdrop}
           options={[
             ["light", t("backdrop.light")],
+            ["library", t("backdrop.library")],
             ["none", t("backdrop.none")],
           ]}
         />

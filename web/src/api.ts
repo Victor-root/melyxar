@@ -1336,8 +1336,9 @@ export interface WideGamutHandling {
 /** What a viewer wants done with a film of wide gamut colour. */
 export type WideGamutChoice = "automatic" | "always_convert" | "never_convert";
 
-/** What is drawn behind the pages: a painting of light, or nothing. */
-export type Backdrop = "light" | "none";
+/** What is drawn behind the pages: a painting of light, the drawn shelf, or
+ *  nothing. */
+export type Backdrop = "light" | "library" | "none";
 
 /** When a work left partway counts as started, as watched, or as too short
  *  to come back to: below the smallest share it starts again, from the
