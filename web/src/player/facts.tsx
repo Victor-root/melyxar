@@ -12,7 +12,7 @@
  * says whether a picture arrived the shape it left.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api } from "../api";
 import type { CalibrationEntry, PlaybackPlan, Producing } from "../api";
@@ -29,8 +29,7 @@ import {
   soundDone,
   soundHeld,
 } from "./describe";
-import { framed } from "./frame";
-import type { Frame, Hold } from "./frame";
+import { PlayerWindow } from "./window";
 
 /** How often what the browser says is read again. */
 const LOOK_EVERY_MS = 1_000;
@@ -98,84 +97,7 @@ interface Props {
   onClose: () => void;
 }
 
-/** The edges and corners a hand can pull the window by. */
-const EDGES: Exclude<Hold, "move">[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
-
-/**
- * A window moved by its title bar and sized by its edges, never past the
- * picture it stands on.
- *
- * It opens where the stylesheet puts it. Its place and size are read once,
- * as a hand first takes hold, and held from then on; the rest of the way is
- * arithmetic on the pointer, and nothing is measured while it moves.
- */
-function useFramedByHand() {
-  const sheet = useRef<HTMLElement>(null);
-  const [frame, setFrame] = useState<Frame | null>(null);
-  const holding = useRef<{
-    hold: Hold;
-    x: number;
-    y: number;
-    from: Frame;
-    room: { width: number; height: number };
-  } | null>(null);
-
-  const grip = (hold: Hold) => ({
-    onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
-      const it = sheet.current;
-      const room = it?.parentElement;
-      // The cross in the bar is a button, not a place to take hold of.
-      if (event.button !== 0 || (event.target as Element).closest("button") || !it || !room) {
-        return;
-      }
-      const at = it.getBoundingClientRect();
-      const within = room.getBoundingClientRect();
-      holding.current = {
-        hold,
-        x: event.clientX,
-        y: event.clientY,
-        from: {
-          left: at.left - within.left,
-          top: at.top - within.top,
-          width: at.width,
-          height: at.height,
-        },
-        room: { width: within.width, height: within.height },
-      };
-      event.currentTarget.setPointerCapture(event.pointerId);
-      event.preventDefault();
-    },
-    onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
-      const held = holding.current;
-      if (held) {
-        setFrame(framed(held.hold, held.from, held.room, event.clientX - held.x, event.clientY - held.y));
-      }
-    },
-    onPointerUp: () => {
-      holding.current = null;
-    },
-    onPointerCancel: () => {
-      holding.current = null;
-    },
-  });
-
-  const style: React.CSSProperties | undefined = frame
-    ? {
-        left: frame.left,
-        top: frame.top,
-        width: frame.width,
-        height: frame.height,
-        right: "auto",
-        bottom: "auto",
-        maxHeight: "none",
-      }
-    : undefined;
-
-  return { sheet, style, grip };
-}
-
 export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
-  const framing = useFramedByHand();
   const [says, setSays] = useState<WhatTheBrowserSays | null>(null);
   const [working, setWorking] = useState<Producing | null>(null);
   const [calibration, setCalibration] = useState<CalibrationEntry[]>([]);
@@ -243,16 +165,11 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
       : null;
 
   return (
-    <aside className="facts" aria-label={t("facts.title")} ref={framing.sheet} style={framing.style}>
-      {EDGES.map((edge) => (
-        <span key={edge} className={`facts-edge facts-edge-${edge}`} aria-hidden="true" {...framing.grip(edge)} />
-      ))}
-      <div className="facts-head" {...framing.grip("move")}>
-        <strong>{t("facts.title")}</strong>
-        <button className="player-button" onClick={onClose} aria-label={t("facts.close")}>
-          ✕
-        </button>
-      </div>
+    <PlayerWindow
+      title={t("facts.title")}
+      closeLabel={t("facts.close")}
+      onClose={onClose}
+    >
 
       <div className="facts-blocks">
         {/* Across every column rather than shut inside one. What this block
@@ -352,6 +269,6 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
           </section>
         )}
       </div>
-    </aside>
+    </PlayerWindow>
   );
 }

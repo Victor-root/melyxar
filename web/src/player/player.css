@@ -248,7 +248,7 @@
   cursor: none;
 }
 
-.player-stage:has(.player-overlay[data-away="yes"]) .facts {
+.player-stage:has(.player-overlay[data-away="yes"]) .player-window {
   cursor: auto;
 }
 
@@ -1382,16 +1382,16 @@
 
 /* A column down the side of the picture rather than a sheet across it,
    which hid most of the film being looked into. Opened between the top row
-   and the controls; wider or taller once a hand pulls its edges, and in two
-   columns of its own once wide enough for them. */
-.facts {
-  --facts-top: 88px;
+   and the controls; wider or taller once a hand pulls its edges, and the
+   diagnostics in two columns of their own once wide enough for them. */
+.player-window {
+  --window-top: 88px;
   position: absolute;
-  top: var(--facts-top);
+  top: var(--window-top);
   right: var(--player-inset);
   z-index: 3;
   width: min(24rem, calc(100% - var(--player-inset) * 2));
-  max-height: calc(100% - var(--facts-top) - 124px);
+  max-height: calc(100% - var(--window-top) - 124px);
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-card);
@@ -1401,7 +1401,7 @@
 /* The bar it is moved by: as tall as its title, with the cross drawn
    smaller than the player's own buttons, which are sized for a hand
    reaching across a whole picture. */
-.facts-head {
+.player-window-head {
   --player-button: 30px;
   --player-button-ring: 1px;
   display: flex;
@@ -1419,67 +1419,67 @@
 
 /* What a hand pulls the window's size by: a thin band along each edge and a
    square at each corner, each with the pointer the system draws for it. */
-.facts-edge {
+.player-window-edge {
   position: absolute;
   z-index: 1;
   touch-action: none;
 }
 
-.facts-edge-n,
-.facts-edge-s {
+.player-window-edge-n,
+.player-window-edge-s {
   left: 10px;
   right: 10px;
   height: 5px;
   cursor: ns-resize;
 }
 
-.facts-edge-e,
-.facts-edge-w {
+.player-window-edge-e,
+.player-window-edge-w {
   top: 10px;
   bottom: 10px;
   width: 5px;
   cursor: ew-resize;
 }
 
-.facts-edge-ne,
-.facts-edge-nw,
-.facts-edge-se,
-.facts-edge-sw {
+.player-window-edge-ne,
+.player-window-edge-nw,
+.player-window-edge-se,
+.player-window-edge-sw {
   width: 10px;
   height: 10px;
 }
 
-.facts-edge-n,
-.facts-edge-ne,
-.facts-edge-nw {
+.player-window-edge-n,
+.player-window-edge-ne,
+.player-window-edge-nw {
   top: 0;
 }
 
-.facts-edge-s,
-.facts-edge-se,
-.facts-edge-sw {
+.player-window-edge-s,
+.player-window-edge-se,
+.player-window-edge-sw {
   bottom: 0;
 }
 
-.facts-edge-e,
-.facts-edge-ne,
-.facts-edge-se {
+.player-window-edge-e,
+.player-window-edge-ne,
+.player-window-edge-se {
   right: 0;
 }
 
-.facts-edge-w,
-.facts-edge-nw,
-.facts-edge-sw {
+.player-window-edge-w,
+.player-window-edge-nw,
+.player-window-edge-sw {
   left: 0;
 }
 
-.facts-edge-nw,
-.facts-edge-se {
+.player-window-edge-nw,
+.player-window-edge-se {
   cursor: nwse-resize;
 }
 
-.facts-edge-ne,
-.facts-edge-sw {
+.player-window-edge-ne,
+.player-window-edge-sw {
   cursor: nesw-resize;
 }
 
@@ -1531,9 +1531,96 @@
   font-weight: 650;
 }
 
+/* ---------------------------------------------------------------------------
+ * Where the opening and closing titles are, corrected by hand
+ * ------------------------------------------------------------------------ */
+
+/* Opened on the other side from the diagnostics, so both can stand open
+   at once without one hiding the other. */
+.segments {
+  right: auto;
+  left: var(--player-inset);
+}
+
+.segments-rows {
+  overflow-y: auto;
+  padding: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-wide);
+}
+
+.segments-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+}
+
+.segments-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+}
+
+.segments-row-head h3 {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.segments-origin {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+/* What a person said, which is what this window is for. */
+.segments-origin-manual {
+  color: var(--accent-bright);
+}
+
+/* The start above the end, their names, fields and buttons each in a
+   column of their own so the two lines read as one table. */
+.segments-times {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: var(--gap-tight) var(--gap-tight);
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.segments-moment {
+  display: contents;
+}
+
+.segments .segments-field {
+  height: 32px;
+  font-variant-numeric: tabular-nums;
+}
+
+.segments .segments-field[aria-invalid="true"] {
+  border-color: var(--trouble);
+}
+
+.segments-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+}
+
+.segments-refused {
+  margin: 0;
+  color: var(--trouble);
+  font-size: 13px;
+}
+
 @media (max-height: 40rem) {
-  .facts {
-    --facts-top: 12px;
+  .player-window {
+    --window-top: 12px;
     max-height: calc(100% - 24px);
   }
 }
@@ -1549,7 +1636,7 @@
   }
 
   .player-menu,
-  .facts {
+  .player-window {
     right: 14px;
     bottom: 96px;
   }
@@ -2040,12 +2127,12 @@
   transform-origin: top center;
 }
 
-/* The facts panel clips its own edges to keep its rounded corners, and its
+/* A window on the picture clips its own edges to keep its rounded corners, and its
    close button sits right against the top right one: a word above it, or
    centred on it, would be cut off exactly where a corner is, rather than
    merely run off the screen. The same fix as the corner above, for the same
    reason, on both edges this button sits against. */
-.facts-head .player-button[aria-label]::before {
+.player-window-head .player-button[aria-label]::before {
   bottom: auto;
   top: calc(100% - var(--player-button-ring) + 6px);
   left: auto;
@@ -2054,8 +2141,8 @@
   transform-origin: top right;
 }
 
-.facts-head .player-button[aria-label]:hover::before,
-.facts-head .player-button[aria-label]:focus-visible::before {
+.player-window-head .player-button[aria-label]:hover::before,
+.player-window-head .player-button[aria-label]:focus-visible::before {
   transform: translateX(0) scale(1);
 }
 
