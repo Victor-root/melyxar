@@ -375,6 +375,9 @@ pub struct WorkCard {
 pub struct CardState {
     /// Where this viewer is in it.
     pub seen: PlaybackState,
+    /// Whether its library keeps watched marks at all. Where it does not,
+    /// the card is never marked, and offers no button to mark it.
+    pub keeps_watched_marks: bool,
     /// Where they stopped, only where they really stopped partway. A position
     /// of nothing is where everybody starts, and a button offering to carry on
     /// from the very beginning says the wrong thing.
@@ -637,8 +640,13 @@ impl Database {
             .join(", ");
         let rows = sqlx::query(AssertSqlSafe(format!(
             "SELECT w.id,
-                    coalesce(p.state, 'not_started') AS seen,
-                    p.position_ms,
+                    -- What this library keeps of a play: a mark or a place
+                    -- kept before it stopped keeping them goes unshown.
+                    l.keeps_watched_marks,
+                    CASE WHEN l.keeps_watched_marks
+                         THEN coalesce(p.state, 'not_started')
+                         ELSE 'not_started' END AS seen,
+                    CASE WHEN l.keeps_resume_points THEN p.position_ms END AS position_ms,
                     f.work_id IS NOT NULL AS favourite,
                     -- The copy a play button on the card would start: the
                     -- biggest one still on the disk, the same one every other
@@ -656,7 +664,7 @@ impl Database {
                             AND (e.parent_id = w.id
                                  OR e.parent_id IN (SELECT id FROM works WHERE parent_id = w.id)))
                     ELSE 0 END AS episodes,
-                    CASE WHEN w.kind IN ('series', 'season') THEN
+                    CASE WHEN w.kind IN ('series', 'season') AND l.keeps_watched_marks THEN
                         (SELECT count(*) FROM works e
                            LEFT JOIN playback_progress q
                                   ON q.work_id = e.id AND q.user_id = ?1
@@ -667,12 +675,13 @@ impl Database {
                     ELSE 0 END AS unwatched,
                     -- How long the copy a play button starts lasts, for a
                     -- work somebody stopped partway through, and only then.
-                    CASE WHEN p.position_ms > 0 THEN
+                    CASE WHEN p.position_ms > 0 AND l.keeps_resume_points THEN
                         (SELECT s.duration_ms FROM media_sources s
                           WHERE s.work_id = w.id AND s.missing_since IS NULL
                           ORDER BY s.size_bytes DESC LIMIT 1)
                     END AS resume_length_ms
              FROM works w
+             JOIN libraries l ON l.id = w.library_id
              LEFT JOIN playback_progress p ON p.work_id = w.id AND p.user_id = ?1
              LEFT JOIN favorites f ON f.work_id = w.id AND f.user_id = ?1
              WHERE w.id IN ({places})"
@@ -694,11 +703,19 @@ impl Database {
             })?;
             let episodes: i64 = row.try_get("episodes")?;
             let unwatched: i64 = row.try_get("unwatched")?;
+            let keeps_watched_marks: bool = row.try_get("keeps_watched_marks")?;
+            // Read off its episodes only where they carry marks: without any,
+            // none of them is left to watch, which would read as all watched.
+            let seen = match keeps_watched_marks {
+                true => melyxar_core::work::seen_through_episodes(episodes, unwatched)
+                    .unwrap_or(own),
+                false => own,
+            };
             found.insert(
                 id,
                 CardState {
-                    seen: melyxar_core::work::seen_through_episodes(episodes, unwatched)
-                        .unwrap_or(own),
+                    seen,
+                    keeps_watched_marks,
                     resume_from: row
                         .try_get::<Option<i64>, _>("position_ms")?
                         .filter(|position| *position > 0)
@@ -724,6 +741,7 @@ impl Database {
             // touched rather than none at all, so the page draws.
             card.state = Some(found.remove(&card.id).unwrap_or(CardState {
                 seen: PlaybackState::NotStarted,
+                keeps_watched_marks: true,
                 resume_from: None,
                 resume_length: None,
                 favourite: false,
@@ -1551,6 +1569,94 @@ mod tests {
             what_is_left(&database, library.id, who).await,
             (3, 0, PlaybackState::Watched),
             "a series with nothing left is watched, though nobody plays a series itself"
+        );
+
+        database
+            .set_library_options(
+                library.id,
+                melyxar_core::library::LibraryOptions {
+                    keeps_watched_marks: false,
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("switched");
+        assert_eq!(
+            what_is_left(&database, library.id, who).await,
+            (3, 0, PlaybackState::NotStarted),
+            "in a library keeping no marks, nothing is left and nothing is watched"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_card_shows_only_what_its_library_keeps_of_a_play() {
+        let (database, films) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let who = somebody(&database, "vera").await;
+        let film = grid_of(&database, films, who).await[0].id;
+        database
+            .record_playback_progress(
+                who,
+                film,
+                Millis::new(920_000),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("position recorded");
+        database
+            .mark_watched(who, film, true)
+            .await
+            .expect("marked");
+        database
+            .record_playback_progress(
+                who,
+                film,
+                Millis::new(920_000),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("started again");
+
+        let state = |cards: Vec<WorkCard>| cards[0].state.clone().expect("a named viewer");
+        let kept = state(grid_of(&database, films, who).await);
+        assert_eq!(kept.seen, PlaybackState::Watched);
+        assert_eq!(kept.resume_from, Some(Millis::new(920_000)));
+        assert!(kept.keeps_watched_marks);
+
+        let options = |keeps_resume_points, keeps_watched_marks| {
+            melyxar_core::library::LibraryOptions {
+                keeps_resume_points,
+                keeps_watched_marks,
+                ..Default::default()
+            }
+        };
+        database
+            .set_library_options(films, options(false, true))
+            .await
+            .expect("switched");
+        let marks_only = state(grid_of(&database, films, who).await);
+        assert_eq!(marks_only.seen, PlaybackState::Watched);
+        assert_eq!(marks_only.resume_from, None, "no place where none is kept");
+        assert_eq!(marks_only.resume_length, None);
+
+        database
+            .set_library_options(films, options(true, false))
+            .await
+            .expect("switched");
+        let resume_only = state(grid_of(&database, films, who).await);
+        assert_eq!(resume_only.seen, PlaybackState::NotStarted, "no mark where none is kept");
+        assert!(!resume_only.keeps_watched_marks);
+        assert_eq!(resume_only.resume_from, Some(Millis::new(920_000)));
+
+        database
+            .set_library_options(films, options(true, true))
+            .await
+            .expect("switched");
+        assert_eq!(
+            state(grid_of(&database, films, who).await),
+            kept,
+            "turned back on, what was kept before shows again: nothing was erased"
         );
     }
 

@@ -151,6 +151,11 @@ struct LibraryView {
     /// Whether its folders are watched, and it is scanned again as soon as
     /// something in them changes.
     watch_in_real_time: bool,
+    /// Whether it keeps where each account stopped, so a work is picked up
+    /// from there.
+    keeps_resume_points: bool,
+    /// Whether it keeps which works each account has watched.
+    keeps_watched_marks: bool,
     /// Where that watching stands, for a library that asked for it:
     /// watching, starting while it is being set up, or refused.
     watch_state: Option<&'static str>,
@@ -205,6 +210,8 @@ async fn libraries(
                 key_frames_during_scan: library.options.key_frames_during_scan,
                 thumbnails_during_scan: library.options.thumbnails_during_scan,
                 watch_in_real_time: library.options.watch_in_real_time,
+                keeps_resume_points: library.options.keeps_resume_points,
+                keeps_watched_marks: library.options.keeps_watched_marks,
                 watch_state,
                 watch_refusal,
                 metadata_language: library.metadata_language,
@@ -348,6 +355,9 @@ struct CardView {
     library: String,
     /// not_started, in_progress or watched, for the account asking.
     seen: &'static str,
+    /// Whether its library keeps watched marks, so a card that is never
+    /// marked offers no button to mark it.
+    watched_marks: bool,
     /// Where they stopped, in seconds, only where they stopped partway.
     resume_from_seconds: Option<i64>,
     /// How long the copy it is carried on in lasts, beside where it stopped.
@@ -435,6 +445,10 @@ fn card_view(card: &WorkCard) -> CardView {
             .as_ref()
             .map_or(PlaybackState::NotStarted, |state| state.seen)
             .as_str(),
+        watched_marks: card
+            .state
+            .as_ref()
+            .is_none_or(|state| state.keeps_watched_marks),
         resume_from_seconds: card
             .state
             .as_ref()

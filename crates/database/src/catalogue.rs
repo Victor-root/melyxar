@@ -621,6 +621,7 @@ impl Database {
             "SELECT {} FROM works e
              JOIN works s ON s.id = e.parent_id
              JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
+             JOIN libraries l ON l.id = e.library_id AND l.keeps_resume_points
              WHERE ?2 IN (s.parent_id, s.id) AND e.kind = 'episode' AND p.position_ms > 0
                AND EXISTS (SELECT 1 FROM media_sources m
                             WHERE m.work_id = e.id AND m.missing_since IS NULL)
@@ -682,12 +683,14 @@ impl Database {
         let row = sqlx::query(AssertSqlSafe(format!(
             "SELECT {} FROM works e
              JOIN works s ON s.id = e.parent_id
+             JOIN libraries l ON l.id = e.library_id
              LEFT JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
              WHERE ?2 IN (s.parent_id, s.id) AND e.kind = 'episode'
                AND EXISTS (SELECT 1 FROM media_sources m
                             WHERE m.work_id = e.id AND m.missing_since IS NULL)
                AND (?3 = 0 OR (s.ordinal, e.ordinal) > (?4, ?5))
-               AND (?6 = 0 OR coalesce(p.state, 'not_started') <> 'watched')
+               AND (?6 = 0 OR NOT l.keeps_watched_marks
+                    OR coalesce(p.state, 'not_started') <> 'watched')
              ORDER BY s.ordinal, e.ordinal
              LIMIT 1",
             what_a_work_is("e.")
@@ -3493,6 +3496,53 @@ mod tests {
             )
             .await
             .expect("recorded");
+    }
+
+    #[tokio::test]
+    async fn a_series_is_picked_back_up_only_by_what_its_library_keeps() {
+        let (database, library_id, root_id) = library().await;
+        let viewer = a_viewer(&database).await;
+        let (series, _, episodes) = a_series(&database, library_id).await;
+        for (rank, episode) in episodes.iter().enumerate() {
+            a_file_behind(&database, root_id, *episode, &format!("{rank}.mkv")).await;
+        }
+        watched(&database, viewer, episodes[0]).await;
+        left_halfway(&database, viewer, episodes[2], melyxar_core::time::now()).await;
+        let picked_up = || async {
+            database
+                .where_to_resume(viewer, series)
+                .await
+                .expect("read")
+                .map(|found| found.id)
+        };
+        let keeping = |keeps_resume_points, keeps_watched_marks| {
+            melyxar_core::library::LibraryOptions {
+                keeps_resume_points,
+                keeps_watched_marks,
+                ..Default::default()
+            }
+        };
+        assert_eq!(picked_up().await, Some(episodes[2]), "the one left halfway");
+
+        database
+            .set_library_options(library_id, keeping(false, true))
+            .await
+            .expect("switched");
+        assert_eq!(
+            picked_up().await,
+            Some(episodes[1]),
+            "no place kept, so the first one not watched"
+        );
+
+        database
+            .set_library_options(library_id, keeping(false, false))
+            .await
+            .expect("switched");
+        assert_eq!(
+            picked_up().await,
+            Some(episodes[0]),
+            "no mark kept either, so the very first"
+        );
     }
 
     #[tokio::test]
