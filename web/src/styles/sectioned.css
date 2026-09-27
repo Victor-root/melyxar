@@ -152,7 +152,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
   /* ROW_STEP in masonry.ts: the two are one number. */
-  grid-auto-rows: 4px;
+  grid-auto-rows: 1px;
   column-gap: calc(var(--gap) * 1.5);
   align-items: start;
   min-width: 0;
@@ -163,6 +163,12 @@
 
 .sectioned-page > * {
   grid-column: 1 / -1;
+}
+
+/* The title of a page keeps no gap of the board under it: the first cards
+   start where the list of sections beside them does. */
+.sectioned-page > .page-head {
+  --board-gap-after: 0;
 }
 
 /* A group of panels lays its cards on the page itself, as ordinary ones. */
