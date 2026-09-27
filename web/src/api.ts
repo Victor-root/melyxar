@@ -1336,6 +1336,9 @@ export interface WideGamutHandling {
 /** What a viewer wants done with a film of wide gamut colour. */
 export type WideGamutChoice = "automatic" | "always_convert" | "never_convert";
 
+/** What is drawn behind the pages: a painting of light, or nothing. */
+export type Backdrop = "light" | "none";
+
 /** When a work left partway counts as started, as watched, or as too short
  *  to come back to: below the smallest share it starts again, from the
  *  largest it is watched, shorter than the length it is never carried on. */
@@ -1500,6 +1503,9 @@ export interface ViewerPreferences {
    *  show them, and those shown on the bar. */
   header_buttons: HeaderButton[];
   buttons_in_the_bar: HeaderButton[];
+  /** What is drawn behind the pages, and which painting of light, from one. */
+  backdrop: Backdrop;
+  backdrop_light: number;
   /** Whether this account is left off the list the sign in screen offers.
    *  Hidden, it still signs in: the name is typed rather than pressed. */
   hidden_at_the_door: boolean;

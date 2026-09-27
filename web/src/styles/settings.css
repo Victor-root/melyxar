@@ -84,6 +84,56 @@
   cursor: pointer;
 }
 
+/* The paintings of light, each shown whole in a tile the shape of a screen,
+   on the surface it is drawn over, its dust shrunk with it. */
+.lights {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 12px;
+  padding: 4px 0 14px;
+}
+
+.light-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-deep);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.light-choice:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--text);
+}
+
+.light-choice-on {
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.light-tile {
+  --dust-scale: 0.3;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: calc(var(--radius-control) - 3px);
+}
+
+.light-name {
+  padding: 0 2px;
+}
+
 .profile-card {
   display: flex;
   align-items: center;

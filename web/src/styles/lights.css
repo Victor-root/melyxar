@@ -1,0 +1,663 @@
+/*
+ * The paintings of light drawn behind the pages and behind the door: pools
+ * of accent, a shape the light takes across them, and dust caught in it.
+ *
+ * Painted rather than assembled. The first of them was seven boxes that
+ * never stopped moving, three of them under a blur of seventy points, and a
+ * blurred box that is also being scaled has its blur worked out again on
+ * every frame, over the whole window. Measured on a screen where nothing was
+ * happening, that came to eight frames a second at 1080p and three at 4K.
+ * Every one of them is now one box carrying gradients: painted once,
+ * composed thereafter, and nothing moving, blurred or filtered. A painting
+ * added here keeps to that.
+ *
+ * All of it in fractions of the box rather than in points, so it is drawn at
+ * whatever resolution the screen has, and the same painting shrinks whole
+ * into the little tile somebody picks it from. Every colour is one of the
+ * accent's, so each painting follows the colour an account chose.
+ */
+.drift {
+  /* How much of all this there is, and what colour the dust is. Both are
+     turned down rather than redrawn on a white screen, further down: light
+     added to a white surface is not light, and dust the colour of the
+     accent on white is pink confetti. Named here so that is the whole of
+     what the other theme has to say, rather than every painting again. */
+  --drift-force: 1;
+  --drift-dust: var(--accent-bright);
+  --drift-dust-force: 1;
+  /* Everything below is drawn at this scale in points: the tile a painting
+     is chosen from shrinks its dust with the rest of it. */
+  --dust-scale: 1;
+
+  /* The dust: two bands of one dot repeated, each cut by a mask, so it
+     reads as a drift of it rather than as graph paper. A near one, fine,
+     and a far one, wider apart and fainter, crossing it: one band alone
+     reads as a stripe, two read as depth. Their spacing is in points
+     rather than in fractions of the window, so it is the same dust on a
+     laptop as on a large panel. Each painting says where its two bands lie. */
+  --near-step: 17px;
+  --near-dot: 1.1px;
+  --near-force: 0.62;
+  --near-reach: 46% 34%;
+  --near-at: 20% 52%;
+  --far-step: 29px;
+  --far-dot: 1.1px;
+  --far-force: 0.38;
+  --far-reach: 44% 44%;
+  --far-at: 80% 34%;
+
+  /*
+   * The first, the one every page always wore: the light one long arc
+   * throws, up from low on the left and out through the right hand side, on
+   * the edge of an ellipse half the window wide and three quarters of it
+   * tall. The arc keeps its glow and not its hairline: a drawn line behind
+   * a banner that thins out into it reads as a line ruled across the
+   * picture. The three pools are each widened a little for the blur that
+   * used to be over them and weakened by as much.
+   */
+  background:
+    radial-gradient(
+      48% 75% at 18% 29%,
+      transparent 95%,
+      color-mix(in srgb, var(--accent) calc(17% * var(--drift-force)), transparent) 100%,
+      transparent 106%
+    ),
+    radial-gradient(
+      33% 41% at 53% 106%,
+      color-mix(in srgb, var(--accent-dim) calc(17% * var(--drift-force)), transparent),
+      transparent 76%
+    ),
+    radial-gradient(
+      34% 40% at 88% 91%,
+      color-mix(in srgb, var(--accent-bright) calc(20% * var(--drift-force)), transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      35% 43% at 11% 38%,
+      color-mix(in srgb, var(--accent) calc(26% * var(--drift-force)), transparent),
+      transparent 72%
+    );
+}
+
+.drift::before,
+.drift::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.drift::before {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--drift-dust) 62%, transparent) calc(var(--near-dot) * var(--dust-scale)),
+    transparent calc((var(--near-dot) + 0.1px) * var(--dust-scale))
+  );
+  background-size: calc(var(--near-step) * var(--dust-scale)) calc(var(--near-step) * var(--dust-scale));
+  opacity: calc(var(--near-force) * var(--drift-dust-force));
+  mask-image: radial-gradient(
+    var(--near-reach) at var(--near-at),
+    #000 0%,
+    color-mix(in srgb, #000 45%, transparent) 46%,
+    transparent 78%
+  );
+  -webkit-mask-image: radial-gradient(
+    var(--near-reach) at var(--near-at),
+    #000 0%,
+    color-mix(in srgb, #000 45%, transparent) 46%,
+    transparent 78%
+  );
+}
+
+.drift::after {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--drift-dust) 62%, transparent) calc(var(--far-dot) * var(--dust-scale)),
+    transparent calc((var(--far-dot) + 0.1px) * var(--dust-scale))
+  );
+  background-size: calc(var(--far-step) * var(--dust-scale)) calc(var(--far-step) * var(--dust-scale));
+  opacity: calc(var(--far-force) * var(--drift-dust-force));
+  mask-image: radial-gradient(
+    var(--far-reach) at var(--far-at),
+    #000 0%,
+    color-mix(in srgb, #000 40%, transparent) 42%,
+    transparent 74%
+  );
+  -webkit-mask-image: radial-gradient(
+    var(--far-reach) at var(--far-at),
+    #000 0%,
+    color-mix(in srgb, #000 40%, transparent) 42%,
+    transparent 74%
+  );
+}
+
+/* Horizon: the rim of something vast rising from below, lit along its edge,
+   with the dust hanging in the air above it. */
+.drift[data-light="2"] {
+  --near-reach: 62% 20%;
+  --near-at: 50% 58%;
+  --far-reach: 36% 34%;
+  --far-at: 78% 22%;
+
+  background:
+    radial-gradient(
+      96% 44% at 50% 116%,
+      transparent 94%,
+      color-mix(in srgb, var(--accent-bright) calc(30% * var(--drift-force)), transparent) 98.5%,
+      color-mix(in srgb, var(--accent) calc(10% * var(--drift-force)), transparent) 101%,
+      transparent 108%
+    ),
+    radial-gradient(
+      70% 30% at 50% 76%,
+      color-mix(in srgb, var(--accent) calc(24% * var(--drift-force)), transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      96% 44% at 50% 116%,
+      color-mix(in srgb, var(--accent-dim) calc(14% * var(--drift-force)), transparent) 60%,
+      transparent 95%
+    ),
+    radial-gradient(
+      32% 38% at 88% 6%,
+      color-mix(in srgb, var(--accent-dim) calc(16% * var(--drift-force)), transparent),
+      transparent 72%
+    );
+}
+
+/* Eclipse: a disc held against the light, which shows only as the ring
+   around it, and a pool answering it from the far corner. */
+.drift[data-light="3"] {
+  --near-reach: 30% 46%;
+  --near-at: 72% 40%;
+  --far-reach: 40% 40%;
+  --far-at: 18% 70%;
+
+  background:
+    radial-gradient(
+      15% 27% at 72% 40%,
+      transparent 88%,
+      color-mix(in srgb, var(--accent-bright) calc(40% * var(--drift-force)), transparent) 100%,
+      color-mix(in srgb, var(--accent) calc(16% * var(--drift-force)), transparent) 108%,
+      transparent 150%
+    ),
+    radial-gradient(
+      38% 64% at 72% 40%,
+      color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      40% 46% at 10% 90%,
+      color-mix(in srgb, var(--accent-dim) calc(20% * var(--drift-force)), transparent),
+      transparent 72%
+    );
+}
+
+/* Rays: light falling in from the top left corner in a few uneven shafts,
+   fading out before it reaches the far side, and pooling where it lands. */
+.drift[data-light="4"] {
+  --near-reach: 40% 34%;
+  --near-at: 34% 38%;
+  --far-reach: 30% 36%;
+  --far-at: 76% 70%;
+
+  background:
+    radial-gradient(
+      30% 40% at 0% 0%,
+      color-mix(in srgb, var(--accent-bright) calc(30% * var(--drift-force)), transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      36% 34% at 84% 92%,
+      color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      130% 150% at 0% 0%,
+      transparent 40%,
+      var(--surface-deep) 104%
+    ),
+    conic-gradient(
+      from 90deg at 0% 0%,
+      transparent 0deg 12deg,
+      color-mix(in srgb, var(--accent) calc(26% * var(--drift-force)), transparent) 17deg,
+      transparent 23deg 30deg,
+      color-mix(in srgb, var(--accent-bright) calc(30% * var(--drift-force)), transparent) 36deg,
+      transparent 41deg 47deg,
+      color-mix(in srgb, var(--accent) calc(20% * var(--drift-force)), transparent) 50deg,
+      transparent 54deg 60deg,
+      color-mix(in srgb, var(--accent-dim) calc(28% * var(--drift-force)), transparent) 67deg,
+      transparent 75deg
+    );
+}
+
+/* Orbits: three rims around a light low in the right hand corner, each
+   fainter than the one inside it. */
+.drift[data-light="5"] {
+  --near-reach: 36% 30%;
+  --near-at: 56% 56%;
+  --far-reach: 34% 40%;
+  --far-at: 22% 24%;
+
+  background:
+    radial-gradient(
+      44% 52% at 96% 104%,
+      transparent 94%,
+      color-mix(in srgb, var(--accent-bright) calc(26% * var(--drift-force)), transparent) 100%,
+      transparent 106%
+    ),
+    radial-gradient(
+      68% 86% at 96% 104%,
+      transparent 95%,
+      color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent) 100%,
+      transparent 105%
+    ),
+    radial-gradient(
+      96% 126% at 96% 104%,
+      transparent 96%,
+      color-mix(in srgb, var(--accent) calc(11% * var(--drift-force)), transparent) 100%,
+      transparent 104%
+    ),
+    radial-gradient(
+      34% 44% at 96% 104%,
+      color-mix(in srgb, var(--accent) calc(26% * var(--drift-force)), transparent),
+      transparent 76%
+    ),
+    radial-gradient(
+      30% 36% at 6% 8%,
+      color-mix(in srgb, var(--accent-dim) calc(16% * var(--drift-force)), transparent),
+      transparent 72%
+    );
+}
+
+/* Nebula: no line at all, only clouds of the accent in its three shades
+   gathered towards the middle, and the dust thickest where they meet. */
+.drift[data-light="6"] {
+  --near-step: 13px;
+  --near-reach: 40% 42%;
+  --near-at: 44% 44%;
+  --far-step: 23px;
+  --far-reach: 56% 52%;
+  --far-at: 60% 56%;
+
+  background:
+    radial-gradient(
+      26% 30% at 48% 24%,
+      color-mix(in srgb, var(--accent-bright) calc(18% * var(--drift-force)), transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      30% 36% at 64% 58%,
+      color-mix(in srgb, var(--accent-bright) calc(16% * var(--drift-force)), transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      38% 50% at 30% 42%,
+      color-mix(in srgb, var(--accent) calc(24% * var(--drift-force)), transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      44% 30% at 80% 90%,
+      color-mix(in srgb, var(--accent-dim) calc(18% * var(--drift-force)), transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      24% 28% at 10% 82%,
+      color-mix(in srgb, var(--accent-dim) calc(16% * var(--drift-force)), transparent),
+      transparent 72%
+    );
+}
+
+/* Crossing: two long arcs, one rising from the left and one falling from
+   the right, lit where they cross. */
+.drift[data-light="7"] {
+  --near-reach: 30% 30%;
+  --near-at: 52% 50%;
+  --far-reach: 30% 40%;
+  --far-at: 14% 22%;
+
+  background:
+    radial-gradient(
+      22% 30% at 52% 50%,
+      color-mix(in srgb, var(--accent-bright) calc(22% * var(--drift-force)), transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      70% 90% at 8% 120%,
+      transparent 95%,
+      color-mix(in srgb, var(--accent) calc(20% * var(--drift-force)), transparent) 100%,
+      transparent 105%
+    ),
+    radial-gradient(
+      70% 90% at 96% -22%,
+      transparent 95%,
+      color-mix(in srgb, var(--accent-bright) calc(18% * var(--drift-force)), transparent) 100%,
+      transparent 105%
+    ),
+    radial-gradient(
+      34% 40% at 92% 88%,
+      color-mix(in srgb, var(--accent-dim) calc(20% * var(--drift-force)), transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      30% 36% at 6% 10%,
+      color-mix(in srgb, var(--accent) calc(16% * var(--drift-force)), transparent),
+      transparent 72%
+    );
+}
+
+/* Spotlight: one beam straight down from above the top of the screen, the
+   dust caught in it, and the floor lit where it lands. */
+.drift[data-light="8"] {
+  --near-reach: 16% 44%;
+  --near-at: 50% 46%;
+  --far-reach: 30% 30%;
+  --far-at: 50% 30%;
+
+  background:
+    radial-gradient(
+      40% 16% at 50% 98%,
+      color-mix(in srgb, var(--accent) calc(28% * var(--drift-force)), transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      20% 14% at 50% 0%,
+      color-mix(in srgb, var(--accent-bright) calc(30% * var(--drift-force)), transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      90% 140% at 50% -12%,
+      transparent 50%,
+      var(--surface-deep) 108%
+    ),
+    conic-gradient(
+      from 158deg at 50% -12%,
+      transparent 0deg,
+      color-mix(in srgb, var(--accent) calc(24% * var(--drift-force)), transparent) 12deg,
+      color-mix(in srgb, var(--accent-bright) calc(32% * var(--drift-force)), transparent) 22deg,
+      color-mix(in srgb, var(--accent) calc(24% * var(--drift-force)), transparent) 32deg,
+      transparent 44deg
+    );
+}
+
+/* Comet: a streak of light across the screen from the lower left, bright at
+   its head high on the right and spent before it reaches the far corner. */
+.drift[data-light="9"] {
+  --near-reach: 34% 22%;
+  --near-at: 56% 44%;
+  --far-reach: 30% 36%;
+  --far-at: 22% 20%;
+
+  background:
+    radial-gradient(
+      16% 24% at 72% 30%,
+      color-mix(in srgb, var(--accent-bright) calc(34% * var(--drift-force)), transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      36% 32% at 12% 94%,
+      color-mix(in srgb, var(--accent-dim) calc(16% * var(--drift-force)), transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      76% 110% at 72% 30%,
+      transparent 18%,
+      var(--surface-deep) 100%
+    ),
+    linear-gradient(
+      152deg,
+      transparent 36%,
+      color-mix(in srgb, var(--accent) calc(16% * var(--drift-force)), transparent) 45%,
+      color-mix(in srgb, var(--accent-bright) calc(28% * var(--drift-force)), transparent) 49%,
+      color-mix(in srgb, var(--accent) calc(16% * var(--drift-force)), transparent) 53%,
+      transparent 62%
+    );
+}
+
+/* Constellation: points of light scattered one by one across the screen,
+   rather than dust repeated, a fine band of it crossing them like a milky
+   way, over two soft glows. Each point is placed by hand so that none of
+   them lines up with another. */
+.drift[data-light="10"] {
+  --near-step: 11px;
+  --near-dot: 0.8px;
+  --near-force: 0.55;
+  --near-reach: 62% 16%;
+  --near-at: 48% 46%;
+  --far-step: 19px;
+  --far-dot: 0.9px;
+  --far-force: 0.26;
+  --far-reach: 54% 24%;
+  --far-at: 56% 50%;
+
+  background:
+    radial-gradient(
+      circle calc(3.4px * var(--dust-scale)) at 33% 18%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(17px * var(--dust-scale)) at 33% 18%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.6px * var(--dust-scale)) at 8% 80%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.2px * var(--dust-scale)) at 51% 7%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.8px * var(--dust-scale)) at 42% 26%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(14px * var(--dust-scale)) at 42% 26%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.6px * var(--dust-scale)) at 43% 80%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.8px * var(--dust-scale)) at 92% 62%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(14px * var(--dust-scale)) at 92% 62%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.6px * var(--dust-scale)) at 40% 94%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.8px * var(--dust-scale)) at 42% 54%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(14px * var(--dust-scale)) at 42% 54%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.8px * var(--dust-scale)) at 32% 79%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.8px * var(--dust-scale)) at 13% 57%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.8px * var(--dust-scale)) at 9% 9%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2px * var(--dust-scale)) at 50% 53%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.6px * var(--dust-scale)) at 20% 76%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2px * var(--dust-scale)) at 85% 71%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.8px * var(--dust-scale)) at 60% 11%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(14px * var(--dust-scale)) at 60% 11%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2px * var(--dust-scale)) at 75% 57%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.2px * var(--dust-scale)) at 35% 36%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.6px * var(--dust-scale)) at 58% 46%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(3.4px * var(--dust-scale)) at 92% 48%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(17px * var(--dust-scale)) at 92% 48%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(3.4px * var(--dust-scale)) at 32% 57%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(17px * var(--dust-scale)) at 32% 57%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.2px * var(--dust-scale)) at 80% 30%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(3.4px * var(--dust-scale)) at 24% 30%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(17px * var(--dust-scale)) at 24% 30%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.2px * var(--dust-scale)) at 85% 11%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.8px * var(--dust-scale)) at 16% 44%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(14px * var(--dust-scale)) at 16% 44%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.8px * var(--dust-scale)) at 93% 18%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(3.4px * var(--dust-scale)) at 85% 92%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(17px * var(--dust-scale)) at 85% 92%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.8px * var(--dust-scale)) at 9% 23%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2.8px * var(--dust-scale)) at 53% 91%,
+      color-mix(in srgb, var(--drift-dust) calc(85% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(14px * var(--dust-scale)) at 53% 91%,
+      color-mix(in srgb, var(--accent) calc(22% * var(--drift-force)), transparent),
+      transparent
+    ),
+    radial-gradient(
+      circle calc(2px * var(--dust-scale)) at 53% 76%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      circle calc(1.8px * var(--dust-scale)) at 63% 60%,
+      color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
+      transparent
+    ),
+    radial-gradient(
+      44% 50% at 84% 16%,
+      color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      46% 44% at 14% 90%,
+      color-mix(in srgb, var(--accent-dim) calc(20% * var(--drift-force)), transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      50% 46% at 46% 50%,
+      color-mix(in srgb, var(--accent-bright) calc(8% * var(--drift-force)), transparent),
+      transparent 76%
+    );
+}
+
+/* Light on white reads at a fraction of what it reads at on black, so each
+   painting is given a fraction of its strength rather than a painting of
+   its own. And ink rather than light for the dust: on white, dust the
+   colour of the accent is pink confetti, and dust the colour of the text is
+   dust. */
+:root[data-theme="light"] .drift {
+  --drift-force: 0.45;
+  --drift-dust: var(--text);
+  --drift-dust-force: 0.56;
+}

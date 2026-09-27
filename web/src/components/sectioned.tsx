@@ -17,6 +17,7 @@ import type { IconProps } from "../icons";
 import { useMasonry } from "../masonry";
 import { useFindOnArrival } from "./finding";
 import { useSettings } from "../settings";
+import { PageBackdrop } from "./backdrop";
 
 export interface Section {
   /** Under the page's own address; empty for the first one. */
@@ -78,7 +79,7 @@ export function Sectioned({
     <div className="sectioned">
       {/* The library's own light, behind the tools as well: it is the same
           server, and the two should not be set in two different rooms. */}
-      <div className="home-backdrop drift" aria-hidden="true" />
+      <PageBackdrop />
 
       <aside className="side">
         <nav className="side-list" aria-label={t(place)}>
