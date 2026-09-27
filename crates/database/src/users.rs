@@ -9,7 +9,7 @@ use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::work::ResumeRules;
 use melyxar_core::user::{
-    DownmixMethod, HomeSection, Permissions, Preferences, SubtitleMode, ThemeMode, User,
+    DownmixMethod, HeaderButton, HomeSection, Permissions, Preferences, SubtitleMode, ThemeMode, User,
     WideGamutChoice,
 };
 use sqlx::{AssertSqlSafe, Row};
@@ -56,7 +56,8 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.subtitle_mode, p.theme_mode, p.accent_color, p.custom_css, p.volume,
      p.downmix_method, p.downmix_gain,
      p.banner_height, p.banner_cut, p.banner_shown, p.banner_at_random,
-     p.banner_fills_the_screen, p.header_hides_on_scroll,
+     p.banner_fills_the_screen, p.header_hides_on_scroll, p.header_buttons,
+     p.buttons_in_the_menu,
      p.hidden_at_the_door, p.home_order, p.home_sections, p.hidden_home_sections,
      p.step_back_seconds, p.step_on_seconds, p.resume_rewind_seconds,
      p.resume_min_percent, p.resume_max_percent, p.resume_min_seconds,
@@ -394,7 +395,8 @@ impl Database {
                 accent_color = ?,
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
                 banner_height = ?, banner_cut = ?, banner_shown = ?, banner_at_random = ?,
-                banner_fills_the_screen = ?, header_hides_on_scroll = ?,
+                banner_fills_the_screen = ?, header_hides_on_scroll = ?, header_buttons = ?,
+                buttons_in_the_menu = ?,
                 hidden_at_the_door = ?, home_order = ?, home_sections = ?,
                 hidden_home_sections = ?, step_back_seconds = ?,
                 step_on_seconds = ?, resume_rewind_seconds = ?, resume_min_percent = ?,
@@ -418,6 +420,8 @@ impl Database {
         .bind(preferences.banner_at_random)
         .bind(preferences.banner_fills_the_screen)
         .bind(preferences.header_hides_on_scroll)
+        .bind(written_buttons(&preferences.header_buttons))
+        .bind(written_buttons(&preferences.buttons_in_the_menu))
         .bind(preferences.hidden_at_the_door)
         .bind(written_order(&preferences.home_order))
         .bind(written_sections(&preferences.home_sections))
@@ -466,6 +470,20 @@ fn written_sections(sections: &[HomeSection]) -> String {
 
 fn read_sections(stored: &str) -> Vec<HomeSection> {
     stored.split(',').filter_map(HomeSection::parse).collect()
+}
+
+/// Buttons of the bar as they are kept, and read back the same way as the
+/// sections.
+fn written_buttons(buttons: &[HeaderButton]) -> String {
+    buttons
+        .iter()
+        .map(|button| button.as_str())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn read_buttons(stored: &str) -> Vec<HeaderButton> {
+    stored.split(',').filter_map(HeaderButton::parse).collect()
 }
 
 /// The rules each kind of library was given, as they are kept: the kind, the
@@ -550,9 +568,10 @@ async fn write_an_account(
                                        home_sections, hidden_home_sections,
                                        resume_rewind_seconds, resume_min_percent,
                                        resume_max_percent, resume_min_seconds,
-                                       resume_rules_per_kind, resume_rules_by_kind)
+                                       resume_rules_per_kind, resume_rules_by_kind,
+                                       header_buttons, buttons_in_the_menu)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?)",
+                 ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -581,6 +600,8 @@ async fn write_an_account(
     .bind(preferences.resume_rules.min_seconds)
     .bind(preferences.resume_rules_per_kind)
     .bind(written_rules(&preferences.resume_rules_by_kind))
+    .bind(written_buttons(&preferences.header_buttons))
+    .bind(written_buttons(&preferences.buttons_in_the_menu))
     .execute(&mut **transaction)
     .await?;
 
@@ -671,6 +692,8 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             banner_at_random: row.try_get("banner_at_random")?,
             banner_fills_the_screen: row.try_get("banner_fills_the_screen")?,
             header_hides_on_scroll: row.try_get("header_hides_on_scroll")?,
+            header_buttons: read_buttons(&row.try_get::<String, _>("header_buttons")?),
+            buttons_in_the_menu: read_buttons(&row.try_get::<String, _>("buttons_in_the_menu")?),
             hidden_at_the_door: row.try_get("hidden_at_the_door")?,
             home_order: read_order(&row.try_get::<String, _>("home_order")?),
             home_sections: read_sections(&row.try_get::<String, _>("home_sections")?),
@@ -1232,6 +1255,8 @@ mod tests {
             banner_at_random: true,
             banner_fills_the_screen: true,
             header_hides_on_scroll: false,
+            header_buttons: vec![HeaderButton::WatchLater],
+            buttons_in_the_menu: vec![HeaderButton::Search],
             home_order: vec![LibraryKind::Anime, LibraryKind::Movies],
             step_back_seconds: 0,
             step_on_seconds: 30,
@@ -1280,6 +1305,8 @@ mod tests {
         assert!(loaded.preferences.banner_at_random);
         assert!(loaded.preferences.banner_fills_the_screen);
         assert!(!loaded.preferences.header_hides_on_scroll);
+        assert_eq!(loaded.preferences.header_buttons[0], HeaderButton::WatchLater);
+        assert_eq!(loaded.preferences.buttons_in_the_menu, vec![HeaderButton::Search]);
         assert_eq!(
             loaded.preferences.step_back_seconds,
             melyxar_core::user::SHORTEST_STEP,

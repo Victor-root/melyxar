@@ -17,7 +17,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "./api";
-import type { ViewerPreferences } from "./api";
+import { buttonOrder, knownButtons } from "./buttons";
+import type { HeaderButton, ViewerPreferences } from "./api";
 import { initialLanguage, rememberLanguage, safeRead, safeWrite, translate } from "./i18n";
 import type { Language } from "./i18n";
 import { colourTheWindow, markTheApp } from "./installing";
@@ -33,6 +34,8 @@ const STORED_BANNER_CUT = "melyxar.banner.cut";
 const STORED_BANNER_WHOLE = "melyxar.banner.whole";
 const STORED_BANNER_SHOWN = "melyxar.banner.shown";
 const STORED_HEADER_HIDES = "melyxar.header.hides";
+const STORED_HEADER_BUTTONS = "melyxar.header.buttons";
+const STORED_BUTTONS_IN_THE_MENU = "melyxar.header.in_the_menu";
 const STORED_STEP_BACK = "melyxar.step.back";
 const STORED_STEP_ON = "melyxar.step.on";
 
@@ -85,6 +88,12 @@ interface Settings {
       comes back at the first move up. */
   headerHides: boolean;
   setHeaderHides: (hides: boolean) => void;
+  /** Every button at the right end of the bar, in the order it shows them. */
+  headerButtons: HeaderButton[];
+  setHeaderButtons: (buttons: HeaderButton[]) => void;
+  /** The buttons of the bar moved into the account's menu. */
+  buttonsInTheMenu: HeaderButton[];
+  setButtonsInTheMenu: (buttons: HeaderButton[]) => void;
   /** How far the player's button back jumps, in seconds. */
   stepBack: number;
   setStepBack: (seconds: number) => void;
@@ -106,6 +115,11 @@ function initialTheme(): ThemeChoice {
 
 function initialAccent(): string {
   return safeRead(STORED_ACCENT) ?? THE_USUAL_ACCENT;
+}
+
+/** A list this browser kept, its names parted by commas. */
+function storedList(key: string): string[] {
+  return (safeRead(key) ?? "").split(",");
 }
 
 /** A number this browser kept, or the one the stylesheet already carries. */
@@ -132,6 +146,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
   const [headerHides, setHeaderHidesState] = useState(
     () => safeRead(STORED_HEADER_HIDES) !== "no",
+  );
+  const [headerButtons, setHeaderButtonsState] = useState(() =>
+    buttonOrder(storedList(STORED_HEADER_BUTTONS)),
+  );
+  const [buttonsInTheMenu, setButtonsInTheMenuState] = useState(() =>
+    knownButtons(storedList(STORED_BUTTONS_IN_THE_MENU)),
   );
   const [stepBack, setStepBackState] = useState(() =>
     initialNumber(STORED_STEP_BACK, THE_USUAL_STEP_BACK),
@@ -258,6 +278,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ header_hides_on_scroll: hides });
   }, []);
 
+  const setHeaderButtons = useCallback((buttons: HeaderButton[]) => {
+    safeWrite(STORED_HEADER_BUTTONS, buttons.join(","));
+    setHeaderButtonsState(buttons);
+    tellTheServer({ header_buttons: buttons });
+  }, []);
+
+  const setButtonsInTheMenu = useCallback((buttons: HeaderButton[]) => {
+    safeWrite(STORED_BUTTONS_IN_THE_MENU, buttons.join(","));
+    setButtonsInTheMenuState(buttons);
+    tellTheServer({ buttons_in_the_menu: buttons });
+  }, []);
+
   const setStepBack = useCallback((seconds: number) => {
     safeWrite(STORED_STEP_BACK, String(seconds));
     setStepBackState(seconds);
@@ -294,6 +326,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setBannerShownState(chosen.banner_shown);
     safeWrite(STORED_HEADER_HIDES, chosen.header_hides_on_scroll ? "yes" : "no");
     setHeaderHidesState(chosen.header_hides_on_scroll);
+    const order = buttonOrder(chosen.header_buttons);
+    safeWrite(STORED_HEADER_BUTTONS, order.join(","));
+    setHeaderButtonsState(order);
+    const inTheMenu = knownButtons(chosen.buttons_in_the_menu);
+    safeWrite(STORED_BUTTONS_IN_THE_MENU, inTheMenu.join(","));
+    setButtonsInTheMenuState(inTheMenu);
     safeWrite(STORED_STEP_BACK, String(chosen.step_back_seconds));
     setStepBackState(chosen.step_back_seconds);
     safeWrite(STORED_STEP_ON, String(chosen.step_on_seconds));
@@ -318,6 +356,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerShown,
       headerHides,
       setHeaderHides,
+      headerButtons,
+      setHeaderButtons,
+      buttonsInTheMenu,
+      setButtonsInTheMenu,
       stepBack,
       setStepBack,
       stepOn,
@@ -342,6 +384,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerShown,
       headerHides,
       setHeaderHides,
+      headerButtons,
+      setHeaderButtons,
+      buttonsInTheMenu,
+      setButtonsInTheMenu,
       stepBack,
       setStepBack,
       stepOn,

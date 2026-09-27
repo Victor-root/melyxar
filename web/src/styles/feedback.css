@@ -154,6 +154,12 @@
   background: var(--trouble);
 }
 
+/* In the account's menu, at the end of its line rather than on a shoulder. */
+.bell-count-line {
+  position: static;
+  margin-left: auto;
+}
+
 /* Points are sentences, and a sentence cut short is a point half said. */
 .bell-list {
   width: min(340px, calc(100vw - 24px));
