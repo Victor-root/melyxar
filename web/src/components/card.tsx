@@ -147,6 +147,7 @@ export function Card({
   const menu = useWorkMenu(card, {
     identified: marks.rowsHaveMoved,
     picturesChanged: marks.rowsHaveMoved,
+    detailsChanged: marks.rowsHaveMoved,
   });
   const choosing = useChoosingPress(card.id);
   /* The buttons that show only under the pointer are made the first time a

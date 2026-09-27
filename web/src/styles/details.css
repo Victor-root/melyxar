@@ -1,0 +1,131 @@
+/*
+ * The window a work's details are written in by hand: its fields, the lock
+ * beside each name, and the names of genres and studios as little tags.
+ * The fields themselves are dressed like those of the window that names a
+ * work, in identify.css.
+ */
+
+.details-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.details-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-tight);
+}
+
+.details-field textarea {
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+}
+
+.details-field textarea:focus {
+  outline: none;
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
+}
+
+/* Year, rating and classification side by side: three short answers. */
+.details-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--gap);
+}
+
+.details-row input {
+  min-width: 0;
+}
+
+/* Quiet while the provider still decides, in the accent once the field is
+   kept as written. */
+.details-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    color var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+.details-lock:hover {
+  color: var(--text);
+}
+
+.details-lock-on {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+}
+
+/* The names as tags, and the field for one more at their end, all in one
+   box that looks like a field. */
+.details-names {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.details-names:focus-within {
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
+}
+
+.details-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+  font-size: 13px;
+}
+
+.details-name button {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.details-name button:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.identify-field .details-names input {
+  flex: 1 1 120px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}

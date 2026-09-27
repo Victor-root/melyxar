@@ -587,6 +587,7 @@ function Marks({
   const menu = useWorkMenu(card, {
     identified: onIdentified,
     picturesChanged: onChanged,
+    detailsChanged: marks.rowsHaveMoved,
     deleted: onDeleted,
   });
 

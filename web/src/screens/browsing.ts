@@ -20,6 +20,7 @@ import type { Card, Filters, LibraryKind } from "../api";
 import { useAsked, wasAbandoned } from "../asking";
 import { keep, recall } from "../kept";
 import { KINDS } from "../libraries";
+import { useMarks } from "../marks";
 
 /** How many cards a jump reads at once, the most the server hands out: a
  *  jump is one wait, and the fewer questions it takes the shorter it is. */
@@ -189,6 +190,31 @@ export function useBrowsing(): Browsing {
       keep(choices, gathered);
     }
   }, [choices, gathered]);
+
+  /* A work corrected somewhere, named, pictured or rewritten by hand, is
+     read again here in place, as far down as the grid had been read, so its
+     card says what it now is without anybody reloading. */
+  const { rowsMoved } = useMarks();
+  const rowsSeen = useRef(rowsMoved);
+  useEffect(() => {
+    if (rowsSeen.current === rowsMoved) {
+      return;
+    }
+    rowsSeen.current = rowsMoved;
+    const controller = new AbortController();
+    const held = latest.current;
+    gatherAgain(narrowing, held.cards.length, controller.signal)
+      .then((fresh) => {
+        const now = latest.current;
+        if (now.choices === held.choices && now.cards.length === held.cards.length) {
+          setGathered({ choices: held.choices, ...fresh });
+        }
+      })
+      .catch(() => {
+        // What was shown stays until the next change or visit.
+      });
+    return () => controller.abort();
+  }, [rowsMoved, narrowing, setGathered]);
 
   /* Any change to the choices starts the grid again from the top, since the
      page after the fiftieth card of one ordering means nothing in another.
