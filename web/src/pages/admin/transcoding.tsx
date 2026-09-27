@@ -137,94 +137,94 @@ export function AdminTranscoding() {
             </>
           )}
         </Panel>
-      </div>
 
-      {playback.kept && (
-        <Panel icon={FfmpegIcon} title={t("admin.codecs")} lead={t("admin.codecs_why")}>
-          {EVERY_CODEC.map((codec) => {
-            const chosen = playback.kept?.transcode_video_codecs ?? [];
-            const allowed = chosen.includes(codec);
-            return (
-              <Setting key={codec} label={t(`admin.codec.${codec}`)}>
-                <Toggle
-                  label={t(`admin.codec.${codec}`)}
-                  checked={allowed}
-                  // The last one left stays: a server allowed no codec could
-                  // convert nothing.
-                  disabled={allowed && chosen.length === 1}
-                  onChange={(on) =>
-                    playback.setTo({
-                      transcode_video_codecs: EVERY_CODEC.filter((one) =>
-                        one === codec ? on : chosen.includes(one),
-                      ),
-                    })
-                  }
-                />
-              </Setting>
-            );
-          })}
-        </Panel>
-      )}
+        {playback.kept && (
+          <Panel icon={FfmpegIcon} title={t("admin.codecs")} lead={t("admin.codecs_why")}>
+            {EVERY_CODEC.map((codec) => {
+              const chosen = playback.kept?.transcode_video_codecs ?? [];
+              const allowed = chosen.includes(codec);
+              return (
+                <Setting key={codec} label={t(`admin.codec.${codec}`)}>
+                  <Toggle
+                    label={t(`admin.codec.${codec}`)}
+                    checked={allowed}
+                    // The last one left stays: a server allowed no codec could
+                    // convert nothing.
+                    disabled={allowed && chosen.length === 1}
+                    onChange={(on) =>
+                      playback.setTo({
+                        transcode_video_codecs: EVERY_CODEC.filter((one) =>
+                          one === codec ? on : chosen.includes(one),
+                        ),
+                      })
+                    }
+                  />
+                </Setting>
+              );
+            })}
+          </Panel>
+        )}
 
-      {playback.kept && (
-        <Panel icon={ImageIcon} title={t("settings.picture")}>
-          <Setting
-            label={t("settings.tone_mapping_disabled")}
-            why={t("settings.tone_mapping_disabled_why")}
-          >
-            <Toggle
+        {playback.kept && (
+          <Panel icon={ImageIcon} title={t("settings.picture")}>
+            <Setting
               label={t("settings.tone_mapping_disabled")}
-              checked={playback.kept.tone_mapping_disabled}
-              onChange={(tone_mapping_disabled) => playback.setTo({ tone_mapping_disabled })}
-            />
-          </Setting>
-        </Panel>
-      )}
+              why={t("settings.tone_mapping_disabled_why")}
+            >
+              <Toggle
+                label={t("settings.tone_mapping_disabled")}
+                checked={playback.kept.tone_mapping_disabled}
+                onChange={(tone_mapping_disabled) => playback.setTo({ tone_mapping_disabled })}
+              />
+            </Setting>
+          </Panel>
+        )}
 
-      {work.kept && (
-        <Panel icon={ImageIcon} title={t("settings.thumbnails")} lead={t("settings.thumbnails_why")}>
-          <Setting label={t("settings.thumbnails_every")}>
-            <NumberField
-              label={t("settings.thumbnails_every")}
-              value={work.kept.thumbnails_every_seconds}
-              min={1}
-              max={600}
-              onPick={(thumbnails_every_seconds) => work.setTo({ thumbnails_every_seconds })}
-            />
-          </Setting>
-          <Setting label={t("settings.thumbnails_height")}>
-            <NumberField
-              label={t("settings.thumbnails_height")}
-              value={work.kept.thumbnails_height}
-              min={1}
-              max={1080}
-              onPick={(thumbnails_height) => work.setTo({ thumbnails_height })}
-            />
-          </Setting>
-          {/* Said before the change and not after it: changing the shape puts
-              every film back in front of the upkeep. */}
-          <Setting
-            label={t("admin.thumbnails_grid")}
-            why={t("settings.thumbnails_shape_why")}
-          >
-            <NumberField
-              label={t("settings.thumbnails_columns")}
-              value={work.kept.thumbnails_columns}
-              min={1}
-              max={20}
-              onPick={(thumbnails_columns) => work.setTo({ thumbnails_columns })}
-            />
-            <span className="setting-times" aria-hidden="true">×</span>
-            <NumberField
-              label={t("settings.thumbnails_rows")}
-              value={work.kept.thumbnails_rows}
-              min={1}
-              max={20}
-              onPick={(thumbnails_rows) => work.setTo({ thumbnails_rows })}
-            />
-          </Setting>
-        </Panel>
-      )}
+        {work.kept && (
+          <Panel icon={ImageIcon} title={t("settings.thumbnails")} lead={t("settings.thumbnails_why")}>
+            <Setting label={t("settings.thumbnails_every")}>
+              <NumberField
+                label={t("settings.thumbnails_every")}
+                value={work.kept.thumbnails_every_seconds}
+                min={1}
+                max={600}
+                onPick={(thumbnails_every_seconds) => work.setTo({ thumbnails_every_seconds })}
+              />
+            </Setting>
+            <Setting label={t("settings.thumbnails_height")}>
+              <NumberField
+                label={t("settings.thumbnails_height")}
+                value={work.kept.thumbnails_height}
+                min={1}
+                max={1080}
+                onPick={(thumbnails_height) => work.setTo({ thumbnails_height })}
+              />
+            </Setting>
+            {/* Said before the change and not after it: changing the shape puts
+                every film back in front of the upkeep. */}
+            <Setting
+              label={t("admin.thumbnails_grid")}
+              why={t("settings.thumbnails_shape_why")}
+            >
+              <NumberField
+                label={t("settings.thumbnails_columns")}
+                value={work.kept.thumbnails_columns}
+                min={1}
+                max={20}
+                onPick={(thumbnails_columns) => work.setTo({ thumbnails_columns })}
+              />
+              <span className="setting-times" aria-hidden="true">×</span>
+              <NumberField
+                label={t("settings.thumbnails_rows")}
+                value={work.kept.thumbnails_rows}
+                min={1}
+                max={20}
+                onPick={(thumbnails_rows) => work.setTo({ thumbnails_rows })}
+              />
+            </Setting>
+          </Panel>
+        )}
+      </div>
     </>
   );
 }
