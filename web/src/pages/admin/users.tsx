@@ -70,26 +70,28 @@ export function AdminUsers() {
       )}
       {said && <p className="panel-notice panel-notice-ok">{said}</p>}
 
-      {adding && (
-        <NewAccount
-          libraries={libraries}
-          onDone={(name) => {
-            setAdding(false);
-            done(t("users.created", { name }));
-          }}
-          onCancel={() => setAdding(false)}
-        />
-      )}
+      <div className="panels">
+        {adding && (
+          <NewAccount
+            libraries={libraries}
+            onDone={(name) => {
+              setAdding(false);
+              done(t("users.created", { name }));
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        )}
 
-      {(accounts.answer ?? []).map((account) => (
-        <AccountPanel
-          key={account.id}
-          account={account}
-          libraries={libraries}
-          onChanged={accounts.look}
-          onDone={done}
-        />
-      ))}
+        {(accounts.answer ?? []).map((account) => (
+          <AccountPanel
+            key={account.id}
+            account={account}
+            libraries={libraries}
+            onChanged={accounts.look}
+            onDone={done}
+          />
+        ))}
+      </div>
     </>
   );
 }
