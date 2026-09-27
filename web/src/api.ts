@@ -1277,6 +1277,8 @@ export interface PlaybackPlan {
   /** The stretches nobody wants to sit through, when the file says where they
    *  are. Empty for most files. */
   segments: PlaybackSegment[];
+  /** The kinds of stretch a person corrected by hand in this file. */
+  corrected_segments: string[];
   /** Whether this viewer has marked the film as one they like. */
   favourite: boolean;
   /** What the file itself holds, beside what is being made of it. */
@@ -1315,7 +1317,21 @@ export interface PlaybackSegment {
   kind: string;
   from_second: number;
   to_second: number;
+  /** Who said where it is: the file's chapters, the listening, or a person. */
+  origin: "chapter" | "detected" | "manual";
 }
+
+/** What a player offers to skip in a file, and the kinds a person spoke for
+ *  there, which includes a kind said to have none. */
+export interface Stretches {
+  segments: PlaybackSegment[];
+  corrected_segments: string[];
+}
+
+/** What a person says about one kind of stretch in one file. */
+export type SegmentCorrection =
+  | { said: "stretch"; from_second: number; to_second: number }
+  | { said: "none" };
 
 /**
  * One place the film changes scene.
@@ -1919,6 +1935,12 @@ export const api = {
   signOutMyOtherDevices: () => remove<{ signed_out: number }>("/api/v1/me/devices"),
   setFavourite: (work: string, favourite: boolean) =>
     put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
+  /* Where a person says a file's opening and closing titles really are,
+     for an administrator. Both answer what a player now offers to skip. */
+  correctSegment: (source: string, kind: string, correction: SegmentCorrection) =>
+    put<Stretches>(`/api/v1/playback/${source}/segments/${kind}`, correction),
+  takeBackSegment: (source: string, kind: string) =>
+    remove<Stretches>(`/api/v1/playback/${source}/segments/${kind}`),
   setWatchLater: (work: string, later: boolean) =>
     put<{ watch_later: boolean }>(`/api/v1/works/${work}/watch-later`, { watch_later: later }),
   /* On a season or a series this marks every episode below it, which is what

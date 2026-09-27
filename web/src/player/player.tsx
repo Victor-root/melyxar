@@ -26,7 +26,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlaybackTrack, Work } from "../api";
+import { useAccount } from "../account";
+import type { PlaybackPlan, PlaybackTrack, Stretches, Work } from "../api";
 import { useToast } from "../components/toasts";
 import { nameOfPlayed } from "../readable";
 import { showPlaying } from "../tab";
@@ -37,6 +38,7 @@ import { storedArrangement } from "./arrangement";
 import { trackName } from "./describe";
 import { canBePlayedAsItIs, usePlayback } from "./engine";
 import { PlaybackFacts } from "./facts";
+import { SegmentsWindow } from "./segments";
 import { useFullscreen } from "./fullscreen";
 import type { Fullscreen } from "./fullscreen";
 import { markFor, useBranding } from "./logo";
@@ -196,6 +198,19 @@ function Film({
      are watched while the film plays and while other panels come and go, so
      only their own cross shuts them. */
   const [diagnosing, setDiagnosing] = useState(false);
+  /* Whether the window correcting the opening and closing titles is open,
+     for an administrator, and what the last correction answered: offered at
+     once, rather than after the next plan somebody happens to ask for. */
+  const administrator = useAccount().account?.is_administrator === true;
+  const [correcting, setCorrecting] = useState(false);
+  const [corrected, setCorrected] = useState<{ for: PlaybackPlan; stretches: Stretches } | null>(
+    null,
+  );
+  const stretches: Stretches | null = plan
+    ? corrected?.for === plan
+      ? corrected.stretches
+      : { segments: plan.segments, corrected_segments: plan.corrected_segments }
+    : null;
   /* How the picture is fitted. Not remembered between films on purpose: it
      answers one film that was mastered oddly, not a standing preference. */
   const [shape, setShape] = useState<Shape>("auto");
@@ -338,7 +353,7 @@ function Film({
 
       {/* Beside the controls and not inside them: they fade out when
           nobody touches anything, and this is wanted exactly then. */}
-      <SkipStretch playback={playback} t={t} />
+      <SkipStretch playback={playback} segments={stretches?.segments ?? []} t={t} />
 
       <Overlay
         playback={playback}
@@ -356,6 +371,7 @@ function Film({
         panel={panel}
         onPanel={setPanel}
         onFacts={() => setDiagnosing(true)}
+        onSegments={administrator ? () => setCorrecting(true) : undefined}
         onClose={onClose}
         onNextEpisode={onNextEpisode}
         onPreviousEpisode={onPreviousEpisode}
@@ -391,6 +407,17 @@ function Film({
             </span>
           ))}
         </div>
+      )}
+
+      {correcting && plan && stretches && (
+        <SegmentsWindow
+          source={sourceId}
+          stretches={stretches}
+          at={playback.at}
+          t={t}
+          onChanged={(answered) => setCorrected({ for: plan, stretches: answered })}
+          onClose={() => setCorrecting(false)}
+        />
       )}
 
       {diagnosing && plan && (

@@ -292,7 +292,7 @@ Fait depuis, en avance sur ce jalon : la moitié serveur du refus de la conversi
 
 ## Jalon 10 : séries
 
-État : fait, correction des génériques à la main mise à part.
+État : fait, correction des génériques à la main comprise.
 
 - Le rangement : un fichier d'une bibliothèque de séries devient un épisode d'une saison d'une série. Là où le chemin passe par un dossier de saison, c'est le dossier qui le contient qui nomme la série et tout ce qu'il contient y va ; partout ailleurs le nom du fichier est lu en premier et le dossier ne fait que combler ce qui manque. Les quatre rangements qu'on trouve vraiment sur un disque marchent : un dossier par série avec un dossier par saison, un dossier par série avec les épisodes à plat, tout en vrac dans un seul dossier, et des dossiers de saison nommés dans n'importe quelle forme ou absents.
 - La lecture des noms : `S01E02` sous toutes ses ponctuations, `1x02`, la forme en toutes lettres dans les deux langues, l'épisode double, le numéro seul dont la saison vient du dossier. Deux formes sont refusées exprès : le nombre nu (`102`) et la forme croisée à un seul chiffre (`16x9`), qui sont aussi une année, une résolution et un format d'image.
@@ -337,7 +337,7 @@ Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
 
 ## Après la V0.1
 
-- Séries : **corriger un générique à la main** depuis la fiche d'un épisode, ce qui passe devant ce que le fichier dit et devant ce que l'écoute a trouvé. La place est déjà faite dans le modèle, il manque l'écran.
+- Séries : **corriger un générique à la main. Fait**, depuis le lecteur plutôt que depuis la fiche (voir le README des décisions) : une fenêtre « Générique » pour l'administrateur, qui passe devant ce que le fichier dit et devant ce que l'écoute a trouvé.
 - Séries : **ranger** à nouveau des épisodes déjà rangés quand les règles s'améliorent. Le **nom** d'une série encore sans nom est désormais relu à chaque scan, comme celui d'un film, et une série mal nommée se répare donc toute seule. Ce qui reste est le rangement lui-même : un épisode déjà accroché à une saison n'est jamais rattaché ailleurs, parce que son fichier n'a pas bougé, donc un épisode mal placé le reste. La seule façon d'en sortir est de retirer la médiathèque et de la remettre, ce qui ne touche à aucun fichier mais fait tout redemander au fournisseur.
 - Séries : l'affiche d'une saison ou la vignette d'un épisode qui n'est pas arrivée le jour de l'identification n'est redemandée que le jour où la série l'est à nouveau. Un film, lui, a sa passe de rattrapage ; une saison ne peut pas l'avoir telle quelle, puisqu'elle ne se demande jamais toute seule mais par la série au-dessus d'elle.
 - Animés : un catalogue spécialisé en second fournisseur, dans le chantier des fournisseurs multiples. Les noms de sortie des animés et la numérotation absolue sont lus et replacés dans les saisons du fournisseur actuel (voir le README des décisions). Reste à faire : un épisode arrivé après l'identification de sa série est bien placé mais pas encore décrit, comme pour les séries, et un numéro compté sur toute la série à l'intérieur d'un dossier de saison est lu comme compté dans cette saison.
