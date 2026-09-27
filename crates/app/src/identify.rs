@@ -395,7 +395,22 @@ where
         Some(external_id) => external_id,
         None => {
             match find_candidate(provider.as_ref(), catalogue, work, &known_ids, language).await {
-                Ok(WhatCameBack::Found(candidate)) => candidate.external_id,
+                // Said every time, since a film taken for another is only ever
+                // noticed later, on its page, and this line is what says how
+                // the name on disk led to it.
+                Ok(WhatCameBack::Found(candidate)) => {
+                    tracing::info!(
+                        work = %work.title,
+                        year = work.release_year,
+                        taken = %candidate.title,
+                        taken_original = candidate.original_title.as_deref().unwrap_or(""),
+                        taken_year = candidate.release_year,
+                        external_id = %candidate.external_id,
+                        provider = provider.name(),
+                        "a film was taken for this name"
+                    );
+                    candidate.external_id
+                }
                 // Nothing at all came back, however it was asked. The only thing
                 // the provider was given is the title read off the file name, so
                 // that title is what the line has to say.
@@ -921,11 +936,18 @@ fn note_what_was_offered(
 ) {
     *offered += candidates.len();
     let wanted = naming::matchable_title(asked);
+    let wanted_elided = naming::with_elisions_glued(&wanted);
 
     for candidate in candidates {
         let closeness = std::iter::once(candidate.title.as_str())
             .chain(candidate.original_title.as_deref())
-            .map(|name| naming::how_alike(&naming::matchable_title(name), &wanted))
+            .map(naming::matchable_title)
+            .flat_map(|name| {
+                [
+                    naming::how_alike(&name, &wanted),
+                    naming::how_alike(&name, &wanted_elided),
+                ]
+            })
             .fold(0.0_f64, f64::max);
         if nearest
             .as_ref()
@@ -996,11 +1018,12 @@ fn choose_for<'a>(
         return None;
     }
     let wanted = naming::matchable_title(title);
-    // A release named entirely in dots turns an apostrophe into a separator
-    // like any other, leaving apart two words a provider's own title reads as
-    // one: `l` and `automne` where the provider has `lautomne`. Never used for
-    // anything but this one extra chance at an exact match, since it is a
-    // second reading of the very same title and not a different one.
+    // A release named entirely in dots, or in capitals with spaces, turns an
+    // apostrophe into a separator like any other, leaving apart two words a
+    // provider's own title reads as one: `l` and `automne` where the provider
+    // has `lautomne`. A second reading of the very same title rather than a
+    // different one, so it is given the same chances as the first: an exact
+    // match, and a weighing of how alike the names are.
     let wanted_elided = naming::with_elisions_glued(&wanted);
 
     let names_of = |candidate: &Candidate| {
@@ -1093,7 +1116,12 @@ fn choose_for<'a>(
         .map(|candidate| {
             let closeness = names_of(candidate)
                 .iter()
-                .map(|name| naming::how_alike(name, &wanted))
+                .flat_map(|name| {
+                    [
+                        naming::how_alike(name, &wanted),
+                        naming::how_alike(name, &wanted_elided),
+                    ]
+                })
                 .fold(0.0_f64, f64::max);
             (candidate, closeness)
         })
@@ -1958,6 +1986,21 @@ mod tests {
         ];
         assert_eq!(
             choose(&offered, &wanted).expect("one of them").external_id,
+            "1"
+        );
+    }
+
+    #[test]
+    fn a_lost_apostrophe_does_not_make_a_subtitle_a_stranger() {
+        // Measured on a real file, named here with invented words: written in
+        // capitals with a space where the apostrophe was, with no year and one
+        // letter of a small word dropped. Read as ordinary words the subtitle
+        // shares nothing with the provider's `leclipse`, and the right film,
+        // the only one offered, weighed barely more than a third of itself.
+        let wanted = work_named("LA CITE DE PHARES L ECLIPSE", None);
+        let offered = vec![candidate("1", "La Cité des phares : L'Éclipse", Some(2014))];
+        assert_eq!(
+            choose(&offered, &wanted).expect("the film it is").external_id,
             "1"
         );
     }
