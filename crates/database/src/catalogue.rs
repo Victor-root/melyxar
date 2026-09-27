@@ -47,6 +47,12 @@ const HOW_DEEP_IT_GOES: usize = 2;
 /// before the files, the way every file manager shows them.
 const IN_THE_ONE_ORDER: &str = "ORDER BY ordinal, kind <> 'folder', sort_title";
 
+/// A file as `stored_source_from_row` reads it, the disk it lives on included.
+const A_STORED_SOURCE: &str = "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
+        s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
+   FROM media_sources s
+   JOIN library_roots r ON r.id = s.root_id";
+
 /// One work hanging under another, stripped to where it sits.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RankedChild {
@@ -276,14 +282,7 @@ impl Database {
                 .execute(&mut *transaction)
                 .await?;
         }
-        sqlx::query(
-            "UPDATE works
-                SET child_count = (SELECT count(*) FROM works AS child WHERE child.parent_id = works.id)
-              WHERE id = ?",
-        )
-        .bind(parent_id.to_db_string())
-        .execute(&mut *transaction)
-        .await?;
+        recount_children(&mut *transaction, parent_id).await?;
         transaction.commit().await?;
         Ok(work)
     }
@@ -800,13 +799,10 @@ impl Database {
     /// This is the side of the comparison a scan starts from, so it stays as
     /// small as the comparison needs.
     pub async fn sources_of_root(&self, root_id: LibraryRootId) -> Result<Vec<StoredSource>> {
-        let rows = sqlx::query(
-            "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
-                    s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
-             FROM media_sources s
-             JOIN library_roots r ON r.id = s.root_id
-             WHERE s.root_id = ? ORDER BY s.relative_path",
-        )
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "{A_STORED_SOURCE}
+             WHERE s.root_id = ? ORDER BY s.relative_path"
+        )))
         .bind(root_id.to_db_string())
         .fetch_all(self.reader())
         .await?;
@@ -847,13 +843,10 @@ impl Database {
     /// A work can have several: the same film in two definitions is two files
     /// of one work, and the page offers a choice between them.
     pub async fn sources_of_work(&self, work_id: WorkId) -> Result<Vec<StoredSource>> {
-        let rows = sqlx::query(
-            "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
-                    s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
-             FROM media_sources s
-             JOIN library_roots r ON r.id = s.root_id
-             WHERE s.work_id = ? ORDER BY s.added_at",
-        )
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "{A_STORED_SOURCE}
+             WHERE s.work_id = ? ORDER BY s.added_at"
+        )))
         .bind(work_id.to_db_string())
         .fetch_all(self.reader())
         .await?;
@@ -866,13 +859,10 @@ impl Database {
     /// whole path has to be built, and only the root knows where the disk is
     /// mounted.
     pub async fn source_by_id(&self, source_id: MediaSourceId) -> Result<Option<StoredSource>> {
-        let row = sqlx::query(
-            "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
-                    s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
-             FROM media_sources s
-             JOIN library_roots r ON r.id = s.root_id
-             WHERE s.id = ?",
-        )
+        let row = sqlx::query(AssertSqlSafe(format!(
+            "{A_STORED_SOURCE}
+             WHERE s.id = ?"
+        )))
         .bind(source_id.to_db_string())
         .fetch_optional(self.reader())
         .await?;
@@ -995,14 +985,11 @@ impl Database {
         &self,
         root_id: LibraryRootId,
     ) -> Result<Vec<StoredSource>> {
-        let rows = sqlx::query(
-            "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
-                    s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
-             FROM media_sources s
-             JOIN library_roots r ON r.id = s.root_id
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "{A_STORED_SOURCE}
              WHERE s.root_id = ? AND s.analysed_at IS NULL AND s.missing_since IS NULL
-             ORDER BY s.relative_path",
-        )
+             ORDER BY s.relative_path"
+        )))
         .bind(root_id.to_db_string())
         .fetch_all(self.reader())
         .await?;
@@ -1500,14 +1487,7 @@ pub(crate) async fn merge_within(
             .await?;
     }
     for work in receiving {
-        sqlx::query(
-            "UPDATE works
-                SET child_count = (SELECT count(*) FROM works AS child WHERE child.parent_id = works.id)
-              WHERE id = ?",
-        )
-        .bind(work.to_db_string())
-        .execute(&mut **transaction)
-        .await?;
+        recount_children(&mut **transaction, work).await?;
     }
 
     Ok(no_longer_used)
@@ -1534,6 +1514,23 @@ where
             Ok((id, row.try_get("ordinal")?))
         })
         .collect()
+}
+
+/// Counts again what hangs under a work, a count kept on the work so that a
+/// page never has to make it.
+pub(crate) async fn recount_children<'e, E>(executor: E, parent_id: WorkId) -> Result<()>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
+    sqlx::query(
+        "UPDATE works
+            SET child_count = (SELECT count(*) FROM works AS child WHERE child.parent_id = works.id)
+          WHERE id = ?",
+    )
+    .bind(parent_id.to_db_string())
+    .execute(executor)
+    .await?;
+    Ok(())
 }
 
 /// The work hanging under another at that number, if there is one.

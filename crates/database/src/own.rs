@@ -12,7 +12,7 @@ use melyxar_core::time::Millis;
 use melyxar_core::work::{IdentificationState, Work, WorkKind};
 use sqlx::{AssertSqlSafe, Row};
 
-use crate::catalogue::{insert_work, what_a_work_is, work_from_row, Placed};
+use crate::catalogue::{insert_work, recount_children, what_a_work_is, work_from_row, Placed};
 use crate::convert::parse_id;
 use crate::images::{image_from_row, StoredImage, WHAT_A_PICTURE_IS};
 use crate::{Database, DatabaseError, Result};
@@ -94,15 +94,7 @@ impl Database {
             .await?;
         work.identification = IdentificationState::Own;
         if let Some(folder) = folder {
-            sqlx::query(
-                "UPDATE works
-                    SET child_count = (SELECT count(*) FROM works AS child
-                                        WHERE child.parent_id = works.id)
-                  WHERE id = ?",
-            )
-            .bind(folder.to_db_string())
-            .execute(&mut *transaction)
-            .await?;
+            recount_children(&mut *transaction, folder).await?;
         }
         transaction.commit().await?;
         Ok(work)
