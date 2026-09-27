@@ -73,7 +73,7 @@ export function AdminOverview() {
         </div>
       </PlayingPanel>
 
-      <div className="overview-panels">
+      <div className="panels">
         <SystemPanel card={overview.answer?.media_tools.card ?? null} />
         <ServerPanel overview={overview.answer} unreachable={overview.failure !== null} />
         <LibrariesPanel />

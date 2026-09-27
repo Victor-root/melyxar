@@ -58,6 +58,7 @@ export function Panel({
   lead,
   action,
   soon,
+  wide,
   className,
   folding,
   children,
@@ -67,6 +68,9 @@ export function Panel({
   lead?: string;
   action?: ReactNode;
   soon?: boolean;
+  /** Across the whole page among the cards of a group, where what it holds
+   *  needs the room: a chart, a long list, a table. */
+  wide?: boolean;
   className?: string;
   /** For a panel among many of the same, folded down to its head until it
    *  is asked for: whether it is open, and what opens and shuts it. Its
@@ -78,7 +82,7 @@ export function Panel({
   const shown = folding === undefined || folding.open;
   return (
     <section
-      className={`panel${soon ? " panel-soon" : ""}${folding ? " panel-folding" : ""}${
+      className={`panel${soon ? " panel-soon" : ""}${wide ? " panel-wide" : ""}${folding ? " panel-folding" : ""}${
         className ? ` ${className}` : ""
       }`}
     >

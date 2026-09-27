@@ -12,27 +12,7 @@
  * The summary
  * ----------------------------------------------------------------------- */
 
-/* Three across on a wide screen, two on an ordinary one, one on a phone. */
-.overview-panels {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: calc(var(--gap) * 1.5);
-}
-
-@container (max-width: 1180px) {
-  .overview-panels {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@container (max-width: 760px) {
-  .overview-panels {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* The server, a panel as square as the others: who it is, then its facts two
-   by two under it. */
+/* The server: who it is, then its facts two by two under it. */
 .server-panel {
   gap: 18px;
 }
@@ -828,16 +808,6 @@
 
 /* Across the panel two by two, and the system panel wider than the others
    on a wide screen: its curves want the room more than a list of names. */
-.overview-panels > .panel-system {
-  grid-column: span 2;
-}
-
-@container (max-width: 1180px) {
-  .overview-panels > .panel-system {
-    grid-column: 1 / -1;
-  }
-}
-
 .gauges {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
