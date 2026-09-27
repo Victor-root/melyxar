@@ -10,10 +10,11 @@
  * page itself below the fold.
  */
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useRef } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import type { IconProps } from "../icons";
+import { useMasonry } from "../masonry";
 import { useSettings } from "../settings";
 
 export interface Section {
@@ -63,6 +64,8 @@ export function Sectioned({
 }) {
   const { t } = useSettings();
   const location = useLocation();
+  const page = useRef<HTMLElement>(null);
+  useMasonry(page);
   const every = groups.flatMap((group) => group.sections);
   const here =
     every.find(
@@ -106,7 +109,7 @@ export function Sectioned({
         {foot && <div className="side-foot">{foot}</div>}
       </aside>
 
-      <main className="sectioned-page">
+      <main className="sectioned-page" ref={page}>
         <SectionContext.Provider value={here}>
           <Outlet />
         </SectionContext.Provider>

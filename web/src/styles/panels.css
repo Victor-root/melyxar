@@ -14,14 +14,6 @@
   gap: calc(var(--gap) * 1.5);
 }
 
-/* The air between the blocks of a page, said once for every page rather than
-   by each pair of neighbours: blocks set side by side in a grid take their
-   spacing from the grid, and a margin on one of them there would lift it out
-   of line with the other. */
-.sectioned-page > :not(.page-head) + * {
-  margin-top: calc(var(--gap) * 1.5);
-}
-
 .panel {
   position: relative;
   display: flex;
