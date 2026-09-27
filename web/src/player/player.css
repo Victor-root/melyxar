@@ -2281,7 +2281,9 @@
   box-shadow: var(--shadow-raised);
 }
 
-.player-skip:hover,
+/* As precise as the hover every button has, which it follows in the page and
+   so overrides: without it the accent never came. */
+.player-skip:hover:not(:disabled),
 .player-skip:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
