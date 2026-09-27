@@ -29,6 +29,7 @@ import { useSettings } from "../settings";
 import { isCatalogued, playsOnItsOwn } from "../works";
 import { DeleteDialog } from "./deletion";
 import { IdentifyDialog } from "./identify";
+import { DetailsDialog } from "./details";
 import { PicturesDialog } from "./pictures";
 import { useSelection } from "./selection";
 import {
@@ -95,6 +96,8 @@ export function useWorkMenu(
     identified: () => void;
     /** Said whenever the pictures it wears changed. */
     picturesChanged: () => void;
+    /** Said once its details were written by hand. */
+    detailsChanged: () => void;
     /** Said once it is gone, for a page that has nothing left to show. */
     deleted?: () => void;
   },
@@ -102,6 +105,7 @@ export function useWorkMenu(
   const [from, setFrom] = useState<{ rect: DOMRect; button: HTMLElement } | null>(null);
   const [identifying, setIdentifying] = useState(false);
   const [choosingPictures, setChoosingPictures] = useState(false);
+  const [writingDetails, setWritingDetails] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const shut = useCallback(() => setFrom(null), []);
 
@@ -118,6 +122,7 @@ export function useWorkMenu(
           openedBy={from.button}
           onIdentify={() => setIdentifying(true)}
           onEditImages={() => setChoosingPictures(true)}
+          onEditDetails={() => setWritingDetails(true)}
           onDelete={() => setDeleting(true)}
           onClose={shut}
         />
@@ -135,6 +140,13 @@ export function useWorkMenu(
           workId={card.id}
           onClose={() => setChoosingPictures(false)}
           onChanged={after.picturesChanged}
+        />
+      )}
+      {writingDetails && (
+        <DetailsDialog
+          workId={card.id}
+          onClose={() => setWritingDetails(false)}
+          onChanged={after.detailsChanged}
         />
       )}
       {deleting && (
@@ -159,6 +171,7 @@ export function CardMenu({
   openedBy,
   onIdentify,
   onEditImages,
+  onEditDetails,
   onDelete,
   onClose,
 }: {
@@ -178,6 +191,9 @@ export function CardMenu({
   /** Opens the panel that chooses the pictures this work wears, for the same
       reason as the one above. */
   onEditImages: () => void;
+  /** Opens the window its details are written in by hand, for the same
+      reason again. */
+  onEditDetails: () => void;
   /** Opens the question put before this work is deleted, for the same
       reason again. */
   onDelete: () => void;
@@ -303,7 +319,7 @@ export function CardMenu({
       key: "edit_metadata",
       mark: <EditIcon size={SHAPE} />,
       allowed: account?.is_administrator === true,
-      later: true,
+      act: onEditDetails,
     },
     {
       key: "edit_images",

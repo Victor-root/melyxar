@@ -189,6 +189,23 @@ export interface Card {
 }
 
 /** A film a person could have meant, as the provider describes it. */
+/** What a work says about itself, as an administrator writes it by hand. */
+export interface WrittenDetails {
+  title: string;
+  tagline: string | null;
+  overview: string | null;
+  release_year: number | null;
+  community_rating: number | null;
+  age_rating: string | null;
+  genres: string[];
+  studios: string[];
+  /** The fields no look up changes any more, by the name of the field. */
+  locked: DetailField[];
+}
+
+/** A field of a work that may be written by hand, and locked. */
+export type DetailField = Exclude<keyof WrittenDetails, "locked">;
+
 export interface Candidate {
   external_id: string;
   title: string;
@@ -1825,6 +1842,12 @@ export const api = {
       external_id: externalId,
       replace_pictures: replacePictures,
     }),
+  /* A work's details written by hand; each field locked stays as written
+     whatever a later look up says. */
+  details: (work: string, signal?: AbortSignal) =>
+    get<WrittenDetails>(`/api/v1/works/${work}/details`, signal),
+  writeDetails: (work: string, details: WrittenDetails) =>
+    put<WrittenDetails>(`/api/v1/works/${work}/details`, details),
   /* The pictures a work wears, what the provider offers instead, and saying
      which one it is to wear. A picture chosen or taken off by hand is
      remembered as a choice and no later run undoes it. */
