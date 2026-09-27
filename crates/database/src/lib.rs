@@ -14,6 +14,7 @@
 #![forbid(unsafe_code)]
 
 pub mod activity;
+pub mod analysis;
 pub mod browse;
 pub mod calibration;
 pub mod catalogue;
@@ -26,6 +27,7 @@ pub mod measures;
 pub mod metadata;
 pub mod moved;
 pub mod numbering;
+pub mod openings;
 pub mod own;
 pub mod people;
 pub mod playback;
@@ -33,6 +35,7 @@ pub mod sessions;
 pub mod schedule;
 pub mod settings;
 pub mod synthetic;
+pub mod upkeep;
 pub mod users;
 
 mod connection;
