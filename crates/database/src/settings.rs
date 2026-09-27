@@ -116,6 +116,46 @@ pub struct ServerSettings {
     pub updated_at: Timestamp,
 }
 
+/// How far behind each viewer segments stay when nobody chose, in seconds.
+pub const USUAL_KEPT_BEHIND: u32 = 300;
+/// The least that may be kept: twice the longest step back an account may
+/// set, so even two presses in a row land on what is already there.
+pub const LEAST_KEPT_BEHIND: u32 = 2 * melyxar_core::user::LONGEST_STEP as u32;
+/// The most: past half an hour, keeping is no longer making room at all.
+pub const MOST_KEPT_BEHIND: u32 = 1800;
+/// The smallest room a cache may be given, in megabytes: a single 4K film
+/// being converted fills several hundred megabytes within minutes.
+pub const LEAST_CACHE_MEGABYTES: u32 = 1024;
+
+/// What the server allows the films it converts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TranscodingLimits {
+    /// How many at once; none for no ceiling.
+    pub most_at_once: Option<u32>,
+    /// How much of the disk their segments may fill, in megabytes; none for
+    /// no ceiling.
+    pub cache_megabytes: Option<u32>,
+    /// How far behind each viewer the segments stay whatever the ceiling says.
+    pub kept_behind_seconds: u32,
+}
+
+impl TranscodingLimits {
+    /// Brought back into range rather than refused: a screen with a defect
+    /// must not leave a server refusing every film, or keeping so little
+    /// behind a viewer that stepping back waits every time.
+    pub fn normalised(self) -> Self {
+        Self {
+            most_at_once: self.most_at_once.map(|most| most.max(1)),
+            cache_megabytes: self
+                .cache_megabytes
+                .map(|megabytes| megabytes.max(LEAST_CACHE_MEGABYTES)),
+            kept_behind_seconds: self
+                .kept_behind_seconds
+                .clamp(LEAST_KEPT_BEHIND, MOST_KEPT_BEHIND),
+        }
+    }
+}
+
 /// What the server does with the films of a library, and when.
 ///
 /// Kept together because they are one screen and one answer: how deeply a scan
@@ -278,30 +318,50 @@ impl Database {
         Ok(())
     }
 
-    /// How many films the server may convert at once, or none for no ceiling.
+    /// What the server allows the films it converts: how many at once, and
+    /// how much of the disk their segments may fill.
     ///
     /// Read each time a film is opened, so its own small query for the same
     /// reason as the switch above.
-    pub async fn transcoding_ceiling(&self) -> Result<Option<u32>> {
-        let value: Option<i64> = sqlx::query_scalar(
-            "SELECT max_transcoding_sessions FROM server_settings WHERE id = 1",
+    pub async fn transcoding_limits(&self) -> Result<TranscodingLimits> {
+        let row = sqlx::query(
+            "SELECT max_transcoding_sessions, transcode_cache_megabytes,
+                    transcode_kept_behind_seconds
+             FROM server_settings WHERE id = 1",
         )
         .fetch_one(self.reader())
         .await?;
-        Ok(value.and_then(|most| u32::try_from(most).ok()))
+        let wanted = |column: &str| -> Result<Option<u32>> {
+            Ok(row
+                .try_get::<Option<i64>, _>(column)?
+                .and_then(|value| u32::try_from(value).ok()))
+        };
+        Ok(TranscodingLimits {
+            most_at_once: wanted("max_transcoding_sessions")?,
+            cache_megabytes: wanted("transcode_cache_megabytes")?,
+            kept_behind_seconds: wanted("transcode_kept_behind_seconds")?
+                .unwrap_or(USUAL_KEPT_BEHIND),
+        }
+        .normalised())
     }
 
-    /// Sets how many films the server may convert at once, or takes the
-    /// ceiling away.
-    pub async fn set_transcoding_ceiling(&self, most: Option<u32>) -> Result<()> {
+    /// Writes what the server allows the films it converts, brought back into
+    /// range first.
+    pub async fn set_transcoding_limits(&self, limits: TranscodingLimits) -> Result<TranscodingLimits> {
+        let limits = limits.normalised();
         sqlx::query(
-            "UPDATE server_settings SET max_transcoding_sessions = ?, updated_at = ? WHERE id = 1",
+            "UPDATE server_settings SET max_transcoding_sessions = ?,
+                    transcode_cache_megabytes = ?, transcode_kept_behind_seconds = ?,
+                    updated_at = ?
+             WHERE id = 1",
         )
-        .bind(most.map(i64::from))
+        .bind(limits.most_at_once.map(i64::from))
+        .bind(limits.cache_megabytes.map(i64::from))
+        .bind(i64::from(limits.kept_behind_seconds))
         .bind(timestamp_to_text(now()))
         .execute(self.writer())
         .await?;
-        Ok(())
+        Ok(limits)
     }
 
     /// What the server is called, on its own for the same reason as the
@@ -702,18 +762,53 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_server_converts_without_a_ceiling_until_one_is_set() {
+    async fn a_server_converts_without_any_ceiling_until_one_is_set() {
         let database = Database::open_in_memory().await.expect("database opens");
-        assert_eq!(database.transcoding_ceiling().await.expect("read"), None);
+        let usual = database.transcoding_limits().await.expect("read");
+        assert_eq!(
+            usual,
+            TranscodingLimits {
+                most_at_once: None,
+                cache_megabytes: None,
+                kept_behind_seconds: USUAL_KEPT_BEHIND,
+            }
+        );
 
-        database
-            .set_transcoding_ceiling(Some(3))
+        let chosen = TranscodingLimits {
+            most_at_once: Some(3),
+            cache_megabytes: Some(8192),
+            kept_behind_seconds: 600,
+        };
+        assert_eq!(
+            database.set_transcoding_limits(chosen).await.expect("set"),
+            chosen
+        );
+        assert_eq!(database.transcoding_limits().await.expect("read"), chosen);
+
+        database.set_transcoding_limits(usual).await.expect("taken away");
+        assert_eq!(database.transcoding_limits().await.expect("read"), usual);
+    }
+
+    #[tokio::test]
+    async fn limits_that_cannot_work_are_brought_back_into_range() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let kept = database
+            .set_transcoding_limits(TranscodingLimits {
+                most_at_once: Some(0),
+                cache_megabytes: Some(1),
+                kept_behind_seconds: 5,
+            })
             .await
             .expect("set");
-        assert_eq!(database.transcoding_ceiling().await.expect("read"), Some(3));
-
-        database.set_transcoding_ceiling(None).await.expect("taken away");
-        assert_eq!(database.transcoding_ceiling().await.expect("read"), None);
+        assert_eq!(
+            kept,
+            TranscodingLimits {
+                most_at_once: Some(1),
+                cache_megabytes: Some(LEAST_CACHE_MEGABYTES),
+                kept_behind_seconds: LEAST_KEPT_BEHIND,
+            }
+        );
+        assert_eq!(database.transcoding_limits().await.expect("read"), kept);
     }
 
     #[tokio::test]

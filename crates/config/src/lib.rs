@@ -165,8 +165,6 @@ pub struct LimitsConfig {
     pub concurrent_image_jobs: usize,
     /// Concurrent calls to a metadata provider.
     pub concurrent_metadata_requests: usize,
-    /// Size the transcode directory may reach, in megabytes.
-    pub transcode_quota_megabytes: u64,
 }
 
 impl Default for LimitsConfig {
@@ -175,7 +173,6 @@ impl Default for LimitsConfig {
             concurrent_probes: 2,
             concurrent_image_jobs: 2,
             concurrent_metadata_requests: 4,
-            transcode_quota_megabytes: 8192,
         }
     }
 }
@@ -451,14 +448,14 @@ mod tests {
 
     #[test]
     fn a_file_still_carrying_a_setting_that_has_moved_still_starts_the_server() {
-        // The thumbnails, the upkeep, the description files and the ceiling on
+        // The thumbnails, the upkeep, the description files and the limits on
         // transcodes are settings of the server now, changed on a screen. A file written before that
         // still holds their old sections, and a server that refused to start
         // over lines nobody can see any more would be a server somebody
         // has to fix from a terminal to reach the screen that replaced them.
         let text = format!(
             "{MINIMAL}\n[thumbnails]\nevery_seconds = 5\n\n[tasks]\nnightly_upkeep = false\n\n\
-             [scan]\nread_companion_files = true\n\n[limits]\nmax_transcoding_sessions = 2\n"
+             [scan]\nread_companion_files = true\n\n[limits]\nmax_transcoding_sessions = 2\ntranscode_quota_megabytes = 8192\n"
         );
         assert!(
             Config::parse(&text).is_ok(),
@@ -543,7 +540,7 @@ mod tests {
 
     #[test]
     fn a_zero_limit_is_refused_rather_than_silently_doing_nothing() {
-        let text = format!("{MINIMAL}\n[limits]\nconcurrent_probes = 0\nconcurrent_image_jobs = 1\nconcurrent_metadata_requests = 1\ntranscode_quota_megabytes = 1024\n");
+        let text = format!("{MINIMAL}\n[limits]\nconcurrent_probes = 0\nconcurrent_image_jobs = 1\nconcurrent_metadata_requests = 1\n");
         assert!(Config::parse(&text).is_err());
     }
 

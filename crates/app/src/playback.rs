@@ -549,10 +549,8 @@ pub async fn open_session(
     }
 
     let expensive = plan.decision.method.is_expensive();
-    let most_at_once = state.database().transcoding_ceiling().await?;
-    let session = sessions
-        .open(who.id, recipe, expensive, most_at_once)
-        .await?;
+    let limits = session_limits(state).await?;
+    let session = sessions.open(who.id, recipe, expensive, limits).await?;
     say_how_the_film_was_cut(&session);
 
     // The upkeep normally pulled these out of the film long before anybody
@@ -1070,11 +1068,32 @@ pub async fn tidy_up_after_a_previous_run(state: &AppState) {
     }
 }
 
+/// What the settings allow the sessions at this moment.
+///
+/// Read again for every film and every sweep, so a change made in the
+/// administration applies to the next one without a restart.
+pub(crate) async fn session_limits(state: &AppState) -> Result<melyxar_streaming::registry::Limits> {
+    let limits = state.database().transcoding_limits().await?;
+    Ok(melyxar_streaming::registry::Limits {
+        most_at_once: limits.most_at_once,
+        room: limits
+            .cache_megabytes
+            .map(|megabytes| melyxar_streaming::registry::Room {
+                most_bytes: u64::from(megabytes) * 1024 * 1024,
+                kept_behind: std::time::Duration::from_secs(u64::from(limits.kept_behind_seconds)),
+            }),
+    })
+}
+
 /// Keeps sweeping away sessions nobody is watching, for as long as it runs.
 ///
 /// A viewer never says goodbye: they close a tab, lose a connection, put a
 /// telephone in a pocket. Without this, the media tool started for them would
 /// keep producing a film nobody will ever see.
+///
+/// The same loop keeps the cache under the room it was given, so segments
+/// piling up behind a film being watched are given up as the film goes on
+/// rather than only when the next one is opened.
 pub fn keep_sessions_swept(state: &AppState) -> tokio::task::JoinHandle<()> {
     sweep_repeatedly(
         state,
@@ -1100,6 +1119,17 @@ fn sweep_repeatedly(
             ticks.tick().await;
             if let Some(sessions) = state.sessions() {
                 sessions.sweep(idle_for).await;
+                match session_limits(&state).await {
+                    Ok(melyxar_streaming::registry::Limits {
+                        room: Some(room), ..
+                    }) => {
+                        sessions.make_room(room).await;
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        tracing::warn!(%error, "the room given to the transcode cache could not be read");
+                    }
+                }
             }
         }
     })
@@ -2245,7 +2275,7 @@ mod tests {
                     if_the_card_refuses: Vec::new(),
                 },
                 false,
-                None,
+                melyxar_streaming::registry::Limits::default(),
             )
             .await
             .expect("a session");
@@ -2280,7 +2310,7 @@ mod tests {
                     if_the_card_refuses: Vec::new(),
                 },
                 false,
-                None,
+                melyxar_streaming::registry::Limits::default(),
             )
             .await
             .expect("a session");

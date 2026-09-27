@@ -11,7 +11,7 @@
 //! number.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -420,6 +420,9 @@ pub struct Session {
     /// When this session was last asked for anything. A session nobody is
     /// watching any more is swept away, tool and folder together.
     touched: Mutex<Instant>,
+    /// The segment last asked for, which is where the viewer is: what lies
+    /// far enough behind it is what a full cache gives up first.
+    last_asked: AtomicU32,
 }
 
 /// What a session is called, which also names its folder.
@@ -460,6 +463,7 @@ impl Session {
             running: Mutex::new(None),
             stepped_down: std::sync::atomic::AtomicUsize::new(0),
             touched: Mutex::new(Instant::now()),
+            last_asked: AtomicU32::new(0),
         })
     }
 
@@ -776,6 +780,7 @@ impl Session {
         if index >= self.playlist.segment_count() {
             return Err(StreamingError::NoSuchSegment);
         }
+        self.last_asked.store(index, Ordering::Relaxed);
 
         let path = self.path_of(index);
         if self.finished_being_written(index).await {
@@ -1236,6 +1241,40 @@ impl Session {
 
     fn path_of(&self, index: u32) -> PathBuf {
         self.folder.join(format!("segment-{index}.m4s"))
+    }
+
+    /// The segments on the disk that lie further behind the viewer than
+    /// `kept_behind`, which a full cache can give up.
+    ///
+    /// One asked for again is made again, exactly as a segment the viewer
+    /// jumped to before it existed: a segment is ready when its file is whole
+    /// on the disk, and nothing else remembers it. The header is never among
+    /// them, and neither is anything at or ahead of the viewer.
+    pub async fn segments_left_behind(&self, kept_behind: Duration) -> Vec<PathBuf> {
+        let here = self
+            .playlist
+            .start_of(self.last_asked.load(Ordering::Relaxed));
+        let kept_from = here.saturating_sub(Millis::new(
+            i64::try_from(kept_behind.as_millis()).unwrap_or(i64::MAX),
+        ));
+        let first_kept = self.playlist.segment_holding(kept_from);
+
+        let Ok(mut entries) = tokio::fs::read_dir(&self.folder).await else {
+            return Vec::new();
+        };
+        let mut behind = Vec::new();
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let name = entry.file_name();
+            let index = name
+                .to_str()
+                .and_then(|name| name.strip_prefix("segment-"))
+                .and_then(|rest| rest.strip_suffix(".m4s"))
+                .and_then(|number| number.parse::<u32>().ok());
+            if index.is_some_and(|index| index < first_kept) {
+                behind.push(entry.path());
+            }
+        }
+        behind
     }
 
     async fn touch(&self) {

@@ -248,9 +248,9 @@ pub async fn open_calibration_session(
     let encode = video_encode_for(capabilities.card(), codec, height, &against)?;
     let on_a_card = encode.card().is_some();
 
-    // A measure is a conversion like any other, and counts against the same
-    // ceiling.
-    let most_at_once = state.database().transcoding_ceiling().await?;
+    // A measure is a conversion like any other, and is held to the same
+    // limits.
+    let limits = crate::playback::session_limits(state).await?;
     let session = sessions
         .open(
             who.id,
@@ -269,7 +269,7 @@ pub async fn open_calibration_session(
                 if_the_card_refuses: Vec::new(),
             },
             true,
-            most_at_once,
+            limits,
         )
         .await?;
     tracing::info!(

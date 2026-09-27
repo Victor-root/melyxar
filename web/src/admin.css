@@ -515,8 +515,10 @@
   overflow-wrap: anywhere;
 }
 
-/* The sign between two counts that make one shape. */
-.setting-times {
+/* The sign between two counts that make one shape, and the unit after a
+   count. */
+.setting-times,
+.setting-unit {
   color: var(--text-faint);
 }
 

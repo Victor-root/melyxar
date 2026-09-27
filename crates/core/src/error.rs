@@ -30,6 +30,9 @@ pub enum ErrorCode {
     /// how to play it with.
     NotDescribed,
     DependencyMissing,
+    /// The cache of films being converted is full of what nobody may give up
+    /// yet, so another cannot start until one ends.
+    NoRoomLeft,
     ExternalServiceUnavailable,
     Internal,
 }
@@ -50,6 +53,7 @@ impl ErrorCode {
             Self::RootUnavailable => "root_unavailable",
             Self::NotDescribed => "not_described",
             Self::DependencyMissing => "dependency_missing",
+            Self::NoRoomLeft => "no_room_left",
             Self::ExternalServiceUnavailable => "external_service_unavailable",
             Self::Internal => "internal",
         }
