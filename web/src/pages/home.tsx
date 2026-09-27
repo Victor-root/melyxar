@@ -27,6 +27,7 @@ import { whatIsLeft, whichEpisode } from "../readable";
 import { cardShapeOf, newestOfKind, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { BinocularsIcon, CameraIcon, EyeIcon, KindIcon } from "../icons";
+import { lengthOfAPlay } from "../watching";
 
 /** Where the row of everything newest leads, which is the same grid read in
  *  the same order. */
@@ -116,10 +117,10 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
               key={card.id}
               card={card}
               shape="lying"
-              watched={howFarIn(card.position_seconds, card.runtime_minutes)}
+              watched={howFarIn(card.position_seconds, lengthOfAPlay(card))}
               lead={card.series_title ?? undefined}
               note={whichEpisode(card, t)}
-              trailing={whatIsLeft(card.position_seconds, card.runtime_minutes, t)}
+              trailing={whatIsLeft(card.position_seconds, lengthOfAPlay(card), t)}
             />
           ))}
         </Row>

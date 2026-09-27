@@ -28,6 +28,7 @@ import { useShownPicture } from "./picture";
 import { howLong, whatTheFileHolds, whichEpisode } from "../readable";
 import { useSettings } from "../settings";
 import { ChevronLeftIcon, ChevronRightIcon, InfoIcon, PlayIcon } from "../icons";
+import { lengthOfAPlay } from "../watching";
 
 /** How many genres are named beside a title. Two: past that it is a list of
  *  everything the film could be filed under rather than what it is. */
@@ -351,10 +352,10 @@ function HeroProgress({ item }: { item: HeroItem }) {
   const { t } = useSettings();
   const resume = useMarks().resumeOf(item);
 
-  if (resume === null || !item.runtime_minutes) {
+  const whole = lengthOfAPlay(item);
+  if (resume === null || whole === null) {
     return null;
   }
-  const whole = item.runtime_minutes * 60;
   const done = Math.min(resume, whole);
 
   return (
@@ -365,7 +366,7 @@ function HeroProgress({ item }: { item: HeroItem }) {
       <span>
         {t("home.hero.progress", {
           done: howLong(Math.round(done / 60), t),
-          whole: howLong(item.runtime_minutes, t),
+          whole: howLong(Math.round(whole / 60), t),
         })}
       </span>
     </p>

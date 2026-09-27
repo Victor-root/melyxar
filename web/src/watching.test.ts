@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { markedWatched, whereaboutsOf } from "./watching";
+import { lengthOfAPlay, markedWatched, whereaboutsOf } from "./watching";
 import type { Whereabouts } from "./watching";
 
 /** A film marked watched once, then started again and left a quarter in. */
@@ -59,5 +59,20 @@ describe("what a screen shows", () => {
 
   it("is what the server sent when nothing was said", () => {
     expect(whereaboutsOf(WATCHED_AND_STARTED_AGAIN, undefined)).toEqual(WATCHED_AND_STARTED_AGAIN);
+  });
+});
+
+describe("what a place is a share of", () => {
+  it("is the copy's own length, when it was measured", () => {
+    // Two eleven minute episodes back to back in one file.
+    expect(lengthOfAPlay({ resume_length_seconds: 1_320, runtime_minutes: 11 })).toBe(1_320);
+  });
+
+  it("is the provider's length, when the copy never was", () => {
+    expect(lengthOfAPlay({ resume_length_seconds: null, runtime_minutes: 11 })).toBe(660);
+  });
+
+  it("is nothing when neither is known", () => {
+    expect(lengthOfAPlay({ resume_length_seconds: null, runtime_minutes: null })).toBeNull();
   });
 });

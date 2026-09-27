@@ -171,6 +171,9 @@ export interface Card {
   seen: Seen;
   /** Where they stopped, in seconds, only where they stopped partway. */
   resume_from_seconds: number | null;
+  /** How long the copy it is carried on in lasts, in seconds, beside where
+   *  it stopped. */
+  resume_length_seconds: number | null;
   favourite: boolean;
   /** Episodes below, and how many are left. Both nothing for a film. */
   episodes: number;

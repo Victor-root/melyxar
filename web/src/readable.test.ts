@@ -224,14 +224,14 @@ describe("containerName", () => {
 
 describe("whatIsLeft", () => {
   it("says what is left of a film, in whole minutes", () => {
-    expect(whatIsLeft(92 * 60, 115, said)).toBe(
+    expect(whatIsLeft(92 * 60, 115 * 60, said)).toBe(
       'home.hero.left({"time":"work.minutes({\\"count\\":23})"})',
     );
   });
 
   it("says nothing without a length, or with nothing left", () => {
     expect(whatIsLeft(600, null, said)).toBeUndefined();
-    expect(whatIsLeft(115 * 60, 115, said)).toBeUndefined();
+    expect(whatIsLeft(115 * 60, 115 * 60, said)).toBeUndefined();
   });
 });
 

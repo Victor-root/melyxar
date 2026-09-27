@@ -64,6 +64,7 @@ import { Player } from "../player/player";
 import { cutOut } from "../player/thumbnail";
 import { isCatalogued, isNamed } from "../works";
 import { FolderView, PhotoView } from "./own";
+import { lengthOfAPlay } from "../watching";
 
 /** As many of the cast as the server prepares faces for: past this the names
  *  would show with an initial where the others have a picture. */
@@ -1069,7 +1070,7 @@ function EpisodeLine({ child }: { child: Child }) {
   const marks = useMarks();
   const { card } = child;
   const resume = marks.resumeOf(card);
-  const left = resume !== null ? whatIsLeft(resume, card.runtime_minutes, t) : undefined;
+  const left = resume !== null ? whatIsLeft(resume, lengthOfAPlay(card), t) : undefined;
 
   return (
     <li className="episode-line">

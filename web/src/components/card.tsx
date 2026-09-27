@@ -29,6 +29,7 @@ import { useWorkMenu } from "./cardmenu";
 import { SelectMark, useChoosingPress } from "./selection";
 import { SeenMark } from "./seen";
 import { HeartIcon, IdentifyIcon, MoreIcon, PlayIcon } from "../icons";
+import { lengthOfAPlay } from "../watching";
 
 /** How a card is laid out: standing like a poster, or lying like a still. */
 export type CardShape = "standing" | "lying";
@@ -168,9 +169,8 @@ export function Card({
   /* Gone once marked watched, which lets go of where it was left: said at
      once, not after the next reading of the page. */
   const resume = marks.resumeOf(card);
-  const howFar =
-    watched ??
-    (resume !== null && card.runtime_minutes ? resume / (card.runtime_minutes * 60) : undefined);
+  const length = lengthOfAPlay(card);
+  const howFar = watched ?? (resume !== null && length ? resume / length : undefined);
 
   if (marks.goneOf(card.id)) {
     return null;
