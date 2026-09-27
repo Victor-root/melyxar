@@ -71,6 +71,9 @@ pub enum IdentificationNote {
     ProviderBusy,
     /// The provider answered something that could not be read.
     ProviderUnreadable,
+    /// A person took away what a provider had said about it. No automatic
+    /// look up names it again: it was named wrongly once already.
+    ClearedByHand,
 }
 
 impl IdentificationNote {
@@ -80,6 +83,7 @@ impl IdentificationNote {
             Self::ProviderUnreachable => "provider_unreachable",
             Self::ProviderBusy => "provider_busy",
             Self::ProviderUnreadable => "provider_unreadable",
+            Self::ClearedByHand => "cleared_by_hand",
         }
     }
 
@@ -89,6 +93,7 @@ impl IdentificationNote {
             "provider_unreachable" => Some(Self::ProviderUnreachable),
             "provider_busy" => Some(Self::ProviderBusy),
             "provider_unreadable" => Some(Self::ProviderUnreadable),
+            "cleared_by_hand" => Some(Self::ClearedByHand),
             _ => None,
         }
     }

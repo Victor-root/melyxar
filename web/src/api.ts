@@ -280,7 +280,8 @@ export type IdentificationNote =
   | "no_match"
   | "provider_unreachable"
   | "provider_busy"
-  | "provider_unreadable";
+  | "provider_unreadable"
+  | "cleared_by_hand";
 
 export interface Page {
   cards: Card[];
@@ -1856,6 +1857,13 @@ export const api = {
     if (asked.providerId) said.set("provider_id", asked.providerId);
     return get<Candidate[]>(`/api/v1/works/${work}/candidates?${said}`, signal);
   },
+  /* Takes away what any provider said about a work, which is then left out
+     of the automatic look up; and asks the provider again about one work,
+     keeping every field written by hand. */
+  forgetIdentity: (work: string) =>
+    remove<{ identified: boolean }>(`/api/v1/works/${work}/identify`),
+  refreshWork: (work: string) =>
+    post<{ outcome: "described" | "not_found" | "postponed" }>(`/api/v1/works/${work}/refresh`),
   identifyByHand: (work: string, externalId: string, replacePictures = true) =>
     post<{ identified: boolean }>(`/api/v1/works/${work}/identify`, {
       external_id: externalId,
