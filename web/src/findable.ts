@@ -185,6 +185,7 @@ export const FINDABLE: FindableSection[] = [
     name: "me.about",
     files: ["pages/settings/about.tsx"],
     named: [
+      ["about.report", "about.report_why"],
       ["about.server"],
       ["about.server_name"],
       ["about.version"],
