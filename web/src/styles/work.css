@@ -168,13 +168,6 @@
   color: var(--accent-bright);
 }
 
-.work-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-}
-
 /* Which copy, which sound, which words: a word and a choice each, on one
    line while there is room for it. */
 .work-choices {

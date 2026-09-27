@@ -19,10 +19,6 @@
   gap: calc(var(--gap) * 1.5);
 }
 
-.overview-panels > .panel-wide {
-  grid-column: span 2;
-}
-
 @container (max-width: 1180px) {
   .overview-panels {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -821,8 +817,7 @@
 }
 
 @container (max-width: 1180px) {
-  .overview-panels > .panel-system,
-  .overview-panels > .panel-wide {
+  .overview-panels > .panel-system {
     grid-column: 1 / -1;
   }
 }

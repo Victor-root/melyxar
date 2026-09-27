@@ -18,13 +18,6 @@
   background: #000;
 }
 
-/* A native slider takes the colour of the browser unless it is told the one
-   this interface uses. */
-.settings input[type="range"] {
-  accent-color: var(--accent);
-  width: 160px;
-}
-
 /* --------------------------------------------------------------------------
  * Somebody's own settings
  * ----------------------------------------------------------------------- */
