@@ -32,6 +32,7 @@ import { IdentifyDialog } from "./identify";
 import { PicturesDialog } from "./pictures";
 import { useSelection } from "./selection";
 import {
+  ClockIcon,
   CollectionIcon,
   DeleteIcon,
   DownloadIcon,
@@ -250,6 +251,7 @@ export function CardMenu({
 
   const seen = marks.seenOf(card);
   const favourite = marks.favouriteOf(card);
+  const later = marks.watchLaterOf(card);
   const pinned = marks.pinnedOf(card) === true;
   const playable = playsOnItsOwn(card);
   const catalogued = isCatalogued(card.identification);
@@ -273,6 +275,11 @@ export function CardMenu({
       key: favourite ? "unfavourite" : "favourite",
       mark: <HeartIcon size={SHAPE} filled={favourite} />,
       act: () => marks.setFavourite(card, !favourite),
+    },
+    {
+      key: later ? "unwatch_later" : "watch_later",
+      mark: <ClockIcon size={SHAPE} />,
+      act: () => marks.setWatchLater(card, !later),
     },
     {
       key: seen === "watched" ? "mark_unwatched" : "mark_watched",

@@ -28,7 +28,11 @@ import type { Said, Whereabouts } from "./watching";
 interface Mark {
   watched?: Said;
   favourite?: boolean;
-  /** On the server's own front shelf. Unlike the two above, nothing is known
+  /** Put aside to watch later, and what the server had said when it was.
+      Seeing the work takes it off the list on the server's side, so a card
+      that has since come back saying otherwise is the server's newer word. */
+  watchLater?: { said: boolean; over: boolean };
+  /** On the server's own front shelf. Unlike those above, nothing is known
       about this until somebody says it here: a card does not arrive saying
       whether it is on the front page. */
   pinned?: boolean;
@@ -45,6 +49,7 @@ interface Marks {
   /** How many episodes of a series or a season are left. */
   unwatchedOf: (card: Card) => number;
   favouriteOf: (card: Card) => boolean;
+  watchLaterOf: (card: Card) => boolean;
   /** Whether this work was put on the front page from this page, and nothing
       at all when nobody has said. */
   pinnedOf: (card: Card) => boolean | undefined;
@@ -56,6 +61,7 @@ interface Marks {
   /** Says it, everywhere at once, and tells the server. */
   setWatched: (card: Card, watched: boolean) => void;
   setFavourite: (card: Card, favourite: boolean) => void;
+  setWatchLater: (card: Card, later: boolean) => void;
   setPinned: (card: Card, pinned: boolean) => void;
   /** Bumped whenever something said here changes which works a row built by
       the server holds: a work put on the front page, an episode ticked off
@@ -89,6 +95,9 @@ export function MarksProvider({ children }: { children: ReactNode }) {
           said: markedWatched(watched, whereaboutsOf(sent, before), card.episodes),
           over: sent,
         },
+        /* Watched is what later was waiting for: the server takes it off
+           the list too. */
+        ...(watched && { watchLater: { said: false, over: card.watch_later } }),
       });
       /* A work ticked off is a work that has left the row of what is
          unfinished, and the one the series above it is waiting on is not
@@ -107,6 +116,15 @@ export function MarksProvider({ children }: { children: ReactNode }) {
       const before = said[card.id]?.favourite ?? card.favourite;
       say(card.id, { favourite });
       api.setFavourite(card.id, favourite).catch(() => say(card.id, { favourite: before }));
+    },
+    [said, say],
+  );
+
+  const setWatchLater = useCallback(
+    (card: Card, later: boolean) => {
+      const before = said[card.id]?.watchLater;
+      say(card.id, { watchLater: { said: later, over: card.watch_later } });
+      api.setWatchLater(card.id, later).catch(() => say(card.id, { watchLater: before }));
     },
     [said, say],
   );
@@ -147,16 +165,21 @@ export function MarksProvider({ children }: { children: ReactNode }) {
       resumeOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).resume,
       unwatchedOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).unwatched,
       favouriteOf: (card) => said[card.id]?.favourite ?? card.favourite,
+      watchLaterOf: (card) => {
+        const later = said[card.id]?.watchLater;
+        return later && later.over === card.watch_later ? later.said : card.watch_later;
+      },
       pinnedOf: (card) => said[card.id]?.pinned,
       goneOf: (id) => said[id]?.gone === true,
       setWatched,
       setFavourite,
+      setWatchLater,
       setPinned,
       setGone,
       rowsMoved,
       rowsHaveMoved,
     }),
-    [said, setWatched, setFavourite, setPinned, setGone, rowsMoved, rowsHaveMoved],
+    [said, setWatched, setFavourite, setWatchLater, setPinned, setGone, rowsMoved, rowsHaveMoved],
   );
 
   return <MarksContext.Provider value={value}>{children}</MarksContext.Provider>;

@@ -143,6 +143,7 @@ function TheLibrary() {
               {/* The same grid, narrowed to what this account marked: a view of the
                   library rather than a library of its own. */}
               <Route path="/favourites" element={<LibraryPage libraries={libraries.all} />} />
+              <Route path="/watch-later" element={<LibraryPage libraries={libraries.all} />} />
               <Route path="/work/:id" element={<WorkPage />} />
               <Route path="/person/:id" element={<PersonPage />} />
               <Route path="/admin" element={<AdminLayout />}>

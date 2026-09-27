@@ -47,6 +47,8 @@ export interface Narrowing {
   /** Only what this account marked. A view rather than a library, so it
       sorts, filters and pages like everything else. */
   favourites: boolean;
+  /** Only what this account put aside to watch later, a view the same way. */
+  watchLater: boolean;
   /** Only the libraries of one kind, which is what the search's scope
       narrows by when it names a category rather than a folder. */
   kind: LibraryKind | undefined;
@@ -139,6 +141,7 @@ export function useBrowsing(): Browsing {
   /* Read from the path rather than from a parameter: the favourites are a
      place somebody goes to, and a place is an address. */
   const favourites = pathname === "/favourites";
+  const watchLater = pathname === "/watch-later";
   const scope = parameters.get("in");
 
   const narrowing = useMemo<Narrowing>(() => {
@@ -154,9 +157,10 @@ export function useBrowsing(): Browsing {
       search,
       unidentified,
       favourites,
+      watchLater,
       kind: asked.kind,
     };
-  }, [id, order, descending, genre, decade, search, unidentified, favourites, scope]);
+  }, [id, order, descending, genre, decade, search, unidentified, favourites, watchLater, scope]);
 
   /* The cards gathered so far, with the choices they answer. Kept under
      those choices as they grow, so a grid walked back to is drawn again

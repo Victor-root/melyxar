@@ -20,7 +20,8 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
   const { narrowing, choose, cards, more, loadMore, reach, loading, failed, filters } =
     useBrowsing();
-  const { order, descending, genre, decade, search, unidentified, favourites } = narrowing;
+  const { order, descending, genre, decade, search, unidentified, favourites, watchLater } =
+    narrowing;
   const library = libraries.find((entry) => entry.id === narrowing.library);
   const shape = cardShapeOf(library?.kind ?? narrowing.kind);
   /* What somebody filmed themselves is never waiting for a name, so there is
@@ -49,8 +50,8 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
      by hand. */
   const held = useRef<{ letter: string; at: number } | null>(null);
   const showsLetters = !!filters && filters.initials.length > 1 && order === "title";
-  /* Only a library opened as such has letters, read by title: the favourites
-     and a search have none. */
+  /* Only a library opened as such has letters, read by title: the favourites,
+     what is put aside for later and a search have none. */
   const { id: opened } = useParams();
   const keepsRoomForLetters = opened !== undefined && order === "title";
 
@@ -182,13 +183,15 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
           <h1>
             {favourites
               ? t("nav.favourites")
-              : (library?.name ??
+              : watchLater
+                ? t("nav.watch_later")
+                : (library?.name ??
                 (narrowing.kind ? nameOfKind(narrowing.kind, libraries, t) : t("library.all")))}
           </h1>
           {/* What the library holds, not what has been scrolled to so far: a
               grid that counts its own loaded cards tells the viewer how far
               they have scrolled, which nobody asked. */}
-          {library && !search && !genre && decade === undefined && !unidentified && !favourites && (
+          {library && !search && !genre && decade === undefined && !unidentified && !favourites && !watchLater && (
             <span className="count">{t("library.count", { count: library.works })}</span>
           )}
         </div>
@@ -265,7 +268,9 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
 
       {failed && <p className="notice">{t("error.unreachable")}</p>}
       {!failed && cards.length === 0 && !loading && (
-        <p className="notice">{t(favourites ? "favourites.empty" : "library.empty")}</p>
+        <p className="notice">
+          {t(favourites ? "favourites.empty" : watchLater ? "watch_later.empty" : "library.empty")}
+        </p>
       )}
 
       {/* The grid and the letters beside it. A few hundred films is too long
