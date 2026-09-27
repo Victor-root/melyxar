@@ -178,6 +178,8 @@ export interface Card {
    *  it stopped. */
   resume_length_seconds: number | null;
   favourite: boolean;
+  /** Whether this account put it aside to watch later. */
+  watch_later: boolean;
   /** Episodes below, and how many are left. Both nothing for a film. */
   episodes: number;
   unwatched: number;
@@ -1595,6 +1597,8 @@ export interface BrowseOptions {
   /** Only what this account marked, which is a narrowing of the grid rather
       than a library of its own. */
   favourites?: boolean;
+  /** Only what this account put aside to watch later, a narrowing too. */
+  watchLater?: boolean;
   /** Only the libraries of one kind, whichever libraries those are. */
   kind?: LibraryKind;
 }
@@ -1613,6 +1617,7 @@ export function browseQuery(options: BrowseOptions): string {
   if (options.unidentified) parameters.set("unidentified", "true");
   if (options.initial) parameters.set("initial", options.initial);
   if (options.favourites) parameters.set("favourites", "true");
+  if (options.watchLater) parameters.set("watch_later", "true");
   if (options.kind) parameters.set("kind", options.kind);
   return parameters.toString();
 }
@@ -1914,6 +1919,8 @@ export const api = {
   signOutMyOtherDevices: () => remove<{ signed_out: number }>("/api/v1/me/devices"),
   setFavourite: (work: string, favourite: boolean) =>
     put<{ favourite: boolean }>(`/api/v1/works/${work}/favourite`, { favourite }),
+  setWatchLater: (work: string, later: boolean) =>
+    put<{ watch_later: boolean }>(`/api/v1/works/${work}/watch-later`, { watch_later: later }),
   /* On a season or a series this marks every episode below it, which is what
      the answer is about: the tick is drawn from what came back. */
   setWatched: (work: string, watched: boolean) =>

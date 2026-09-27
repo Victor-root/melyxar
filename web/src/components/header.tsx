@@ -54,6 +54,7 @@ import {
   BackIcon,
   BellIcon,
   ChevronDownIcon,
+  ClockIcon,
   GearIcon,
   HeartIcon,
   KindIcon,
@@ -540,6 +541,15 @@ export function Header({
             aria-label={t("nav.favourites")}
           >
             <HeartIcon size={24} filled={false} />
+          </NavLink>
+
+          <NavLink
+            to="/watch-later"
+            className="header-icon"
+            title={t("nav.watch_later")}
+            aria-label={t("nav.watch_later")}
+          >
+            <ClockIcon size={24} />
           </NavLink>
 
           {/*
