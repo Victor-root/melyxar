@@ -221,8 +221,6 @@ struct PlanView {
     segments: Vec<SegmentView>,
     /// The kinds of stretch a person corrected by hand in this file.
     corrected_segments: Vec<&'static str>,
-    /// Whether this viewer has marked the film as one they like.
-    favourite: bool,
     /// What the file itself holds, beside what is being made of it.
     ///
     /// Every media server shows this while a film plays, and for a reason: a
@@ -491,7 +489,6 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
             .iter()
             .map(|kind| kind.as_str())
             .collect(),
-        favourite: plan.favourite,
         rebuild: rebuild_view(plan),
         wide_gamut: film
             .picture
@@ -1569,7 +1566,6 @@ mod tests {
             downmix_gain: melyxar_core::user::DEFAULT_DOWNMIX_GAIN,
             rebuild: None,
             thumbnails: None,
-            favourite: false,
             chapters: vec![
                 melyxar_core::media::Chapter {
                     ordinal: 0,

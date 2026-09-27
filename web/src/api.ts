@@ -1278,8 +1278,6 @@ export interface PlaybackPlan {
   segments: PlaybackSegment[];
   /** The kinds of stretch a person corrected by hand in this file. */
   corrected_segments: string[];
-  /** Whether this viewer has marked the film as one they like. */
-  favourite: boolean;
   /** What the file itself holds, beside what is being made of it. */
   film: FilmHolds;
   /** What is done with the film's wide gamut colour, when it has any. */

@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  Card,
   PlaybackChapter,
   PlaybackSegment,
   PlaybackThumbnails,
@@ -65,6 +66,7 @@ import type { Mark } from "./logo";
 import { AS_IT_IS, QUALITIES, qualityName } from "./quality";
 import { AUTOMATIC, CODECS, codecName } from "./codec";
 import { captionOf, type Wording } from "../readable";
+import { useMarks } from "../marks";
 import { markTheOpening } from "./opening";
 import { FADES_AFTER_MS } from "./settings";
 import type { PlayerSettings } from "./settings";
@@ -528,6 +530,23 @@ function KeySaid({
   );
 }
 
+/** The heart, read from and written to the marks every other screen shares:
+ *  liked here is liked on the card the viewer walks back to. */
+function Favourite({ card, t }: { card: Card; t: Props["t"] }) {
+  const marks = useMarks();
+  const favourite = marks.favouriteOf(card);
+  return (
+    <button
+      className={`player-button${favourite ? " player-button-lit" : ""}`}
+      onClick={() => marks.setFavourite(card, !favourite)}
+      aria-pressed={favourite}
+      aria-label={t(favourite ? "player.unfavourite" : "player.favourite")}
+    >
+      <HeartIcon filled={favourite} size={ICON} />
+    </button>
+  );
+}
+
 /** What the sound icon shows for a share of the full sound. */
 function levelOf(loud: number): "off" | "low" | "middling" | "high" {
   return loud === 0 ? "off" : loud < 0.34 ? "low" : loud < 0.67 ? "middling" : "high";
@@ -719,16 +738,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
     }
 
     case "favourite":
-      return (
-        <button
-          className={`player-button${playback.favourite ? " player-button-lit" : ""}`}
-          onClick={() => playback.setFavourite(!playback.favourite)}
-          aria-pressed={playback.favourite}
-          aria-label={t(playback.favourite ? "player.unfavourite" : "player.favourite")}
-        >
-          <HeartIcon filled={playback.favourite} size={ICON} />
-        </button>
-      );
+      return surroundings.work.card ? <Favourite card={surroundings.work.card} t={t} /> : null;
 
     case "subtitles":
       if (!plan || plan.subtitles.length === 0) {
