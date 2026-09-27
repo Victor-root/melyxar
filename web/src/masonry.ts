@@ -163,10 +163,12 @@ export function useMasonry(page: RefObject<HTMLElement | null>): void {
     measured.observe(holder);
     const follow = () => {
       const now = new Set(holder.querySelectorAll(CARDS));
+      let gone = false;
       for (const card of rows.keys()) {
         if (!now.has(card)) {
           measured.unobserve(card);
           rows.delete(card);
+          gone = true;
         }
       }
       for (const card of now) {
@@ -174,6 +176,12 @@ export function useMasonry(page: RefObject<HTMLElement | null>): void {
           rows.set(card, 1);
           measured.observe(card);
         }
+      }
+      // A card that arrives is measured, and laid out then. One that goes is
+      // not measured again by anything, and the cards after it would keep the
+      // places they had below it.
+      if (gone) {
+        lay();
       }
     };
     follow();
