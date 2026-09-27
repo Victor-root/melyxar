@@ -10,6 +10,7 @@ Ce dossier est la mémoire du projet. Il contient les revues d'architecture réa
 | [02-reactivite.md](02-reactivite.md) | Exigence de navigation quasi instantanée jusqu'à 100 000 médias : analyse Jellyfin contre Emby, principe chemin chaud / chemin froid, stratégie serveur et client, isolation des tâches de fond, ce qui est à faire dès le début ou prématuré, mesure et détection des régressions, outils de diagnostic. |
 | [03-plan.md](03-plan.md) | Plan par jalons de la V0.1 et état d'avancement. |
 | [04-fonctionnalites.md](04-fonctionnalites.md) | Ce que Melyxar doit savoir faire, demande par demande, avec les conséquences sur l'architecture. Se remplit au fil des discussions. |
+| [05-partage-entre-serveurs.md](05-partage-entre-serveurs.md) | Idée future, rien de codé : deux serveurs appairés se prêtent des médiathèques, ajoutées comme un dossier de plus d'une médiathèque existante, chaque fichier restant lu par son serveur d'origine. |
 
 Le fichier `CLAUDE.md` à la racine du dépôt résume les règles pour chaque session de travail.
 
