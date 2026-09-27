@@ -43,6 +43,8 @@ pub struct IdentifyReport {
     pub renamed: usize,
     /// Works that turned out to be another copy of a film already here.
     pub merged: usize,
+    /// Episodes moved to where their files now say they go in their series.
+    pub refiled: usize,
     /// Films that had a name but no picture, and have one now.
     pub pictures_filled: usize,
     /// Films that had a name but no synopsis, and have one now.
@@ -88,6 +90,7 @@ where
     let mut report = IdentifyReport {
         renamed: reread.renamed,
         merged: reread.merged,
+        refiled: reread.refiled,
         ..IdentifyReport::default()
     };
     // Everything waiting, read once. A run deals with all of it: a library of
@@ -150,6 +153,7 @@ where
 
     if report.identified > 0
         || report.merged > 0
+        || report.refiled > 0
         || report.pictures_filled > 0
         || report.synopses_filled > 0
     {
@@ -164,6 +168,7 @@ where
         postponed = report.postponed,
         renamed = report.renamed,
         merged = report.merged,
+        refiled = report.refiled,
         pictures_filled = report.pictures_filled,
         synopses_filled = report.synopses_filled,
         cancelled = report.cancelled,
@@ -564,6 +569,7 @@ async fn place_what_was_numbered_across(
                 season_sort_title: naming::sort_title(&season_title),
                 season_title,
                 ordinal,
+                absolute_number: Some(episode.absolute_number),
                 renamed,
             })
         })
