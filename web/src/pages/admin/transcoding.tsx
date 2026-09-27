@@ -1,9 +1,11 @@
 /*
  * How a film is made into what a screen can play: the card that does it, the
  * pictures of the playback bar, the colours of a wide gamut film, and what the
- * films it converts are allowed: how many at once, and how much of the disk.
+ * films it converts are allowed: how many at once, how much of the disk, and
+ * the codecs they come out in.
  */
 
+import type { VideoCodec } from "../../api";
 import { NumberField, PageHead, Panel, Setting, Stat, Toggle } from "../../components/panel";
 import {
   FfmpegIcon,
@@ -14,6 +16,10 @@ import {
 import { useLibraryWork, usePlaybackSettings } from "../../screens/settings";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
+
+/** Every codec a converted film may come out in, best first, as the server
+    keeps them. */
+const EVERY_CODEC: VideoCodec[] = ["av1", "hevc", "h264"];
 
 /** The ceiling a server is given when one is first switched on. */
 const A_FIRST_CEILING = 2;
@@ -132,6 +138,33 @@ export function AdminTranscoding() {
           )}
         </Panel>
       </div>
+
+      {playback.kept && (
+        <Panel icon={FfmpegIcon} title={t("admin.codecs")} lead={t("admin.codecs_why")}>
+          {EVERY_CODEC.map((codec) => {
+            const chosen = playback.kept?.transcode_video_codecs ?? [];
+            const allowed = chosen.includes(codec);
+            return (
+              <Setting key={codec} label={t(`admin.codec.${codec}`)}>
+                <Toggle
+                  label={t(`admin.codec.${codec}`)}
+                  checked={allowed}
+                  // The last one left stays: a server allowed no codec could
+                  // convert nothing.
+                  disabled={allowed && chosen.length === 1}
+                  onChange={(on) =>
+                    playback.setTo({
+                      transcode_video_codecs: EVERY_CODEC.filter((one) =>
+                        one === codec ? on : chosen.includes(one),
+                      ),
+                    })
+                  }
+                />
+              </Setting>
+            );
+          })}
+        </Panel>
+      )}
 
       {playback.kept && (
         <Panel icon={ImageIcon} title={t("settings.picture")}>

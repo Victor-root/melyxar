@@ -442,7 +442,12 @@ export interface PlaybackSettings {
   /** How far behind each viewer those segments stay whatever the ceiling
       says, in seconds. */
   transcode_kept_behind_seconds: number;
+  /** The codecs a converted film may come out in, best first. Never empty. */
+  transcode_video_codecs: VideoCodec[];
 }
+
+/** A codec a converted film may come out in. */
+export type VideoCodec = "av1" | "hevc" | "h264";
 
 export interface Filters {
   genres: { name: string; works: number }[];

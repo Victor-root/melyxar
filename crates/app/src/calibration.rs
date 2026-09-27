@@ -227,14 +227,15 @@ pub async fn open_calibration_session(
         )));
     }
     if !state
-        .config()
-        .transcode
-        .enabled_video_codecs
+        .database()
+        .transcoding_limits()
+        .await?
+        .video_codecs
         .iter()
         .any(|allowed| allowed.eq_ignore_ascii_case(codec))
     {
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
-            "this server is not configured to transcode into that codec",
+            "this server is not set to transcode into that codec",
         )));
     }
 

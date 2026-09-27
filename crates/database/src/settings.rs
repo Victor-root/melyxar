@@ -127,8 +127,11 @@ pub const MOST_KEPT_BEHIND: u32 = 1800;
 /// being converted fills several hundred megabytes within minutes.
 pub const LEAST_CACHE_MEGABYTES: u32 = 1024;
 
+/// Every codec a converted film may come out in, best first.
+pub const EVERY_VIDEO_CODEC: [&str; 3] = ["av1", "hevc", "h264"];
+
 /// What the server allows the films it converts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranscodingLimits {
     /// How many at once; none for no ceiling.
     pub most_at_once: Option<u32>,
@@ -137,6 +140,8 @@ pub struct TranscodingLimits {
     pub cache_megabytes: Option<u32>,
     /// How far behind each viewer the segments stay whatever the ceiling says.
     pub kept_behind_seconds: u32,
+    /// The codecs a converted film may come out in, best first. Never empty.
+    pub video_codecs: Vec<String>,
 }
 
 impl TranscodingLimits {
@@ -152,7 +157,22 @@ impl TranscodingLimits {
             kept_behind_seconds: self
                 .kept_behind_seconds
                 .clamp(LEAST_KEPT_BEHIND, MOST_KEPT_BEHIND),
+            video_codecs: codecs_in_order(&self.video_codecs),
         }
+    }
+}
+
+/// The known codecs among these, each once and best first, or every one of
+/// them when none is left: a server allowed no codec could convert nothing.
+fn codecs_in_order(asked: &[String]) -> Vec<String> {
+    let known: Vec<String> = EVERY_VIDEO_CODEC
+        .iter()
+        .filter(|codec| asked.iter().any(|one| one.eq_ignore_ascii_case(codec)))
+        .map(|codec| codec.to_string())
+        .collect();
+    match known.is_empty() {
+        true => EVERY_VIDEO_CODEC.iter().map(|codec| codec.to_string()).collect(),
+        false => known,
     }
 }
 
@@ -326,7 +346,7 @@ impl Database {
     pub async fn transcoding_limits(&self) -> Result<TranscodingLimits> {
         let row = sqlx::query(
             "SELECT max_transcoding_sessions, transcode_cache_megabytes,
-                    transcode_kept_behind_seconds
+                    transcode_kept_behind_seconds, transcode_video_codecs
              FROM server_settings WHERE id = 1",
         )
         .fetch_one(self.reader())
@@ -341,6 +361,11 @@ impl Database {
             cache_megabytes: wanted("transcode_cache_megabytes")?,
             kept_behind_seconds: wanted("transcode_kept_behind_seconds")?
                 .unwrap_or(USUAL_KEPT_BEHIND),
+            video_codecs: row
+                .try_get::<String, _>("transcode_video_codecs")?
+                .split(',')
+                .map(str::to_string)
+                .collect(),
         }
         .normalised())
     }
@@ -352,12 +377,13 @@ impl Database {
         sqlx::query(
             "UPDATE server_settings SET max_transcoding_sessions = ?,
                     transcode_cache_megabytes = ?, transcode_kept_behind_seconds = ?,
-                    updated_at = ?
+                    transcode_video_codecs = ?, updated_at = ?
              WHERE id = 1",
         )
         .bind(limits.most_at_once.map(i64::from))
         .bind(limits.cache_megabytes.map(i64::from))
         .bind(i64::from(limits.kept_behind_seconds))
+        .bind(limits.video_codecs.join(","))
         .bind(timestamp_to_text(now()))
         .execute(self.writer())
         .await?;
@@ -771,6 +797,7 @@ mod tests {
                 most_at_once: None,
                 cache_megabytes: None,
                 kept_behind_seconds: USUAL_KEPT_BEHIND,
+                video_codecs: vec!["av1".into(), "hevc".into(), "h264".into()],
             }
         );
 
@@ -778,15 +805,31 @@ mod tests {
             most_at_once: Some(3),
             cache_megabytes: Some(8192),
             kept_behind_seconds: 600,
+            video_codecs: vec!["hevc".into(), "h264".into()],
         };
         assert_eq!(
-            database.set_transcoding_limits(chosen).await.expect("set"),
+            database
+                .set_transcoding_limits(chosen.clone())
+                .await
+                .expect("set"),
             chosen
         );
         assert_eq!(database.transcoding_limits().await.expect("read"), chosen);
 
-        database.set_transcoding_limits(usual).await.expect("taken away");
+        database
+            .set_transcoding_limits(usual.clone())
+            .await
+            .expect("taken away");
         assert_eq!(database.transcoding_limits().await.expect("read"), usual);
+    }
+
+    #[test]
+    fn codecs_are_kept_once_each_best_first_and_unknown_ones_dropped() {
+        let asked: Vec<String> = ["H264", "vp9", "av1", "h264"]
+            .iter()
+            .map(|codec| codec.to_string())
+            .collect();
+        assert_eq!(codecs_in_order(&asked), ["av1", "h264"]);
     }
 
     #[tokio::test]
@@ -797,6 +840,7 @@ mod tests {
                 most_at_once: Some(0),
                 cache_megabytes: Some(1),
                 kept_behind_seconds: 5,
+                video_codecs: Vec::new(),
             })
             .await
             .expect("set");
@@ -806,7 +850,9 @@ mod tests {
                 most_at_once: Some(1),
                 cache_megabytes: Some(LEAST_CACHE_MEGABYTES),
                 kept_behind_seconds: LEAST_KEPT_BEHIND,
-            }
+                video_codecs: vec!["av1".into(), "hevc".into(), "h264".into()],
+            },
+            "a server allowed no codec could convert nothing"
         );
         assert_eq!(database.transcoding_limits().await.expect("read"), kept);
     }

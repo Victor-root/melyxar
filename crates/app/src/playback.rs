@@ -306,7 +306,7 @@ pub async fn plan(
         &profile,
         state.capabilities(),
         subtitle_to_paint_on(&decision, &tracks).is_some(),
-        &state.config().transcode.enabled_video_codecs,
+        &state.database().transcoding_limits().await?.video_codecs,
         request.preferred_video_codec.as_deref(),
     );
 
