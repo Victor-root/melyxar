@@ -192,43 +192,67 @@ pub async fn start_scan_and_identification(
 ) -> Result<JobId> {
     let scan = start_scan(state, library.clone(), priority, mode).await?;
     let id = scan.id();
-
-    // Without a provider key there is nothing to look anything up with. The
-    // scan still runs, and the library still browses: that is a server
-    // configured without a key, not a broken one. The readings below still
-    // follow, since they are about the files and not about the pages.
-    let provider = state.metadata_provider();
-
-    let waiting = state.clone();
+    let state = state.clone();
     tokio::spawn(async move {
-        let (ended, _) = scan.wait().await;
-        if ended != JobState::Succeeded {
-            // A scan that did not finish leaves nothing dependable to look up,
-            // and whoever reads the list of jobs can already see why.
-            return;
-        }
+        what_follows_a_scan(&state, library, scan, priority, mode).await;
+    });
+    Ok(id)
+}
 
-        // The pages and the pictures first, and waited for. Never for what
-        // people filmed themselves, which no catalogue holds.
-        if let Some(provider) = provider.filter(|_| library.kind.is_catalogued()) {
-            match crate::identify::start_identification(&waiting, provider, library.clone(), mode)
-                .await
-            {
-                Ok(job) => {
-                    job.wait().await;
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "the scan finished but the look up would not start");
-                }
+/// Scans a library, and waits for everything that follows it: the look up,
+/// then the readings that follow an arrival there. Answers how the scan ended.
+///
+/// What the scheduled scan does library after library, so the next library
+/// starts on a disk that is free.
+pub async fn scan_and_what_follows(
+    state: &AppState,
+    library: Library,
+    priority: JobPriority,
+    mode: RefreshMode,
+) -> Result<JobState> {
+    let scan = start_scan(state, library.clone(), priority, mode).await?;
+    Ok(what_follows_a_scan(state, library, scan, priority, mode).await)
+}
+
+/// Waits for a scan, then looks up what it found and reads what follows an
+/// arrival. Answers how the scan ended.
+async fn what_follows_a_scan(
+    state: &AppState,
+    library: Library,
+    scan: ScanJob,
+    priority: JobPriority,
+    mode: RefreshMode,
+) -> JobState {
+    let (ended, _) = scan.wait().await;
+    if ended != JobState::Succeeded {
+        // A scan that did not finish leaves nothing dependable to look up,
+        // and whoever reads the list of jobs can already see why.
+        return ended;
+    }
+
+    // The pages and the pictures first, and waited for. Never for what
+    // people filmed themselves, which no catalogue holds. Without a provider
+    // key there is nothing to look anything up with: the library still
+    // browses, and the readings below still follow, since they are about the
+    // files and not about the pages.
+    if let Some(provider) = state
+        .metadata_provider()
+        .filter(|_| library.kind.is_catalogued())
+    {
+        match crate::identify::start_identification(state, provider, library.clone(), mode).await {
+            Ok(job) => {
+                job.wait().await;
+            }
+            Err(error) => {
+                tracing::warn!(%error, "the scan finished but the look up would not start");
             }
         }
+    }
 
-        // And only then the readings of the files. A look up that went wrong
-        // does not hold them back: they are about the files.
-        read_what_follows_an_arrival_in(&waiting, &library, priority).await;
-    });
-
-    Ok(id)
+    // And only then the readings of the files. A look up that went wrong
+    // does not hold them back: they are about the files.
+    read_what_follows_an_arrival_in(state, &library, priority).await;
+    ended
 }
 
 /// Sets going the readings that follow an arrival in this library, once the
@@ -2925,25 +2949,30 @@ mod tests {
             && work.kind == WorkKind::Movie));
     }
 
-    /// Runs every reading that is waiting and waits for it to end.
+    /// Runs the four reading tasks in turn and waits for them to end.
     ///
-    /// What the chain after a scan does, and what the button on the upkeep
-    /// screen does. Answers how many jobs it took, since the readings are jobs
-    /// of their own now rather than steps of the scan.
+    /// What those scheduled tasks do each night. Answers how many jobs it
+    /// took, since the readings are jobs of their own rather than steps of the
+    /// scan.
     async fn read_everything_that_is_waiting(state: &AppState) -> usize {
-        let started = crate::upkeep::start_what_is_waiting(state, JobPriority::REQUESTED).await;
-        // The jobs are written down before they start, so waiting on the rows
-        // is waiting on the work.
-        while !state
-            .database()
-            .unfinished_jobs()
+        let before = state.database().recent_jobs(500).await.expect("read").len();
+        let readings: Vec<crate::schedule::ScheduledTask> = crate::upkeep::UpkeepTask::ALL
+            .into_iter()
+            .map(crate::schedule::ScheduledTask::Reading)
+            .collect();
+        crate::schedule::run_in_turn(state, &readings, JobPriority::REQUESTED).await;
+        state.database().recent_jobs(500).await.expect("read").len() - before
+    }
+
+    /// What one scheduled task has waiting, over every library.
+    async fn waiting_for(state: &AppState, task: crate::upkeep::UpkeepTask) -> Option<i64> {
+        crate::schedule::status(state)
             .await
-            .expect("read")
-            .is_empty()
-        {
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-        started
+            .expect("counted")
+            .into_iter()
+            .find(|status| status.task == crate::schedule::ScheduledTask::Reading(task))
+            .expect("every task answers")
+            .waiting
     }
 
     #[tokio::test]
@@ -3102,29 +3131,15 @@ mod tests {
         let report = scan(&state, &library).await;
         assert_eq!(report.added, 1);
 
-        // And what it left is counted, which is what the upkeep screen shows
-        // and what the button acts on.
-        let left = crate::upkeep::what_is_left(&state).await.expect("counted");
-        assert!(
-            !left
-                .iter()
-                .any(|entry| entry.task == crate::upkeep::UpkeepTask::Openings),
-            "a film has no season and no neighbours, so a row that would read \
-             nought of nought for ever is not offered at all: {left:?}"
+        // And what it left is counted, which is what the screen of the
+        // scheduled tasks shows and what their buttons act on.
+        assert_eq!(
+            waiting_for(&state, crate::upkeep::UpkeepTask::Openings).await,
+            Some(0),
+            "a film has no season and no neighbours, so nothing waits to be listened to"
         );
         for task in readings_that_apply_to_films() {
-            let entry = left
-                .iter()
-                .find(|entry| entry.task == task && entry.library == library.id)
-                .expect("every library answers for every reading that applies to it");
-            assert_eq!(entry.waiting, 1, "{}", task.as_str());
-            assert_eq!(
-                entry.during_the_scan,
-                task == crate::upkeep::UpkeepTask::KeyFrames,
-                "only the quick reading follows an arrival unless asked: {}",
-                task.as_str()
-            );
-            assert!(!entry.under_way);
+            assert_eq!(waiting_for(&state, task).await, Some(1), "{}", task.as_str());
         }
 
         assert_eq!(
@@ -3133,18 +3148,26 @@ mod tests {
             "one job for each reading, on the one library that has anything waiting"
         );
 
-        let done = crate::upkeep::what_is_left(&state).await.expect("counted");
         for task in readings_that_apply_to_films() {
-            let entry = done
+            assert_eq!(waiting_for(&state, task).await, Some(0), "{}", task.as_str());
+        }
+        let statuses = crate::schedule::status(&state).await.expect("counted");
+        for task in readings_that_apply_to_films() {
+            let status = statuses
                 .iter()
-                .find(|entry| entry.task == task && entry.library == library.id)
-                .expect("every library answers for every reading that applies to it");
-            assert_eq!(entry.waiting, 0, "{}", task.as_str());
-            assert_eq!(entry.done, 1, "{}", task.as_str());
+                .find(|status| status.task == crate::schedule::ScheduledTask::Reading(task))
+                .expect("every task answers");
+            assert_eq!(
+                status.last_run.as_ref().map(|run| run.state),
+                Some(melyxar_core::job::JobState::Succeeded),
+                "{}",
+                task.as_str()
+            );
+            assert!(!status.under_way);
         }
 
         assert_eq!(
-            crate::upkeep::start_what_is_waiting(&state, JobPriority::REQUESTED).await,
+            read_everything_that_is_waiting(&state).await,
             0,
             "nothing is waiting, so no job that would end on the spot is started"
         );

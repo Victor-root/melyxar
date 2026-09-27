@@ -32,17 +32,19 @@ pub fn router() -> Router<AppState> {
             "/api/v1/libraries/{id}/options",
             axum::routing::put(set_library_options),
         )
-        .route("/api/v1/upkeep", axum::routing::get(upkeep))
+        // The six scheduled tasks, each valid for every library.
+        .route("/api/v1/tasks", axum::routing::get(scheduled_tasks))
+        .route("/api/v1/tasks/run", axum::routing::post(run_every_task))
+        .route(
+            "/api/v1/tasks/{task}/schedule",
+            axum::routing::put(schedule_task),
+        )
+        .route("/api/v1/tasks/{task}/run", axum::routing::post(run_one_task))
         // One name, two verbs: reading what the server is set to do and
         // saying what it is to do from now on.
         .route(
             "/api/v1/settings/libraries",
             axum::routing::get(library_work).put(set_library_work),
-        )
-        .route("/api/v1/upkeep/run", axum::routing::post(run_the_upkeep))
-        .route(
-            "/api/v1/libraries/{id}/upkeep/{task}",
-            axum::routing::post(run_one_upkeep_task),
         )
         .route(
             "/api/v1/works/{id}/candidates",
@@ -518,79 +520,147 @@ async fn set_library_options(
     }))
 }
 
+/// Where one scheduled task stands.
 #[derive(Debug, Serialize)]
-struct UpkeepTaskView {
+struct TaskView {
     task: &'static str,
-    library: String,
-    library_name: String,
-    /// Files still waiting. Nought means there is nothing to start.
-    waiting: i64,
-    /// Files already done, so a screen says four hundred of four hundred and
-    /// ten rather than ten.
-    done: i64,
-    /// Whether the two numbers above count seasons rather than files.
-    ///
-    /// Listening for the titles a season shares is done season by season, so
-    /// a screen saying files would be counting something nobody can act on.
+    /// Whether it runs on its own each day, and when, in minutes since
+    /// midnight, **in UTC**. Whatever shows it turns it into the time of
+    /// whoever is looking.
+    runs_on_schedule: bool,
+    at_utc_minutes: i64,
+    /// When it next runs on its own, as an instant, so whoever reads it sees
+    /// it in their own hour. Absent when it never does.
+    next_run: Option<String>,
+    /// What it has waiting over every library. Absent for the scan, which
+    /// cannot know what a disk holds until it has walked it.
+    waiting: Option<i64>,
+    /// Whether that number counts seasons rather than files.
     counts_seasons: bool,
-    /// Whether the scan of that library does this reading itself.
-    during_the_scan: bool,
     /// Whether it is running right now, so a screen offers to watch rather
     /// than to start.
     under_way: bool,
-    /// When this reading last ran to an end here, as an instant, or nothing
-    /// when it never has. A reading that never ran and one that ran last night
-    /// and found nothing look alike without it.
+    /// When it last ran, as an instant, how that ended, and how long it took.
+    /// A task that never ran and one that ran last night and found nothing
+    /// look alike without them.
     last_run: Option<String>,
-    /// How that run ended, in the words every other job uses.
     last_run_state: Option<&'static str>,
-    /// How long it took, in seconds.
     last_run_seconds: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
-struct UpkeepView {
-    tasks: Vec<UpkeepTaskView>,
-    /// When the upkeep next runs on its own, written as an instant so that
-    /// whoever reads it sees it in their own hour rather than in the server's.
-    /// Absent when it never does.
+struct TasksView {
+    tasks: Vec<TaskView>,
+    /// The soonest any task runs on its own, for a screen with room for one
+    /// line. Absent when none does.
     next_run: Option<String>,
-    /// What the server does with a library, which this screen also sets.
-    settings: WorkView,
 }
 
-/// What the upkeep has left to do, and when it will next do it on its own.
-async fn upkeep(_: crate::account::Administrator, State(state): State<AppState>) -> Result<Json<UpkeepView>> {
-    let work = state.database().library_work().await.map_err(internal)?;
-    let left = melyxar_app::upkeep::what_is_left(&state).await?;
+async fn tasks_view(state: &AppState) -> Result<TasksView> {
+    let tasks: Vec<TaskView> = melyxar_app::schedule::status(state)
+        .await?
+        .into_iter()
+        .map(|status| TaskView {
+            task: status.task.as_str(),
+            runs_on_schedule: status.runs_on_schedule,
+            at_utc_minutes: status.at_utc_minutes,
+            next_run: status.runs_on_schedule.then(|| {
+                melyxar_core::time::to_text(melyxar_core::time::next_occurrence_of_utc_minutes(
+                    status.at_utc_minutes,
+                ))
+            }),
+            waiting: status.waiting,
+            counts_seasons: status.task.counts_seasons(),
+            under_way: status.under_way,
+            last_run: status
+                .last_run
+                .as_ref()
+                .map(|last| melyxar_core::time::to_text(last.at)),
+            last_run_state: status.last_run.as_ref().map(|last| last.state.as_str()),
+            last_run_seconds: status.last_run.as_ref().and_then(|last| last.took_seconds),
+        })
+        .collect();
+    // Written the same way for every task, so the earliest instant is the
+    // earliest text.
+    let next_run = tasks.iter().filter_map(|task| task.next_run.clone()).min();
+    Ok(TasksView { tasks, next_run })
+}
 
-    Ok(Json(UpkeepView {
-        tasks: left
-            .into_iter()
-            .map(|entry| UpkeepTaskView {
-                task: entry.task.as_str(),
-                library: entry.library.to_string(),
-                library_name: entry.library_name,
-                waiting: entry.waiting,
-                done: entry.done,
-                counts_seasons: entry.task.counts_seasons(),
-                during_the_scan: entry.during_the_scan,
-                under_way: entry.under_way,
-                last_run: entry
-                    .last_run
-                    .as_ref()
-                    .map(|last| melyxar_core::time::to_text(last.at)),
-                last_run_state: entry.last_run.as_ref().map(|last| last.state.as_str()),
-                last_run_seconds: entry.last_run.as_ref().and_then(|last| last.took_seconds),
-            })
-            .collect(),
-        next_run: work.upkeep_nightly.then(|| {
-            melyxar_core::time::to_text(melyxar_core::time::next_occurrence_of_utc_minutes(
-                work.upkeep_at_utc_minutes,
-            ))
-        }),
-        settings: work_view(work),
-    }))
+/// Every scheduled task: when it runs, what it has waiting, how it last went.
+async fn scheduled_tasks(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+) -> Result<Json<TasksView>> {
+    Ok(Json(tasks_view(&state).await?))
+}
+
+fn task_named(value: &str) -> Result<melyxar_app::schedule::ScheduledTask> {
+    melyxar_app::schedule::ScheduledTask::parse(value)
+        .ok_or_else(|| ServerError::invalid_input("there is no such task"))
+}
+
+/// Whether a task runs on its own each day, and when.
+#[derive(Debug, Deserialize)]
+struct ScheduleAsked {
+    runs_on_schedule: bool,
+    /// Minutes since midnight, in UTC.
+    at_utc_minutes: i64,
+}
+
+/// Says whether a task runs on its own each day, and when. Answers every
+/// task, as the screen draws them.
+async fn schedule_task(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+    Path(task): Path<String>,
+    Json(asked): Json<ScheduleAsked>,
+) -> Result<Json<TasksView>> {
+    let task = task_named(&task)?;
+    melyxar_app::schedule::set_schedule(&state, task, asked.runs_on_schedule, asked.at_utc_minutes)
+        .await?;
+    tracing::debug!(
+        task = task.as_str(),
+        runs_on_schedule = asked.runs_on_schedule,
+        at_utc_minutes = asked.at_utc_minutes,
+        "when a task runs was set"
+    );
+    Ok(Json(tasks_view(&state).await?))
+}
+
+#[derive(Debug, Serialize)]
+struct TaskStartedView {
+    started: bool,
+}
+
+/// Starts one task now, over every library it concerns.
+///
+/// At the priority of something asked for: whoever pressed this is not
+/// waiting for the night, which is the whole reason the button exists.
+async fn run_one_task(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+    Path(task): Path<String>,
+) -> Result<Json<TaskStartedView>> {
+    melyxar_app::schedule::start(
+        &state,
+        task_named(&task)?,
+        melyxar_core::job::JobPriority::REQUESTED,
+    )
+    .map_err(already_running)?;
+    Ok(Json(TaskStartedView { started: true }))
+}
+
+/// Starts every task now, one after the other in the order they are listed.
+async fn run_every_task(
+    _: crate::account::Administrator,
+    State(state): State<AppState>,
+) -> Result<Json<TaskStartedView>> {
+    melyxar_app::schedule::start_in_turn(
+        &state,
+        melyxar_app::schedule::ScheduledTask::ALL.to_vec(),
+        melyxar_core::job::JobPriority::REQUESTED,
+    );
+    Ok(Json(TaskStartedView { started: true }))
 }
 
 /// What the server does with a library, on its own and in what shape.
@@ -610,12 +680,6 @@ struct WorkView {
     thumbnails_height: i64,
     thumbnails_columns: i64,
     thumbnails_rows: i64,
-    /// Whether the upkeep runs on its own of a night.
-    upkeep_nightly: bool,
-    /// When it does, in minutes since midnight, **in UTC**. Whatever shows it
-    /// turns it into the time of whoever is looking; the server keeps the one
-    /// clock it can read with certainty.
-    upkeep_at_utc_minutes: i64,
 }
 
 fn work_view(work: melyxar_app::settings::LibraryWork) -> WorkView {
@@ -626,16 +690,14 @@ fn work_view(work: melyxar_app::settings::LibraryWork) -> WorkView {
         thumbnails_height: work.thumbnails_height,
         thumbnails_columns: work.thumbnails_columns,
         thumbnails_rows: work.thumbnails_rows,
-        upkeep_nightly: work.upkeep_nightly,
-        upkeep_at_utc_minutes: work.upkeep_at_utc_minutes,
     }
 }
 
 /// What the server is set to do with a library.
 ///
-/// Its own route rather than a corner of the upkeep's: a screen of settings
-/// wants one row of the settings, and asking the upkeep would count every
-/// film of every library to answer it.
+/// Its own route rather than a corner of the scheduled tasks': a screen of
+/// settings wants one row of the settings, and asking the tasks would count
+/// every film of every library to answer it.
 async fn library_work(_: crate::account::Administrator, State(state): State<AppState>) -> Result<Json<WorkView>> {
     Ok(Json(work_view(
         state.database().library_work().await.map_err(internal)?,
@@ -667,8 +729,6 @@ async fn set_library_work(
             thumbnails_height: asked.thumbnails_height,
             thumbnails_columns: asked.thumbnails_columns,
             thumbnails_rows: asked.thumbnails_rows,
-            upkeep_nightly: asked.upkeep_nightly,
-            upkeep_at_utc_minutes: asked.upkeep_at_utc_minutes,
         })
         .await
         .map_err(internal)?;
@@ -680,59 +740,9 @@ async fn set_library_work(
         thumbnails_height = kept.thumbnails_height,
         thumbnails_columns = kept.thumbnails_columns,
         thumbnails_rows = kept.thumbnails_rows,
-        upkeep_nightly = kept.upkeep_nightly,
-        upkeep_at_utc_minutes = kept.upkeep_at_utc_minutes,
         "what the server does with a library was set"
     );
     Ok(Json(work_view(kept)))
-}
-
-#[derive(Debug, Serialize)]
-struct StartedManyView {
-    /// How many jobs this started. Nought is an answer: there was nothing
-    /// waiting, which is what somebody pressing the button wanted to know.
-    started: usize,
-}
-
-/// Starts everything the upkeep has waiting, now, on every library.
-///
-/// At the priority of something asked for: whoever pressed this is not waiting
-/// for the night, which is the whole reason the button exists.
-async fn run_the_upkeep(_: crate::account::Administrator, State(state): State<AppState>) -> Result<Json<StartedManyView>> {
-    let started = melyxar_app::upkeep::start_what_is_waiting(
-        &state,
-        melyxar_core::job::JobPriority::REQUESTED,
-    )
-    .await;
-    // Nought is the commonest answer here and the one worth writing down: the
-    // button did work, there was simply nothing waiting, and from the outside
-    // that is indistinguishable from a button that does nothing.
-    tracing::debug!(jobs = started, "the upkeep was asked for from a screen");
-    Ok(Json(StartedManyView { started }))
-}
-
-/// Starts one of the two readings on one library, now.
-async fn run_one_upkeep_task(
-    _: crate::account::Administrator,
-    State(state): State<AppState>,
-    Path((id, task)): Path<(String, String)>,
-) -> Result<Json<StartedView>> {
-    let task = melyxar_app::upkeep::UpkeepTask::parse(&task)
-        .ok_or_else(|| ServerError::invalid_input("there is no such upkeep task"))?;
-    let library = library_of(&state, &id).await?;
-
-    let job = melyxar_app::upkeep::start(
-        &state,
-        task,
-        library,
-        melyxar_core::job::JobPriority::REQUESTED,
-    )
-    .await
-    .map_err(already_running)?;
-
-    Ok(Json(StartedView {
-        job_id: job.id.to_string(),
-    }))
 }
 
 /// Asks a job to stop.
@@ -878,9 +888,9 @@ mod tests {
             said_twice(&format!("refresh.{}", mode.as_str()));
             said_twice(&format!("refresh.{}_why", mode.as_str()));
         }
-        for task in melyxar_app::upkeep::UpkeepTask::ALL {
-            said_twice(&format!("upkeep.{}", task.as_str()));
-            said_twice(&format!("upkeep.{}_why", task.as_str()));
+        for task in melyxar_app::schedule::ScheduledTask::ALL {
+            said_twice(&format!("task.{}", task.as_str()));
+            said_twice(&format!("task.{}_why", task.as_str()));
         }
     }
 

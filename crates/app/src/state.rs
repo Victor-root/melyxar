@@ -57,6 +57,8 @@ struct Inner {
     folder_watch: crate::folder_watch::FolderWatch,
     /// Where the activity journal is written.
     journal: crate::activity::Journal,
+    /// The scheduled tasks running right now.
+    schedule: crate::schedule::Running,
 }
 
 impl AppState {
@@ -118,6 +120,7 @@ impl AppState {
                 measuring: crate::measures::Measuring::new(),
                 watching: crate::watching::Watching::default(),
                 folder_watch: crate::folder_watch::FolderWatch::default(),
+                schedule: crate::schedule::Running::default(),
             }),
         }
     }
@@ -152,6 +155,11 @@ impl AppState {
 
     pub fn jobs(&self) -> &JobRunner {
         &self.inner.jobs
+    }
+
+    /// The scheduled tasks running right now.
+    pub(crate) fn schedule(&self) -> &crate::schedule::Running {
+        &self.inner.schedule
     }
 
     /// What each library has been counted for.
