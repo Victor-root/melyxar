@@ -190,16 +190,23 @@
   padding-top: var(--gap);
 }
 
-/* The setting or card a search led to, lit for a moment in the accent so the
-   eye lands on it. */
-.setting,
-.panel {
-  outline: 2px solid transparent;
-  outline-offset: 6px;
-  transition: outline-color var(--calm) var(--ease);
+/* The card a search led to, pulsing softly twice in the accent once it has
+   scrolled into view, then back as it was. */
+.panel.found {
+  animation: found 1.8s var(--ease) 0.35s 1;
 }
 
-.setting.found,
-.panel.found {
-  outline-color: var(--accent-bright);
+@keyframes found {
+  0%,
+  50%,
+  100% {
+    box-shadow: var(--shadow-card);
+  }
+  25%,
+  75% {
+    box-shadow:
+      var(--shadow-card),
+      0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent),
+      0 0 32px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
 }
