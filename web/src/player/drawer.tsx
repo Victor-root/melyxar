@@ -328,7 +328,6 @@ function everyFewMinutes(length: number): PlaybackChapter[] {
   return marks;
 }
 
-
 /** Who is in it and who made it, faces first. */
 function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number }) {
   const everyone: Credit[] = [...work.cast, ...work.crew];

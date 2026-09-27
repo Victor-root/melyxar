@@ -9,7 +9,7 @@
  */
 
 import type { PlaybackThumbnails } from "../api";
-import type { Turn } from "./overlay";
+import type { Turn } from "./panels";
 
 /** Which thumbnail covers a moment, and where it sits on its sheet. */
 export function spotOf(
