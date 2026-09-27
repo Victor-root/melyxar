@@ -540,7 +540,7 @@ mod tests {
             .await
             .expect("read")
             .expect("the library was declared");
-        state
+        let interrupted = state
             .database()
             .create_job(
                 JobKind::ScanLibrary,
@@ -562,15 +562,18 @@ mod tests {
         );
 
         // The row exists before the work starts, so it is there by the time
-        // this returns rather than at some moment worth waiting for.
+        // this returns rather than at some moment worth waiting for. Found by
+        // being another scan than the one cut short, whether or not it has
+        // ended yet: a library with nothing to walk can be scanned through
+        // before this reads it.
         let taken_up = state
             .database()
             .recent_jobs(10)
             .await
             .expect("read")
             .into_iter()
-            .find(|job| job.kind == JobKind::ScanLibrary && !job.state.is_finished())
-            .expect("a scan is under way again");
+            .find(|job| job.kind == JobKind::ScanLibrary && job.id != interrupted.id)
+            .expect("a scan was started again");
         assert_eq!(
             taken_up.priority,
             JobPriority::BACKGROUND,
