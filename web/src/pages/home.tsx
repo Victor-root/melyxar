@@ -18,6 +18,7 @@ import { Link } from "react-router-dom";
 import type { Card as CardData, HomeSection, Library } from "../api";
 import { Band } from "../components/band";
 import { Card } from "../components/card";
+import { InOrder } from "../components/in-order";
 import type { CardShape } from "../components/card";
 import { Hero } from "../components/hero";
 import { Row, RowHead } from "../components/row";
@@ -121,19 +122,21 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
     carry_on: home.carry_on.length > 0 && (
       <section className="section">
         <RowHead mark={<EyeIcon size={24} />} title={t("home.carry_on")} />
-        <Row>
-          {home.carry_on.map((card) => (
-            <Card
-              key={card.id}
-              card={card}
-              shape="lying"
-              watched={howFarIn(card.position_seconds, lengthOfAPlay(card))}
-              lead={card.series_title ?? undefined}
-              note={whichEpisode(card, t)}
-              trailing={whatIsLeft(card.position_seconds, lengthOfAPlay(card), t)}
-            />
-          ))}
-        </Row>
+        <InOrder cards={home.carry_on}>
+          <Row>
+            {home.carry_on.map((card) => (
+              <Card
+                key={card.id}
+                card={card}
+                shape="lying"
+                watched={howFarIn(card.position_seconds, lengthOfAPlay(card))}
+                lead={card.series_title ?? undefined}
+                note={whichEpisode(card, t)}
+                trailing={whatIsLeft(card.position_seconds, lengthOfAPlay(card), t)}
+              />
+            ))}
+          </Row>
+        </InOrder>
       </section>
     ),
 
@@ -143,17 +146,19 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
     up_next: home.up_next.length > 0 && (
       <section className="section">
         <RowHead mark={<BinocularsIcon size={24} />} title={t("home.up_next")} />
-        <Row>
-          {home.up_next.map((card) => (
-            <Card
-              key={card.id}
-              card={card}
-              shape="lying"
-              lead={card.series_title}
-              note={whichEpisode(card, t)}
-            />
-          ))}
-        </Row>
+        <InOrder cards={home.up_next}>
+          <Row>
+            {home.up_next.map((card) => (
+              <Card
+                key={card.id}
+                card={card}
+                shape="lying"
+                lead={card.series_title}
+                note={whichEpisode(card, t)}
+              />
+            ))}
+          </Row>
+        </InOrder>
       </section>
     ),
 
@@ -176,11 +181,13 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
             </>
           )}
         </RowHead>
-        <Row>
-          {home.recently_added.map((card) => (
-            <Card key={card.id} card={card} />
-          ))}
-        </Row>
+        <InOrder cards={home.recently_added}>
+          <Row>
+            {home.recently_added.map((card) => (
+              <Card key={card.id} card={card} />
+            ))}
+          </Row>
+        </InOrder>
       </section>
     ),
 
@@ -306,11 +313,13 @@ function Shelf<T extends CardData>({
   return (
     <section className="section">
       <RowHead mark={mark} title={title} to={to} />
-      <Row>
-        {cards.map((card) => (
-          <Card key={card.id} card={card} shape={shape} />
-        ))}
-      </Row>
+      <InOrder cards={cards}>
+        <Row>
+          {cards.map((card) => (
+            <Card key={card.id} card={card} shape={shape} />
+          ))}
+        </Row>
+      </InOrder>
     </section>
   );
 }

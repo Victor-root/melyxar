@@ -7,6 +7,7 @@ import { useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Library } from "../api";
 import { Card } from "../components/card";
+import { InOrder } from "../components/in-order";
 import { Grid } from "../components/grid";
 import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
@@ -293,9 +294,11 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
         ref={holder}
       >
         <Selecting items={cards}>
-          <Grid onReachEnd={loadMore} hasMore={more} shape={shape}>
-            {drawn}
-          </Grid>
+          <InOrder cards={cards}>
+            <Grid onReachEnd={loadMore} hasMore={more} shape={shape}>
+              {drawn}
+            </Grid>
+          </InOrder>
         </Selecting>
 
         {/* Only the letters the library really has: a letter leading

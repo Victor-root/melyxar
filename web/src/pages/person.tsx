@@ -12,6 +12,7 @@ import { api } from "../api";
 import type { Person } from "../api";
 import { useAsked } from "../asking";
 import { Card } from "../components/card";
+import { InOrder } from "../components/in-order";
 import { useShownPicture } from "../components/picture";
 import { Row, RowHead } from "../components/row";
 import { useFittedText } from "../fitting";
@@ -57,22 +58,26 @@ export function PersonPage() {
         {films.length > 0 && (
           <section className="section">
             <RowHead mark={<FilmIcon size={24} />} title={t("person.films")} />
-            <Row>
-              {films.map((card) => (
-                <Card key={card.id} card={card} />
-              ))}
-            </Row>
+            <InOrder cards={films}>
+              <Row>
+                {films.map((card) => (
+                  <Card key={card.id} card={card} />
+                ))}
+              </Row>
+            </InOrder>
           </section>
         )}
 
         {series.length > 0 && (
           <section className="section">
             <RowHead mark={<SeriesIcon size={24} />} title={t("person.series")} />
-            <Row>
-              {series.map((card) => (
-                <Card key={card.id} card={card} />
-              ))}
-            </Row>
+            <InOrder cards={series}>
+              <Row>
+                {series.map((card) => (
+                  <Card key={card.id} card={card} />
+                ))}
+              </Row>
+            </InOrder>
           </section>
         )}
       </main>

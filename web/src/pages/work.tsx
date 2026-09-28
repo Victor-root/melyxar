@@ -18,6 +18,7 @@ import { useAccount } from "../account";
 import { useTold } from "../asking";
 import { WayBackUp } from "../components/ancestry";
 import { Card } from "../components/card";
+import { InOrder } from "../components/in-order";
 import { useWorkMenu } from "../components/cardmenu";
 import { Panel, Picker } from "../components/panel";
 import { PersonCard } from "../components/person";
@@ -219,17 +220,19 @@ export function WorkPage() {
             mark={<CollectionIcon size={24} />}
             title={work.saga.name ?? t("work.same_characters")}
           />
-          <Row
-            opensOn={
-              work.saga.name === null
-                ? undefined
-                : work.saga.cards.findIndex((card) => card.id === work.id)
-            }
-          >
-            {work.saga.cards.map((card) => (
-              <Card key={card.id} card={card} here={card.id === work.id} />
-            ))}
-          </Row>
+          <InOrder cards={work.saga.cards}>
+            <Row
+              opensOn={
+                work.saga.name === null
+                  ? undefined
+                  : work.saga.cards.findIndex((card) => card.id === work.id)
+              }
+            >
+              {work.saga.cards.map((card) => (
+                <Card key={card.id} card={card} here={card.id === work.id} />
+              ))}
+            </Row>
+          </InOrder>
         </section>
       )}
 
@@ -240,11 +243,13 @@ export function WorkPage() {
             title={t("work.alike", { genre: work.alike.genre })}
             to={`/library/${work.library_id}?genre=${encodeURIComponent(work.alike.genre)}`}
           />
-          <Row>
-            {work.alike.cards.map((card) => (
-              <Card key={card.id} card={card} />
-            ))}
-          </Row>
+          <InOrder cards={work.alike.cards}>
+            <Row>
+              {work.alike.cards.map((card) => (
+                <Card key={card.id} card={card} />
+              ))}
+            </Row>
+          </InOrder>
         </section>
       )}
 
@@ -1059,11 +1064,13 @@ function WhatHangsUnder({ work }: { work: Work }) {
           ))}
         </Row>
       ) : (
-        <ol className="episode-lines">
-          {work.children.map((child) => (
-            <EpisodeLine key={child.card.id} child={child} />
-          ))}
-        </ol>
+        <InOrder cards={work.children.map((child) => child.card)}>
+          <ol className="episode-lines">
+            {work.children.map((child) => (
+              <EpisodeLine key={child.card.id} child={child} />
+            ))}
+          </ol>
+        </InOrder>
       )}
     </section>
   );
@@ -1128,18 +1135,20 @@ function TheRestOfTheSeason({ work }: { work: Work }) {
       />
       {/* Drawn anew for another season, so it opens on its own episode
           rather than keeping where the last season's row was left. */}
-      <Row key={season.id} opensOn={here < 0 ? undefined : here}>
-        {work.siblings.map((sibling) => (
-          <Card
-            key={sibling.card.id}
-            card={sibling.card}
-            shape="lying"
-            here={sibling.card.id === work.id}
-            lead={nameOfChild(sibling, t)}
-            note={lengthOf(sibling.card, t)}
-          />
-        ))}
-      </Row>
+      <InOrder cards={work.siblings.map((sibling) => sibling.card)}>
+        <Row key={season.id} opensOn={here < 0 ? undefined : here}>
+          {work.siblings.map((sibling) => (
+            <Card
+              key={sibling.card.id}
+              card={sibling.card}
+              shape="lying"
+              here={sibling.card.id === work.id}
+              lead={nameOfChild(sibling, t)}
+              note={lengthOf(sibling.card, t)}
+            />
+          ))}
+        </Row>
+      </InOrder>
     </section>
   );
 }

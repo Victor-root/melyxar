@@ -35,6 +35,8 @@ import { DetailsDialog } from "./details";
 import { DownloadDialog } from "./download";
 import { ForgetIdentityDialog } from "./forgetting";
 import { PicturesDialog } from "./pictures";
+import { playInTurn } from "../queue";
+import { useCardsInOrder } from "./in-order";
 import { useSelection } from "./selection";
 import { useToast } from "./toasts";
 import {
@@ -324,6 +326,14 @@ export function CardMenu({
   const later = marks.watchLaterOf(card);
   const pinned = marks.pinnedOf(card) === true;
   const playable = playsOnItsOwn(card);
+  /* This card and every one after it in its row or grid that plays, in the
+     order shown. */
+  const inOrder = useCardsInOrder();
+  const here = inOrder?.findIndex((one) => one.id === card.id) ?? -1;
+  const fromHere =
+    playable && inOrder && here >= 0
+      ? inOrder.slice(here).filter(playsOnItsOwn).map((one) => one.id)
+      : [];
   const catalogued = isCatalogued(card.identification);
 
   const entries: Entry[] = [
@@ -336,8 +346,11 @@ export function CardMenu({
     {
       key: "play_from_here",
       mark: <PlayAllIcon size={SHAPE} />,
-      allowed: playable,
-      later: true,
+      allowed: fromHere.length > 1,
+      act: () => {
+        playInTurn(fromHere);
+        navigate(`/work/${card.id}?play`);
+      },
     },
     { key: "collection", mark: <CollectionIcon size={SHAPE} />, later: true },
     { key: "playlist", mark: <PlaylistIcon size={SHAPE} />, later: true },
