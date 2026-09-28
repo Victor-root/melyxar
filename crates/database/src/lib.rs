@@ -32,6 +32,7 @@ pub mod openings;
 pub mod own;
 pub mod people;
 pub mod playback;
+pub mod ratings;
 pub mod sessions;
 pub mod schedule;
 pub mod settings;

@@ -347,6 +347,24 @@ impl Database {
         Ok(())
     }
 
+    /// The key OMDb gave the administrator, when one was given. Its own small
+    /// query for the same reason as the switch above.
+    pub async fn omdb_key(&self) -> Result<Option<String>> {
+        Ok(sqlx::query_scalar("SELECT omdb_key FROM server_settings WHERE id = 1")
+            .fetch_one(self.reader())
+            .await?)
+    }
+
+    /// Keeps the key OMDb gave the administrator, or forgets it with nothing.
+    pub async fn set_omdb_key(&self, key: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET omdb_key = ?, updated_at = ? WHERE id = 1")
+            .bind(key)
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// What the server allows the films it converts: how many at once, and
     /// how much of the disk their segments may fill.
     ///
@@ -557,6 +575,16 @@ mod tests {
         let settings = database.server_settings().await.expect("read");
         assert_eq!(settings.server_name, "Home Cinema");
         assert_eq!(settings.activity_retention_days, 30);
+    }
+
+    #[tokio::test]
+    async fn the_omdb_key_is_kept_and_forgotten() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.omdb_key().await.expect("read"), None);
+        database.set_omdb_key(Some("abcd1234")).await.expect("kept");
+        assert_eq!(database.omdb_key().await.expect("read").as_deref(), Some("abcd1234"));
+        database.set_omdb_key(None).await.expect("forgotten");
+        assert_eq!(database.omdb_key().await.expect("read"), None);
     }
 
     #[tokio::test]

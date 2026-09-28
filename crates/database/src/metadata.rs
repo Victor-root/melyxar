@@ -756,6 +756,7 @@ impl Database {
         for statement in [
             "DELETE FROM images WHERE owner_kind = 'work' AND owner_id IN (SELECT id FROM tree)",
             "DELETE FROM work_external_ids WHERE work_id IN (SELECT id FROM tree)",
+            "DELETE FROM work_ratings WHERE work_id IN (SELECT id FROM tree)",
             "DELETE FROM work_translations WHERE work_id IN (SELECT id FROM tree)",
             "DELETE FROM work_genres WHERE work_id IN (SELECT id FROM tree)",
             "DELETE FROM work_studios WHERE work_id IN (SELECT id FROM tree)",
@@ -858,6 +859,18 @@ impl Database {
         .execute(&mut *transaction)
         .await?;
 
+        // Ratings from elsewhere belong to the work the provider named, and
+        // go when it names another.
+        sqlx::query(
+            "DELETE FROM work_ratings WHERE work_id = ?1 AND NOT EXISTS (
+                SELECT 1 FROM work_external_ids
+                 WHERE work_id = ?1 AND provider = ?2 AND external_id = ?3)",
+        )
+        .bind(work_id.to_db_string())
+        .bind(&found.provider)
+        .bind(&found.external_id)
+        .execute(&mut *transaction)
+        .await?;
         set_external_id(
             &mut transaction,
             work_id,
@@ -1575,6 +1588,50 @@ mod tests {
                 url: "https://www.youtube.com/watch?v=abc".to_string(),
             }],
         }
+    }
+
+    #[tokio::test]
+    async fn ratings_from_elsewhere_go_with_the_work_they_were_given_for() {
+        use melyxar_core::rating::RatingSource;
+        let (database, work) = work_in_library().await;
+        let rated = |database: Database| async move {
+            database
+                .write_ratings(RatingSource::Imdb, &[(work.id, Some((7.0, Some(10))))])
+                .await
+                .expect("rated");
+        };
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("named");
+        rated(database.clone()).await;
+
+        database
+            .apply_identification(work.id, &found(), false)
+            .await
+            .expect("named again");
+        assert_eq!(
+            database.work_ratings(work.id).await.expect("read").len(),
+            1,
+            "the same work named again keeps its ratings"
+        );
+
+        let another = IdentifiedWork {
+            external_id: "222".to_string(),
+            ..found()
+        };
+        database
+            .apply_identification(work.id, &another, true)
+            .await
+            .expect("named otherwise");
+        assert!(database.work_ratings(work.id).await.expect("read").is_empty());
+
+        rated(database.clone()).await;
+        database
+            .clear_identification(work.id)
+            .await
+            .expect("cleared");
+        assert!(database.work_ratings(work.id).await.expect("read").is_empty());
     }
 
     #[tokio::test]
