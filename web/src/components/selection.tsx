@@ -156,7 +156,7 @@ export function SelectMark({ id }: { id: string }) {
         selection.press(id, event.shiftKey);
       }}
     >
-      <TickIcon size={16} />
+      <TickIcon size={14} />
     </button>
   );
 }
