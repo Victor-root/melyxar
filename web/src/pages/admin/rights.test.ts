@@ -36,6 +36,7 @@ describe("settled", () => {
       libraries: [],
       may_delete: true,
       may_delete_from_disk: true,
+      may_download: true,
       most_streams: null,
     });
   });

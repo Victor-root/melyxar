@@ -364,8 +364,12 @@ function RightsLines({
               onPick={(value) => set({ most_streams: value === "" ? null : Number(value) })}
             />
           </Setting>
-          <Setting label={t("admin.right.may_download")} soon>
-            <Toggle label={t("admin.right.may_download")} checked={false} onChange={() => {}} disabled />
+          <Setting label={t("admin.right.may_download")} why={t("users.may_download_why")}>
+            <Toggle
+              label={t("admin.right.may_download")}
+              checked={rights.may_download}
+              onChange={(may_download) => set({ may_download })}
+            />
           </Setting>
           <Setting label={t("admin.limit_age")} soon>
             <Toggle label={t("admin.limit_age")} checked={false} onChange={() => {}} disabled />

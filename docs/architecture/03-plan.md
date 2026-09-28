@@ -339,6 +339,7 @@ Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
 
 ## Après la V0.1
 
+- **Télécharger. Fait** : le fichier d'origine, sous son nom, pour un film ou un épisode, avec le choix de la version quand il y en a plusieurs. Réservé aux comptes qui ont le droit « Télécharger des médias », désormais réglable dans Utilisateurs (coupé par défaut, toujours accordé à un administrateur), et refusé par le serveur à tout autre compte comme à toute bibliothèque non accordée.
 - **Supprimer l'identification et actualiser les métadonnées. Faits**, depuis le menu de la fiche et des cartes (voir le README des décisions).
 - **Modifier les métadonnées à la main. Fait.** Depuis le menu de la fiche et des cartes, pour l'administrateur : titre, slogan, résumé, date de sortie (et de fin pour une série), année, note, classification, genres, studios, distribution et équipe, chaque champ modifié verrouillé contre les actualisations et déverrouillable (voir le README des décisions). Les dates complètes viennent aussi du fournisseur, et la fiche affiche le jour de sortie, ou les années d'une série terminée.
 - Séries : **corriger un générique à la main. Fait**, depuis le lecteur plutôt que depuis la fiche (voir le README des décisions) : une fenêtre « Générique » pour l'administrateur, qui passe devant ce que le fichier dit et devant ce que l'écoute a trouvé.
