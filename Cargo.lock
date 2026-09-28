@@ -1312,6 +1312,7 @@ dependencies = [
 name = "melyxar-app"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "melyxar-auth",
  "melyxar-config",
  "melyxar-container",
@@ -1447,6 +1448,7 @@ dependencies = [
 name = "melyxar-metadata"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "melyxar-core",
  "reqwest",
  "serde",

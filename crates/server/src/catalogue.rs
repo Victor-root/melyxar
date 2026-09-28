@@ -813,6 +813,8 @@ struct WorkView {
     versions: Vec<VersionView>,
     trailers: Vec<TrailerView>,
     external_ids: Vec<ExternalIdView>,
+    /// What IMDb's viewers and Rotten Tomatoes' critics made of it.
+    ratings: Vec<RatingView>,
     /// The seasons of a series, the episodes of a season, in order. Empty for
     /// anything met on its own.
     children: Vec<ChildView>,
@@ -1016,6 +1018,15 @@ struct TrailerView {
 struct ExternalIdView {
     provider: String,
     id: String,
+}
+
+/// One rating from elsewhere: out of ten for IMDb, out of a hundred for
+/// Rotten Tomatoes.
+#[derive(Debug, Serialize)]
+struct RatingView {
+    source: &'static str,
+    value: f64,
+    votes: Option<i64>,
 }
 
 async fn work(
@@ -1239,6 +1250,15 @@ fn work_view(detail: &WorkDetail) -> WorkView {
             .map(|(provider, id)| ExternalIdView {
                 provider: provider.clone(),
                 id: id.clone(),
+            })
+            .collect(),
+        ratings: detail
+            .ratings
+            .iter()
+            .map(|rating| RatingView {
+                source: rating.source.as_str(),
+                value: rating.value,
+                votes: rating.votes,
             })
             .collect(),
     }

@@ -9,6 +9,7 @@
 
 use axum::extract::State;
 use axum::{Json, Router};
+use melyxar_app::ratings::KeyTried;
 use melyxar_app::settings::TranscodingLimits;
 use melyxar_app::AppState;
 use serde::{Deserialize, Serialize};
@@ -43,6 +44,12 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/settings/server/door/slogan",
             axum::routing::put(write_door_slogan),
+        )
+        .route(
+            "/api/v1/settings/ratings",
+            axum::routing::get(ratings_settings)
+                .put(set_omdb_key)
+                .delete(forget_omdb_key),
         )
         .route(
             "/api/v1/settings/server/door/picture",
@@ -195,6 +202,62 @@ async fn remove_door_picture(
 ) -> Result<Json<ServerView>> {
     melyxar_app::server::remove_door_picture(&state).await?;
     ServerView::of(&state).await
+}
+
+/// Where the ratings from elsewhere stand: when IMDb's file was last
+/// fetched, and whether a key for OMDb was given, never the key itself.
+#[derive(Debug, Serialize)]
+struct RatingsView {
+    #[serde(with = "time::serde::rfc3339::option")]
+    imdb_fetched_at: Option<melyxar_core::time::Timestamp>,
+    has_omdb_key: bool,
+    /// What trying the key just typed came to: kept, refused or unreachable.
+    tried: Option<&'static str>,
+}
+
+impl RatingsView {
+    async fn of(state: &AppState, tried: Option<KeyTried>) -> Result<Json<Self>> {
+        Ok(Json(Self {
+            imdb_fetched_at: melyxar_app::ratings::imdb_fetched_at(state).await,
+            has_omdb_key: melyxar_app::ratings::has_omdb_key(state).await?,
+            tried: tried.map(|tried| match tried {
+                KeyTried::Kept => "kept",
+                KeyTried::Refused => "refused",
+                KeyTried::Unreachable => "unreachable",
+            }),
+        }))
+    }
+}
+
+async fn ratings_settings(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+) -> Result<Json<RatingsView>> {
+    RatingsView::of(&state, None).await
+}
+
+#[derive(Debug, Deserialize)]
+struct KeyGiven {
+    omdb_key: String,
+}
+
+/// Tries the OMDb key typed, and keeps it once OMDb has taken it.
+async fn set_omdb_key(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    Json(given): Json<KeyGiven>,
+) -> Result<Json<RatingsView>> {
+    let tried = melyxar_app::ratings::set_omdb_key(&state, &given.omdb_key).await?;
+    RatingsView::of(&state, Some(tried)).await
+}
+
+/// Forgets the OMDb key, which stops the critics being asked.
+async fn forget_omdb_key(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+) -> Result<Json<RatingsView>> {
+    melyxar_app::ratings::forget_omdb_key(&state).await?;
+    RatingsView::of(&state, None).await
 }
 
 #[derive(Debug, Serialize, Deserialize)]

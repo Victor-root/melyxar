@@ -336,6 +336,14 @@ pub trait MetadataProvider: Send + Sync {
         language: &str,
     ) -> impl Future<Output = Result<Vec<OfferedPicture>>> + Send;
 
+    /// What IMDb calls one work, which ratings from elsewhere are looked up
+    /// by. A series is not described with it, so it is asked for on its own.
+    fn imdb_id(
+        &self,
+        catalogue: Catalogue,
+        external_id: &str,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
+
     /// The work an identifier from another site stands for.
     ///
     /// This is what makes a description file worth reading: an identifier can

@@ -143,7 +143,7 @@ const fn road_of(catalogue: Catalogue) -> &'static str {
 const fn extras_of(catalogue: Catalogue) -> &'static str {
     match catalogue {
         Catalogue::Films => "credits,release_dates,videos,images",
-        Catalogue::Series => "credits,content_ratings,videos,images",
+        Catalogue::Series => "credits,content_ratings,videos,images,external_ids",
     }
 }
 
@@ -334,6 +334,16 @@ impl MetadataProvider for TmdbProvider {
         Ok(offered)
     }
 
+    async fn imdb_id(&self, catalogue: Catalogue, external_id: &str) -> Result<Option<String>> {
+        let ids: RawExternalIds = self
+            .get(
+                &format!("/{}/{external_id}/external_ids", road_of(catalogue)),
+                &[],
+            )
+            .await?;
+        Ok(ids.imdb_id())
+    }
+
     async fn by_imdb_id(&self, imdb_id: &str, language: &str) -> Result<Option<Candidate>> {
         let found: FindResponse = self
             .get(
@@ -383,6 +393,20 @@ struct SearchResponse {
     results: Vec<RawMovie>,
 }
 
+/// What a work is called on other sites.
+#[derive(Debug, Default, Deserialize)]
+struct RawExternalIds {
+    #[serde(default)]
+    imdb_id: Option<String>,
+}
+
+impl RawExternalIds {
+    /// The IMDb identifier, when it has the shape of one.
+    fn imdb_id(self) -> Option<String> {
+        self.imdb_id.filter(|value| value.starts_with("tt"))
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct FindResponse {
     #[serde(default)]
@@ -418,8 +442,12 @@ struct RawMovie {
 #[derive(Debug, Deserialize)]
 struct DetailsResponse {
     id: i64,
+    /// Said by a film itself, and by a series only among its identifiers
+    /// elsewhere.
     #[serde(default)]
     imdb_id: Option<String>,
+    #[serde(default)]
+    external_ids: Option<RawExternalIds>,
     #[serde(default, alias = "name")]
     title: Option<String>,
     #[serde(default, alias = "original_name")]
@@ -785,7 +813,11 @@ fn details_from(raw: DetailsResponse, language: &str) -> Details {
 
     Details {
         external_id: raw.id.to_string(),
-        imdb_id: raw.imdb_id.filter(|value| value.starts_with("tt")),
+        imdb_id: RawExternalIds {
+            imdb_id: raw.imdb_id,
+        }
+        .imdb_id()
+        .or_else(|| raw.external_ids.and_then(RawExternalIds::imdb_id)),
         title: raw
             .title
             .clone()
@@ -1213,6 +1245,21 @@ mod tests {
         assert_eq!(candidates[0].title, "Quiet Harbour");
         assert_eq!(candidates[0].release_year, Some(2019));
         assert_eq!(candidates[1].overview, None, "an empty text is no text");
+    }
+
+    #[test]
+    fn a_series_gives_its_imdb_identifier_among_those_elsewhere() {
+        let raw: DetailsResponse = serde_json::from_str(
+            r#"{"id": 222, "name": "Amber Field", "external_ids": {"imdb_id": "tt0000222"}}"#,
+        )
+        .expect("the answer parses");
+        assert_eq!(details_from(raw, "fr").imdb_id.as_deref(), Some("tt0000222"));
+
+        let raw: DetailsResponse = serde_json::from_str(
+            r#"{"id": 222, "name": "Amber Field", "external_ids": {"imdb_id": ""}}"#,
+        )
+        .expect("the answer parses");
+        assert_eq!(details_from(raw, "fr").imdb_id, None, "an empty identifier is none");
     }
 
     #[test]

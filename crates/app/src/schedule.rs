@@ -1,12 +1,13 @@
-//! The six scheduled tasks, each valid for every library.
+//! The seven scheduled tasks, each valid for every library.
 //!
 //! Where there used to be one nightly run of four readings shown library by
-//! library, there are six tasks: the scan, the look up, and the four readings
-//! of the files. Each runs over every library it concerns, one library after
-//! the other, and each has its own switch and time of day. Several falling due
-//! together run one after the other in the order they are listed, which is the
-//! order each needs the one before it: a file has to be found before it can be
-//! named, and named before anybody waits on its pictures.
+//! library, there are seven tasks: the scan, the look up, the ratings from
+//! elsewhere, and the four readings of the files. Each runs over every library
+//! it concerns, one library after the other, and each has its own switch and
+//! time of day. Several falling due together run one after the other in the
+//! order they are listed, which is the order each needs the one before it: a
+//! file has to be found before it can be named, and named before anybody waits
+//! on its pictures or its ratings.
 //!
 //! What a library wants of the heavy readings is its own affair
 //! (`LibraryOptions`): a task passes by a library that does not want it, and
@@ -23,7 +24,7 @@ use melyxar_core::time::Timestamp;
 use crate::upkeep::UpkeepTask;
 use crate::{AppError, AppState, Result};
 
-/// One of the six scheduled tasks.
+/// One of the seven scheduled tasks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScheduledTask {
     /// Walks every library for what was added, moved or removed, and follows
@@ -31,6 +32,8 @@ pub enum ScheduledTask {
     Scan,
     /// Looks up the works still without a name.
     Identify,
+    /// Brings the ratings from IMDb and Rotten Tomatoes up to date.
+    Ratings,
     /// One of the readings that go through the files.
     Reading(UpkeepTask),
 }
@@ -38,9 +41,10 @@ pub enum ScheduledTask {
 impl ScheduledTask {
     /// Every task, in the order they are shown and in the order several due
     /// together are run.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Scan,
         Self::Identify,
+        Self::Ratings,
         Self::Reading(UpkeepTask::KeyFrames),
         Self::Reading(UpkeepTask::Subtitles),
         Self::Reading(UpkeepTask::Thumbnails),
@@ -51,6 +55,7 @@ impl ScheduledTask {
         match self {
             Self::Scan => "scan",
             Self::Identify => "identify",
+            Self::Ratings => "ratings",
             Self::Reading(task) => task.as_str(),
         }
     }
@@ -59,6 +64,7 @@ impl ScheduledTask {
         match value {
             "scan" => Some(Self::Scan),
             "identify" => Some(Self::Identify),
+            "ratings" => Some(Self::Ratings),
             other => UpkeepTask::parse(other).map(Self::Reading),
         }
     }
@@ -68,6 +74,7 @@ impl ScheduledTask {
         match self {
             Self::Scan => JobKind::ScanLibrary,
             Self::Identify => JobKind::IdentifyWork,
+            Self::Ratings => JobKind::FetchRatings,
             Self::Reading(task) => task.job_kind(),
         }
     }
@@ -84,6 +91,7 @@ impl ScheduledTask {
             Self::Identify => {
                 state.metadata_provider().is_some() && library.kind.is_catalogued()
             }
+            Self::Ratings => library.kind.is_catalogued(),
             Self::Reading(task) => task.applies_to(library),
         }
     }
@@ -99,6 +107,7 @@ impl ScheduledTask {
                     .count_awaiting_identification(Some(library.id))
                     .await?,
             ),
+            Self::Ratings => Some(crate::ratings::waiting_on(state, library).await?),
             Self::Reading(task) => {
                 Some(crate::upkeep::what_is_waiting_for(state, task, library.id).await?)
             }
@@ -342,6 +351,11 @@ async fn run_on(
                 .await
                 .0
         }
+        ScheduledTask::Ratings => crate::ratings::start(state, library, priority)
+            .await?
+            .completion
+            .await
+            .unwrap_or(JobState::Failed),
         ScheduledTask::Reading(reading) => crate::upkeep::start(state, reading, library, priority)
             .await?
             .completion
@@ -477,6 +491,7 @@ mod tests {
         assert_eq!(ScheduledTask::parse("nothing"), None);
         assert_eq!(ScheduledTask::ALL[0], ScheduledTask::Scan, "a file is found first");
         assert_eq!(ScheduledTask::ALL[1], ScheduledTask::Identify, "then named");
+        assert_eq!(ScheduledTask::ALL[2], ScheduledTask::Ratings, "then rated, by its name");
     }
 
     #[test]

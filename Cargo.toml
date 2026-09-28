@@ -73,6 +73,10 @@ notify = { version = "8.2", default-features = false }
 # store being verified against by default. "query" and "form" became features
 # of their own in the same release, and the provider's key travels as a query.
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "gzip", "query"] }
+# Reads the file of ratings IMDb publishes each day, which is compressed as a
+# file rather than for the journey, so the client's own decoding never sees it.
+# Already there under the client, so nothing new is built.
+flate2 = "1"
 # Password hashing, the memory hard kind: a stolen database must stay useless.
 argon2 = "0.6"
 # For the fingerprint of a session token. Deliberately not Argon2: a token is

@@ -46,6 +46,9 @@ pub struct WorkDetail {
     /// Trailers, the local ones first since they play without leaving here.
     pub trailers: Vec<TrailerLink>,
     pub external_ids: Vec<(String, String)>,
+    /// What IMDb's viewers and Rotten Tomatoes' critics made of it, when the
+    /// server has heard.
+    pub ratings: Vec<melyxar_core::rating::Rating>,
     /// What hangs under this one, in order: the seasons of a series, the
     /// episodes of a season. Empty for anything met on its own.
     pub children: Vec<ChildWork>,
@@ -536,6 +539,7 @@ pub async fn work_detail(
         collection: database.work_collection(work_id).await?,
         images,
         external_ids: database.work_external_ids(work_id).await?,
+        ratings: database.work_ratings(work_id).await?,
         versions,
         trailers,
         work,

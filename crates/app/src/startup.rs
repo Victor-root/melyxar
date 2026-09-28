@@ -157,6 +157,11 @@ pub async fn take_up_again_what_a_restart_cut_short(state: &AppState, cut_short:
             )
             .await
             .map(|_| ()),
+            JobKind::FetchRatings => {
+                crate::ratings::start(state, library.clone(), JobPriority::BACKGROUND)
+                    .await
+                    .map(|_| ())
+            }
             // Everything else is short enough that the next thing to ask for
             // it will do it, and starting it here would only be guessing at
             // what somebody wanted an hour ago.

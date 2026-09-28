@@ -52,6 +52,9 @@ pub enum JobKind {
     ListenForOpenings,
     PurgeActivity,
     Backup,
+    /// Fetches the ratings a work carries from elsewhere than its provider:
+    /// IMDb's, and Rotten Tomatoes' when a key for OMDb was given.
+    FetchRatings,
 }
 
 impl JobKind {
@@ -61,7 +64,7 @@ impl JobKind {
     /// several things have to cover all of them: the interface needs a
     /// sentence for each, and a kind with none reaches the screen as its own
     /// name.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::ScanLibrary,
         Self::IdentifyWork,
         Self::ReadCopyAgain,
@@ -73,6 +76,7 @@ impl JobKind {
         Self::ListenForOpenings,
         Self::PurgeActivity,
         Self::Backup,
+        Self::FetchRatings,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -88,6 +92,7 @@ impl JobKind {
             Self::ListenForOpenings => "listen_for_openings",
             Self::PurgeActivity => "purge_activity",
             Self::Backup => "backup",
+            Self::FetchRatings => "fetch_ratings",
         }
     }
 
@@ -104,6 +109,7 @@ impl JobKind {
             "listen_for_openings" => Some(Self::ListenForOpenings),
             "purge_activity" => Some(Self::PurgeActivity),
             "backup" => Some(Self::Backup),
+            "fetch_ratings" => Some(Self::FetchRatings),
             _ => None,
         }
     }
@@ -142,11 +148,17 @@ pub enum JobStep {
     /// Taking the picture of each video and photo somebody filmed or took
     /// themselves out of the file itself.
     PicturingOwnFiles,
+    /// Asking the provider what IMDb calls the works that do not say.
+    LookingUpImdbIds,
+    /// Reading the ratings of the works out of the file IMDb publishes.
+    ReadingImdbRatings,
+    /// Asking OMDb what the critics gathered by Rotten Tomatoes made of them.
+    AskingOmdb,
 }
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 13] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
@@ -157,6 +169,9 @@ impl JobStep {
         Self::AskingTheProvider,
         Self::FillingInWhatIsMissing,
         Self::PicturingOwnFiles,
+        Self::LookingUpImdbIds,
+        Self::ReadingImdbRatings,
+        Self::AskingOmdb,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -171,6 +186,9 @@ impl JobStep {
             Self::AskingTheProvider => "asking_the_provider",
             Self::FillingInWhatIsMissing => "filling_in_what_is_missing",
             Self::PicturingOwnFiles => "picturing_own_files",
+            Self::LookingUpImdbIds => "looking_up_imdb_ids",
+            Self::ReadingImdbRatings => "reading_imdb_ratings",
+            Self::AskingOmdb => "asking_omdb",
         }
     }
 
@@ -186,6 +204,9 @@ impl JobStep {
             "asking_the_provider" => Some(Self::AskingTheProvider),
             "filling_in_what_is_missing" => Some(Self::FillingInWhatIsMissing),
             "picturing_own_files" => Some(Self::PicturingOwnFiles),
+            "looking_up_imdb_ids" => Some(Self::LookingUpImdbIds),
+            "reading_imdb_ratings" => Some(Self::ReadingImdbRatings),
+            "asking_omdb" => Some(Self::AskingOmdb),
             _ => None,
         }
     }
