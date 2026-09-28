@@ -252,6 +252,9 @@ struct FiltersView {
     /// The letters titles really start with, in order, the bucket for
     /// everything else first.
     initials: Vec<CountedView>,
+    /// How many works still wait for a name, so the filter for them is only
+    /// offered while there are some.
+    awaiting_identification: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -271,8 +274,9 @@ async fn filters(
     Viewer(who): Viewer,
     Path(id): Path<String>,
 ) -> Result<Json<FiltersView>> {
-    let found =
+    let counted =
         melyxar_app::catalogue::filters(&state, Some(parse_library(&id)?), &who).await?;
+    let found = counted.filters;
     Ok(Json(FiltersView {
         genres: found
             .genres
@@ -289,6 +293,7 @@ async fn filters(
             .into_iter()
             .map(|(name, works)| CountedView { name, works })
             .collect(),
+        awaiting_identification: counted.awaiting_identification,
     }))
 }
 

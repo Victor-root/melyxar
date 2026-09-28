@@ -352,11 +352,25 @@
 /* A hairline of its own rather than a border on the line below it: a border
    takes the link's own corner radius and rounds off at both ends, which on a
    straight rule reads as a line that has been chewed. */
-.quick-search-divider,
-.header-menu-divider {
+.quick-search-divider {
   margin: 4px 8px;
   height: 1px;
   background: var(--border);
+}
+
+/* Between the families of a menu: a soft stroke of accent, round at both
+   ends and fading out towards them, rather than a hard grey rule. */
+.header-menu-divider {
+  margin: 6px 14px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--accent) 70%, transparent) 20%,
+    color-mix(in srgb, var(--accent) 70%, transparent) 80%,
+    transparent
+  );
 }
 
 .quick-search-all {

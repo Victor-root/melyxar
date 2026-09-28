@@ -291,7 +291,8 @@ export function Card({
           </div>
         )}
 
-        {(shown || choosing.selecting || choosing.chosen) && <SelectMark id={card.id} />}
+        {/* Only once a choice is being made: it starts from the card's menu. */}
+        {choosing.selecting && <SelectMark id={card.id} />}
 
         {/* How far in this film already is, drawn on the picture itself: it is
             the one thing that tells two cards of a row apart at a glance. */}
