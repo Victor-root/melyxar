@@ -2,7 +2,7 @@
  * A grid of a whole library, with what narrows it.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Library } from "../api";
@@ -11,7 +11,7 @@ import { InOrder } from "../components/in-order";
 import { Grid } from "../components/grid";
 import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
-import { ArrowRightIcon, CloseIcon, IdentifyIcon } from "../icons";
+import { ArrowRightIcon, ChevronRightIcon, CloseIcon, IdentifyIcon } from "../icons";
 import { useMarks } from "../marks";
 import { letterOfTheTopRow } from "../letters";
 import { cardShapeOf, nameOfKind } from "../libraries";
@@ -51,6 +51,14 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
   const holder = useRef<HTMLDivElement>(null);
   const [jumping, setJumping] = useState<string | null>(null);
   const [landing, setLanding] = useState<{ work: string; letter: string } | null>(null);
+  /* Where the letter last jumped to begins, marked in the grid itself: its
+     row may open on the last titles of the letter before. Kept until another
+     letter is chosen or the grid is read another way. */
+  const [starts, setStarts] = useState<{ work: string; letter: string } | null>(null);
+  useEffect(
+    () => setStarts(null),
+    [order, descending, genre, decade, search, unidentified, narrowing.library, narrowing.kind],
+  );
   /* The letter of the titles at the top of the screen, lit on the rail. */
   const [reading, setReading] = useState<string | null>(null);
   /* The letter just jumped to, and where the page stood once it got there.
@@ -71,6 +79,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
       .then(async (page) => {
         const first = page.cards[0]?.id;
         if (first && (await reach(first))) {
+          setStarts({ work: first, letter });
           setLanding({ work: first, letter });
         }
       })
@@ -87,7 +96,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
     }
     const { work, letter } = landing;
     const target = holder.current?.querySelector<HTMLElement>(
-      `[data-card="${CSS.escape(work)}"]`,
+      `[data-starts="${CSS.escape(work)}"], [data-card="${CSS.escape(work)}"]`,
     );
     // Not drawn yet: the cards that hold it are on their way to the screen,
     // and this runs again when they arrive.
@@ -177,8 +186,19 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
      drawn again each time the top row reached another letter: measured,
      most of what the page did while it was being scrolled. */
   const drawn = useMemo(
-    () => cards.map((card) => <Card key={card.id} card={card} shape={shape} />),
-    [cards, shape],
+    () =>
+      cards.map((card) => (
+        <Fragment key={card.id}>
+          {starts?.work === card.id && (
+            <div className={`letter-starts letter-starts-${shape}`} data-starts={card.id} aria-hidden="true">
+              <span>{starts.letter.toUpperCase()}</span>
+              <ChevronRightIcon size={40} />
+            </div>
+          )}
+          <Card card={card} shape={shape} />
+        </Fragment>
+      )),
+    [cards, shape, starts],
   );
 
   return (
