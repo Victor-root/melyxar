@@ -103,6 +103,27 @@ function picturesDropped(element: HTMLVideoElement): number {
   return quality ? quality.droppedVideoFrames : 0;
 }
 
+/** How often the picture is weighed against the sound in the journal. */
+const PICTURE_AND_SOUND_EVERY_MS = 10_000;
+
+/**
+ * How far, in milliseconds, the picture about to be shown stands behind the
+ * clock the sound runs on: positive when the picture is late.
+ *
+ * The clock is read when the browser calls back, a moment before the picture
+ * reaches the screen, so it is carried forward to that moment first.
+ */
+export function pictureBehindMs(
+  clockSecond: number,
+  pictureSecond: number,
+  now: number,
+  shownAt: number,
+  rate: number,
+): number {
+  const clockWhenShown = clockSecond + ((shownAt - now) / 1000) * rate;
+  return (clockWhenShown - pictureSecond) * 1000;
+}
+
 /** What following one film hands back to whoever set it going. */
 export interface Watching {
   /** Stops following it, which the player calls when the element goes. */
@@ -423,6 +444,55 @@ export function watchTheReading(element: HTMLVideoElement, reading: Reading): Wa
 
   const ticking = window.setInterval(look, LOOK_EVERY_MS);
 
+  /* The picture weighed against the sound, picture by picture, and said as
+     an average over a stretch of playing. Nothing else here can see a
+     picture that runs late on a clock that never stops. */
+  let weighing: number | null = null;
+  let weighedSince = performance.now();
+  let behindSum = 0;
+  let behindWorst = 0;
+  let behindCount = 0;
+  const weigh = (now: number, picture: VideoFrameCallbackMetadata) => {
+    weighing = element.requestVideoFrameCallback(weigh);
+    if (element.paused || element.seeking) {
+      weighedSince = now;
+      behindSum = 0;
+      behindWorst = 0;
+      behindCount = 0;
+      return;
+    }
+    const behind = pictureBehindMs(
+      element.currentTime,
+      picture.mediaTime,
+      now,
+      picture.expectedDisplayTime,
+      element.playbackRate,
+    );
+    behindSum += behind;
+    behindCount += 1;
+    if (Math.abs(behind) > Math.abs(behindWorst)) {
+      behindWorst = behind;
+    }
+    if (now - weighedSince >= PICTURE_AND_SOUND_EVERY_MS && behindCount > 0) {
+      tell({
+        ...reading,
+        saw: "picture_and_sound",
+        at_second: element.currentTime,
+        over_ms: Math.round(now - weighedSince),
+        samples: behindCount,
+        picture_behind_ms: Math.round(behindSum / behindCount),
+        worst_behind_ms: Math.round(behindWorst),
+      });
+      weighedSince = now;
+      behindSum = 0;
+      behindWorst = 0;
+      behindCount = 0;
+    }
+  };
+  if (element.requestVideoFrameCallback) {
+    weighing = element.requestVideoFrameCallback(weigh);
+  }
+
   /* The opening seconds picture by picture, which is the only way a stutter
      of a picture or two as a film starts reaches the journal at all. */
   const stopFollowingTheOpening = followTheOpening(element, (opening) =>
@@ -457,6 +527,9 @@ export function watchTheReading(element: HTMLVideoElement, reading: Reading): Wa
     },
     stop: () => {
       window.clearInterval(ticking);
+      if (weighing !== null) {
+        element.cancelVideoFrameCallback?.(weighing);
+      }
       stopFollowingTheOpening();
       window.clearTimeout(startedOrNot);
       window.clearTimeout(settling);
