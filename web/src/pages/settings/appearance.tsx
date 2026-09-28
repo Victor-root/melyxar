@@ -16,6 +16,7 @@ import {
   BellIcon,
   ClockIcon,
   CollectionIcon,
+  PlaylistIcon,
   DashboardIcon,
   GearIcon,
   HeartIcon,
@@ -156,6 +157,7 @@ const BUTTON_NAMES: Record<HeaderButton, string> = {
   favourites: "nav.favourites",
   watch_later: "nav.watch_later",
   collections: "nav.collections",
+  playlists: "nav.playlists",
   notifications: "nav.notifications",
   scan: "home.scan",
   administration: "nav.administration",
@@ -246,6 +248,8 @@ function ButtonMark({ button }: { button: HeaderButton }) {
       return <ClockIcon size={18} />;
     case "collections":
       return <CollectionIcon size={18} />;
+    case "playlists":
+      return <PlaylistIcon size={18} />;
     case "scan":
       return <RefreshIcon size={18} />;
     case "administration":

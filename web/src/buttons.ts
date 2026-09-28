@@ -11,6 +11,7 @@ export const EVERY_HEADER_BUTTON: HeaderButton[] = [
   "favourites",
   "watch_later",
   "collections",
+  "playlists",
   "notifications",
   "scan",
   "administration",

@@ -1,9 +1,9 @@
 /*
- * The server's collections: the window that puts a title in them, the page
- * listing them, and the page of one.
+ * Collections and playlists: the window that puts a title in them, and the
+ * head of the page of one.
  */
 
-.collect-lines {
+.lists-lines {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -12,7 +12,7 @@
   list-style: none;
 }
 
-.collect-line {
+.lists-line {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -28,11 +28,11 @@
   transition: border-color var(--quick) var(--ease);
 }
 
-.collect-line:hover {
+.lists-line:hover {
   border-color: var(--accent-bright);
 }
 
-.collect-mark {
+.lists-mark {
   display: grid;
   place-items: center;
   flex: none;
@@ -43,48 +43,114 @@
   color: var(--accent-contrast);
 }
 
-.collect-line-in .collect-mark {
+.lists-line-in .lists-mark {
   border-color: var(--accent);
   background: var(--accent);
 }
 
-.collect-name {
+.lists-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.collect-new {
+.lists-new {
   display: flex;
   gap: var(--gap-tight);
   margin-top: var(--gap);
 }
 
-.collect-new .field-line {
+.lists-new .field-line {
   flex: 1;
   min-width: 0;
 }
 
-/* The name of a collection, how many titles it holds, and what can be done
+/* The name of a list, how many titles it holds, and what can be done
    with it, on one line while there is room. */
-.collection-head {
+.list-head {
   flex-wrap: wrap;
   gap: var(--gap);
 }
 
-.collection-count {
+.list-count {
   color: var(--text-soft);
 }
 
-.collection-actions {
+.list-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--gap-tight);
   margin-left: auto;
 }
 
-.collection-rename {
+.list-rename {
   margin-top: 0;
   flex: 0 1 420px;
+}
+
+/* One title of a playlist: its still, its name and what it is, and what
+   takes it out, on a line dragged into its place. */
+.playlist-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 860px;
+}
+
+.playlist-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  width: 100%;
+  padding: 6px 0;
+}
+
+.playlist-line .card {
+  flex: none;
+  width: 180px;
+}
+
+.playlist-line-words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.playlist-line-name {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-line-name:hover {
+  color: var(--accent-bright);
+}
+
+.playlist-line-facts {
+  color: var(--text-soft);
+  font-size: 13.5px;
+}
+
+.playlist-line-off {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.playlist-line-off:hover {
+  background: var(--surface-hover);
+  color: var(--text);
 }
