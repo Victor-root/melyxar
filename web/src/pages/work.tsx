@@ -29,7 +29,7 @@ import {
   FilmIcon,
   FolderIcon,
   HeartIcon,
-  MoreIcon,
+  ToolIcon,
   PeopleIcon,
   PlaylistIcon,
   SoundIcon,
@@ -616,7 +616,7 @@ function Marks({
         aria-expanded={menu.open}
         onClick={() => menu.toggle(kebab.current)}
       >
-        <MoreIcon size={22} />
+        <ToolIcon size={22} />
       </button>
       {menu.drawn}
     </span>

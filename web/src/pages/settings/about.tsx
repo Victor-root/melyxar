@@ -16,6 +16,7 @@ const ISSUES = `${REPOSITORY}/issues`;
 const AUTHOR = "https://github.com/Victor-root";
 const LICENCE = "https://www.gnu.org/licenses/agpl-3.0.html";
 const PROVIDER = "https://www.themoviedb.org";
+const ICONS = "https://tabler.io/icons";
 
 export function MyAbout() {
   const { t } = useSettings();
@@ -71,6 +72,11 @@ export function MyAbout() {
         <Setting label="GNU AGPL 3.0">
           <a className="button button-small" href={LICENCE} target="_blank" rel="noopener noreferrer">
             {t("about.read_licence")}
+          </a>
+        </Setting>
+        <Setting label={t("about.icons")} why={t("about.icons_why")}>
+          <a className="button button-small" href={ICONS} target="_blank" rel="noopener noreferrer">
+            tabler.io
           </a>
         </Setting>
       </Panel>

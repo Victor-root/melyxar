@@ -80,7 +80,7 @@ export function HeartIcon({ filled, ...props }: IconProps & { filled: boolean })
   return (
     <Icon {...props}>
       <path
-        d="M12 20.3 4.6 13a4.7 4.7 0 0 1 6.6-6.7l.8.8.8-.8A4.7 4.7 0 0 1 19.4 13Z"
+        d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"
         fill={filled ? "currentColor" : "none"}
       />
     </Icon>
@@ -293,13 +293,11 @@ export function ChevronRightIcon(props: IconProps) {
  * On a card
  * ---------------------------------------------------------------------- */
 
-/** The three dots every interface hides the rest of its actions behind. */
-export function MoreIcon(props: IconProps) {
+/** A spanner, for everything else that can be done to a work. */
+export function ToolIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <circle cx="12" cy="5.4" r="1.7" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="18.6" r="1.7" fill="currentColor" stroke="none" />
+      <path d="M7 10h3v-3l-3.5 -3.5a6 6 0 0 1 8 8l6 6a2 2 0 0 1 -3 3l-6 -6a6 6 0 0 1 -8 -8l3.5 3.5" />
     </Icon>
   );
 }
@@ -943,6 +941,18 @@ export function HomeIcon(props: IconProps) {
 }
 
 /** Sliders, for the settings of the server as a whole. */
+/** Four panels of a board, for the administration of the server. */
+export function DashboardIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5 4h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1" />
+      <path d="M5 16h4a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1" />
+      <path d="M15 12h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1" />
+      <path d="M15 4h4a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1" />
+    </Icon>
+  );
+}
+
 export function SlidersIcon(props: IconProps) {
   return (
     <Icon {...props}>

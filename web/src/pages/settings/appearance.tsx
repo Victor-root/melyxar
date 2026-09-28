@@ -15,6 +15,7 @@ import { LIGHTS } from "../../lights";
 import {
   BellIcon,
   ClockIcon,
+  DashboardIcon,
   GearIcon,
   HeartIcon,
   PaletteIcon,
@@ -244,7 +245,7 @@ function ButtonMark({ button }: { button: HeaderButton }) {
     case "scan":
       return <RefreshIcon size={18} />;
     case "administration":
-      return <SlidersIcon size={18} />;
+      return <DashboardIcon size={18} />;
     case "cast":
       return <ScreenCastIcon size={18} />;
     case "settings":

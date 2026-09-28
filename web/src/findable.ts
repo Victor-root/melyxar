@@ -191,6 +191,7 @@ export const FINDABLE: FindableSection[] = [
       ["about.version"],
       ["about.api_version"],
       ["about.licence", "about.licence_why"],
+      ["about.icons", "about.icons_why"],
       ["about.metadata", "attribution.tmdb"],
     ],
   },
