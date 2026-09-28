@@ -502,6 +502,23 @@ impl Command {
         // must never be read as an option.
         args.push(self.input.path.clone().into_os_string());
 
+        // A picture being rebuilt starts where it was asked to, but a sound
+        // copied as it is does not: it starts at the key frame the reading
+        // rewound to, seconds early. The player then places the whole piece by
+        // that earlier sound, and every piece after a jump sits a little off
+        // the ones before it: measured, a picture seconds behind its sound
+        // after a few jumps. Cutting everything at the second asked for, on
+        // the way out, and putting the film's own clock back keeps both where
+        // they belong.
+        if let (Some(start), Output::Segments { .. }) = (self.input.start_at, &self.output) {
+            if !matches!(self.video, VideoOutput::Copy) {
+                push!("-ss");
+                push!(&format_seconds(start));
+                push!("-output_ts_offset");
+                push!(&format_seconds(start));
+            }
+        }
+
         if let Some(duration) = self.duration {
             push!("-t");
             push!(&format_seconds(duration));
@@ -1533,6 +1550,40 @@ mod tests {
             !arguments(&plain_file).contains(&"-copyts".to_string()),
             "a file that starts part way through starts at nothing, as a file does"
         );
+    }
+
+    #[test]
+    fn after_a_jump_a_rebuilt_picture_and_a_copied_sound_are_cut_at_the_same_second() {
+        let segments = Output::Segments {
+            pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
+            initialisation: PathBuf::from("/tmp/session/init.mp4"),
+            tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
+            cut: WhereToCut::Every(Millis::new(4000)),
+            start_number: 2,
+        };
+        let rebuilt = Command::new(
+            Input::new("/media/film.mkv").starting_at(Millis::new(8_000)),
+            segments.clone(),
+        )
+        .with_video(VideoOutput::Encode(VideoEncode::software_h264()));
+        let args = arguments(&rebuilt);
+        let cut = args
+            .iter()
+            .rposition(|a| a == "-ss")
+            .expect("cut on the way out");
+        assert!(
+            Some(cut) > position(&args, "-i"),
+            "after the file, so it cuts what comes out"
+        );
+        assert_eq!(args[cut + 1], "8.000");
+        let offset = position(&args, "-output_ts_offset").expect("the clock put back");
+        assert_eq!(args[offset + 1], "8.000");
+
+        let copied = Command::new(
+            Input::new("/media/film.mkv").starting_at(Millis::new(8_000)),
+            segments,
+        );
+        assert!(!arguments(&copied).contains(&"-output_ts_offset".to_string()));
     }
 
     #[test]
