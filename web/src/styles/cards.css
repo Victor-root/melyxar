@@ -605,9 +605,30 @@ button.seen-mark:not(.seen-mark-on):hover {
   z-index: 40;
   min-width: 210px;
   /* Long on purpose: everything this interface is meant to do is listed,
-     wired or not. Taller than the window it scrolls rather than spilling. */
-  max-height: min(70vh, 560px);
+     wired or not. It takes the whole height of the window before it
+     scrolls, and scrolls only on a window too short to hold it. */
+  max-height: calc(100dvh - 16px);
   overflow-y: auto;
+  /* When it does, its bar is a thin one in a softer accent, which a menu
+     read at a glance should not be ruled down its side by. */
+  --scrollbar-width: 6px;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .card-menu {
+    scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent) transparent;
+  }
+}
+
+.card-menu::-webkit-scrollbar-thumb {
+  border-width: 1px;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  background-clip: content-box;
+}
+
+.card-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  background-clip: content-box;
 }
 
 /* The name, and at its right what a row of half watched films is read for.
