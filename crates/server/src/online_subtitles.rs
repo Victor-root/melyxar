@@ -4,7 +4,7 @@
 
 use axum::extract::{Path, Query, State};
 use axum::{Json, Router};
-use melyxar_app::online_subtitles::SubtitleOffer;
+use melyxar_app::online_subtitles::{Offered, SubtitleOffer};
 use melyxar_app::ratings::KeyTried;
 use melyxar_app::AppState;
 use melyxar_core::media::TrackKind;
@@ -137,10 +137,19 @@ struct OfferView {
     machine_translated: bool,
     #[serde(default)]
     trusted: bool,
+    /// Timed on this very file.
+    #[serde(default)]
+    matches_the_file: bool,
+    #[serde(default)]
+    fps: Option<f64>,
+    /// Timed on a video of another speed than this copy, so it drifts.
+    #[serde(default, skip_deserializing)]
+    other_speed: bool,
 }
 
-impl From<SubtitleOffer> for OfferView {
-    fn from(offer: SubtitleOffer) -> Self {
+impl From<Offered> for OfferView {
+    fn from(offered: Offered) -> Self {
+        let offer = offered.offer;
         Self {
             file_id: offer.file_id,
             language: offer.language,
@@ -149,6 +158,9 @@ impl From<SubtitleOffer> for OfferView {
             hearing_impaired: offer.hearing_impaired,
             machine_translated: offer.machine_translated,
             trusted: offer.trusted,
+            matches_the_file: offer.matches_the_file,
+            fps: offer.fps,
+            other_speed: offered.other_speed,
         }
     }
 }
@@ -180,6 +192,8 @@ struct FetchedView {
     track_id: String,
     /// How many more downloads today allows, when OpenSubtitles said.
     remaining: Option<i64>,
+    /// Its last line comes after the film has ended.
+    ends_after_the_film: bool,
 }
 
 async fn download(
@@ -196,11 +210,14 @@ async fn download(
         hearing_impaired: offer.hearing_impaired,
         machine_translated: offer.machine_translated,
         trusted: offer.trusted,
+        matches_the_file: offer.matches_the_file,
+        fps: offer.fps,
     };
     let fetched = melyxar_app::online_subtitles::download(&state, &who, parse_source(&id)?, &offer).await?;
     Ok(Json(FetchedView {
         track_id: fetched.track_id.to_string(),
         remaining: fetched.remaining,
+        ends_after_the_film: fetched.ends_after_the_film,
     }))
 }
 

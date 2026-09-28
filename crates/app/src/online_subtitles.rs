@@ -11,7 +11,8 @@ use melyxar_core::media::{normalise_language, SubtitleDetails, SubtitleLayout, T
 use melyxar_core::user::User;
 use melyxar_core::work::WorkKind;
 use melyxar_database::settings::OpenSubtitlesAccount;
-use melyxar_metadata::opensubtitles::{OpenSubtitlesClient, Searched};
+use melyxar_core::time::Millis;
+use melyxar_metadata::opensubtitles::{fingerprint, OpenSubtitlesClient, Searched, FINGERPRINT_CHUNK};
 pub use melyxar_metadata::opensubtitles::SubtitleOffer;
 use melyxar_metadata::ProviderError;
 
@@ -36,7 +37,27 @@ pub struct Standing {
 pub struct Fetched {
     pub track_id: TrackId,
     pub remaining: Option<i64>,
+    /// Its last line comes after the film has ended, which a subtitle timed
+    /// on this copy never does.
+    pub ends_after_the_film: bool,
 }
+
+/// One subtitle offered, and whether it was timed on a video showing another
+/// number of pictures a second than this copy, which makes it drift further
+/// and further from the picture.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Offered {
+    pub offer: SubtitleOffer,
+    pub other_speed: bool,
+}
+
+/// How far two numbers of pictures a second may be apart and still be the
+/// same speed: 23.976 is written 23.98 by some.
+const SAME_SPEED: f64 = 0.05;
+
+/// How far past the end of the film a subtitle's last line may come before
+/// it is taken for one timed on something longer.
+const PAST_THE_END: Millis = Millis::new(3_000);
 
 /// Whether a key and an account were given.
 pub async fn standing(state: &AppState) -> Result<Standing> {
@@ -100,7 +121,7 @@ pub async fn offers(
     who: &User,
     source_id: MediaSourceId,
     languages: &[String],
-) -> Result<Vec<SubtitleOffer>> {
+) -> Result<Vec<Offered>> {
     may_manage(who)?;
     if languages.is_empty() || !languages.iter().all(|language| is_a_language(language)) {
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
@@ -108,8 +129,8 @@ pub async fn offers(
         )));
     }
     let client = client(state).await?;
-    let work_id = crate::playable_file(state.database(), source_id).await?.work_id;
-    let searched = searched_for(state, work_id).await?;
+    let source = crate::playable_file(state.database(), source_id).await?;
+    let searched = searched_for(state, source.work_id).await?;
     let asking = match &searched {
         Asked::Film(tmdb_id) => Searched::Film { tmdb_id },
         Asked::Episode(series, season, episode) => Searched::Episode {
@@ -118,7 +139,84 @@ pub async fn offers(
             episode: *episode,
         },
     };
-    client.search(asking, languages).await.map_err(said)
+    let fingerprint = fingerprint_of(&source.path).await;
+    let offers = client
+        .search(asking, languages, fingerprint.as_deref())
+        .await
+        .map_err(said)?;
+    let speed = pictures_a_second(state, source_id).await?;
+    Ok(offers
+        .into_iter()
+        .map(|offer| Offered {
+            other_speed: other_speed(speed, offer.fps),
+            offer,
+        })
+        .collect())
+}
+
+/// The fingerprint of a copy, read off both ends of its file. Nothing for a
+/// file too small to have one, or that could not be read.
+async fn fingerprint_of(path: &std::path::Path) -> Option<String> {
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        use std::io::{Read, Seek, SeekFrom};
+        let mut file = std::fs::File::open(&path).ok()?;
+        let size = file.metadata().ok()?.len();
+        let chunk = FINGERPRINT_CHUNK as u64;
+        if size < chunk * 2 {
+            return None;
+        }
+        let mut head = vec![0; FINGERPRINT_CHUNK];
+        let mut tail = vec![0; FINGERPRINT_CHUNK];
+        file.read_exact(&mut head).ok()?;
+        file.seek(SeekFrom::Start(size - chunk)).ok()?;
+        file.read_exact(&mut tail).ok()?;
+        Some(fingerprint(size, &head, &tail))
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+/// How many pictures a second the picture of a copy shows.
+async fn pictures_a_second(state: &AppState, source_id: MediaSourceId) -> Result<Option<f64>> {
+    Ok(state
+        .database()
+        .tracks_of_source(source_id)
+        .await?
+        .iter()
+        .find_map(|track| match &track.kind {
+            TrackKind::Video(details) => details.frame_rate,
+            _ => None,
+        }))
+}
+
+/// Whether a subtitle was timed on another speed than this copy's. Nothing
+/// known on either side is no difference.
+fn other_speed(copy: Option<f64>, subtitle: Option<f64>) -> bool {
+    matches!((copy, subtitle), (Some(copy), Some(subtitle)) if (copy - subtitle).abs() > SAME_SPEED)
+}
+
+/// When the last line of a SubRip subtitle ends.
+fn last_line_ends(text: &str) -> Option<Millis> {
+    text.lines()
+        .filter_map(|line| line.split_once("-->"))
+        .filter_map(|(_, end)| moment(end.trim()))
+        .max()
+}
+
+/// A moment written the SubRip way, hours:minutes:seconds,milliseconds.
+fn moment(written: &str) -> Option<Millis> {
+    let written = written.split_whitespace().next()?;
+    let (clock, thousandths) = written.split_once([',', '.'])?;
+    let mut parts = clock.split(':').map(|part| part.parse::<i64>().ok());
+    let (Some(Some(hours)), Some(Some(minutes)), Some(Some(seconds)), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return None;
+    };
+    let thousandths: i64 = thousandths.parse().ok()?;
+    Some(Millis::new(((hours * 60 + minutes) * 60 + seconds) * 1000 + thousandths))
 }
 
 /// Downloads one subtitle offered and makes it a track of this copy.
@@ -165,9 +263,14 @@ pub async fn download(
         remaining = fetched.remaining,
         "a subtitle was downloaded"
     );
+    let ends = last_line_ends(&String::from_utf8_lossy(&fetched.contents));
     Ok(Fetched {
         track_id,
         remaining: fetched.remaining,
+        ends_after_the_film: matches!(
+            (ends, source.duration),
+            (Some(ends), Some(lasts)) if ends.get() > lasts.get() + PAST_THE_END.get()
+        ),
     })
 }
 
@@ -333,6 +436,23 @@ fn is_a_language(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_subtitle_of_another_speed_is_told_apart_from_a_rounding() {
+        assert!(other_speed(Some(23.976), Some(25.0)));
+        assert!(!other_speed(Some(23.976), Some(23.98)));
+        assert!(!other_speed(None, Some(25.0)));
+        assert!(!other_speed(Some(25.0), None));
+    }
+
+    #[test]
+    fn the_last_line_of_a_subtitle_is_where_it_ends() {
+        let text = "1\n00:00:01,500 --> 00:00:03,000\nHello\n\n2\n01:12:04,250 --> 01:12:06,900 X1:0\nBye\n";
+        assert_eq!(last_line_ends(text), Some(Millis::new(((72 * 60) + 6) * 1000 + 900)));
+        assert_eq!(last_line_ends("no times here"), None);
+        assert_eq!(moment("00:00:01.500"), Some(Millis::new(1500)));
+        assert_eq!(moment("1:02"), None);
+    }
 
     #[test]
     fn only_the_files_no_track_holds_are_orphans() {

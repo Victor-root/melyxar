@@ -39,6 +39,9 @@ export function OnlineSubtitlesDialog({
   const [said, setSaid] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
   const [fetched, setFetched] = useState<Set<number>>(new Set());
+  /* The last subtitle downloaded ends after the film does, so it was timed
+     on another version. */
+  const [long, setLong] = useState(false);
 
   const attempt = async (doing: () => Promise<void>) => {
     setRefused(null);
@@ -61,14 +64,16 @@ export function OnlineSubtitlesDialog({
   const download = (offer: SubtitleOffer) => {
     setBusy(offer.file_id);
     setSaid(null);
+    setLong(false);
     void attempt(async () => {
-      const { remaining } = await api.downloadSubtitle(sourceId, offer);
+      const { remaining, ends_after_the_film } = await api.downloadSubtitle(sourceId, offer);
       setFetched((before) => new Set([...before, offer.file_id]));
       setSaid(
         remaining === null
           ? t("online_subtitles.downloaded")
           : t("online_subtitles.downloaded_left", { count: remaining }),
       );
+      setLong(ends_after_the_film);
       setAgain((count) => count + 1);
       rowsHaveMoved();
     });
@@ -134,6 +139,7 @@ export function OnlineSubtitlesDialog({
       )}
       {refused && <p className="notice">{t(refused)}</p>}
       {said && <p className="panel-notice panel-notice-ok">{said}</p>}
+      {long && <p className="panel-notice panel-notice-trouble">{t("online_subtitles.too_long")}</p>}
       {offers?.length === 0 && <p className="settings-why">{t("online_subtitles.nothing")}</p>}
       {offers && offers.length > 0 && (
         <ul className="subtitles-lines subtitles-offers">
@@ -141,6 +147,14 @@ export function OnlineSubtitlesDialog({
             <li key={offer.file_id} className="subtitles-line">
               <span className="subtitles-release">{offer.release}</span>
               <span className="subtitles-marks">
+                {offer.matches_the_file && (
+                  <span className="work-badge subtitles-fits">{t("online_subtitles.fits")}</span>
+                )}
+                {offer.other_speed && (
+                  <span className="work-badge work-badge-warning" title={t("online_subtitles.other_speed_why")}>
+                    {t("online_subtitles.other_speed")}
+                  </span>
+                )}
                 <span>{t("online_subtitles.downloads", { count: howManyVoted(offer.downloads, language) })}</span>
                 {offer.hearing_impaired && <span className="work-badge">{t("online_subtitles.hearing_impaired")}</span>}
                 {offer.machine_translated && <span className="work-badge">{t("online_subtitles.machine")}</span>}

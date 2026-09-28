@@ -24,6 +24,22 @@ const A_FILM_EVERYBODY_KNOWS: &str = "603";
 /// Refuses a subtitle beyond any plausible size before reading it all.
 const LARGEST_SUBTITLE: usize = 5 * 1024 * 1024;
 
+/// How much of each end of a file its fingerprint is read from.
+pub const FINGERPRINT_CHUNK: usize = 64 * 1024;
+
+/// The fingerprint OpenSubtitles knows a video file by: its size, plus the
+/// sum of the first and the last 64 kilobytes read as eight byte numbers,
+/// written as sixteen hexadecimal digits. The same file anywhere has the same
+/// one, which is how a subtitle timed on this very file is recognised.
+pub fn fingerprint(size: u64, head: &[u8], tail: &[u8]) -> String {
+    let words = |bytes: &[u8]| {
+        bytes.chunks_exact(8).fold(0u64, |sum, word| {
+            sum.wrapping_add(u64::from_le_bytes(word.try_into().expect("eight bytes")))
+        })
+    };
+    format!("{:016x}", size.wrapping_add(words(head)).wrapping_add(words(tail)))
+}
+
 /// What a search is about: a film, or an episode of a series.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Searched<'a> {
@@ -47,6 +63,10 @@ pub struct SubtitleOffer {
     pub machine_translated: bool,
     /// Uploaded by somebody OpenSubtitles trusts.
     pub trusted: bool,
+    /// Timed on this very file, recognised by its fingerprint.
+    pub matches_the_file: bool,
+    /// How many pictures a second the video it was timed on showed.
+    pub fps: Option<f64>,
 }
 
 /// A subtitle downloaded, and how many more the day allows.
@@ -89,7 +109,7 @@ impl OpenSubtitlesClient {
         if self.login.is_some() {
             self.signed_in().await.map(|_| ())
         } else {
-            self.search(Searched::Film { tmdb_id: A_FILM_EVERYBODY_KNOWS }, &["en".to_string()])
+            self.search(Searched::Film { tmdb_id: A_FILM_EVERYBODY_KNOWS }, &["en".to_string()], None)
                 .await
                 .map(|_| ())
         }
@@ -97,8 +117,17 @@ impl OpenSubtitlesClient {
 
     /// The subtitles offered for a work in these languages, the most
     /// downloaded first.
-    pub async fn search(&self, searched: Searched<'_>, languages: &[String]) -> Result<Vec<SubtitleOffer>> {
+    /// With the file's fingerprint, those timed on it come first.
+    pub async fn search(
+        &self,
+        searched: Searched<'_>,
+        languages: &[String],
+        fingerprint: Option<&str>,
+    ) -> Result<Vec<SubtitleOffer>> {
         let mut query: Vec<(&str, String)> = vec![("languages", languages.join(","))];
+        if let Some(fingerprint) = fingerprint {
+            query.push(("moviehash", fingerprint.to_string()));
+        }
         match searched {
             Searched::Film { tmdb_id } => {
                 query.push(("tmdb_id", tmdb_id.to_string()));
@@ -121,7 +150,9 @@ impl OpenSubtitlesClient {
             .map_err(unreachable)?;
         let found: Found = read(response).await?;
         let mut offers = found.offers();
-        offers.sort_by(|one, other| other.downloads.cmp(&one.downloads));
+        offers.sort_by(|one, other| {
+            (other.matches_the_file, other.downloads).cmp(&(one.matches_the_file, one.downloads))
+        });
         Ok(offers)
     }
 
@@ -250,6 +281,10 @@ struct Attributes {
     #[serde(default)]
     from_trusted: bool,
     #[serde(default)]
+    moviehash_match: bool,
+    #[serde(default)]
+    fps: Option<f64>,
+    #[serde(default)]
     files: Vec<FoundFile>,
 }
 
@@ -282,6 +317,8 @@ impl Found {
                     hearing_impaired: attributes.hearing_impaired,
                     machine_translated: attributes.machine_translated || attributes.ai_translated,
                     trusted: attributes.from_trusted,
+                    matches_the_file: attributes.moviehash_match,
+                    fps: attributes.fps.filter(|fps| *fps > 0.0),
                 })
             })
             .collect()
@@ -293,12 +330,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_fingerprint_is_the_size_and_both_ends_summed_as_numbers() {
+        let head = [1u8, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0];
+        let tail = [0xffu8; 8];
+        // 100 + 1 + 2 + (2^64 - 1), wrapping round.
+        assert_eq!(fingerprint(100, &head, &tail), format!("{:016x}", 102u64));
+        assert_eq!(fingerprint(0, &[], &[]), "0000000000000000");
+    }
+
+    #[test]
     fn a_subtitle_is_offered_as_one_file_with_what_tells_it_apart() {
         let found: Found = serde_json::from_str(
             r#"{"data": [
                 {"attributes": {"language": "fr", "release": "Quiet.Harbour.2019.1080p",
                     "download_count": 1200, "hearing_impaired": true, "ai_translated": true,
-                    "from_trusted": true, "files": [{"file_id": 7, "file_name": "a.srt"}]}},
+                    "from_trusted": true, "moviehash_match": true, "fps": 23.976,
+                    "files": [{"file_id": 7, "file_name": "a.srt"}]}},
                 {"attributes": {"language": "fr", "release": "",
                     "download_count": 3, "files": [{"file_id": 8, "file_name": "b.srt"}]}},
                 {"attributes": {"language": "fr", "release": "Two.Discs",
@@ -318,6 +365,8 @@ mod tests {
                     hearing_impaired: true,
                     machine_translated: true,
                     trusted: true,
+                    matches_the_file: true,
+                    fps: Some(23.976),
                 },
                 SubtitleOffer {
                     file_id: 8,
@@ -327,6 +376,8 @@ mod tests {
                     hearing_impaired: false,
                     machine_translated: false,
                     trusted: false,
+                    matches_the_file: false,
+                    fps: None,
                 },
             ],
             "a release in several files, or of no language, is left out"
