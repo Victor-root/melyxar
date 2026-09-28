@@ -90,7 +90,7 @@ export function OnlineSubtitlesDialog({
   const noKey = settings.answer && !settings.answer.has_key;
 
   return (
-    <Modal title={t("online_subtitles.title", { title })} onClose={onClose}>
+    <Modal title={t("online_subtitles.title", { title })} onClose={onClose} className="modal-subtitles">
       <h3 className="subtitles-heading">{t("online_subtitles.tracks")}</h3>
       {tracks.answer?.length === 0 && <p className="settings-why">{t("online_subtitles.no_tracks")}</p>}
       {tracks.answer && tracks.answer.length > 0 && (
