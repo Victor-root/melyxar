@@ -345,6 +345,54 @@
   }
 }
 
+/* The first arrival on a heavy page: the page built where it will stand but
+   out of sight, and held still so nothing scrolls it before it is shown. */
+.arrival-held {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.arrival-shown {
+  animation: arrival-fade 320ms var(--ease);
+}
+
+@keyframes arrival-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The loader over it: the mark, and a ring in the accent turning round it. */
+.arrival {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  transform: translate(-50%, -50%);
+}
+
+.arrival-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  border-top-color: var(--accent-bright);
+  animation: arrival-turn 900ms linear infinite;
+}
+
+@keyframes arrival-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 /* Exactly the height of the banner it stands in for, from the same token: a
    block a different size is a page that jumps the moment the picture lands. */
 .skeleton-hero {
@@ -375,7 +423,12 @@
    movement: the shape is the point, the sweep is only a hint that it is not
    the page yet. */
 @media (prefers-reduced-motion: reduce) {
-  .skeleton {
+  .skeleton,
+  .arrival-shown {
     animation: none;
+  }
+
+  .arrival-ring {
+    animation-duration: 2.4s;
   }
 }

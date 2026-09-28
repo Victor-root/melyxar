@@ -722,6 +722,7 @@ const en: Dictionary = {
   "pictures.looking": "Searching for images…",
   "pictures.nothing": "No other images of this type are available.",
 
+  "arrival.loading": "Loading",
   "home.carry_on": "Carry on watching",
   "row.back": "Scroll row left",
   "row.on": "Scroll row right",
@@ -2083,6 +2084,7 @@ const fr: Dictionary = {
   "pictures.looking": "Recherche d’images…",
   "pictures.nothing": "Aucune autre image de ce type n’est disponible.",
 
+  "arrival.loading": "Chargement",
   "home.carry_on": "Continuer la lecture",
   "row.back": "Faire défiler la rangée vers la gauche",
   "row.on": "Faire défiler la rangée vers la droite",
