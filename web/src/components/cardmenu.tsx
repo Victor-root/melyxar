@@ -29,7 +29,6 @@ import { refusalAbout } from "../asking";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 import { isCatalogued, playsOnItsOwn } from "../works";
-import { CollectingDialog } from "./collecting";
 import { DeleteDialog } from "./deletion";
 import { IdentifyDialog } from "./identify";
 import { DetailsDialog } from "./details";
@@ -38,6 +37,8 @@ import { ForgetIdentityDialog } from "./forgetting";
 import { PicturesDialog } from "./pictures";
 import { playInTurn } from "../queue";
 import { useCardsInOrder } from "./in-order";
+import { PutInListsDialog } from "./lists";
+import type { Lists } from "./lists";
 import { useSelection } from "./selection";
 import { useToast } from "./toasts";
 import {
@@ -76,6 +77,23 @@ interface Entry {
   later?: boolean;
   act?: () => void;
 }
+
+/** The collections made by hand, as the window that fills them asks them. */
+const COLLECTIONS: Lists = {
+  every: async (signal) =>
+    (await api.collections(signal)).filter((collection) => collection.made_by_hand),
+  holding: async (work, signal) => (await api.collectionsHolding(work, signal)).collections,
+  put: api.putInCollection,
+  create: api.createCollection,
+};
+
+/** This account's playlists, the same way. */
+const PLAYLISTS: Lists = {
+  every: (signal) => api.playlists(signal),
+  holding: async (work, signal) => (await api.playlistsHolding(work, signal)).playlists,
+  put: api.putInPlaylist,
+  create: api.createPlaylist,
+};
 
 /** How far from the edge of the window a menu is allowed to sit. */
 const OFF_THE_EDGE = 8;
@@ -117,6 +135,7 @@ export function useWorkMenu(
   const [forgetting, setForgetting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [collecting, setCollecting] = useState(false);
+  const [listing, setListing] = useState(false);
   const { t } = useSettings();
   const toast = useToast();
 
@@ -156,6 +175,7 @@ export function useWorkMenu(
           onRefresh={refresh}
           onDownload={() => setDownloading(true)}
           onCollect={() => setCollecting(true)}
+          onPlaylist={() => setListing(true)}
           onDelete={() => setDeleting(true)}
           onClose={shut}
         />
@@ -191,7 +211,22 @@ export function useWorkMenu(
         />
       )}
       {collecting && (
-        <CollectingDialog workId={card.id} title={card.title} onClose={() => setCollecting(false)} />
+        <PutInListsDialog
+          workId={card.id}
+          title={card.title}
+          lists={COLLECTIONS}
+          words="collect"
+          onClose={() => setCollecting(false)}
+        />
+      )}
+      {listing && (
+        <PutInListsDialog
+          workId={card.id}
+          title={card.title}
+          lists={PLAYLISTS}
+          words="playlist"
+          onClose={() => setListing(false)}
+        />
       )}
       {forgetting && (
         <ForgetIdentityDialog
@@ -228,6 +263,7 @@ export function CardMenu({
   onRefresh,
   onDownload,
   onCollect,
+  onPlaylist,
   onDelete,
   onClose,
 }: {
@@ -259,6 +295,8 @@ export function CardMenu({
   onDownload: () => void;
   /** Opens the window that puts it in the server's collections. */
   onCollect: () => void;
+  /** Opens the window that puts it in this account's playlists. */
+  onPlaylist: () => void;
   /** Opens the question put before this work is deleted, for the same
       reason again. */
   onDelete: () => void;
@@ -367,7 +405,12 @@ export function CardMenu({
       allowed: account?.may_manage_collections === true && card.kind !== "season" && card.kind !== "episode",
       act: onCollect,
     },
-    { key: "playlist", mark: <PlaylistIcon size={SHAPE} />, later: true },
+    {
+      key: "playlist",
+      mark: <PlaylistIcon size={SHAPE} />,
+      allowed: card.kind === "movie" || card.kind === "episode" || card.kind === "video",
+      act: onPlaylist,
+    },
     {
       key: favourite ? "unfavourite" : "favourite",
       mark: <HeartIcon size={SHAPE} filled={favourite} />,

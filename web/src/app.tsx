@@ -24,6 +24,7 @@ import { LibraryPage } from "./pages/library";
 import { SearchPage } from "./pages/search";
 import { CollectionPage, CollectionsPage } from "./pages/collections";
 import { PersonPage } from "./pages/person";
+import { PlaylistPage, PlaylistsPage } from "./pages/playlists";
 import { useKeptPlaces } from "./scrolling";
 import { WorkPage } from "./pages/work";
 import { AdminLayout } from "./pages/admin/layout";
@@ -149,6 +150,8 @@ function TheLibrary() {
               <Route path="/person/:id" element={<PersonPage />} />
               <Route path="/collections" element={<CollectionsPage />} />
               <Route path="/collection/:id" element={<CollectionPage />} />
+              <Route path="/playlists" element={<PlaylistsPage />} />
+              <Route path="/playlist/:id" element={<PlaylistPage />} />
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverview />} />
                 <Route path="libraries" element={<AdminLibraries />} />

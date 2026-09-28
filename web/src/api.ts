@@ -497,6 +497,21 @@ export interface CollectionSummary {
   cover: Card | null;
 }
 
+/** One playlist of this account as the list of them shows it. */
+export interface PlaylistSummary {
+  id: string;
+  name: string;
+  count: number;
+  cover: Card | null;
+}
+
+/** One playlist of this account with its titles, in its order. */
+export interface Playlist {
+  id: string;
+  name: string;
+  cards: Card[];
+}
+
 /** One collection with its titles, in its order. */
 export interface Collection {
   id: string;
@@ -629,6 +644,7 @@ export type HeaderButton =
   | "favourites"
   | "watch_later"
   | "collections"
+  | "playlists"
   | "notifications"
   | "scan"
   | "administration"
@@ -1945,6 +1961,19 @@ export const api = {
     post<null>(`/api/v1/collections/${id}/works`, { works, in_it }),
   collectionsHolding: (work: string, signal?: AbortSignal) =>
     get<{ collections: string[] }>(`/api/v1/works/${work}/collections`, signal),
+  /* This account's playlists, which nobody else sees. */
+  playlists: (signal?: AbortSignal) => get<PlaylistSummary[]>("/api/v1/playlists", signal),
+  playlist: (id: string, signal?: AbortSignal) => get<Playlist>(`/api/v1/playlists/${id}`, signal),
+  createPlaylist: (name: string, works: string[]) =>
+    post<{ id: string }>("/api/v1/playlists", { name, works }),
+  renamePlaylist: (id: string, name: string) => put<null>(`/api/v1/playlists/${id}/name`, { name }),
+  deletePlaylist: (id: string) => remove<null>(`/api/v1/playlists/${id}`),
+  putInPlaylist: (id: string, works: string[], in_it: boolean) =>
+    post<null>(`/api/v1/playlists/${id}/works`, { works, in_it }),
+  reorderPlaylist: (id: string, works: string[]) =>
+    put<null>(`/api/v1/playlists/${id}/order`, { works }),
+  playlistsHolding: (work: string, signal?: AbortSignal) =>
+    get<{ playlists: string[] }>(`/api/v1/works/${work}/playlists`, signal),
   /* A work's details written by hand; each field locked stays as written
      whatever a later look up says. */
   details: (work: string, signal?: AbortSignal) =>

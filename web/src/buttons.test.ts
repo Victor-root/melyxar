@@ -14,6 +14,7 @@ describe("buttonOrder", () => {
       "search",
       "favourites",
       "collections",
+      "playlists",
       "notifications",
       "scan",
       "administration",
