@@ -290,6 +290,7 @@ fn subtitle_details(stream: &ProbeStream) -> SubtitleDetails {
         is_hearing_impaired: stream.has_disposition("hearing_impaired"),
         is_external: false,
         external_relative_path: None,
+        downloaded_file: None,
     }
 }
 

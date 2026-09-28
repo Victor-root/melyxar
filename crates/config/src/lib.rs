@@ -119,6 +119,13 @@ impl Directories {
         self.cache.join("subtitles")
     }
 
+    /// Directory holding the subtitles downloaded for a film. In the data
+    /// directory: each one cost one of a day's few downloads, and it is not
+    /// made again from anything the server holds.
+    pub fn downloaded_subtitles(&self) -> PathBuf {
+        self.data.join("subtitles")
+    }
+
     /// Directory holding the sheets of thumbnails shown on the playback bar.
     ///
     /// In the cache with everything else read out of a film: they are made

@@ -57,6 +57,16 @@ pub enum KeyTried {
     Unreachable,
 }
 
+impl KeyTried {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Kept => "kept",
+            Self::Refused => "refused",
+            Self::Unreachable => "unreachable",
+        }
+    }
+}
+
 /// Where the file of IMDb ratings is kept between two runs.
 fn imdb_file(state: &AppState) -> PathBuf {
     state

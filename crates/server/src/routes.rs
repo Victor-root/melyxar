@@ -75,6 +75,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::page::router())
         .merge(crate::playback::router())
         .merge(crate::playlists::router())
+        .merge(crate::online_subtitles::router())
         .merge(crate::preferences::router())
         // Last: whatever no route above answered. An address of the surface
         // is not found; any other is a page of the interface, which reads the

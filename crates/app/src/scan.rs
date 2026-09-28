@@ -1356,6 +1356,7 @@ async fn attach_subtitles(
                     is_hearing_impaired: found.is_hearing_impaired,
                     is_external: true,
                     external_relative_path: Some(path.clone()),
+                    downloaded_file: None,
                 }),
             });
         }

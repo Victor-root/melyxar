@@ -29,6 +29,7 @@ pub mod libraries;
 pub mod mark;
 pub mod marks;
 pub mod measures;
+pub mod online_subtitles;
 pub mod openings;
 pub mod overview;
 pub mod people;

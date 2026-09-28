@@ -203,6 +203,7 @@ pub fn prepare_directories(config: &Config) -> Result<()> {
         &config.directories.uploads(),
         &config.directories.images(),
         &config.directories.subtitles(),
+        &config.directories.downloaded_subtitles(),
         &config.directories.thumbnails(),
         &config.directories.calibration(),
         &config.directories.backups(),

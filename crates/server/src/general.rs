@@ -220,11 +220,7 @@ impl RatingsView {
         Ok(Json(Self {
             imdb_fetched_at: melyxar_app::ratings::imdb_fetched_at(state).await,
             has_omdb_key: melyxar_app::ratings::has_omdb_key(state).await?,
-            tried: tried.map(|tried| match tried {
-                KeyTried::Kept => "kept",
-                KeyTried::Refused => "refused",
-                KeyTried::Unreachable => "unreachable",
-            }),
+            tried: tried.map(KeyTried::as_str),
         }))
     }
 }
