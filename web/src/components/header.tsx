@@ -58,6 +58,7 @@ import {
   BellIcon,
   ChevronDownIcon,
   ClockIcon,
+  CollectionIcon,
   GearIcon,
   HeartIcon,
   KindIcon,
@@ -1053,6 +1054,7 @@ function Bell({ administrator }: { administrator: boolean }) {
 const PLACES = {
   favourites: { to: "/favourites", name: "nav.favourites" },
   watch_later: { to: "/watch-later", name: "nav.watch_later" },
+  collections: { to: "/collections", name: "nav.collections" },
   administration: { to: "/admin", name: "nav.administration" },
   settings: { to: "/settings", name: "nav.settings" },
   cast: { to: null, name: "nav.cast" },
@@ -1064,6 +1066,8 @@ function PlaceIcon({ place, size }: { place: keyof typeof PLACES; size: number }
       return <HeartIcon size={size} filled={false} />;
     case "watch_later":
       return <ClockIcon size={size} />;
+    case "collections":
+      return <CollectionIcon size={size} />;
     case "administration":
       return <DashboardIcon size={size} />;
     case "settings":

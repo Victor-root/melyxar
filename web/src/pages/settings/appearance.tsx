@@ -15,6 +15,7 @@ import { LIGHTS } from "../../lights";
 import {
   BellIcon,
   ClockIcon,
+  CollectionIcon,
   DashboardIcon,
   GearIcon,
   HeartIcon,
@@ -154,6 +155,7 @@ const BUTTON_NAMES: Record<HeaderButton, string> = {
   search: "nav.search",
   favourites: "nav.favourites",
   watch_later: "nav.watch_later",
+  collections: "nav.collections",
   notifications: "nav.notifications",
   scan: "home.scan",
   administration: "nav.administration",
@@ -242,6 +244,8 @@ function ButtonMark({ button }: { button: HeaderButton }) {
       return <HeartIcon size={18} filled={false} />;
     case "watch_later":
       return <ClockIcon size={18} />;
+    case "collections":
+      return <CollectionIcon size={18} />;
     case "scan":
       return <RefreshIcon size={18} />;
     case "administration":

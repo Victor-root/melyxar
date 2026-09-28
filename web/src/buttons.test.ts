@@ -13,6 +13,7 @@ describe("buttonOrder", () => {
       "watch_later",
       "search",
       "favourites",
+      "collections",
       "notifications",
       "scan",
       "administration",

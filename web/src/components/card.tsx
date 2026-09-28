@@ -53,7 +53,7 @@ export type CardShape = "standing" | "lying";
  * takes it into account by itself, which is how a fine screen still gets the
  * larger picture without anybody asking for it here.
  */
-const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
+export const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
   standing: "(max-width: 700px) 40vw, (min-width: 1400px) 186px, 168px",
   lying: "(max-width: 700px) 70vw, (min-width: 1400px) 301px, 272px",
 };

@@ -288,6 +288,7 @@ export const FINDABLE: FindableSection[] = [
       ["admin.right.may_delete_from_disk", "users.may_delete_from_disk_why"],
       ["admin.limit_streams", "users.streams_why"],
       ["admin.right.may_download", "users.may_download_why"],
+      ["admin.right.may_manage_collections", "users.may_manage_collections_why"],
       ["admin.limit_age"],
       ["users.new", "users.new_why"],
       ["users.password"],

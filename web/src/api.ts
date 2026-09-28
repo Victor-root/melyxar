@@ -13,6 +13,7 @@ export interface Account {
       what somebody is shown, never what they are allowed. */
   is_administrator: boolean;
   may_download: boolean;
+  may_manage_collections: boolean;
   may_delete: boolean;
   may_delete_from_disk: boolean;
   /** Where the picture it chose is served, when it chose one. */
@@ -30,6 +31,8 @@ export interface Rights {
   may_delete_from_disk: boolean;
   /** Whether it may keep a copy of a file on its own device. */
   may_download: boolean;
+  /** Whether it may make and fill the server's collections. */
+  may_manage_collections: boolean;
   /** How many films it may watch at once. Nothing for no limit. */
   most_streams: number | null;
 }
@@ -482,6 +485,26 @@ export interface LibraryWork {
  * them: what it does about wide gamut colour it cannot show a client, and what
  * it allows the films it converts.
  */
+/** One collection as the list of them shows it: gathered by hand, or a saga
+ *  the provider knows. */
+export interface CollectionSummary {
+  id: string;
+  name: string;
+  made_by_hand: boolean;
+  /** How many of its titles this account can reach. */
+  count: number;
+  /** Its first title, whose poster it wears. */
+  cover: Card | null;
+}
+
+/** One collection with its titles, in its order. */
+export interface Collection {
+  id: string;
+  name: string;
+  made_by_hand: boolean;
+  cards: Card[];
+}
+
 /** A rating from elsewhere than the provider: out of ten for IMDb, with how
  *  many voted, and out of a hundred for Rotten Tomatoes' critics. */
 export interface Rating {
@@ -605,6 +628,7 @@ export type HeaderButton =
   | "search"
   | "favourites"
   | "watch_later"
+  | "collections"
   | "notifications"
   | "scan"
   | "administration"
@@ -1907,6 +1931,20 @@ export const api = {
       external_id: externalId,
       replace_pictures: replacePictures,
     }),
+  /* The server's collections: listed and opened by everybody, made and
+     filled by whoever may manage them. */
+  collections: (signal?: AbortSignal) => get<CollectionSummary[]>("/api/v1/collections", signal),
+  collection: (id: string, signal?: AbortSignal) =>
+    get<Collection>(`/api/v1/collections/${id}`, signal),
+  createCollection: (name: string, works: string[]) =>
+    post<{ id: string }>("/api/v1/collections", { name, works }),
+  renameCollection: (id: string, name: string) =>
+    put<null>(`/api/v1/collections/${id}/name`, { name }),
+  deleteCollection: (id: string) => remove<null>(`/api/v1/collections/${id}`),
+  putInCollection: (id: string, works: string[], in_it: boolean) =>
+    post<null>(`/api/v1/collections/${id}/works`, { works, in_it }),
+  collectionsHolding: (work: string, signal?: AbortSignal) =>
+    get<{ collections: string[] }>(`/api/v1/works/${work}/collections`, signal),
   /* A work's details written by hand; each field locked stays as written
      whatever a later look up says. */
   details: (work: string, signal?: AbortSignal) =>

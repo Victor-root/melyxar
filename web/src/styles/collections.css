@@ -1,0 +1,90 @@
+/*
+ * The server's collections: the window that puts a title in them, the page
+ * listing them, and the page of one.
+ */
+
+.collect-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collect-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--quick) var(--ease);
+}
+
+.collect-line:hover {
+  border-color: var(--accent-bright);
+}
+
+.collect-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  color: var(--accent-contrast);
+}
+
+.collect-line-in .collect-mark {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.collect-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collect-new {
+  display: flex;
+  gap: var(--gap-tight);
+  margin-top: var(--gap);
+}
+
+.collect-new .field-line {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The name of a collection, how many titles it holds, and what can be done
+   with it, on one line while there is room. */
+.collection-head {
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.collection-count {
+  color: var(--text-soft);
+}
+
+.collection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+  margin-left: auto;
+}
+
+.collection-rename {
+  margin-top: 0;
+  flex: 0 1 420px;
+}
