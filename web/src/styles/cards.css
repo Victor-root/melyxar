@@ -735,6 +735,25 @@ button.seen-mark:not(.seen-mark-on):hover {
  * the grid, it was pushed back up by the end of it, and moved under the hand
  * at the bottom of every library.
  */
+/* Where the letter just chosen begins, standing in the grid as one more
+   tile: the row it opens may still end the letter before. */
+.letter-starts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  aspect-ratio: 2 / 3;
+  border: 2px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: var(--radius-card);
+  color: var(--accent-bright);
+  font-size: 64px;
+  font-weight: 750;
+}
+
+.letter-starts-lying {
+  aspect-ratio: 16 / 9;
+}
+
 .letters {
   --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide));
   --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 26px);
