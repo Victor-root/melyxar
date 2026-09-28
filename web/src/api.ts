@@ -28,6 +28,8 @@ export interface Rights {
   libraries: string[];
   may_delete: boolean;
   may_delete_from_disk: boolean;
+  /** Whether it may keep a copy of a file on its own device. */
+  may_download: boolean;
   /** How many films it may watch at once. Nothing for no limit. */
   most_streams: number | null;
 }
@@ -1860,6 +1862,9 @@ export const api = {
   /* Takes away what any provider said about a work, which is then left out
      of the automatic look up; and asks the provider again about one work,
      keeping every field written by hand. */
+  /** Where a copy is handed over as a file to keep, for an account allowed
+   *  to download. */
+  downloadAddress: (source: string) => `/api/v1/playback/${source}/download`,
   forgetIdentity: (work: string) =>
     remove<{ identified: boolean }>(`/api/v1/works/${work}/identify`),
   refreshWork: (work: string) =>

@@ -32,6 +32,7 @@ import { isCatalogued, playsOnItsOwn } from "../works";
 import { DeleteDialog } from "./deletion";
 import { IdentifyDialog } from "./identify";
 import { DetailsDialog } from "./details";
+import { DownloadDialog } from "./download";
 import { ForgetIdentityDialog } from "./forgetting";
 import { PicturesDialog } from "./pictures";
 import { useSelection } from "./selection";
@@ -111,6 +112,7 @@ export function useWorkMenu(
   const [choosingPictures, setChoosingPictures] = useState(false);
   const [writingDetails, setWritingDetails] = useState(false);
   const [forgetting, setForgetting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const { t } = useSettings();
   const toast = useToast();
 
@@ -148,6 +150,7 @@ export function useWorkMenu(
           onEditDetails={() => setWritingDetails(true)}
           onForgetIdentity={() => setForgetting(true)}
           onRefresh={refresh}
+          onDownload={() => setDownloading(true)}
           onDelete={() => setDeleting(true)}
           onClose={shut}
         />
@@ -173,6 +176,13 @@ export function useWorkMenu(
           series={card.kind === "series"}
           onClose={() => setWritingDetails(false)}
           onChanged={after.detailsChanged}
+        />
+      )}
+      {downloading && (
+        <DownloadDialog
+          workId={card.id}
+          title={card.title}
+          onClose={() => setDownloading(false)}
         />
       )}
       {forgetting && (
@@ -208,6 +218,7 @@ export function CardMenu({
   onEditDetails,
   onForgetIdentity,
   onRefresh,
+  onDownload,
   onDelete,
   onClose,
 }: {
@@ -235,6 +246,8 @@ export function CardMenu({
   onForgetIdentity: () => void;
   /** Asks the provider again about it. */
   onRefresh: () => void;
+  /** Hands over its file to keep, or asks which one when it has several. */
+  onDownload: () => void;
   /** Opens the question put before this work is deleted, for the same
       reason again. */
   onDelete: () => void;
@@ -353,8 +366,9 @@ export function CardMenu({
     {
       key: "download",
       mark: <DownloadIcon size={SHAPE} />,
-      allowed: account?.may_download === true,
-      later: true,
+      allowed:
+        account?.may_download === true && (card.kind === "movie" || card.kind === "episode"),
+      act: onDownload,
     },
     {
       key: "edit_metadata",

@@ -36,6 +36,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/playback/{id}/plan", axum::routing::post(plan))
         .route("/api/v1/playback/{id}/stream", axum::routing::get(stream))
+        .route("/api/v1/playback/{id}/download", axum::routing::get(download))
         .route(
             "/api/v1/playback/progress",
             axum::routing::post(record_progress),
@@ -600,6 +601,50 @@ async fn stream(
         Ok(response) => response,
         Err(error) => error.into_response(),
     }
+}
+
+/// Hands a copy over as it lies on the disk, to be kept rather than played,
+/// under the name it has there.
+async fn download(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    RoutePath(id): RoutePath<String>,
+    request: Request<Body>,
+) -> Response {
+    let answer = async {
+        let path = melyxar_app::playback::file_to_download(&state, &who, parse_source(&id)?).await?;
+        let mut response = crate::serve_the_file(&path, request).await?;
+        if let Some(disposition) = kept_as(&path) {
+            response.headers_mut().insert(header::CONTENT_DISPOSITION, disposition);
+        }
+        Ok::<_, ServerError>(response)
+    };
+    match answer.await {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Says a file is to be kept, under its own name. The name is written twice:
+/// plainly for the letters every browser reads, and percent encoded for the
+/// accents and the rest, which a browser prefers when it can read it.
+fn kept_as(path: &std::path::Path) -> Option<HeaderValue> {
+    let name = path.file_name()?.to_string_lossy();
+    let plain: String = name
+        .chars()
+        .map(|letter| match letter {
+            ' '..='~' if letter != '"' && letter != '\\' => letter,
+            _ => '_',
+        })
+        .collect();
+    let encoded: String = name
+        .bytes()
+        .map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'-' | b'_' => (byte as char).to_string(),
+            _ => format!("%{byte:02X}"),
+        })
+        .collect();
+    HeaderValue::from_str(&format!("attachment; filename=\"{plain}\"; filename*=UTF-8''{encoded}")).ok()
 }
 
 async fn serve_file(
@@ -1391,6 +1436,17 @@ async fn remember_tracks(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_download_is_kept_under_the_name_the_file_has() {
+        let said = kept_as(std::path::Path::new("/mnt/one/Films/Le Été \"final\" (2019).mkv"))
+            .expect("a header");
+        assert_eq!(
+            said.to_str().expect("plain text"),
+            "attachment; filename=\"Le _t_ _final_ (2019).mkv\"; \
+             filename*=UTF-8''Le%20%C3%89t%C3%A9%20%22final%22%20%282019%29.mkv"
+        );
+    }
     use melyxar_core::id::{TrackId, WorkId};
 
     #[test]

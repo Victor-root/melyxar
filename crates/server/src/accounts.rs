@@ -39,6 +39,7 @@ struct RightsView {
     libraries: Vec<String>,
     may_delete: bool,
     may_delete_from_disk: bool,
+    may_download: bool,
     /// How many films it may watch at once. Absent for no limit.
     most_streams: Option<i32>,
 }
@@ -56,6 +57,7 @@ impl RightsView {
                 .collect(),
             may_delete: held.may_delete,
             may_delete_from_disk: held.may_delete_from_disk,
+            may_download: held.may_download,
             most_streams: held.max_sessions,
         }
     }
@@ -71,6 +73,7 @@ impl RightsView {
                 .collect::<Result<_>>()?,
             may_delete: self.may_delete,
             may_delete_from_disk: self.may_delete_from_disk,
+            may_download: self.may_download,
             most_streams: self.most_streams,
         })
     }

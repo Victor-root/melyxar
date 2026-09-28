@@ -181,6 +181,23 @@ pub async fn file_of(
     Ok(crate::playable_file(state.database(), source_id).await?.path)
 }
 
+/// Where the file of a copy is, for the route that hands it over to be kept,
+/// for an account allowed to download and to read the library it is in.
+pub async fn file_to_download(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    source_id: melyxar_core::id::MediaSourceId,
+) -> Result<std::path::PathBuf> {
+    if !who.permissions.may_download {
+        return Err(AppError::Domain(melyxar_core::Error::forbidden(
+            "this account may not download",
+        )));
+    }
+    let path = file_of(state, who, source_id).await?;
+    tracing::info!(account = %who.name, path = %path.display(), "file downloaded");
+    Ok(path)
+}
+
 pub async fn plan(
     state: &AppState,
     who: &melyxar_core::user::User,
@@ -1424,6 +1441,47 @@ mod tests {
                 .expect("handed over")
                 .ends_with("Quiet.Harbour.2019.mp4"),
             "and an account that sees every library is handed it"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_is_handed_over_to_keep_only_to_an_account_allowed_to_download() {
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mp4", "mov,mp4,m4a", |id| {
+                vec![video(id, "h264", 1080)]
+            })
+            .await;
+        let viewer = crate::an_ordinary_account(user_id);
+        assert!(!viewer.permissions.may_download, "nobody downloads unless allowed to");
+        assert!(matches!(
+            file_to_download(&state, &viewer, source_id).await.expect_err("refused"),
+            AppError::Domain(error) if error.code == melyxar_core::error::ErrorCode::Forbidden
+        ));
+
+        let allowed = melyxar_core::user::User {
+            permissions: Permissions {
+                may_download: true,
+                ..Permissions::viewer()
+            },
+            ..crate::an_ordinary_account(user_id)
+        };
+        assert!(file_to_download(&state, &allowed, source_id)
+            .await
+            .expect("handed over")
+            .ends_with("Quiet.Harbour.2019.mp4"));
+
+        let allowed_elsewhere = melyxar_core::user::User {
+            permissions: Permissions {
+                may_download: true,
+                sees_every_library: false,
+                allowed_libraries: Vec::new(),
+                ..Permissions::viewer()
+            },
+            ..crate::an_ordinary_account(user_id)
+        };
+        assert!(
+            file_to_download(&state, &allowed_elsewhere, source_id).await.is_err(),
+            "allowed to download is not allowed into a library it was not granted"
         );
     }
 

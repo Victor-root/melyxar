@@ -666,6 +666,7 @@ pub struct Rights {
     pub libraries: Vec<melyxar_core::id::LibraryId>,
     pub may_delete: bool,
     pub may_delete_from_disk: bool,
+    pub may_download: bool,
     /// How many films it may watch at once, when it is limited.
     pub most_streams: Option<i32>,
 }
@@ -679,6 +680,7 @@ impl Rights {
             allowed_libraries: self.libraries.clone(),
             may_delete: self.may_delete,
             may_delete_from_disk: self.may_delete_from_disk,
+            may_download: self.may_download,
             max_sessions: self.most_streams,
             ..held.clone()
         }
@@ -1517,6 +1519,7 @@ mod tests {
             libraries: permissions.allowed_libraries.clone(),
             may_delete: permissions.may_delete,
             may_delete_from_disk: permissions.may_delete_from_disk,
+            may_download: permissions.may_download,
             most_streams: permissions.max_sessions,
         }
     }
