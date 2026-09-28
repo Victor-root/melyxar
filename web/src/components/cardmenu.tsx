@@ -18,7 +18,7 @@
  * page, which is also what keeps it above the cards after it.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -392,121 +392,136 @@ export function CardMenu({
       : [];
   const catalogued = isCatalogued(card.identification);
 
-  const entries: Entry[] = [
-    {
-      key: "play",
-      mark: <PlayIcon size={SHAPE} />,
-      allowed: playable,
-      act: () => navigate(`/work/${card.id}?play`),
-    },
-    {
-      key: "play_from_here",
-      mark: <PlayAllIcon size={SHAPE} />,
-      allowed: fromHere.length > 1,
-      act: () => {
-        playInTurn(fromHere);
-        navigate(`/work/${card.id}?play`);
+  /* Kept in families with a rule between them, so a long menu is read by
+     what each part is for: watching, keeping track, lists, the details,
+     naming the work, and the one line that loses something. */
+  const groups: Entry[][] = [
+    [
+      {
+        key: "play",
+        mark: <PlayIcon size={SHAPE} />,
+        allowed: playable,
+        act: () => navigate(`/work/${card.id}?play`),
       },
-    },
-    {
-      key: "collection",
-      mark: <CollectionIcon size={SHAPE} />,
-      allowed: account?.may_manage_collections === true && card.kind !== "season" && card.kind !== "episode",
-      act: onCollect,
-    },
-    {
-      key: "playlist",
-      mark: <PlaylistIcon size={SHAPE} />,
-      allowed: card.kind === "movie" || card.kind === "episode" || card.kind === "video",
-      act: onPlaylist,
-    },
-    {
-      key: favourite ? "unfavourite" : "favourite",
-      mark: <HeartIcon size={SHAPE} filled={favourite} />,
-      act: () => marks.setFavourite(card, !favourite),
-    },
-    {
-      key: later ? "unwatch_later" : "watch_later",
-      mark: <ClockIcon size={SHAPE} />,
-      act: () => marks.setWatchLater(card, !later),
-    },
-    {
-      key: seen === "watched" ? "mark_unwatched" : "mark_watched",
-      mark: <TickIcon size={SHAPE} />,
-      allowed: card.watched_marks,
-      act: () => marks.setWatched(card, seen !== "watched"),
-    },
-    {
-      key: "select",
-      mark: <SelectIcon size={SHAPE} />,
-      allowed: selection !== null,
-      act: () => selection?.press(card.id, false),
-    },
-    {
-      key: "download",
-      mark: <DownloadIcon size={SHAPE} />,
-      allowed:
-        account?.may_download === true && (card.kind === "movie" || card.kind === "episode"),
-      act: onDownload,
-    },
-    {
-      key: "edit_metadata",
-      mark: <EditIcon size={SHAPE} />,
-      allowed: account?.is_administrator === true,
-      act: onEditDetails,
-    },
-    {
-      key: "edit_images",
-      mark: <ImageIcon size={SHAPE} />,
-      allowed: account?.is_administrator === true && catalogued,
-      act: onEditImages,
-    },
-    {
-      key: "edit_subtitles",
-      mark: <SubtitlesIcon size={SHAPE} />,
-      allowed:
-        account?.is_administrator === true &&
-        card.source !== null &&
-        (card.kind === "movie" || card.kind === "episode"),
-      act: onEditSubtitles,
-    },
-    {
-      key: "identify",
-      mark: <IdentifyIcon size={SHAPE} />,
-      allowed: account?.is_administrator === true && catalogued,
-      act: onIdentify,
-    },
-    {
-      key: "forget_identity",
-      mark: <ForgetIcon size={SHAPE} />,
-      allowed:
-        account?.is_administrator === true &&
-        (card.kind === "movie" || card.kind === "series") &&
-        (card.identification === "identified" || card.identification === "manual"),
-      act: onForgetIdentity,
-    },
-    {
-      key: "refresh",
-      mark: <RefreshIcon size={SHAPE} />,
-      allowed: account?.is_administrator === true && catalogued,
-      act: onRefresh,
-    },
-    {
-      /* Says what it will do rather than always the same thing. Nothing is
-         known about a card that arrives from the server, so it offers to put
-         it there; once it has been put there from here, it offers to take it
-         back off. */
-      key: pinned ? "unpin" : "pin",
-      mark: <PinIcon size={SHAPE} filled={pinned} />,
-      allowed: account?.is_administrator === true,
-      act: () => marks.setPinned(card, !pinned),
-    },
-    {
-      key: "delete",
-      mark: <DeleteIcon size={SHAPE} />,
-      allowed: account?.may_delete === true,
-      act: onDelete,
-    },
+      {
+        key: "play_from_here",
+        mark: <PlayAllIcon size={SHAPE} />,
+        allowed: fromHere.length > 1,
+        act: () => {
+          playInTurn(fromHere);
+          navigate(`/work/${card.id}?play`);
+        },
+      },
+      {
+        key: "download",
+        mark: <DownloadIcon size={SHAPE} />,
+        allowed:
+          account?.may_download === true && (card.kind === "movie" || card.kind === "episode"),
+        act: onDownload,
+      },
+    ],
+    [
+      {
+        key: favourite ? "unfavourite" : "favourite",
+        mark: <HeartIcon size={SHAPE} filled={favourite} />,
+        act: () => marks.setFavourite(card, !favourite),
+      },
+      {
+        key: later ? "unwatch_later" : "watch_later",
+        mark: <ClockIcon size={SHAPE} />,
+        act: () => marks.setWatchLater(card, !later),
+      },
+      {
+        key: seen === "watched" ? "mark_unwatched" : "mark_watched",
+        mark: <TickIcon size={SHAPE} />,
+        allowed: card.watched_marks,
+        act: () => marks.setWatched(card, seen !== "watched"),
+      },
+      {
+        key: "select",
+        mark: <SelectIcon size={SHAPE} />,
+        allowed: selection !== null,
+        act: () => selection?.press(card.id, false),
+      },
+    ],
+    [
+      {
+        key: "collection",
+        mark: <CollectionIcon size={SHAPE} />,
+        allowed: account?.may_manage_collections === true && card.kind !== "season" && card.kind !== "episode",
+        act: onCollect,
+      },
+      {
+        key: "playlist",
+        mark: <PlaylistIcon size={SHAPE} />,
+        allowed: card.kind === "movie" || card.kind === "episode" || card.kind === "video",
+        act: onPlaylist,
+      },
+      {
+        /* Says what it will do rather than always the same thing. Nothing is
+           known about a card that arrives from the server, so it offers to put
+           it there; once it has been put there from here, it offers to take it
+           back off. */
+        key: pinned ? "unpin" : "pin",
+        mark: <PinIcon size={SHAPE} filled={pinned} />,
+        allowed: account?.is_administrator === true,
+        act: () => marks.setPinned(card, !pinned),
+      },
+    ],
+    [
+      {
+        key: "edit_metadata",
+        mark: <EditIcon size={SHAPE} />,
+        allowed: account?.is_administrator === true,
+        act: onEditDetails,
+      },
+      {
+        key: "edit_images",
+        mark: <ImageIcon size={SHAPE} />,
+        allowed: account?.is_administrator === true && catalogued,
+        act: onEditImages,
+      },
+      {
+        key: "edit_subtitles",
+        mark: <SubtitlesIcon size={SHAPE} />,
+        allowed:
+          account?.is_administrator === true &&
+          card.source !== null &&
+          (card.kind === "movie" || card.kind === "episode"),
+        act: onEditSubtitles,
+      },
+    ],
+    [
+      {
+        key: "identify",
+        mark: <IdentifyIcon size={SHAPE} />,
+        allowed: account?.is_administrator === true && catalogued,
+        act: onIdentify,
+      },
+      {
+        key: "forget_identity",
+        mark: <ForgetIcon size={SHAPE} />,
+        allowed:
+          account?.is_administrator === true &&
+          (card.kind === "movie" || card.kind === "series") &&
+          (card.identification === "identified" || card.identification === "manual"),
+        act: onForgetIdentity,
+      },
+      {
+        key: "refresh",
+        mark: <RefreshIcon size={SHAPE} />,
+        allowed: account?.is_administrator === true && catalogued,
+        act: onRefresh,
+      },
+    ],
+    [
+      {
+        key: "delete",
+        mark: <DeleteIcon size={SHAPE} />,
+        allowed: account?.may_delete === true,
+        act: onDelete,
+      },
+    ],
   ];
 
   return createPortal(
@@ -521,32 +536,38 @@ export function CardMenu({
         visibility: at ? "visible" : "hidden",
       }}
     >
-      {entries
-        .filter((entry) => entry.allowed !== false)
-        .map((entry) => (
-          <button
-            key={entry.key}
-            type="button"
-            role="menuitem"
-            className={`header-menu-line${entry.later ? " header-menu-later" : ""}`}
-            /* Said rather than disabled outright: a disabled button takes no
-               pointer, so the very tooltip that explains why it is grey
-               never appears. */
-            aria-disabled={entry.later}
-            title={entry.later ? t("nav.later") : undefined}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              if (entry.later) {
-                return;
-              }
-              entry.act?.();
-              onClose();
-            }}
-          >
-            {entry.mark}
-            {t(`card.menu.${entry.key}`)}
-          </button>
+      {groups
+        .map((group) => group.filter((entry) => entry.allowed !== false))
+        .filter((group) => group.length > 0)
+        .map((group, at) => (
+          <Fragment key={group[0].key}>
+            {at > 0 && <div className="header-menu-divider" aria-hidden="true" />}
+            {group.map((entry) => (
+              <button
+                key={entry.key}
+                type="button"
+                role="menuitem"
+                className={`header-menu-line${entry.later ? " header-menu-later" : ""}`}
+                /* Said rather than disabled outright: a disabled button takes no
+                   pointer, so the very tooltip that explains why it is grey
+                   never appears. */
+                aria-disabled={entry.later}
+                title={entry.later ? t("nav.later") : undefined}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (entry.later) {
+                    return;
+                  }
+                  entry.act?.();
+                  onClose();
+                }}
+              >
+                {entry.mark}
+                {t(`card.menu.${entry.key}`)}
+              </button>
+            ))}
+          </Fragment>
         ))}
     </div>,
     document.body,
