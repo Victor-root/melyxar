@@ -62,7 +62,8 @@ interface Marks {
   setWatched: (card: Card, watched: boolean) => void;
   setFavourite: (card: Card, favourite: boolean) => void;
   setWatchLater: (card: Card, later: boolean) => void;
-  setPinned: (card: Card, pinned: boolean) => void;
+  /** Settled once the server holds it, for pins that have to land in turn. */
+  setPinned: (card: Card, pinned: boolean) => Promise<void>;
   /** Bumped whenever something said here changes which works a row built by
       the server holds: a work put on the front page, an episode ticked off
       the row of what is unfinished. The screens standing on such a row read
@@ -132,13 +133,22 @@ export function MarksProvider({ children }: { children: ReactNode }) {
   /* The banner of the home page is the one thing this changes, and it is the
      server that decides what stands in it. So nothing is mended here beyond
      the menu entry's own wording: what is said is that the shelf moved, and
-     the screens that show it ask again. */
+     the screens that show it ask again. What made room for it in a full
+     banner is no longer there either. */
   const setPinned = useCallback(
     (card: Card, pinned: boolean) => {
       const before = said[card.id]?.pinned;
       say(card.id, { pinned });
       rowsHaveMoved();
-      api.setPinned(card.id, pinned).catch(() => say(card.id, { pinned: before }));
+      return api.setPinned(card.id, pinned).then(
+        ({ displaced }) => {
+          displaced.forEach((id) => say(id, { pinned: false }));
+          if (displaced.length > 0) {
+            rowsHaveMoved();
+          }
+        },
+        () => say(card.id, { pinned: before }),
+      );
     },
     [said, say, rowsHaveMoved],
   );

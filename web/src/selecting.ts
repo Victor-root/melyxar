@@ -44,6 +44,5 @@ export function marksThemAll<T>(chosen: readonly T[], wears: (one: T) => boolean
   return !chosen.every(wears);
 }
 
-/** How many works the banner of the home page holds, the most that can be
- *  put there together. */
+/** How many works the banner of the home page holds. */
 export const IN_THE_BANNER = 5;

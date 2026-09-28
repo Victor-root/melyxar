@@ -109,23 +109,20 @@ export function Selecting({ items, children }: { items: Card[]; children: ReactN
     (card) => card.kind === "movie" || card.kind === "episode" || card.kind === "video",
   );
   const pinned = marksThemAll(picked, (card) => marks.pinnedOf(card) === true);
-  const tooManyToPin = pinned && picked.length > IN_THE_BANNER;
+  /* One after the other, the first chosen last, so it ends up at the front
+     of the banner and the rest follow in the order they were chosen. Beyond
+     what the banner holds, each would only push out one pinned here. */
+  const pin = async () => {
+    const put = pinned ? picked.slice(0, IN_THE_BANNER).reverse() : picked;
+    for (const card of put) {
+      await marks.setPinned(card, pinned);
+    }
+  };
 
   /** One action of the bar, drawn as its shape with its words under the
       pointer: seven words in a row did not fit a phone. */
-  const act = (key: string, mark: ReactNode, onPress: () => void, why?: string) => (
-    <button
-      type="button"
-      className="selection-act"
-      aria-label={why ?? t(key)}
-      title={why ?? t(key)}
-      aria-disabled={why !== undefined}
-      onClick={() => {
-        if (why === undefined) {
-          onPress();
-        }
-      }}
-    >
+  const act = (key: string, mark: ReactNode, onPress: () => void) => (
+    <button type="button" className="selection-act" aria-label={t(key)} title={t(key)} onClick={onPress}>
       {mark}
     </button>
   );
@@ -169,8 +166,7 @@ export function Selecting({ items, children }: { items: Card[]; children: ReactN
             act(
               pinned ? "card.menu.pin" : "card.menu.unpin",
               <PinIcon size={17} filled={!pinned} />,
-              () => picked.forEach((card) => marks.setPinned(card, pinned)),
-              tooManyToPin ? t("selection.too_many_to_pin", { count: IN_THE_BANNER }) : undefined,
+              () => void pin(),
             )}
           {account.may_delete && (
             <button

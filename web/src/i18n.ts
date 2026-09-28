@@ -684,7 +684,6 @@ const en: Dictionary = {
   "selection.count_one": "1 selected",
   "selection.all": "Select all",
   "selection.cancel": "Cancel",
-  "selection.too_many_to_pin": "The home banner holds {count} titles at most",
   "selection.choose": "Select",
   "selection.unchoose": "Unselect",
   "refused.library.something_is_running":
@@ -2161,7 +2160,6 @@ const fr: Dictionary = {
   "selection.count_one": "1 sélectionné",
   "selection.all": "Tout sélectionner",
   "selection.cancel": "Annuler",
-  "selection.too_many_to_pin": "La une de l’accueil montre {count} titres au plus",
   "selection.choose": "Sélectionner",
   "selection.unchoose": "Désélectionner",
   "refused.library.something_is_running":

@@ -217,22 +217,36 @@ impl Database {
         Ok(cards)
     }
 
-    /// Puts a work in front of everybody, at the end of what is already there.
-    ///
-    /// Pinning what is already pinned leaves it where it is rather than moving
-    /// it to the end: an administrator who presses twice meant to pin it once,
-    /// and the order of this row is arranged by hand.
-    pub async fn pin_work(&self, work_id: WorkId) -> Result<()> {
+    /// Puts a work in front of everybody, ahead of what is already there,
+    /// and keeps only the `kept` first: the banner holds no more, so what
+    /// was pinned longest ago makes room rather than the pin being refused.
+    /// Pinning what is already pinned brings it back to the front. Answers
+    /// the works that made room.
+    pub async fn pin_work(&self, work_id: WorkId, kept: i64) -> Result<Vec<WorkId>> {
+        let mut transaction = self.begin().await?;
         sqlx::query(
             "INSERT INTO pinned_works (work_id, rank, pinned_at)
-             VALUES (?, coalesce((SELECT max(rank) FROM pinned_works), 0) + 1, ?)
-             ON CONFLICT (work_id) DO NOTHING",
+             VALUES (?, coalesce((SELECT min(rank) FROM pinned_works), 1) - 1, ?)
+             ON CONFLICT (work_id) DO UPDATE
+                SET rank = excluded.rank, pinned_at = excluded.pinned_at",
         )
         .bind(work_id.to_db_string())
         .bind(timestamp_to_text(now()))
-        .execute(self.writer())
+        .execute(&mut *transaction)
         .await?;
-        Ok(())
+        let rows = sqlx::query(
+            "DELETE FROM pinned_works
+              WHERE work_id IN (SELECT work_id FROM pinned_works
+                                 ORDER BY rank, pinned_at LIMIT -1 OFFSET ?)
+              RETURNING work_id",
+        )
+        .bind(kept)
+        .fetch_all(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        rows.iter()
+            .map(|row| parse_id(&row.try_get::<String, _>("work_id")?))
+            .collect()
     }
 
     /// Takes a work back off the front page. Answers whether one was there.
@@ -827,14 +841,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn what_is_pinned_comes_back_in_the_order_it_was_pinned_in() {
+    async fn a_full_banner_makes_room_by_letting_go_of_the_oldest_pin() {
+        let (database, _, who, films) = a_shelf(&[
+            ("One", 7.0, "Drame"),
+            ("Two", 8.0, "Drame"),
+            ("Three", 6.0, "Drame"),
+        ])
+        .await;
+
+        assert!(database.pin_work(films[0], 2).await.expect("pinned").is_empty());
+        assert!(database.pin_work(films[1], 2).await.expect("pinned").is_empty());
+        let displaced = database.pin_work(films[2], 2).await.expect("pinned");
+
+        assert_eq!(displaced, vec![films[0]]);
+        let front = database.pinned_works(who, None, 10).await.expect("pinned read");
+        assert_eq!(
+            front.iter().map(|card| card.id).collect::<Vec<_>>(),
+            vec![films[2], films[1]]
+        );
+    }
+
+    #[tokio::test]
+    async fn what_is_pinned_last_comes_first() {
         let (database, _, who, films) =
             a_shelf(&[("One", 7.0, "Drame"), ("Two", 8.0, "Drame")]).await;
 
-        database.pin_work(films[1]).await.expect("pinned");
-        database.pin_work(films[0]).await.expect("pinned");
-        // Pressing twice on the same one leaves it where it is.
-        database.pin_work(films[1]).await.expect("pinned again");
+        database.pin_work(films[0], 5).await.expect("pinned");
+        database.pin_work(films[0], 5).await.expect("pinned again");
+        database.pin_work(films[1], 5).await.expect("pinned");
 
         let front = database
             .pinned_works(who, None, 10)
@@ -844,6 +878,11 @@ mod tests {
             front.iter().map(|card| card.id).collect::<Vec<_>>(),
             vec![films[1], films[0]]
         );
+
+        // Pinned again, it comes back to the front.
+        database.pin_work(films[0], 5).await.expect("pinned again");
+        let front = database.pinned_works(who, None, 10).await.expect("pinned read");
+        assert_eq!(front[0].id, films[0]);
 
         assert!(database.is_pinned(films[0]).await.expect("read"));
         assert!(database.unpin_work(films[0]).await.expect("unpinned"));
@@ -890,7 +929,7 @@ mod tests {
                 .expect("hung under its parent");
         }
 
-        database.pin_work(hung[2]).await.expect("pinned");
+        database.pin_work(hung[2], 5).await.expect("pinned");
 
         assert_eq!(
             database

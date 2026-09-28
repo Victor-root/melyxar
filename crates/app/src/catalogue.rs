@@ -281,23 +281,24 @@ pub async fn browse(
 /// for one: this is the server's own shelf, not a bookmark. Each person's own
 /// list is the favourites.
 ///
-/// Answers what it is now rather than what was asked for, so a button pressed
-/// twice in a second cannot end up saying one thing while the server says
-/// another.
+/// A work pinned goes to the front of the banner, and what was pinned longest
+/// ago leaves it once it holds more than it shows; those are answered too, so
+/// the screens can say they are no longer there.
 pub async fn set_pinned(
     state: &AppState,
     who: &User,
     work_id: WorkId,
     pinned: bool,
-) -> Result<bool> {
+) -> Result<Vec<WorkId>> {
     crate::reach::may_read_the_work(state, who, work_id).await?;
+    let database = state.database();
     match pinned {
-        true => state.database().pin_work(work_id).await?,
+        true => Ok(database.pin_work(work_id, IN_THE_HERO).await?),
         false => {
-            state.database().unpin_work(work_id).await?;
+            database.unpin_work(work_id).await?;
+            Ok(Vec::new())
         }
     }
-    Ok(pinned)
 }
 
 /// What a home page opens on.
@@ -876,7 +877,7 @@ mod tests {
             .expect("a film")
             .id;
 
-        state.database().pin_work(oldest).await.expect("pinned");
+        state.database().pin_work(oldest, IN_THE_HERO).await.expect("pinned");
 
         let page = home(&state, Some(library_id), &viewer).await.expect("read");
         assert_eq!(page.hero[0].card.id, oldest);
@@ -919,7 +920,7 @@ mod tests {
         }
 
         let chosen = films.last().expect("a film").id;
-        state.database().pin_work(chosen).await.expect("pinned");
+        state.database().pin_work(chosen, IN_THE_HERO).await.expect("pinned");
 
         let page = home(&state, Some(library_id), &viewer).await.expect("read");
         assert_eq!(page.hero.len(), IN_THE_HERO as usize);
