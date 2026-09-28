@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::account::Viewer;
 use crate::catalogue::{card_view, CardView};
 use crate::error::{Result, ServerError};
-use crate::identifiers::{parse_collection, parse_work};
+use crate::identifiers::{parse_collection, parse_work, parse_works};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -105,12 +105,7 @@ async fn create(
     Viewer(who): Viewer,
     Json(made): Json<Made>,
 ) -> Result<Json<MadeView>> {
-    let works = made
-        .works
-        .iter()
-        .map(|work| parse_work(work))
-        .collect::<Result<Vec<_>>>()?;
-    let id = melyxar_app::collections::create(&state, &who, &made.name, &works).await?;
+    let id = melyxar_app::collections::create(&state, &who, &made.name, &parse_works(&made.works)?).await?;
     Ok(Json(MadeView { id: id.to_string() }))
 }
 
@@ -151,12 +146,8 @@ async fn put(
     Path(id): Path<String>,
     Json(asked): Json<Put>,
 ) -> Result<Json<()>> {
-    let works = asked
-        .works
-        .iter()
-        .map(|work| parse_work(work))
-        .collect::<Result<Vec<_>>>()?;
-    melyxar_app::collections::put(&state, &who, parse_collection(&id)?, &works, asked.in_it).await?;
+    melyxar_app::collections::put(&state, &who, parse_collection(&id)?, &parse_works(&asked.works)?, asked.in_it)
+        .await?;
     Ok(Json(()))
 }
 

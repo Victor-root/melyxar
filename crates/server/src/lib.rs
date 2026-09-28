@@ -28,6 +28,7 @@ pub mod live;
 pub mod page;
 pub mod pictures;
 pub mod playback;
+pub mod playlists;
 pub mod preferences;
 pub mod routes;
 pub mod timing;

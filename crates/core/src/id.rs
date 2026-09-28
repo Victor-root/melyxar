@@ -118,6 +118,10 @@ define_id!(
     CollectionId
 );
 define_id!(
+    /// Identifies one account's playlist.
+    PlaylistId
+);
+define_id!(
     /// Identifies one generated picture in the cache.
     ImageId
 );
