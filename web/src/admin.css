@@ -42,6 +42,13 @@
   box-shadow: 0 0 28px -6px var(--accent-glow);
 }
 
+/* The administrator's own logo in that frame, in its own shape. */
+.server-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
 .server-words {
   display: flex;
   flex: 1 1 200px;

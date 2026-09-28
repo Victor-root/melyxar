@@ -16,8 +16,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { MelyxarMark } from "../icons";
+import { useBranding } from "../player/logo";
 import { useSettings } from "../settings";
+import { ServerMark } from "./server-mark";
 
 /** The longest a page is held, from the moment the loader first shows. */
 const LONGEST_HOLD_MS = 3000;
@@ -39,10 +40,11 @@ export function stillArriving(): boolean {
 /** The loader alone, while there is not yet anything to build. */
 export function ArrivalLoader() {
   const { t } = useSettings();
+  const branding = useBranding();
   heldSince ??= performance.now();
   return (
     <div className="arrival" role="status" aria-label={t("arrival.loading")}>
-      <MelyxarMark size={56} />
+      <ServerMark branding={branding} size={56} logoClassName="arrival-logo" />
       <span className="arrival-ring" aria-hidden="true" />
     </div>
   );

@@ -34,12 +34,12 @@ import {
   EyeIcon,
   EyeOffIcon,
   LockIcon,
-  MelyxarMark,
 } from "../icons";
 import { Face } from "../components/face";
 import { useDoorScreen } from "../screens/door";
 import { useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
+import { ServerMark } from "../components/server-mark";
 
 /** The letter a name is shown by, where it has no picture.
  *
@@ -182,11 +182,7 @@ export function Door({
         <div className="door-crown">
           {/* A mark of the administrator's own stays in its own colours; the
               one Melyxar ships takes the accent, like the rest of the page. */}
-          {branding.logo ? (
-            <img className="door-mark" src={branding.logo} alt="" aria-hidden="true" />
-          ) : (
-            <MelyxarMark size={58} className="door-mark" />
-          )}
+          <ServerMark branding={branding} size={58} className="door-mark" />
           <h1 className="door-name">{branding.server_name}</h1>
         </div>
 
