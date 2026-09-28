@@ -318,6 +318,8 @@ input[type="radio"]:disabled {
 }
 
 .picker-list {
+  /* Above a window it is opened from, not only above the page. */
+  z-index: 70;
   max-height: min(340px, 60vh);
   overflow-y: auto;
 }

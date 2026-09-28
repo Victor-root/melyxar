@@ -3,6 +3,10 @@
  * online, one line each.
  */
 
+.modal-subtitles {
+  width: min(980px, 100%);
+}
+
 .subtitles-heading {
   margin: 4px 0 8px;
   font-size: 14px;
@@ -49,11 +53,9 @@
 .subtitles-release {
   flex: 1 1 200px;
   min-width: 0;
-  overflow: hidden;
   color: var(--text-soft);
   font-size: 13.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .subtitles-origin,
