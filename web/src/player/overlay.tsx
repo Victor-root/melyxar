@@ -632,7 +632,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
         <button
           className="player-button"
           onClick={surroundings.onNextEpisode}
-          aria-label={t("player.next_episode")}
+          aria-label={t(surroundings.work.kind === "episode" ? "player.next_episode" : "player.next")}
         >
           <NextEpisodeIcon size={ICON} />
         </button>

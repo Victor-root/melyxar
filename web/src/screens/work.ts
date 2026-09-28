@@ -19,6 +19,7 @@ import { useAsked } from "../asking";
 import { useMarks } from "../marks";
 import type { Trailer } from "../components/trailer";
 import { embedOf } from "../trailers";
+import { forgetTheQueue, movedTo, theQueue, whatComesNext } from "../queue";
 
 /**
  * What the address says when a page is meant to start playing by itself.
@@ -174,10 +175,10 @@ export interface WorkScreen {
   trailer: Trailer | null;
   watchTrailer: (trailer: Trailer) => void;
   stopTrailer: () => void;
-  /** Steps straight to the episode after this one, playing it at once: what
-      an episode ending on its own asks for, and what the button beside play
-      asks for by hand. Absent for anything that is not an episode, and for
-      the last one of a series. */
+  /** Steps straight to what follows this one, playing it at once: the next
+      episode, or the next work of a row played from a card onwards. What a
+      work ending on its own asks for, and what the button beside play asks
+      for by hand. Absent when nothing follows. */
   nextEpisode: (() => void) | null;
   /** The same, a step back into the episode before this one. Absent for the
       first one of a series. */
@@ -377,6 +378,8 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
      screen, which is still the same film. */
   const { look } = asked;
   const stopPlaying = useCallback(() => {
+    // Leaving the film ends the sitting, and what was to follow it with it.
+    forgetTheQueue();
     setPlaying(null);
     if (cameToPlay.current) {
       setLeaving(true);
@@ -412,6 +415,25 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
   const nextUp = work?.kind === "episode" ? work.carry_on_with : null;
   const previousUp = work?.kind === "episode" ? work.previous_episode : null;
 
+  /* What follows this work: its next episode, or the next work of a row
+     somebody asked to play from a card onwards. Read as the page is drawn,
+     which is after the queue was set by whatever opened it. */
+  const queue = theQueue();
+  const following = work ? whatComesNext(queue, work.id, nextUp?.id ?? null) : null;
+  const goOn = useCallback(() => {
+    if (!following) {
+      return;
+    }
+    if (nextUp && following === nextUp.id) {
+      stepTo(nextUp);
+      return;
+    }
+    if (queue) {
+      movedTo(queue, following);
+    }
+    navigate(`/work/${following}?${START_AT_ONCE}`, { replace: true });
+  }, [following, nextUp, queue, stepTo, navigate]);
+
   return {
     work,
     failed: asked.failure && (asked.failure.code === "not_found" ? "not_found" : "unreachable"),
@@ -437,7 +459,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     stopTrailer,
     /* Only after an episode: a film that ends is a film that ended, and a
        season has nothing playing to follow. */
-    nextEpisode: nextUp ? () => stepTo(nextUp) : null,
+    nextEpisode: following ? goOn : null,
     previousEpisode: previousUp ? () => stepTo(previousUp) : null,
     playEpisode: stepTo,
   };
