@@ -19,7 +19,6 @@ import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
 import { useToast } from "./toasts";
-import type { Choosable } from "./selection";
 
 /** How many files are named before the rest are only counted. */
 const FILES_NAMED = 8;
@@ -29,7 +28,7 @@ export function DeleteDialog({
   onClose,
   onDeleted,
 }: {
-  works: Choosable[];
+  works: { id: string; title: string }[];
   onClose: () => void;
   /** Said once they are gone, every card of them already taken away, so
       whoever showed them can move on. */

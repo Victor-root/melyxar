@@ -33,3 +33,17 @@ export function pressed(
   }
   return next;
 }
+
+/**
+ * Whether a mark pressed for several chosen cards at once puts it on them, or
+ * takes it off. Off only when every one of them already wears it, so a choice
+ * that is half marked comes out wholly marked rather than flipped card by
+ * card.
+ */
+export function marksThemAll<T>(chosen: readonly T[], wears: (one: T) => boolean): boolean {
+  return !chosen.every(wears);
+}
+
+/** How many works the banner of the home page holds, the most that can be
+ *  put there together. */
+export const IN_THE_BANNER = 5;

@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { api } from "../api";
 import type { Card } from "../api";
 import { refusalOf, useAsked } from "../asking";
 import { refusalKey } from "../i18n";
@@ -32,15 +33,32 @@ export interface Lists {
   create: (name: string, works: string[]) => Promise<{ id: string }>;
 }
 
+/** The collections made by hand, as the window that fills them asks them. */
+export const COLLECTIONS: Lists = {
+  every: async (signal) =>
+    (await api.collections(signal)).filter((collection) => collection.made_by_hand),
+  holding: async (work, signal) => (await api.collectionsHolding(work, signal)).collections,
+  put: api.putInCollection,
+  create: api.createCollection,
+};
+
+/** This account's playlists, the same way. */
+export const PLAYLISTS: Lists = {
+  every: (signal) => api.playlists(signal),
+  holding: async (work, signal) => (await api.playlistsHolding(work, signal)).playlists,
+  put: api.putInPlaylist,
+  create: api.createPlaylist,
+};
+
 export function PutInListsDialog({
-  workId,
-  title,
+  works,
   lists,
   words,
   onClose,
 }: {
-  workId: string;
-  title: string;
+  /** One title, or several chosen together: a list is ticked when it holds
+      every one of them. */
+  works: { id: string; title: string }[];
   lists: Lists;
   /** Where the words of the window start: `collect` or `playlist`. */
   words: string;
@@ -49,7 +67,15 @@ export function PutInListsDialog({
   const { t } = useSettings();
   const { rowsHaveMoved } = useMarks();
   const every = useAsked((signal) => lists.every(signal), []);
-  const held = useAsked((signal) => lists.holding(workId, signal), [workId]);
+  const ids = works.map((work) => work.id);
+  const asked = ids.join();
+  const held = useAsked(
+    async (signal) => {
+      const each = await Promise.all(ids.map((id) => lists.holding(id, signal)));
+      return each.reduce((all, one) => all.filter((list) => one.includes(list)));
+    },
+    [asked],
+  );
   const [made, setMade] = useState<{ id: string; name: string }[]>([]);
   const [inThem, setInThem] = useState<Set<string> | null>(null);
   const [typed, setTyped] = useState("");
@@ -81,7 +107,7 @@ export function PutInListsDialog({
     setInThem(next);
     setRefused(null);
     try {
-      await lists.put(id, [workId], putIn);
+      await lists.put(id, ids, putIn);
       rowsHaveMoved();
     } catch (error) {
       setInThem(inThem);
@@ -97,7 +123,7 @@ export function PutInListsDialog({
     setBusy(true);
     setRefused(null);
     try {
-      const { id } = await lists.create(name, [workId]);
+      const { id } = await lists.create(name, ids);
       setMade((before) => [...before, { id, name }]);
       setInThem(new Set([...inThem, id]));
       setTyped("");
@@ -111,7 +137,14 @@ export function PutInListsDialog({
   const failure = every.failure ?? held.failure;
 
   return (
-    <Modal title={t(`${words}.title`, { title })} onClose={onClose}>
+    <Modal
+      title={
+        works.length === 1
+          ? t(`${words}.title`, { title: works[0].title })
+          : t(`${words}.title_many`, { count: works.length })
+      }
+      onClose={onClose}
+    >
       {failure && <p className="notice">{t(refusalKey(refusalOf(failure)))}</p>}
       {refused && <p className="notice">{t(refusalKey(refused))}</p>}
 

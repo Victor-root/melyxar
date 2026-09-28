@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pressed } from "./selecting";
+import { marksThemAll, pressed } from "./selecting";
 
 const order = ["a", "b", "c", "d", "e"];
 
@@ -28,5 +28,18 @@ describe("pressed", () => {
   it("is a single press when there is nowhere to start a range from", () => {
     expect([...pressed(order, new Set(), "c", null, true)]).toEqual(["c"]);
     expect([...pressed(order, new Set(), "c", "gone", true)]).toEqual(["c"]);
+  });
+});
+
+describe("marksThemAll", () => {
+  const wears = (one: boolean) => one;
+
+  it("puts the mark on when any chosen card lacks it", () => {
+    expect(marksThemAll([true, false, true], wears)).toBe(true);
+    expect(marksThemAll([false, false], wears)).toBe(true);
+  });
+
+  it("takes it off only when every chosen card already wears it", () => {
+    expect(marksThemAll([true, true], wears)).toBe(false);
   });
 });
