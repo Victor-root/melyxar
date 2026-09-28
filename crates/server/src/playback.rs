@@ -1589,6 +1589,7 @@ mod tests {
                 is_hearing_impaired: false,
                 is_external: true,
                 external_relative_path: Some("Quiet.Harbour.2019.fr.srt".into()),
+                downloaded_file: None,
             }),
         };
 

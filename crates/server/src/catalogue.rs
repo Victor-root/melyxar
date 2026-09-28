@@ -1436,6 +1436,7 @@ mod tests {
                 is_hearing_impaired: false,
                 is_external: false,
                 external_relative_path: None,
+                downloaded_file: None,
             }),
         }
     }

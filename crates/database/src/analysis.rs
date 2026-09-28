@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use melyxar_core::id::{ChapterId, LibraryId, LibraryRootId, MediaSourceId};
+use melyxar_core::id::{ChapterId, LibraryId, LibraryRootId, MediaSourceId, TrackId};
 use melyxar_core::media::{
     AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, Margins, SubtitleDetails,
     SubtitleLayout, Track, TrackKind, VideoDetails,
@@ -173,7 +173,8 @@ impl Database {
         let rows = sqlx::query(
             "SELECT DISTINCT tracks.source_id FROM tracks
              JOIN media_sources ON media_sources.id = tracks.source_id
-             WHERE media_sources.root_id = ? AND tracks.is_external = 1",
+             WHERE media_sources.root_id = ? AND tracks.is_external = 1
+               AND tracks.downloaded_file IS NULL",
         )
         .bind(root_id.to_db_string())
         .fetch_all(self.reader())
@@ -195,7 +196,10 @@ impl Database {
         tracks: &[Track],
     ) -> Result<()> {
         let mut transaction = self.begin().await?;
-        sqlx::query("DELETE FROM tracks WHERE source_id = ? AND is_external = 1")
+        sqlx::query(
+            "DELETE FROM tracks
+              WHERE source_id = ? AND is_external = 1 AND downloaded_file IS NULL",
+        )
             .bind(source_id.to_db_string())
             .execute(&mut *transaction)
             .await?;
@@ -204,6 +208,40 @@ impl Database {
         }
         transaction.commit().await?;
         Ok(())
+    }
+
+    /// Adds a subtitle downloaded for a source, as one more of its tracks.
+    pub async fn add_downloaded_subtitle(&self, source_id: MediaSourceId, track: &Track) -> Result<()> {
+        let mut transaction = self.begin().await?;
+        insert_track(&mut transaction, source_id, track).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    /// Takes away a subtitle downloaded for this source, and answers the name
+    /// of its file so it can be deleted. Nothing for a track that is not one.
+    pub async fn remove_downloaded_subtitle(
+        &self,
+        source_id: MediaSourceId,
+        track_id: TrackId,
+    ) -> Result<Option<String>> {
+        let mut transaction = self.begin().await?;
+        let file: Option<String> = sqlx::query_scalar(
+            "SELECT downloaded_file FROM tracks
+              WHERE id = ? AND source_id = ? AND downloaded_file IS NOT NULL",
+        )
+        .bind(track_id.to_db_string())
+        .bind(source_id.to_db_string())
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if file.is_some() {
+            sqlx::query("DELETE FROM tracks WHERE id = ?")
+                .bind(track_id.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+        }
+        transaction.commit().await?;
+        Ok(file)
     }
 
     /// Streams of one source, video first, then audio, then subtitles.
@@ -295,7 +333,7 @@ async fn insert_track(
             channels, channel_layout, sample_rate,
             loudness_integrated_lufs, loudness_true_peak_dbfs, loudness_range_lu,
             subtitle_layout, is_hearing_impaired, is_external, external_relative_path,
-            margin_top, margin_bottom, margin_left, margin_right
+            downloaded_file, margin_top, margin_bottom, margin_left, margin_right
          ) VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
@@ -305,7 +343,7 @@ async fn insert_track(
             ?, ?, ?,
             ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?
+            ?, ?, ?, ?, ?
          )",
     )
     .bind(track.id.to_db_string())
@@ -359,6 +397,7 @@ async fn insert_track(
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned())
     }))
+    .bind(subtitle.and_then(|details| details.downloaded_file.as_deref()))
     .bind(video.and_then(|details| details.margins).map(|it| it.top))
     .bind(
         video
@@ -454,6 +493,7 @@ fn track_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Track> {
             external_relative_path: row
                 .try_get::<Option<String>, _>("external_relative_path")?
                 .map(PathBuf::from),
+            downloaded_file: row.try_get("downloaded_file")?,
         }),
         other => {
             return Err(DatabaseError::Corrupt(format!(
@@ -535,6 +575,7 @@ mod tests {
                 is_hearing_impaired: true,
                 is_external: false,
                 external_relative_path: None,
+                downloaded_file: None,
             }),
         }
     }
@@ -730,8 +771,65 @@ mod tests {
                 is_hearing_impaired: false,
                 is_external: true,
                 external_relative_path: Some(PathBuf::from("Quiet.Harbour.2019.fr.forced.srt")),
+                downloaded_file: None,
             }),
         }
+    }
+
+    #[tokio::test]
+    async fn a_downloaded_subtitle_outlives_scans_and_analyses_until_taken_away() {
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        let mut downloaded = external_subtitle(source_id);
+        if let TrackKind::Subtitle(details) = &mut downloaded.kind {
+            details.external_relative_path = None;
+            details.downloaded_file = Some("downloaded.srt".to_string());
+        }
+        database
+            .add_downloaded_subtitle(source_id, &downloaded)
+            .await
+            .expect("added");
+
+        database
+            .store_external_subtitles(source_id, &[])
+            .await
+            .expect("a scan found nothing next to the film");
+        database
+            .store_analysis(source_id, &SourceAnalysis::default(), &[video_track(source_id)], &[])
+            .await
+            .expect("analysed again");
+        assert!(
+            database
+                .sources_with_external_subtitles(root_id)
+                .await
+                .expect("read")
+                .is_empty(),
+            "a downloaded subtitle is not one a scan looks after"
+        );
+        let stored = database.tracks_of_source(source_id).await.expect("read");
+        assert!(stored.iter().any(|track| matches!(
+            &track.kind,
+            TrackKind::Subtitle(details) if details.downloaded_file.as_deref() == Some("downloaded.srt")
+        )));
+
+        assert_eq!(
+            database
+                .remove_downloaded_subtitle(source_id, stored[0].id)
+                .await
+                .expect("refused"),
+            None,
+            "a track that was not downloaded is not taken away here"
+        );
+        assert_eq!(
+            database
+                .remove_downloaded_subtitle(source_id, downloaded.id)
+                .await
+                .expect("taken away")
+                .as_deref(),
+            Some("downloaded.srt")
+        );
+        assert_eq!(database.tracks_of_source(source_id).await.expect("read").len(), 1);
     }
 
     #[tokio::test]

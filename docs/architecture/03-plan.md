@@ -358,7 +358,7 @@ Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
 - Émissions : type de bibliothèque à part entière (documentaires et programmes de télévision), réutilisant le modèle série, saison, épisode.
 - Versions numérotées et **mise à jour depuis l'interface**. Une fois la mise à jour terminée, chaque page ouverte doit se recharger d'elle-même : sans cela, un onglet resté ouvert garde l'ancienne interface, qui peut réclamer au serveur des fichiers ou des réponses qui n'existent plus. Le script garde aujourd'hui les fichiers de l'interface précédente pour une mise à jour, ce qui couvre le cas le plus courant, pas tous.
 - Import ponctuel de l'historique de visionnage et des favoris depuis une installation Jellyfin existante.
-- Recherche et téléchargement de sous-titres en ligne, sur demande explicite.
+- **Sous-titres en ligne. Fait** (voir le README des décisions) : recherche chez OpenSubtitles depuis « Modifier les sous-titres » dans le menu d'un film ou d'un épisode, pour l'administrateur, avec la clé et le compte réglés dans Métadonnées ; le sous-titre choisi devient une piste de la copie, gardée dans les données du serveur, que le lecteur propose aussitôt et qu'on retire de la même fenêtre. Reste : un sous-titre téléchargé pour une copie supprimée laisse son fichier dans le dossier des sous-titres téléchargés.
 - Contrôle à distance d'une session de lecture depuis un autre appareil, sans priorité.
 - Partage de médiathèques entre deux serveurs appairés, après le jalon 9 : voir [05-partage-entre-serveurs.md](05-partage-entre-serveurs.md).
 - Interface ambitieuse, surveillance des dossiers en temps réel.

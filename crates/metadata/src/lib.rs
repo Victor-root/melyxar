@@ -13,6 +13,7 @@
 pub mod defaults;
 pub mod imdb;
 pub mod omdb;
+pub mod opensubtitles;
 pub mod provider;
 pub mod tmdb;
 

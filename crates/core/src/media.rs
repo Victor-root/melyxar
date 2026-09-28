@@ -492,10 +492,15 @@ pub struct SubtitleDetails {
     pub layout: SubtitleLayout,
     /// Meant for viewers who are hard of hearing.
     pub is_hearing_impaired: bool,
-    /// Stored in a separate file next to the media rather than inside it.
+    /// Stored in a separate file rather than inside the media: next to it,
+    /// or downloaded and kept by the server.
     pub is_external: bool,
-    /// Path of the external file, relative to the root.
+    /// Path of the external file, relative to the root, for one next to the
+    /// media.
     pub external_relative_path: Option<PathBuf>,
+    /// Name of the file in the server's own folder of downloaded subtitles,
+    /// for one downloaded rather than found on the disk.
+    pub downloaded_file: Option<String>,
 }
 
 impl SubtitleDetails {
@@ -691,6 +696,7 @@ mod tests {
             is_hearing_impaired: false,
             is_external: false,
             external_relative_path: None,
+            downloaded_file: None,
         };
         let bitmap = SubtitleDetails {
             layout: SubtitleLayout::Bitmap,
@@ -733,6 +739,7 @@ mod tests {
             is_hearing_impaired: false,
             is_external: false,
             external_relative_path: None,
+            downloaded_file: None,
         })
     }
 

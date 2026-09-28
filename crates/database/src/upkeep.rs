@@ -1177,6 +1177,7 @@ mod tests {
                 is_hearing_impaired: false,
                 is_external,
                 external_relative_path: is_external.then(|| PathBuf::from("Quiet.Harbour.fr.srt")),
+                downloaded_file: None,
             }),
         }
     }

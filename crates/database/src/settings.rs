@@ -232,6 +232,14 @@ impl LibraryWork {
     }
 }
 
+/// What the server asks OpenSubtitles with: the key of the administrator's
+/// application, and their account, a name and a password, when given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenSubtitlesAccount {
+    pub key: String,
+    pub login: Option<(String, String)>,
+}
+
 impl Database {
     /// Reads the settings row, which the first migration guarantees exists.
     pub async fn server_settings(&self) -> Result<ServerSettings> {
@@ -362,6 +370,46 @@ impl Database {
             .bind(timestamp_to_text(now()))
             .execute(self.writer())
             .await?;
+        Ok(())
+    }
+
+    /// What the server asks OpenSubtitles with, when the administrator gave
+    /// it: the key of their application, and their account when they gave
+    /// one.
+    pub async fn opensubtitles_account(&self) -> Result<Option<OpenSubtitlesAccount>> {
+        let row: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT opensubtitles_key, opensubtitles_username, opensubtitles_password
+               FROM server_settings WHERE id = 1",
+        )
+        .fetch_one(self.reader())
+        .await?;
+        Ok(match row {
+            (Some(key), username, password) => Some(OpenSubtitlesAccount {
+                key,
+                login: username.zip(password),
+            }),
+            (None, _, _) => None,
+        })
+    }
+
+    /// Keeps what the server asks OpenSubtitles with, or forgets it with
+    /// nothing.
+    pub async fn set_opensubtitles_account(&self, account: Option<&OpenSubtitlesAccount>) -> Result<()> {
+        let (username, password) = account
+            .and_then(|account| account.login.as_ref())
+            .map(|(username, password)| (Some(username.as_str()), Some(password.as_str())))
+            .unwrap_or((None, None));
+        sqlx::query(
+            "UPDATE server_settings SET opensubtitles_key = ?, opensubtitles_username = ?,
+                                        opensubtitles_password = ?, updated_at = ?
+              WHERE id = 1",
+        )
+        .bind(account.map(|account| account.key.as_str()))
+        .bind(username)
+        .bind(password)
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
         Ok(())
     }
 
@@ -585,6 +633,20 @@ mod tests {
         assert_eq!(database.omdb_key().await.expect("read").as_deref(), Some("abcd1234"));
         database.set_omdb_key(None).await.expect("forgotten");
         assert_eq!(database.omdb_key().await.expect("read"), None);
+    }
+
+    #[tokio::test]
+    async fn the_opensubtitles_account_is_kept_and_forgotten() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.opensubtitles_account().await.expect("read"), None);
+        let account = OpenSubtitlesAccount {
+            key: "key".to_string(),
+            login: Some(("me".to_string(), "secret".to_string())),
+        };
+        database.set_opensubtitles_account(Some(&account)).await.expect("kept");
+        assert_eq!(database.opensubtitles_account().await.expect("read"), Some(account));
+        database.set_opensubtitles_account(None).await.expect("forgotten");
+        assert_eq!(database.opensubtitles_account().await.expect("read"), None);
     }
 
     #[tokio::test]

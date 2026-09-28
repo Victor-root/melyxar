@@ -24,7 +24,7 @@ use crate::{AppError, AppState, Result};
 /// Named after the track rather than the film: one film can carry a dozen, and
 /// a viewer switching between two of them should find the second already
 /// there.
-fn cached_at(state: &AppState, track_id: TrackId) -> PathBuf {
+pub(crate) fn cached_at(state: &AppState, track_id: TrackId) -> PathBuf {
     state
         .config()
         .directories
@@ -130,9 +130,10 @@ pub async fn as_web_vtt(
     // A track in a file of its own is taken whole; one inside the film is
     // named by its place in it. The relative path is the one the scan
     // recorded, and it is joined to the root here rather than trusted from
-    // anywhere else.
-    let (file, stream_index) = match &details.external_relative_path {
-        Some(relative) if details.is_external => (source.root.join(relative), None),
+    // anywhere else; a downloaded one lives in the server's own folder.
+    let (file, stream_index) = match (&details.downloaded_file, &details.external_relative_path) {
+        (Some(name), _) => (state.config().directories.downloaded_subtitles().join(name), None),
+        (None, Some(relative)) if details.is_external => (source.root.join(relative), None),
         _ => (source.path.clone(), Some(track.stream_index)),
     };
 
@@ -506,6 +507,7 @@ mod tests {
                 is_hearing_impaired: false,
                 is_external: external.is_some(),
                 external_relative_path: external.map(PathBuf::from),
+                downloaded_file: None,
             }),
         }
     }
