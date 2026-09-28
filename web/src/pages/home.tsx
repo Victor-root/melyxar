@@ -28,6 +28,7 @@ import { cardShapeOf, newestOfKind, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { BinocularsIcon, CameraIcon, EyeIcon, KindIcon } from "../icons";
 import { lengthOfAPlay } from "../watching";
+import { Arrival, ArrivalLoader, stillArriving } from "../components/arrival";
 import { PageBackdrop } from "../components/backdrop";
 
 /** Where the row of everything newest leads, which is the same grid read in
@@ -52,11 +53,19 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
     );
   }
 
-  /* Skeletons rather than a spinner over the whole page: what is coming has a
-     shape, and showing the shape is what stops the page jumping when it
-     arrives. */
+  /* The first time, the loader, since the page is held until it can be
+     scrolled; afterwards skeletons rather than a spinner, since what is
+     coming has a shape, and showing the shape is what stops the page jumping
+     when it arrives. */
   if (!home) {
-    return <HomeSkeleton />;
+    return stillArriving() ? (
+      <>
+        <PageBackdrop />
+        <ArrivalLoader />
+      </>
+    ) : (
+      <HomeSkeleton />
+    );
   }
 
   if (home.works === 0) {
@@ -198,35 +207,37 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       {/* Outside the page rather than inside it: the banner is the picture,
           and a picture held inside a column that stops short of both edges of
           a wide screen is a picture with a margin drawn round it. */}
-      <Hero items={home.hero} />
+      <Arrival>
+        <Hero items={home.hero} />
 
-      <main className="page page-home">
-        {laidOut(home.sections).map((laid) =>
-          typeof laid === "string" ? (
-            <Fragment key={laid}>{sections[laid]}</Fragment>
-          ) : (
-            /* The two rows of what is already under way, side by side while
-               both are short enough to go on one line. They are two rows
-               either way, with a heading each; what they share is a line,
-               and only while there is room for one. The stylesheet decides,
-               on the width of the window it is being read in. */
-            (sections[laid[0]] || sections[laid[1]]) && (
-              <Together key={laid.join(":")}>
-                {sections[laid[0]]}
-                {sections[laid[1]]}
-              </Together>
-            )
-          ),
-        )}
+        <main className="page page-home">
+          {laidOut(home.sections).map((laid) =>
+            typeof laid === "string" ? (
+              <Fragment key={laid}>{sections[laid]}</Fragment>
+            ) : (
+              /* The two rows of what is already under way, side by side while
+                 both are short enough to go on one line. They are two rows
+                 either way, with a heading each; what they share is a line,
+                 and only while there is room for one. The stylesheet decides,
+                 on the width of the window it is being read in. */
+              (sections[laid[0]] || sections[laid[1]]) && (
+                <Together key={laid.join(":")}>
+                  {sections[laid[0]]}
+                  {sections[laid[1]]}
+                </Together>
+              )
+            ),
+          )}
 
-        {/* The server said no, which is an answer and belongs on the screen
-            that asked rather than in a log nobody is reading. */}
-        {refused && (
-          <section className="section">
-            <p className="notice">{t(refusalKey(refused))}</p>
-          </section>
-        )}
-      </main>
+          {/* The server said no, which is an answer and belongs on the screen
+              that asked rather than in a log nobody is reading. */}
+          {refused && (
+            <section className="section">
+              <p className="notice">{t(refusalKey(refused))}</p>
+            </section>
+          )}
+        </main>
+      </Arrival>
     </>
   );
 }
