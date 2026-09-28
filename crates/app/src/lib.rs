@@ -33,6 +33,7 @@ pub mod overview;
 pub mod people;
 mod own;
 pub mod playback;
+pub mod ratings;
 pub mod reach;
 pub mod preferences;
 pub mod scan;

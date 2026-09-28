@@ -821,7 +821,7 @@ fn postpone(work: &Work, error: &ProviderError) -> Outcome {
     }
 }
 
-fn known_id(ids: &[(String, String)], provider: &str) -> Option<String> {
+pub(crate) fn known_id(ids: &[(String, String)], provider: &str) -> Option<String> {
     ids.iter()
         .find(|(name, _)| name == provider)
         .map(|(_, id)| id.clone())
@@ -1537,6 +1537,7 @@ where
         replace_pictures,
     )
     .await?;
+    crate::ratings::rate_one(state, provider.as_ref(), work_id, catalogue).await;
 
     state.database().bump_library_version(library_id).await?;
     Ok(())
@@ -1619,6 +1620,9 @@ where
         _ => identify_one(state, provider, &library, &work).await?,
     };
     record_outcome(state, work.id, outcome).await?;
+    if let (Outcome::Identified, Some(catalogue)) = (outcome, Catalogue::of(work.kind)) {
+        crate::ratings::rate_one(state, provider.as_ref(), work.id, catalogue).await;
+    }
     state.database().bump_library_version(library.id).await?;
     tracing::info!(work = %work.title, outcome = ?outcome, "metadata asked for again by hand");
 
@@ -1884,6 +1888,21 @@ mod tests {
                 return Err(failure());
             }
             Ok(self.offered.clone())
+        }
+
+        async fn imdb_id(
+            &self,
+            _catalogue: Catalogue,
+            external_id: &str,
+        ) -> melyxar_metadata::provider::Result<Option<String>> {
+            if let Some(failure) = self.failure {
+                return Err(failure());
+            }
+            Ok(self
+                .details
+                .iter()
+                .find(|details| details.external_id == external_id)
+                .and_then(|details| details.imdb_id.clone()))
         }
 
         async fn by_imdb_id(

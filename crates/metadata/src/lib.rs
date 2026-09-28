@@ -11,6 +11,8 @@
 #![forbid(unsafe_code)]
 
 pub mod defaults;
+pub mod imdb;
+pub mod omdb;
 pub mod provider;
 pub mod tmdb;
 
@@ -18,4 +20,5 @@ pub use provider::{
     Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, MetadataProvider,
     OfferedPicture, PersonDetails, PictureKind, ProviderError, SeasonDetails, Trailer,
 };
+pub use omdb::OmdbClient;
 pub use tmdb::TmdbProvider;

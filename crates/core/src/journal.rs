@@ -57,6 +57,8 @@ pub fn tag_of(module: &str) -> &'static str {
         // skip button turns up in the wrong place.
         ("melyxar_app::openings", "openings"),
         ("melyxar_app::identify", "identify"),
+        // Ratings from elsewhere are what the metadata screen sets up.
+        ("melyxar_app::ratings", "metadata"),
         ("melyxar_app::subtitles", "subtitles"),
         ("melyxar_app::playback", "playback"),
         ("melyxar_app::images", "images"),

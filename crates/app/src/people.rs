@@ -182,6 +182,10 @@ mod tests {
             Err(nothing_else())
         }
 
+        async fn imdb_id(&self, _: Catalogue, _: &str) -> Answer<Option<String>> {
+            Err(nothing_else())
+        }
+
         async fn by_imdb_id(&self, _: &str, _: &str) -> Answer<Option<Candidate>> {
             Err(nothing_else())
         }

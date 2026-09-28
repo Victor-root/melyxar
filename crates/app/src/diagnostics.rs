@@ -1398,7 +1398,7 @@ mod tests {
         let state = state_with_root(directory.path(), media).await;
 
         let report = collect(&state).await.expect("report collected");
-        assert_eq!(report.upkeep.scheduled.len(), 6);
+        assert_eq!(report.upkeep.scheduled.len(), 7);
         assert!(
             report
                 .upkeep

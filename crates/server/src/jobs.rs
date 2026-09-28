@@ -32,7 +32,7 @@ pub fn router() -> Router<AppState> {
             "/api/v1/libraries/{id}/options",
             axum::routing::put(set_library_options),
         )
-        // The six scheduled tasks, each valid for every library.
+        // The seven scheduled tasks, each valid for every library.
         .route("/api/v1/tasks", axum::routing::get(scheduled_tasks))
         .route("/api/v1/tasks/run", axum::routing::post(run_every_task))
         .route(
