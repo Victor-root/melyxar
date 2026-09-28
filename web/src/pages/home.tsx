@@ -37,7 +37,7 @@ import { PageBackdrop } from "../components/backdrop";
 const EVERYTHING_NEWEST = "/search?order=added_at&descending=true";
 
 export function HomePage({ libraries }: { libraries: Library[] }) {
-  const { t } = useSettings();
+  const { t, bannerShown } = useSettings();
   const { home, failed, again, jobs, scan, lookUp, refused } = useHomeScreen(libraries);
 
   if (failed) {
@@ -215,7 +215,9 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
           and a picture held inside a column that stops short of both edges of
           a wide screen is a picture with a margin drawn round it. */}
       <Arrival>
-        <Hero items={home.hero} />
+        {/* Taken away the moment it is switched off, before the page is read
+            again without it. */}
+        {bannerShown && <Hero items={home.hero} />}
 
         <main className="page page-home">
           {laidOut(home.sections).map((laid) =>
