@@ -12,7 +12,7 @@ pub use melyxar_database::collections::{CollectionHeld, CollectionSummary};
 
 use crate::{AppError, AppState, Result};
 
-/// The longest name a collection may carry, in letters.
+/// The longest name a collection or a playlist may carry, in letters.
 pub const LONGEST_NAME: usize = 80;
 
 /// Every collection this account can see something of, by name.
@@ -109,12 +109,13 @@ fn found(done: bool) -> Result<()> {
     }
 }
 
-/// The name typed, trimmed, or why it cannot be one.
-fn named(name: &str) -> Result<&str> {
+/// The name typed for a collection or a playlist, trimmed, or why it cannot
+/// be one.
+pub(crate) fn named(name: &str) -> Result<&str> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > LONGEST_NAME {
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
-            "a collection needs a name of a reasonable length",
+            "a list needs a name of a reasonable length",
         )));
     }
     Ok(name)

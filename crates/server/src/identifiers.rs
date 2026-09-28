@@ -5,8 +5,8 @@
 //! so the wording a client sees does not depend on which route it knocked at.
 
 use melyxar_core::id::{
-    CollectionId, DeviceId, LibraryId, MediaSourceId, PersonId, PlaybackClientId, TrackId, UserId,
-    WorkId,
+    CollectionId, DeviceId, LibraryId, MediaSourceId, PersonId, PlaybackClientId, PlaylistId,
+    TrackId, UserId, WorkId,
 };
 
 use crate::error::Result;
@@ -25,6 +25,15 @@ pub(crate) fn parse_work(value: &str) -> Result<WorkId> {
 
 pub(crate) fn parse_collection(value: &str) -> Result<CollectionId> {
     parse(value, "collection")
+}
+
+pub(crate) fn parse_playlist(value: &str) -> Result<PlaylistId> {
+    parse(value, "playlist")
+}
+
+/// Several works a request names, all of them or none.
+pub(crate) fn parse_works(values: &[String]) -> Result<Vec<WorkId>> {
+    values.iter().map(|value| parse_work(value)).collect()
 }
 
 pub(crate) fn parse_person(value: &str) -> Result<PersonId> {
