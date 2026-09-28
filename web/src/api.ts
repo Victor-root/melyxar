@@ -1138,6 +1138,23 @@ export type PageFact =
       pictures_shown: number;
       pictures_dropped: number;
     }
+  | {
+      saw: "picture_and_sound";
+      at_second: number;
+      over_ms: number;
+      samples: number;
+      /** Positive when the picture is behind the sound. */
+      picture_behind_ms: number;
+      worst_behind_ms: number;
+    }
+  | {
+      saw: "segment_placed";
+      segment: number;
+      playlist_second: number;
+      video_starts_second: number | null;
+      audio_starts_second: number | null;
+      library_shift_second: number | null;
+    }
   | ({ saw: "the_opening_seconds" } & OpeningSeconds)
   | {
       saw: "playback_refused";

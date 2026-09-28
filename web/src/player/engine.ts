@@ -765,6 +765,7 @@ export function usePlayback({
         },
       };
       sayWhereItBegan(Library, feed, stream.id);
+      sayWhereSegmentsLand(Library, feed, stream.id);
       // The playlist has been read, and the library now knows what to ask
       // for. Whatever is slow from here on is either the server producing it
       // or the network carrying it, not this.
@@ -1428,6 +1429,54 @@ function sayWhereItBegan(Library: HlsLibrary, feed: Hls, session: string) {
       })
       // Nothing waits on this: it is a line in a journal, and a film that
       // plays matters more than knowing where it started.
+      .catch(() => {});
+  });
+}
+
+/** How many segments of each run of the tool are said to the journal. */
+const SEGMENTS_SAID_PER_RUN = 3;
+
+/**
+ * Tells the journal where the first segments of each run of the tool were
+ * placed, picture and sound apart.
+ *
+ * Each run begins where somebody jumped to, and a picture and a sound the
+ * tool began at different moments are placed apart on the film's clock: seen
+ * from here only, since the server knows what it wrote and never where the
+ * browser put it.
+ */
+function sayWhereSegmentsLand(Library: HlsLibrary, feed: Hls, session: string) {
+  let shift: number | null = null;
+  let last = -1;
+  let saidOfThisRun = 0;
+
+  feed.on(Library.Events.INIT_PTS_FOUND, (_event, found) => {
+    shift = found.initPTS / found.timescale;
+  });
+
+  feed.on(Library.Events.FRAG_BUFFERED, (_event, buffered) => {
+    const { sn, start } = buffered.frag;
+    if (typeof sn !== "number") {
+      return;
+    }
+    saidOfThisRun = sn === last + 1 ? saidOfThisRun : 0;
+    last = sn;
+    if (saidOfThisRun >= SEGMENTS_SAID_PER_RUN) {
+      return;
+    }
+    saidOfThisRun += 1;
+    const streams = buffered.frag.elementaryStreams as Record<string, { startPTS: number } | null>;
+    const together = streams.audiovideo?.startPTS ?? null;
+    api
+      .tellTheJournal({
+        session,
+        saw: "segment_placed",
+        segment: sn,
+        playlist_second: start,
+        video_starts_second: streams.video?.startPTS ?? together,
+        audio_starts_second: streams.audio?.startPTS ?? together,
+        library_shift_second: shift,
+      })
       .catch(() => {});
   });
 }

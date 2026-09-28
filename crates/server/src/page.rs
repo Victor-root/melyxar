@@ -211,6 +211,34 @@ enum Seen {
         pictures_shown: u32,
         pictures_dropped: u32,
     },
+    /// How far the picture on the screen stood from the clock the sound runs
+    /// on, over a stretch of playing.
+    ///
+    /// The one measure of a picture out of step with its sound: every other
+    /// fact here follows the clock, and a picture late by a second on a clock
+    /// that never stops is invisible to all of them. Positive when the picture
+    /// is behind.
+    PictureAndSound {
+        at_second: f64,
+        over_ms: u32,
+        samples: u32,
+        picture_behind_ms: f64,
+        worst_behind_ms: f64,
+    },
+    /// Where a segment of a rebuilt film was placed once the browser took it,
+    /// beside where the playlist said it begins.
+    ///
+    /// Said for the first segments of each run of the tool: a picture and a
+    /// sound that come out of the tool at different moments are placed apart,
+    /// and only these numbers say by how much.
+    SegmentPlaced {
+        segment: u32,
+        playlist_second: f64,
+        video_starts_second: Option<f64>,
+        audio_starts_second: Option<f64>,
+        /// The shift the library applies to every segment, when it says one.
+        library_shift_second: Option<f64>,
+    },
     /// The opening seconds of a film, picture by picture.
     ///
     /// A film that stutters once as it starts and then plays smoothly is
@@ -758,6 +786,38 @@ async fn what_the_page_saw(
             pictures_dropped,
             "the browser dropped pictures without ever losing the clock"
         ),
+        Seen::PictureAndSound {
+            at_second,
+            over_ms,
+            samples,
+            picture_behind_ms,
+            worst_behind_ms,
+        } => tracing::debug!(
+            session,
+            source,
+            at_second,
+            over_ms,
+            samples,
+            picture_behind_ms,
+            worst_behind_ms,
+            "how far the picture stood from the clock of the sound"
+        ),
+        Seen::SegmentPlaced {
+            segment,
+            playlist_second,
+            video_starts_second,
+            audio_starts_second,
+            library_shift_second,
+        } => tracing::debug!(
+            session,
+            source,
+            segment,
+            playlist_second,
+            video_starts_second,
+            audio_starts_second,
+            library_shift_second,
+            "where the browser placed a segment"
+        ),
         Seen::TheOpeningSeconds {
             over_ms,
             pictures,
@@ -892,6 +952,39 @@ mod tests {
                 assert_eq!(playlist_said_second, Some(1040.993));
                 assert_eq!(began_at_second, 0.0);
                 assert_eq!(first_segment, 0);
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_picture_against_the_sound_and_where_a_segment_was_placed_are_read() {
+        let said: FromThePage = serde_json::from_str(
+            r#"{"session":"x","saw":"picture_and_sound","at_second":12.5,"over_ms":10000,
+                "samples":290,"picture_behind_ms":480.5,"worst_behind_ms":520}"#,
+        )
+        .expect("read");
+        assert!(matches!(
+            said.seen,
+            Seen::PictureAndSound { samples: 290, .. }
+        ));
+
+        let said: FromThePage = serde_json::from_str(
+            r#"{"session":"x","saw":"segment_placed","segment":169,"playlist_second":676,
+                "video_starts_second":676,"audio_starts_second":671.488,
+                "library_shift_second":null}"#,
+        )
+        .expect("read");
+        match said.seen {
+            Seen::SegmentPlaced {
+                segment,
+                audio_starts_second,
+                library_shift_second,
+                ..
+            } => {
+                assert_eq!(segment, 169);
+                assert_eq!(audio_starts_second, Some(671.488));
+                assert_eq!(library_shift_second, None);
             }
             other => panic!("read as the wrong fact: {other:?}"),
         }
