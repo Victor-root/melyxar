@@ -159,6 +159,26 @@
   padding-left: 22px;
 }
 
+/* The sentence to paste in OMDb's form, with what copies it. */
+.ratings-guide-use {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin-top: 6px;
+}
+
+.ratings-guide-use code {
+  flex: 1 1 220px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  user-select: all;
+}
+
 .ratings-guide p {
   margin: 10px 0 0;
 }

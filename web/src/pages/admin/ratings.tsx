@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api";
 import type { RatingsSettings } from "../../api";
 import { refusalOf, useAsked, useTold } from "../../asking";
+import { putOnTheClipboard } from "../../clipboard";
 import { Panel, Setting } from "../../components/panel";
 import { refusalKey } from "../../i18n";
 import { DeleteIcon, StarIcon } from "../../icons";
@@ -18,6 +19,10 @@ import { useSettings } from "../../settings";
 /** Where OMDb hands out its keys. */
 const OMDB_KEYS = "https://www.omdbapi.com/apikey.aspx";
 
+/** What the key is for, as OMDb's form asks it, in the language of its form. */
+const WHAT_THE_KEY_IS_FOR =
+  "Personal home media server (Melyxar), to display ratings on my own movie library.";
+
 export function RatingsPanel() {
   const { t } = useSettings();
   const { finished, watch } = useRunning();
@@ -26,6 +31,7 @@ export function RatingsPanel() {
   const asked = useAsked((signal) => api.ratingsSettings(signal), [finished]);
   const [kept, setKept] = useState<RatingsSettings | null>(null);
   const [typed, setTyped] = useState("");
+  const [copied, setCopied] = useState(false);
   useEffect(() => setKept(null), [asked.answer]);
   const shown = kept ?? asked.answer;
 
@@ -121,7 +127,19 @@ export function RatingsPanel() {
               omdbapi.com/apikey.aspx
             </a>
           </li>
-          <li>{t("admin.omdb_step_form")}</li>
+          <li>
+            {t("admin.omdb_step_form")}
+            <span className="ratings-guide-use">
+              <code>{WHAT_THE_KEY_IS_FOR}</code>
+              <button
+                type="button"
+                className="button button-small"
+                onClick={async () => setCopied(await putOnTheClipboard(WHAT_THE_KEY_IS_FOR))}
+              >
+                {t(copied ? "admin.omdb_copied" : "admin.omdb_copy")}
+              </button>
+            </span>
+          </li>
           <li>{t("admin.omdb_step_activate")}</li>
           <li>{t("admin.omdb_step_paste")}</li>
         </ol>
