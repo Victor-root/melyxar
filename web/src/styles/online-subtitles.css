@@ -66,6 +66,12 @@
   font-size: 12.5px;
 }
 
+/* Timed on this very file: the one to take. */
+.subtitles-fits {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
 .subtitles-off {
   display: grid;
   place-items: center;

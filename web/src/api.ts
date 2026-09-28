@@ -542,6 +542,11 @@ export interface SubtitleOffer {
   machine_translated: boolean;
   /** Uploaded by somebody OpenSubtitles trusts. */
   trusted: boolean;
+  /** Timed on this very file, recognised by its fingerprint. */
+  matches_the_file: boolean;
+  fps: number | null;
+  /** Timed on a video of another speed than this copy, so it drifts. */
+  other_speed: boolean;
 }
 
 /** Whether a key for OpenSubtitles was given, and an account with it. */
@@ -1959,7 +1964,10 @@ export const api = {
       signal,
     ),
   downloadSubtitle: (source: string, offer: SubtitleOffer) =>
-    post<{ track_id: string; remaining: number | null }>(`/api/v1/playback/${source}/subtitles/online`, offer),
+    post<{ track_id: string; remaining: number | null; ends_after_the_film: boolean }>(
+      `/api/v1/playback/${source}/subtitles/online`,
+      offer,
+    ),
   removeSubtitle: (source: string, track: string) =>
     remove<null>(`/api/v1/playback/${source}/subtitles/online/${track}`),
   playbackSettings: (signal?: AbortSignal) =>
