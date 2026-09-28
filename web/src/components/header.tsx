@@ -67,7 +67,7 @@ import {
   ScreenCastIcon,
   TickIcon,
   SearchIcon,
-  SlidersIcon,
+  DashboardIcon,
 } from "../icons";
 
 /**
@@ -803,7 +803,7 @@ function Scope({
       </ScopeLine>
       {administrator && (
         <ScopeLine value="area:admin" scope={scope} onChoose={onChoose}>
-          <SlidersIcon size={16} />
+          <DashboardIcon size={16} />
           {t("search.in_admin")}
         </ScopeLine>
       )}
@@ -1076,7 +1076,7 @@ function PlaceIcon({ place, size }: { place: keyof typeof PLACES; size: number }
     case "watch_later":
       return <ClockIcon size={size} />;
     case "administration":
-      return <SlidersIcon size={size} />;
+      return <DashboardIcon size={size} />;
     case "settings":
       return <GearIcon size={size} />;
     case "cast":

@@ -28,7 +28,7 @@ import { useShownPicture } from "./picture";
 import { useWorkMenu } from "./cardmenu";
 import { SelectMark, useChoosingPress } from "./selection";
 import { SeenMark } from "./seen";
-import { HeartIcon, IdentifyIcon, MoreIcon, PlayIcon } from "../icons";
+import { HeartIcon, IdentifyIcon, ToolIcon, PlayIcon } from "../icons";
 import { lengthOfAPlay } from "../watching";
 
 /** How a card is laid out: standing like a poster, or lying like a still. */
@@ -285,7 +285,7 @@ export function Card({
                 aria-expanded={menu.open}
                 onClick={stop(() => menu.toggle(kebab.current))}
               >
-                <MoreIcon size={17} />
+                <ToolIcon size={17} />
               </button>
             </div>
           </div>
