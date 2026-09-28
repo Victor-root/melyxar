@@ -351,7 +351,9 @@ function TopOfTheWork({
         <p className="work-facts">
           {work.rating !== null && (
             <span className="work-rating" title={t("rating.tmdb")}>
-              <StarIcon size={17} />
+              <span className="work-rating-mark" aria-hidden="true">
+                TMDB
+              </span>
               {outOfTen(work.rating)}
             </span>
           )}

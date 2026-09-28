@@ -404,16 +404,16 @@ export function TomatoIcon(props: IconProps) {
  *  did not like. */
 export function SplatIcon(props: IconProps) {
   return (
-    <Icon {...props} strokeWidth={1.6}>
+    <Icon {...props} strokeWidth={1.8}>
       <path
-        d="M4.2 16.4c0-1.9 3.5-3.2 7.8-3.2s7.8 1.3 7.8 3.2-3.5 2.9-7.8 2.9-7.8-1-7.8-2.9Z"
+        d="M2.6 16.2c0-2.5 4.2-4.2 9.4-4.2s9.4 1.7 9.4 4.2-4.2 3.8-9.4 3.8-9.4-1.3-9.4-3.8Z"
         fill="currentColor"
       />
-      <path d="M12 13.2c.4-1.3 1.3-2.2 2.6-2.6M12 13.2c-.6-1-1.6-1.5-2.8-1.5" />
-      <circle cx="4.6" cy="11.6" r="1" fill="currentColor" stroke="none" />
-      <circle cx="19.4" cy="11.2" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="16.8" cy="7.6" r=".8" fill="currentColor" stroke="none" />
-      <circle cx="7.4" cy="8" r=".7" fill="currentColor" stroke="none" />
+      <path d="M12 12c.5-1.6 1.6-2.7 3.2-3.2M12 12c-.7-1.2-1.9-1.8-3.4-1.8" />
+      <circle cx="3.6" cy="10.4" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="20.4" cy="10" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="17.6" cy="5.6" r="1" fill="currentColor" stroke="none" />
+      <circle cx="6.6" cy="6" r="1" fill="currentColor" stroke="none" />
     </Icon>
   );
 }
