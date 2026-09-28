@@ -187,6 +187,24 @@ export function Toggle({
  * the reason the menus of the bar at the top are: it is frosted glass, and
  * glass inside a panel frosts nothing but the panel.
  */
+/** Where a picker's list goes: under its field, or over it when the window
+    has more room there, never running past the edge of the window. */
+type Placed = { top?: number; bottom?: number; left: number; width: number; room: number };
+
+const LIST_GAP = 6;
+const LIST_TALLEST = 340;
+
+export function placeList(field: DOMRect, height: number): Placed {
+  const below = height - field.bottom - LIST_GAP * 2;
+  const above = field.top - LIST_GAP * 2;
+  const left = field.left;
+  const width = field.width;
+  if (below >= LIST_TALLEST || below >= above) {
+    return { top: field.bottom + LIST_GAP, left, width, room: Math.min(LIST_TALLEST, below) };
+  }
+  return { bottom: height - field.top + LIST_GAP, left, width, room: Math.min(LIST_TALLEST, above) };
+}
+
 export function Picker<T extends string>({
   value,
   options,
@@ -204,7 +222,7 @@ export function Picker<T extends string>({
   const [open, setOpen] = useState(false);
   const field = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const [under, setUnder] = useState({ top: 0, left: 0, width: 0 });
+  const [under, setUnder] = useState<Placed>({ left: 0, width: 0, room: 0 });
   const listId = useId();
 
   useLayoutEffect(() => {
@@ -214,7 +232,7 @@ export function Picker<T extends string>({
     const place = () => {
       const it = field.current?.getBoundingClientRect();
       if (it) {
-        setUnder({ top: it.bottom + 6, left: it.left, width: it.width });
+        setUnder(placeList(it, window.innerHeight));
       }
     };
     place();
@@ -302,7 +320,13 @@ export function Picker<T extends string>({
             role="listbox"
             aria-label={label}
             className="header-menu-list picker-list"
-            style={{ top: under.top, left: under.left, minWidth: under.width }}
+            style={{
+              top: under.top,
+              bottom: under.bottom,
+              left: under.left,
+              minWidth: under.width,
+              maxHeight: under.room,
+            }}
             onKeyDown={walk}
           >
             {options.map(([option, wording]) => {
