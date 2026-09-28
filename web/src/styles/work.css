@@ -151,8 +151,11 @@
 }
 
 /* The name of a rating from elsewhere, where a drawing would say less than
-   the name everybody knows it by. */
+   the name everybody knows it by. Raised by a pixel to sit on the middle of
+   the figures beside it, which stand above the middle of their line. */
 .work-rating-mark {
+  position: relative;
+  top: -1px;
   padding: 0 4px;
   border-radius: 3px;
   font-size: 11px;
