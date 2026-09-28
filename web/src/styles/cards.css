@@ -506,21 +506,28 @@ button.seen-mark:not(.seen-mark-on):hover {
    every card wears it, since every press is now a choice. */
 .select-mark {
   position: absolute;
-  left: 8px;
-  bottom: 8px;
+  /* Smaller than the round buttons at the other corner, and on the same
+     line through their middle. */
+  left: 12px;
+  bottom: 12px;
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--surface-deep) 70%, transparent);
-  border: 2px solid color-mix(in srgb, var(--text) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-deep) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 45%, transparent);
   color: transparent;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--quick) var(--ease), background var(--quick) var(--ease);
+  transition:
+    opacity var(--quick) var(--ease),
+    background var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
 }
 
 .card:hover .select-mark,
@@ -532,8 +539,13 @@ button.seen-mark:not(.seen-mark-on):hover {
   pointer-events: auto;
 }
 
+/* Rimmed and lit in the accent under the pointer, like the round buttons. */
 .select-mark:hover {
   color: var(--text-soft);
+  border-color: var(--accent-bright);
+  box-shadow:
+    0 0 6px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .select-mark-on,
