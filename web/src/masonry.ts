@@ -10,6 +10,12 @@
  * short card leaves under it with the next one. Columns ending about level
  * count as level, and then the leftmost wins, so the page reads left to right
  * rather than dropping a card in the middle for the sake of a few pixels.
+ *
+ * The order is the page's own until somebody uses it. A card that grows
+ * because somebody opened something in it grows where it stands: laid out
+ * tallest first again, it would jump to another column under the pointer that
+ * just opened it. The order is worked out afresh when cards come or go, or
+ * when the number of columns changes.
  */
 
 import { useLayoutEffect } from "react";
@@ -53,12 +59,16 @@ export interface ToPlace {
  * ending within `level` rows of it. A wide one starts below everything placed
  * so far, and everything after it starts below it.
  */
-export function placed(cards: ToPlace[], columns: number, level: number): Placed[] {
+export function placed(
+  cards: ToPlace[],
+  columns: number,
+  level: number,
+  /** The order to lay them in, to keep the one they were laid in before. */
+  kept?: number[],
+): Placed[] {
   const ends: number[] = new Array(Math.max(1, columns)).fill(0);
   const where: Placed[] = new Array(cards.length);
-  // In a single column nothing stands side by side, and the page keeps the
-  // order it was written in.
-  const order = ends.length === 1 ? cards.map((_, index) => index) : tallestFirst(cards);
+  const order = kept ?? layingOrder(cards, ends.length);
   for (const index of order) {
     const card = cards[index];
     if (card.wide || ends.length === 1) {
@@ -76,8 +86,14 @@ export function placed(cards: ToPlace[], columns: number, level: number): Placed
   return where;
 }
 
-/** The order cards are laid in: each run of ordinary cards tallest first,
- *  every wide card where it stands. */
+/** The order cards are laid in when nobody has used the page: in a single
+ *  column, where nothing stands side by side, the order they were written in;
+ *  otherwise each run of ordinary
+ *  cards tallest first, every wide card where it stands. */
+export function layingOrder(cards: ToPlace[], columns: number): number[] {
+  return columns <= 1 ? cards.map((_, index) => index) : tallestFirst(cards);
+}
+
 function tallestFirst(cards: ToPlace[]): number[] {
   const order: number[] = [];
   let run: number[] = [];
@@ -119,17 +135,30 @@ export function useMasonry(page: RefObject<HTMLElement | null>): void {
      *  itself, and a panel of a group that asks for it. */
     const isWide = (card: HTMLElement) =>
       card.parentElement === holder || card.classList.contains("panel-wide");
+    /** The cards in the order last laid, and over how many columns, once
+     *  somebody has used the page; nothing until then. */
+    let held: { cards: Element[]; columns: number } | null = null;
+    let lastLaid: { cards: Element[]; columns: number } = { cards: [], columns: 0 };
     const lay = () => {
       const columns = getComputedStyle(holder)
         .gridTemplateColumns.split(" ")
         .filter(Boolean).length;
       const cards = [...holder.querySelectorAll<HTMLElement>(CARDS)];
       const wide = cards.map(isWide);
-      const where = placed(
-        cards.map((card, index) => ({ rows: rows.get(card) ?? 1, wide: wide[index] })),
-        columns,
-        Math.round(ABOUT_LEVEL / ROW_STEP),
-      );
+      const toPlace = cards.map((card, index) => ({ rows: rows.get(card) ?? 1, wide: wide[index] }));
+      const stillHeld =
+        held !== null &&
+        held.columns === columns &&
+        held.cards.length === cards.length &&
+        cards.every((card) => held!.cards.includes(card));
+      if (!stillHeld) {
+        held = null;
+      }
+      const order = held
+        ? held.cards.map((card) => cards.indexOf(card as HTMLElement))
+        : layingOrder(toPlace, columns);
+      lastLaid = { cards: order.map((index) => cards[index]), columns };
+      const where = placed(toPlace, columns, Math.round(ABOUT_LEVEL / ROW_STEP), order);
       cards.forEach((card, index) => {
         const { column, row } = where[index];
         card.style.gridColumn = wide[index] ? "1 / -1" : String(column + 1);
@@ -161,6 +190,13 @@ export function useMasonry(page: RefObject<HTMLElement | null>): void {
       lay();
     });
     measured.observe(holder);
+    // Somebody pressing or typing on the page is using it: from then on what
+    // they open grows in place.
+    const used = () => {
+      held ??= lastLaid;
+    };
+    holder.addEventListener("pointerdown", used);
+    holder.addEventListener("keydown", used);
     const follow = () => {
       const now = new Set(holder.querySelectorAll(CARDS));
       let gone = false;
@@ -188,6 +224,8 @@ export function useMasonry(page: RefObject<HTMLElement | null>): void {
     const changes = new MutationObserver(follow);
     changes.observe(holder, { childList: true, subtree: true });
     return () => {
+      holder.removeEventListener("pointerdown", used);
+      holder.removeEventListener("keydown", used);
       changes.disconnect();
       measured.disconnect();
     };

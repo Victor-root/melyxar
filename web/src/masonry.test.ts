@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placed, rowsFor } from "./masonry";
+import { layingOrder, placed, rowsFor } from "./masonry";
 
 describe("rowsFor", () => {
   it("covers the card and the gap under it, rounded up to whole rows", () => {
@@ -50,5 +50,16 @@ describe("placed", () => {
       { column: 0, row: 0 },
       { column: 0, row: 10 },
     ]);
+  });
+});
+
+describe("a card that grows once the page is used", () => {
+  const card = (rows: number) => ({ rows, wide: false });
+  it("keeps its column when laid in the order it was laid before", () => {
+    const before = [card(10), card(50), card(20)];
+    const order = layingOrder(before, 2);
+    const grown = [card(90), card(50), card(20)];
+    expect(placed(grown, 2, 0, order)[0].column).toBe(placed(before, 2, 0)[0].column);
+    expect(placed(grown, 2, 0)[0].column).not.toBe(placed(before, 2, 0)[0].column);
   });
 });
