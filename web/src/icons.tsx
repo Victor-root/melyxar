@@ -400,14 +400,20 @@ export function TomatoIcon(props: IconProps) {
   );
 }
 
-/** A tomato thrown and burst, for a work most critics did not like. */
+/** A tomato squashed flat, with what flew out of it, for a work most critics
+ *  did not like. */
 export function SplatIcon(props: IconProps) {
   return (
-    <Icon {...props} strokeWidth={1.4}>
+    <Icon {...props} strokeWidth={1.6}>
       <path
-        d="m12 4.4 1.6 3.5 3.5-1.6-1 3.7 3.7 1-3.1 2.3 2.3 3.1-3.8-.3-.2 3.8L12 17.6l-3 2.3-.2-3.8-3.8.3 2.3-3.1L4.2 11l3.7-1-1-3.7 3.5 1.6Z"
+        d="M4.2 16.4c0-1.9 3.5-3.2 7.8-3.2s7.8 1.3 7.8 3.2-3.5 2.9-7.8 2.9-7.8-1-7.8-2.9Z"
         fill="currentColor"
       />
+      <path d="M12 13.2c.4-1.3 1.3-2.2 2.6-2.6M12 13.2c-.6-1-1.6-1.5-2.8-1.5" />
+      <circle cx="4.6" cy="11.6" r="1" fill="currentColor" stroke="none" />
+      <circle cx="19.4" cy="11.2" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="16.8" cy="7.6" r=".8" fill="currentColor" stroke="none" />
+      <circle cx="7.4" cy="8" r=".7" fill="currentColor" stroke="none" />
     </Icon>
   );
 }
