@@ -12,6 +12,7 @@ pub mod accounts;
 pub mod activity;
 pub mod calibration;
 pub mod catalogue;
+pub mod collections;
 pub mod deletion;
 pub mod details;
 pub mod devices;

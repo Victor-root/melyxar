@@ -15,6 +15,7 @@ pub mod avatars;
 pub mod bench;
 pub mod calibration;
 pub mod catalogue;
+pub mod collections;
 pub mod counted;
 pub mod deletion;
 pub mod detail;

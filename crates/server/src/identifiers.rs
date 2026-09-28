@@ -5,7 +5,8 @@
 //! so the wording a client sees does not depend on which route it knocked at.
 
 use melyxar_core::id::{
-    DeviceId, LibraryId, MediaSourceId, PersonId, PlaybackClientId, TrackId, UserId, WorkId,
+    CollectionId, DeviceId, LibraryId, MediaSourceId, PersonId, PlaybackClientId, TrackId, UserId,
+    WorkId,
 };
 
 use crate::error::Result;
@@ -20,6 +21,10 @@ fn parse<T: std::str::FromStr>(value: &str, what: &str) -> Result<T> {
 
 pub(crate) fn parse_work(value: &str) -> Result<WorkId> {
     parse(value, "work")
+}
+
+pub(crate) fn parse_collection(value: &str) -> Result<CollectionId> {
+    parse(value, "collection")
 }
 
 pub(crate) fn parse_person(value: &str) -> Result<PersonId> {

@@ -337,7 +337,7 @@ struct PageView {
 }
 
 #[derive(Debug, Serialize)]
-struct CardView {
+pub(crate) struct CardView {
     id: String,
     title: String,
     year: Option<i32>,
@@ -438,7 +438,7 @@ async fn works(
     }))
 }
 
-fn card_view(card: &WorkCard) -> CardView {
+pub(crate) fn card_view(card: &WorkCard) -> CardView {
     CardView {
         id: card.id.to_string(),
         title: card.title.clone(),
