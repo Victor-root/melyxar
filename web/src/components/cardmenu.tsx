@@ -37,9 +37,8 @@ import { ForgetIdentityDialog } from "./forgetting";
 import { PicturesDialog } from "./pictures";
 import { playInTurn } from "../queue";
 import { useCardsInOrder } from "./in-order";
-import { PutInListsDialog } from "./lists";
+import { COLLECTIONS, PLAYLISTS, PutInListsDialog } from "./lists";
 import { OnlineSubtitlesDialog } from "./online-subtitles";
-import type { Lists } from "./lists";
 import { useSelection } from "./selection";
 import { useToast } from "./toasts";
 import {
@@ -78,23 +77,6 @@ interface Entry {
   later?: boolean;
   act?: () => void;
 }
-
-/** The collections made by hand, as the window that fills them asks them. */
-const COLLECTIONS: Lists = {
-  every: async (signal) =>
-    (await api.collections(signal)).filter((collection) => collection.made_by_hand),
-  holding: async (work, signal) => (await api.collectionsHolding(work, signal)).collections,
-  put: api.putInCollection,
-  create: api.createCollection,
-};
-
-/** This account's playlists, the same way. */
-const PLAYLISTS: Lists = {
-  every: (signal) => api.playlists(signal),
-  holding: async (work, signal) => (await api.playlistsHolding(work, signal)).playlists,
-  put: api.putInPlaylist,
-  create: api.createPlaylist,
-};
 
 /** How far from the edge of the window a menu is allowed to sit. */
 const OFF_THE_EDGE = 8;
@@ -215,8 +197,7 @@ export function useWorkMenu(
       )}
       {collecting && (
         <PutInListsDialog
-          workId={card.id}
-          title={card.title}
+          works={[card]}
           lists={COLLECTIONS}
           words="collect"
           onClose={() => setCollecting(false)}
@@ -227,8 +208,7 @@ export function useWorkMenu(
       )}
       {listing && (
         <PutInListsDialog
-          workId={card.id}
-          title={card.title}
+          works={[card]}
           lists={PLAYLISTS}
           words="playlist"
           onClose={() => setListing(false)}

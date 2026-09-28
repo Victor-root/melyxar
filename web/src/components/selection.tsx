@@ -4,25 +4,28 @@
  * A grid that can be chosen from is wrapped in this. Once one card is chosen,
  * pressing another chooses it too rather than opening it, a bar at the foot
  * of the window says how many are chosen and what can be done with them, and
- * Escape lets go of all of them. Offered only to an account allowed to
- * delete, since deleting is the one thing done with a choice so far.
+ * Escape lets go of all of them. Each action is offered only for what the
+ * account may do, and applies to the chosen cards it makes sense for.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useAccount } from "../account";
-import { TickIcon } from "../icons";
+import type { Card } from "../api";
+import {
+  ClockIcon,
+  CollectionIcon,
+  HeartIcon,
+  PinIcon,
+  PlaylistIcon,
+  TickIcon,
+} from "../icons";
 import { useMarks } from "../marks";
 import { howMany } from "../readable";
-import { pressed } from "../selecting";
+import { IN_THE_BANNER, marksThemAll, pressed } from "../selecting";
 import { useSettings } from "../settings";
 import { DeleteDialog } from "./deletion";
-
-/** One card that can be chosen, as the question before deleting names it. */
-export interface Choosable {
-  id: string;
-  title: string;
-}
+import { COLLECTIONS, PLAYLISTS, PutInListsDialog } from "./lists";
 
 interface Selection {
   isChosen: (id: string) => boolean;
@@ -42,13 +45,14 @@ export function useSelection(): Selection | null {
   return useContext(SelectionContext);
 }
 
-export function Selecting({ items, children }: { items: Choosable[]; children: ReactNode }) {
+export function Selecting({ items, children }: { items: Card[]; children: ReactNode }) {
   const { t } = useSettings();
   const { account } = useAccount();
   const marks = useMarks();
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
   const [from, setFrom] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [listing, setListing] = useState<"collect" | "playlist" | null>(null);
 
   /* What is still drawn: a card deleted from here is no longer one to
      choose, and a card the grid no longer holds after a change of filter is
@@ -90,9 +94,42 @@ export function Selecting({ items, children }: { items: Choosable[]; children: R
     [chosen, selecting, press],
   );
 
-  if (!account?.may_delete) {
+  if (!account) {
     return <>{children}</>;
   }
+
+  const favourite = marksThemAll(picked, marks.favouriteOf);
+  const later = marksThemAll(picked, marks.watchLaterOf);
+  const markable = picked.filter((card) => card.watched_marks);
+  const watched = marksThemAll(markable, (card) => marks.seenOf(card) === "watched");
+  const collectable = account.may_manage_collections
+    ? picked.filter((card) => card.kind !== "season" && card.kind !== "episode")
+    : [];
+  const listable = picked.filter(
+    (card) => card.kind === "movie" || card.kind === "episode" || card.kind === "video",
+  );
+  const pinned = marksThemAll(picked, (card) => marks.pinnedOf(card) === true);
+  const tooManyToPin = pinned && picked.length > IN_THE_BANNER;
+
+  /** One action of the bar, drawn as its shape with its words under the
+      pointer: seven words in a row did not fit a phone. */
+  const act = (key: string, mark: ReactNode, onPress: () => void, why?: string) => (
+    <button
+      type="button"
+      className="selection-act"
+      aria-label={why ?? t(key)}
+      title={why ?? t(key)}
+      aria-disabled={why !== undefined}
+      onClick={() => {
+        if (why === undefined) {
+          onPress();
+        }
+      }}
+    >
+      {mark}
+    </button>
+  );
+
   return (
     <SelectionContext.Provider value={value}>
       {children}
@@ -108,17 +145,54 @@ export function Selecting({ items, children }: { items: Choosable[]; children: R
               {t("selection.all")}
             </button>
           )}
-          <button
-            type="button"
-            className="button button-small button-accent"
-            onClick={() => setDeleting(true)}
-          >
-            {t("card.menu.delete")}
-          </button>
+          {act(
+            favourite ? "card.menu.favourite" : "card.menu.unfavourite",
+            <HeartIcon size={17} filled={!favourite} />,
+            () => picked.forEach((card) => marks.setFavourite(card, favourite)),
+          )}
+          {act(
+            later ? "card.menu.watch_later" : "card.menu.unwatch_later",
+            <ClockIcon size={17} />,
+            () => picked.forEach((card) => marks.setWatchLater(card, later)),
+          )}
+          {markable.length > 0 &&
+            act(
+              watched ? "card.menu.mark_watched" : "card.menu.mark_unwatched",
+              <TickIcon size={17} />,
+              () => markable.forEach((card) => marks.setWatched(card, watched)),
+            )}
+          {listable.length > 0 &&
+            act("card.menu.playlist", <PlaylistIcon size={17} />, () => setListing("playlist"))}
+          {collectable.length > 0 &&
+            act("card.menu.collection", <CollectionIcon size={17} />, () => setListing("collect"))}
+          {account.is_administrator &&
+            act(
+              pinned ? "card.menu.pin" : "card.menu.unpin",
+              <PinIcon size={17} filled={!pinned} />,
+              () => picked.forEach((card) => marks.setPinned(card, pinned)),
+              tooManyToPin ? t("selection.too_many_to_pin", { count: IN_THE_BANNER }) : undefined,
+            )}
+          {account.may_delete && (
+            <button
+              type="button"
+              className="button button-small button-accent"
+              onClick={() => setDeleting(true)}
+            >
+              {t("card.menu.delete")}
+            </button>
+          )}
           <button type="button" className="button button-small" onClick={letGo}>
             {t("selection.cancel")}
           </button>
         </div>
+      )}
+      {listing && (
+        <PutInListsDialog
+          works={listing === "collect" ? collectable : listable}
+          lists={listing === "collect" ? COLLECTIONS : PLAYLISTS}
+          words={listing}
+          onClose={() => setListing(null)}
+        />
       )}
       {deleting && (
         <DeleteDialog

@@ -594,6 +594,29 @@ button.seen-mark:not(.seen-mark-on):hover {
   animation: header-menu-arrive var(--quick) var(--ease) both;
 }
 
+/* One thing done to every chosen card, as its shape alone. */
+.selection-act {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.selection-act:hover:not([aria-disabled="true"]) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.selection-act[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .selection-count {
   margin-right: 6px;
   font-weight: 600;
