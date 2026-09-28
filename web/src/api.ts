@@ -601,6 +601,8 @@ export interface Filters {
   decades: { decade: number; works: number }[];
   /** The letters titles really start with, the bucket for the rest first. */
   initials: { name: string; works: number }[];
+  /** How many works still wait for a name. */
+  awaiting_identification: number;
 }
 
 /** Why a work opens the page, which is what its button says. */

@@ -241,10 +241,10 @@ pub async fn filters(
     state: &AppState,
     library_id: Option<LibraryId>,
     who: &User,
-) -> Result<Filters> {
+) -> Result<crate::counted::Counted> {
     Ok(crate::reach::counted_for(state, who, library_id)
         .await?
-        .filters
+        .as_ref()
         .clone())
 }
 
@@ -1121,7 +1121,7 @@ mod tests {
     async fn a_filter_menu_of_an_empty_library_offers_nothing_rather_than_failing() {
         let (_directory, state, library_id, viewer) = state_with_films(&[]).await;
         assert_eq!(
-            filters(&state, Some(library_id), &viewer).await.expect("read"),
+            filters(&state, Some(library_id), &viewer).await.expect("read").filters,
             Filters::default()
         );
     }
@@ -1170,7 +1170,9 @@ mod tests {
             .await
             .expect("identification applied");
 
-        let offered = filters(&state, Some(library_id), &viewer).await.expect("read");
+        let counted = filters(&state, Some(library_id), &viewer).await.expect("read");
+        assert_eq!(counted.awaiting_identification, 0);
+        let offered = counted.filters;
         assert_eq!(
             offered
                 .genres

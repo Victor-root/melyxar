@@ -36,6 +36,12 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
   /* What somebody filmed themselves is never waiting for a name, so there is
      nothing to narrow to. */
   const awaitsNames = library?.kind !== "home_media" && narrowing.kind !== "home_media";
+  /* In a library, offered only while something there still waits for a
+     name, and kept while it is on, so the last one named does not take the
+     way back out with it. A grid over several libraries has no count. */
+  const offersUnidentified =
+    awaitsNames &&
+    (unidentified || !library || (filters?.awaiting_identification ?? 0) > 0);
 
   /*
    * A letter takes the grid to where its titles begin, with the row holding
@@ -277,7 +283,7 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
             )}
           </div>
 
-          {awaitsNames && (
+          {offersUnidentified && (
             <button
               type="button"
               className={`browse-piece browse-alone${unidentified ? " browse-alone-on" : ""}`}
