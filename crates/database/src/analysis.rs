@@ -218,6 +218,15 @@ impl Database {
         Ok(())
     }
 
+    /// The files of every subtitle downloaded that a track still holds.
+    pub async fn downloaded_subtitle_files(&self) -> Result<Vec<String>> {
+        Ok(sqlx::query_scalar(
+            "SELECT downloaded_file FROM tracks WHERE downloaded_file IS NOT NULL",
+        )
+        .fetch_all(self.reader())
+        .await?)
+    }
+
     /// Takes away a subtitle downloaded for this source, and answers the name
     /// of its file so it can be deleted. Nothing for a track that is not one.
     pub async fn remove_downloaded_subtitle(
@@ -790,6 +799,10 @@ mod tests {
             .add_downloaded_subtitle(source_id, &downloaded)
             .await
             .expect("added");
+        assert_eq!(
+            database.downloaded_subtitle_files().await.expect("read"),
+            vec!["downloaded.srt".to_string()]
+        );
 
         database
             .store_external_subtitles(source_id, &[])
@@ -830,6 +843,7 @@ mod tests {
             Some("downloaded.srt")
         );
         assert_eq!(database.tracks_of_source(source_id).await.expect("read").len(), 1);
+        assert!(database.downloaded_subtitle_files().await.expect("read").is_empty());
     }
 
     #[tokio::test]

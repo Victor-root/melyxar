@@ -119,6 +119,7 @@ pub async fn delete(
     let removed = database.delete_works(work_ids, !from_the_disk).await?;
     let sheets = crate::libraries::forget_the_thumbnails_of(state, &going.sources).await;
     let pictures = crate::images::forget_the_pictures(state, &removed.swept.picture_paths).await;
+    crate::online_subtitles::forget_the_orphans(state).await;
     for &library_id in &going.library_ids {
         database.bump_library_version(library_id).await?;
     }

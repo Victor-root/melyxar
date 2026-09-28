@@ -19,6 +19,10 @@ use crate::identify::known_id;
 use crate::ratings::KeyTried;
 use crate::{AppError, AppState, Result};
 
+/// How old a downloaded file must be before a sweep may take it for one
+/// nobody holds.
+const SETTLED_AFTER: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
 /// Where OpenSubtitles stands on this server: whether a key was given, and an
 /// account with it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,6 +199,57 @@ pub async fn remove(state: &AppState, who: &User, source_id: MediaSourceId, trac
     Ok(())
 }
 
+/// Deletes the files of downloaded subtitles no track holds any more: the
+/// copy they were downloaded for was deleted, or left the disk and the
+/// library with it. Answers how many went.
+pub async fn forget_the_orphans(state: &AppState) -> usize {
+    let held = match state.database().downloaded_subtitle_files().await {
+        Ok(held) => held,
+        Err(error) => {
+            tracing::warn!(%error, "the downloaded subtitles still held could not be read");
+            return 0;
+        }
+    };
+    let folder = state.config().directories.downloaded_subtitles();
+    let Ok(mut entries) = tokio::fs::read_dir(&folder).await else {
+        return 0;
+    };
+    let mut on_the_disk = Vec::new();
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        // A file is written before its track, so one this recent may be a
+        // download still under way rather than one nobody holds.
+        let settled = entry
+            .metadata()
+            .await
+            .ok()
+            .and_then(|found| found.modified().ok())
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age >= SETTLED_AFTER);
+        if let (true, Some(name)) = (settled, entry.file_name().to_str()) {
+            on_the_disk.push(name.to_string());
+        }
+    }
+    let mut gone = 0;
+    for name in orphans(&on_the_disk, &held) {
+        if tokio::fs::remove_file(folder.join(name)).await.is_ok() {
+            gone += 1;
+        }
+    }
+    if gone > 0 {
+        tracing::info!(gone, "downloaded subtitles no copy holds any more were deleted");
+    }
+    gone
+}
+
+/// The files of the folder no track holds.
+fn orphans<'a>(on_the_disk: &'a [String], held: &[String]) -> Vec<&'a str> {
+    on_the_disk
+        .iter()
+        .filter(|name| !held.contains(name))
+        .map(String::as_str)
+        .collect()
+}
+
 /// What OpenSubtitles is asked about for a work.
 enum Asked {
     Film(String),
@@ -278,6 +333,13 @@ fn is_a_language(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_files_no_track_holds_are_orphans() {
+        let on_the_disk = ["a.srt".to_string(), "b.srt".to_string()];
+        assert_eq!(orphans(&on_the_disk, &["b.srt".to_string()]), vec!["a.srt"]);
+        assert!(orphans(&on_the_disk, &on_the_disk).is_empty());
+    }
 
     #[test]
     fn a_language_is_two_letters_with_a_region_at_most() {
