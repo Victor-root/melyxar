@@ -520,6 +520,37 @@ export interface Collection {
   cards: Card[];
 }
 
+/** One subtitle track of a copy, and where it comes from. */
+export interface SubtitleTrackInfo {
+  id: string;
+  language: string | null;
+  title: string | null;
+  origin: "inside" | "beside" | "downloaded";
+  hearing_impaired: boolean;
+}
+
+/** One subtitle OpenSubtitles offers for a copy. */
+export interface SubtitleOffer {
+  file_id: number;
+  /** Two letters, sometimes with a region. */
+  language: string;
+  /** The release it was timed on. */
+  release: string;
+  downloads: number;
+  hearing_impaired: boolean;
+  /** Written by a program rather than by somebody. */
+  machine_translated: boolean;
+  /** Uploaded by somebody OpenSubtitles trusts. */
+  trusted: boolean;
+}
+
+/** Whether a key for OpenSubtitles was given, and an account with it. */
+export interface OpenSubtitlesSettings {
+  has_key: boolean;
+  signed_in: boolean;
+  tried: "kept" | "refused" | "unreachable" | null;
+}
+
 /** A rating from elsewhere than the provider: out of ten for IMDb, with how
  *  many voted, and out of a hundred for Rotten Tomatoes' critics. */
 export interface Rating {
@@ -1912,6 +1943,25 @@ export const api = {
   setOmdbKey: (omdb_key: string) =>
     put<RatingsSettings>("/api/v1/settings/ratings", { omdb_key }),
   forgetOmdbKey: () => remove<RatingsSettings>("/api/v1/settings/ratings"),
+  /* Subtitles from OpenSubtitles, for an administrator: the key and
+     account, the tracks of a copy, what is offered for it, and downloading
+     or taking away one. */
+  openSubtitles: (signal?: AbortSignal) =>
+    get<OpenSubtitlesSettings>("/api/v1/settings/opensubtitles", signal),
+  setOpenSubtitles: (key: string, username: string, password: string) =>
+    put<OpenSubtitlesSettings>("/api/v1/settings/opensubtitles", { key, username, password }),
+  forgetOpenSubtitles: () => remove<OpenSubtitlesSettings>("/api/v1/settings/opensubtitles"),
+  subtitleTracks: (source: string, signal?: AbortSignal) =>
+    get<SubtitleTrackInfo[]>(`/api/v1/playback/${source}/subtitles`, signal),
+  subtitleOffers: (source: string, languages: string[], signal?: AbortSignal) =>
+    get<SubtitleOffer[]>(
+      `/api/v1/playback/${source}/subtitles/online?languages=${encodeURIComponent(languages.join(","))}`,
+      signal,
+    ),
+  downloadSubtitle: (source: string, offer: SubtitleOffer) =>
+    post<{ track_id: string; remaining: number | null }>(`/api/v1/playback/${source}/subtitles/online`, offer),
+  removeSubtitle: (source: string, track: string) =>
+    remove<null>(`/api/v1/playback/${source}/subtitles/online/${track}`),
   playbackSettings: (signal?: AbortSignal) =>
     get<PlaybackSettings>("/api/v1/settings/playback", signal),
   setPlaybackSettings: (settings: PlaybackSettings) =>
