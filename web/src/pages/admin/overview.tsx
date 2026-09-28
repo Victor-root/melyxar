@@ -40,6 +40,8 @@ import { ActivityLines, useActivity } from "./activity-list";
 import { useOverview } from "./layout";
 import { SystemPanel } from "./machine";
 import { PlayingPanel } from "./playback";
+import { useBranding } from "../../player/logo";
+import { ServerMark } from "../../components/server-mark";
 
 /** Every family of the journal, for the lines of the summary. */
 const EVERY_FAMILY: ActivityFamily[] = [];
@@ -101,6 +103,7 @@ function useMinute(): number {
  */
 function ServerPanel({ overview, unreachable }: { overview: Overview | null; unreachable: boolean }) {
   const { t, language } = useSettings();
+  const branding = useBranding();
   const now = useMinute();
 
   const worries = overview?.worries ?? [];
@@ -110,10 +113,10 @@ function ServerPanel({ overview, unreachable }: { overview: Overview | null; unr
     <section className="panel server-panel">
       <div className="server-who">
         <span className="server-mark" aria-hidden="true">
-          <MelyxarMark size={36} />
+          <ServerMark branding={branding} size={36} logoClassName="server-logo" />
         </span>
         <div className="server-words">
-          <h2>{overview?.server_name ?? t("app.name")}</h2>
+          <h2>{branding?.server_name ?? overview?.server_name}</h2>
           <StatePill state={state}>
             {t(unreachable ? "admin.unreachable" : "admin.online")}
           </StatePill>

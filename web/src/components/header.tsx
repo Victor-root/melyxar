@@ -62,13 +62,13 @@ import {
   HeartIcon,
   KindIcon,
   LeaveIcon,
-  MelyxarMark,
   RefreshIcon,
   ScreenCastIcon,
   TickIcon,
   SearchIcon,
   DashboardIcon,
 } from "../icons";
+import { ServerMark } from "./server-mark";
 
 /**
  * The two keys that reach the search field, written the way this machine
@@ -488,18 +488,7 @@ export function Header({
             </button>
           )}
           <Link className="brand" to="/">
-            {/* Decorative: the name is written right next to it, and an
-                image announced twice over is exactly what a screen reader
-                must not have to hear. The administrator's own logo keeps its
-                own colours; the one Melyxar ships takes the accent. Nothing
-                until the server has said which, so Melyxar's never flashes
-                up in front of somebody else's. */}
-            {branding &&
-              (branding.logo ? (
-                <img className="brand-logo" src={branding.logo} alt="" aria-hidden="true" />
-              ) : (
-                <MelyxarMark size={28} />
-              ))}
+            <ServerMark branding={branding} size={28} logoClassName="brand-logo" />
             <span className="brand-name">{branding?.server_name}</span>
           </Link>
         </div>

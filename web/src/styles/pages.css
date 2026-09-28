@@ -378,6 +378,15 @@
   transform: translate(-50%, -50%);
 }
 
+/* The administrator's own logo, at the height of the mark it stands in for
+   and in its own shape, inside the ring. */
+.arrival-logo {
+  height: 52px;
+  width: auto;
+  max-width: 84px;
+  object-fit: contain;
+}
+
 .arrival-ring {
   position: absolute;
   inset: 0;

@@ -7,7 +7,6 @@ export type Language = "en" | "fr";
 type Dictionary = Record<string, string>;
 
 const en: Dictionary = {
-  "app.name": "Melyxar",
   "nav.back": "Back",
   "nav.search": "Search",
   "nav.jobs": "Activity",
@@ -1377,7 +1376,6 @@ const en: Dictionary = {
 };
 
 const fr: Dictionary = {
-  "app.name": "Melyxar",
   "nav.back": "Précédent",
   "nav.search": "Rechercher",
   "nav.jobs": "Activité",
