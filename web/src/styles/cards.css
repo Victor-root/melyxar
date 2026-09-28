@@ -607,14 +607,9 @@ button.seen-mark:not(.seen-mark-on):hover {
   cursor: pointer;
 }
 
-.selection-act:hover:not([aria-disabled="true"]) {
+.selection-act:hover {
   background: var(--surface-hover);
   color: var(--text);
-}
-
-.selection-act[aria-disabled="true"] {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .selection-count {

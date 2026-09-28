@@ -1107,6 +1107,8 @@ struct PinnedBody {
 #[derive(Debug, Serialize)]
 struct PinnedView {
     pinned: bool,
+    /// What left the banner to make room for it.
+    displaced: Vec<String>,
 }
 
 /// Puts a work in front of everybody, or takes it back off.
@@ -1122,8 +1124,12 @@ async fn set_pinned(
     Json(body): Json<PinnedBody>,
 ) -> Result<Json<PinnedView>> {
     let work_id = parse_work(&id)?;
-    let pinned = melyxar_app::catalogue::set_pinned(&state, &who, work_id, body.pinned).await?;
-    Ok(Json(PinnedView { pinned }))
+    let displaced =
+        melyxar_app::catalogue::set_pinned(&state, &who, work_id, body.pinned).await?;
+    Ok(Json(PinnedView {
+        pinned: body.pinned,
+        displaced: displaced.iter().map(ToString::to_string).collect(),
+    }))
 }
 
 /// Whether this viewer is saying they have watched it.

@@ -445,7 +445,7 @@ export function CardMenu({
         key: pinned ? "unpin" : "pin",
         mark: <PinIcon size={SHAPE} filled={pinned} />,
         allowed: account?.is_administrator === true,
-        act: () => marks.setPinned(card, !pinned),
+        act: () => void marks.setPinned(card, !pinned),
       },
     ],
     [
