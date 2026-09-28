@@ -555,8 +555,14 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--accent-contrast);
 }
 
-/* A chosen card is ringed, so a grid of them reads at a glance. */
-.card-chosen .card-picture,
+/* A chosen card is ringed, so a grid of them reads at a glance. Inside the
+   picture's edge, like the rim under the pointer: drawn outside it, the ring
+   was cut off wherever the card stops painting. */
+.card-chosen .card-picture::after,
+.card-chosen:hover .card-picture::after {
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+
 .own-chosen .own-picture {
   box-shadow: 0 0 0 3px var(--accent);
 }
