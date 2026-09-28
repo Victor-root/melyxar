@@ -451,17 +451,36 @@ button.seen-mark:not(.seen-mark-on):hover {
 .card-mark {
   display: grid;
   place-items: center;
+  box-sizing: border-box;
   width: 30px;
   height: 30px;
+  /* A button's own padding and line pushed the mark off the middle of its
+     disc: nothing but the mark is left inside. */
+  padding: 0;
+  line-height: 0;
   border-radius: 50%;
   background: color-mix(in srgb, var(--surface-deep) 86%, transparent);
   border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
   color: var(--text);
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+  transition:
+    background var(--quick) var(--ease),
+    color var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
 }
 
+.card-mark svg {
+  display: block;
+}
+
+/* Rimmed and lit in the accent under the pointer, the way the card itself
+   is. */
 .card-mark:hover {
   background: var(--surface-raised);
+  border-color: var(--accent-bright);
+  box-shadow:
+    0 0 6px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .card-mark-on {
