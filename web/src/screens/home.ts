@@ -16,6 +16,7 @@ import { useAsked } from "../asking";
 import { keep, recall } from "../kept";
 import { useMarks } from "../marks";
 import { useRunning, useStartIdentification, useStartScan } from "../running";
+import { useSettings } from "../settings";
 import type { Starter } from "../running";
 
 /**
@@ -101,9 +102,12 @@ export function useHomeScreen(libraries: Library[]): HomeScreen {
      row holds: a film put on the front page, an episode ticked off. What
      takes its place is the server's answer, so it is asked again. */
   const marks = useMarks();
+  /* And once the banner is switched on or off, which the server decides
+     whether to work out at all. */
+  const { bannerKept } = useSettings();
   const asked = useAsked(
     (signal) => api.home(undefined, signal),
-    [finished, marks.rowsMoved],
+    [finished, marks.rowsMoved, bannerKept],
     "home",
   );
 

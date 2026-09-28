@@ -87,6 +87,9 @@ interface Settings {
   /** Whether the home page opens on its banner at all. */
   bannerShown: boolean;
   setBannerShown: (shown: boolean) => void;
+  /** Counted up each time the server has kept the banner switched on or off,
+      so the home page, whose banner the server works out, asks again. */
+  bannerKept: number;
   /** Whether the bar at the top slides away while a page is read down, and
       comes back at the first move up. */
   headerHides: boolean;
@@ -295,10 +298,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ banner_fills_the_screen: whole });
   }, []);
 
+  const [bannerKept, setBannerKept] = useState(0);
   const setBannerShown = useCallback((shown: boolean) => {
     safeWrite(STORED_BANNER_SHOWN, shown ? "yes" : "no");
     setBannerShownState(shown);
-    tellTheServer({ banner_shown: shown });
+    void api
+      .savePreferences({ banner_shown: shown })
+      .then(() => setBannerKept((count) => count + 1))
+      .catch(() => {});
   }, []);
 
   const setHeaderHides = useCallback((hides: boolean) => {
@@ -409,6 +416,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerFillsTheScreen,
       bannerShown,
       setBannerShown,
+      bannerKept,
       headerHides,
       setHeaderHides,
       headerButtons,
@@ -442,6 +450,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBannerFillsTheScreen,
       bannerShown,
       setBannerShown,
+      bannerKept,
       headerHides,
       setHeaderHides,
       headerButtons,
