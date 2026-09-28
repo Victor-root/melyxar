@@ -233,8 +233,8 @@ function TaskLine({
     <div className="task-line">
       <div className="task-line-words">
         <span className="line-name">{name}</span>
-        {/* What it does, in words anybody can follow: six lines nobody
-            understands are six switches nobody dares touch. */}
+        {/* What it does, in words anybody can follow: seven lines nobody
+            understands are seven switches nobody dares touch. */}
         <span className="task-line-why">{t(`task.${task.task}_why`)}</span>
         {/* When it last ran, beside how much is left: a task that never ran
             and one that ran last night and found nothing look alike from a

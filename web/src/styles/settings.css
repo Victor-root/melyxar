@@ -134,6 +134,39 @@
   padding: 0 2px;
 }
 
+/* The steps to a key for OMDb, folded away once there is one. */
+.ratings-guide {
+  margin-top: var(--gap);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-deep);
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.ratings-guide summary {
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ratings-guide ol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 22px;
+}
+
+.ratings-guide p {
+  margin: 10px 0 0;
+}
+
+.ratings-guide a {
+  color: var(--accent-bright);
+}
+
 /* What Melyxar is: its mark, who made it, and where its source lives. */
 .about-melyxar {
   display: flex;

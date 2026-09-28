@@ -28,6 +28,7 @@ import {
   outOfAHundred,
   outOfTen,
   percentOf,
+  howManyVoted,
   readableBitrate,
   readableSize,
   readableDay,
@@ -200,6 +201,15 @@ describe("networkRate", () => {
     expect(networkRate(15_625_000, "en")).toBe("125\u00a0Mb/s");
     expect(networkRate(1_500_000, "fr")).toBe("12,0\u00a0Mb/s");
     expect(networkRate(0, "en")).toBe("0\u00a0b/s");
+  });
+});
+
+describe("howManyVoted", () => {
+  it("shortens a large number the way the language does", () => {
+    expect(howManyVoted(1_234_567, "en")).toBe("1.2M");
+    expect(howManyVoted(1_234_567, "fr")).toBe("1,2\u00a0M");
+    expect(howManyVoted(950, "en")).toBe("950");
+    expect(howManyVoted(12_400, "fr")).toBe("12,4\u00a0k");
   });
 });
 
