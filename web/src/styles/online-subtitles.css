@@ -1,0 +1,106 @@
+/*
+ * The window of a copy's subtitles: the tracks it has, and those offered
+ * online, one line each.
+ */
+
+.subtitles-heading {
+  margin: 4px 0 8px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.subtitles-heading + .subtitles-lines,
+.subtitles-heading + .settings-why {
+  margin-bottom: var(--gap-wide);
+}
+
+.subtitles-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subtitles-offers {
+  max-height: 46vh;
+  margin-top: var(--gap);
+  overflow-y: auto;
+}
+
+.subtitles-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px var(--gap);
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.subtitles-language {
+  flex: none;
+  font-weight: 600;
+}
+
+.subtitles-release {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtitles-origin,
+.subtitles-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.subtitles-off {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.subtitles-off:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* The key and the account OpenSubtitles is asked with, one field a line. */
+.opensubtitles-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  margin-top: var(--gap);
+}
+
+.opensubtitles-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap-tight);
+}
+
+.subtitles-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight);
+}

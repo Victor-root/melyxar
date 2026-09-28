@@ -38,6 +38,7 @@ import { PicturesDialog } from "./pictures";
 import { playInTurn } from "../queue";
 import { useCardsInOrder } from "./in-order";
 import { PutInListsDialog } from "./lists";
+import { OnlineSubtitlesDialog } from "./online-subtitles";
 import type { Lists } from "./lists";
 import { useSelection } from "./selection";
 import { useToast } from "./toasts";
@@ -136,6 +137,7 @@ export function useWorkMenu(
   const [downloading, setDownloading] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [listing, setListing] = useState(false);
+  const [subtitling, setSubtitling] = useState(false);
   const { t } = useSettings();
   const toast = useToast();
 
@@ -176,6 +178,7 @@ export function useWorkMenu(
           onDownload={() => setDownloading(true)}
           onCollect={() => setCollecting(true)}
           onPlaylist={() => setListing(true)}
+          onEditSubtitles={() => setSubtitling(true)}
           onDelete={() => setDeleting(true)}
           onClose={shut}
         />
@@ -218,6 +221,9 @@ export function useWorkMenu(
           words="collect"
           onClose={() => setCollecting(false)}
         />
+      )}
+      {subtitling && card.source && (
+        <OnlineSubtitlesDialog sourceId={card.source} title={card.title} onClose={() => setSubtitling(false)} />
       )}
       {listing && (
         <PutInListsDialog
@@ -264,6 +270,7 @@ export function CardMenu({
   onDownload,
   onCollect,
   onPlaylist,
+  onEditSubtitles,
   onDelete,
   onClose,
 }: {
@@ -297,6 +304,8 @@ export function CardMenu({
   onCollect: () => void;
   /** Opens the window that puts it in this account's playlists. */
   onPlaylist: () => void;
+  /** Opens the window of its subtitles, and those offered online. */
+  onEditSubtitles: () => void;
   /** Opens the question put before this work is deleted, for the same
       reason again. */
   onDelete: () => void;
@@ -455,8 +464,11 @@ export function CardMenu({
     {
       key: "edit_subtitles",
       mark: <SubtitlesIcon size={SHAPE} />,
-      allowed: account?.is_administrator === true,
-      later: true,
+      allowed:
+        account?.is_administrator === true &&
+        card.source !== null &&
+        (card.kind === "movie" || card.kind === "episode"),
+      act: onEditSubtitles,
     },
     {
       key: "identify",
