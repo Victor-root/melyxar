@@ -37,6 +37,7 @@ describe("settled", () => {
       may_delete: true,
       may_delete_from_disk: true,
       may_download: true,
+      may_manage_collections: true,
       most_streams: null,
     });
   });

@@ -10,6 +10,7 @@ export const EVERY_HEADER_BUTTON: HeaderButton[] = [
   "search",
   "favourites",
   "watch_later",
+  "collections",
   "notifications",
   "scan",
   "administration",

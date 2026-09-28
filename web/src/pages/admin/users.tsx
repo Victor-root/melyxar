@@ -371,6 +371,13 @@ function RightsLines({
               onChange={(may_download) => set({ may_download })}
             />
           </Setting>
+          <Setting label={t("admin.right.may_manage_collections")} why={t("users.may_manage_collections_why")}>
+            <Toggle
+              label={t("admin.right.may_manage_collections")}
+              checked={rights.may_manage_collections}
+              onChange={(may_manage_collections) => set({ may_manage_collections })}
+            />
+          </Setting>
           <Setting label={t("admin.limit_age")} soon>
             <Toggle label={t("admin.limit_age")} checked={false} onChange={() => {}} disabled />
           </Setting>

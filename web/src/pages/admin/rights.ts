@@ -21,6 +21,7 @@ export const AN_ORDINARY_ACCOUNT: Rights = {
   may_delete: false,
   may_delete_from_disk: false,
   may_download: false,
+  may_manage_collections: false,
   most_streams: null,
 };
 
@@ -40,6 +41,7 @@ export function settled(rights: Rights): Rights {
       may_delete: true,
       may_delete_from_disk: true,
       may_download: true,
+      may_manage_collections: true,
       most_streams: null,
     };
   }

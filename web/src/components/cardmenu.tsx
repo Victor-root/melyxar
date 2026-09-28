@@ -29,6 +29,7 @@ import { refusalAbout } from "../asking";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 import { isCatalogued, playsOnItsOwn } from "../works";
+import { CollectingDialog } from "./collecting";
 import { DeleteDialog } from "./deletion";
 import { IdentifyDialog } from "./identify";
 import { DetailsDialog } from "./details";
@@ -115,6 +116,7 @@ export function useWorkMenu(
   const [writingDetails, setWritingDetails] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [collecting, setCollecting] = useState(false);
   const { t } = useSettings();
   const toast = useToast();
 
@@ -153,6 +155,7 @@ export function useWorkMenu(
           onForgetIdentity={() => setForgetting(true)}
           onRefresh={refresh}
           onDownload={() => setDownloading(true)}
+          onCollect={() => setCollecting(true)}
           onDelete={() => setDeleting(true)}
           onClose={shut}
         />
@@ -186,6 +189,9 @@ export function useWorkMenu(
           title={card.title}
           onClose={() => setDownloading(false)}
         />
+      )}
+      {collecting && (
+        <CollectingDialog workId={card.id} title={card.title} onClose={() => setCollecting(false)} />
       )}
       {forgetting && (
         <ForgetIdentityDialog
@@ -221,6 +227,7 @@ export function CardMenu({
   onForgetIdentity,
   onRefresh,
   onDownload,
+  onCollect,
   onDelete,
   onClose,
 }: {
@@ -250,6 +257,8 @@ export function CardMenu({
   onRefresh: () => void;
   /** Hands over its file to keep, or asks which one when it has several. */
   onDownload: () => void;
+  /** Opens the window that puts it in the server's collections. */
+  onCollect: () => void;
   /** Opens the question put before this work is deleted, for the same
       reason again. */
   onDelete: () => void;
@@ -352,7 +361,12 @@ export function CardMenu({
         navigate(`/work/${card.id}?play`);
       },
     },
-    { key: "collection", mark: <CollectionIcon size={SHAPE} />, later: true },
+    {
+      key: "collection",
+      mark: <CollectionIcon size={SHAPE} />,
+      allowed: account?.may_manage_collections === true && card.kind !== "season" && card.kind !== "episode",
+      act: onCollect,
+    },
     { key: "playlist", mark: <PlaylistIcon size={SHAPE} />, later: true },
     {
       key: favourite ? "unfavourite" : "favourite",

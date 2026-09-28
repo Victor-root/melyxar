@@ -22,6 +22,7 @@ import { DebugJournal } from "./components/debug-journal";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { SearchPage } from "./pages/search";
+import { CollectionPage, CollectionsPage } from "./pages/collections";
 import { PersonPage } from "./pages/person";
 import { useKeptPlaces } from "./scrolling";
 import { WorkPage } from "./pages/work";
@@ -146,6 +147,8 @@ function TheLibrary() {
               <Route path="/watch-later" element={<LibraryPage libraries={libraries.all} />} />
               <Route path="/work/:id" element={<WorkPage />} />
               <Route path="/person/:id" element={<PersonPage />} />
+              <Route path="/collections" element={<CollectionsPage />} />
+              <Route path="/collection/:id" element={<CollectionPage />} />
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverview />} />
                 <Route path="libraries" element={<AdminLibraries />} />
