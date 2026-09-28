@@ -34,7 +34,7 @@ export function ElsewhereRatings({ ratings }: { ratings: Rating[] }) {
         const said = t("rating.critics", { share });
         return (
           <span key={rating.source} className="work-rating" title={said} aria-label={said}>
-            {rating.value >= FRESH_FROM ? <TomatoIcon size={17} /> : <SplatIcon size={17} />}
+            {rating.value >= FRESH_FROM ? <TomatoIcon size={22} /> : <SplatIcon size={22} />}
             {share}
           </span>
         );
