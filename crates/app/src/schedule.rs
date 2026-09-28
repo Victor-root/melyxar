@@ -438,12 +438,14 @@ pub fn keep_the_schedule(state: &AppState) -> tokio::task::JoinHandle<()> {
         // The activity journal on the same beat: the same kind of
         // housekeeping, owed whatever the libraries are set to do.
         crate::activity::forget_the_old(&state).await;
+        crate::online_subtitles::forget_the_orphans(&state).await;
         loop {
             tokio::time::sleep(LOOK_AT_THE_CLOCK_EVERY).await;
 
             if melyxar_core::time::now() - last_sweep >= FORGET_UNUSED_SESSIONS_EVERY {
                 last_sweep = forget_the_sessions_nobody_uses(&state).await;
                 crate::activity::forget_the_old(&state).await;
+                crate::online_subtitles::forget_the_orphans(&state).await;
             }
 
             let Ok(rows) = state.database().scheduled_tasks().await else {
