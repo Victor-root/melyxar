@@ -422,8 +422,15 @@ export const REFRESH_MODES: RefreshMode[] = [
   "everything",
 ];
 
-/** One of the six scheduled tasks, each covering every library. */
-export type TaskName = "scan" | "identify" | "key_frames" | "subtitles" | "thumbnails" | "openings";
+/** One of the seven scheduled tasks, each covering every library. */
+export type TaskName =
+  | "scan"
+  | "identify"
+  | "ratings"
+  | "key_frames"
+  | "subtitles"
+  | "thumbnails"
+  | "openings";
 
 /** Where one scheduled task stands. */
 export interface ScheduledTask {
@@ -475,6 +482,24 @@ export interface LibraryWork {
  * them: what it does about wide gamut colour it cannot show a client, and what
  * it allows the films it converts.
  */
+/** A rating from elsewhere than the provider: out of ten for IMDb, with how
+ *  many voted, and out of a hundred for Rotten Tomatoes' critics. */
+export interface Rating {
+  source: "imdb" | "rotten_tomatoes";
+  value: number;
+  votes: number | null;
+}
+
+/** Where the ratings from elsewhere stand. The OMDb key itself never comes
+ *  back, only whether there is one. */
+export interface RatingsSettings {
+  /** When IMDb's file of ratings was last fetched, as an instant. */
+  imdb_fetched_at: string | null;
+  has_omdb_key: boolean;
+  /** What trying the key just typed came to. */
+  tried: "kept" | "refused" | "unreachable" | null;
+}
+
 export interface PlaybackSettings {
   /** Never convert such colour, even where a client cannot show it correctly.
       Off by default. Dolby Vision without a compatible base layer is
@@ -749,6 +774,9 @@ export interface Work {
   versions: Version[];
   trailers: Trailer[];
   external_ids: { provider: string; id: string }[];
+  /** What IMDb's viewers and Rotten Tomatoes' critics made of it, when the
+   *  server has heard. */
+  ratings: Rating[];
   /** The seasons of a series, the episodes of a season, in order. Empty for
    *  anything met on its own. */
   children: Child[];
@@ -1839,6 +1867,11 @@ export const api = {
     get<LibraryWork>("/api/v1/settings/libraries", signal),
   setLibraryWork: (work: LibraryWork) =>
     put<LibraryWork>("/api/v1/settings/libraries", work),
+  ratingsSettings: (signal?: AbortSignal) =>
+    get<RatingsSettings>("/api/v1/settings/ratings", signal),
+  setOmdbKey: (omdb_key: string) =>
+    put<RatingsSettings>("/api/v1/settings/ratings", { omdb_key }),
+  forgetOmdbKey: () => remove<RatingsSettings>("/api/v1/settings/ratings"),
   playbackSettings: (signal?: AbortSignal) =>
     get<PlaybackSettings>("/api/v1/settings/playback", signal),
   setPlaybackSettings: (settings: PlaybackSettings) =>

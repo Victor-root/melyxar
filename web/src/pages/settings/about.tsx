@@ -1,7 +1,7 @@
 /*
  * What Melyxar is, which one this server runs, under which licence, and where
- * the pictures and words about films come from, which the provider asks to be
- * said.
+ * the pictures, words and ratings about films come from, which their sources
+ * ask to be said.
  */
 
 import { useEffect, useState } from "react";
@@ -17,6 +17,8 @@ const AUTHOR = "https://github.com/Victor-root";
 const LICENCE = "https://www.gnu.org/licenses/agpl-3.0.html";
 const PROVIDER = "https://www.themoviedb.org";
 const ICONS = "https://tabler.io/icons";
+const IMDB = "https://www.imdb.com";
+const OMDB = "https://www.omdbapi.com";
 
 export function MyAbout() {
   const { t } = useSettings();
@@ -85,6 +87,16 @@ export function MyAbout() {
         <Setting label="TMDB" why={t("about.metadata_why")}>
           <a className="button button-small" href={PROVIDER} target="_blank" rel="noopener noreferrer">
             themoviedb.org
+          </a>
+        </Setting>
+        <Setting label="IMDb" why={t("about.imdb_why")}>
+          <a className="button button-small" href={IMDB} target="_blank" rel="noopener noreferrer">
+            imdb.com
+          </a>
+        </Setting>
+        <Setting label="OMDb" why={t("about.omdb_why")}>
+          <a className="button button-small" href={OMDB} target="_blank" rel="noopener noreferrer">
+            omdbapi.com
           </a>
         </Setting>
       </Panel>

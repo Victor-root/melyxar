@@ -1,7 +1,7 @@
 /*
  * What the server knows about the works, and where it learns it from: the
  * language each library is described in, the files sitting beside the films,
- * and the provider it asks.
+ * the ratings from elsewhere, and the provider it asks.
  */
 
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
@@ -11,6 +11,7 @@ import { useLibraries } from "../../libraries";
 import { useLibraryEditing } from "../../screens/declaring";
 import { useLibraryWork } from "../../screens/settings";
 import { useSettings } from "../../settings";
+import { RatingsPanel } from "./ratings";
 
 export function AdminMetadata() {
   const { t, language } = useSettings();
@@ -63,6 +64,8 @@ export function AdminMetadata() {
             </Setting>
           </Panel>
         )}
+
+        <RatingsPanel />
 
         <Panel icon={IdentifyIcon} title={t("admin.provider")} lead={t("admin.provider_lead")} soon>
           <Setting label={t("admin.provider_state")} soon>

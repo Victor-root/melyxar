@@ -387,6 +387,31 @@ export function StarIcon(props: IconProps) {
   );
 }
 
+/** A ripe tomato, for a work most critics liked, as Rotten Tomatoes says it. */
+export function TomatoIcon(props: IconProps) {
+  return (
+    <Icon {...props} strokeWidth={1.6}>
+      <path
+        d="M12 8.6c4.3 0 7.4 2.5 7.4 5.9S16.3 20.4 12 20.4s-7.4-2.5-7.4-5.9S7.7 8.6 12 8.6Z"
+        fill="currentColor"
+      />
+      <path d="M12 8.6V4.4M8.6 6.4c1.2 1.3 2.3 1.8 3.4 1.8s2.2-.5 3.4-1.8" />
+    </Icon>
+  );
+}
+
+/** A tomato thrown and burst, for a work most critics did not like. */
+export function SplatIcon(props: IconProps) {
+  return (
+    <Icon {...props} strokeWidth={1.4}>
+      <path
+        d="m12 4.4 1.6 3.5 3.5-1.6-1 3.7 3.7 1-3.1 2.3 2.3 3.1-3.8-.3-.2 3.8L12 17.6l-3 2.3-.2-3.8-3.8.3 2.3-3.1L4.2 11l3.7-1-1-3.7 3.5 1.6Z"
+        fill="currentColor"
+      />
+    </Icon>
+  );
+}
+
 /** A clapperboard, for the trailer: the film before the film. */
 export function TrailerIcon(props: IconProps) {
   return (

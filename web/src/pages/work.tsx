@@ -21,6 +21,7 @@ import { Card } from "../components/card";
 import { useWorkMenu } from "../components/cardmenu";
 import { Panel, Picker } from "../components/panel";
 import { PersonCard } from "../components/person";
+import { ElsewhereRatings } from "../components/ratings";
 import { TrailerDialog } from "../components/trailer";
 import { Row, RowHead } from "../components/row";
 import { useFittedText } from "../fitting";
@@ -349,11 +350,12 @@ function TopOfTheWork({
 
         <p className="work-facts">
           {work.rating !== null && (
-            <span className="work-rating">
+            <span className="work-rating" title={t("rating.tmdb")}>
               <StarIcon size={17} />
               {outOfTen(work.rating)}
             </span>
           )}
+          <ElsewhereRatings ratings={work.ratings} />
           {facts.length > 0 && <span>{facts.join(" · ")}</span>}
           {work.age_rating && <span className="work-badge">{work.age_rating}</span>}
           {work.genres.length > 0 && <span>{work.genres.join(", ")}</span>}

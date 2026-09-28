@@ -482,6 +482,12 @@ export function networkRate(bytesPerSecond: number, language: string): string {
   return `${value.toLocaleString(language, { maximumFractionDigits: digits, minimumFractionDigits: digits })}\u00a0${units[unit]}`;
 }
 
+/** How many voted, shortened the way the language shortens a large number:
+ *  1.2M, 1,2 M. */
+export function howManyVoted(votes: number, language: string): string {
+  return votes.toLocaleString(language, { notation: "compact", maximumFractionDigits: 1 });
+}
+
 /** A share from nought to one as a whole percentage, the way the language writes one. */
 export function percentOf(share: number, language: string): string {
   return share.toLocaleString(language, { style: "percent", maximumFractionDigits: 0 });
