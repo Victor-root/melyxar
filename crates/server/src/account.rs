@@ -383,6 +383,7 @@ struct AccountView {
     name: String,
     is_administrator: bool,
     may_download: bool,
+    may_manage_collections: bool,
     may_delete: bool,
     may_delete_from_disk: bool,
     /// Where its picture is served, when it has one.
@@ -396,6 +397,7 @@ impl From<&User> for AccountView {
             name: user.name.clone(),
             is_administrator: user.permissions.is_administrator,
             may_download: user.permissions.may_download,
+            may_manage_collections: user.permissions.may_manage_collections,
             may_delete: user.permissions.may_delete,
             may_delete_from_disk: user.permissions.may_delete_from_disk,
             avatar: user.avatar_path.as_deref().map(crate::images::face_url),

@@ -51,7 +51,7 @@ pub enum KeptAnAdministrator {
 const WHAT_AN_ACCOUNT_IS: &str =
     "u.id, u.name, u.avatar_path, u.is_administrator, u.sees_every_library,
      u.max_age_rating,
-     u.may_download, u.may_delete, u.may_delete_from_disk, u.max_sessions, u.created_at,
+     u.may_download, u.may_manage_collections, u.may_delete, u.may_delete_from_disk, u.max_sessions, u.created_at,
      p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
      p.subtitle_mode, p.theme_mode, p.accent_color, p.custom_css, p.volume,
      p.downmix_method, p.downmix_gain,
@@ -339,7 +339,8 @@ impl Database {
         let before = administrators_in(&mut transaction).await?;
         let done = sqlx::query(
             "UPDATE users SET is_administrator = ?, sees_every_library = ?, max_age_rating = ?,
-                              may_download = ?, may_delete = ?, may_delete_from_disk = ?,
+                              may_download = ?, may_manage_collections = ?, may_delete = ?,
+                              may_delete_from_disk = ?,
                               max_sessions = ?
              WHERE id = ?",
         )
@@ -347,6 +348,7 @@ impl Database {
         .bind(bool_to_int(permissions.sees_every_library))
         .bind(permissions.max_age_rating)
         .bind(bool_to_int(permissions.may_download))
+        .bind(bool_to_int(permissions.may_manage_collections))
         .bind(bool_to_int(permissions.may_delete))
         .bind(bool_to_int(permissions.may_delete_from_disk))
         .bind(permissions.max_sessions)
@@ -542,9 +544,9 @@ async fn write_an_account(
 
     sqlx::query(
         "INSERT INTO users (id, name, password_hash, is_administrator, sees_every_library,
-                            max_age_rating, may_download, may_delete, may_delete_from_disk,
-                            max_sessions, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            max_age_rating, may_download, may_manage_collections, may_delete,
+                            may_delete_from_disk, max_sessions, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(name)
@@ -553,6 +555,7 @@ async fn write_an_account(
     .bind(bool_to_int(permissions.sees_every_library))
     .bind(permissions.max_age_rating)
     .bind(bool_to_int(permissions.may_download))
+    .bind(bool_to_int(permissions.may_manage_collections))
     .bind(bool_to_int(permissions.may_delete))
     .bind(bool_to_int(permissions.may_delete_from_disk))
     .bind(permissions.max_sessions)
@@ -673,6 +676,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             allowed_libraries,
             max_age_rating: row.try_get("max_age_rating")?,
             may_download: int_to_bool(row.try_get("may_download")?),
+            may_manage_collections: int_to_bool(row.try_get("may_manage_collections")?),
             may_delete: int_to_bool(row.try_get("may_delete")?),
             may_delete_from_disk: int_to_bool(row.try_get("may_delete_from_disk")?),
             max_sessions: row.try_get("max_sessions")?,

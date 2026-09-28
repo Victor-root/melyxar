@@ -33,6 +33,9 @@ pub struct Permissions {
     /// Highest age rating this person may watch, when one is set.
     pub max_age_rating: Option<i32>,
     pub may_download: bool,
+    /// Make, rename and delete the server's collections, and put works in
+    /// them.
+    pub may_manage_collections: bool,
     /// Remove a work from the library.
     pub may_delete: bool,
     /// Also erase the file from disk. Administrators only, and still gated on
@@ -51,6 +54,7 @@ impl Permissions {
             allowed_libraries: Vec::new(),
             max_age_rating: None,
             may_download: true,
+            may_manage_collections: true,
             may_delete: true,
             may_delete_from_disk: true,
             max_sessions: None,
@@ -65,6 +69,7 @@ impl Permissions {
             allowed_libraries: Vec::new(),
             max_age_rating: None,
             may_download: false,
+            may_manage_collections: false,
             may_delete: false,
             may_delete_from_disk: false,
             max_sessions: None,
@@ -467,6 +472,8 @@ pub enum HeaderButton {
     Search,
     Favourites,
     WatchLater,
+    /// The server's collections.
+    Collections,
     Notifications,
     /// Offered to administrators only, as the next one.
     Scan,
@@ -477,11 +484,12 @@ pub enum HeaderButton {
 
 impl HeaderButton {
     /// Every button, in the order everybody starts with.
-    pub const fn every() -> [Self; 8] {
+    pub const fn every() -> [Self; 9] {
         [
             Self::Search,
             Self::Favourites,
             Self::WatchLater,
+            Self::Collections,
             Self::Notifications,
             Self::Scan,
             Self::Administration,
@@ -506,6 +514,7 @@ impl HeaderButton {
             Self::Search => "search",
             Self::Favourites => "favourites",
             Self::WatchLater => "watch_later",
+            Self::Collections => "collections",
             Self::Notifications => "notifications",
             Self::Scan => "scan",
             Self::Administration => "administration",

@@ -667,6 +667,7 @@ pub struct Rights {
     pub may_delete: bool,
     pub may_delete_from_disk: bool,
     pub may_download: bool,
+    pub may_manage_collections: bool,
     /// How many films it may watch at once, when it is limited.
     pub most_streams: Option<i32>,
 }
@@ -681,6 +682,7 @@ impl Rights {
             may_delete: self.may_delete,
             may_delete_from_disk: self.may_delete_from_disk,
             may_download: self.may_download,
+            may_manage_collections: self.may_manage_collections,
             max_sessions: self.most_streams,
             ..held.clone()
         }
@@ -1520,6 +1522,7 @@ mod tests {
             may_delete: permissions.may_delete,
             may_delete_from_disk: permissions.may_delete_from_disk,
             may_download: permissions.may_download,
+            may_manage_collections: permissions.may_manage_collections,
             most_streams: permissions.max_sessions,
         }
     }
