@@ -23,7 +23,7 @@ export function ElsewhereRatings({ ratings }: { ratings: Rating[] }) {
           });
           return (
             <span key={rating.source} className="work-rating" title={said} aria-label={said}>
-              <span className="work-rating-mark" aria-hidden="true">
+              <span className="work-rating-mark work-rating-imdb" aria-hidden="true">
                 IMDb
               </span>
               {outOfTen(rating.value)}

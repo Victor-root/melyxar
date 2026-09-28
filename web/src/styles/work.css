@@ -155,12 +155,20 @@
 .work-rating-mark {
   padding: 0 4px;
   border-radius: 3px;
-  background: var(--accent);
-  color: var(--accent-contrast);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 16px;
+}
+
+.work-rating-imdb {
+  background: var(--brand-imdb);
+  color: var(--brand-imdb-text);
+}
+
+.work-rating-tmdb {
+  background: var(--brand-tmdb);
+  color: var(--brand-tmdb-text);
 }
 
 /* Bordered rather than filled, like the badges of the banner: facts about the

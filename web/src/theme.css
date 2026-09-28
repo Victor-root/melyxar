@@ -77,6 +77,12 @@
   /* The colour the logo is drawn in: the accent's hue made as vivid as the
      red the logo was drawn in (mark.ts works it out for any other accent). */
   --mark-colour: #e50000;
+  /* The colours IMDb and TMDB are known by, beside the ratings they give:
+     their own, like the logo of a site linked to, and never the accent's. */
+  --brand-imdb: #f5c518;
+  --brand-imdb-text: #000000;
+  --brand-tmdb: linear-gradient(90deg, #90cea1, #01b4e4);
+  --brand-tmdb-text: #0d253f;
   /* What the installed application's icon and opening screen are laid on:
      the dark ground whatever the theme, so an icon on a phone does not
      change colour at nightfall with the system's theme. */

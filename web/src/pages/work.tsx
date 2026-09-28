@@ -351,7 +351,7 @@ function TopOfTheWork({
         <p className="work-facts">
           {work.rating !== null && (
             <span className="work-rating" title={t("rating.tmdb")}>
-              <span className="work-rating-mark" aria-hidden="true">
+              <span className="work-rating-mark work-rating-tmdb" aria-hidden="true">
                 TMDB
               </span>
               {outOfTen(work.rating)}
