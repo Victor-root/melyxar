@@ -22,6 +22,19 @@ Chantier à venir. Rien n'est codé : ce document fixe la règle qui le guide, d
 
 Pourquoi pas un lecteur commun : la musique joue autrement (pas de session découpée, pas d'image, une file d'attente qui enchaîne sans coupure, une barre qui reste en bas pendant qu'on navigue), et toucher au lecteur vidéo, qui marche bien, ferait courir un risque à tout le reste pour économiser peu de code.
 
+## Organisation du code
+
+Le code de la musique doit être bien séparé et facile à maintenir. Les règles du projet s'appliquent à la lettre, avec en plus la cloison décrite plus haut.
+
+- **Une responsabilité par fichier, dite en une phrase.** Le code neuf va dans le fichier qui porte sa responsabilité, jamais dans celui qu'on était en train de modifier. On découpe quand des fonctions sans rapport se croisent, pas pour le nombre de lignes.
+- **Les couches existantes, sans exception** : le SQL de la musique dans `database` uniquement, la logique métier dans `app`, les routes dans `server` sans logique, chacune dans un module à elle. La direction des dépendances entre crates reste unique.
+- **Les calculs purs vivent dans une brique basse, avec leurs tests** : regroupement des morceaux en albums et artistes, lecture d'un disque et d'une piste, rendu d'un modèle de renommage. Pas dans l'orchestrateur du scan, pas dans un composant d'interface.
+- **Les étiquettes des fichiers ont leur propre brique** (`lofty` y est enfermée), qui ne dépend d'aucune autre crate du serveur : la lecture d'un côté, l'écriture de l'autre, jamais mélangées. Le reste du serveur ne connaît pas `lofty`.
+- **Dans l'interface** : un dossier `web/src/music/` pour les pages et le lecteur, ses styles dans un fichier `styles/music.css` chargé par `styles/index.css`, ses textes sous le préfixe `music.` en anglais puis en français. Le lecteur audio, la file d'attente, les paroles, le gestionnaire d'étiquettes et les pages de navigation sont des fichiers distincts.
+- **Pas de duplication** : avant d'écrire une aide, on cherche si elle existe. Les briques neutres partagées (temps, volume, appels au serveur) sont sorties à un endroit neutre au lieu d'être copiées.
+- **Les tests suivent le code qu'ils testent** : un test d'intégration sur base migrée pour chaque requête SQL de la musique, Vitest pour tout calcul de l'interface, la suite complète et `clippy` pour tout ce qui touche le moteur.
+- **Le plan (`03-plan.md`) est mis à jour à chaque étape terminée.** Les noms exacts de crates et de modules sont fixés à l'ouverture du chantier, en respectant ces règles.
+
 ## Ce qui existe déjà
 
 - Le modèle de données : les œuvres de sorte artiste, album et morceau, avec parent et numéro de piste, et les colonnes de sonie (intégrée, crête, plage) sur les pistes audio.
