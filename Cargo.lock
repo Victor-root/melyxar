@@ -1359,6 +1359,7 @@ dependencies = [
  "melyxar-sound",
  "melyxar-streaming",
  "melyxar-system",
+ "melyxar-tags",
  "notify",
  "png",
  "serde",

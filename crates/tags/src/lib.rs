@@ -17,9 +17,11 @@
 //! about a database, a scan or a job: it is handed a path and says what it
 //! found.
 
+mod pairs;
 mod read;
 mod values;
 
+pub use pairs::from_pairs;
 pub use read::read;
 
 /// Everything read out of one music file.

@@ -57,7 +57,8 @@ pub struct ScanReport {
     /// whose files joined it rather than standing as a film of their own.
     pub merged: usize,
     /// Episodes moved to where their files now say they go in their series,
-    /// because the rules that read a season and a number improved.
+    /// because the rules that read a season and a number improved, and songs
+    /// whose files now name another album.
     pub refiled: usize,
     pub extras: usize,
     /// Subtitle files attached to the film they sit next to.
@@ -397,7 +398,26 @@ pub async fn scan_library(
             .into_iter()
             .partition(|file| file.companion_kind.is_none());
 
-        record_changes(state, library, root.id, &media, &signs, &mut report).await?;
+        let added = record_changes(database, root.id, &media, &mut report).await?;
+
+        // A library of music files its songs its own way, and has no clip,
+        // subtitle or description going with a film to attach.
+        if library.kind == LibraryKind::Music {
+            crate::music::scan::file_root(
+                state,
+                library,
+                root,
+                &media,
+                &added,
+                handle,
+                &mut report,
+            )
+            .await?;
+            handle.advance(1).await;
+            continue;
+        }
+
+        file_added(state, library, root.id, &added, &signs, &mut report).await?;
         attach_companions(database, root.id, &companions, &media, &mut report).await?;
         attach_subtitles(database, root.id, &outcome.subtitles, &mut report).await?;
 
@@ -416,13 +436,19 @@ pub async fn scan_library(
     }
 
     report.moved = follow_what_moved(state, library).await?;
+    if library.kind == LibraryKind::Music {
+        crate::music::scan::prune(state, library).await?;
+    }
 
     handle.at_step(JobStep::ReadingNamesAgain).await;
     let reread = reread_names_of_nameless_works(state, library).await?;
     report.renamed = reread.renamed;
     report.merged = reread.merged;
-    report.refiled = reread.refiled;
-    analyse_pending(state, library, handle, &mut report).await?;
+    report.refiled += reread.refiled;
+    // Every song was read as it was filed.
+    if library.kind != LibraryKind::Music {
+        analyse_pending(state, library, handle, &mut report).await?;
+    }
     // After the analysis, which is what says where in a video its picture is.
     if library.kind == LibraryKind::HomeMedia {
         report.pictured = crate::own::picture_what_has_none(state, library, handle).await?;
@@ -488,16 +514,16 @@ async fn say_what_is_left_to_the_upkeep(state: &AppState, library: &Library) {
     }
 }
 
-/// Writes down what the walk found for one root.
+/// Writes down what changed on one root since the last walk: files replaced,
+/// gone, or back. Answers the files met for the first time, for the library
+/// to write down its own way; what somebody took out of the library and left
+/// on the disk is not among them, since they said they do not want it here.
 async fn record_changes(
-    state: &AppState,
-    library: &Library,
+    database: &Database,
     root_id: LibraryRootId,
     media: &[FoundFile],
-    signs: &naming::LibrarySigns,
     report: &mut ScanReport,
-) -> Result<()> {
-    let database = state.database();
+) -> Result<Vec<FoundFile>> {
     let stored = database.sources_of_root(root_id).await?;
     let known: Vec<KnownFile> = stored
         .iter()
@@ -514,27 +540,6 @@ async fn record_changes(
         .iter()
         .map(|source| (source.relative_path.as_path(), source))
         .collect();
-
-    // What somebody took out of the library and left on the disk is walked
-    // past: they said they do not want it here.
-    let set_aside = database.set_aside_paths(root_id).await?;
-    for file in changes
-        .added
-        .iter()
-        .filter(|file| !set_aside.contains(&file.relative_path))
-    {
-        let work_id = work_for(state, library, &file.relative_path, signs).await?;
-        database
-            .insert_source(
-                work_id,
-                root_id,
-                &file.relative_path,
-                file.size_bytes,
-                file.modified_at,
-            )
-            .await?;
-        report.added += 1;
-    }
 
     for file in &changes.changed {
         if let Some(source) = by_path.get(file.relative_path.as_path()) {
@@ -565,6 +570,38 @@ async fn record_changes(
         }
     }
 
+    let set_aside = database.set_aside_paths(root_id).await?;
+    Ok(changes
+        .added
+        .into_iter()
+        .filter(|file| !set_aside.contains(&file.relative_path))
+        .collect())
+}
+
+/// Writes down the films, episodes and home videos met for the first time,
+/// each under the work its name or its place leads to.
+async fn file_added(
+    state: &AppState,
+    library: &Library,
+    root_id: LibraryRootId,
+    added: &[FoundFile],
+    signs: &naming::LibrarySigns,
+    report: &mut ScanReport,
+) -> Result<()> {
+    for file in added {
+        let work_id = work_for(state, library, &file.relative_path, signs).await?;
+        state
+            .database()
+            .insert_source(
+                work_id,
+                root_id,
+                &file.relative_path,
+                file.size_bytes,
+                file.modified_at,
+            )
+            .await?;
+        report.added += 1;
+    }
     Ok(())
 }
 

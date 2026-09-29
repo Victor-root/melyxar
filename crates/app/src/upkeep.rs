@@ -105,8 +105,12 @@ impl UpkeepTask {
     /// goes wrong without it. The three heavy ones are each the library's own
     /// choice, and the listening never is for a library of films: an opening
     /// is what every episode of a season shares, and a film has no season and
-    /// no neighbours. What a library does not want waits for nothing.
+    /// no neighbours. What a library does not want waits for nothing, and a
+    /// library of music wants none of them: they all go through a video.
     pub fn applies_to(self, library: &Library) -> bool {
+        if !library.kind.holds_videos() {
+            return false;
+        }
         match self {
             Self::KeyFrames => true,
             Self::Subtitles => library.options.extract_subtitles,
@@ -790,5 +794,14 @@ mod tests {
 
         library.kind = melyxar_core::library::LibraryKind::Movies;
         assert!(!UpkeepTask::Openings.applies_to(&library), "a film has no season");
+
+        library.kind = melyxar_core::library::LibraryKind::Music;
+        library.options.make_thumbnails = true;
+        assert!(
+            UpkeepTask::ALL
+                .iter()
+                .all(|task| !task.applies_to(&library)),
+            "a song has no picture to read through, whatever the library asked for"
+        );
     }
 }
