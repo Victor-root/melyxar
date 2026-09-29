@@ -10,7 +10,7 @@ impl Database {
     /// What this account chose, or the defaults while it has chosen nothing.
     pub async fn music_preferences(&self, user: UserId) -> Result<MusicPreferences> {
         let row = sqlx::query(
-            "SELECT film_on_screen, resume_queue, max_bitrate_kbps, volume_mode
+            "SELECT film_on_screen, resume_queue, max_bitrate_kbps, volume_mode, crossfade_seconds
                FROM music_preferences WHERE user_id = ?",
         )
         .bind(user.to_db_string())
@@ -28,6 +28,8 @@ impl Database {
                 .and_then(|kbps| u32::try_from(kbps).ok()),
             volume_mode: VolumeMode::parse(&row.try_get::<String, _>("volume_mode")?)
                 .unwrap_or_default(),
+            crossfade_seconds: u32::try_from(row.try_get::<i64, _>("crossfade_seconds")?)
+                .unwrap_or(0),
         })
     }
 
@@ -38,19 +40,22 @@ impl Database {
     ) -> Result<()> {
         sqlx::query(
             "INSERT INTO music_preferences
-                (user_id, film_on_screen, resume_queue, max_bitrate_kbps, volume_mode)
-             VALUES (?, ?, ?, ?, ?)
+                (user_id, film_on_screen, resume_queue, max_bitrate_kbps, volume_mode,
+                 crossfade_seconds)
+             VALUES (?, ?, ?, ?, ?, ?)
              ON CONFLICT (user_id) DO UPDATE SET
                 film_on_screen = excluded.film_on_screen,
                 resume_queue = excluded.resume_queue,
                 max_bitrate_kbps = excluded.max_bitrate_kbps,
-                volume_mode = excluded.volume_mode",
+                volume_mode = excluded.volume_mode,
+                crossfade_seconds = excluded.crossfade_seconds",
         )
         .bind(user.to_db_string())
         .bind(chosen.film_on_screen.as_str())
         .bind(chosen.resume_queue)
         .bind(chosen.max_bitrate_kbps.map(i64::from))
         .bind(chosen.volume_mode.as_str())
+        .bind(i64::from(chosen.crossfade_seconds))
         .execute(self.writer())
         .await?;
         Ok(())
@@ -81,6 +86,7 @@ mod tests {
             resume_queue: false,
             max_bitrate_kbps: Some(128),
             volume_mode: VolumeMode::Album,
+            crossfade_seconds: 6,
         };
         database
             .save_music_preferences(user, &chosen)
