@@ -35,6 +35,7 @@ import { howMany } from "../../readable";
 import { useStartScan } from "../../running";
 import { useDeclaring, useLibraryEditing, useRemoving } from "../../screens/declaring";
 import type { LibraryEditing } from "../../screens/declaring";
+import { MusicLibraryOptionsFields } from "../../music/library-options";
 import { useSettings } from "../../settings";
 
 export function AdminLibraries() {
@@ -193,6 +194,7 @@ function LibraryPanel({
           watchWhy={library.watch_state === "starting" ? "admin.watch_starting" : undefined}
           watchRefusal={library.watch_refusal}
         />
+        {library.kind === "music" && <MusicLibraryOptionsFields library={library.id} />}
       </div>
 
       {/* The folders it looks in. A log line shows only the label, but this is

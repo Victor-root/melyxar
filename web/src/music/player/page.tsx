@@ -1,10 +1,11 @@
 /*
  * The page of what is playing, opened over the interface from the bar,
- * from wherever one is: the cover large, every control, and the queue.
+ * from wherever one is: the cover large, every control, and beside them the
+ * queue or the words of the song.
  * Closed, it gives back the page it was opened over, just as it was.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { asClock } from "../../clock";
 import { ChevronDownIcon, CloseIcon } from "../../icons";
@@ -13,6 +14,7 @@ import { useSettings } from "../../settings";
 import { Heart } from "../heart";
 import { Clock, Cover, Loudness, PlayPause, Progress, Ways } from "./bar";
 import { NextIcon, PreviousIcon, StopIcon } from "./icons";
+import { LyricsPanel } from "./lyrics-panel";
 import { useMusic } from "./player";
 
 export function MusicNowPlaying() {
@@ -21,6 +23,7 @@ export function MusicNowPlaying() {
   const film = useIsAFilmOnScreen();
   const { song, open, setOpen } = music;
   const shown = open && song !== null && !film;
+  const [side, setSide] = useState<"queue" | "lyrics">("queue");
 
   useEffect(() => {
     if (!shown) {
@@ -94,8 +97,23 @@ export function MusicNowPlaying() {
           <Loudness music={music} />
         </section>
 
-        <section className="music-now-queue" aria-label={t("music.queue")}>
-          <h3>{t("music.queue")}</h3>
+        <section className="music-now-queue" aria-label={t(side === "queue" ? "music.queue" : "music.lyrics")}>
+          <nav className="music-now-tabs">
+            {(["queue", "lyrics"] as const).map((one) => (
+              <button
+                key={one}
+                type="button"
+                className={`music-tab${side === one ? " music-tab-on" : ""}`}
+                aria-current={side === one ? "true" : undefined}
+                onClick={() => setSide(one)}
+              >
+                {t(one === "queue" ? "music.queue" : "music.lyrics")}
+              </button>
+            ))}
+          </nav>
+          {side === "lyrics" ? (
+            <LyricsPanel song={song.id} />
+          ) : (
           <ol className="music-queue">
             {queue.order.map((place, at) => {
               const one = queue.songs[place];
@@ -116,6 +134,7 @@ export function MusicNowPlaying() {
               );
             })}
           </ol>
+          )}
         </section>
       </div>
     </div>
