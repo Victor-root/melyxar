@@ -1197,10 +1197,7 @@ write_configuration() {
     return 0
   fi
 
-  local port
-  port="$(prompt_default "$(tr_msg prompt_port)" "$DEFAULT_PORT")"
-  check_port "$port" || true
-
+  local port="$1"
   local tmp
   tmp="$(mktemp)"
   "$BINARY_PATH" print-default-config > "$tmp"
@@ -1292,12 +1289,20 @@ show_done() {
 }
 
 action_install() {
+  # Every question is asked before anything is installed, so that once the
+  # install is under way it runs to its end without waiting on anybody.
+  local port="$DEFAULT_PORT"
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    port="$(prompt_default "$(tr_msg prompt_port)" "$DEFAULT_PORT")"
+    check_port "$port" || true
+  fi
+
   check_system
   install_packages
   create_account_and_folders
   fetch_source
   build_and_install
-  write_configuration
+  write_configuration "$port"
   install_service
   mark_installed engine
   show_done

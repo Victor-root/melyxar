@@ -610,3 +610,29 @@ input[type="radio"]:disabled {
 .panel-notice-trouble {
   background: var(--trouble-wash);
 }
+
+/* The theme turned with one press, where the settings are not yet in
+   reach: automatic does not always land on the one the eyes want. */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  color: var(--text-faint);
+  transition:
+    color var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+.theme-toggle:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-raised) 60%, transparent);
+}
+
+.theme-toggle-icon {
+  width: 16px;
+  height: 16px;
+}
+

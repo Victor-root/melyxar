@@ -13,6 +13,8 @@ import type { ComponentType } from "react";
 import type { Library } from "../api";
 import { useTold } from "../asking";
 import { PageBackdrop } from "../components/backdrop";
+import { LanguagePicker } from "../components/language-picker";
+import { ThemeToggle } from "../components/theme-toggle";
 import { Panel } from "../components/panel";
 import { refusalKey } from "../i18n";
 import { AccountIcon, FolderIcon, KindIcon, PlayIcon, TickIcon } from "../icons";
@@ -85,8 +87,12 @@ export function FirstSteps({
             )}
           </div>
         </nav>
-        <div className="side-foot">
-          {t("first_steps.foot", { at: at + 1, of: STEPS.length })}
+        {/* The two settings of the door stay in reach all the way through:
+            the settings pages are behind these steps. */}
+        <div className="side-foot first-steps-foot-side">
+          <span>{t("first_steps.foot", { at: at + 1, of: STEPS.length })}</span>
+          <LanguagePicker />
+          <ThemeToggle />
         </div>
       </aside>
 
