@@ -671,7 +671,7 @@ function HowFarIn({ seconds, minutes }: { seconds: number | null; minutes: numbe
           style={{ width: `${(Math.min(seconds, whole) / whole) * 100}%` }}
         />
       </span>
-      <span>{whatIsLeft(seconds, minutes, t)}</span>
+      <span>{whatIsLeft(seconds, whole, t)}</span>
     </p>
   );
 }
