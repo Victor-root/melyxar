@@ -192,9 +192,9 @@ async fn write(
     let mut chosen = melyxar_app::preferences::of(&state, who.id).await?;
 
     if let Some(language) = body.interface_language {
-        if !melyxar_core::user::is_a_language(&language) {
+        if !melyxar_core::user::is_an_interface_language(&language) {
             return Err(ServerError::invalid_input(
-                "a language is two letters, such as fr or en",
+                "a language is two letters, such as fr or en, or auto",
             ));
         }
         chosen.interface_language = language;

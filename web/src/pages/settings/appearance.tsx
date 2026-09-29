@@ -7,6 +7,7 @@
  */
 
 import type { Backdrop, HeaderButton } from "../../api";
+import { LanguagePicker } from "../../components/language-picker";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
 import { Sortable } from "../../components/sortable";
 import { useAccount } from "../../account";
@@ -33,7 +34,7 @@ import { reorderedAmong } from "../../sorting";
 import type { ThemeChoice } from "../../settings";
 
 export function MyAppearance() {
-  const { t, language, setLanguage, theme, setTheme, accent, setAccent } = useSettings();
+  const { t, theme, setTheme, accent, setAccent } = useSettings();
 
   return (
     <>
@@ -53,15 +54,7 @@ export function MyAppearance() {
           />
         </Setting>
         <Setting label={t("nav.language")}>
-          <Picker
-            label={t("nav.language")}
-            value={language}
-            onPick={(picked) => setLanguage(picked === "fr" ? "fr" : "en")}
-            options={[
-              ["en", "English"],
-              ["fr", "Français"],
-            ]}
-          />
+          <LanguagePicker />
         </Setting>
         {/* A handful at a press, and any other by hand: the colour is what
             every active and pressable thing in the interface wears. */}

@@ -593,6 +593,29 @@ pub fn is_a_language(value: &str) -> bool {
     value.len() == 2 && value.bytes().all(|byte| byte.is_ascii_alphabetic())
 }
 
+/// What an interface language set to follow the browser is stored as.
+pub const AUTOMATIC_LANGUAGE: &str = "auto";
+
+/// Whether an account may be given this as its interface language: a
+/// language, or the browser's.
+pub fn is_an_interface_language(value: &str) -> bool {
+    value == AUTOMATIC_LANGUAGE || is_a_language(value)
+}
+
+/// The language an account reads the interface in, from what it chose and
+/// what its browser says it accepts first. Following the browser, a browser
+/// that says nothing usable reads English.
+pub fn interface_language_in_force(chosen: &str, accepted: Option<&str>) -> String {
+    if chosen != AUTOMATIC_LANGUAGE {
+        return chosen.to_string();
+    }
+    accepted
+        .and_then(|header| header.split([',', ';', '-']).next())
+        .map(|first| first.trim().to_ascii_lowercase())
+        .filter(|first| is_a_language(first))
+        .unwrap_or_else(|| "en".to_string())
+}
+
 /// Per person settings.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Preferences {
@@ -678,7 +701,7 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
-            interface_language: "en".to_string(),
+            interface_language: AUTOMATIC_LANGUAGE.to_string(),
             preferred_audio_language: None,
             preferred_subtitle_language: None,
             subtitle_mode: SubtitleMode::default(),
@@ -747,8 +770,8 @@ impl Preferences {
         if !is_an_accent_colour(&self.accent_color) {
             self.accent_color = DEFAULT_ACCENT_COLOR.to_string();
         }
-        if !is_a_language(&self.interface_language) {
-            self.interface_language = "en".to_string();
+        if !is_an_interface_language(&self.interface_language) {
+            self.interface_language = AUTOMATIC_LANGUAGE.to_string();
         }
         // A kind named twice keeps its first place, and one never named goes
         // after the others, in the order everybody starts with: a kind added
@@ -1279,7 +1302,16 @@ mod tests {
         }
         .normalised();
         assert_eq!(wild.accent_color, DEFAULT_ACCENT_COLOR);
-        assert_eq!(wild.interface_language, "en");
+        assert_eq!(wild.interface_language, AUTOMATIC_LANGUAGE);
+    }
+
+    #[test]
+    fn a_language_following_the_browser_reads_the_first_one_it_accepts() {
+        assert_eq!(interface_language_in_force("auto", Some("fr-FR,fr;q=0.9,en;q=0.8")), "fr");
+        assert_eq!(interface_language_in_force("auto", Some("EN-us")), "en");
+        assert_eq!(interface_language_in_force("auto", Some("*")), "en");
+        assert_eq!(interface_language_in_force("auto", None), "en");
+        assert_eq!(interface_language_in_force("fr", Some("en-US")), "fr");
     }
 
     #[test]

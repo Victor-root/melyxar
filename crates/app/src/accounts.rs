@@ -521,10 +521,14 @@ pub async fn finish_first_steps(state: &AppState) -> Result<()> {
 /// The name is theirs to choose. A name decided here would be one more thing
 /// to explain, and it would be the same on every installation of this server
 /// in the world.
+///
+/// It reads the interface in the language chosen on its door, the browser's
+/// unless another was picked there.
 pub async fn create_the_first_account(
     state: &AppState,
     name: &str,
     password: &str,
+    language: Option<&str>,
 ) -> std::result::Result<User, Trouble> {
     let name = name_of(name)?;
 
@@ -534,12 +538,19 @@ pub async fn create_the_first_account(
 
     // The looking and the writing happen together down there, so two people
     // reaching a brand new server in the same breath cannot both come through.
-    let Some(user) = state.database().create_the_first_user(name, &hashed).await? else {
+    let Some(mut user) = state.database().create_the_first_user(name, &hashed).await? else {
         return Err(Trouble::Failed(AppError::Domain(melyxar_core::Error::new(
             melyxar_core::error::ErrorCode::Conflict,
             "this server has already been set up",
         ))));
     };
+    if let Some(language) = language.filter(|language| melyxar_core::user::is_an_interface_language(language)) {
+        user.preferences.interface_language = language.to_string();
+        state
+            .database()
+            .save_preferences(user.id, &user.preferences)
+            .await?;
+    }
     tracing::info!(account = %user.name, "created the first account");
     record(
         state,
@@ -1075,7 +1086,7 @@ mod tests {
 
     async fn a_server_with_an_account() -> (tempfile::TempDir, AppState) {
         let (directory, state) = a_server().await;
-        create_the_first_account(&state, "victor", "quiet harbour")
+        create_the_first_account(&state, "victor", "quiet harbour", None)
             .await
             .expect("first account created");
         (directory, state)
@@ -1086,16 +1097,36 @@ mod tests {
         let (_directory, state) = a_server().await;
         assert!(still_to_be_set_up(&state).await.expect("asked"));
 
-        create_the_first_account(&state, "victor", "quiet harbour")
+        create_the_first_account(&state, "victor", "quiet harbour", None)
             .await
             .expect("first account created");
         assert!(!still_to_be_set_up(&state).await.expect("asked"));
     }
 
     #[tokio::test]
+    async fn the_first_account_speaks_the_language_its_door_was_read_in() {
+        let (_directory, state) = a_server().await;
+        let user = create_the_first_account(&state, "someone", "quiet harbour", Some("fr"))
+            .await
+            .expect("first account created");
+        let kept = state.database().user(user.id).await.expect("read").expect("there");
+        assert_eq!(kept.preferences.interface_language, "fr");
+    }
+
+    #[tokio::test]
+    async fn the_first_account_reads_the_language_chosen_on_its_door() {
+        let (_directory, state) = a_server().await;
+        let user = create_the_first_account(&state, "someone", "quiet harbour", Some("fr"))
+            .await
+            .expect("first account created");
+        let kept = state.database().user(user.id).await.expect("read").expect("there");
+        assert_eq!(kept.preferences.interface_language, "fr");
+    }
+
+    #[tokio::test]
     async fn the_first_account_is_an_administrator_and_is_named_by_whoever_makes_it() {
         let (_directory, state) = a_server().await;
-        let user = create_the_first_account(&state, "victor", "quiet harbour")
+        let user = create_the_first_account(&state, "victor", "quiet harbour", None)
             .await
             .expect("first account created");
         assert_eq!(user.name, "victor");
@@ -1108,7 +1139,7 @@ mod tests {
         // this server later must not be able to make themselves an
         // administrator on it.
         let (_directory, state) = a_server_with_an_account().await;
-        assert!(create_the_first_account(&state, "someone else", "another password")
+        assert!(create_the_first_account(&state, "someone else", "another password", None)
             .await
             .is_err());
     }
@@ -1116,10 +1147,10 @@ mod tests {
     #[tokio::test]
     async fn an_account_cannot_be_made_without_a_name_or_with_too_short_a_password() {
         let (_directory, state) = a_server().await;
-        assert!(create_the_first_account(&state, "   ", "quiet harbour")
+        assert!(create_the_first_account(&state, "   ", "quiet harbour", None)
             .await
             .is_err());
-        assert!(create_the_first_account(&state, "victor", "short")
+        assert!(create_the_first_account(&state, "victor", "short", None)
             .await
             .is_err());
         assert!(

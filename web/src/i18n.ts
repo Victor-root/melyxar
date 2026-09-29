@@ -207,6 +207,7 @@ const en: Dictionary = {
   "door.rule":
     "Use a long, unique password or passphrase.",
   "door.go": "Sign in",
+  "language.auto": "Automatic (browser)",
   "first_steps.title": "Welcome to your server",
   "first_steps.lead":
     "Tell it where your films and series are. Each library is scanned as soon as it is added.",
@@ -1697,6 +1698,7 @@ const fr: Dictionary = {
   "door.rule":
     "Choisissez un mot de passe ou une phrase de passe longue et unique.",
   "door.go": "Se connecter",
+  "language.auto": "Automatique (navigateur)",
   "first_steps.title": "Bienvenue sur votre serveur",
   "first_steps.lead":
     "Indiquez-lui où se trouvent vos films et vos séries. Chaque médiathèque est analysée dès qu’elle est ajoutée.",
@@ -2985,17 +2987,29 @@ const dictionaries: Record<Language, Dictionary> = { en, fr };
 
 const STORED_LANGUAGE = "melyxar.language";
 
-/** Use the saved language, or fall back to the browser language. */
-export function initialLanguage(): Language {
-  const stored = safeRead(STORED_LANGUAGE);
-  if (stored === "en" || stored === "fr") {
-    return stored;
-  }
-  return navigator.language.toLowerCase().startsWith("fr") ? "fr" : "en";
+/** A language, or the browser's, whichever it happens to be. */
+export type LanguageChoice = Language | "auto";
+
+/** The choice this browser kept, following the browser when it kept none. */
+export function initialLanguageChoice(): LanguageChoice {
+  return languageChoiceOf(safeRead(STORED_LANGUAGE));
 }
 
-export function rememberLanguage(language: Language): void {
-  safeWrite(STORED_LANGUAGE, language);
+/** A choice as stored or sent, anything unknown following the browser. */
+export function languageChoiceOf(stored: string | null): LanguageChoice {
+  return stored === "en" || stored === "fr" ? stored : "auto";
+}
+
+/** The language a choice reads the interface in. */
+export function languageOf(choice: LanguageChoice, browser: string): Language {
+  if (choice !== "auto") {
+    return choice;
+  }
+  return browser.toLowerCase().startsWith("fr") ? "fr" : "en";
+}
+
+export function rememberLanguageChoice(choice: LanguageChoice): void {
+  safeWrite(STORED_LANGUAGE, choice);
 }
 
 /**

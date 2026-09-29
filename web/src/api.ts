@@ -2186,8 +2186,8 @@ export const api = {
   me: (signal?: AbortSignal) => get<Account>("/api/v1/me", signal),
   /* The first account of a brand new server, which is an administrator and is
      signed in straight away. Refused once there is one. */
-  setUp: (name: string, password: string, remember: boolean, client: string) =>
-    post<Account>("/api/v1/setup", { name, password, remember, client }),
+  setUp: (name: string, password: string, remember: boolean, client: string, language: string) =>
+    post<Account>("/api/v1/setup", { name, password, remember, client, language }),
   /* What an administrator is taken through once, after the first account. */
   firstSteps: (signal?: AbortSignal) =>
     get<{ pending: boolean }>("/api/v1/setup/first-steps", signal),

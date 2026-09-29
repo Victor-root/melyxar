@@ -362,6 +362,10 @@ struct WhoAndWhat {
     /// session here replaces the one this account held on it.
     #[serde(default)]
     client: Option<String>,
+    /// The language the door was read in, which only the first account
+    /// takes: every later one is made by an administrator.
+    #[serde(default)]
+    language: Option<String>,
 }
 
 fn kept_unless_said_otherwise() -> bool {
@@ -570,7 +574,12 @@ async fn set_this_server_up(
     Json(asked): Json<WhoAndWhat>,
 ) -> Result<Response> {
     let user =
-        melyxar_app::accounts::create_the_first_account(&state, &asked.name, &asked.password)
+        melyxar_app::accounts::create_the_first_account(
+            &state,
+            &asked.name,
+            &asked.password,
+            asked.language.as_deref(),
+        )
             .await?;
 
     let SignedInOrNot::Opened(opened) = melyxar_app::accounts::sign_in(
