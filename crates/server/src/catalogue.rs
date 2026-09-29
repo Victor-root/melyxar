@@ -660,10 +660,19 @@ struct CarryOnView {
 
 async fn home(
     State(state): State<AppState>,
-    Viewer(who): Viewer,
+    Viewer(mut who): Viewer,
+    headers: axum::http::HeaderMap,
     Query(params): Query<HomeParams>,
 ) -> Result<Json<HomeView>> {
     let library_id = params.library.as_deref().map(parse_library).transpose()?;
+    // The banner's words are in the language the page is read in, which for
+    // an account following its browser is the one the browser asks for.
+    who.preferences.interface_language = melyxar_core::user::interface_language_in_force(
+        &who.preferences.interface_language,
+        headers
+            .get(axum::http::header::ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok()),
+    );
     let page = melyxar_app::catalogue::home(&state, library_id, &who).await?;
 
     Ok(Json(HomeView {

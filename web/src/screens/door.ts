@@ -16,7 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Account, Branding, NameAtTheDoor } from "../api";
 import { deviceIdentity } from "../deviceIdentity";
-import { initialLanguage, refusalKey } from "../i18n";
+import { refusalKey } from "../i18n";
 
 /** A refusal, worded and with whatever its wording needs. */
 export interface Refusal {
@@ -48,7 +48,11 @@ export interface DoorScreen {
   forget: () => void;
 }
 
-export function useDoorScreen(branding: Branding, cameIn: (who: Account) => void): DoorScreen {
+export function useDoorScreen(
+  branding: Branding,
+  cameIn: (who: Account) => void,
+  language: string,
+): DoorScreen {
   const [asking, setAsking] = useState(false);
   const [refused, setRefused] = useState<Refusal | null>(null);
   const [names, setNames] = useState<NameAtTheDoor[]>([]);
@@ -79,23 +83,15 @@ export function useDoorScreen(branding: Branding, cameIn: (who: Account) => void
       setRefused(null);
       try {
         const who = brandNew
-          ? await api.setUp(name, password, remember, deviceIdentity())
+          ? await api.setUp(name, password, remember, deviceIdentity(), language)
           : await api.signIn(name, password, remember, deviceIdentity());
-        // A new account starts in the server's language; the first one keeps
-        // the language this screen was read in, which is what the first
-        // steps after it are then shown in.
-        if (brandNew) {
-          await api
-            .savePreferences({ interface_language: initialLanguage() })
-            .catch(() => {});
-        }
         cameIn(who);
       } catch (error) {
         setRefused(whatTheServerSaid(error));
         setAsking(false);
       }
     },
-    [brandNew, cameIn],
+    [brandNew, cameIn, language],
   );
 
   return {

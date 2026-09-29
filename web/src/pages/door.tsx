@@ -36,6 +36,7 @@ import {
   LockIcon,
 } from "../icons";
 import { Face } from "../components/face";
+import { LanguagePicker } from "../components/language-picker";
 import { useDoorScreen } from "../screens/door";
 import { useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
@@ -75,8 +76,8 @@ export function Door({
   branding: Branding;
   cameIn: (who: Account) => void;
 }) {
-  const { t, theme, setTheme } = useSettings();
-  const door = useDoorScreen(branding, cameIn);
+  const { t, theme, setTheme, languageChoice } = useSettings();
+  const door = useDoorScreen(branding, cameIn, languageChoice);
 
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -443,12 +444,12 @@ export function Door({
         <p className="door-slogan">{branding.door_slogan ?? t("door.slogan")}</p>
       </form>
 
-      {/* The language is read from the browser and never asked about here:
-          somebody who cannot read the door cannot get through it to change
-          it, so there is nothing to gain by offering a choice before one is
-          needed. The theme is the one door setting a viewer can still turn,
-          since automatic does not always land on the one their eyes want. */}
+      {/* The two door settings a viewer can turn before anybody knows them:
+          the language, the browser's to begin with, and the theme, since
+          automatic does not always land on the one either wants. On a brand
+          new server the language chosen here is the first account's. */}
       <div className="door-foot">
+        <LanguagePicker />
         <button
           type="button"
           className="door-theme"

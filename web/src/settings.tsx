@@ -19,8 +19,16 @@ import type { ReactNode } from "react";
 import { api } from "./api";
 import { buttonOrder, EVERY_HEADER_BUTTON, IN_THE_BAR_AT_FIRST, knownButtons } from "./buttons";
 import type { Backdrop, HeaderButton, ViewerPreferences } from "./api";
-import { initialLanguage, rememberLanguage, safeRead, safeWrite, translate } from "./i18n";
-import type { Language } from "./i18n";
+import {
+  initialLanguageChoice,
+  languageChoiceOf,
+  languageOf,
+  rememberLanguageChoice,
+  safeRead,
+  safeWrite,
+  translate,
+} from "./i18n";
+import type { Language, LanguageChoice } from "./i18n";
 import { colourTheWindow, markTheApp } from "./installing";
 import { LIGHTS } from "./lights";
 import { markTheTab, vividOf } from "./mark";
@@ -66,8 +74,11 @@ export const OFFERED_ACCENTS = [
 const THE_USUAL_BANNER = { height: 0.31, cut: 0.13 };
 
 interface Settings {
+  /** The language the interface is read in. */
   language: Language;
-  setLanguage: (language: Language) => void;
+  /** What was chosen for it: a language, or the browser's. */
+  languageChoice: LanguageChoice;
+  setLanguage: (choice: LanguageChoice) => void;
   theme: ThemeChoice;
   setTheme: (theme: ThemeChoice) => void;
   /** The account's accent, a hash and six hexadecimal digits. */
@@ -154,7 +165,8 @@ function initialNumber(key: string, usual: number): number {
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>(initialLanguage);
+  const [languageChoice, setLanguageChoiceState] = useState<LanguageChoice>(initialLanguageChoice);
+  const language = languageOf(languageChoice, navigator.language);
   const [theme, setThemeState] = useState<ThemeChoice>(initialTheme);
   const [accent, setAccentState] = useState<string>(initialAccent);
   const [bannerHeight, setBannerHeightState] = useState(() =>
@@ -260,9 +272,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = language;
   }, [language]);
 
-  const setLanguage = useCallback((next: Language) => {
-    rememberLanguage(next);
-    setLanguageState(next);
+  const setLanguage = useCallback((next: LanguageChoice) => {
+    rememberLanguageChoice(next);
+    setLanguageChoiceState(next);
     tellTheServer({ interface_language: next });
   }, []);
 
@@ -359,9 +371,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const adopt = useCallback((chosen: ViewerPreferences) => {
-    const language = chosen.interface_language === "fr" ? "fr" : "en";
-    rememberLanguage(language);
-    setLanguageState(language);
+    const choice = languageChoiceOf(chosen.interface_language);
+    rememberLanguageChoice(choice);
+    setLanguageChoiceState(choice);
 
     const mode = chosen.theme_mode;
     const theme: ThemeChoice =
@@ -403,6 +415,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Settings>(
     () => ({
       language,
+      languageChoice,
       setLanguage,
       theme,
       setTheme,
@@ -437,6 +450,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }),
     [
       language,
+      languageChoice,
       setLanguage,
       theme,
       setTheme,
