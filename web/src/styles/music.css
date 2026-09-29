@@ -802,8 +802,65 @@
   gap: var(--gap);
 }
 
-.music-now-queue h3 {
+.music-now-tabs {
+  display: flex;
+  gap: 4px;
   margin: 0 0 var(--gap);
+}
+
+/* The words of the song: the line being sung lit and large enough to read
+   from across a room, the ones sung already faded. */
+.music-lyrics {
+  position: relative;
+  max-height: min(62vh, 640px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+  mask-image: linear-gradient(transparent, rgb(0 0 0 / 100%) 12%, rgb(0 0 0 / 100%) 88%, transparent);
+}
+
+.music-lyrics-line button {
+  display: block;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--calm) var(--ease), transform var(--calm) var(--ease);
+}
+
+.music-lyrics-line button:hover {
+  background: var(--surface-hover);
+}
+
+.music-lyrics-sung button {
+  color: var(--text-faint);
+}
+
+.music-lyrics-now button {
+  color: var(--accent-bright);
+  transform: scale(1.03);
+  transform-origin: left center;
+}
+
+.music-lyrics-plain {
+  white-space: pre-line;
+  color: var(--text-soft);
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.music-lyrics-note {
+  color: var(--text-faint);
 }
 
 .music-queue {

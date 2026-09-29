@@ -4,7 +4,7 @@ import { translate } from "./i18n";
 
 /** Every page of settings and of the administration, as written, music's
  *  own among them. */
-const PAGES = import.meta.glob(["./pages/{admin,settings}/*.tsx", "./music/settings.tsx"], {
+const PAGES = import.meta.glob(["./pages/{admin,settings}/*.tsx", "./music/{settings,library-options}.tsx"], {
   query: "?raw",
   import: "default",
   eager: true,

@@ -92,6 +92,26 @@ export interface MusicPreferences {
   max_bitrate_kbps: number | null;
 }
 
+/** One line sung at a known moment. */
+export interface LyricLine {
+  at_ms: number;
+  text: string;
+}
+
+/** The words of a song, and where they were found. */
+export interface SongLyrics {
+  source: "song" | "beside" | "online";
+  plain: string;
+  /** Empty when the words carry no moments. */
+  lines: LyricLine[];
+  instrumental: boolean;
+}
+
+/** What a library of music does beyond the rest. */
+export interface MusicLibraryOptions {
+  lyrics_online: boolean;
+}
+
 /** One album, as its own page shows it. */
 export interface AlbumPage extends Album {
   /** Its songs, in their order on it. */
@@ -174,6 +194,12 @@ export const music = {
   listened: (library: string, order: "lately" | "most", signal?: AbortSignal) =>
     get<Song[]>(`/api/v1/music/${library}/listened${query({ order })}`, signal),
   recordListen: (song: string) => post<{ listened: boolean }>(`/api/v1/music/songs/${song}/listened`),
+  lyrics: (song: string, signal?: AbortSignal) =>
+    get<SongLyrics | null>(`/api/v1/music/songs/${song}/lyrics`, signal),
+  libraryOptions: (library: string, signal?: AbortSignal) =>
+    get<MusicLibraryOptions>(`/api/v1/music/${library}/options`, signal),
+  setLibraryOptions: (library: string, options: MusicLibraryOptions) =>
+    put<MusicLibraryOptions>(`/api/v1/music/${library}/options`, options),
   search: (words: string, library: string | undefined, signal?: AbortSignal) =>
     get<Found>(`/api/v1/music/search${query({ words, library })}`, signal),
   album: (id: string, signal?: AbortSignal) =>

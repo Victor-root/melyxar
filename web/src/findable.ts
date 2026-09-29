@@ -228,7 +228,7 @@ export const FINDABLE: FindableSection[] = [
     area: "admin",
     path: "libraries",
     name: "admin.libraries",
-    files: ["pages/admin/libraries.tsx"],
+    files: ["pages/admin/libraries.tsx", "music/library-options.tsx"],
     named: [
       ["settings.library_name"],
       ["settings.extract_subtitles", "admin.extract_subtitles_why"],
@@ -238,6 +238,7 @@ export const FINDABLE: FindableSection[] = [
       ["settings.watch_in_real_time"],
       ["settings.keeps_resume_points", "admin.resume_points_why"],
       ["settings.keeps_watched_marks", "admin.watched_marks_why"],
+      ["music.lyrics_online", "music.lyrics_online_why"],
       ["settings.add_library", "settings.new_library_why"],
       ["settings.library_kind"],
       ["settings.metadata_language"],
