@@ -26,6 +26,7 @@ pub mod jobs;
 pub mod libraries;
 pub mod live;
 pub mod music;
+pub mod music_playlists;
 pub mod music_preferences;
 pub mod online_subtitles;
 pub mod page;
