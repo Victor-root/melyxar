@@ -209,6 +209,12 @@ pub async fn artist(
     Ok(state.database().music_artist(artist).await?)
 }
 
+/// Every song an artist plays on, for playing them all.
+pub async fn artist_songs(state: &AppState, who: &User, artist: WorkId) -> Result<Vec<SongRow>> {
+    may_read_the_work(state, who, artist).await?;
+    Ok(state.database().music_artist_songs(artist).await?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::in_turn;

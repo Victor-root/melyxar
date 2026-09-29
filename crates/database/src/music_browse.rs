@@ -518,6 +518,25 @@ impl Database {
         )))
     }
 
+    /// Every song an artist plays on, album by album from the earliest,
+    /// each in its order on its album.
+    pub async fn music_artist_songs(&self, artist: WorkId) -> Result<Vec<SongRow>> {
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {A_SONG}
+               FROM works w
+               JOIN music_credits c ON c.work_id = w.id AND c.role = 'artist' AND c.artist_id = ?
+               LEFT JOIN music_songs ms ON ms.work_id = w.id
+               LEFT JOIN works al ON al.id = w.parent_id
+              WHERE w.kind = 'song'
+              ORDER BY al.release_year, al.sort_title, al.id, ms.disc_number, w.ordinal,
+                       w.sort_title, w.id"
+        )))
+        .bind(artist.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+        self.song_rows(&rows).await
+    }
+
     /// Albums read from rows, with their artists and their covers.
     pub(crate) async fn album_cards(
         &self,
@@ -982,6 +1001,29 @@ mod tests {
             .await
             .expect("searched");
         assert_eq!(nothing, MusicFound::default());
+    }
+
+    #[tokio::test]
+    async fn every_song_an_artist_plays_on_comes_in_the_order_of_their_albums() {
+        let (database, library, _) = collection().await;
+        let amber = database
+            .music_artists(library, false, 0, 10)
+            .await
+            .expect("read")
+            .items
+            .into_iter()
+            .find(|artist| artist.name == "Amber Field")
+            .expect("in the collection")
+            .id;
+        let songs = database.music_artist_songs(amber).await.expect("read");
+        assert_eq!(
+            songs
+                .iter()
+                .map(|song| song.title.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Beginnings", "The Long Road", "Quiet Harbour", "Tides"],
+            "2011, then the song they sing on in 2015, then 2019 in its order"
+        );
     }
 
     #[tokio::test]

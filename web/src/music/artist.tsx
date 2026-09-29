@@ -1,14 +1,19 @@
 /*
- * The page of one artist: their picture, the albums that are theirs, and the
- * albums of others they play on.
+ * The page of one artist: their picture, every song they play on played at
+ * a press, the albums that are theirs, and the albums of others they play
+ * on.
  */
 
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { PlayIcon } from "../icons";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Album, ArtistPage } from "./api";
+import { Heart } from "./heart";
+import { ShuffleIcon } from "./player/icons";
+import { useMusic } from "./player/player";
 import { AlbumTile, ArtistPicture } from "./tiles";
 
 export function MusicArtistPage() {
@@ -16,6 +21,18 @@ export function MusicArtistPage() {
   const { id = "" } = useParams();
   const [artist, setArtist] = useState<ArtistPage | null>(null);
   const [failed, setFailed] = useState(false);
+  const player = useMusic();
+  /* Asked for only when pressed: their songs are the whole of their work,
+     and most visits to an artist never play all of it. */
+  const [starting, setStarting] = useState(false);
+  const playAll = (shuffle: boolean) => {
+    setStarting(true);
+    music
+      .artistSongs(id)
+      .then((songs) => player.play(songs, shuffle ? Math.floor(Math.random() * songs.length) : 0, shuffle))
+      .catch(() => {})
+      .finally(() => setStarting(false));
+  };
 
   useEffect(() => {
     const stop = new AbortController();
@@ -64,6 +81,27 @@ export function MusicArtistPage() {
               .filter(Boolean)
               .join(" · ")}
           </p>
+          <div className="music-hero-actions">
+            <button
+              type="button"
+              className="button button-accent"
+              disabled={artist.songs === 0 || starting}
+              onClick={() => playAll(false)}
+            >
+              <PlayIcon size={18} />
+              {t("music.play_all")}
+            </button>
+            <button
+              type="button"
+              className="button"
+              disabled={artist.songs === 0 || starting}
+              onClick={() => playAll(true)}
+            >
+              <ShuffleIcon size={18} />
+              {t("music.shuffle")}
+            </button>
+            <Heart id={artist.id} size={20} className="music-hero-heart" />
+          </div>
         </div>
       </header>
 

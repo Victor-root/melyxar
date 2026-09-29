@@ -10,6 +10,7 @@ import { asClock } from "../../clock";
 import { ChevronDownIcon, CloseIcon } from "../../icons";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
+import { Heart } from "../heart";
 import { Clock, Cover, Loudness, PlayPause, Progress, Ways } from "./bar";
 import { NextIcon, PreviousIcon, StopIcon } from "./icons";
 import { useMusic } from "./player";
@@ -51,7 +52,10 @@ export function MusicNowPlaying() {
         <section className="music-now-playing">
           <Cover pictures={song.cover} large />
           <div className="music-now-words">
-            <h2>{song.title}</h2>
+            <div className="music-now-title">
+              <h2>{song.title}</h2>
+              <Heart id={song.id} size={22} />
+            </div>
             <p className="music-now-by">
               {song.artists.map((artist, index) => (
                 <span key={artist.id}>

@@ -5,7 +5,7 @@
  * requests: what goes wrong with music stays with music.
  */
 
-import { get, put } from "../api";
+import { get, post, put } from "../api";
 import type { Picture } from "../api";
 
 /** An artist named on an album or a song. */
@@ -168,10 +168,17 @@ export const music = {
     get<MusicPreferences>("/api/v1/music/preferences", signal),
   setPreferences: (chosen: MusicPreferences) =>
     put<MusicPreferences>("/api/v1/music/preferences", chosen),
+  favouriteIds: (signal?: AbortSignal) => get<string[]>("/api/v1/music/favourites", signal),
+  favourites: (library: string, signal?: AbortSignal) =>
+    get<Found>(`/api/v1/music/${library}/favourites`, signal),
+  listened: (library: string, order: "lately" | "most", signal?: AbortSignal) =>
+    get<Song[]>(`/api/v1/music/${library}/listened${query({ order })}`, signal),
+  recordListen: (song: string) => post<{ listened: boolean }>(`/api/v1/music/songs/${song}/listened`),
   search: (words: string, library: string | undefined, signal?: AbortSignal) =>
     get<Found>(`/api/v1/music/search${query({ words, library })}`, signal),
   album: (id: string, signal?: AbortSignal) =>
     get<AlbumPage>(`/api/v1/music/albums/${id}`, signal),
+  artistSongs: (id: string) => get<Song[]>(`/api/v1/music/artists/${id}/songs`),
   artist: (id: string, signal?: AbortSignal) =>
     get<ArtistPage>(`/api/v1/music/artists/${id}`, signal),
 };

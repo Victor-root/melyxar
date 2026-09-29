@@ -214,7 +214,7 @@
 
 .music-song {
   display: grid;
-  grid-template-columns: 3ch minmax(0, 2fr) minmax(0, 1.2fr) 6ch;
+  grid-template-columns: 3ch minmax(0, 2fr) minmax(0, 1.2fr) 32px 6ch;
   align-items: center;
   gap: var(--gap);
   min-height: 52px;
@@ -226,7 +226,58 @@
 }
 
 .music-songs-no-album .music-song {
-  grid-template-columns: 3ch minmax(0, 1fr) 6ch;
+  grid-template-columns: 3ch minmax(0, 1fr) 32px 6ch;
+}
+
+.music-now-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The heart of a song, an album or an artist: faint until it is liked, and
+   on a line of songs only shown under the pointer until then. */
+.music-heart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color var(--quick) var(--ease), opacity var(--quick) var(--ease);
+}
+
+.music-heart:hover,
+.music-heart:focus-visible {
+  color: var(--text);
+}
+
+.music-heart-on,
+.music-heart-on:hover {
+  color: var(--accent);
+}
+
+.music-hero-heart {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+}
+
+@media (hover: hover) {
+  .music-song .music-heart:not(.music-heart-on) {
+    opacity: 0;
+  }
+
+  .music-song:hover .music-heart,
+  .music-song .music-heart:focus-visible {
+    opacity: 1;
+  }
 }
 
 .music-song:hover {
@@ -361,7 +412,7 @@
 
   .music-song,
   .music-songs-no-album .music-song {
-    grid-template-columns: 3ch minmax(0, 1fr) 5ch;
+    grid-template-columns: 3ch minmax(0, 1fr) 32px 5ch;
     padding: 6px 4px;
   }
 

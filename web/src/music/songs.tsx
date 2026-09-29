@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { asClock } from "../clock";
 import { useSettings } from "../settings";
 import type { Credited, Song } from "./api";
+import { Heart } from "./heart";
 import { useMusic } from "./player/player";
 
 /** Who plays a song, each a way to their page. */
@@ -86,6 +87,7 @@ export function SongList({
                 {song.album && <Link to={`/music/album/${song.album.id}`}>{song.album.name}</Link>}
               </span>
             )}
+            <Heart id={song.id} size={16} />
             <span className="music-song-length" title={t("music.length")}>
               {song.seconds === null ? "" : asClock(song.seconds)}
             </span>

@@ -15,7 +15,9 @@ import type { ReactNode } from "react";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { music as server } from "../api";
 import type { MusicPreferences, Song } from "../api";
+import { useMusicMarks } from "../marks";
 import { formsPlayedHere } from "./forms";
+import { countsAsListened } from "./listening";
 import { rememberLoudness, rememberQueue, storedLoudness, storedQueue } from "./kept";
 import type { Loudness } from "./kept";
 import {
@@ -152,6 +154,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [turn, setTurn] = useState(0);
   const queueNow = useRef(queue);
   queueNow.current = queue;
+  const turnNow = useRef(turn);
+  turnNow.current = turn;
 
   const load = useCallback(
     (next: Song, start: number, andPlay: boolean) => {
@@ -280,6 +284,29 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       }
     };
   }, [audio]);
+
+  // A song heard for long enough counts as listened to, once each time it
+  // is played. Read as the time moves rather than drawn: nothing on the
+  // screen changes for it.
+  const { listened } = useMusicMarks();
+  const counted = useRef<string | null>(null);
+  useEffect(() => {
+    const check = () => {
+      const now = current(queueNow.current);
+      if (!now || audio.paused) {
+        return;
+      }
+      const play = `${now.id}:${turnNow.current}`;
+      if (counted.current !== play && countsAsListened(time.now.position, time.now.length)) {
+        counted.current = play;
+        listened(now.id);
+      }
+    };
+    time.listeners.add(check);
+    return () => {
+      time.listeners.delete(check);
+    };
+  }, [audio, listened]);
 
   // The queue is kept for the next visit, and where the song has got to
   // every few seconds and as the page goes. Not before the last one was

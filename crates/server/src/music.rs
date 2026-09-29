@@ -38,6 +38,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/songs/{id}/listened", post(record_listen))
         .route("/api/v1/music/albums/{id}", get(album))
         .route("/api/v1/music/artists/{id}", get(artist))
+        .route("/api/v1/music/artists/{id}/songs", get(artist_songs))
         .route("/api/v1/music/songs/{id}/sound", get(sound))
 }
 
@@ -445,6 +446,15 @@ async fn artist(
         their_albums: theirs.iter().map(album_view).collect(),
         appears_on: played_on.iter().map(album_view).collect(),
     }))
+}
+
+async fn artist_songs(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<SongView>>> {
+    let songs = melyxar_app::music::browse::artist_songs(&state, &who, parse_work(&id)?).await?;
+    Ok(Json(songs.iter().map(song_view).collect()))
 }
 
 #[derive(Debug, Deserialize)]
