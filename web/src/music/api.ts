@@ -97,6 +97,8 @@ export interface MusicPreferences {
   /** Nothing for every song as it is. */
   max_bitrate_kbps: number | null;
   volume_mode: VolumeMode;
+  /** How many seconds one song fades into the next, nought for none. */
+  crossfade_seconds: number;
 }
 
 /** How songs are levelled: not at all, each to the same level, or each

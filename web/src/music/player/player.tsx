@@ -1,7 +1,8 @@
 /*
- * The player of music: one element of sound for the whole interface, made
+ * The player of music: two elements of sound for the whole interface, made
  * once and never unmounted, so that going from page to page never stops a
- * song. See `docs/architecture/06-musique.md`.
+ * song, taking turns so that one song follows the next without a gap. See
+ * `docs/architecture/06-musique.md`.
  *
  * Two things are handed out apart. What is playing and every command change
  * rarely, and every page that has a play button reads them. Where the song
@@ -17,6 +18,7 @@ import { music as server } from "../api";
 import type { MusicPreferences, Song } from "../api";
 import { useMusicMarks } from "../marks";
 import { formsPlayedHere } from "./forms";
+import { PREPARE_AHEAD_SECONDS, fadeBetween, handOverIn, secondsLeft } from "./handover";
 import { levelOf } from "./levelling";
 import { countsAsListened } from "./listening";
 import { rememberLoudness, rememberQueue, storedLoudness, storedQueue } from "./kept";
@@ -118,18 +120,36 @@ export const DEFAULT_PREFERENCES: MusicPreferences = {
   resume_queue: true,
   max_bitrate_kbps: null,
   volume_mode: "track",
+  crossfade_seconds: 0,
 };
+
+/** One element of sound, asking only for what it needs to start. */
+function aDeck(): HTMLAudioElement {
+  const element = new Audio();
+  element.preload = "metadata";
+  return element;
+}
+
+/** Where the sound of a song is asked for, from `start` seconds in. */
+function soundOf(song: Song, start: number): string {
+  const query = new URLSearchParams({ plays: formsPlayedHere() });
+  if (start > 0) {
+    query.set("start", start.toFixed(3));
+  }
+  return `/api/v1/music/songs/${song.id}/sound?${query.toString()}`;
+}
 
 /** How often where the song has got to is written down, for a tab closed
  *  and opened again to take it up there. */
 const KEEP_EVERY_MS = 5_000;
 
 export function MusicProvider({ children }: { children: ReactNode }) {
-  const [audio] = useState(() => {
-    const element = new Audio();
-    element.preload = "metadata";
-    return element;
-  });
+  /* Two elements of sound, taking turns: the one playing, and the one the
+     next song is made ready in, so it starts the moment the other ends, or
+     fades in over it. Everything the interface does is to the one playing. */
+  const [decks] = useState(() => [aDeck(), aDeck()] as const);
+  const liveAt = useRef(0);
+  const live = useCallback(() => decks[liveAt.current], [decks]);
   const kept = useMemo(storedQueue, []);
   /* Empty until the account has said whether a queue left in a closed tab
      is taken up again: shown and then taken away, it would be a bar that
@@ -158,35 +178,61 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   queueNow.current = queue;
   const turnNow = useRef(turn);
   turnNow.current = turn;
+  /* The song made ready in the other element, and when it takes over. */
+  const prepared = useRef<string | null>(null);
+  const takeOver = useRef<number | null>(null);
+  /* Set while a song that has already taken over becomes the queue's own,
+     which must not ask for its sound a second time. */
+  const alreadyPlaying = useRef(false);
+  /* Set while one song fades into the next, which the levelling of songs
+     leaves alone. */
+  const fading = useRef(false);
 
   const load = useCallback(
     (next: Song, start: number, andPlay: boolean) => {
+      const audio = live();
       startAt.current = start;
       offset.current = 0;
-      const query = new URLSearchParams({ plays: formsPlayedHere() });
-      if (start > 0) {
-        query.set("start", start.toFixed(3));
-      }
-      audio.src = `/api/v1/music/songs/${next.id}/sound?${query.toString()}`;
+      audio.src = soundOf(next, start);
       time.set({ position: Math.floor(start), length: next.seconds ?? 0 });
       if (andPlay) {
         void audio.play().catch(() => setPlaying(false));
       }
     },
-    [audio],
+    [live],
   );
 
-  // Another song, or the same one asked for again: its sound is asked for.
+  /* The next song made ready, or the one made ready let go. */
+  const letGoOfTheNext = useCallback(() => {
+    if (takeOver.current !== null) {
+      window.clearTimeout(takeOver.current);
+      takeOver.current = null;
+    }
+    if (prepared.current !== null) {
+      prepared.current = null;
+      const other = decks[1 - liveAt.current];
+      other.removeAttribute("src");
+      other.load();
+    }
+  }, [decks]);
+
+  // Another song, or the same one asked for again: its sound is asked for,
+  // unless it already took over from the one before.
   const songId = song?.id ?? null;
   useEffect(() => {
+    if (alreadyPlaying.current) {
+      alreadyPlaying.current = false;
+      return;
+    }
     const now = current(queueNow.current);
     if (!now) {
       return;
     }
+    letGoOfTheNext();
     const start = resumeFrom.current;
     resumeFrom.current = 0;
     load(now, start, wantsToPlay.current);
-  }, [songId, turn, load]);
+  }, [songId, turn, load, letGoOfTheNext]);
 
   // The account's choices, and with them the queue of the last visit when
   // it asked for it back.
@@ -199,8 +245,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         if (stop.signal.aborted) {
           return;
         }
-        const { film_on_screen, resume_queue, max_bitrate_kbps, volume_mode } = chosen;
-        setPreferencesHere({ film_on_screen, resume_queue, max_bitrate_kbps, volume_mode });
+        const { film_on_screen, resume_queue, max_bitrate_kbps, volume_mode, crossfade_seconds } = chosen;
+        setPreferencesHere({ film_on_screen, resume_queue, max_bitrate_kbps, volume_mode, crossfade_seconds });
         if (resume_queue && kept) {
           resumeFrom.current = kept.position;
           setQueue({ songs: kept.songs, order: kept.order, at: kept.at, shuffle: kept.shuffle, repeat: kept.repeat });
@@ -210,16 +256,18 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [kept]);
 
   useEffect(() => {
-    audio.volume = loudness.volume;
-    audio.muted = loudness.muted;
+    for (const deck of decks) {
+      deck.volume = loudness.volume;
+      deck.muted = loudness.muted;
+    }
     rememberLoudness(loudness);
-  }, [audio, loudness]);
+  }, [decks, loudness]);
 
-  /* The sound goes through a gain, which is what brings every song to the
-     same level: the element's own volume only lowers, and a quiet song has
-     to be raised. Made at the first play, which is when a browser lets a
-     page make sound. */
-  const graph = useRef<{ context: AudioContext; gain: GainNode } | null>(null);
+  /* The sound goes through a gain for each element, which is what brings
+     every song to the same level, the element's own volume only lowering,
+     and what fades one song into the next. Made at the first play, which is
+     when a browser lets a page make sound. */
+  const graph = useRef<{ context: AudioContext; gains: readonly [GainNode, GainNode] } | null>(null);
   const soundThroughTheGain = useCallback(() => {
     if (graph.current) {
       if (graph.current.context.state === "suspended") {
@@ -229,27 +277,84 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     }
     try {
       const context = new AudioContext();
-      const gain = context.createGain();
-      context.createMediaElementSource(audio).connect(gain).connect(context.destination);
-      graph.current = { context, gain };
+      const gains = [context.createGain(), context.createGain()] as const;
+      decks.forEach((deck, at) => {
+        context.createMediaElementSource(deck).connect(gains[at]).connect(context.destination);
+      });
+      graph.current = { context, gains };
     } catch (error) {
       if (import.meta.env.DEV) {
         console.debug("[music] songs are played without levelling", error);
       }
     }
-  }, [audio]);
+  }, [decks]);
 
   const volumeMode = preferences?.volume_mode ?? DEFAULT_PREFERENCES.volume_mode;
+  const volumeModeNow = useRef(volumeMode);
+  volumeModeNow.current = volumeMode;
+  const crossfadeNow = useRef(DEFAULT_PREFERENCES.crossfade_seconds);
+  crossfadeNow.current = preferences?.crossfade_seconds ?? DEFAULT_PREFERENCES.crossfade_seconds;
   useEffect(() => {
     const through = graph.current;
-    if (through && song) {
-      through.gain.gain.setTargetAtTime(levelOf(song, volumeMode), through.context.currentTime, 0.05);
+    if (through && song && !fading.current) {
+      through.gains[liveAt.current].gain.setTargetAtTime(levelOf(song, volumeMode), through.context.currentTime, 0.05);
     }
   }, [song, volumeMode, playing]);
 
-  // What the element says, turned into what the interface shows.
+  /* The next song takes over: started in the element it was made ready in,
+     at its own level at once, or faded in while the one before fades out. */
+  const handOver = useCallback(() => {
+    takeOver.current = null;
+    const after = afterTheEnd(queueNow.current);
+    const next = after ? current(after) : null;
+    const from = live();
+    const to = decks[1 - liveAt.current];
+    if (!after || !next || prepared.current !== next.id) {
+      return;
+    }
+    const fade = fadeBetween(crossfadeNow.current, current(queueNow.current)?.seconds ?? null, next.seconds);
+    const through = graph.current;
+    if (through) {
+      const now = through.context.currentTime;
+      const out = through.gains[liveAt.current].gain;
+      const into = through.gains[1 - liveAt.current].gain;
+      const level = levelOf(next, volumeModeNow.current);
+      out.cancelScheduledValues(now);
+      into.cancelScheduledValues(now);
+      if (fade > 0) {
+        out.setValueAtTime(out.value, now);
+        out.linearRampToValueAtTime(0, now + fade);
+        into.setValueAtTime(0, now);
+        into.linearRampToValueAtTime(level, now + fade);
+      } else {
+        into.setValueAtTime(level, now);
+      }
+    }
+    fading.current = fade > 0 && through !== null;
+    void to.play().catch(() => setPlaying(false));
+    liveAt.current = 1 - liveAt.current;
+    prepared.current = null;
+    offset.current = 0;
+    startAt.current = 0;
+    alreadyPlaying.current = true;
+    wantsToPlay.current = true;
+    setQueue(after);
+    setTurn((was) => was + 1);
+    time.set({ position: 0, length: next.seconds ?? 0 });
+    window.setTimeout(() => {
+      from.pause();
+      from.removeAttribute("src");
+      from.load();
+      fading.current = false;
+    }, fade * 1000 + 100);
+  }, [decks, live]);
+
+  // What the element playing says, turned into what the interface shows.
+  // The other one is heard only once it takes over, and only its failing to
+  // load is listened to before then.
   useEffect(() => {
     const onMetadata = () => {
+      const audio = live();
       const start = startAt.current;
       if (Number.isFinite(audio.duration)) {
         if (start > 0) {
@@ -261,17 +366,44 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       startAt.current = 0;
     };
     const onTime = () => {
-      const whole = queueNow.current.songs.length > 0 ? current(queueNow.current) : null;
+      const audio = live();
+      const now = queueNow.current.songs.length > 0 ? current(queueNow.current) : null;
       time.set({
         position: Math.floor(offset.current + audio.currentTime),
-        length: whole?.seconds ?? (Number.isFinite(audio.duration) ? Math.floor(audio.duration) : 0),
+        length: now?.seconds ?? (Number.isFinite(audio.duration) ? Math.floor(audio.duration) : 0),
       });
+      if (!now || audio.paused) {
+        return;
+      }
+      const left = secondsLeft(audio.duration, audio.currentTime, offset.current, now.seconds);
+      const after = afterTheEnd(queueNow.current);
+      const next = after ? current(after) : null;
+      if (left === null || !next || left > PREPARE_AHEAD_SECONDS) {
+        return;
+      }
+      if (prepared.current !== next.id) {
+        letGoOfTheNext();
+        const other = decks[1 - liveAt.current];
+        other.preload = "auto";
+        other.src = soundOf(next, 0);
+        prepared.current = next.id;
+      }
+      if (takeOver.current === null) {
+        const fade = fadeBetween(crossfadeNow.current, now.seconds, next.seconds);
+        takeOver.current = window.setTimeout(handOver, handOverIn(left, fade) * 1000);
+      }
     };
     const onPlay = () => {
       soundThroughTheGain();
       setPlaying(true);
     };
-    const onPause = () => setPlaying(false);
+    const onPause = () => {
+      if (takeOver.current !== null) {
+        window.clearTimeout(takeOver.current);
+        takeOver.current = null;
+      }
+      setPlaying(false);
+    };
     const onWaiting = () => setWaiting(true);
     const onFlowing = () => setWaiting(false);
     const onEnded = () => {
@@ -285,6 +417,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setTurn((was) => was + 1);
     };
     const onError = () => {
+      const audio = live();
       if (!audio.getAttribute("src")) {
         return;
       }
@@ -312,15 +445,29 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       ["ended", onEnded],
       ["error", onError],
     ];
-    for (const [name, handler] of events) {
-      audio.addEventListener(name, handler);
-    }
+    const attached = decks.map((deck) =>
+      events.map(([name, handler]) => {
+        const heard = () => {
+          if (deck === live()) {
+            handler();
+          } else if (name === "error" && deck.getAttribute("src")) {
+            // The next song could not be made ready: it is asked for again,
+            // the ordinary way, once the one playing ends.
+            letGoOfTheNext();
+          }
+        };
+        deck.addEventListener(name, heard);
+        return [name, heard] as const;
+      }),
+    );
     return () => {
-      for (const [name, handler] of events) {
-        audio.removeEventListener(name, handler);
-      }
+      decks.forEach((deck, at) => {
+        for (const [name, heard] of attached[at]) {
+          deck.removeEventListener(name, heard);
+        }
+      });
     };
-  }, [audio, soundThroughTheGain]);
+  }, [decks, live, soundThroughTheGain, handOver, letGoOfTheNext]);
 
   // A song heard for long enough counts as listened to, once each time it
   // is played. Read as the time moves rather than drawn: nothing on the
@@ -330,7 +477,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const check = () => {
       const now = current(queueNow.current);
-      if (!now || audio.paused) {
+      if (!now || live().paused) {
         return;
       }
       const play = `${now.id}:${turnNow.current}`;
@@ -343,7 +490,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     return () => {
       time.listeners.delete(check);
     };
-  }, [audio, listened]);
+  }, [live, listened]);
 
   // The queue is kept for the next visit, and where the song has got to
   // every few seconds and as the page goes. Not before the last one was
@@ -369,6 +516,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [queue, settled]);
 
   const stop = useCallback(() => {
+    letGoOfTheNext();
+    const audio = live();
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
@@ -378,7 +527,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setOpen(false);
     setQueue(EMPTY);
     time.set({ position: 0, length: 0 });
-  }, [audio]);
+  }, [live, letGoOfTheNext]);
 
   // A film on the screen stops the music for good, the bar going with it,
   // or pauses it until the film is closed, as the account chose: two sounds
@@ -387,6 +536,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const pausedForAFilm = useRef(false);
   const onlyPause = preferences?.film_on_screen === "pause";
   useEffect(() => {
+    const audio = live();
     if (filmOnScreen && queueNow.current.songs.length > 0) {
       if (!onlyPause) {
         stop();
@@ -398,7 +548,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       pausedForAFilm.current = false;
       void audio.play().catch(() => setPlaying(false));
     }
-  }, [filmOnScreen, onlyPause, stop, audio]);
+  }, [filmOnScreen, onlyPause, stop, live]);
 
   const preferencesNow = useRef(preferences);
   preferencesNow.current = preferences;
@@ -441,6 +591,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         if (!now) {
           return;
         }
+        const audio = live();
         if (!audio.getAttribute("src")) {
           load(now, time.now.position, true);
         } else if (audio.paused) {
@@ -468,6 +619,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           return;
         }
         const to = Math.max(0, Math.min(seconds, now.seconds ?? seconds));
+        const audio = live();
+        if (takeOver.current !== null) {
+          window.clearTimeout(takeOver.current);
+          takeOver.current = null;
+        }
         if (Number.isFinite(audio.duration)) {
           audio.currentTime = to;
         } else {
@@ -503,7 +659,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       preferences: preferences ?? DEFAULT_PREFERENCES,
       setPreferences,
     };
-  }, [queue, song, playing, waiting, loudness, open, audio, load, stop, preferences, setPreferences]);
+  }, [queue, song, playing, waiting, loudness, open, live, load, stop, preferences, setPreferences]);
 
   useMediaSession(music);
 

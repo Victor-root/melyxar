@@ -1,7 +1,7 @@
 /*
  * What an account chose for its music: what a film does to it, how songs
- * are levelled, whether the queue of the last visit comes back, and how
- * heavy a song may be on its way. Changed at once in the player, and put back if the server refuses.
+ * are levelled and how one follows the next, whether the queue of the last
+ * visit comes back, and how heavy a song may be on its way. Changed at once in the player, and put back if the server refuses.
  */
 
 import { PageHead, Panel, Picker, Setting, Toggle } from "../components/panel";
@@ -13,6 +13,10 @@ import { useMusic } from "./player/player";
 /** The ceilings offered, heaviest first, in kilobits a second. The server
  *  holds any other between the lowest and the highest of them. */
 export const CEILINGS = [320, 256, 192, 160, 128, 96, 64] as const;
+
+/** The crossfades offered, in seconds: none, and up to the longest the
+ *  server keeps. */
+export const CROSSFADES = [0, 2, 4, 6, 8, 10, 12] as const;
 
 /** A ceiling as the picker keeps it: none is every song as it is. */
 export function ceilingValue(kbps: number | null): string {
@@ -55,6 +59,20 @@ export function MyMusic() {
               ["off", t("settings.music_volume_mode.off")],
             ]}
             onPick={(volume_mode) => change({ volume_mode })}
+          />
+        </Setting>
+        <Setting label={t("settings.music_crossfade")} why={t("settings.music_crossfade_why")}>
+          <Picker
+            label={t("settings.music_crossfade")}
+            value={String(preferences.crossfade_seconds)}
+            options={CROSSFADES.map(
+              (seconds) =>
+                [
+                  String(seconds),
+                  seconds === 0 ? t("settings.music_crossfade.none") : t("settings.music_crossfade.seconds", { seconds }),
+                ] as const,
+            )}
+            onPick={(value) => change({ crossfade_seconds: Number(value) })}
           />
         </Setting>
         <Setting label={t("settings.music_resume_queue")} why={t("settings.music_resume_queue_why")}>
