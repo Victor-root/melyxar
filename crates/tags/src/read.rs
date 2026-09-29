@@ -12,7 +12,7 @@ use lofty::probe::Probe;
 use lofty::properties::FileProperties;
 use lofty::tag::{Accessor, ItemKey, Tag};
 
-use crate::values::{cleaned, names, says_yes, year_in};
+use crate::values::{cleaned, decibels, names, number, says_yes, year_in};
 use crate::{AudioFile, ReadError, Sound, Tags};
 
 /// Reads the tags and the sound of one file.
@@ -61,6 +61,11 @@ pub fn read(path: &Path) -> Result<AudioFile, ReadError> {
         }
     };
 
+    // The tag the format itself favours, and failing that whatever tag there
+    // is: an MP3 carrying only the old short tag still says what it is.
+    let tag = tagged.primary_tag().or_else(|| tagged.first_tag());
+    let tagged_value = |key: ItemKey| tag.and_then(|tag| tag.get_string(key));
+
     let properties = tagged.properties();
     let sound = Sound {
         container: container_of(file_type)?,
@@ -71,15 +76,10 @@ pub fn read(path: &Path) -> Result<AudioFile, ReadError> {
         sample_rate: properties.sample_rate().filter(|rate| *rate > 0),
         channels: properties.channels().filter(|count| *count > 0),
         bit_depth: properties.bit_depth().filter(|depth| *depth > 0),
+        replay_gain_db: tagged_value(ItemKey::ReplayGainTrackGain).and_then(decibels),
+        replay_gain_peak: tagged_value(ItemKey::ReplayGainTrackPeak).and_then(number),
     };
-
-    // The tag the format itself favours, and failing that whatever tag there
-    // is: an MP3 carrying only the old short tag still says what it is.
-    let tags = tagged
-        .primary_tag()
-        .or_else(|| tagged.first_tag())
-        .map(tags_of)
-        .unwrap_or_default();
+    let tags = tag.map(tags_of).unwrap_or_default();
 
     Ok(AudioFile { tags, sound })
 }

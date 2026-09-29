@@ -59,6 +59,26 @@ pub fn plays_as_it_is(codec: &str, container: Option<&str>, plays: &[&str]) -> b
     browser_form(codec, container).is_some_and(|form| plays.contains(&form))
 }
 
+/// How loud ReplayGain takes a song to be once raised by its gain, in the
+/// same measure the server reads songs with (EBU R128).
+const REPLAY_GAIN_REFERENCE_LUFS: f64 = -18.0;
+
+/// How loud a song is, from the gain and the peak a tagging program wrote in
+/// it: a song to be lowered by six decibels to reach the reference is six
+/// louder than it. The peak is written where one is full scale.
+pub fn loudness_from_replay_gain(
+    gain_db: Option<f64>,
+    peak: Option<f64>,
+) -> crate::media::Loudness {
+    crate::media::Loudness {
+        integrated_lufs: gain_db.map(|gain| REPLAY_GAIN_REFERENCE_LUFS - gain),
+        true_peak_dbfs: peak
+            .filter(|peak| *peak > 0.0)
+            .map(|peak| 20.0 * peak.log10()),
+        range_lu: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,6 +112,19 @@ mod tests {
     fn uncompressed_sound_is_played_only_from_a_wave_file() {
         assert!(plays_as_it_is("pcm_s16le", Some("wav"), &["wav"]));
         assert!(!plays_as_it_is("pcm_s16be", Some("aiff"), &["wav"]));
+    }
+
+    #[test]
+    fn a_tagged_gain_says_how_loud_the_song_is() {
+        let loudness = loudness_from_replay_gain(Some(-6.5), Some(1.0));
+        assert_eq!(loudness.integrated_lufs, Some(-11.5));
+        assert_eq!(loudness.true_peak_dbfs, Some(0.0));
+        let untagged = loudness_from_replay_gain(None, None);
+        assert!(!untagged.is_measured());
+        assert_eq!(
+            loudness_from_replay_gain(Some(2.0), Some(0.0)).true_peak_dbfs,
+            None
+        );
     }
 
     #[test]

@@ -251,3 +251,18 @@ fn a_picture_marked_as_nothing_in_particular_is_the_cover_all_the_same() {
     assert_eq!(cover.data, b"a picture");
     assert_eq!(cover.extension, "jpg");
 }
+
+#[test]
+fn the_gain_a_tagging_program_measured_is_read_with_the_sound() {
+    let (_directory, song) = copy_of("one-second.flac");
+    tag_file(&song, |tag| {
+        tag.insert_text(ItemKey::ReplayGainTrackGain, "-6.54 dB".to_string());
+        tag.insert_text(ItemKey::ReplayGainTrackPeak, "0.988".to_string());
+    });
+    let tagged = read(&song).expect("read");
+    assert_eq!(tagged.sound.replay_gain_db, Some(-6.54));
+    assert_eq!(tagged.sound.replay_gain_peak, Some(0.988));
+
+    let (_other, untagged) = copy_of("one-second.mp3");
+    assert_eq!(read(&untagged).expect("read").sound.replay_gain_db, None);
+}

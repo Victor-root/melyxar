@@ -51,6 +51,29 @@ pub(crate) fn year_in(text: &str) -> Option<i32> {
     digits.parse().ok().filter(|year| *year > 0)
 }
 
+/// A number of decibels, written `-6.54 dB`, `+1.2 dB` or bare.
+pub(crate) fn decibels(text: &str) -> Option<f64> {
+    let text = text.trim();
+    let number = text
+        .strip_suffix("dB")
+        .or_else(|| text.strip_suffix("db"))
+        .or_else(|| text.strip_suffix("DB"))
+        .unwrap_or(text);
+    number
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite())
+}
+
+/// A plain number, such as the peak of a song on a scale where one is full.
+pub(crate) fn number(text: &str) -> Option<f64> {
+    text.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite())
+}
+
 /// Whether a flag field says yes.
 ///
 /// Written `1` by nearly everything, and `true` or `yes` by the rest.
@@ -61,6 +84,15 @@ pub(crate) fn says_yes(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decibels_are_read_with_or_without_their_unit() {
+        assert_eq!(decibels("-6.54 dB"), Some(-6.54));
+        assert_eq!(decibels("+1.20 dB"), Some(1.2));
+        assert_eq!(decibels("3"), Some(3.0));
+        assert_eq!(decibels("loud"), None);
+        assert_eq!(number(" 0.988 "), Some(0.988));
+    }
 
     #[test]
     fn a_blank_value_is_no_value() {

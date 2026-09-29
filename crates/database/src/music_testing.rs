@@ -2,12 +2,14 @@
 
 use std::path::PathBuf;
 
-use melyxar_core::id::{LibraryId, LibraryRootId, MediaSourceId};
+use melyxar_core::id::{LibraryId, LibraryRootId, MediaSourceId, TrackId};
 use melyxar_core::library::LibraryKind;
+use melyxar_core::media::{AudioDetails, Loudness, Track, TrackKind};
 use melyxar_core::music::{AlbumFiling, Named, SongFiling};
-use melyxar_core::time::now;
+use melyxar_core::time::{Millis, now};
 
 use crate::Database;
+use crate::catalogue::SourceAnalysis;
 use crate::music::MusicFile;
 
 pub(crate) fn named(name: &str) -> Named {
@@ -125,4 +127,72 @@ pub(crate) async fn collection() -> (Database, LibraryId, LibraryRootId) {
         .await
         .expect("filed");
     (database, library.id, root)
+}
+
+/// A song on no album whose file was read: one second of sound in `codec`,
+/// as loud as `loudness` says.
+pub(crate) fn a_read_song(
+    relative_path: &str,
+    title: &str,
+    codec: &str,
+    loudness: Loudness,
+) -> MusicFile {
+    let source_id = MediaSourceId::new();
+    MusicFile {
+        source_id,
+        song: None,
+        relative_path: PathBuf::from(relative_path),
+        size_bytes: 10,
+        modified_at: now(),
+        filing: SongFiling {
+            title: named(title),
+            artists: Vec::new(),
+            album: None,
+            track: None,
+            disc: None,
+            year: None,
+            genres: Vec::new(),
+        },
+        reading: Ok((
+            SourceAnalysis {
+                container: Some("mov,mp4,m4a,3gp,3g2,mj2".to_string()),
+                duration: Some(Millis::new(1_000)),
+                overall_bitrate: Some(900_000),
+            },
+            Track {
+                id: TrackId::new(),
+                source_id,
+                stream_index: 0,
+                language: None,
+                title: None,
+                is_default: true,
+                is_forced: false,
+                kind: TrackKind::Audio(AudioDetails {
+                    codec: codec.to_string(),
+                    profile: None,
+                    channels: 2,
+                    channel_layout: None,
+                    sample_rate: None,
+                    bit_depth: None,
+                    bitrate: None,
+                    loudness,
+                }),
+            },
+        )),
+    }
+}
+
+/// An empty library of music on one disk.
+pub(crate) async fn empty_music_library() -> (Database, LibraryId, LibraryRootId) {
+    let database = Database::open_in_memory().await.expect("opens");
+    let library = database
+        .create_library(
+            "Music",
+            LibraryKind::Music,
+            "fr",
+            &[("disk-one".to_string(), PathBuf::from("/mnt/one"))],
+        )
+        .await
+        .expect("library");
+    (database, library.id, library.roots[0].id)
 }

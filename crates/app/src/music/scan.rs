@@ -18,8 +18,9 @@ use std::path::{Path, PathBuf};
 use melyxar_core::id::{MediaSourceId, TrackId, WorkId};
 use melyxar_core::job::JobStep;
 use melyxar_core::library::{Library, LibraryRoot};
-use melyxar_core::media::{AudioDetails, Loudness, Track, TrackKind};
+use melyxar_core::media::{AudioDetails, Track, TrackKind};
 use melyxar_core::media_log::MediaPath;
+use melyxar_core::music::loudness_from_replay_gain;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_database::catalogue::SourceAnalysis;
 use melyxar_database::music::MusicFile;
@@ -333,7 +334,7 @@ fn described(sound: &melyxar_tags::Sound, source_id: MediaSourceId) -> (SourceAn
                 sample_rate: sound.sample_rate.and_then(|rate| i32::try_from(rate).ok()),
                 bit_depth: sound.bit_depth.map(i32::from),
                 bitrate: sound.audio_bitrate.map(bits),
-                loudness: Loudness::default(),
+                loudness: loudness_from_replay_gain(sound.replay_gain_db, sound.replay_gain_peak),
             }),
         },
     )

@@ -23,7 +23,7 @@ mod pairs;
 mod read;
 mod values;
 
-pub use cover::{front_cover, Cover};
+pub use cover::{Cover, front_cover};
 pub use lyrics::lyrics;
 pub use pairs::from_pairs;
 pub use read::read;
@@ -69,7 +69,7 @@ pub struct Tags {
 }
 
 /// How the file sounds and how it is packed.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Sound {
     /// The container, named as the analyser of the films names it, so a song
     /// read here and one read by that analyser describe themselves the same.
@@ -84,6 +84,12 @@ pub struct Sound {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub bit_depth: Option<u8>,
+    /// How far the song is to be raised or lowered to sound as loud as any
+    /// other, in decibels, when whoever tagged it measured that (ReplayGain).
+    pub replay_gain_db: Option<f64>,
+    /// The highest its sound reaches, where one is full scale, measured with
+    /// the gain above.
+    pub replay_gain_peak: Option<f64>,
 }
 
 #[derive(Debug, thiserror::Error)]

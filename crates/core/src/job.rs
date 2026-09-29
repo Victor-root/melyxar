@@ -155,11 +155,13 @@ pub enum JobStep {
     ReadingImdbRatings,
     /// Asking OMDb what the critics gathered by Rotten Tomatoes made of them.
     AskingOmdb,
+    /// Reading each song through for how loud it is.
+    MeasuringSongs,
 }
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
@@ -173,6 +175,7 @@ impl JobStep {
         Self::LookingUpImdbIds,
         Self::ReadingImdbRatings,
         Self::AskingOmdb,
+        Self::MeasuringSongs,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -190,6 +193,7 @@ impl JobStep {
             Self::LookingUpImdbIds => "looking_up_imdb_ids",
             Self::ReadingImdbRatings => "reading_imdb_ratings",
             Self::AskingOmdb => "asking_omdb",
+            Self::MeasuringSongs => "measuring_songs",
         }
     }
 
@@ -208,6 +212,7 @@ impl JobStep {
             "looking_up_imdb_ids" => Some(Self::LookingUpImdbIds),
             "reading_imdb_ratings" => Some(Self::ReadingImdbRatings),
             "asking_omdb" => Some(Self::AskingOmdb),
+            "measuring_songs" => Some(Self::MeasuringSongs),
             _ => None,
         }
     }
