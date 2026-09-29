@@ -5,4 +5,5 @@
 //! music. Nothing outside this module and its children calls into music, save
 //! the scan, which hands a library of music over to it.
 
+pub(crate) mod pictures;
 pub(crate) mod scan;

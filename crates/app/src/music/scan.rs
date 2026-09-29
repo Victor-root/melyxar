@@ -656,3 +656,172 @@ mod tests {
         assert_eq!(album_of(&state, &song).await.title, "Northern Lights");
     }
 }
+
+#[cfg(test)]
+mod picture_tests {
+    use std::process::Command;
+
+    use melyxar_core::job::{JobPriority, JobState};
+    use melyxar_core::refresh::RefreshMode;
+    use melyxar_core::work::WorkKind;
+
+    use super::*;
+
+    fn fixture(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tags/tests/fixtures")
+            .join(name)
+    }
+
+    /// Runs the tool the server runs on, or answers false where there is
+    /// none: pictures are made with it, so without it there is nothing to
+    /// test.
+    fn run(arguments: &[&std::ffi::OsStr]) -> bool {
+        let Ok(tools) = melyxar_ffmpeg::ToolPaths::discover(None, None) else {
+            return false;
+        };
+        let status = Command::new(&tools.ffmpeg)
+            .args(["-hide_banner", "-loglevel", "error", "-y"])
+            .args(arguments)
+            .status()
+            .expect("the tool runs");
+        assert!(status.success());
+        true
+    }
+
+    /// A small picture of one colour.
+    fn a_picture(path: &Path, colour: &str) -> bool {
+        std::fs::create_dir_all(path.parent().expect("a folder")).expect("folder made");
+        let source = format!("color=c={colour}:s=64x64:d=1");
+        run(&[
+            "-f".as_ref(),
+            "lavfi".as_ref(),
+            "-i".as_ref(),
+            source.as_ref(),
+            "-frames:v".as_ref(),
+            "1".as_ref(),
+            path.as_os_str(),
+        ])
+    }
+
+    fn a_song(root: &Path, relative: &str) -> PathBuf {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().expect("a folder")).expect("folder made");
+        std::fs::copy(fixture("one-second.mp3"), &path).expect("copied");
+        path
+    }
+
+    async fn library(directory: &Path, root: &Path) -> (AppState, Library) {
+        let (config, database, library) =
+            crate::a_test_server(directory, "music", vec![("disk-one", root.to_path_buf())]).await;
+        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        (
+            AppState::new(config, database, tools, capabilities),
+            library,
+        )
+    }
+
+    async fn scan(state: &AppState, library: &Library) -> ScanReport {
+        let (ended, report) = crate::scan::start_scan(
+            state,
+            library.clone(),
+            JobPriority::REQUESTED,
+            RefreshMode::default(),
+        )
+        .await
+        .expect("started")
+        .wait()
+        .await;
+        assert_eq!(ended, JobState::Succeeded);
+        report.expect("a report")
+    }
+
+    async fn wears_a_picture(
+        state: &AppState,
+        library: &Library,
+        kind: WorkKind,
+        title: &str,
+    ) -> bool {
+        let work = state
+            .database()
+            .recent_works(library.id, 100)
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|work| work.kind == kind && work.title == title)
+            .expect("the work is there");
+        state
+            .database()
+            .image_fingerprint("work", &work.id.to_db_string(), "poster")
+            .await
+            .expect("read")
+            .is_some()
+    }
+
+    #[tokio::test]
+    async fn an_album_wears_the_cover_beside_it_and_an_artist_the_picture_above() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let root = directory.path().join("Music");
+        a_song(&root, "Amber Field/Northern Lights/01 - Quiet Harbour.mp3");
+        a_song(&root, "Amber Field/Southern Nights/01 - Tides.mp3");
+        if !a_picture(&root.join("Amber Field/Northern Lights/cover.jpg"), "red") {
+            eprintln!("no media tool here, no picture could be made");
+            return;
+        }
+        a_picture(&root.join("Amber Field/artist.jpg"), "blue");
+        let (state, library) = library(directory.path(), &root).await;
+
+        let report = scan(&state, &library).await;
+        assert_eq!(report.pictured, 2, "the album with a cover, and its artist");
+        assert!(wears_a_picture(&state, &library, WorkKind::Album, "Northern Lights").await);
+        assert!(
+            !wears_a_picture(&state, &library, WorkKind::Album, "Southern Nights").await,
+            "nothing beside it and nothing inside its song"
+        );
+        assert!(wears_a_picture(&state, &library, WorkKind::Artist, "Amber Field").await);
+
+        let again = scan(&state, &library).await;
+        assert_eq!(
+            again.pictured, 0,
+            "a picture already made is not made again"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_album_with_nothing_beside_it_wears_the_cover_inside_its_song() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let root = directory.path().join("Music");
+        let cover = directory.path().join("cover.png");
+        if !a_picture(&cover, "green") {
+            eprintln!("no media tool here, no picture could be made");
+            return;
+        }
+        let song = root.join("Amber Field/Northern Lights/01 - Quiet Harbour.mp3");
+        std::fs::create_dir_all(song.parent().expect("a folder")).expect("folder made");
+        let original = fixture("one-second.mp3");
+        run(&[
+            "-i".as_ref(),
+            original.as_os_str(),
+            "-i".as_ref(),
+            cover.as_os_str(),
+            "-map".as_ref(),
+            "0".as_ref(),
+            "-map".as_ref(),
+            "1".as_ref(),
+            "-c".as_ref(),
+            "copy".as_ref(),
+            "-disposition:v".as_ref(),
+            "attached_pic".as_ref(),
+            song.as_os_str(),
+        ]);
+        let (state, library) = library(directory.path(), &root).await;
+
+        let report = scan(&state, &library).await;
+        assert_eq!(
+            report.added, 1,
+            "the picture inside is not a video of its own"
+        );
+        assert_eq!(report.pictured, 1);
+        assert!(wears_a_picture(&state, &library, WorkKind::Album, "Northern Lights").await);
+    }
+}

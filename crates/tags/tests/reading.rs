@@ -10,7 +10,7 @@ use lofty::config::WriteOptions;
 use lofty::file::TaggedFileExt;
 use lofty::probe::Probe;
 use lofty::tag::{Accessor, ItemKey, ItemValue, Tag, TagExt, TagItem};
-use melyxar_tags::{ReadError, read};
+use melyxar_tags::{ReadError, front_cover, read};
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -202,4 +202,52 @@ fn a_year_alone_is_read_as_well_as_a_full_date() {
         tag.insert_text(ItemKey::Year, "1987".to_string());
     });
     assert_eq!(read(&path).expect("read").tags.year, Some(1987));
+}
+
+#[test]
+fn the_cover_a_file_carries_is_taken_out_as_it_was_stored() {
+    use lofty::picture::{MimeType, Picture, PictureType};
+
+    let (_directory, path) = copy_of("one-second.mp3");
+    assert_eq!(front_cover(&path).expect("read"), None, "no picture yet");
+
+    let front = b"\x89PNG not really a picture, but bytes kept as they are".to_vec();
+    tag_file(&path, |tag| {
+        tag.push_picture(
+            Picture::unchecked(b"the back of the sleeve".to_vec())
+                .pic_type(PictureType::CoverBack)
+                .mime_type(MimeType::Jpeg)
+                .build(),
+        );
+        tag.push_picture(
+            Picture::unchecked(front.clone())
+                .pic_type(PictureType::CoverFront)
+                .mime_type(MimeType::Png)
+                .build(),
+        );
+    });
+    let cover = front_cover(&path).expect("read").expect("a cover");
+    assert_eq!(cover.data, front, "the front, not the back");
+    assert_eq!(cover.extension, "png");
+
+    // And reading the tags never loads it.
+    assert_eq!(read(&path).expect("read").tags, Default::default());
+}
+
+#[test]
+fn a_picture_marked_as_nothing_in_particular_is_the_cover_all_the_same() {
+    use lofty::picture::{MimeType, Picture, PictureType};
+
+    let (_directory, path) = copy_of("one-second.flac");
+    tag_file(&path, |tag| {
+        tag.push_picture(
+            Picture::unchecked(b"a picture".to_vec())
+                .pic_type(PictureType::Other)
+                .mime_type(MimeType::Jpeg)
+                .build(),
+        );
+    });
+    let cover = front_cover(&path).expect("read").expect("a cover");
+    assert_eq!(cover.data, b"a picture");
+    assert_eq!(cover.extension, "jpg");
 }

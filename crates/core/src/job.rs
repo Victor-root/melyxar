@@ -146,7 +146,8 @@ pub enum JobStep {
     /// Asking again about the films that have a name and are missing the rest.
     FillingInWhatIsMissing,
     /// Taking the picture of each video and photo somebody filmed or took
-    /// themselves out of the file itself.
+    /// themselves out of the file itself, and the cover of each album from
+    /// beside its songs.
     PicturingOwnFiles,
     /// Asking the provider what IMDb calls the works that do not say.
     LookingUpImdbIds,

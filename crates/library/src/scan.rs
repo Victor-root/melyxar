@@ -44,6 +44,10 @@ pub struct ScanOutcome {
     /// root. Reading them is a choice the server makes elsewhere; finding them
     /// costs nothing and keeps the walk the only thing that touches the disk.
     pub companion_files: Vec<PathBuf>,
+    /// The pictures of albums and artists sitting beside the songs, in a
+    /// library of music: found while walking past them, so that choosing a
+    /// cover costs no second look at the disk.
+    pub pictures: Vec<FoundFile>,
     /// Folders that could not be entered, reported rather than swallowed.
     pub unreadable_folders: Vec<PathBuf>,
 }
@@ -82,6 +86,7 @@ pub fn walk(root_label: &str, root: &Path, kind: LibraryKind) -> Result<ScanOutc
         files: Vec::new(),
         subtitles: Vec::new(),
         companion_files: Vec::new(),
+        pictures: Vec::new(),
         unreadable_folders: Vec::new(),
     };
     walk_into(root, root, kind, &mut outcome, root_label);
@@ -160,7 +165,8 @@ fn walk_into(
             let goes_with_films = kind != LibraryKind::Music;
             let is_subtitle = goes_with_films && crate::sidecar::is_subtitle_file(name);
             let is_description = goes_with_films && crate::companion::is_companion_file(name);
-            if !is_media && !is_subtitle && !is_description {
+            let is_picture = kind == LibraryKind::Music && crate::music::is_music_picture(name);
+            if !is_media && !is_subtitle && !is_description && !is_picture {
                 continue;
             }
 
@@ -182,7 +188,12 @@ fn walk_into(
                 "found"
             );
 
-            outcome.files.push(FoundFile {
+            let found = if is_picture {
+                &mut outcome.pictures
+            } else {
+                &mut outcome.files
+            };
+            found.push(FoundFile {
                 relative_path: relative_path.to_path_buf(),
                 size_bytes: metadata.len() as i64,
                 modified_at: metadata
@@ -204,6 +215,9 @@ fn walk_into(
         .sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
     outcome.subtitles.sort();
     outcome.companion_files.sort();
+    outcome
+        .pictures
+        .sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
     outcome.unreadable_folders.sort();
 }
 
@@ -424,6 +438,15 @@ mod tests {
         );
         assert!(outcome.subtitles.is_empty());
         assert!(outcome.companion_files.is_empty());
+        assert_eq!(
+            outcome
+                .pictures
+                .iter()
+                .map(|picture| picture.relative_path.clone())
+                .collect::<Vec<_>>(),
+            vec![PathBuf::from("Amber Field/Northern Lights/cover.jpg")],
+            "the cover is found on the way, for the album to wear"
+        );
 
         let films = walk("disk-one", root, LibraryKind::Movies).expect("usable");
         assert!(

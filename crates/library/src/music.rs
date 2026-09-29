@@ -211,6 +211,78 @@ impl Place {
     }
 }
 
+/// The folder an album lives in, from the folder one of its songs sits in:
+/// the folder above a disc folder, or that folder itself.
+pub fn album_folder(folder: &Path) -> &Path {
+    let is_disc = folder
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| disc_of_folder(name).is_some());
+    match (is_disc, folder.parent()) {
+        (true, Some(above)) => above,
+        _ => folder,
+    }
+}
+
+/// The folder above an album's, where the pictures of whoever made it are
+/// kept. None for an album sitting straight in the library, whose own folder
+/// is usually named after its artist and holds its cover.
+pub fn artist_folder(album_folder: &Path) -> Option<&Path> {
+    album_folder
+        .parent()
+        .filter(|above| !above.as_os_str().is_empty())
+}
+
+/// The names an album's cover is kept under beside its songs, the most
+/// telling first. The small copy a Windows player leaves, `AlbumArtSmall`,
+/// is none of them: it is a thumbnail of the cover already there.
+const ALBUM_PICTURES: [&str; 5] = ["cover", "folder", "front", "album", "albumart"];
+
+/// The names the picture of an artist is kept under in their folder.
+const ARTIST_PICTURES: [&str; 3] = ["artist", "folder", "poster"];
+
+/// The forms a picture beside the songs is read in.
+const PICTURE_EXTENSIONS: [&str; 4] = ["jpg", "jpeg", "png", "webp"];
+
+/// Whether a file beside the songs is a picture of an album or of an artist,
+/// which a walk of a library of music keeps.
+pub fn is_music_picture(file_name: &str) -> bool {
+    picture_stem(file_name).is_some_and(|stem| {
+        ALBUM_PICTURES.contains(&stem.as_str()) || ARTIST_PICTURES.contains(&stem.as_str())
+    })
+}
+
+/// The cover of an album among the names of the pictures in its folder.
+pub fn album_picture<'a>(names: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    best_picture(names, &ALBUM_PICTURES)
+}
+
+/// The picture of an artist among the names of the pictures in their folder.
+pub fn artist_picture<'a>(names: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    best_picture(names, &ARTIST_PICTURES)
+}
+
+fn best_picture<'a>(names: impl IntoIterator<Item = &'a str>, wanted: &[&str]) -> Option<&'a str> {
+    names
+        .into_iter()
+        .filter_map(|name| {
+            let stem = picture_stem(name)?;
+            let rank = wanted.iter().position(|one| *one == stem)?;
+            Some((rank, name))
+        })
+        .min()
+        .map(|(_, name)| name)
+}
+
+/// The name of a picture without its extension and its capitals, or nothing
+/// for a file that is not a picture.
+fn picture_stem(file_name: &str) -> Option<String> {
+    let (stem, extension) = file_name.rsplit_once('.')?;
+    PICTURE_EXTENSIONS
+        .contains(&extension.to_lowercase().as_str())
+        .then(|| stem.to_lowercase())
+}
+
 /// The number of a folder named after one disc of an album: `CD1`, `Disc 2`,
 /// `Disque 3`, `disk_4`.
 fn disc_of_folder(name: &str) -> Option<u32> {
@@ -509,6 +581,69 @@ mod tests {
         assert_eq!(disc_of_folder("Discovery"), None);
         assert_eq!(disc_of_folder("CD"), None);
         assert_eq!(disc_of_folder("Cdiscount 2"), None);
+    }
+
+    #[test]
+    fn the_folder_of_an_album_is_the_one_above_a_disc_folder() {
+        assert_eq!(
+            album_folder(Path::new("Amber Field/Northern Lights/CD 2")),
+            Path::new("Amber Field/Northern Lights")
+        );
+        assert_eq!(
+            album_folder(Path::new("Amber Field/Northern Lights")),
+            Path::new("Amber Field/Northern Lights")
+        );
+        assert_eq!(
+            artist_folder(Path::new("Amber Field/Northern Lights")),
+            Some(Path::new("Amber Field"))
+        );
+        assert_eq!(
+            artist_folder(Path::new("Amber Field")),
+            None,
+            "an album straight in the library"
+        );
+    }
+
+    #[test]
+    fn the_cover_of_an_album_is_the_most_telling_picture_beside_it() {
+        let names = ["AlbumArtSmall.jpg", "Folder.jpg", "cover.PNG", "back.jpg"];
+        assert_eq!(album_picture(names), Some("cover.PNG"));
+        assert_eq!(
+            album_picture(["AlbumArtSmall.jpg", "Folder.jpg"]),
+            Some("Folder.jpg")
+        );
+        assert_eq!(
+            album_picture(["AlbumArtSmall.jpg", "back.jpg"]),
+            None,
+            "a thumbnail is not the cover"
+        );
+        assert_eq!(album_picture(["cover.txt"]), None);
+        assert_eq!(
+            artist_picture(["folder.jpg", "artist.jpg"]),
+            Some("artist.jpg")
+        );
+    }
+
+    #[test]
+    fn a_walk_keeps_only_the_pictures_of_albums_and_artists() {
+        for kept in [
+            "cover.jpg",
+            "Folder.JPG",
+            "front.png",
+            "artist.webp",
+            "poster.jpeg",
+        ] {
+            assert!(is_music_picture(kept), "{kept}");
+        }
+        for left in [
+            "AlbumArtSmall.jpg",
+            "back.jpg",
+            "booklet.pdf",
+            "cover.txt",
+            "scan01.png",
+        ] {
+            assert!(!is_music_picture(left), "{left}");
+        }
     }
 
     #[test]

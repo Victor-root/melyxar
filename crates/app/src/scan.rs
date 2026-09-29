@@ -45,7 +45,8 @@ pub struct ScanReport {
     pub unchanged: usize,
     pub analysed: usize,
     /// Videos and photos somebody filmed or took themselves given a picture
-    /// taken out of the file.
+    /// taken out of the file, and albums and artists given the picture kept
+    /// beside their songs.
     pub pictured: usize,
     /// Files the analyser could not read. Recorded rather than hidden: a file
     /// nobody can analyse is a file nobody will be able to play either.
@@ -358,6 +359,7 @@ pub async fn scan_library(
     // what this pass is finding out, and a disk is what it stops between.
     handle.at_step(JobStep::WalkingFolders).await;
     handle.set_total(library.roots.len() as i64).await;
+    let mut pictures_found = crate::music::pictures::PicturesFound::new();
 
     for root in &library.roots {
         if handle.is_cancelled() {
@@ -403,6 +405,7 @@ pub async fn scan_library(
         // A library of music files its songs its own way, and has no clip,
         // subtitle or description going with a film to attach.
         if library.kind == LibraryKind::Music {
+            pictures_found.insert(root.id, outcome.pictures);
             crate::music::scan::file_root(
                 state,
                 library,
@@ -438,6 +441,8 @@ pub async fn scan_library(
     report.moved = follow_what_moved(state, library).await?;
     if library.kind == LibraryKind::Music {
         crate::music::scan::prune(state, library).await?;
+        report.pictured =
+            crate::music::pictures::picture(state, library, &pictures_found, handle).await?;
     }
 
     handle.at_step(JobStep::ReadingNamesAgain).await;
