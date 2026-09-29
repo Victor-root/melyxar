@@ -52,6 +52,8 @@ Ordre proposé, chaque étape livrable seule :
 - **Page d'un album comme chez Jellyfin** : pochette, nom, artiste, nombre de pistes, boutons Lire, Aléatoire, favori et menu, puis la liste des morceaux avec leur durée, un favori et un menu par ligne.
 - **Un vrai bouton Arrêt, distinct de la pause.** Arrêter met fin à la lecture et fait disparaître le lecteur, y compris la commande de lecture que le système affiche dans ses panneaux (téléphone, ordinateur), pour qu'on puisse la quitter. La pause, elle, laisse tout en place.
 - **La réactivité est une exigence au même titre que pour le reste de Melyxar** (voir `02-reactivite.md`) : Emby est réactif, Jellyfin est lent, et Melyxar doit être au niveau du meilleur. Cela vaut pour le démarrage d'un morceau, le passage au suivant sans attente, le défilement d'une discothèque de plus de 100 000 morceaux, la barre de lettres, et le fait que le lecteur du bas ne ralentisse aucune page. Elle se mesure avec l'enregistreur intégré avant d'être gardée.
+- **Lancer un film arrête la musique pour de bon par défaut**, réglable : chaque compte peut choisir de la mettre seulement en pause à la place.
+- **Une catégorie « Musique » dans les réglages du compte**, pour laisser le choix. Y vivent ce réglage, le mode de volume (même niveau pour tous ou écarts d'album gardés), les paroles et tout ce que la musique ajoutera. Le principe : chaque comportement discutable est un réglage, jamais imposé.
 - **Le volume laisse toujours le choix** : un même niveau pour tous les morceaux, ou les écarts d'un album gardés.
 - **L'écoute en arrière-plan est prévue d'office** : écran verrouillé, onglet en arrière-plan, touches multimédia du clavier et du téléphone.
 - **L'accueil a une rangée dédiée à la musique**, qui ne passe ni dans « Continuer la lecture » ni dans « À suivre ». Ses propres rangées (écoutés récemment, ajoutés récemment) vivent dans la médiathèque de musique.
@@ -62,4 +64,4 @@ Ordre proposé, chaque étape livrable seule :
 
 À trancher avec le mainteneur avant de coder l'étape concernée. Les réponses sont ajoutées ici, puis au README des décisions.
 
-- Quand on lance un film pendant qu'une musique joue : la musique se met-elle en pause d'elle-même, et le lecteur du bas reste-t-il visible au-dessus de la page du film ?
+- Le lecteur du bas reste-t-il visible au-dessus de la page d'un film, ou disparaît-il puisque la musique s'y arrête ?
