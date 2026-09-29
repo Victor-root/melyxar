@@ -257,28 +257,97 @@ pub(crate) async fn store_own_picture(
         return Ok(false);
     }
 
+    let original = poster_folder(state, work_id)
+        .await?
+        .join(format!("{}-{fingerprint}.png", kind.as_str()));
+    melyxar_ffmpeg::images::upright_picture(&tools.ffmpeg, file, at, orientation, &original)
+        .await?;
+    let written = store_poster(state, &tools.ffmpeg, work_id, &fingerprint, &original).await;
+    tokio::fs::remove_file(&original).await.ok();
+    written
+}
+
+/// What a picture made from `made_from` is fingerprinted as, for a caller
+/// that knows the fingerprint a work's poster has and wants to know whether
+/// it is still the one wanted.
+pub(crate) fn fingerprint_of(made_from: &str) -> String {
+    stamp(made_from)
+}
+
+/// Prepares the poster of a work from a picture sitting on the disk, which is
+/// read and left where it is: it belongs to whoever put it there.
+///
+/// What it is made from is said by `made_from`, as for the pictures of home
+/// media. Answers whether a picture was made.
+pub(crate) async fn store_poster_from_file(
+    state: &AppState,
+    work_id: WorkId,
+    picture: &Path,
+    made_from: &str,
+) -> Result<bool> {
+    let Some(tools) = state.tools() else {
+        return Ok(false);
+    };
+    poster_folder(state, work_id).await?;
+    store_poster(state, &tools.ffmpeg, work_id, &stamp(made_from), picture).await
+}
+
+/// Prepares the poster of a work from the bytes of a picture, such as the
+/// cover a music file carries. They are written out for the tool to read,
+/// and the file goes once every size is made.
+pub(crate) async fn store_poster_from_bytes(
+    state: &AppState,
+    work_id: WorkId,
+    bytes: &[u8],
+    extension: &str,
+    made_from: &str,
+) -> Result<bool> {
+    let Some(tools) = state.tools() else {
+        return Ok(false);
+    };
+    let fingerprint = stamp(made_from);
+    let original = poster_folder(state, work_id).await?.join(format!(
+        "{}-{fingerprint}.{extension}",
+        Kind::Poster.as_str()
+    ));
+    tokio::fs::write(&original, bytes).await?;
+    let written = store_poster(state, &tools.ffmpeg, work_id, &fingerprint, &original).await;
+    tokio::fs::remove_file(&original).await.ok();
+    written
+}
+
+/// The folder of the cache a work's poster is filed in, made if it is not
+/// there yet.
+async fn poster_folder(state: &AppState, work_id: WorkId) -> Result<PathBuf> {
     let folder = state
         .config()
         .directories
         .images()
-        .join(kind.folder())
-        .join(&owner_id);
+        .join(Kind::Poster.folder())
+        .join(work_id.to_db_string());
     tokio::fs::create_dir_all(&folder).await?;
-    let original = folder.join(format!("{}-{fingerprint}.png", kind.as_str()));
-    melyxar_ffmpeg::images::upright_picture(&tools.ffmpeg, file, at, orientation, &original)
-        .await?;
+    Ok(folder)
+}
+
+/// Writes every size of a work's poster from one picture, and paints its
+/// card with the picture's colour.
+async fn store_poster(
+    state: &AppState,
+    tool: &Path,
+    work_id: WorkId,
+    fingerprint: &str,
+    original: &Path,
+) -> Result<bool> {
     let written = write_every_size(
         state,
-        &tools.ffmpeg,
-        kind,
-        &owner_id,
-        &fingerprint,
-        &original,
+        tool,
+        Kind::Poster,
+        &work_id.to_db_string(),
+        fingerprint,
+        original,
     )
-    .await;
-    tokio::fs::remove_file(&original).await.ok();
-
-    let Some(picture) = written? else {
+    .await?;
+    let Some(picture) = written else {
         return Ok(false);
     };
     remember_the_colour(state, work_id, picture.colour).await;

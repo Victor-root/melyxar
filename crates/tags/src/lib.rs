@@ -17,10 +17,12 @@
 //! about a database, a scan or a job: it is handed a path and says what it
 //! found.
 
+mod cover;
 mod pairs;
 mod read;
 mod values;
 
+pub use cover::{front_cover, Cover};
 pub use pairs::from_pairs;
 pub use read::read;
 
