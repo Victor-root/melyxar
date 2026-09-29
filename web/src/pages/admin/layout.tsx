@@ -11,6 +11,7 @@
  */
 
 import { createContext, useContext, useEffect } from "react";
+import type { ReactNode } from "react";
 import type { Asked } from "../../asking";
 import { useAsked } from "../../asking";
 import { api } from "../../api";
@@ -98,8 +99,10 @@ export function AdminLayout() {
   return <TheAdministration />;
 }
 
-function TheAdministration() {
-  const { t } = useSettings();
+/** The state of the server, read once for everything inside and looked at
+ *  again on a slow beat: the administration, and the first steps of a new
+ *  server, which show some of the same panels. */
+export function OverviewProvider({ children }: { children: ReactNode }) {
   const overview = useAsked((signal) => api.overview(signal));
   const { look } = overview;
 
@@ -108,25 +111,30 @@ function TheAdministration() {
     return () => window.clearInterval(timer);
   }, [look]);
 
-  const cut = overview.failure !== null;
+  return <OverviewContext.Provider value={overview}>{children}</OverviewContext.Provider>;
+}
 
+function TheAdministration() {
   return (
-    <OverviewContext.Provider value={overview}>
-      <Sectioned
-        base="/admin"
-        place="admin.title"
-        groups={SECTIONS}
-        foot={
-          <span className="side-state">
-            <span className={`state-dot state-${cut ? "trouble" : "ok"}`} aria-hidden="true" />
-            <span>
-              {cut || !overview.answer
-                ? t(cut ? "admin.unreachable" : "admin.title")
-                : t("admin.foot", { version: releaseOf(overview.answer.version) })}
-            </span>
-          </span>
-        }
-      />
-    </OverviewContext.Provider>
+    <OverviewProvider>
+      <Sectioned base="/admin" place="admin.title" groups={SECTIONS} foot={<ServerState />} />
+    </OverviewProvider>
+  );
+}
+
+/** Whether the server is up, at the foot of the list. */
+function ServerState() {
+  const { t } = useSettings();
+  const overview = useOverview();
+  const cut = overview.failure !== null;
+  return (
+    <span className="side-state">
+      <span className={`state-dot state-${cut ? "trouble" : "ok"}`} aria-hidden="true" />
+      <span>
+        {cut || !overview.answer
+          ? t(cut ? "admin.unreachable" : "admin.title")
+          : t("admin.foot", { version: releaseOf(overview.answer.version) })}
+      </span>
+    </span>
   );
 }

@@ -1539,6 +1539,25 @@
   margin: 0;
 }
 
+.first-steps-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+}
+
+/* Two services side by side while there is the room. */
+.first-steps-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: calc(var(--gap) * 1.5);
+  align-items: start;
+}
+
+.first-steps-address {
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .first-steps-add {
   align-self: flex-start;
 }

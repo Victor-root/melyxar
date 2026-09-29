@@ -30,7 +30,6 @@ const MEGABYTES_IN_A_GB = 1024;
 
 export function AdminTranscoding() {
   const { t } = useSettings();
-  const overview = useOverview().answer;
   const work = useLibraryWork();
   const playback = usePlaybackSettings();
   const failed = work.failed ?? playback.failed;
@@ -46,29 +45,7 @@ export function AdminTranscoding() {
       )}
 
       <div className="panels">
-        <Panel icon={GraphicsCardIcon} title={t("admin.card")} lead={t("admin.card_lead")}>
-          <div className="stats">
-            <Stat
-              icon={FfmpegIcon}
-              label={t("admin.media_tools")}
-              value={overview ? t(overview.media_tools.found ? "admin.found" : "admin.missing") : "–"}
-              note={overview?.media_tools.version ?? undefined}
-              state={overview ? (overview.media_tools.found ? "ok" : "trouble") : undefined}
-            />
-            <Stat
-              icon={GraphicsCardIcon}
-              label={t("admin.card")}
-              value={
-                overview
-                  ? overview.media_tools.card
-                    ? overview.media_tools.card.toUpperCase()
-                    : t("admin.card_unused")
-                  : "–"
-              }
-              state={overview ? (overview.media_tools.card ? "ok" : "attention") : undefined}
-            />
-          </div>
-        </Panel>
+        <CardPanel />
 
         <Panel icon={PlaybackIcon} title={t("admin.limits")} lead={t("admin.limits_lead")}>
           {playback.kept && (
@@ -226,5 +203,36 @@ export function AdminTranscoding() {
         )}
       </div>
     </>
+  );
+}
+
+/** What converts the films: the media tool and the graphics card it found. */
+export function CardPanel() {
+  const { t } = useSettings();
+  const overview = useOverview().answer;
+  return (
+    <Panel icon={GraphicsCardIcon} title={t("admin.card")} lead={t("admin.card_lead")}>
+      <div className="stats">
+        <Stat
+          icon={FfmpegIcon}
+          label={t("admin.media_tools")}
+          value={overview ? t(overview.media_tools.found ? "admin.found" : "admin.missing") : "–"}
+          note={overview?.media_tools.version ?? undefined}
+          state={overview ? (overview.media_tools.found ? "ok" : "trouble") : undefined}
+        />
+        <Stat
+          icon={GraphicsCardIcon}
+          label={t("admin.card")}
+          value={
+            overview
+              ? overview.media_tools.card
+                ? overview.media_tools.card.toUpperCase()
+                : t("admin.card_unused")
+              : "–"
+          }
+          state={overview ? (overview.media_tools.card ? "ok" : "attention") : undefined}
+        />
+      </div>
+    </Panel>
   );
 }
