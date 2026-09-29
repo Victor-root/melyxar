@@ -1,20 +1,32 @@
 /*
- * The first steps of a brand new server, taken once its first account exists:
- * the libraries it is to hold.
+ * The first steps of a brand new server, taken once its first account exists.
  *
- * The installer only installs. Everything a server is set up with is said
- * here, in the browser, with the same form the administration uses, so there
- * is one way of declaring a library and it is the one somebody finds again
- * later.
+ * Laid out like the administration, a list of the steps down the side and the
+ * step itself across the rest of the screen, because that is where somebody
+ * finds these same settings again later. The installer only installs:
+ * everything a server is set up with is said here, with the forms the
+ * administration uses.
  */
 
 import { useState } from "react";
+import type { ComponentType } from "react";
 import type { Library } from "../api";
 import { useTold } from "../asking";
+import { PageBackdrop } from "../components/backdrop";
+import { Panel } from "../components/panel";
 import { refusalKey } from "../i18n";
-import { FolderIcon, KindIcon } from "../icons";
+import { AccountIcon, FolderIcon, KindIcon, PlayIcon, TickIcon } from "../icons";
+import type { IconProps } from "../icons";
 import { NewLibrary } from "./admin/libraries";
 import { useSettings } from "../settings";
+
+type Step = "account" | "libraries" | "ready";
+
+const STEPS: { step: Step; icon: ComponentType<IconProps>; label: string }[] = [
+  { step: "account", icon: AccountIcon, label: "first_steps.step.account" },
+  { step: "libraries", icon: FolderIcon, label: "first_steps.step.libraries" },
+  { step: "ready", icon: PlayIcon, label: "first_steps.step.ready" },
+];
 
 export function FirstSteps({
   libraries,
@@ -26,45 +38,119 @@ export function FirstSteps({
   onFinish: () => Promise<void>;
 }) {
   const { t } = useSettings();
-  /* Open straight away on a server with nothing in it: declaring a library
-     is the whole of what this screen is for. */
-  const [adding, setAdding] = useState(libraries.length === 0);
-  const [refused, setRefused] = useState<string | null>(null);
+  /* The account is made on the door, so the steps open on the one after. */
+  const [step, setStep] = useState<Step>("libraries");
+  const at = STEPS.findIndex((one) => one.step === step);
   const finishing = useTold(onFinish);
 
   return (
-    <main className="page first-steps">
-      <header className="first-steps-head">
-        <span className="page-head-mark" aria-hidden="true">
-          <FolderIcon size={24} />
-        </span>
-        <div>
-          <h1>{t("first_steps.title")}</h1>
-          <p>{t("first_steps.lead")}</p>
+    <div className="sectioned first-steps">
+      <PageBackdrop />
+
+      <aside className="side">
+        <nav className="side-list" aria-label={t("first_steps.title")}>
+          <div className="side-group">
+            <span className="side-group-name">{t("first_steps.steps")}</span>
+            {STEPS.map((one, index) => {
+              const StepIcon = index < at ? TickIcon : one.icon;
+              return (
+                <button
+                  key={one.step}
+                  type="button"
+                  className={`side-line${index === at ? " active" : ""}${index < at ? " side-line-done" : ""}`}
+                  // The account is behind, and what comes after this step is
+                  // reached by finishing it: only the steps already passed
+                  // that can be taken again are offered.
+                  disabled={one.step === "account" || index > at}
+                  aria-current={index === at ? "step" : undefined}
+                  onClick={() => setStep(one.step)}
+                >
+                  <StepIcon size={20} />
+                  <span className="side-line-name">{t(one.label)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="side-group">
+            <span className="side-group-name">{t("first_steps.declared")}</span>
+            {libraries.length === 0 ? (
+              <span className="first-steps-none">{t("first_steps.none_yet")}</span>
+            ) : (
+              libraries.map((library) => (
+                <span className="first-steps-declared-line" key={library.id}>
+                  <KindIcon kind={library.kind} size={18} />
+                  <span className="side-line-name">{library.name}</span>
+                </span>
+              ))
+            )}
+          </div>
+        </nav>
+        <div className="side-foot">
+          {t("first_steps.foot", { at: at + 1, of: STEPS.length })}
         </div>
-      </header>
+      </aside>
 
-      {(refused || finishing.failure) && (
-        <p className="panel-notice panel-notice-trouble">
-          {t(refused ?? refusalKey(finishing.failure!.code))}
-        </p>
-      )}
-
-      {libraries.length > 0 && (
-        <div className="lines">
-          {libraries.map((library) => (
-            <div className="line" key={library.id}>
-              <span className="line-mark" aria-hidden="true">
-                <KindIcon kind={library.kind} size={18} />
-              </span>
-              <span className="line-words">
-                <span className="line-name">{library.name}</span>
-                <span className="line-note">{t(`library.kind.${library.kind}`)}</span>
-              </span>
+      <main className="first-steps-page">
+        <header className="page-head">
+          <div className="page-head-line">
+            <span className="page-head-mark" aria-hidden="true">
+              {step === "libraries" ? <FolderIcon size={24} /> : <PlayIcon size={24} />}
+            </span>
+            <div className="page-head-words">
+              <h1>{t(step === "libraries" ? "first_steps.title" : "first_steps.ready_title")}</h1>
+              <p>{t(step === "libraries" ? "first_steps.lead" : "first_steps.ready_lead")}</p>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        </header>
+
+        {step === "libraries" ? (
+          <Libraries libraries={libraries} onDeclared={onDeclared} onNext={() => setStep("ready")} />
+        ) : (
+          <>
+            {finishing.failure && (
+              <p className="panel-notice panel-notice-trouble">
+                {t(refusalKey(finishing.failure.code))}
+              </p>
+            )}
+            <div className="first-steps-foot">
+              <button className="button" onClick={() => setStep("libraries")}>
+                {t("first_steps.back")}
+              </button>
+              <button
+                className="button button-accent"
+                disabled={finishing.busy}
+                onClick={() => void finishing.tell()}
+              >
+                {t("first_steps.finish")}
+              </button>
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+
+/** Declaring the libraries: the form of the administration on one side, what
+ *  is already declared on the other. */
+function Libraries({
+  libraries,
+  onDeclared,
+  onNext,
+}: {
+  libraries: Library[];
+  onDeclared: () => void;
+  onNext: () => void;
+}) {
+  const { t } = useSettings();
+  /* Open straight away on a server with nothing in it: declaring a library
+     is the whole of what this step is for. */
+  const [adding, setAdding] = useState(libraries.length === 0);
+  const [refused, setRefused] = useState<string | null>(null);
+
+  return (
+    <>
+      {refused && <p className="panel-notice panel-notice-trouble">{t(refused)}</p>}
 
       {adding ? (
         <NewLibrary
@@ -77,22 +163,24 @@ export function FirstSteps({
           onRefused={setRefused}
         />
       ) : (
-        <button className="button first-steps-add" onClick={() => setAdding(true)}>
-          <FolderIcon size={18} />
-          {t(libraries.length === 0 ? "settings.add_library" : "first_steps.add_another")}
-        </button>
+        <Panel
+          icon={FolderIcon}
+          title={t("settings.add_library")}
+          lead={t(libraries.length === 0 ? "first_steps.another_why" : "first_steps.scanning")}
+        >
+          <button className="button button-accent first-steps-add" onClick={() => setAdding(true)}>
+            <FolderIcon size={18} />
+            {t("first_steps.add_another")}
+          </button>
+        </Panel>
       )}
 
       <div className="first-steps-foot">
-        <p>{t("first_steps.later")}</p>
-        <button
-          className="button button-accent"
-          disabled={finishing.busy}
-          onClick={() => void finishing.tell()}
-        >
-          {t(libraries.length === 0 ? "first_steps.skip" : "first_steps.finish")}
+        <span>{t("first_steps.later")}</span>
+        <button className="button button-accent" onClick={onNext}>
+          {t(libraries.length === 0 ? "first_steps.skip" : "first_steps.next")}
         </button>
       </div>
-    </main>
+    </>
   );
 }

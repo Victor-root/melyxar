@@ -577,61 +577,70 @@ export function NewLibrary({
       lead={t("settings.new_library_why")}
       className="library-new"
     >
-      <div className="settings-lines">
-        <Setting label={t("settings.library_name")}>
-          <input
-            type="text"
-            className="field-line"
-            value={name}
-            autoFocus
-            aria-label={t("settings.library_name")}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </Setting>
-        <Setting label={t("settings.library_kind")}>
-          <Picker
-            label={t("settings.library_kind")}
-            value={kind}
-            options={KINDS.map((one) => [one, t(`library.kind.${one}`)] as const)}
-            onPick={setKind}
-          />
-        </Setting>
-        <Setting label={t("settings.metadata_language")}>
-          <Picker
-            label={t("settings.metadata_language")}
-            value={metadata}
-            options={METADATA_LANGUAGES.map((code) => [code, languageName(code, language)] as const)}
-            onPick={setMetadata}
-          />
-        </Setting>
-        <LibraryChoicesFields kind={kind} choices={choices} onChange={choose} />
-      </div>
+      {/* What the library is and where it looks on one side, what it does
+          with its files on the other, once the panel has the width for both. */}
+      <div className="library-new-columns">
+        <div className="library-new-what">
+          <div className="settings-lines">
+            <Setting label={t("settings.library_name")}>
+              <input
+                type="text"
+                className="field-line"
+                value={name}
+                autoFocus
+                aria-label={t("settings.library_name")}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </Setting>
+            <Setting label={t("settings.library_kind")}>
+              <Picker
+                label={t("settings.library_kind")}
+                value={kind}
+                options={KINDS.map((one) => [one, t(`library.kind.${one}`)] as const)}
+                onPick={setKind}
+              />
+            </Setting>
+            <Setting label={t("settings.metadata_language")}>
+              <Picker
+                label={t("settings.metadata_language")}
+                value={metadata}
+                options={METADATA_LANGUAGES.map((code) => [code, languageName(code, language)] as const)}
+                onPick={setMetadata}
+              />
+            </Setting>
+          </div>
 
-      <div className="library-folders">
-        <div className="library-folders-head">
-          <span>{t("admin.folders")}</span>
-          <button className="button button-small" onClick={() => setPicking(true)}>
-            <FolderIcon size={15} />
-            {t("settings.add_folder")}
-          </button>
-        </div>
-        <div className="lines">
-          {roots.length === 0 && <p className="empty-line">{t("admin.no_folder_yet")}</p>}
-          {roots.map((path) => (
-            <div className="line" key={path}>
-              <span className="line-mark" aria-hidden="true">
-                <FolderIcon size={18} />
-              </span>
-              <span className="line-words">
-                <span className="line-name line-path">{path}</span>
-              </span>
-              <span className="line-end">
-                <button className="button button-small button-quiet" onClick={() => dropRoot(path)}>
-                  {t("settings.forget_folder")}
-                </button>
-              </span>
+          <div className="library-folders">
+            <div className="library-folders-head">
+              <span>{t("admin.folders")}</span>
+              <button className="button button-small" onClick={() => setPicking(true)}>
+                <FolderIcon size={15} />
+                {t("settings.add_folder")}
+              </button>
             </div>
-          ))}
+            <div className="lines">
+              {roots.length === 0 && <p className="empty-line">{t("admin.no_folder_yet")}</p>}
+              {roots.map((path) => (
+                <div className="line" key={path}>
+                  <span className="line-mark" aria-hidden="true">
+                    <FolderIcon size={18} />
+                  </span>
+                  <span className="line-words">
+                    <span className="line-name line-path">{path}</span>
+                  </span>
+                  <span className="line-end">
+                    <button className="button button-small button-quiet" onClick={() => dropRoot(path)}>
+                      {t("settings.forget_folder")}
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-lines">
+          <LibraryChoicesFields kind={kind} choices={choices} onChange={choose} />
         </div>
       </div>
 
