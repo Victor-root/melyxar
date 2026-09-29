@@ -1424,7 +1424,7 @@ const post = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
   send<T>("POST", path, body, signal);
 const remove = <T>(path: string, signal?: AbortSignal) =>
   send<T>("DELETE", path, undefined, signal);
-const put = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
+export const put = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
   send<T>("PUT", path, body, signal);
 
 async function send<T>(

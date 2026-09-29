@@ -36,6 +36,15 @@ impl Converted {
             Self::Mp3 => "audio/mpeg",
         }
     }
+
+    /// How heavy it is made, in kilobits a second, when nothing asks for
+    /// lighter: as good as either form gets to the ear.
+    pub fn usual_kbps(self) -> u32 {
+        match self {
+            Self::Opus => 192,
+            Self::Mp3 => 320,
+        }
+    }
 }
 
 /// A song on its way, and the tool writing it. The tool stops when this is
@@ -46,10 +55,16 @@ pub struct ConvertedSong {
     pub process: Child,
 }
 
-/// Starts converting a song, from `start` on.
-pub fn convert(tool: &Path, song: &Path, start: Millis, into: Converted) -> Result<ConvertedSong> {
+/// Starts converting a song, from `start` on, at `kbps` kilobits a second.
+pub fn convert(
+    tool: &Path,
+    song: &Path,
+    start: Millis,
+    into: Converted,
+    kbps: u32,
+) -> Result<ConvertedSong> {
     let mut process = TokioCommand::new(tool)
-        .args(arguments(song, start, into))
+        .args(arguments(song, start, into, kbps))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -63,7 +78,7 @@ pub fn convert(tool: &Path, song: &Path, start: Millis, into: Converted) -> Resu
 
 /// What the tool is told, written as a value so it can be read without
 /// running anything.
-pub fn arguments(song: &Path, start: Millis, into: Converted) -> Vec<OsString> {
+pub fn arguments(song: &Path, start: Millis, into: Converted, kbps: u32) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = ["-hide_banner", "-loglevel", "error", "-nostdin"]
         .into_iter()
         .map(OsString::from)
@@ -77,11 +92,12 @@ pub fn arguments(song: &Path, start: Millis, into: Converted) -> Vec<OsString> {
     // The sound alone: a cover carried inside is a picture, and a picture in
     // the answer would make it a video to the browser.
     arguments.extend(["-map", "0:a:0", "-vn", "-map_metadata", "-1"].map(OsString::from));
-    let (codec, rate, format) = match into {
-        Converted::Opus => ("libopus", "192k", "ogg"),
-        Converted::Mp3 => ("libmp3lame", "320k", "mp3"),
+    let (codec, format) = match into {
+        Converted::Opus => ("libopus", "ogg"),
+        Converted::Mp3 => ("libmp3lame", "mp3"),
     };
-    arguments.extend(["-c:a", codec, "-b:a", rate, "-f", format, "pipe:1"].map(OsString::from));
+    let rate = format!("{kbps}k");
+    arguments.extend(["-c:a", codec, "-b:a", &rate, "-f", format, "pipe:1"].map(OsString::from));
     arguments
 }
 
@@ -103,6 +119,7 @@ mod tests {
             Path::new("/m/a.m4a"),
             Millis::ZERO,
             Converted::Opus,
+            Converted::Opus.usual_kbps(),
         ));
         assert_eq!(
             from_start,
@@ -113,10 +130,11 @@ mod tests {
             Path::new("/m/a.wma"),
             Millis::new(61_500),
             Converted::Mp3,
+            128,
         ));
         assert!(later.contains("-ss 61.500 -i /m/a.wma"), "{later}");
         assert!(
-            later.ends_with("-c:a libmp3lame -b:a 320k -f mp3 pipe:1"),
+            later.ends_with("-c:a libmp3lame -b:a 128k -f mp3 pipe:1"),
             "{later}"
         );
     }
@@ -145,8 +163,14 @@ mod tests {
             (Converted::Opus, &b"OggS"[..]),
             (Converted::Mp3, &b"ID3"[..]),
         ] {
-            let mut converted =
-                convert(&tools.ffmpeg, &song, Millis::new(1_000), into).expect("started");
+            let mut converted = convert(
+                &tools.ffmpeg,
+                &song,
+                Millis::new(1_000),
+                into,
+                into.usual_kbps(),
+            )
+            .expect("started");
             let mut sound = Vec::new();
             converted
                 .output
