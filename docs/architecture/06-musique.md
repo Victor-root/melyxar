@@ -75,6 +75,9 @@ Ordre proposé, chaque étape livrable seule :
   - renommer les fichiers à partir de leurs étiquettes.
 - **Qui peut s'en servir** : les administrateurs, et les comptes à qui ce droit est donné.
 - **Garde-fou** : une case à cocher, optionnelle, garde une copie de l'ancien fichier avant de l'écrire.
+- **Aperçu avant d'écrire** : avant d'enregistrer, Melyxar montre ce qui va changer (étiquettes, nouveau nom de fichier) et on valide. C'est le comportement d'office, que chaque compte peut désactiver dans ses réglages Musique.
+- **Renommage par modèle libre** : la forme du nom est écrite à partir des étiquettes (numéro de piste, titre, artiste, album, etc.).
+- **Les fichiers ne sont jamais déplacés d'un dossier à un autre** : le gestionnaire renomme, il ne range pas dans des dossiers `Artiste/Album/`.
 - **Écrire dans les fichiers reste éteint tant qu'on ne l'a pas demandé**, comme la règle déjà en place pour les médias (le service ne peut qu'y lire par défaut).
 - **Isolation** : l'écriture des étiquettes vit dans son propre module, séparé de la lecture. Renommer un fichier ne doit rien faire perdre à la fiche (favoris, compteurs d'écoute, listes de lecture), sur le modèle du déplacement d'un film déjà géré.
 
