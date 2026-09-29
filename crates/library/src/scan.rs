@@ -64,7 +64,9 @@ pub enum ScanError {
 /// What is worth looking at depends on what the library holds: photos only
 /// where people keep their own, and clips told apart from the film they come
 /// with only where a release named them so. A video somebody filmed and named
-/// `beach-sample.mp4` is a video, not a sample.
+/// `beach-sample.mp4` is a video, not a sample. A library of music takes its
+/// songs and nothing else: no film, and no subtitle or description, which
+/// belong to films.
 pub fn walk(root_label: &str, root: &Path, kind: LibraryKind) -> Result<ScanOutcome, ScanError> {
     let state = access::check(root);
     if !state.is_usable() {
@@ -105,7 +107,6 @@ fn walk_into(
     outcome: &mut ScanOutcome,
     root_label: &str,
 ) {
-    let takes_photos = kind == LibraryKind::HomeMedia;
     let mut pending = vec![start.to_path_buf()];
 
     while let Some(folder) = pending.pop() {
@@ -149,11 +150,17 @@ fn walk_into(
                 continue;
             };
 
-            let is_video =
-                naming::is_video_file(name) || takes_photos && naming::is_photo_file(name);
-            let is_subtitle = crate::sidecar::is_subtitle_file(name);
-            let is_description = crate::companion::is_companion_file(name);
-            if !is_video && !is_subtitle && !is_description {
+            let is_media = match kind {
+                LibraryKind::Music => naming::is_audio_file(name),
+                LibraryKind::HomeMedia => {
+                    naming::is_video_file(name) || naming::is_photo_file(name)
+                }
+                _ => naming::is_video_file(name),
+            };
+            let goes_with_films = kind != LibraryKind::Music;
+            let is_subtitle = goes_with_films && crate::sidecar::is_subtitle_file(name);
+            let is_description = goes_with_films && crate::companion::is_companion_file(name);
+            if !is_media && !is_subtitle && !is_description {
                 continue;
             }
 
@@ -371,6 +378,60 @@ mod tests {
             films.files.len(),
             1,
             "a library of films never takes a photo for a film"
+        );
+    }
+
+    #[test]
+    fn a_library_of_music_walks_its_songs_and_nothing_that_goes_with_a_film() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let root = directory.path();
+        write(
+            root,
+            "Amber Field/Northern Lights/01 - Quiet Harbour.flac",
+            b"x",
+        );
+        write(root, "Amber Field/Northern Lights/cover.jpg", b"x");
+        write(root, "Amber Field/Northern Lights/album.nfo", b"x");
+        write(root, "Amber Field/Northern Lights/clip.mkv", b"x");
+        write(
+            root,
+            "Amber Field/Northern Lights/01 - Quiet Harbour.srt",
+            b"x",
+        );
+        write(root, "Loose Song-trailer.mp3", b"x");
+
+        let outcome = walk("disk-one", root, LibraryKind::Music).expect("usable");
+        let found: Vec<(String, Option<&str>)> = outcome
+            .files
+            .iter()
+            .map(|file| {
+                (
+                    file.relative_path.to_string_lossy().into_owned(),
+                    file.companion_kind,
+                )
+            })
+            .collect();
+        assert_eq!(
+            found,
+            vec![
+                (
+                    "Amber Field/Northern Lights/01 - Quiet Harbour.flac".to_string(),
+                    None
+                ),
+                ("Loose Song-trailer.mp3".to_string(), None),
+            ],
+            "a song whatever its name, and never a picture or a video"
+        );
+        assert!(outcome.subtitles.is_empty());
+        assert!(outcome.companion_files.is_empty());
+
+        let films = walk("disk-one", root, LibraryKind::Movies).expect("usable");
+        assert!(
+            films
+                .files
+                .iter()
+                .all(|file| file.relative_path.extension().is_some_and(|e| e == "mkv")),
+            "a library of films never takes a song for a film"
         );
     }
 

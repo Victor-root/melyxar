@@ -1,8 +1,8 @@
 //! Scanning folders and making sense of file names.
 //!
-//! Three jobs, kept apart so each can be tested on its own: finding out what
-//! the server may do with a folder, walking that folder, and reading a title
-//! out of a file name.
+//! Four jobs, kept apart so each can be tested on its own: finding out what
+//! the server may do with a folder, walking that folder, reading a title out
+//! of a file name, and filing the songs of a folder by what their files say.
 //!
 //! Nothing here touches the database. A scan reports what it saw and the
 //! orchestration layer decides what to do about it, which is what keeps this
@@ -14,6 +14,7 @@ pub mod access;
 pub mod companion;
 pub mod episode;
 pub mod folders;
+pub mod music;
 pub mod naming;
 pub mod orientation;
 pub mod scan;

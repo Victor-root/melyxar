@@ -1134,6 +1134,26 @@ pub fn is_photo_file(file_name: &str) -> bool {
         .is_some_and(|(_, extension)| PHOTO_EXTENSIONS.contains(&extension.to_lowercase().as_str()))
 }
 
+/// File extensions treated as music, in a library that holds music.
+///
+/// Every form a collection is found in, whether or not a browser plays it as
+/// it is: what it does not play is converted on the way, which is the music's
+/// own path to decide, not the walk's.
+const AUDIO_EXTENSIONS: [&str; 15] = [
+    "mp3", "flac", "m4a", "aac", "ogg", "oga", "opus", "wav", "aif", "aiff", "ape", "wv", "wma",
+    "mpc", "dsf",
+];
+
+/// Whether a name looks like a music file.
+pub fn is_audio_file(file_name: &str) -> bool {
+    if file_name.starts_with('.') {
+        return false;
+    }
+    file_name
+        .rsplit_once('.')
+        .is_some_and(|(_, extension)| AUDIO_EXTENSIONS.contains(&extension.to_lowercase().as_str()))
+}
+
 /// Markers a release puts at the end of a clip that is not the film itself.
 const COMPANION_MARKERS: &[(&str, &str)] = &[
     ("-trailer", "trailer"),
@@ -1996,6 +2016,29 @@ mod tests {
         assert!(!is_video_file("cover.jpg"));
         assert!(!is_video_file("notes.txt"));
         assert!(!is_video_file("film.nfo"));
+    }
+
+    #[test]
+    fn music_files_are_recognised_and_their_pictures_and_videos_left_alone() {
+        for name in [
+            "01 - Quiet Harbour.mp3",
+            "track.FLAC",
+            "song.m4a",
+            "song.opus",
+            "old.wma",
+        ] {
+            assert!(is_audio_file(name), "{name}");
+        }
+        for name in [
+            "cover.jpg",
+            "folder.png",
+            "clip.mp4",
+            "album.nfo",
+            "song.lrc",
+            ".hidden.mp3",
+        ] {
+            assert!(!is_audio_file(name), "{name}");
+        }
     }
 
     #[test]

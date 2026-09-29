@@ -1458,6 +1458,7 @@ version = "0.1.0"
 dependencies = [
  "kamadak-exif",
  "melyxar-core",
+ "melyxar-tags",
  "tempfile",
  "thiserror",
  "time",
