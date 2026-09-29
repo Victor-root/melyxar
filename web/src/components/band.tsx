@@ -71,10 +71,19 @@ const ROOM_FOR_A_PRINT = "(max-width: 900px) 40vw, 180px";
  *  rippling, and nothing else would say so. */
 const RIPPLE = "band-ripple";
 
-export function Band({ shelves, libraries }: { shelves: Shelf[]; libraries: Library[] }) {
+export function Band({
+  shelves,
+  libraries,
+  after,
+}: {
+  shelves: Shelf[];
+  libraries: Library[];
+  /** Tiles drawn by others and standing after these, music's among them. */
+  after?: React.ReactNode;
+}) {
   const { t } = useSettings();
 
-  if (shelves.length === 0) {
+  if (shelves.length === 0 && !after) {
     return null;
   }
   return (
@@ -83,6 +92,7 @@ export function Band({ shelves, libraries }: { shelves: Shelf[]; libraries: Libr
       {shelves.map((shelf) => (
         <Tile key={shelf.kind} shelf={shelf} libraries={libraries} />
       ))}
+      {after}
     </nav>
   );
 }

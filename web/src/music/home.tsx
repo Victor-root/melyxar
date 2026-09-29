@@ -1,5 +1,6 @@
 /*
- * The row of the newest albums, for the home page.
+ * The newest albums, for the home page: its row, and the covers fanned out
+ * on the tile of music in the band of ways in.
  *
  * Asked of music's own requests and drawn with music's own tiles: an album is
  * not a film's card, and the home page only gives it its place among the
@@ -34,11 +35,14 @@ export function inTurn<T>(lists: T[][], room: number): T[] {
   return taken;
 }
 
-export function NewestMusic({ libraries, readAgain }: { libraries: Library[]; readAgain: unknown }) {
-  const { t } = useSettings();
+/** The newest albums of every library of music, read once for the whole
+ *  home page and again whenever `readAgain` changes. */
+export function useNewestAlbums(libraries: Library[], readAgain: unknown): Album[] {
   const [albums, setAlbums] = useState<Album[]>([]);
-  const ofMusic = libraries.filter((library) => library.kind === "music");
-  const ids = ofMusic.map((library) => library.id).join(",");
+  const ids = libraries
+    .filter((library) => library.kind === "music")
+    .map((library) => library.id)
+    .join(",");
 
   useEffect(() => {
     if (!ids) {
@@ -53,7 +57,11 @@ export function NewestMusic({ libraries, readAgain }: { libraries: Library[]; re
       .catch(() => {});
     return () => stop.abort();
   }, [ids, readAgain]);
+  return albums;
+}
 
+export function NewestMusic({ libraries, albums }: { libraries: Library[]; albums: Album[] }) {
+  const { t } = useSettings();
   if (albums.length === 0) {
     return null;
   }

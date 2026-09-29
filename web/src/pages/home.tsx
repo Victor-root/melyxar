@@ -31,7 +31,8 @@ import { BinocularsIcon, CameraIcon, EyeIcon, KindIcon } from "../icons";
 import { lengthOfAPlay } from "../watching";
 import { Arrival, ArrivalLoader, stillArriving } from "../components/arrival";
 import { PageBackdrop } from "../components/backdrop";
-import { NewestMusic } from "../music/home";
+import { MusicBandTile } from "../music/band";
+import { NewestMusic, useNewestAlbums } from "../music/home";
 
 /** Where the row of everything newest leads, which is the same grid read in
  *  the same order. */
@@ -40,6 +41,7 @@ const EVERYTHING_NEWEST = "/search?order=added_at&descending=true";
 export function HomePage({ libraries }: { libraries: Library[] }) {
   const { t, bannerShown } = useSettings();
   const { home, failed, again, jobs, scan, lookUp, refused } = useHomeScreen(libraries);
+  const newestAlbums = useNewestAlbums(libraries, home);
 
   if (failed) {
     return (
@@ -117,7 +119,13 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
      nothing to draw, and is not drawn. */
   const sections: Partial<Record<HomeSection, React.ReactNode>> = {
     /* Where to go for somebody who already knows what they want. */
-    band: <Band shelves={home.shelves} libraries={libraries} />,
+    band: (
+      <Band
+        shelves={home.shelves}
+        libraries={libraries}
+        after={<MusicBandTile libraries={libraries} albums={newestAlbums} />}
+      />
+    ),
 
     /* What was left halfway. Lying down, because what tells two of these
        apart is the still and the bar under it rather than the poster, and
@@ -209,7 +217,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
         />,
       ]),
     ),
-    "newest:music": <NewestMusic libraries={libraries} readAgain={home} />,
+    "newest:music": <NewestMusic libraries={libraries} albums={newestAlbums} />,
   };
 
   return (
