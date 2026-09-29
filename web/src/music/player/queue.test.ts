@@ -14,9 +14,10 @@ import {
   withShuffle,
   without,
 } from "./queue";
+import { aSong } from "../testing";
 
 function song(title: string): Song {
-  return { id: title, title, artists: [], album: null, track: null, disc: null, year: null, seconds: 200, source: null, cover: [] };
+  return aSong({ title });
 }
 
 const ABCD = ["a", "b", "c", "d"].map(song);

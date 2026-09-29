@@ -17,6 +17,7 @@ import { music as server } from "../api";
 import type { MusicPreferences, Song } from "../api";
 import { useMusicMarks } from "../marks";
 import { formsPlayedHere } from "./forms";
+import { levelOf } from "./levelling";
 import { countsAsListened } from "./listening";
 import { rememberLoudness, rememberQueue, storedLoudness, storedQueue } from "./kept";
 import type { Loudness } from "./kept";
@@ -116,6 +117,7 @@ export const DEFAULT_PREFERENCES: MusicPreferences = {
   film_on_screen: "stop",
   resume_queue: true,
   max_bitrate_kbps: null,
+  volume_mode: "track",
 };
 
 /** How often where the song has got to is written down, for a tab closed
@@ -197,8 +199,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         if (stop.signal.aborted) {
           return;
         }
-        const { film_on_screen, resume_queue, max_bitrate_kbps } = chosen;
-        setPreferencesHere({ film_on_screen, resume_queue, max_bitrate_kbps });
+        const { film_on_screen, resume_queue, max_bitrate_kbps, volume_mode } = chosen;
+        setPreferencesHere({ film_on_screen, resume_queue, max_bitrate_kbps, volume_mode });
         if (resume_queue && kept) {
           resumeFrom.current = kept.position;
           setQueue({ songs: kept.songs, order: kept.order, at: kept.at, shuffle: kept.shuffle, repeat: kept.repeat });
@@ -212,6 +214,38 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     audio.muted = loudness.muted;
     rememberLoudness(loudness);
   }, [audio, loudness]);
+
+  /* The sound goes through a gain, which is what brings every song to the
+     same level: the element's own volume only lowers, and a quiet song has
+     to be raised. Made at the first play, which is when a browser lets a
+     page make sound. */
+  const graph = useRef<{ context: AudioContext; gain: GainNode } | null>(null);
+  const soundThroughTheGain = useCallback(() => {
+    if (graph.current) {
+      if (graph.current.context.state === "suspended") {
+        void graph.current.context.resume();
+      }
+      return;
+    }
+    try {
+      const context = new AudioContext();
+      const gain = context.createGain();
+      context.createMediaElementSource(audio).connect(gain).connect(context.destination);
+      graph.current = { context, gain };
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.debug("[music] songs are played without levelling", error);
+      }
+    }
+  }, [audio]);
+
+  const volumeMode = preferences?.volume_mode ?? DEFAULT_PREFERENCES.volume_mode;
+  useEffect(() => {
+    const through = graph.current;
+    if (through && song) {
+      through.gain.gain.setTargetAtTime(levelOf(song, volumeMode), through.context.currentTime, 0.05);
+    }
+  }, [song, volumeMode, playing]);
 
   // What the element says, turned into what the interface shows.
   useEffect(() => {
@@ -233,7 +267,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         length: whole?.seconds ?? (Number.isFinite(audio.duration) ? Math.floor(audio.duration) : 0),
       });
     };
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => {
+      soundThroughTheGain();
+      setPlaying(true);
+    };
     const onPause = () => setPlaying(false);
     const onWaiting = () => setWaiting(true);
     const onFlowing = () => setWaiting(false);
@@ -283,7 +320,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         audio.removeEventListener(name, handler);
       }
     };
-  }, [audio]);
+  }, [audio, soundThroughTheGain]);
 
   // A song heard for long enough counts as listened to, once each time it
   // is played. Read as the time moves rather than drawn: nothing on the
