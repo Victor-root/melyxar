@@ -72,10 +72,12 @@ impl LibraryKind {
         matches!(self, Self::Series | Self::Anime | Self::Shows)
     }
 
-    /// Whether what it holds is in a catalogue somebody could be asked about.
-    /// What people filmed themselves is in none.
+    /// Whether what it holds is in the catalogue of films and series the
+    /// server looks things up in. What people filmed themselves is in none,
+    /// and music is in a catalogue of its own, which that one knows nothing
+    /// about: asking it for an album is asking for a film of the same name.
     pub fn is_catalogued(self) -> bool {
-        !matches!(self, Self::HomeMedia)
+        !matches!(self, Self::HomeMedia | Self::Music)
     }
 
     /// The kind of work a file in this library stands for when nothing better
@@ -337,12 +339,10 @@ mod tests {
     }
 
     #[test]
-    fn only_what_people_filmed_themselves_is_in_no_catalogue() {
-        assert!(!LibraryKind::HomeMedia.is_catalogued());
+    fn films_and_series_are_in_the_catalogue_and_music_and_home_media_are_not() {
         for kind in LibraryKind::every() {
-            if kind != LibraryKind::HomeMedia {
-                assert!(kind.is_catalogued(), "{kind:?}");
-            }
+            let apart = matches!(kind, LibraryKind::HomeMedia | LibraryKind::Music);
+            assert_eq!(kind.is_catalogued(), !apart, "{kind:?}");
         }
     }
 
