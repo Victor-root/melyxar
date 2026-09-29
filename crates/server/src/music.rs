@@ -11,8 +11,8 @@ use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_app::music::browse::{
-    AlbumCard, AlbumOrder, AlbumsWanted, ArtistCard, Credited, MusicGenre, MusicInitial, MusicPage,
-    Paging, SongOrder, SongRow,
+    AlbumCard, AlbumOrder, AlbumsWanted, ArtistCard, Credited, MusicFound, MusicGenre,
+    MusicInitial, MusicPage, Paging, SongOrder, SongRow,
 };
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +28,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/{library}/songs", get(songs))
         .route("/api/v1/music/{library}/genres", get(genres))
         .route("/api/v1/music/{library}/initials", get(initials))
+        .route("/api/v1/music/search", get(search))
         .route("/api/v1/music/albums/{id}", get(album))
         .route("/api/v1/music/artists/{id}", get(artist))
         .route("/api/v1/music/songs/{id}/sound", get(sound))
@@ -241,6 +242,36 @@ async fn songs(
     )
     .await?;
     Ok(Json(page_view(&page, song_view)))
+}
+
+#[derive(Debug, Deserialize)]
+struct SearchQuery {
+    #[serde(default)]
+    words: String,
+    /// One library of music, or every one this account may read.
+    library: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct FoundView {
+    albums: Vec<AlbumView>,
+    artists: Vec<ArtistView>,
+    songs: Vec<SongView>,
+}
+
+async fn search(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<FoundView>> {
+    let library = query.library.as_deref().map(parse_library).transpose()?;
+    let found: MusicFound =
+        melyxar_app::music::browse::search(&state, &who, library, &query.words).await?;
+    Ok(Json(FoundView {
+        albums: found.albums.iter().map(album_view).collect(),
+        artists: found.artists.iter().map(artist_view).collect(),
+        songs: found.songs.iter().map(song_view).collect(),
+    }))
 }
 
 #[derive(Debug, Serialize)]

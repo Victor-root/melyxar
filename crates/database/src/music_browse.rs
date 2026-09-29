@@ -12,7 +12,7 @@ use melyxar_core::id::{LibraryId, MediaSourceId, WorkId};
 use melyxar_core::time::{Millis, Timestamp};
 use sqlx::{AssertSqlSafe, Row};
 
-use crate::browse::initial_of_a_title;
+use crate::browse::{escape_for_like, initial_of_a_title};
 use crate::convert::{parse_id, parse_timestamp};
 use crate::images::StoredImage;
 use crate::{Database, Result};
@@ -101,6 +101,14 @@ pub struct MusicInitial {
 pub struct MusicPage<T> {
     pub items: Vec<T>,
     pub total: i64,
+}
+
+/// What a few words found in a library of music, a few of each.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MusicFound {
+    pub albums: Vec<AlbumCard>,
+    pub artists: Vec<ArtistCard>,
+    pub songs: Vec<SongRow>,
 }
 
 /// How a list of albums is read.
@@ -308,6 +316,62 @@ impl Database {
         .await?;
         let items = self.song_rows(&rows).await?;
         Ok(MusicPage { items, total })
+    }
+
+    /// The albums, artists and songs of a library whose name holds these
+    /// words, the first few of each in the order their lists are read in.
+    ///
+    /// Both the name and its sort form, for the same reason as the grids of
+    /// films: the sort form finds "ete" in "Été", the name finds a search
+    /// that opens with the article the sort form dropped.
+    pub async fn music_search(
+        &self,
+        library_id: LibraryId,
+        words: &str,
+        limit: i64,
+    ) -> Result<MusicFound> {
+        let pattern = format!("%{}%", escape_for_like(words));
+        let named = "(w.title LIKE ? ESCAPE '\\' OR w.sort_title LIKE ? ESCAPE '\\')";
+        let read = |sql: String| {
+            sqlx::query(AssertSqlSafe(sql))
+                .bind(library_id.to_db_string())
+                .bind(pattern.clone())
+                .bind(pattern.clone())
+                .bind(limit)
+        };
+
+        let albums = read(format!(
+            "SELECT {AN_ALBUM} FROM works w JOIN music_albums ma ON ma.work_id = w.id
+              WHERE w.library_id = ? AND w.kind = 'album' AND {named}
+              ORDER BY {} LIMIT ?",
+            AlbumOrder::Title.clause(false)
+        ))
+        .fetch_all(self.reader())
+        .await?;
+        let artists = read(format!(
+            "SELECT {AN_ARTIST} FROM works w
+              WHERE w.library_id = ? AND w.kind = 'artist' AND {named}
+              ORDER BY w.sort_title, w.id LIMIT ?"
+        ))
+        .fetch_all(self.reader())
+        .await?;
+        let songs = read(format!(
+            "SELECT {A_SONG}
+               FROM works w
+               LEFT JOIN music_songs ms ON ms.work_id = w.id
+               LEFT JOIN works al ON al.id = w.parent_id
+              WHERE w.library_id = ? AND w.kind = 'song' AND {named}
+              ORDER BY {} LIMIT ?",
+            SongOrder::Title.clause(false)
+        ))
+        .fetch_all(self.reader())
+        .await?;
+
+        Ok(MusicFound {
+            albums: self.album_cards(&albums).await?,
+            artists: self.artist_cards(&artists).await?,
+            songs: self.song_rows(&songs).await?,
+        })
     }
 
     /// Every genre the albums of a library carry, by name.
@@ -990,6 +1054,52 @@ mod tests {
             "earliest first"
         );
         assert_eq!(titles(&played_on), vec!["Road"]);
+    }
+
+    #[tokio::test]
+    async fn a_search_finds_albums_artists_and_songs_by_a_piece_of_their_name() {
+        let (database, library, _) = collection().await;
+        let found = database
+            .music_search(library, "road", 10)
+            .await
+            .expect("searched");
+        assert_eq!(titles(&found.albums), vec!["Road"]);
+        assert!(found.artists.is_empty());
+        assert_eq!(
+            found
+                .songs
+                .iter()
+                .map(|s| s.title.as_str())
+                .collect::<Vec<_>>(),
+            vec!["The Long Road"]
+        );
+
+        let amber = database
+            .music_search(library, "amber", 10)
+            .await
+            .expect("searched");
+        assert_eq!(
+            amber
+                .artists
+                .iter()
+                .map(|a| a.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Amber Field"]
+        );
+        assert!(amber.albums.is_empty() && amber.songs.is_empty());
+
+        let few = database
+            .music_search(library, "e", 1)
+            .await
+            .expect("searched");
+        assert_eq!(few.albums.len(), 1);
+        assert_eq!(few.songs.len(), 1);
+
+        let nothing = database
+            .music_search(library, "100%", 10)
+            .await
+            .expect("searched");
+        assert_eq!(nothing, MusicFound::default());
     }
 
     #[tokio::test]

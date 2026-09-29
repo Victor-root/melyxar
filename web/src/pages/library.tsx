@@ -18,7 +18,17 @@ import { cardShapeOf, nameOfKind } from "../libraries";
 import { ORDERS, useBrowsing } from "../screens/browsing";
 import { useSettings } from "../settings";
 
-export function LibraryPage({ libraries }: { libraries: Library[] }) {
+export function LibraryPage({
+  libraries,
+  besides,
+  besidesFound = false,
+}: {
+  libraries: Library[];
+  /** What else a search found, drawn above the grid. */
+  besides?: React.ReactNode;
+  /** Whether that found anything, so an empty grid is not called empty. */
+  besidesFound?: boolean;
+}) {
   const { t } = useSettings();
   const { narrowing, choose, cards: read, more, loadMore, reach, loading, failed, filters } =
     useBrowsing();
@@ -301,8 +311,10 @@ export function LibraryPage({ libraries }: { libraries: Library[] }) {
         </div>
       </div>
 
+      {besides}
+
       {failed && <p className="notice">{t("error.unreachable")}</p>}
-      {!failed && cards.length === 0 && !loading && (
+      {!failed && cards.length === 0 && !loading && !besidesFound && (
         <p className="notice">
           {t(favourites ? "favourites.empty" : watchLater ? "watch_later.empty" : "library.empty")}
         </p>
