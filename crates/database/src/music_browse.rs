@@ -74,6 +74,9 @@ pub struct SongRow {
     pub duration: Option<Millis>,
     /// The file it is played from, the first there is on a disk.
     pub source_id: Option<MediaSourceId>,
+    /// Every size of the cover of its album, largest first: what a player
+    /// shows while it plays.
+    pub cover: Vec<StoredImage>,
 }
 
 /// One genre, and how many albums carry it.
@@ -526,6 +529,12 @@ impl Database {
             .map(|row| parse_id(&row.try_get::<String, _>("id")?))
             .collect::<Result<_>>()?;
         let mut artists = self.credited_on(&ids, "artist").await?;
+        let albums: Vec<WorkId> = rows
+            .iter()
+            .filter_map(|row| row.try_get::<Option<String>, _>("parent_id").ok().flatten())
+            .map(|album| parse_id(&album))
+            .collect::<Result<_>>()?;
+        let covers = self.posters_of(&albums).await?;
         rows.iter()
             .zip(ids)
             .map(|(row, id)| {
@@ -542,7 +551,6 @@ impl Database {
                     id,
                     title: row.try_get("title")?,
                     artists: artists.remove(&id).unwrap_or_default(),
-                    album,
                     track: row.try_get("ordinal")?,
                     disc: row.try_get("disc_number")?,
                     year: row.try_get("release_year")?,
@@ -553,6 +561,12 @@ impl Database {
                         .try_get::<Option<String>, _>("source_id")?
                         .map(|source| parse_id(&source))
                         .transpose()?,
+                    cover: album
+                        .as_ref()
+                        .and_then(|album| covers.get(&album.id))
+                        .cloned()
+                        .unwrap_or_default(),
+                    album,
                 })
             })
             .collect()

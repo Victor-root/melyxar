@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { asClock } from "../clock";
 import { useSettings } from "../settings";
 import type { Credited, Song } from "./api";
+import { useMusic } from "./player/player";
 
 /** Who plays a song, each a way to their page. */
 function Artists({ artists }: { artists: Credited[] }) {
@@ -28,6 +29,7 @@ export function SongList({
   showAlbum = true,
   hideArtists,
   first = 0,
+  onPlay,
 }: {
   songs: Song[];
   /** By the song's own number on its album, or by its place in the list. */
@@ -38,8 +40,11 @@ export function SongList({
   hideArtists?: string;
   /** The place of the first line in the whole list. */
   first?: number;
+  /** Plays the list from the line pressed. */
+  onPlay?: (index: number) => void;
 }) {
   const { t } = useSettings();
+  const { song: playingNow } = useMusic();
   return (
     <ol className={`music-songs${showAlbum ? "" : " music-songs-no-album"}`}>
       {songs.map((song, index) => {
@@ -49,12 +54,27 @@ export function SongList({
             ? []
             : song.artists;
         return (
-          <li className="music-song" key={song.id} data-index={first + index}>
+          <li
+            className={`music-song${playingNow?.id === song.id ? " music-song-playing" : ""}`}
+            key={song.id}
+            data-index={first + index}
+          >
             <span className="music-song-number">
               {numbered === "track" ? (song.track ?? "") : first + index + 1}
             </span>
             <span className="music-song-words">
-              <span className="music-song-title">{song.title}</span>
+              {onPlay ? (
+                <button
+                  type="button"
+                  className="music-song-title music-song-play"
+                  onClick={() => onPlay(index)}
+                  title={t("music.play_song", { title: song.title })}
+                >
+                  {song.title}
+                </button>
+              ) : (
+                <span className="music-song-title">{song.title}</span>
+              )}
               {artists.length > 0 && (
                 <span className="music-song-artists">
                   <Artists artists={artists} />

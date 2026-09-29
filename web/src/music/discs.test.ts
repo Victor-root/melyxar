@@ -13,6 +13,7 @@ function song(title: string, disc: number | null, seconds: number | null = 200):
     year: null,
     seconds,
     source: null,
+    cover: [],
   };
 }
 

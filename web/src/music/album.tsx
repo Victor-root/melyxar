@@ -5,16 +5,20 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { howMany } from "../readable";
+import { PlayIcon } from "../icons";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { AlbumPage } from "./api";
 import { byDisc, minutesOf } from "./discs";
+import { ShuffleIcon } from "./player/icons";
+import { useMusic } from "./player/player";
 import { SongList } from "./songs";
 import { AlbumCover, namesOf } from "./tiles";
 
 export function MusicAlbumPage() {
   const { t } = useSettings();
   const { id = "" } = useParams();
+  const player = useMusic();
   const [album, setAlbum] = useState<AlbumPage | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -69,6 +73,26 @@ export function MusicAlbumPage() {
                   </span>
                 ))}
           </p>
+          <div className="music-hero-actions">
+            <button
+              type="button"
+              className="button button-accent"
+              disabled={album.tracks.length === 0}
+              onClick={() => player.play(album.tracks, 0)}
+            >
+              <PlayIcon size={18} />
+              {t("music.play")}
+            </button>
+            <button
+              type="button"
+              className="button"
+              disabled={album.tracks.length === 0}
+              onClick={() => player.play(album.tracks, Math.floor(Math.random() * album.tracks.length), true)}
+            >
+              <ShuffleIcon size={18} />
+              {t("music.shuffle")}
+            </button>
+          </div>
           <p className="music-hero-facts">
             {[
               album.year,
@@ -91,6 +115,7 @@ export function MusicAlbumPage() {
             numbered="track"
             showAlbum={false}
             hideArtists={whose ?? undefined}
+            onPlay={(index) => player.play(album.tracks, album.tracks.indexOf(disc.songs[index]))}
           />
         </section>
       ))}

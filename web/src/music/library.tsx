@@ -17,6 +17,7 @@ import { useSettings } from "../settings";
 import { music } from "./api";
 import type { AlbumOrder, Genre, Initial, SongOrder } from "./api";
 import { usePaged } from "./paging";
+import { useMusic } from "./player/player";
 import type { Paged } from "./paging";
 import { SongList } from "./songs";
 import { AlbumTile, ArtistTile } from "./tiles";
@@ -165,6 +166,7 @@ function SongsTab({ library }: { library: string }) {
     }
     setParams(next, { replace: true });
   };
+  const player = useMusic();
   const songs = usePaged(`${library}|${order}|${descending}`, (offset, limit, signal) =>
     music.songs(library, order, descending, offset, limit, signal),
   );
@@ -188,7 +190,7 @@ function SongsTab({ library }: { library: string }) {
         )}
       </div>
       <Lettered paged={songs} letters={null} empty="music.no_song">
-        <SongList songs={songs.items} numbered="place" />
+        <SongList songs={songs.items} numbered="place" onPlay={(index) => player.play(songs.items, index)} />
       </Lettered>
     </>
   );
