@@ -9,6 +9,7 @@ members = [
     "crates/container",
     "crates/media_probe",
     "crates/sound",
+    "crates/tags",
     "crates/system",
     "crates/playback",
     "crates/streaming",
@@ -23,7 +24,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "AGPL-3.0-only"
 repository = "https://github.com/Victor-root/melyxar"
 
@@ -36,6 +37,7 @@ melyxar-ffmpeg = { path = "crates/ffmpeg" }
 melyxar-container = { path = "crates/container" }
 melyxar-media-probe = { path = "crates/media_probe" }
 melyxar-sound = { path = "crates/sound" }
+melyxar-tags = { path = "crates/tags" }
 melyxar-system = { path = "crates/system" }
 melyxar-playback = { path = "crates/playback" }
 melyxar-streaming = { path = "crates/streaming" }
@@ -87,6 +89,8 @@ getrandom = "0.4"
 # Reads which way up a photo is meant to be seen, which a camera writes into
 # the file rather than into its pixels.
 kamadak-exif = "0.6"
+# What a music file says about itself, read and written without launching a tool.
+lofty = "0.25"
 # Reads the relief of the logo and writes the icon of the installed application
 # drawn from it: a few hundred lines of pure Rust, for one small picture.
 png = "0.18"
