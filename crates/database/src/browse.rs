@@ -52,9 +52,13 @@ use crate::{Database, DatabaseError, Result};
 /// What a library of home media holds is met at the root of the library, and
 /// what sits in a folder is met by opening that folder, like an episode by
 /// opening its season.
+///
+/// Music is none of it: albums, artists and songs are browsed by pages of
+/// their own, and an album showing up among films in a grid of everything,
+/// a search or the favourites would be music leaking into what plays films.
 pub(crate) fn met_on_its_own(table: &str) -> String {
     format!(
-        "({table}kind IN ('movie', 'series', 'album')
+        "({table}kind IN ('movie', 'series')
           OR ({table}kind IN ('episode', 'folder', 'video', 'photo')
               AND {table}parent_id IS NULL))"
     )
@@ -213,6 +217,7 @@ macro_rules! initial_of_a_title {
          END"
     };
 }
+pub(crate) use initial_of_a_title;
 
 /// The columns a card is read from, always under the name `w`.
 ///
@@ -783,10 +788,28 @@ impl Database {
             return Ok(());
         }
 
-        let owners: Vec<String> = cards.iter().map(|card| card.id.to_db_string()).collect();
+        let ids: Vec<WorkId> = cards.iter().map(|card| card.id).collect();
+        let mut posters = self.posters_of(&ids).await?;
+        for card in cards.iter_mut() {
+            card.poster = posters.remove(&card.id).unwrap_or_default();
+        }
+        self.lend_pictures_to_folders(cards).await
+    }
+
+    /// Every size of the poster of each of these works, largest first.
+    ///
+    /// One query for the whole page rather than one per card.
+    pub(crate) async fn posters_of(
+        &self,
+        works: &[WorkId],
+    ) -> Result<std::collections::HashMap<WorkId, Vec<crate::images::StoredImage>>> {
+        let mut found = std::collections::HashMap::new();
+        if works.is_empty() {
+            return Ok(found);
+        }
         // The list is built from identifiers this crate just read back, never
         // from anything a caller sent.
-        let placeholders = vec!["?"; owners.len()].join(", ");
+        let placeholders = vec!["?"; works.len()].join(", ");
         let sql = format!(
             "SELECT {} FROM images
              WHERE owner_kind = 'work' AND image_kind = 'poster' AND owner_id IN ({placeholders})
@@ -797,22 +820,17 @@ impl Database {
         // The only thing assembled here is a row of question marks, one per
         // identifier this crate has just read back from its own tables.
         let mut query = sqlx::query(AssertSqlSafe(sql));
-        for owner in &owners {
-            query = query.bind(owner);
+        for work in works {
+            query = query.bind(work.to_db_string());
         }
-        let rows = query.fetch_all(self.reader()).await?;
-
-        for row in rows {
-            let owner_id: String = row.try_get("owner_id")?;
-            let image = crate::images::image_from_row(&row)?;
-            if let Some(card) = cards
-                .iter_mut()
-                .find(|card| card.id.to_db_string() == owner_id)
-            {
-                card.poster.push(image);
-            }
+        for row in query.fetch_all(self.reader()).await? {
+            let owner: WorkId = crate::convert::parse_id(&row.try_get::<String, _>("owner_id")?)?;
+            found
+                .entry(owner)
+                .or_insert_with(Vec::new)
+                .push(crate::images::image_from_row(&row)?);
         }
-        self.lend_pictures_to_folders(cards).await
+        Ok(found)
     }
 
     /// Gives every folder card with no picture of its own the picture of the
