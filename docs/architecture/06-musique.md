@@ -54,11 +54,26 @@ Ordre proposé, chaque étape livrable seule :
 - **La réactivité est une exigence au même titre que pour le reste de Melyxar** (voir `02-reactivite.md`) : Emby est réactif, Jellyfin est lent, et Melyxar doit être au niveau du meilleur. Cela vaut pour le démarrage d'un morceau, le passage au suivant sans attente, le défilement d'une discothèque de plus de 100 000 morceaux, la barre de lettres, et le fait que le lecteur du bas ne ralentisse aucune page. Elle se mesure avec l'enregistreur intégré avant d'être gardée.
 - **Lancer un film arrête la musique pour de bon par défaut**, réglable : chaque compte peut choisir de la mettre seulement en pause à la place. Le lecteur du bas disparaît pendant le film ; en mode pause, il revient à la fin du film avec la musique là où elle en était.
 - **Une catégorie « Musique » dans les réglages du compte**, pour laisser le choix. Y vivent ce réglage, le mode de volume (même niveau pour tous ou écarts d'album gardés), les paroles et tout ce que la musique ajoutera. Le principe : chaque comportement discutable est un réglage, jamais imposé.
+- **Comme Jellyfin sur tout ce qui touche au classement**, pour que ceux qui viennent de là retrouvent leurs repères : artistes d'albums séparés des artistes (les invités d'un morceau comptent parmi ces derniers), compilations sous « Artistes divers », albums en plusieurs disques groupés par disque, genres lus dans les étiquettes avec leur onglet, favoris (morceaux, albums, artistes), compteurs d'écoute pour « Écoutés récemment » et « Les plus écoutés ».
+- **La photo d'un artiste** vient d'abord de son dossier (`folder.jpg`, `artist.jpg`), un fournisseur en ligne optionnel pouvant la compléter plus tard.
+- **La file d'attente est retrouvée** quand on revient après avoir fermé l'onglet, avec le morceau et la position, et cette reprise se choisit ou non par réglage, comme pour les médiathèques.
+- **Fondu enchaîné entre morceaux, en option** dans les réglages Musique.
+- **Débit maximum de la musique, par compte** : au-delà, les morceaux sont convertis à la volée, utile pour écouter par un accès lent.
+- **La recherche du haut trouve aussi la musique**, dans une section « Musique » de ses résultats, et cela marche quand la portée choisie est « Partout ».
 - **Le volume laisse toujours le choix** : un même niveau pour tous les morceaux, ou les écarts d'un album gardés.
 - **L'écoute en arrière-plan est prévue d'office** : écran verrouillé, onglet en arrière-plan, touches multimédia du clavier et du téléphone.
 - **L'accueil a une rangée dédiée à la musique**, qui ne passe ni dans « Continuer la lecture » ni dans « À suivre ». Ses propres rangées (écoutés récemment, ajoutés récemment) vivent dans la médiathèque de musique.
 - **Les paroles sont à mettre en place**, défilant en rythme quand elles portent l'heure de chaque ligne. Sources, de la plus locale à la plus distante : paroles intégrées au fichier, fichier `.lrc` à côté du morceau, puis LRCLIB (gratuit, sans clé) si le fournisseur est activé, réglable par médiathèque.
 - **LRCLIB vérifié le 29 septembre 2026** : sans compte ni clé, une requête `GET /api/get` avec artiste, titre, album et durée rend les paroles seules et les paroles synchronisées (une heure par ligne, au format `[0:07.78]`), et une réponse 404 `TrackNotFound` quand le morceau est inconnu. La durée n'a pas besoin d'être exacte à la seconde. Le service répond parfois 503 « serveur occupé » : la recherche ne doit jamais bloquer ni la lecture ni le scan, elle réessaie plus tard. Aucune limite de débit ni condition d'usage n'est publiée : s'identifier par un `User-Agent`, ne demander qu'une fois par morceau et garder la réponse, y compris l'absence de réponse.
+
+## Pistes possibles, sans priorité
+
+Ouvertes à l'avenir, mais pas un objectif pour l'instant. Le chantier ne doit simplement pas les rendre impossibles.
+
+- Clips vidéo rangés sous un artiste (Jellyfin le fait), lus par le lecteur vidéo.
+- Livres audio, comme sorte de médiathèque à part, avec reprise à l'endroit où l'on s'est arrêté.
+- Égaliseur dans le lecteur.
+- Envoi de ce qu'on écoute à des services comme Last.fm ou ListenBrainz (le « scrobbling »).
 
 ## Questions ouvertes
 
