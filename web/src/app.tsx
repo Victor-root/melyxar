@@ -25,6 +25,9 @@ import { LibraryPage } from "./pages/library";
 import { MusicAlbumPage } from "./music/album";
 import { MusicArtistPage } from "./music/artist";
 import { MusicLibraryPage } from "./music/library";
+import { MusicBar } from "./music/player/bar";
+import { MusicNowPlaying } from "./music/player/page";
+import { MusicProvider } from "./music/player/player";
 import { SearchPage } from "./pages/search";
 import { CollectionPage, CollectionsPage } from "./pages/collections";
 import { PersonPage } from "./pages/person";
@@ -168,6 +171,9 @@ function TheLibrary() {
             it out of the page. */}
         {/* DEBUG ONLY, TO BE REMOVED with components/debug-journal.tsx. */}
         <DebugJournal />
+        {/* The player of music stands outside every page, so that going
+            from one to the next never stops a song. */}
+        <MusicProvider>
         <div className="shell">
           <Header libraries={libraries.all} scrolling={scrolling} />
           <div className="shell-scroll" ref={scrolling}>
@@ -216,7 +222,10 @@ function TheLibrary() {
           {/* Outside the box it belongs to, because a bar drawn inside it
               would be cut off at the same edge everything else is. */}
           <ScrollBar holder={scrolling} />
+          <MusicBar />
+          <MusicNowPlaying />
         </div>
+        </MusicProvider>
         </AttentionProvider>
         </AdministrationLine>
         </Toasts>

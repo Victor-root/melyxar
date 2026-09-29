@@ -47,6 +47,7 @@ import type { Panel, Shape, Turn } from "./panels";
 import { rememberSettings, storedSettings } from "./settings";
 import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
+import { useFilmOnScreen } from "../on-screen";
 
 interface Watched {
   sourceId: string;
@@ -84,6 +85,9 @@ export function Player(props: Omit<Watched, "work"> & { work: Work | null }) {
   const { work, sourceId } = props;
   const stage = useRef<HTMLDivElement>(null);
   const fullscreen = useFullscreen(stage);
+  /* Said aloud, for whatever else plays sound in this interface to fall
+     silent while a film is on. */
+  useFilmOnScreen();
   const [appearance, setAppearanceState] = useState<Appearance>(storedAppearance);
   const [settings, setSettingsState] = useState<PlayerSettings>(storedSettings);
 

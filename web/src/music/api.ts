@@ -53,6 +53,8 @@ export interface Song {
   seconds: number | null;
   /** The file it plays from. */
   source: string | null;
+  /** The cover of its album. */
+  cover: Picture[];
 }
 
 export interface Genre {

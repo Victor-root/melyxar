@@ -381,3 +381,483 @@
     align-self: center;
   }
 }
+
+/* --------------------------------------------------------------------------
+ * Playing
+ * ----------------------------------------------------------------------- */
+
+.music-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  margin-top: var(--gap);
+}
+
+.music-song-play {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.music-song-play:hover {
+  color: var(--accent-bright);
+}
+
+.music-song-playing .music-song-title,
+.music-song-playing .music-song-number {
+  color: var(--accent-bright);
+  font-weight: 650;
+}
+
+/* Room at the foot of every page while the bar is there, so its end is
+   never under the bar; and the words said in the corner rise above it. */
+:root {
+  --music-bar-height: 76px;
+}
+
+:root[data-music-bar] .shell-scroll {
+  padding-bottom: var(--music-bar-height);
+}
+
+:root[data-music-bar] .toasts {
+  bottom: calc(var(--music-bar-height) + var(--gutter));
+}
+
+/* --------------------------------------------------------------------------
+ * The bar at the foot of every page
+ * ----------------------------------------------------------------------- */
+
+/* Over the page and its scroll bar, under the bar at the top and the menus
+   that open from it. */
+.music-bar-dock {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 18;
+  height: var(--music-bar-height);
+  border-top: 1px solid var(--border);
+  background: var(--header-glass);
+  backdrop-filter: blur(22px) saturate(1.3);
+  box-shadow: var(--shadow-raised);
+}
+
+.music-bar-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--gap);
+  height: 100%;
+  padding: 0 var(--gutter);
+}
+
+.music-bar-now {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.music-bar-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.music-bar-title,
+.music-bar-artists {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-bar-title {
+  font-weight: 650;
+}
+
+.music-bar-artists {
+  color: var(--text-soft);
+  font-size: 0.9em;
+}
+
+.music-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.music-bar-side {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
+
+.music-now-cover {
+  flex: none;
+  position: relative;
+  width: 52px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.music-now-cover img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.music-now-cover-large {
+  width: min(420px, 100%);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-raised);
+}
+
+.music-control {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition:
+    background var(--quick) var(--ease),
+    color var(--quick) var(--ease),
+    transform var(--quick) var(--ease);
+}
+
+.music-control:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.music-control-on,
+.music-control-on:hover {
+  color: var(--accent-bright);
+}
+
+.music-control-main {
+  width: 46px;
+  height: 46px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.music-control-main:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  transform: scale(1.06);
+}
+
+.music-control-large {
+  width: 68px;
+  height: 68px;
+}
+
+/* Waiting for the sound: the button breathes rather than lying. */
+.music-control-waiting {
+  animation: music-waiting 1.2s var(--ease) infinite alternate;
+}
+
+@keyframes music-waiting {
+  to {
+    box-shadow: 0 0 0 6px var(--accent-glow);
+  }
+}
+
+.music-clock {
+  margin-left: var(--gap-tight);
+  color: var(--text-soft);
+  font-size: 0.88em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* How far into the song, along the top edge of the bar: a line that thickens
+   under a hand. */
+.music-progress,
+.music-volume {
+  appearance: none;
+  height: 4px;
+  margin: 0;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--played, 0%),
+    var(--border-strong) var(--played, 0%) 100%
+  );
+  cursor: pointer;
+}
+
+.music-progress {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  left: 0;
+  width: 100%;
+  transition: height var(--quick) var(--ease);
+}
+
+.music-progress:hover,
+.music-progress:focus-visible {
+  height: 6px;
+}
+
+.music-progress-standing {
+  position: static;
+  width: 100%;
+}
+
+.music-progress::-webkit-slider-thumb,
+.music-volume::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.music-progress::-moz-range-thumb,
+.music-volume::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-bright);
+}
+
+.music-loudness {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.music-volume {
+  width: 96px;
+}
+
+/* --------------------------------------------------------------------------
+ * The page of what is playing
+ * ----------------------------------------------------------------------- */
+
+/* Over the whole interface, under the windows that ask something. */
+.music-now {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background: var(--surface-deep);
+}
+
+.music-now-glow {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    ellipse at 30% 20%,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    transparent 60%
+  );
+  pointer-events: none;
+}
+
+.music-now-close {
+  position: fixed;
+  top: var(--gap);
+  left: var(--gutter);
+  z-index: 1;
+}
+
+.music-now-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--gap-section);
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: calc(var(--gap-section) + var(--gap)) var(--gutter) var(--gap-section);
+}
+
+.music-now-playing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+  text-align: center;
+}
+
+.music-now-words {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.music-now-words h2 {
+  margin: var(--gap) 0 4px;
+  font-size: clamp(1.4rem, 3vw, 2.2rem);
+}
+
+.music-now-by,
+.music-now-album {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.music-now-by {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.music-now-words a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.music-now-words a:hover {
+  color: var(--accent-bright);
+  text-decoration: underline;
+}
+
+.music-now-clock {
+  align-self: stretch;
+  text-align: right;
+}
+
+.music-now-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.music-now-queue h3 {
+  margin: 0 0 var(--gap);
+}
+
+.music-queue {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.music-queue-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 54px;
+  padding: 0 var(--gap-tight);
+  border-radius: var(--radius-control);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 54px;
+}
+
+.music-queue-line:hover {
+  background: var(--surface-hover);
+}
+
+.music-queue-here {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.music-queue-played {
+  opacity: 0.55;
+}
+
+.music-queue-song {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.music-queue-here .music-queue-title {
+  color: var(--accent-bright);
+  font-weight: 650;
+}
+
+.music-queue-title,
+.music-queue-artists {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-queue-artists {
+  color: var(--text-soft);
+  font-size: 0.88em;
+}
+
+.music-queue-length {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.music-queue-remove {
+  width: 30px;
+  height: 30px;
+}
+
+/* --------------------------------------------------------------------------
+ * The player on a phone
+ * ----------------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  :root {
+    --music-bar-height: 68px;
+  }
+
+  /* What is playing and the two buttons a thumb reaches for: the rest is
+     on the page of what is playing, a press away. */
+  .music-bar-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .music-bar-side,
+  .music-control-wide,
+  .music-bar-controls .music-clock {
+    display: none;
+  }
+
+  .music-now-cover {
+    width: 46px;
+  }
+
+  /* Clear of the button that closes the page, which stays in its corner. */
+  .music-now-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--gap-wide);
+    padding-top: calc(var(--gap) + 56px);
+  }
+
+  .music-now-cover-large {
+    width: min(78vw, 360px);
+  }
+}

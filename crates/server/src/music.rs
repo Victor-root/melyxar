@@ -116,6 +116,8 @@ struct SongView {
     seconds: Option<i64>,
     /// The file it plays from.
     source: Option<String>,
+    /// The cover of its album.
+    cover: Vec<ImageView>,
 }
 
 fn song_view(song: &SongRow) -> SongView {
@@ -129,6 +131,7 @@ fn song_view(song: &SongRow) -> SongView {
         year: song.year,
         seconds: song.duration.map(|length| (length.get() + 500) / 1_000),
         source: song.source_id.map(|source| source.to_string()),
+        cover: song.cover.iter().map(image_view).collect(),
     }
 }
 
@@ -455,6 +458,7 @@ mod tests {
             year: None,
             duration: None,
             source_id: None,
+            cover: Vec::new(),
         };
         // Written as it is sent, where two keys of one name would both go
         // out and a browser would keep only the last.
