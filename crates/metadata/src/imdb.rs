@@ -93,10 +93,11 @@ pub fn read_ratings(
         if !wanted.contains(id) {
             continue;
         }
-        if let (Ok(average), Ok(votes)) = (average.parse::<f64>(), votes.parse::<i64>()) {
-            if (0.0..=10.0).contains(&average) && votes > 0 {
-                found.insert(id.to_string(), (average, votes));
-            }
+        if let (Ok(average), Ok(votes)) = (average.parse::<f64>(), votes.parse::<i64>())
+            && (0.0..=10.0).contains(&average)
+            && votes > 0
+        {
+            found.insert(id.to_string(), (average, votes));
         }
     }
     Ok(found)

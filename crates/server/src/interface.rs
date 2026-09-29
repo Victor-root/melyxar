@@ -66,10 +66,10 @@ fn from_the_folder(folder: &Path, address: &str, asked: &HeaderMap) -> Response 
     // addresses, and those are answered with the page: the interface reads the
     // address itself and shows the right screen. A name that would reach out
     // of the folder is answered the same way, and never read.
-    if let Some(relative) = safe_relative_path(address.trim_start_matches('/')) {
-        if let Some(file) = file_response(folder, &relative, asked) {
-            return file;
-        }
+    if let Some(relative) = safe_relative_path(address.trim_start_matches('/'))
+        && let Some(file) = file_response(folder, &relative, asked)
+    {
+        return file;
     }
     match file_response(folder, Path::new(PAGE), asked) {
         Some(page) => page,

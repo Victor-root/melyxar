@@ -361,13 +361,13 @@ pub async fn choose_picture(
     .await?;
 
     state.database().lock_field(work_id, kind.as_str()).await?;
-    if kind == Kind::Poster {
-        if let Some(colour) = prepared.as_ref().and_then(|picture| picture.colour.clone()) {
-            state
-                .database()
-                .set_work_dominant_color(work_id, &colour)
-                .await?;
-        }
+    if kind == Kind::Poster
+        && let Some(colour) = prepared.as_ref().and_then(|picture| picture.colour.clone())
+    {
+        state
+            .database()
+            .set_work_dominant_color(work_id, &colour)
+            .await?;
     }
     Ok(prepared.is_some())
 }
@@ -716,10 +716,10 @@ pub(crate) async fn forget_the_pictures(state: &AppState, paths: &[String]) -> u
                 continue;
             }
         }
-        if let Some(folder) = file.parent().map(Path::to_path_buf) {
-            if !folders.contains(&folder) {
-                folders.push(folder);
-            }
+        if let Some(folder) = file.parent().map(Path::to_path_buf)
+            && !folders.contains(&folder)
+        {
+            folders.push(folder);
         }
     }
 

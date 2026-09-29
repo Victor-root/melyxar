@@ -240,20 +240,19 @@ async fn what_the_task_was_on(database: &Database, target: Option<&str>) -> Resu
     let Some(target) = target else {
         return Ok(Value::Null);
     };
-    if let Ok(library) = target.parse() {
-        if let Some(found) = database
+    if let Ok(library) = target.parse()
+        && let Some(found) = database
             .list_libraries()
             .await?
             .into_iter()
             .find(|library_found| library_found.id == library)
-        {
-            return Ok(json!({ "library": found.name }));
-        }
+    {
+        return Ok(json!({ "library": found.name }));
     }
-    if let Ok(work) = target.parse() {
-        if let Some(found) = database.work(work).await? {
-            return Ok(json!({ "title": found.title }));
-        }
+    if let Ok(work) = target.parse()
+        && let Some(found) = database.work(work).await?
+    {
+        return Ok(json!({ "title": found.title }));
     }
     Ok(Value::Null)
 }

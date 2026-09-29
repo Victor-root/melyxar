@@ -390,10 +390,10 @@ where
     let mut set: JoinSet<(usize, R)> = JoinSet::new();
 
     for (index, item) in items.into_iter().enumerate() {
-        if set.len() >= limit {
-            if let Some(Ok((done, value))) = set.join_next().await {
-                ordered[done] = Some(value);
-            }
+        if set.len() >= limit
+            && let Some(Ok((done, value))) = set.join_next().await
+        {
+            ordered[done] = Some(value);
         }
         let task = Arc::clone(&task);
         set.spawn(async move { (index, task(item).await) });
