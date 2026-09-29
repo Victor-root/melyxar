@@ -1,6 +1,7 @@
 /*
- * A library of music: its albums, its artists, its songs and its genres, each
- * under a tab of its own, as the servers people come from lay it out.
+ * A library of music: what is new and what was listened to, its albums, its
+ * artists, its songs, what this account likes and its genres, each under a
+ * tab of its own, as the servers people come from lay it out.
  *
  * Which tab is open, and how its list is read, is written in the address, so
  * going back to the library finds it the way it was left.
@@ -16,13 +17,14 @@ import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { AlbumOrder, Genre, Initial, SongOrder } from "./api";
+import { FavouritesTab, ForYouTab } from "./for-you";
 import { usePaged } from "./paging";
 import { useMusic } from "./player/player";
 import type { Paged } from "./paging";
 import { SongList } from "./songs";
 import { AlbumTile, ArtistTile } from "./tiles";
 
-const TABS = ["albums", "album_artists", "artists", "songs", "genres"] as const;
+const TABS = ["for_you", "albums", "album_artists", "artists", "songs", "favourites", "genres"] as const;
 type Tab = (typeof TABS)[number];
 
 const ALBUM_ORDERS: AlbumOrder[] = ["title", "artist", "year", "added"];
@@ -31,8 +33,8 @@ const SONG_ORDERS: SongOrder[] = ["title", "album", "added"];
 export function MusicLibraryPage({ library }: { library: Library }) {
   const { t } = useSettings();
   const [params, setParams] = useSearchParams();
-  const tab: Tab = TABS.find((one) => one === params.get("tab")) ?? "albums";
-  const open = (next: Tab) => setParams(next === "albums" ? {} : { tab: next }, { replace: true });
+  const tab: Tab = TABS.find((one) => one === params.get("tab")) ?? "for_you";
+  const open = (next: Tab) => setParams(next === "for_you" ? {} : { tab: next }, { replace: true });
 
   return (
     <main className="page music-page">
@@ -53,10 +55,12 @@ export function MusicLibraryPage({ library }: { library: Library }) {
         </nav>
       </div>
 
+      {tab === "for_you" && <ForYouTab library={library.id} />}
       {tab === "albums" && <AlbumsTab library={library.id} />}
       {tab === "album_artists" && <ArtistsTab library={library.id} albumArtistsOnly />}
       {tab === "artists" && <ArtistsTab library={library.id} albumArtistsOnly={false} />}
       {tab === "songs" && <SongsTab library={library.id} />}
+      {tab === "favourites" && <FavouritesTab library={library.id} />}
       {tab === "genres" && <GenresTab library={library.id} />}
     </main>
   );

@@ -16,6 +16,7 @@ import { useShownPicture } from "../../components/picture";
 import { PlayIcon } from "../../icons";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
+import { Heart } from "../heart";
 import { namesOf } from "../tiles";
 import { NextIcon, PauseIcon, PreviousIcon, QueueIcon, RepeatIcon, ShuffleIcon, StopIcon, VolumeIcon } from "./icons";
 import { useMusic, useMusicTime } from "./player";
@@ -78,6 +79,7 @@ export function MusicBar() {
         </div>
 
         <div className="music-bar-side">
+          <Heart id={song.id} size={20} />
           <Loudness music={music} />
           <Ways music={music} />
           <button type="button" className="music-control" onClick={() => music.setOpen(true)} aria-label={t("music.queue")} title={t("music.queue")}>

@@ -55,6 +55,7 @@ import { MyHomePage } from "./pages/settings/home";
 import { MyPlayback } from "./pages/settings/playback";
 import { MySubtitles } from "./pages/settings/subtitles";
 import { MyMusic } from "./music/settings";
+import { MusicMarksProvider } from "./music/marks";
 import { Door } from "./pages/door";
 import { FirstSteps } from "./pages/first-steps";
 import { useFirstSteps } from "./screens/first-steps";
@@ -174,6 +175,7 @@ function TheLibrary() {
         <DebugJournal />
         {/* The player of music stands outside every page, so that going
             from one to the next never stops a song. */}
+        <MusicMarksProvider>
         <MusicProvider>
         <div className="shell">
           <Header libraries={libraries.all} scrolling={scrolling} />
@@ -228,6 +230,7 @@ function TheLibrary() {
           <MusicNowPlaying />
         </div>
         </MusicProvider>
+        </MusicMarksProvider>
         </AttentionProvider>
         </AdministrationLine>
         </Toasts>

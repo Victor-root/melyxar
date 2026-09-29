@@ -1420,7 +1420,7 @@ async function getText(path: string, signal?: AbortSignal): Promise<string> {
   return (await exchange(path, "text/plain", undefined, undefined, signal)).text();
 }
 
-const post = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
+export const post = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
   send<T>("POST", path, body, signal);
 const remove = <T>(path: string, signal?: AbortSignal) =>
   send<T>("DELETE", path, undefined, signal);

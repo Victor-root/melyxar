@@ -10,6 +10,7 @@ import { useSettings } from "../settings";
 import { music } from "./api";
 import type { AlbumPage } from "./api";
 import { byDisc, minutesOf } from "./discs";
+import { Heart } from "./heart";
 import { ShuffleIcon } from "./player/icons";
 import { useMusic } from "./player/player";
 import { SongList } from "./songs";
@@ -92,6 +93,7 @@ export function MusicAlbumPage() {
               <ShuffleIcon size={18} />
               {t("music.shuffle")}
             </button>
+            <Heart id={album.id} size={20} className="music-hero-heart" />
           </div>
           <p className="music-hero-facts">
             {[
