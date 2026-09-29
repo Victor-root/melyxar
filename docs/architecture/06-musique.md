@@ -49,11 +49,11 @@ Ordre proposé, chaque étape livrable seule :
 - **Page d'un album comme chez Jellyfin** : pochette, nom, artiste, nombre de pistes, boutons Lire, Aléatoire, favori et menu, puis la liste des morceaux avec leur durée, un favori et un menu par ligne.
 - **Le volume laisse toujours le choix** : un même niveau pour tous les morceaux, ou les écarts d'un album gardés.
 - **L'écoute en arrière-plan est prévue d'office** : écran verrouillé, onglet en arrière-plan, touches multimédia du clavier et du téléphone.
-- **Les paroles sont à mettre en place.**
+- **L'accueil a une rangée dédiée à la musique**, qui ne passe ni dans « Continuer la lecture » ni dans « À suivre ». Ses propres rangées (écoutés récemment, ajoutés récemment) vivent dans la médiathèque de musique.
+- **Les paroles sont à mettre en place**, défilant en rythme quand elles portent l'heure de chaque ligne. Sources, de la plus locale à la plus distante : paroles intégrées au fichier, fichier `.lrc` à côté du morceau, puis LRCLIB (gratuit, sans clé) si le fournisseur est activé, réglable par médiathèque. À vérifier avant de coder : que le service répond toujours comme prévu.
 
 ## Questions ouvertes
 
 À trancher avec le mainteneur avant de coder l'étape concernée. Les réponses sont ajoutées ici, puis au README des décisions.
 
-- L'historique : une écoute de musique apparaît-elle dans les rangées de l'accueil des films (« Continuer la lecture »), ou la musique a-t-elle ses propres rangées (« Écoutés récemment ») dans sa médiathèque ?
-- Les paroles : d'où viennent-elles (fichiers `.lrc` à côté du morceau, étiquettes intégrées, fournisseur en ligne) et sont-elles synchronisées ligne à ligne ?
+Aucune pour le moment.
