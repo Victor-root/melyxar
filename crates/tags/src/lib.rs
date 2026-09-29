@@ -18,11 +18,13 @@
 //! found.
 
 mod cover;
+mod lyrics;
 mod pairs;
 mod read;
 mod values;
 
 pub use cover::{front_cover, Cover};
+pub use lyrics::lyrics;
 pub use pairs::from_pairs;
 pub use read::read;
 
