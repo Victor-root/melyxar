@@ -365,28 +365,6 @@ en|step_config|Writing the initial configuration
 fr|step_config|Écriture de la configuration initiale
 en|prompt_port|Port for the Melyxar server
 fr|prompt_port|Port du serveur Melyxar
-en|prompt_add_library|Add a library now?
-fr|prompt_add_library|Ajouter une bibliothèque maintenant ?
-en|prompt_library_name|Library name
-fr|prompt_library_name|Nom de la bibliothèque
-en|prompt_library_kind|Library type (movies, series, anime, shows, home_media, music)
-fr|prompt_library_kind|Type de bibliothèque (movies, series, anime, shows, home_media, music)
-en|prompt_root_path|Media folder path (leave empty to finish)
-fr|prompt_root_path|Chemin du dossier multimédia (laisser vide pour terminer)
-en|prompt_root_label|Short folder label shown in logs
-fr|prompt_root_label|Libellé court du dossier affiché dans les journaux
-en|root_added|Folder added: %s
-fr|root_added|Dossier ajouté : %s
-en|root_missing|This folder does not exist. Add it anyway?
-fr|root_missing|Ce dossier n’existe pas. L’ajouter quand même ?
-en|root_unreadable|This folder exists, but the server account cannot read it.
-fr|root_unreadable|Ce dossier existe, mais le compte du serveur ne peut pas le lire.
-en|root_not_absolute|Enter an absolute folder path starting with /.
-fr|root_not_absolute|Saisissez un chemin absolu commençant par /.
-en|err_bad_kind|Unsupported library type. Choose: movies, series, anime, shows, home_media or music.
-fr|err_bad_kind|Type de bibliothèque non pris en charge. Choisissez : movies, series, anime, shows, home_media ou music.
-en|library_without_root|No folder was provided, so the library was not created. You can add it later from the web interface.
-fr|library_without_root|Aucun dossier n’a été indiqué ; la bibliothèque n’a pas été créée. Vous pourrez l’ajouter depuis l’interface web.
 en|section_service|Service
 fr|section_service|Service
 en|step_unit|Installing the service file
@@ -403,6 +381,10 @@ en|done_title|Melyxar is running
 fr|done_title|Melyxar est en cours d’exécution
 en|done_open|Open Melyxar at:
 fr|done_open|Ouvrez Melyxar à l’adresse :
+en|done_finish_title|Melyxar is installed
+fr|done_finish_title|Melyxar est installé
+en|done_finish|Open this address in a browser to finish setting up. There you create the administrator account, then add your libraries:
+fr|done_finish|Ouvrez cette adresse dans un navigateur pour terminer la configuration. Vous y créerez le compte administrateur, puis ajouterez vos médiathèques :
 en|done_config|Configuration file:
 fr|done_config|Fichier de configuration :
 en|done_logs|View live logs with:
@@ -739,16 +721,6 @@ need_command() {
 
 is_installed() {
   [[ -x "$BINARY_PATH" ]]
-}
-
-# A name or a path typed by hand can carry a character the configuration
-# format gives a meaning to, and a file that no longer parses is a server that
-# no longer starts.
-toml_string() {
-  local value="$1"
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  printf '"%s"' "$value"
 }
 
 # ── Checks ────────────────────────────────────────────────────────────────────
@@ -1234,81 +1206,10 @@ write_configuration() {
   "$BINARY_PATH" print-default-config > "$tmp"
   sed -i "s/^port = .*/port = ${port}/" "$tmp"
 
-  if confirm_default_yes "$(tr_msg prompt_add_library)"; then
-    append_library "$tmp"
-  fi
-
   step "$(tr_msg step_config)" bash -c "
     install -m 0640 -o root -g '$APP_GROUP' '$tmp' '$CONFIG_FILE'
     rm -f '$tmp'
   "
-}
-
-prompt_library_kind() {
-  local kind
-  while true; do
-    kind="$(prompt_default "$(tr_msg prompt_library_kind)" "movies")"
-    case "$kind" in
-      movies | series | anime | shows | home_media | music )
-        printf "%s" "$kind"
-        return 0
-        ;;
-      * ) warn "$(tr_msg err_bad_kind)" >&2 ;;
-    esac
-  done
-}
-
-# A library is written only once it holds at least one folder: the server
-# refuses a library that points nowhere, and discovering that when the service
-# fails to start is too late to be of any use.
-append_library() {
-  local target="$1"
-  local name kind path label
-  local labels=() paths=()
-
-  name="$(prompt_default "$(tr_msg prompt_library_name)" "Films")"
-  kind="$(prompt_library_kind)"
-
-  while true; do
-    path="$(prompt_free "$(tr_msg prompt_root_path)")"
-    [[ -z "$path" ]] && break
-
-    if [[ "$path" != /* ]]; then
-      warn "$(tr_msg root_not_absolute)"
-      continue
-    fi
-
-    if [[ ! -d "$path" ]]; then
-      confirm_default_no "$(tr_msg root_missing)" || continue
-    elif ! runuser -u "$APP_USER" -- test -r "$path" 2>/dev/null; then
-      warn "$(tr_msg root_unreadable)"
-    fi
-
-    label="$(prompt_default "$(tr_msg prompt_root_label)" "$(basename "$(dirname "$path")")")"
-    labels+=("$label")
-    paths+=("$path")
-    success "$(tr_fmt root_added "$path")"
-  done
-
-  if [[ "${#paths[@]}" -eq 0 ]]; then
-    warn "$(tr_msg library_without_root)"
-    return 0
-  fi
-
-  {
-    echo
-    echo "[[libraries]]"
-    echo "name = $(toml_string "$name")"
-    echo "kind = $(toml_string "$kind")"
-    echo "metadata_language = $(toml_string "$APP_LANG")"
-    local index
-    for index in "${!paths[@]}"; do
-      echo
-      echo "[[libraries.roots]]"
-      echo "label = $(toml_string "${labels[index]}")"
-      echo "path = $(toml_string "${paths[index]}")"
-    done
-  } >> "$target"
 }
 
 install_service() {
@@ -1364,9 +1265,17 @@ show_done() {
   address="$(hostname -I 2>/dev/null | awk '{print $1}')"
   [[ -z "$address" ]] && address="127.0.0.1"
 
+  # A server with no account yet is only half set up: the rest, the first
+  # account and the libraries, is done in the browser.
+  local title="done_title" open="done_open"
+  if [[ -z "$(runuser -u "$APP_USER" -- "$BINARY_PATH" --config "$CONFIG_FILE" account list 2>/dev/null)" ]]; then
+    title="done_finish_title"
+    open="done_finish"
+  fi
+
   section "$(tr_msg section_done)"
-  panel "${GREEN}" "$(tr_msg done_title)" \
-    "$(tr_msg done_open)" \
+  panel "${GREEN}" "$(tr_msg "$title")" \
+    "$(tr_msg "$open")" \
     "${BOLD}${CYAN}  http://${address}:${port}${RESET}" \
     "" \
     "$(tr_msg done_config)" \

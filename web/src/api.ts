@@ -2188,6 +2188,10 @@ export const api = {
      signed in straight away. Refused once there is one. */
   setUp: (name: string, password: string, remember: boolean, client: string) =>
     post<Account>("/api/v1/setup", { name, password, remember, client }),
+  /* What an administrator is taken through once, after the first account. */
+  firstSteps: (signal?: AbortSignal) =>
+    get<{ pending: boolean }>("/api/v1/setup/first-steps", signal),
+  finishFirstSteps: () => post<{ pending: boolean }>("/api/v1/setup/first-steps/done"),
   /* The picture of the account signed in, sent as the file chosen. Both
      answer the account as it now is. */
   setAvatar: (image: Blob) => put<Account>("/api/v1/me/avatar", image),

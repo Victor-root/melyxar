@@ -76,6 +76,11 @@ pub fn router() -> Router<AppState> {
                 )),
         )
         .route("/api/v1/setup", axum::routing::post(set_this_server_up))
+        .route("/api/v1/setup/first-steps", axum::routing::get(first_steps))
+        .route(
+            "/api/v1/setup/first-steps/done",
+            axum::routing::post(finish_first_steps),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -590,6 +595,26 @@ async fn set_this_server_up(
     ))
 }
 
+/// Whether the first steps of this server are still ahead, which an
+/// administrator is taken through before anything else.
+async fn first_steps(
+    State(state): State<AppState>,
+    _: Administrator,
+) -> Result<Json<serde_json::Value>> {
+    let pending = melyxar_app::accounts::first_steps_pending(&state).await?;
+    Ok(Json(serde_json::json!({ "pending": pending })))
+}
+
+/// Puts the first steps behind this server, and says so in the same words
+/// as the question.
+async fn finish_first_steps(
+    State(state): State<AppState>,
+    _: Administrator,
+) -> Result<Json<serde_json::Value>> {
+    melyxar_app::accounts::finish_first_steps(&state).await?;
+    Ok(Json(serde_json::json!({ "pending": false })))
+}
+
 /// The answer to every door that opens a session: the cookie, and who it is.
 fn answered_with_a_session(
     state: &AppState,
@@ -789,6 +814,8 @@ mod tests {
 
         // A route nobody thought about is a route nobody can reach.
         for closed in [
+            "/api/v1/setup/first-steps",
+            "/api/v1/setup/first-steps/done",
             "/api/v1/works",
             "/api/v1/home",
             "/api/v1/libraries",

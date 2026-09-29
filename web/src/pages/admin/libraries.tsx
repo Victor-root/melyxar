@@ -543,7 +543,7 @@ function LibraryChoicesFields({
   );
 }
 
-function NewLibrary({
+export function NewLibrary({
   onDone,
   onCancel,
   onRefused,
