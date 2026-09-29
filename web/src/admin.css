@@ -1511,6 +1511,17 @@
   color: var(--ok);
 }
 
+.first-steps-foot-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+}
+
+.first-steps-foot-side .theme-toggle {
+  align-self: flex-start;
+  margin-left: -12px;
+}
+
 .first-steps-page {
   display: flex;
   flex-direction: column;

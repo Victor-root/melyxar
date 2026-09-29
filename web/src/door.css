@@ -904,31 +904,6 @@ img.door-mark {
   gap: var(--gap);
 }
 
-/* The one door setting a viewer can still turn: the theme, since automatic
-   does not always land on the one their eyes want. */
-.door-theme {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
-  padding: 5px 12px;
-  border-radius: var(--radius-pill);
-  font-size: 12.5px;
-  color: var(--text-faint);
-  transition:
-    color var(--quick) var(--ease),
-    background var(--quick) var(--ease);
-}
-
-.door-theme:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--surface-raised) 60%, transparent);
-}
-
-.door-theme-icon {
-  width: 16px;
-  height: 16px;
-}
-
 /* What this server is, out of the way of everything above it: an accent-free
    line nobody needs to read. */
 .door-footer {
