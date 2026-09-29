@@ -131,13 +131,14 @@ impl UpkeepTask {
     /// Whether this reading follows a file's arrival, rather than waiting for
     /// its scheduled task.
     ///
-    /// Where a jump can land always does: it is quick, and a film arriving
-    /// without it is a film whose bar lands seconds early until the night.
+    /// Where a jump can land always does, wherever there are videos: it is
+    /// quick, and a film arriving without it is a film whose bar lands
+    /// seconds early until the night.
     /// The heavy ones do when the library asked for its files to be read as
     /// they arrive, and only the ones it wants at all.
     pub fn follows_an_arrival_in(self, library: &Library) -> bool {
         match self {
-            Self::KeyFrames => true,
+            Self::KeyFrames => self.applies_to(library),
             Self::Subtitles | Self::Thumbnails | Self::Openings => {
                 library.options.process_on_arrival && self.applies_to(library)
             }
@@ -797,10 +798,11 @@ mod tests {
 
         library.kind = melyxar_core::library::LibraryKind::Music;
         library.options.make_thumbnails = true;
+        library.options.process_on_arrival = true;
         assert!(
             UpkeepTask::ALL
                 .iter()
-                .all(|task| !task.applies_to(&library)),
+                .all(|task| !task.applies_to(&library) && !task.follows_an_arrival_in(&library)),
             "a song has no picture to read through, whatever the library asked for"
         );
     }

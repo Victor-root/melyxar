@@ -1400,7 +1400,9 @@ async function exchange(
   return response;
 }
 
-async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+/** Reads one answer of the server. Exported for the parts of the interface
+ *  kept apart from this file, music among them, which ask the same way. */
+export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await exchange(path, "application/json", undefined, undefined, signal)).json() as Promise<T>;
 }
 
