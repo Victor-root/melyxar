@@ -630,6 +630,27 @@
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
 }
 
+/* What the library is and where it looks, then what it does with its files:
+   one column under the other, side by side once the page is wide enough
+   for both to keep their settings on one line. */
+.library-new-columns {
+  display: grid;
+  gap: var(--gap-wide);
+  align-items: start;
+}
+
+.library-new-what {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+@container (min-width: 900px) {
+  .library-new-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
 .library-folders {
   display: flex;
   flex-direction: column;
@@ -1454,38 +1475,88 @@
  * The first steps of a brand new server
  * ----------------------------------------------------------------------- */
 
-/* Its own scroll: the body never scrolls, the shell's box does, and this
-   screen is drawn without the shell. */
+/* The administration's own layout, drawn without the bar at the top: no room
+   kept for it, and its own scroll, the shell's box not being there. */
 .first-steps {
+  height: 100dvh;
+  overflow-y: auto;
+  padding-top: var(--gap-wide);
+}
+
+.first-steps .side {
+  top: 0;
+  max-height: calc(100dvh - var(--gap-wide) * 2);
+}
+
+.first-steps .side-line {
+  width: 100%;
+  background: none;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
+
+.first-steps .side-line:disabled {
+  cursor: default;
+}
+
+.first-steps .side-line:disabled:hover {
+  background: none;
+  color: var(--text-soft);
+}
+
+.side-line-done svg {
+  color: var(--ok);
+}
+
+.first-steps-page {
   display: flex;
   flex-direction: column;
   gap: var(--gap-wide);
-  height: 100dvh;
-  overflow-y: auto;
-  padding-inline: max(var(--gutter), calc((100% - 760px) / 2));
+  min-width: 0;
+  /* What the form lays itself out against, as on the administration. */
+  container-type: inline-size;
 }
 
-.first-steps-head {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.first-steps-head h1 {
+/* Where the administration lifts its head into the bar at the top, there
+   is no bar here to lift it into. */
+.first-steps-page .page-head {
+  height: auto;
+  max-width: none;
   margin: 0;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.first-steps-head p {
-  margin: 4px 0 0;
-  color: var(--text-soft);
-  font-size: 14.5px;
 }
 
 .first-steps-add {
   align-self: flex-start;
+}
+
+/* The libraries already added, under the steps: always in view while the
+   next one is being declared. */
+.first-steps .side-group + .side-group {
+  margin-top: var(--gap);
+}
+
+.first-steps-declared-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 12px;
+  color: var(--text-soft);
+  font-size: 13.5px;
+}
+
+.first-steps-declared-line svg {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.first-steps-none {
+  padding: 0 12px;
+  color: var(--text-faint);
+  font-size: 13px;
 }
 
 .first-steps-foot {
@@ -1496,10 +1567,6 @@
   gap: var(--gap);
   padding-top: var(--gap);
   border-top: 1px solid var(--border);
-}
-
-.first-steps-foot p {
-  margin: 0;
   color: var(--text-soft);
   font-size: 13.5px;
 }
