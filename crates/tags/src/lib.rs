@@ -60,18 +60,6 @@ pub struct Tags {
     /// Whether the file says it belongs to a compilation, an album of songs by
     /// various artists.
     pub compilation: bool,
-    pub musicbrainz: MusicBrainzIds,
-}
-
-/// The identifiers a file tagged against MusicBrainz carries. Kept so that a
-/// later look up asks about the right release rather than about a name.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct MusicBrainzIds {
-    pub recording: Option<String>,
-    pub release: Option<String>,
-    pub release_group: Option<String>,
-    pub artist: Option<String>,
-    pub release_artist: Option<String>,
 }
 
 /// How the file sounds and how it is packed.

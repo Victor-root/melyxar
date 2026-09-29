@@ -13,7 +13,7 @@ use lofty::properties::FileProperties;
 use lofty::tag::{Accessor, ItemKey, Tag};
 
 use crate::values::{cleaned, names, says_yes, year_in};
-use crate::{AudioFile, MusicBrainzIds, ReadError, Sound, Tags};
+use crate::{AudioFile, ReadError, Sound, Tags};
 
 /// Reads the tags and the sound of one file.
 ///
@@ -188,12 +188,5 @@ fn tags_of(tag: &Tag) -> Tags {
         compilation: tag
             .get_string(ItemKey::FlagCompilation)
             .is_some_and(says_yes),
-        musicbrainz: MusicBrainzIds {
-            recording: text(ItemKey::MusicBrainzRecordingId),
-            release: text(ItemKey::MusicBrainzReleaseId),
-            release_group: text(ItemKey::MusicBrainzReleaseGroupId),
-            artist: text(ItemKey::MusicBrainzArtistId),
-            release_artist: text(ItemKey::MusicBrainzReleaseArtistId),
-        },
     }
 }

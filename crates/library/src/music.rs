@@ -18,6 +18,7 @@
 
 use std::path::Path;
 
+use melyxar_core::music::{AlbumFiling, Named, SongFiling};
 use melyxar_tags::Tags;
 
 use crate::naming::sort_title;
@@ -33,40 +34,6 @@ pub const VARIOUS_ARTISTS: &str = "Various Artists";
 pub struct FolderSong<'a> {
     pub file_name: &'a str,
     pub tags: &'a Tags,
-}
-
-/// A name as it is shown, and as it is sorted.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Named {
-    pub name: String,
-    pub sort_name: String,
-}
-
-/// The album a song goes on.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AlbumFiling {
-    pub title: Named,
-    /// Whose album it is. Empty when nobody could be told, which leaves the
-    /// album under no artist rather than under a made up one.
-    pub artists: Vec<Named>,
-    pub is_compilation: bool,
-    /// The earliest year of its songs in this folder.
-    pub year: Option<i32>,
-}
-
-/// Where one song goes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SongFiling {
-    pub title: Named,
-    /// Who plays it.
-    pub artists: Vec<Named>,
-    /// Absent for a song that sits at the top of a library and says nothing
-    /// of an album: it is a song on its own, which is found among the songs.
-    pub album: Option<AlbumFiling>,
-    pub track: Option<u32>,
-    pub disc: Option<u32>,
-    pub year: Option<i32>,
-    pub genres: Vec<String>,
 }
 
 /// Files every song of one folder, in the order they were given.
@@ -108,11 +75,6 @@ pub fn file_folder(folder: &Path, songs: &[FolderSong<'_>]) -> Vec<SongFiling> {
             let (number_in_name, title_in_name) = read_file_name(song.file_name);
 
             let album = album.zip(claim).map(|(title, claim)| AlbumFiling {
-                year: songs
-                    .iter()
-                    .filter(|other| same_album(other, &title, &place))
-                    .filter_map(|other| other.tags.year)
-                    .min(),
                 title,
                 artists: claim.artists,
                 is_compilation: claim.is_compilation,
@@ -214,16 +176,6 @@ fn claim_for(
         artists,
         is_compilation: false,
     }
-}
-
-fn same_album(song: &FolderSong<'_>, title: &Named, place: &Place) -> bool {
-    let album = song
-        .tags
-        .album
-        .as_ref()
-        .map(|album| named(album, song.tags.album_sort.as_deref()))
-        .or_else(|| place.album.clone());
-    album.is_some_and(|album| album.sort_name == title.sort_name)
 }
 
 /// What the folders say, for the songs whose files say nothing.
@@ -359,7 +311,6 @@ mod tests {
         assert_eq!(album.title.name, "Northern Lights");
         assert_eq!(names(&album.artists), vec!["Amber Field"]);
         assert!(!album.is_compilation);
-        assert_eq!(album.year, Some(2019));
         assert_eq!(
             (song.track, song.disc, song.year),
             (Some(3), Some(1), Some(2019))
@@ -476,7 +427,6 @@ mod tests {
         let second = filed[1].album.as_ref().unwrap();
         assert_eq!(first.title.name, "Northern Lights");
         assert_eq!(names(&first.artists), vec!["Amber Field"]);
-        assert_eq!(first.year, Some(2019));
         assert_eq!(second.title.name, "Southern Nights");
         assert_eq!(names(&second.artists), vec!["The Lanterns"]);
         assert!(!first.is_compilation && !second.is_compilation);
@@ -609,25 +559,5 @@ mod tests {
         });
         let filed = file("x", &[("1.mp3", &sorted)]);
         assert_eq!(filed[0].artists[0].sort_name, "field, amber");
-    }
-
-    #[test]
-    fn the_year_of_an_album_is_its_earliest_song() {
-        let early = tags(|t| {
-            t.album = Some("Northern Lights".into());
-            t.artists = vec!["Amber Field".into()];
-            t.year = Some(2019);
-        });
-        let late = tags(|t| {
-            t.album = Some("Northern Lights".into());
-            t.artists = vec!["Amber Field".into()];
-            t.year = Some(2021);
-        });
-        let filed = file("x", &[("1.mp3", &late), ("2.mp3", &early)]);
-        assert!(
-            filed
-                .iter()
-                .all(|song| song.album.as_ref().unwrap().year == Some(2019))
-        );
     }
 }
