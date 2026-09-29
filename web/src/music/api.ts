@@ -77,6 +77,13 @@ export interface Page<T> {
 export type AlbumOrder = "title" | "artist" | "year" | "added";
 export type SongOrder = "title" | "album" | "added";
 
+/** What a few words found in the music, a few of each. */
+export interface Found {
+  albums: Album[];
+  artists: Artist[];
+  songs: Song[];
+}
+
 /** One album, as its own page shows it. */
 export interface AlbumPage extends Album {
   /** Its songs, in their order on it. */
@@ -149,6 +156,8 @@ export const music = {
     get<Genre[]>(`/api/v1/music/${library}/genres`, signal),
   initials: (library: string, of: "albums" | "artists" | "album_artists", signal?: AbortSignal) =>
     get<Initial[]>(`/api/v1/music/${library}/initials${query({ of })}`, signal),
+  search: (words: string, library: string | undefined, signal?: AbortSignal) =>
+    get<Found>(`/api/v1/music/search${query({ words, library })}`, signal),
   album: (id: string, signal?: AbortSignal) =>
     get<AlbumPage>(`/api/v1/music/albums/${id}`, signal),
   artist: (id: string, signal?: AbortSignal) =>

@@ -5,10 +5,11 @@
 //! given answers as one that is not there.
 
 use melyxar_core::id::{LibraryId, WorkId};
+use melyxar_core::library::LibraryKind;
 use melyxar_core::user::User;
 pub use melyxar_database::music_browse::{
-    AlbumCard, AlbumOrder, AlbumsWanted, ArtistCard, Credited, MusicGenre, MusicInitial, MusicPage,
-    SongOrder, SongRow,
+    AlbumCard, AlbumOrder, AlbumsWanted, ArtistCard, Credited, MusicFound, MusicGenre,
+    MusicInitial, MusicPage, SongOrder, SongRow,
 };
 
 use crate::reach::{may_read, may_read_the_work};
@@ -53,9 +54,90 @@ pub async fn albums(
 pub async fn albums_held(state: &AppState, library: LibraryId) -> Result<i64> {
     Ok(state
         .database()
-        .music_albums(library, &AlbumsWanted::default(), AlbumOrder::Title, false, 0, 1)
+        .music_albums(
+            library,
+            &AlbumsWanted::default(),
+            AlbumOrder::Title,
+            false,
+            0,
+            1,
+        )
         .await?
         .total)
+}
+
+/// The most of each list a search answers with: it is a glance, and the
+/// library itself is where the rest is read.
+pub const FOUND_OF_EACH: i64 = 24;
+
+/// What a few words found among the music an account may read: in one
+/// library, or in every library of music it was granted, taken in turn from
+/// each so that none pushes the others out.
+pub async fn search(
+    state: &AppState,
+    who: &User,
+    library: Option<LibraryId>,
+    words: &str,
+) -> Result<MusicFound> {
+    let words = words.trim();
+    if words.is_empty() {
+        return Ok(MusicFound::default());
+    }
+    let database = state.database();
+    let mut libraries = Vec::new();
+    for held in database.list_libraries().await? {
+        if held.kind == LibraryKind::Music
+            && who.permissions.may_access_library(held.id)
+            && library.is_none_or(|wanted| wanted == held.id)
+        {
+            libraries.push(held.id);
+        }
+    }
+    let mut each = Vec::with_capacity(libraries.len());
+    for library in libraries {
+        each.push(database.music_search(library, words, FOUND_OF_EACH).await?);
+    }
+    let room = FOUND_OF_EACH as usize;
+    Ok(MusicFound {
+        albums: in_turn(
+            each.iter_mut()
+                .map(|f| std::mem::take(&mut f.albums))
+                .collect(),
+            room,
+        ),
+        artists: in_turn(
+            each.iter_mut()
+                .map(|f| std::mem::take(&mut f.artists))
+                .collect(),
+            room,
+        ),
+        songs: in_turn(
+            each.iter_mut()
+                .map(|f| std::mem::take(&mut f.songs))
+                .collect(),
+            room,
+        ),
+    })
+}
+
+/// Several lists as one, one from each in turn, up to `room`.
+fn in_turn<T>(lists: Vec<Vec<T>>, room: usize) -> Vec<T> {
+    let mut iterators: Vec<_> = lists.into_iter().map(Vec::into_iter).collect();
+    let mut taken = Vec::new();
+    while taken.len() < room {
+        let before = taken.len();
+        for iterator in &mut iterators {
+            if taken.len() < room
+                && let Some(next) = iterator.next()
+            {
+                taken.push(next);
+            }
+        }
+        if taken.len() == before {
+            break;
+        }
+    }
+    taken
 }
 
 pub async fn artists(
@@ -125,4 +207,19 @@ pub async fn artist(
 ) -> Result<Option<(ArtistCard, Vec<AlbumCard>, Vec<AlbumCard>)>> {
     may_read_the_work(state, who, artist).await?;
     Ok(state.database().music_artist(artist).await?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::in_turn;
+
+    #[test]
+    fn several_lists_are_taken_from_in_turn_up_to_the_room() {
+        assert_eq!(
+            in_turn(vec![vec![1, 2, 3], vec![10]], 10),
+            vec![1, 10, 2, 3]
+        );
+        assert_eq!(in_turn(vec![vec![1, 2], vec![10, 20]], 3), vec![1, 10, 2]);
+        assert_eq!(in_turn::<i32>(Vec::new(), 3), Vec::<i32>::new());
+    }
 }

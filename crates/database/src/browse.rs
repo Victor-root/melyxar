@@ -1118,7 +1118,7 @@ impl Database {
 /// Makes the characters a pattern gives a meaning to stand for themselves.
 ///
 /// Without this, a film whose title holds a percent sign matches everything.
-fn escape_for_like(value: &str) -> String {
+pub(crate) fn escape_for_like(value: &str) -> String {
     value
         .replace('\\', "\\\\")
         .replace('%', "\\%")

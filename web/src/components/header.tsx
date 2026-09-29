@@ -71,6 +71,9 @@ import {
   DashboardIcon,
 } from "../icons";
 import { ServerMark } from "./server-mark";
+import { music } from "../music/api";
+import { musicScopeOf, quickLinesOf } from "../music/search";
+import type { QuickLine } from "../music/search";
 
 /**
  * The two keys that reach the search field, written the way this machine
@@ -340,7 +343,7 @@ export function Header({
    * is one question, not five, and the FTS index this asks of is built for
    * exactly this, prefix and all.
    */
-  const [quickResults, setQuickResults] = useState<Card[] | null>(null);
+  const [quickResults, setQuickResults] = useState<QuickLine[] | null>(null);
   /* Put aside by a press outside, the enter key, or a result chosen: what it
      answers is done with, and typing again is what asks it back. */
   const [quickDismissed, setQuickDismissed] = useState(false);
@@ -355,10 +358,21 @@ export function Header({
       return;
     }
     const controller = new AbortController();
+    const inMusic = musicScopeOf(scope, libraries);
     const timer = window.setTimeout(() => {
-      api
-        .works({ search: words, limit: QUICK_RESULTS, ...scopeToBrowse(scope) }, controller.signal)
-        .then((page) => setQuickResults(page.cards))
+      Promise.all([
+        inMusic.only
+          ? []
+          : api
+              .works({ search: words, limit: QUICK_RESULTS, ...scopeToBrowse(scope) }, controller.signal)
+              .then((page) => page.cards.map(quickLineOf)),
+        inMusic.looks
+          ? music
+              .search(words, inMusic.library, controller.signal)
+              .then((found) => quickLinesOf(found, QUICK_RESULTS))
+          : [],
+      ])
+        .then(([films, songs]) => setQuickResults([...films, ...songs]))
         .catch((error) => {
           if (!wasAbandoned(error)) {
             setQuickResults([]);
@@ -369,7 +383,7 @@ export function Header({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [words, scope, looking, area]);
+  }, [words, scope, looking, area, libraries]);
 
   /* The settings are found here and at once: a few hundred names in memory
      need no server and no pause. */
@@ -637,17 +651,17 @@ export function Header({
                   <p className="quick-search-empty">{t("library.empty")}</p>
                 ) : (
                   <>
-                    {quickResults.map((card) => (
+                    {quickResults.map((line) => (
                       <Link
-                        key={card.id}
+                        key={line.key}
                         className="quick-search-line"
-                        to={`/work/${card.id}`}
+                        to={line.to}
                         onClick={chooseQuickResult}
                       >
-                        <QuickPicture card={card} />
-                        <span className="quick-search-title">{card.title}</span>
-                        {card.year !== null && (
-                          <span className="quick-search-year">{card.year}</span>
+                        <QuickPicture line={line} />
+                        <span className="quick-search-title">{line.title}</span>
+                        {line.note !== null && (
+                          <span className="quick-search-year">{line.note}</span>
                         )}
                       </Link>
                     ))}
@@ -809,17 +823,29 @@ function Scope({
  * every other card in this interface shows: a poster that has not arrived is
  * not a hole, and one that never will is not a broken picture.
  */
-function QuickPicture({ card }: { card: Card }) {
-  const picture = pictureSet(card.poster);
+/** A work of the catalogue as a line of the few results. */
+function quickLineOf(card: Card): QuickLine {
+  return {
+    key: card.id,
+    to: `/work/${card.id}`,
+    title: card.title,
+    note: card.year === null ? null : String(card.year),
+    pictures: card.poster,
+    color: card.color,
+  };
+}
+
+function QuickPicture({ line }: { line: QuickLine }) {
+  const picture = pictureSet(line.pictures);
   return (
     <span
-      className="quick-search-picture"
-      style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
+      className={`quick-search-picture${line.shape ? ` quick-search-picture-${line.shape}` : ""}`}
+      style={{ ["--card-color" as string]: line.color ?? "var(--surface-raised)" }}
     >
       {picture ? (
         <img src={picture.src} alt="" loading="lazy" decoding="async" draggable={false} />
       ) : (
-        <span aria-hidden="true">{card.title.slice(0, 1)}</span>
+        <span aria-hidden="true">{line.title.slice(0, 1)}</span>
       )}
     </span>
   );
