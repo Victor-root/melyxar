@@ -25,6 +25,7 @@ import { useLibraries } from "../../libraries";
 import { asLocalTime, asUtcMinutes, outOfAHundred, whenItIs } from "../../readable";
 import type { Wording } from "../../readable";
 import { useActivityScreen } from "../../screens/activity";
+import type { ActivityScreen } from "../../screens/activity";
 import { useSettings } from "../../settings";
 
 export function AdminTasks() {
@@ -107,37 +108,12 @@ export function AdminTasks() {
         </Panel>
       </div>
 
-      <Panel
-        icon={ClockIcon}
-        title={t("tasks.title")}
-        lead={t("tasks.why")}
-        action={
-          <button className="button button-small button-accent" onClick={startEveryTask}>
-            <PlayIcon size={14} />
-            {t("tasks.run_all")}
-          </button>
-        }
-      >
-        {tasks && (
-          <>
-            <p className="panel-say">
-              {tasks.next_run
-                ? t("tasks.next_run", { when: whenItIs(tasks.next_run) })
-                : t("tasks.none_scheduled")}
-            </p>
-            <div className="task-lines">
-              {tasks.tasks.map((task) => (
-                <TaskLine
-                  key={task.task}
-                  task={task}
-                  onStart={() => startTask(task.task)}
-                  onSchedule={(runs, at) => schedule(task.task, runs, at)}
-                />
-              ))}
-            </div>
-          </>
-        )}
-      </Panel>
+      <ScheduledTasksPanel
+        tasks={tasks}
+        onStartEvery={startEveryTask}
+        onStart={startTask}
+        onSchedule={schedule}
+      />
 
       <Panel
         icon={HistoryIcon}
@@ -213,6 +189,55 @@ function JobCard({ job, onCancel }: { job: Job; onCancel?: () => void }) {
       {job.doing && <span className="job-card-doing">{job.doing}</span>}
       {job.failure_reason && <span className="job-card-reason">{job.failure_reason}</span>}
     </div>
+  );
+}
+
+/** The tasks that run by themselves, each with the hour it runs at. The
+ *  administration and the first steps of a new server both show it. */
+export function ScheduledTasksPanel({
+  tasks,
+  onStartEvery,
+  onStart,
+  onSchedule,
+}: {
+  tasks: ActivityScreen["tasks"];
+  onStartEvery: () => void;
+  onStart: (task: ScheduledTask["task"]) => void;
+  onSchedule: ActivityScreen["schedule"];
+}) {
+  const { t } = useSettings();
+  return (
+    <Panel
+      icon={ClockIcon}
+      title={t("tasks.title")}
+      lead={t("tasks.why")}
+      action={
+        <button className="button button-small button-accent" onClick={onStartEvery}>
+          <PlayIcon size={14} />
+          {t("tasks.run_all")}
+        </button>
+      }
+    >
+      {tasks && (
+        <>
+          <p className="panel-say">
+            {tasks.next_run
+              ? t("tasks.next_run", { when: whenItIs(tasks.next_run) })
+              : t("tasks.none_scheduled")}
+          </p>
+          <div className="task-lines">
+            {tasks.tasks.map((task) => (
+              <TaskLine
+                key={task.task}
+                task={task}
+                onStart={() => onStart(task.task)}
+                onSchedule={(runs, at) => onSchedule(task.task, runs, at)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </Panel>
   );
 }
 

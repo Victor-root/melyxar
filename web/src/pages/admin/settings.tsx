@@ -78,7 +78,7 @@ const LONGEST_NAME = 15;
 const TOO_LARGE = 413;
 
 /** What the server is called and the logo it wears. */
-function ServerPanel() {
+export function ServerPanel() {
   const { t } = useSettings();
   const toast = useToast();
   const overview = useOverview();

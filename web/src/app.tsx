@@ -27,7 +27,7 @@ import { PersonPage } from "./pages/person";
 import { PlaylistPage, PlaylistsPage } from "./pages/playlists";
 import { useKeptPlaces } from "./scrolling";
 import { WorkPage } from "./pages/work";
-import { AdminLayout } from "./pages/admin/layout";
+import { AdminLayout, OverviewProvider } from "./pages/admin/layout";
 import { AdminOverview } from "./pages/admin/overview";
 import { AdminLibraries } from "./pages/admin/libraries";
 import { AdminMetadata } from "./pages/admin/metadata";
@@ -134,11 +134,18 @@ function TheLibrary() {
     return (
       <RunningContext.Provider value={running}>
         <LibrariesContext.Provider value={libraries}>
-          <FirstSteps
-            libraries={libraries.all}
-            onDeclared={libraries.refresh}
-            onFinish={firstSteps.finish}
-          />
+          {/* The administration's own panels are shown in the steps, with
+              what they lean on: the state of the server, and the notes they
+              raise. */}
+          <Toasts>
+            <OverviewProvider>
+              <FirstSteps
+                libraries={libraries.all}
+                onDeclared={libraries.refresh}
+                onFinish={firstSteps.finish}
+              />
+            </OverviewProvider>
+          </Toasts>
         </LibrariesContext.Provider>
       </RunningContext.Provider>
     );
