@@ -31,6 +31,7 @@ import { BinocularsIcon, CameraIcon, EyeIcon, KindIcon } from "../icons";
 import { lengthOfAPlay } from "../watching";
 import { Arrival, ArrivalLoader, stillArriving } from "../components/arrival";
 import { PageBackdrop } from "../components/backdrop";
+import { NewestMusic } from "../music/home";
 
 /** Where the row of everything newest leads, which is the same grid read in
  *  the same order. */
@@ -69,7 +70,10 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
     );
   }
 
-  if (home.works === 0) {
+  /* A library of music counts its albums, which the catalogue's own count
+     leaves out. */
+  const held = home.works + libraries.reduce((sum, library) => sum + (library.kind === "music" ? library.works : 0), 0);
+  if (held === 0) {
     return (
       <>
         <PageBackdrop />
@@ -162,7 +166,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       </section>
     ),
 
-    recently_added: (
+    recently_added: home.recently_added.length > 0 && (
       <section className="section">
         <RowHead mark={<CameraIcon size={24} />} title={t("home.recently_added")} to={EVERYTHING_NEWEST}>
           {home.awaiting_identification > 0 && (
@@ -205,6 +209,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
         />,
       ]),
     ),
+    "newest:music": <NewestMusic libraries={libraries} readAgain={home} />,
   };
 
   return (

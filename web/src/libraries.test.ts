@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { Library, LibraryKind } from "./api";
 import {
   cardShapeOf,
+  kindsHeld,
   kindsOnTheHomePage,
   nameOfKind,
   newestOfKind,
@@ -22,6 +23,11 @@ describe("the order of the home page", () => {
   it("shows only the kinds this account holds, never music", () => {
     const held = [library("anime"), library("music"), library("movies"), library("movies")];
     expect(kindsOnTheHomePage(EVERY, held)).toEqual(["movies", "anime"]);
+  });
+
+  it("holds music among the kinds held, for its own row", () => {
+    const held = [library("music"), library("movies")];
+    expect(kindsHeld(EVERY, held)).toEqual(["movies", "music"]);
   });
 });
 

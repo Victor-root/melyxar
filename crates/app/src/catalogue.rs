@@ -200,7 +200,10 @@ pub async fn libraries(state: &AppState, who: &User) -> Result<Vec<LibrarySummar
             continue;
         }
         summaries.push(LibrarySummary {
-            works: crate::counted::counted(state, Some(library.id)).await?.browsable,
+            works: match library.kind {
+                LibraryKind::Music => crate::music::browse::albums_held(state, library.id).await?,
+                _ => crate::counted::counted(state, Some(library.id)).await?.browsable,
+            },
             version: database.library_version(library.id).await?,
             set_aside: database.count_set_aside(library.id).await?,
             roots: library

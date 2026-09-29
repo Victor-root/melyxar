@@ -48,6 +48,16 @@ pub async fn albums(
         .await?)
 }
 
+/// How many albums a library holds, which is what a library of music counts
+/// in: its songs are met inside them.
+pub async fn albums_held(state: &AppState, library: LibraryId) -> Result<i64> {
+    Ok(state
+        .database()
+        .music_albums(library, &AlbumsWanted::default(), AlbumOrder::Title, false, 0, 1)
+        .await?
+        .total)
+}
+
 pub async fn artists(
     state: &AppState,
     who: &User,
