@@ -42,13 +42,18 @@ Ordre proposé, chaque étape livrable seule :
 6. **La normalisation du volume** : mesure au scan, gain à la lecture, modes morceau et album.
 7. **Les informations en ligne** : MusicBrainz et les pochettes.
 
+## Décisions prises avec le mainteneur
+
+- **Tous les formats audio courants se lisent**, y compris les plus rares (ALAC, WMA, APE, WavPack) : ce que le navigateur ne lit pas tel quel est converti en fichier audio simple par le chemin serveur de la musique.
+- **Un lecteur en bas de l'écran, comme Emby et Jellyfin** : pochette, titre et artiste, précédent, lecture, arrêt, suivant, temps, volume, aléatoire, répétition, favori et file d'attente. Il reste pendant qu'on navigue. Seule l'ergonomie est reprise, l'apparence est celle de Melyxar.
+- **Page d'un album comme chez Jellyfin** : pochette, nom, artiste, nombre de pistes, boutons Lire, Aléatoire, favori et menu, puis la liste des morceaux avec leur durée, un favori et un menu par ligne.
+- **Le volume laisse toujours le choix** : un même niveau pour tous les morceaux, ou les écarts d'un album gardés.
+- **L'écoute en arrière-plan est prévue d'office** : écran verrouillé, onglet en arrière-plan, touches multimédia du clavier et du téléphone.
+- **Les paroles sont à mettre en place.**
+
 ## Questions ouvertes
 
 À trancher avec le mainteneur avant de coder l'étape concernée. Les réponses sont ajoutées ici, puis au README des décisions.
 
-- Quels formats faut-il lire au minimum (MP3, FLAC, AAC, OGG, OPUS, ALAC, WMA, formats sans perte plus rares) ?
-- Les paroles : hors sujet, ou une place prévue plus tard ?
-- La barre de lecture : un mini lecteur en bas, plus une page « en cours de lecture » en grand ?
-- Le volume : un même niveau pour tous les morceaux, ou conserver les écarts d'un album ?
-- Un morceau joué compte-t-il dans « Continuer la lecture » et dans l'historique, ou la musique a-t-elle son propre historique ?
-- Faut-il pouvoir écouter écran verrouillé ou onglet en arrière-plan, avec les touches multimédia du clavier et du téléphone ?
+- L'historique : une écoute de musique apparaît-elle dans les rangées de l'accueil des films (« Continuer la lecture »), ou la musique a-t-elle ses propres rangées (« Écoutés récemment ») dans sa médiathèque ?
+- Les paroles : d'où viennent-elles (fichiers `.lrc` à côté du morceau, étiquettes intégrées, fournisseur en ligne) et sont-elles synchronisées ligne à ligne ?
