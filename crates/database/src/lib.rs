@@ -30,6 +30,7 @@ pub mod metadata;
 pub mod moved;
 pub mod music;
 pub mod music_browse;
+pub mod music_listen;
 pub mod music_pictures;
 pub mod numbering;
 pub mod openings;

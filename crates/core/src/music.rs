@@ -35,3 +35,67 @@ pub struct SongFiling {
     pub year: Option<i32>,
     pub genres: Vec<String>,
 }
+
+/// The name a browser gives the form of a song, which is how it says what it
+/// plays: `mp3`, `aac`, `flac`, `opus`, `vorbis`, `alac`, `wav`. Nothing for a
+/// form no browser plays at all.
+pub fn browser_form(codec: &str, container: Option<&str>) -> Option<&'static str> {
+    let container = container.unwrap_or_default();
+    Some(match codec {
+        "mp3" => "mp3",
+        "aac" => "aac",
+        "flac" => "flac",
+        "alac" => "alac",
+        "opus" if container.contains("ogg") || container.contains("webm") => "opus",
+        "vorbis" if container.contains("ogg") || container.contains("webm") => "vorbis",
+        pcm if pcm.starts_with("pcm_") && container.contains("wav") => "wav",
+        _ => return None,
+    })
+}
+
+/// Whether a song reaches a browser as it lies on the disk, given the forms
+/// that browser says it plays. Anything else is converted on the way.
+pub fn plays_as_it_is(codec: &str, container: Option<&str>, plays: &[&str]) -> bool {
+    browser_form(codec, container).is_some_and(|form| plays.contains(&form))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const A_BROWSER: [&str; 5] = ["mp3", "aac", "flac", "opus", "vorbis"];
+
+    #[test]
+    fn what_a_browser_plays_goes_as_it_is_and_the_rest_is_converted() {
+        assert!(plays_as_it_is("mp3", Some("mp3"), &A_BROWSER));
+        assert!(plays_as_it_is("flac", Some("flac"), &A_BROWSER));
+        assert!(plays_as_it_is(
+            "aac",
+            Some("mov,mp4,m4a,3gp,3g2,mj2"),
+            &A_BROWSER
+        ));
+        assert!(plays_as_it_is("opus", Some("ogg"), &A_BROWSER));
+        assert!(
+            !plays_as_it_is("alac", Some("mov,mp4,m4a,3gp,3g2,mj2"), &A_BROWSER),
+            "Apple's lossless, which this one does not play"
+        );
+        assert!(
+            plays_as_it_is("alac", Some("mov,mp4,m4a,3gp,3g2,mj2"), &["alac"]),
+            "and one that says it does"
+        );
+        for never in ["wmav2", "ape", "wavpack", "musepack", "dsd_lsbf"] {
+            assert!(!plays_as_it_is(never, None, &A_BROWSER), "{never}");
+        }
+    }
+
+    #[test]
+    fn uncompressed_sound_is_played_only_from_a_wave_file() {
+        assert!(plays_as_it_is("pcm_s16le", Some("wav"), &["wav"]));
+        assert!(!plays_as_it_is("pcm_s16be", Some("aiff"), &["wav"]));
+    }
+
+    #[test]
+    fn a_browser_that_says_nothing_is_sent_everything_converted() {
+        assert!(!plays_as_it_is("mp3", Some("mp3"), &[]));
+    }
+}

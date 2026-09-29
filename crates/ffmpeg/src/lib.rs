@@ -18,6 +18,7 @@ pub mod capabilities;
 pub mod command;
 pub mod hardware;
 pub mod images;
+pub mod listening;
 pub mod probe;
 pub mod process;
 pub mod sound;
