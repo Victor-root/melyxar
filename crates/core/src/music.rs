@@ -79,6 +79,21 @@ pub fn loudness_from_replay_gain(
     }
 }
 
+/// How loud a whole album is, from how loud each of its songs is and how
+/// long each lasts: loudness adds up as power, not as decibels, so a quiet
+/// interlude weighs on the album only as much as its few seconds do. Nothing
+/// when no song of it was measured.
+pub fn album_loudness(songs: &[(f64, i64)]) -> Option<f64> {
+    let (power, length) = songs
+        .iter()
+        .filter(|(lufs, ms)| lufs.is_finite() && *ms > 0)
+        .fold((0.0, 0.0), |(power, length), (lufs, ms)| {
+            let ms = *ms as f64;
+            (power + ms * 10f64.powf(lufs / 10.0), length + ms)
+        });
+    (length > 0.0 && power > 0.0).then(|| 10.0 * (power / length).log10())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,6 +127,16 @@ mod tests {
     fn uncompressed_sound_is_played_only_from_a_wave_file() {
         assert!(plays_as_it_is("pcm_s16le", Some("wav"), &["wav"]));
         assert!(!plays_as_it_is("pcm_s16be", Some("aiff"), &["wav"]));
+    }
+
+    #[test]
+    fn an_album_is_as_loud_as_its_songs_by_how_long_each_lasts() {
+        let even = album_loudness(&[(-10.0, 1000), (-10.0, 3000)]).expect("measured");
+        assert!((even - -10.0).abs() < 1e-9);
+        let weighed = album_loudness(&[(-10.0, 9000), (-30.0, 1000)]).expect("measured");
+        assert!(weighed > -10.5 && weighed < -10.0, "{weighed}");
+        assert_eq!(album_loudness(&[]), None);
+        assert_eq!(album_loudness(&[(-10.0, 0)]), None);
     }
 
     #[test]

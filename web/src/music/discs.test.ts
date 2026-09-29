@@ -1,20 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Song } from "./api";
 import { byDisc, minutesOf } from "./discs";
+import { aSong } from "./testing";
 
 function song(title: string, disc: number | null, seconds: number | null = 200): Song {
-  return {
-    id: title,
-    title,
-    artists: [],
-    album: null,
-    track: 1,
-    disc,
-    year: null,
-    seconds,
-    source: null,
-    cover: [],
-  };
+  return aSong({ title, disc, seconds, track: 1 });
 }
 
 describe("byDisc", () => {

@@ -128,6 +128,12 @@ struct SongView {
     source: Option<String>,
     /// The cover of its album.
     cover: Vec<ImageView>,
+    /// How loud it is, in LUFS, and how high its sound reaches, in dBFS,
+    /// once measured: what the player levels it by.
+    lufs: Option<f64>,
+    peak_dbfs: Option<f64>,
+    /// How loud its whole album is, for levelling album by album.
+    album_lufs: Option<f64>,
 }
 
 fn song_view(song: &SongRow) -> SongView {
@@ -142,6 +148,9 @@ fn song_view(song: &SongRow) -> SongView {
         seconds: song.duration.map(|length| (length.get() + 500) / 1_000),
         source: song.source_id.map(|source| source.to_string()),
         cover: song.cover.iter().map(image_view).collect(),
+        lufs: song.lufs,
+        peak_dbfs: song.peak_dbfs,
+        album_lufs: song.album_lufs,
     }
 }
 
@@ -597,6 +606,9 @@ mod tests {
             duration: None,
             source_id: None,
             cover: Vec::new(),
+            lufs: None,
+            peak_dbfs: None,
+            album_lufs: None,
         };
         // Written as it is sent, where two keys of one name would both go
         // out and a browser would keep only the last.

@@ -55,6 +55,12 @@ export interface Song {
   source: string | null;
   /** The cover of its album. */
   cover: Picture[];
+  /** How loud it is, in LUFS, and how high its sound reaches, in dBFS,
+      once measured. */
+  lufs: number | null;
+  peak_dbfs: number | null;
+  /** How loud its whole album is. */
+  album_lufs: number | null;
 }
 
 export interface Genre {
@@ -90,7 +96,12 @@ export interface MusicPreferences {
   resume_queue: boolean;
   /** Nothing for every song as it is. */
   max_bitrate_kbps: number | null;
+  volume_mode: VolumeMode;
 }
+
+/** How songs are levelled: not at all, each to the same level, or each
+ *  album to the same level with its songs kept apart. */
+export type VolumeMode = "off" | "track" | "album";
 
 /** One line sung at a known moment. */
 export interface LyricLine {

@@ -7,7 +7,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_core::music_preferences::{
-    FilmOnScreen, MusicLibraryOptions, MusicPreferences, bounded_ceiling,
+    FilmOnScreen, MusicLibraryOptions, MusicPreferences, VolumeMode, bounded_ceiling,
 };
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,8 @@ struct MusicPreferencesView {
     resume_queue: bool,
     /// Nothing for every song as it is.
     max_bitrate_kbps: Option<u32>,
+    /// off, track or album.
+    volume_mode: String,
 }
 
 fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
@@ -38,6 +40,7 @@ fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
         film_on_screen: chosen.film_on_screen.as_str().to_string(),
         resume_queue: chosen.resume_queue,
         max_bitrate_kbps: chosen.max_bitrate_kbps,
+        volume_mode: chosen.volume_mode.as_str().to_string(),
     })
 }
 
@@ -68,6 +71,9 @@ fn chosen_from(body: &MusicPreferencesView) -> Result<MusicPreferences> {
         })?,
         resume_queue: body.resume_queue,
         max_bitrate_kbps: body.max_bitrate_kbps.map(bounded_ceiling),
+        volume_mode: VolumeMode::parse(&body.volume_mode).ok_or_else(|| {
+            ServerError::invalid_input("songs are levelled off, by track or by album")
+        })?,
     })
 }
 
@@ -120,17 +126,20 @@ mod tests {
             film_on_screen: "pause".to_string(),
             resume_queue: false,
             max_bitrate_kbps: Some(9000),
+            volume_mode: "album".to_string(),
         });
         let Ok(chosen) = chosen else {
             panic!("a choice that exists is read");
         };
         assert_eq!(chosen.film_on_screen, FilmOnScreen::Pause);
         assert_eq!(chosen.max_bitrate_kbps, Some(320));
+        assert_eq!(chosen.volume_mode, VolumeMode::Album);
         assert!(
             chosen_from(&MusicPreferencesView {
                 film_on_screen: "louder".to_string(),
                 resume_queue: true,
                 max_bitrate_kbps: None,
+                volume_mode: "track".to_string(),
             })
             .is_err()
         );

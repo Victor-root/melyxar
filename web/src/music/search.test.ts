@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Library } from "../api";
 import type { Found } from "./api";
 import { foundAny, musicScopeOf, quickLinesOf } from "./search";
+import { aSong } from "./testing";
 
 const films = { id: "f", kind: "movies" } as Library;
 const songs = { id: "m", kind: "music" } as Library;
@@ -25,8 +26,8 @@ describe("what a search found in the music", () => {
     artists: [{ id: "a", library: "m", name: "Amber Field", initial: "a", albums: 1, songs: 2, color: null, picture: [] }],
     albums: [{ id: "b", library: "m", title: "Road", artists: [{ id: "a", name: "Amber Field" }], compilation: false, year: 2015, songs: 1, color: "#123", initial: "r", cover: [] }],
     songs: [
-      { id: "c", title: "Long Road", artists: [{ id: "a", name: "Amber Field" }], album: { id: "b", name: "Road" }, track: 1, disc: null, year: null, seconds: 10, source: null, cover: [] },
-      { id: "d", title: "Loose", artists: [], album: null, track: null, disc: null, year: null, seconds: 10, source: null, cover: [] },
+      aSong({ id: "c", title: "Long Road", artists: [{ id: "a", name: "Amber Field" }], album: { id: "b", name: "Road" } }),
+      aSong({ id: "d", title: "Loose" }),
     ],
   };
 

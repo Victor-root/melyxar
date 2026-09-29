@@ -29,6 +29,39 @@ impl FilmOnScreen {
     }
 }
 
+/// How songs are levelled against one another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VolumeMode {
+    /// Each song as loud as it was made.
+    Off,
+    /// Every song to the same level.
+    #[default]
+    Track,
+    /// Every album to the same level, its songs keeping the differences
+    /// the album was made with: a quiet ballad stays quieter than the song
+    /// beside it.
+    Album,
+}
+
+impl VolumeMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Track => "track",
+            Self::Album => "album",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "off" => Some(Self::Off),
+            "track" => Some(Self::Track),
+            "album" => Some(Self::Album),
+            _ => None,
+        }
+    }
+}
+
 /// The lowest and highest ceiling a song can be held to, in kilobits a
 /// second: below the first nothing is worth hearing, above the second no
 /// conversion reaches.
@@ -44,6 +77,7 @@ pub struct MusicPreferences {
     /// The most a song may weigh on its way, in kilobits a second. A heavier
     /// one is converted down to it; nothing means every song as it is.
     pub max_bitrate_kbps: Option<u32>,
+    pub volume_mode: VolumeMode,
 }
 
 impl Default for MusicPreferences {
@@ -52,6 +86,7 @@ impl Default for MusicPreferences {
             film_on_screen: FilmOnScreen::default(),
             resume_queue: true,
             max_bitrate_kbps: None,
+            volume_mode: VolumeMode::default(),
         }
     }
 }
@@ -90,6 +125,9 @@ mod tests {
             assert_eq!(FilmOnScreen::parse(choice.as_str()), Some(choice));
         }
         assert_eq!(FilmOnScreen::parse("louder"), None);
+        for mode in [VolumeMode::Off, VolumeMode::Track, VolumeMode::Album] {
+            assert_eq!(VolumeMode::parse(mode.as_str()), Some(mode));
+        }
     }
 
     #[test]

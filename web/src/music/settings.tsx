@@ -1,7 +1,7 @@
 /*
- * What an account chose for its music: what a film does to it, whether the
- * queue of the last visit comes back, and how heavy a song may be on its
- * way. Changed at once in the player, and put back if the server refuses.
+ * What an account chose for its music: what a film does to it, how songs
+ * are levelled, whether the queue of the last visit comes back, and how
+ * heavy a song may be on its way. Changed at once in the player, and put back if the server refuses.
  */
 
 import { PageHead, Panel, Picker, Setting, Toggle } from "../components/panel";
@@ -43,6 +43,18 @@ export function MyMusic() {
               ["pause", t("settings.music_film.pause")],
             ]}
             onPick={(film_on_screen) => change({ film_on_screen })}
+          />
+        </Setting>
+        <Setting label={t("settings.music_volume_mode")} why={t("settings.music_volume_mode_why")}>
+          <Picker
+            label={t("settings.music_volume_mode")}
+            value={preferences.volume_mode}
+            options={[
+              ["track", t("settings.music_volume_mode.track")],
+              ["album", t("settings.music_volume_mode.album")],
+              ["off", t("settings.music_volume_mode.off")],
+            ]}
+            onPick={(volume_mode) => change({ volume_mode })}
           />
         </Setting>
         <Setting label={t("settings.music_resume_queue")} why={t("settings.music_resume_queue_why")}>

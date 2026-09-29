@@ -77,6 +77,13 @@ pub struct SongRow {
     /// Every size of the cover of its album, largest first: what a player
     /// shows while it plays.
     pub cover: Vec<StoredImage>,
+    /// How loud it is, once measured or tagged, in LUFS.
+    pub lufs: Option<f64>,
+    /// The highest its sound truly reaches, in dBFS.
+    pub peak_dbfs: Option<f64>,
+    /// How loud its whole album is, for a player that keeps the differences
+    /// between the songs of one album.
+    pub album_lufs: Option<f64>,
 }
 
 /// One genre, and how many albums carry it.
@@ -191,7 +198,15 @@ pub(crate) const A_SONG: &str = "w.id, w.title, w.ordinal, w.release_year, ms.di
      w.parent_id, al.title AS album_title, al.sort_title AS album_sort,
      (SELECT s.id FROM media_sources s WHERE s.work_id = w.id AND s.missing_since IS NULL
        ORDER BY s.added_at LIMIT 1) AS source_id,
-     (SELECT max(s.duration_ms) FROM media_sources s WHERE s.work_id = w.id) AS duration_ms";
+     (SELECT max(s.duration_ms) FROM media_sources s WHERE s.work_id = w.id) AS duration_ms,
+     (SELECT t.loudness_integrated_lufs FROM media_sources s
+        JOIN tracks t ON t.source_id = s.id AND t.kind = 'audio'
+       WHERE s.work_id = w.id AND s.missing_since IS NULL
+       ORDER BY s.added_at LIMIT 1) AS lufs,
+     (SELECT t.loudness_true_peak_dbfs FROM media_sources s
+        JOIN tracks t ON t.source_id = s.id AND t.kind = 'audio'
+       WHERE s.work_id = w.id AND s.missing_since IS NULL
+       ORDER BY s.added_at LIMIT 1) AS peak_dbfs";
 
 impl Database {
     /// A page of the albums of a library.
@@ -537,6 +552,41 @@ impl Database {
         self.song_rows(&rows).await
     }
 
+    /// How loud each of these albums is, from its songs measured so far.
+    async fn album_loudness_of(&self, albums: &[WorkId]) -> Result<HashMap<WorkId, f64>> {
+        if albums.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let mut distinct = albums.to_vec();
+        distinct.sort();
+        distinct.dedup();
+        let marks = vec!["?"; distinct.len()].join(", ");
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT w.parent_id, t.loudness_integrated_lufs AS lufs, s.duration_ms
+               FROM works w
+               JOIN media_sources s ON s.work_id = w.id AND s.missing_since IS NULL
+               JOIN tracks t ON t.source_id = s.id AND t.kind = 'audio'
+              WHERE w.kind = 'song' AND w.parent_id IN ({marks})
+                AND t.loudness_integrated_lufs IS NOT NULL AND s.duration_ms IS NOT NULL"
+        )));
+        for album in &distinct {
+            query = query.bind(album.to_db_string());
+        }
+        let mut songs: HashMap<WorkId, Vec<(f64, i64)>> = HashMap::new();
+        for row in query.fetch_all(self.reader()).await? {
+            songs
+                .entry(parse_id(&row.try_get::<String, _>("parent_id")?)?)
+                .or_default()
+                .push((row.try_get("lufs")?, row.try_get("duration_ms")?));
+        }
+        Ok(songs
+            .into_iter()
+            .filter_map(|(album, songs)| {
+                melyxar_core::music::album_loudness(&songs).map(|lufs| (album, lufs))
+            })
+            .collect())
+    }
+
     /// Albums read from rows, with their artists and their covers.
     pub(crate) async fn album_cards(
         &self,
@@ -624,6 +674,7 @@ impl Database {
             .map(|album| parse_id(&album))
             .collect::<Result<_>>()?;
         let covers = self.posters_of(&albums).await?;
+        let album_loudness = self.album_loudness_of(&albums).await?;
         rows.iter()
             .zip(ids)
             .map(|(row, id)| {
@@ -655,6 +706,12 @@ impl Database {
                         .and_then(|album| covers.get(&album.id))
                         .cloned()
                         .unwrap_or_default(),
+                    lufs: row.try_get("lufs")?,
+                    peak_dbfs: row.try_get("peak_dbfs")?,
+                    album_lufs: album
+                        .as_ref()
+                        .and_then(|album| album_loudness.get(&album.id))
+                        .copied(),
                     album,
                 })
             })

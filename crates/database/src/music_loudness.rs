@@ -110,8 +110,11 @@ impl Database {
 mod tests {
     use std::path::Path;
 
+    use melyxar_core::music::AlbumFiling;
+
     use super::*;
-    use crate::music_testing::{a_read_song, empty_music_library};
+    use crate::music_browse::SongOrder;
+    use crate::music_testing::{a_read_song, empty_music_library, named};
 
     #[tokio::test]
     async fn a_song_is_measured_once_unless_its_tags_said_already() {
@@ -175,6 +178,65 @@ mod tests {
                 .await
                 .expect("read"),
             0
+        );
+    }
+
+    #[tokio::test]
+    async fn a_song_says_how_loud_it_is_and_how_loud_its_album_is() {
+        let (database, library, root) = empty_music_library().await;
+        let on_road = |path: &str, title: &str, lufs: Option<f64>| {
+            let mut song = a_read_song(
+                path,
+                title,
+                "flac",
+                Loudness {
+                    integrated_lufs: lufs,
+                    true_peak_dbfs: lufs.map(|_| -1.0),
+                    range_lu: None,
+                },
+            );
+            song.filing.album = Some(AlbumFiling {
+                title: named("Road"),
+                artists: vec![named("The Lanterns")],
+                is_compilation: false,
+            });
+            song
+        };
+        database
+            .file_music(
+                library,
+                root,
+                &[
+                    on_road("R/01.flac", "Dust", Some(-10.0)),
+                    on_road("R/02.flac", "Homecoming", Some(-20.0)),
+                    on_road("R/03.flac", "Morning", None),
+                ],
+            )
+            .await
+            .expect("filed");
+
+        let songs = database
+            .music_songs(library, SongOrder::Title, false, 0, 10)
+            .await
+            .expect("read")
+            .items;
+        let dust = songs
+            .iter()
+            .find(|song| song.title == "Dust")
+            .expect("filed");
+        assert_eq!(dust.lufs, Some(-10.0));
+        assert_eq!(dust.peak_dbfs, Some(-1.0));
+        let album = dust.album_lufs.expect("measured");
+        assert!((album - -12.596).abs() < 0.01, "{album}");
+        let morning = songs
+            .iter()
+            .find(|song| song.title == "Morning")
+            .expect("filed");
+        assert_eq!(morning.lufs, None);
+        assert_eq!(
+            morning.album_lufs,
+            Some(album),
+            "the album is the same album"
         );
     }
 }
