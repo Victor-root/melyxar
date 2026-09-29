@@ -358,19 +358,19 @@
   background: var(--border);
 }
 
-/* Between the families of a menu: a soft stroke of accent, round at both
-   ends and fading out towards them, rather than a hard grey rule. */
+/* Between the families of a menu: the same quiet hairline of accent as the
+   one between the rows of the home page, fading out towards both ends. */
 .header-menu-divider {
   margin: 6px 14px;
-  height: 2px;
-  border-radius: var(--radius-pill);
+  height: 1px;
   background: linear-gradient(
     to right,
     transparent,
-    color-mix(in srgb, var(--accent) 70%, transparent) 20%,
-    color-mix(in srgb, var(--accent) 70%, transparent) 80%,
+    color-mix(in srgb, var(--accent) 45%, transparent) 18%,
+    color-mix(in srgb, var(--accent) 45%, transparent) 82%,
     transparent
   );
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 45%, transparent));
 }
 
 .quick-search-all {
