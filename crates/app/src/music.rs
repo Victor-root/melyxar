@@ -12,6 +12,7 @@ pub mod listen;
 pub mod loudness;
 pub mod lyrics;
 pub mod marks;
+pub mod playlists;
 pub(crate) mod pictures;
 pub mod preferences;
 pub(crate) mod scan;

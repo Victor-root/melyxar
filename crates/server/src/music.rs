@@ -114,7 +114,7 @@ fn artist_view(artist: &ArtistCard) -> ArtistView {
 }
 
 #[derive(Debug, Serialize)]
-struct SongView {
+pub(crate) struct SongView {
     id: String,
     title: String,
     artists: Vec<CreditedView>,
@@ -136,7 +136,7 @@ struct SongView {
     album_lufs: Option<f64>,
 }
 
-fn song_view(song: &SongRow) -> SongView {
+pub(crate) fn song_view(song: &SongRow) -> SongView {
     SongView {
         id: song.id.to_string(),
         title: song.title.clone(),
