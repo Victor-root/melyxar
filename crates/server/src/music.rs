@@ -3,7 +3,10 @@
 //!
 //! Apart from the routes of films, as music is everywhere in this server.
 
+use axum::body::{Body, Bytes};
 use axum::extract::{Path, Query, State};
+use axum::http::{Request, header};
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::AppState;
@@ -27,6 +30,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/{library}/initials", get(initials))
         .route("/api/v1/music/albums/{id}", get(album))
         .route("/api/v1/music/artists/{id}", get(artist))
+        .route("/api/v1/music/songs/{id}/sound", get(sound))
 }
 
 /// What a page holds when nothing is said: a few screens of a grid.
@@ -353,6 +357,71 @@ async fn artist(
         their_albums: theirs.iter().map(album_view).collect(),
         appears_on: played_on.iter().map(album_view).collect(),
     }))
+}
+
+#[derive(Debug, Deserialize)]
+struct SoundQuery {
+    /// The forms the browser says it plays, separated by commas.
+    #[serde(default)]
+    plays: String,
+    /// Where to start, in seconds, for a song that has to be converted. A
+    /// song sent as it is starts wherever the browser asks it to.
+    start: Option<f64>,
+}
+
+/// How much of a converted song is handed on at a time.
+const CHUNK: usize = 64 * 1024;
+
+/// The sound of one song: its file, or the file converted on the way.
+async fn sound(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+    Query(query): Query<SoundQuery>,
+    request: Request<Body>,
+) -> Result<Response> {
+    let plays: Vec<&str> = query
+        .plays
+        .split(',')
+        .map(str::trim)
+        .filter(|form| !form.is_empty())
+        .collect();
+    let start = melyxar_core::time::Millis::from_seconds_f64(query.start.unwrap_or(0.0).max(0.0));
+    let sound = melyxar_app::music::listen::sound_of(&state, &who, parse_work(&id)?, &plays, start)
+        .await?
+        .ok_or_else(|| ServerError::not_found("no such song on a disk"))?;
+
+    match sound {
+        melyxar_app::music::listen::Sound::AsItIs(path) => {
+            crate::serve_the_file(&path, request).await
+        }
+        melyxar_app::music::listen::Sound::Converted { song, into } => {
+            use tokio::io::AsyncReadExt;
+            // The tool is held by the stream, and stops when the stream is
+            // dropped: a listener who moves on or goes away takes it with
+            // them.
+            let stream = futures_util::stream::unfold(Some(song), |held| async move {
+                let mut song = held?;
+                let mut chunk = vec![0u8; CHUNK];
+                match song.output.read(&mut chunk).await {
+                    Ok(0) => None,
+                    Ok(read) => {
+                        chunk.truncate(read);
+                        Some((Ok::<Bytes, std::io::Error>(Bytes::from(chunk)), Some(song)))
+                    }
+                    Err(error) => Some((Err(error), None)),
+                }
+            });
+            Ok((
+                [
+                    (header::CONTENT_TYPE, into.content_type()),
+                    (header::CACHE_CONTROL, "no-store"),
+                ],
+                Body::from_stream(stream),
+            )
+                .into_response())
+        }
+    }
 }
 
 #[cfg(test)]

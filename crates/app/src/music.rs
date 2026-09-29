@@ -7,5 +7,6 @@
 //! server that read it.
 
 pub mod browse;
+pub mod listen;
 pub(crate) mod pictures;
 pub(crate) mod scan;
