@@ -18,7 +18,7 @@ import { pictureSet } from "../api";
 import { useDragToScroll } from "../dragging";
 import { SeenMark } from "../components/seen";
 import { chapterAt } from "./chapters";
-import { asClock } from "./clock";
+import { asClock } from "../clock";
 import type { Playback } from "./engine";
 import { PlayIcon } from "./icons";
 import { languageName } from "../languages";

@@ -12,7 +12,7 @@ import { useState } from "react";
 
 import { api } from "../api";
 import type { PlaybackSegment, SegmentCorrection, Stretches } from "../api";
-import { asClock, fromClock } from "./clock";
+import { asClock, fromClock } from "../clock";
 import { PlayerWindow } from "./window";
 
 /** The stretches a person corrects here. Advertisements are only ever read

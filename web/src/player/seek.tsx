@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { PlaybackThumbnails } from "../api";
-import { asClock } from "./clock";
+import { asClock } from "../clock";
 import type { Playback } from "./engine";
 import type { Turn } from "./panels";
 import type { Wording } from "../readable";
