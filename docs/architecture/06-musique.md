@@ -2,6 +2,15 @@
 
 Chantier à venir. Rien n'est codé : ce document fixe la règle qui le guide, dit ce qui existe déjà et ce qui manque, et garde les questions encore ouvertes. Il se met à jour à mesure que les décisions se prennent.
 
+## Principe directeur
+
+**La base est le fonctionnement d'Emby et de Jellyfin sur la musique**, pas la façon dont le mainteneur range ses propres fichiers. Sa manière de faire servira à la fin, pour vérifier que la base tient sur un cas réel.
+
+- Les étiquettes intégrées aux fichiers font foi (artiste, album, numéro de piste) ; le dossier ne sert que de secours quand elles manquent.
+- Les fournisseurs en ligne sont optionnels et réglables par médiathèque. Tout désactivé, la musique marche avec ce qui est sur le disque.
+- Les pochettes locales (`cover.jpg`, `folder.jpg` et leurs semblables) sont prises automatiquement, sans réglage.
+- Squelette de l'écran repris de Jellyfin : onglets Albums, Suggestions, Artistes d'albums, Artistes, Listes de lecture, Chansons et Genres ; grille de pochettes ; barre de lettres ; lecture et mélange en tête de liste. Le style reste celui de Melyxar.
+
 ## Règle d'isolation
 
 **La musique est un chantier à part, isolé du reste autant que possible.** Le mainteneur ne lit pas le code et ne peut pas tout vérifier à l'œil : la meilleure protection est une cloison. Si la musique a un défaut, il reste dans la musique, et les films, les séries, les photos et l'accueil continuent de marcher.
@@ -37,9 +46,7 @@ Ordre proposé, chaque étape livrable seule :
 
 À trancher avec le mainteneur avant de coder l'étape concernée. Les réponses sont ajoutées ici, puis au README des décisions.
 
-- Comment sont rangés les fichiers : un dossier par artiste puis par album, ou tout à plat ? Faut-il se fier aux étiquettes intégrées, aux noms de dossiers, ou aux deux ?
 - Quels formats faut-il lire au minimum (MP3, FLAC, AAC, OGG, OPUS, ALAC, WMA, formats sans perte plus rares) ?
-- Les pochettes : intégrées aux fichiers, fichier `cover.jpg` dans le dossier, ou récupérées en ligne ?
 - Les paroles : hors sujet, ou une place prévue plus tard ?
 - La barre de lecture : un mini lecteur en bas, plus une page « en cours de lecture » en grand ?
 - Le volume : un même niveau pour tous les morceaux, ou conserver les écarts d'un album ?
