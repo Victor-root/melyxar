@@ -355,6 +355,25 @@ impl Database {
         Ok(())
     }
 
+    /// Whether the first steps of a brand new server, taken in the browser
+    /// after its first account, are still to be gone through.
+    pub async fn first_steps_pending(&self) -> Result<bool> {
+        let done: bool =
+            sqlx::query_scalar("SELECT first_steps_done FROM server_settings WHERE id = 1")
+                .fetch_one(self.reader())
+                .await?;
+        Ok(!done)
+    }
+
+    /// Writes down that the first steps are behind this server, for good.
+    pub async fn finish_first_steps(&self) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET first_steps_done = 1, updated_at = ? WHERE id = 1")
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// The key OMDb gave the administrator, when one was given. Its own small
     /// query for the same reason as the switch above.
     pub async fn omdb_key(&self) -> Result<Option<String>> {
@@ -623,6 +642,14 @@ mod tests {
         let settings = database.server_settings().await.expect("read");
         assert_eq!(settings.server_name, "Home Cinema");
         assert_eq!(settings.activity_retention_days, 30);
+    }
+
+    #[tokio::test]
+    async fn a_brand_new_server_has_its_first_steps_ahead_until_they_are_finished() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert!(database.first_steps_pending().await.expect("read"));
+        database.finish_first_steps().await.expect("written");
+        assert!(!database.first_steps_pending().await.expect("read"));
     }
 
     #[tokio::test]

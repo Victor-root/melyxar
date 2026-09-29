@@ -1449,3 +1449,54 @@
 .panel .chips + .empty-line {
   margin-top: var(--gap);
 }
+
+/* --------------------------------------------------------------------------
+ * The first steps of a brand new server
+ * ----------------------------------------------------------------------- */
+
+.first-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-wide);
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.first-steps-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.first-steps-head h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.first-steps-head p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 14.5px;
+}
+
+.first-steps-add {
+  align-self: flex-start;
+}
+
+.first-steps-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding-top: var(--gap);
+  border-top: 1px solid var(--border);
+}
+
+.first-steps-foot p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13.5px;
+}

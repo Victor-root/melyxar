@@ -497,6 +497,20 @@ pub async fn still_to_be_set_up(state: &AppState) -> Result<bool> {
     Ok(state.database().user_count().await? == 0)
 }
 
+/// Whether the first steps of this server, taken in the browser once its
+/// first account exists, are still ahead: the libraries it is to hold.
+pub async fn first_steps_pending(state: &AppState) -> Result<bool> {
+    Ok(state.database().first_steps_pending().await?)
+}
+
+/// Puts the first steps behind this server, for good. Whatever was left out
+/// of them is done from the administration like anything else.
+pub async fn finish_first_steps(state: &AppState) -> Result<()> {
+    state.database().finish_first_steps().await?;
+    tracing::info!("the first steps of this server are done");
+    Ok(())
+}
+
 /// Creates the very first account, which is an administrator.
 ///
 /// The one thing on this server that answers without anybody signed in, so it

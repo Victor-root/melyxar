@@ -207,6 +207,13 @@ const en: Dictionary = {
   "door.rule":
     "Use a long, unique password or passphrase.",
   "door.go": "Sign in",
+  "first_steps.title": "Welcome to your server",
+  "first_steps.lead":
+    "Tell it where your films and series are. Each library is scanned as soon as it is added.",
+  "first_steps.add_another": "Add another library",
+  "first_steps.later": "Everything here can be changed later in the administration.",
+  "first_steps.finish": "Finish",
+  "first_steps.skip": "Skip for now",
   "door.first.go": "Create this account",
   "door.asking": "Signing in…",
   "door.refused.wrong": "Incorrect username or password.",
@@ -1690,6 +1697,13 @@ const fr: Dictionary = {
   "door.rule":
     "Choisissez un mot de passe ou une phrase de passe longue et unique.",
   "door.go": "Se connecter",
+  "first_steps.title": "Bienvenue sur votre serveur",
+  "first_steps.lead":
+    "Indiquez-lui où se trouvent vos films et vos séries. Chaque médiathèque est analysée dès qu’elle est ajoutée.",
+  "first_steps.add_another": "Ajouter une autre médiathèque",
+  "first_steps.later": "Tout ceci se modifie plus tard depuis l’administration.",
+  "first_steps.finish": "Terminer",
+  "first_steps.skip": "Passer pour l’instant",
   "door.first.go": "Créer ce compte",
   "door.asking": "Connexion en cours…",
   "door.refused.wrong": "Nom d’utilisateur ou mot de passe incorrect.",

@@ -48,9 +48,11 @@ import { MyHomePage } from "./pages/settings/home";
 import { MyPlayback } from "./pages/settings/playback";
 import { MySubtitles } from "./pages/settings/subtitles";
 import { Door } from "./pages/door";
+import { FirstSteps } from "./pages/first-steps";
+import { useFirstSteps } from "./screens/first-steps";
 import { LibrariesContext, useWatchedLibraries } from "./libraries";
 import { RunningContext, useWatchedWork } from "./running";
-import { useWhoIsThere, WhoProvider } from "./account";
+import { useAccount, useWhoIsThere, WhoProvider } from "./account";
 import { MarksProvider } from "./marks";
 import { useSettings } from "./settings";
 
@@ -121,6 +123,26 @@ function TheLibrary() {
   // held here rather than by every page that mentions them, and read again
   // whenever the settings screen changes one or a scan ends.
   const libraries = useWatchedLibraries(running.finished);
+  // A brand new server takes its administrator through its first steps
+  // before anything else, and nothing is drawn until it has said whether.
+  const firstSteps = useFirstSteps(useAccount().account?.is_administrator ?? false);
+
+  if (firstSteps.pending === null) {
+    return <main className="page" aria-busy="true" />;
+  }
+  if (firstSteps.pending) {
+    return (
+      <RunningContext.Provider value={running}>
+        <LibrariesContext.Provider value={libraries}>
+          <FirstSteps
+            libraries={libraries.all}
+            onDeclared={libraries.refresh}
+            onFinish={firstSteps.finish}
+          />
+        </LibrariesContext.Provider>
+      </RunningContext.Provider>
+    );
+  }
 
   return (
     <RunningContext.Provider value={running}>
