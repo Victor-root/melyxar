@@ -22,7 +22,7 @@ import {
   KindIcon,
   SlidersIcon,
 } from "../../icons";
-import { kindsOnTheHomePage, nameOfKind, newestOfKind, useLibraries } from "../../libraries";
+import { kindsHeld, kindsOnTheHomePage, nameOfKind, newestOfKind, useLibraries } from "../../libraries";
 import { useMarks } from "../../marks";
 import { kindOfSection, sectionsOnOffer } from "../../screens/home";
 import { usePreferences } from "../../screens/settings";
@@ -147,7 +147,7 @@ function HomeSections({ preferences }: { preferences: Preferences }) {
     return null;
   }
   const hidden = kept.hidden_home_sections;
-  const offered = sectionsOnOffer(kept.home_sections, kindsOnTheHomePage(kept.home_order, libraries.all));
+  const offered = sectionsOnOffer(kept.home_sections, kindsHeld(kept.home_order, libraries.all));
   const name = (section: HomeSection) => {
     const kind = kindOfSection(section);
     return kind ? newestOfKind(kind, libraries.all, t) : t(`home_section.${section}`);

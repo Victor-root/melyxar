@@ -97,14 +97,17 @@ export function whereAKindLeads(kind: LibraryKind, libraries: Library[]): string
   return ofThatKind.length === 1 ? `/library/${ofThatKind[0].id}` : `/search?in=kind:${kind}`;
 }
 
+/** The kinds this account holds a library of, in the order it chose. */
+export function kindsHeld(order: LibraryKind[], libraries: Library[]): LibraryKind[] {
+  return order.filter((kind) => libraries.some((library) => library.kind === kind));
+}
+
 /**
- * The kinds the home page gives a tile and a row, in the order this account
- * chose. Music has neither yet, on the server as here.
+ * The kinds the home page gives a tile, in the order this account chose.
+ * Music has its own row, drawn apart, and no tile yet.
  */
 export function kindsOnTheHomePage(order: LibraryKind[], libraries: Library[]): LibraryKind[] {
-  return order.filter(
-    (kind) => kind !== "music" && libraries.some((library) => library.kind === kind),
-  );
+  return kindsHeld(order, libraries).filter((kind) => kind !== "music");
 }
 
 /** How the cards of a kind are laid out: on their side for what somebody
