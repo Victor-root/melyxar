@@ -1,0 +1,17 @@
+[package]
+name = "melyxar-tags"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "What a music file says about itself: its tags and how it sounds, read without launching a tool."
+
+[dependencies]
+# Kept in here and nowhere else: the rest of the server knows what a song is
+# called, never which library read it.
+lofty = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
