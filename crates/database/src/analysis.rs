@@ -28,21 +28,12 @@ impl Database {
     /// Kept rather than logged: a reason in a log line is gone by the time
     /// anybody asks, and this is the one thing that says what to do about a
     /// file that has a card in the library and fails when it is played.
-    ///
-    /// Cut to a length a report can show. What the tool says first is what
-    /// says why; the rest is the same complaint again.
     pub async fn record_analysis_failure(
         &self,
         source_id: MediaSourceId,
         reason: &str,
     ) -> Result<()> {
-        let reason: String = reason.chars().take(LONGEST_FAILURE_REASON).collect();
-        sqlx::query("UPDATE media_sources SET analysis_failure = ? WHERE id = ?")
-            .bind(reason)
-            .bind(source_id.to_db_string())
-            .execute(self.writer())
-            .await?;
-        Ok(())
+        write_analysis_failure(self.writer(), source_id, reason).await
     }
 
     /// Forgets what the analyser found, so the next scan reads every file
@@ -84,79 +75,7 @@ impl Database {
         chapters: &[Chapter],
     ) -> Result<()> {
         let mut transaction = self.begin().await?;
-
-        sqlx::query(
-            "UPDATE media_sources
-             SET container = ?, duration_ms = ?, overall_bitrate = ?, analysed_at = ?,
-                 analysis_failure = NULL
-             WHERE id = ?",
-        )
-        .bind(analysis.container.as_deref())
-        .bind(analysis.duration.map(Millis::get))
-        .bind(analysis.overall_bitrate)
-        .bind(timestamp_to_text(now()))
-        .bind(source_id.to_db_string())
-        .execute(&mut *transaction)
-        .await?;
-
-        // An analysis owns the streams inside the file and nothing else: the
-        // subtitles that live in their own files are not its to replace.
-        sqlx::query("DELETE FROM tracks WHERE source_id = ? AND is_external = 0")
-            .bind(source_id.to_db_string())
-            .execute(&mut *transaction)
-            .await?;
-        sqlx::query("DELETE FROM chapters WHERE source_id = ?")
-            .bind(source_id.to_db_string())
-            .execute(&mut *transaction)
-            .await?;
-        // The stretches read off those chapters go with them. Anything a
-        // person said themselves stays: a correction made by hand is not the
-        // analysis's to undo, and reading the file again is not somebody
-        // changing their mind.
-        sqlx::query("DELETE FROM media_segments WHERE source_id = ? AND origin <> 'manual'")
-            .bind(source_id.to_db_string())
-            .execute(&mut *transaction)
-            .await?;
-        // And with the stretches found by listening goes the note saying this
-        // file was listened to, for the same reason a film whose thumbnails
-        // were thrown away is written down as having none: a file marked as
-        // done with nothing to show for it is a file that is never read again,
-        // and its season would keep its silence for ever.
-        sqlx::query("DELETE FROM media_source_openings WHERE source_id = ?")
-            .bind(source_id.to_db_string())
-            .execute(&mut *transaction)
-            .await?;
-
-        for track in tracks {
-            insert_track(&mut transaction, source_id, track).await?;
-        }
-        for chapter in chapters {
-            sqlx::query(
-                "INSERT INTO chapters (id, source_id, ordinal, start_ms, title, thumbnail_path)
-                 VALUES (?, ?, ?, ?, ?, ?)",
-            )
-            .bind(ChapterId::new().to_db_string())
-            .bind(source_id.to_db_string())
-            .bind(chapter.ordinal)
-            .bind(chapter.start.get())
-            .bind(chapter.title.as_deref())
-            .bind(
-                chapter
-                    .thumbnail_path
-                    .as_ref()
-                    .map(|path| path.to_string_lossy().into_owned()),
-            )
-            .execute(&mut *transaction)
-            .await?;
-        }
-
-        // Read from the chapters that were just written, in the same step:
-        // the two are one reading of one file and a reader must never see the
-        // chapters of today beside the stretches of yesterday.
-        for segment in melyxar_core::segments::segments_from_chapters(chapters, analysis.duration) {
-            insert_segment(&mut *transaction, source_id, &segment).await?;
-        }
-
+        write_analysis(&mut transaction, source_id, analysis, tracks, chapters).await?;
         transaction.commit().await?;
         Ok(())
     }
@@ -289,6 +208,111 @@ impl Database {
         }
         Ok(chapters)
     }
+}
+
+/// Writes down why a file could not be described, cut to a length a report
+/// can show. What the tool says first is what says why; the rest is the same
+/// complaint again.
+pub(crate) async fn write_analysis_failure<'e, E>(
+    executor: E,
+    source_id: MediaSourceId,
+    reason: &str,
+) -> Result<()>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    let reason: String = reason.chars().take(LONGEST_FAILURE_REASON).collect();
+    sqlx::query("UPDATE media_sources SET analysis_failure = ? WHERE id = ?")
+        .bind(reason)
+        .bind(source_id.to_db_string())
+        .execute(executor)
+        .await?;
+    Ok(())
+}
+
+/// Writes what one analysis found, inside a transaction the caller holds:
+/// the file as a whole, its streams and its chapters, replacing what an
+/// earlier reading wrote.
+pub(crate) async fn write_analysis(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    source_id: MediaSourceId,
+    analysis: &SourceAnalysis,
+    tracks: &[Track],
+    chapters: &[Chapter],
+) -> Result<()> {
+    sqlx::query(
+        "UPDATE media_sources
+         SET container = ?, duration_ms = ?, overall_bitrate = ?, analysed_at = ?,
+             analysis_failure = NULL
+         WHERE id = ?",
+    )
+    .bind(analysis.container.as_deref())
+    .bind(analysis.duration.map(Millis::get))
+    .bind(analysis.overall_bitrate)
+    .bind(timestamp_to_text(now()))
+    .bind(source_id.to_db_string())
+    .execute(&mut **transaction)
+    .await?;
+
+    // An analysis owns the streams inside the file and nothing else: the
+    // subtitles that live in their own files are not its to replace.
+    sqlx::query("DELETE FROM tracks WHERE source_id = ? AND is_external = 0")
+        .bind(source_id.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
+    sqlx::query("DELETE FROM chapters WHERE source_id = ?")
+        .bind(source_id.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
+    // The stretches read off those chapters go with them. Anything a
+    // person said themselves stays: a correction made by hand is not the
+    // analysis's to undo, and reading the file again is not somebody
+    // changing their mind.
+    sqlx::query("DELETE FROM media_segments WHERE source_id = ? AND origin <> 'manual'")
+        .bind(source_id.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
+    // And with the stretches found by listening goes the note saying this
+    // file was listened to, for the same reason a film whose thumbnails
+    // were thrown away is written down as having none: a file marked as
+    // done with nothing to show for it is a file that is never read again,
+    // and its season would keep its silence for ever.
+    sqlx::query("DELETE FROM media_source_openings WHERE source_id = ?")
+        .bind(source_id.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
+
+    for track in tracks {
+        insert_track(transaction, source_id, track).await?;
+    }
+    for chapter in chapters {
+        sqlx::query(
+            "INSERT INTO chapters (id, source_id, ordinal, start_ms, title, thumbnail_path)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(ChapterId::new().to_db_string())
+        .bind(source_id.to_db_string())
+        .bind(chapter.ordinal)
+        .bind(chapter.start.get())
+        .bind(chapter.title.as_deref())
+        .bind(
+            chapter
+                .thumbnail_path
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned()),
+        )
+        .execute(&mut **transaction)
+        .await?;
+    }
+
+    // Read from the chapters that were just written, in the same step:
+    // the two are one reading of one file and a reader must never see the
+    // chapters of today beside the stretches of yesterday.
+    for segment in melyxar_core::segments::segments_from_chapters(chapters, analysis.duration) {
+        insert_segment(&mut **transaction, source_id, &segment).await?;
+    }
+
+    Ok(())
 }
 
 async fn insert_track(

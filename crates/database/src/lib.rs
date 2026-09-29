@@ -28,6 +28,7 @@ pub mod libraries;
 pub mod measures;
 pub mod metadata;
 pub mod moved;
+pub mod music;
 pub mod numbering;
 pub mod openings;
 pub mod own;

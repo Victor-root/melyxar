@@ -21,7 +21,8 @@ pub enum IdentificationState {
     /// A person picked the match by hand. Never overwritten by a refresh.
     Manual,
     /// In no catalogue and waiting for none: what somebody filmed or
-    /// photographed themselves. Named by its file, and that is all it needs.
+    /// photographed themselves, named by its file, and music, named by what
+    /// its files say, for as long as the server knows no catalogue of music.
     Own,
 }
 

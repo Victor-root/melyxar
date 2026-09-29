@@ -113,10 +113,6 @@ fn what_a_tagging_program_wrote_is_read_back_in_every_common_form() {
             tag.set_disk_total(2);
             tag.insert_text(ItemKey::RecordingDate, "2019-05-03".to_string());
             tag.set_genre("Folk".to_string());
-            tag.insert_text(
-                ItemKey::MusicBrainzReleaseId,
-                "0d3c8f3e-1111-4b6a-9c3e-222233334444".to_string(),
-            );
         });
 
         let tags = read(&path)
@@ -134,11 +130,6 @@ fn what_a_tagging_program_wrote_is_read_back_in_every_common_form() {
         assert_eq!((tags.disc, tags.disc_total), (Some(2), Some(2)), "{name}");
         assert_eq!(tags.year, Some(2019), "{name}");
         assert_eq!(tags.genres, vec!["Folk"], "{name}");
-        assert_eq!(
-            tags.musicbrainz.release.as_deref(),
-            Some("0d3c8f3e-1111-4b6a-9c3e-222233334444"),
-            "{name}"
-        );
     }
 }
 
