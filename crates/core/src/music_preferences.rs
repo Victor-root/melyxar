@@ -1,6 +1,6 @@
-//! What each account chose for its music, apart from the preferences of
-//! films: the two players share nothing, and neither do their settings (see
-//! `docs/architecture/06-musique.md`).
+//! What was chosen for music, by each account and for each library of it,
+//! apart from the preferences and options of films: the two share nothing,
+//! and neither do their settings (see `docs/architecture/06-musique.md`).
 
 /// What becomes of the music when a film starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -54,6 +54,15 @@ impl Default for MusicPreferences {
             max_bitrate_kbps: None,
         }
     }
+}
+
+/// What a library of music does beyond what every library does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MusicLibraryOptions {
+    /// Whether lyrics found neither in a song nor beside it are asked of
+    /// LRCLIB. Off until an administrator turns it on, like every source
+    /// online.
+    pub lyrics_online: bool,
 }
 
 /// A ceiling brought within what can be asked of a conversion.

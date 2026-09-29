@@ -60,7 +60,10 @@ impl LrcLibClient {
 
     /// The words of a song, or nothing when LRCLIB does not know it.
     pub async fn lyrics(&self, asked: &Asked<'_>) -> Result<Option<FoundLyrics>> {
-        let mut query = vec![("artist_name", asked.artist.to_string()), ("track_name", asked.title.to_string())];
+        let mut query = vec![
+            ("artist_name", asked.artist.to_string()),
+            ("track_name", asked.title.to_string()),
+        ];
         if let Some(album) = asked.album {
             query.push(("album_name", album.to_string()));
         }
@@ -109,8 +112,12 @@ fn answer_of(status: u16, body: &str) -> Result<Option<FoundLyrics>> {
         429 => Err(ProviderError::TooManyRequests {
             retry_after_seconds: None,
         }),
-        500..=599 => Err(ProviderError::Unreachable(format!("LRCLIB answered {status}"))),
-        _ => Err(ProviderError::Unexpected(format!("LRCLIB answered {status}"))),
+        500..=599 => Err(ProviderError::Unreachable(format!(
+            "LRCLIB answered {status}"
+        ))),
+        _ => Err(ProviderError::Unexpected(format!(
+            "LRCLIB answered {status}"
+        ))),
     }
 }
 
@@ -133,10 +140,20 @@ mod tests {
 
     #[test]
     fn a_song_without_words_says_so_and_empty_words_are_none() {
-        let found = answer_of(200, r#"{"plainLyrics":"","syncedLyrics":null,"instrumental":true}"#)
-            .expect("read")
-            .expect("found");
-        assert_eq!(found, FoundLyrics { plain: None, synced: None, instrumental: true });
+        let found = answer_of(
+            200,
+            r#"{"plainLyrics":"","syncedLyrics":null,"instrumental":true}"#,
+        )
+        .expect("read")
+        .expect("found");
+        assert_eq!(
+            found,
+            FoundLyrics {
+                plain: None,
+                synced: None,
+                instrumental: true
+            }
+        );
     }
 
     #[test]
