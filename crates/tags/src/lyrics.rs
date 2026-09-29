@@ -49,7 +49,10 @@ mod tests {
             tagged.insert_tag(Tag::new(TagType::VorbisComments));
         }
         let tag = tagged.primary_tag_mut().expect("a tag");
-        tag.insert_text(ItemKey::Lyrics, "[00:01.00]First line\n[00:02.50]Second line\n".to_string());
+        tag.insert_text(
+            ItemKey::Lyrics,
+            "[00:01.00]First line\n[00:02.50]Second line\n".to_string(),
+        );
         tagged
             .save_to_path(&song, WriteOptions::default())
             .expect("written");

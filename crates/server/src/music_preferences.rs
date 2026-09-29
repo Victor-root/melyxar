@@ -1,18 +1,27 @@
-//! The routes of what an account chose for its music: read whole, and
-//! written whole, since there are few enough of them to send every time.
+//! The routes of what was chosen for music: by an account, and for a library
+//! of it by an administrator. Read whole, and written whole, since there are
+//! few enough of them to send every time.
 
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::AppState;
-use melyxar_core::music_preferences::{FilmOnScreen, MusicPreferences, bounded_ceiling};
+use melyxar_core::music_preferences::{
+    FilmOnScreen, MusicLibraryOptions, MusicPreferences, bounded_ceiling,
+};
 use serde::{Deserialize, Serialize};
 
-use crate::account::Viewer;
+use crate::account::{Administrator, Viewer};
 use crate::error::{Result, ServerError};
+use crate::identifiers::parse_library;
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/api/v1/music/preferences", get(read).put(write))
+    Router::new()
+        .route("/api/v1/music/preferences", get(read).put(write))
+        .route(
+            "/api/v1/music/{library}/options",
+            get(read_library_options).put(write_library_options),
+        )
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -32,7 +41,10 @@ fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
     })
 }
 
-async fn read(State(state): State<AppState>, Viewer(who): Viewer) -> Result<Json<MusicPreferencesView>> {
+async fn read(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+) -> Result<Json<MusicPreferencesView>> {
     Ok(answer(
         &melyxar_app::music::preferences::preferences(&state, &who).await?,
     ))
@@ -57,6 +69,45 @@ fn chosen_from(body: &MusicPreferencesView) -> Result<MusicPreferences> {
         resume_queue: body.resume_queue,
         max_bitrate_kbps: body.max_bitrate_kbps.map(bounded_ceiling),
     })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct LibraryOptionsView {
+    lyrics_online: bool,
+}
+
+async fn read_library_options(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(library): Path<String>,
+) -> Result<Json<LibraryOptionsView>> {
+    let options =
+        melyxar_app::music::preferences::library_options(&state, &who, parse_library(&library)?)
+            .await?;
+    Ok(Json(LibraryOptionsView {
+        lyrics_online: options.lyrics_online,
+    }))
+}
+
+async fn write_library_options(
+    State(state): State<AppState>,
+    _: Administrator,
+    Viewer(who): Viewer,
+    Path(library): Path<String>,
+    Json(body): Json<LibraryOptionsView>,
+) -> Result<Json<LibraryOptionsView>> {
+    let options = melyxar_app::music::preferences::set_library_options(
+        &state,
+        &who,
+        parse_library(&library)?,
+        &MusicLibraryOptions {
+            lyrics_online: body.lyrics_online,
+        },
+    )
+    .await?;
+    Ok(Json(LibraryOptionsView {
+        lyrics_online: options.lyrics_online,
+    }))
 }
 
 #[cfg(test)]

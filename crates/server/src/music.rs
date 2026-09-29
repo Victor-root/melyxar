@@ -36,6 +36,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/{library}/favourites", get(favourites))
         .route("/api/v1/music/{library}/listened", get(listened))
         .route("/api/v1/music/songs/{id}/listened", post(record_listen))
+        .route("/api/v1/music/songs/{id}/lyrics", get(lyrics))
         .route("/api/v1/music/albums/{id}", get(album))
         .route("/api/v1/music/artists/{id}", get(artist))
         .route("/api/v1/music/artists/{id}/songs", get(artist_songs))
@@ -455,6 +456,48 @@ async fn artist_songs(
 ) -> Result<Json<Vec<SongView>>> {
     let songs = melyxar_app::music::browse::artist_songs(&state, &who, parse_work(&id)?).await?;
     Ok(Json(songs.iter().map(song_view).collect()))
+}
+
+/// One line sung at a known moment.
+#[derive(Debug, Serialize)]
+struct LineView {
+    at_ms: i64,
+    text: String,
+}
+
+#[derive(Debug, Serialize)]
+struct LyricsView {
+    /// song, beside or online.
+    source: &'static str,
+    plain: String,
+    /// Empty when the words carry no moments.
+    lines: Vec<LineView>,
+    instrumental: bool,
+}
+
+/// The lyrics of a song, or nothing when none were found anywhere.
+async fn lyrics(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Json<Option<LyricsView>>> {
+    let found = melyxar_app::music::lyrics::lyrics_of(&state, &who, parse_work(&id)?).await?;
+    Ok(Json(found.map(|found| {
+        LyricsView {
+            source: found.source.as_str(),
+            plain: found.lyrics.plain,
+            lines: found
+                .lyrics
+                .synced
+                .into_iter()
+                .map(|line| LineView {
+                    at_ms: line.at.get(),
+                    text: line.text,
+                })
+                .collect(),
+            instrumental: found.instrumental,
+        }
+    })))
 }
 
 #[derive(Debug, Deserialize)]

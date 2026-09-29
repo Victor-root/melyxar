@@ -85,7 +85,10 @@ fn moment(stamp: &str) -> Option<i64> {
     let minutes: i64 = minutes.trim().parse().ok()?;
     let (whole, fraction) = seconds.split_once(['.', ':']).unwrap_or((seconds, ""));
     let whole: i64 = whole.trim().parse().ok()?;
-    if !(0..60).contains(&whole) || fraction.len() > 3 || !fraction.chars().all(|c| c.is_ascii_digit()) {
+    if !(0..60).contains(&whole)
+        || fraction.len() > 3
+        || !fraction.chars().all(|c| c.is_ascii_digit())
+    {
         return None;
     }
     let fraction = match fraction.len() {
@@ -117,10 +120,16 @@ mod tests {
 
     #[test]
     fn stamped_lines_are_read_with_their_moments_and_as_plain_words() {
-        let read = read_lyrics("[ar:Amber Field]\n[ti:Tides]\n[00:07.78]First line\n[00:12.5]Second line\n[01:02.345]Third\n");
+        let read = read_lyrics(
+            "[ar:Amber Field]\n[ti:Tides]\n[00:07.78]First line\n[00:12.5]Second line\n[01:02.345]Third\n",
+        );
         assert_eq!(
             read.synced,
-            vec![line(7780, "First line"), line(12500, "Second line"), line(62345, "Third")]
+            vec![
+                line(7780, "First line"),
+                line(12500, "Second line"),
+                line(62345, "Third")
+            ]
         );
         assert_eq!(read.plain, "First line\nSecond line\nThird");
     }
@@ -130,14 +139,21 @@ mod tests {
         let read = read_lyrics("[00:30.00][00:10.00]Chorus\n[00:20.00]Verse");
         assert_eq!(
             read.synced,
-            vec![line(10_000, "Chorus"), line(20_000, "Verse"), line(30_000, "Chorus")]
+            vec![
+                line(10_000, "Chorus"),
+                line(20_000, "Verse"),
+                line(30_000, "Chorus")
+            ]
         );
     }
 
     #[test]
     fn the_offset_brings_every_line_sooner() {
         let read = read_lyrics("[offset:+500]\n[00:01.00]Early\n[00:00.20]Never before nought");
-        assert_eq!(read.synced, vec![line(0, "Never before nought"), line(500, "Early")]);
+        assert_eq!(
+            read.synced,
+            vec![line(0, "Never before nought"), line(500, "Early")]
+        );
     }
 
     #[test]
