@@ -16,7 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Account, Branding, NameAtTheDoor } from "../api";
 import { deviceIdentity } from "../deviceIdentity";
-import { refusalKey } from "../i18n";
+import { initialLanguage, refusalKey } from "../i18n";
 
 /** A refusal, worded and with whatever its wording needs. */
 export interface Refusal {
@@ -81,6 +81,14 @@ export function useDoorScreen(branding: Branding, cameIn: (who: Account) => void
         const who = brandNew
           ? await api.setUp(name, password, remember, deviceIdentity())
           : await api.signIn(name, password, remember, deviceIdentity());
+        // A new account starts in the server's language; the first one keeps
+        // the language this screen was read in, which is what the first
+        // steps after it are then shown in.
+        if (brandNew) {
+          await api
+            .savePreferences({ interface_language: initialLanguage() })
+            .catch(() => {});
+        }
         cameIn(who);
       } catch (error) {
         setRefused(whatTheServerSaid(error));
