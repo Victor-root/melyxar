@@ -126,4 +126,3 @@ pub(crate) async fn collection() -> (Database, LibraryId, LibraryRootId) {
         .expect("filed");
     (database, library.id, root)
 }
-

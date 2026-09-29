@@ -1,5 +1,6 @@
 //! The routes that read a library of music: its albums, artists, songs and
-//! genres, and the page of one album or one artist.
+//! genres, the page of one album or one artist, and what each account makes
+//! of it, liked and listened to.
 //!
 //! Apart from the routes of films, as music is everywhere in this server.
 
@@ -7,7 +8,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::{Path, Query, State};
 use axum::http::{Request, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_app::music::browse::{
@@ -15,6 +16,8 @@ use melyxar_app::music::browse::{
     MusicInitial, MusicPage, Paging, SongOrder, SongRow,
 };
 use serde::{Deserialize, Serialize};
+
+use melyxar_app::music::marks::Listened;
 
 use crate::account::Viewer;
 use crate::catalogue::{ImageView, image_view};
@@ -29,6 +32,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/{library}/genres", get(genres))
         .route("/api/v1/music/{library}/initials", get(initials))
         .route("/api/v1/music/search", get(search))
+        .route("/api/v1/music/favourites", get(favourite_ids))
+        .route("/api/v1/music/{library}/favourites", get(favourites))
+        .route("/api/v1/music/{library}/listened", get(listened))
+        .route("/api/v1/music/songs/{id}/listened", post(record_listen))
         .route("/api/v1/music/albums/{id}", get(album))
         .route("/api/v1/music/artists/{id}", get(artist))
         .route("/api/v1/music/songs/{id}/sound", get(sound))
@@ -265,13 +272,60 @@ async fn search(
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<FoundView>> {
     let library = query.library.as_deref().map(parse_library).transpose()?;
-    let found: MusicFound =
-        melyxar_app::music::browse::search(&state, &who, library, &query.words).await?;
-    Ok(Json(FoundView {
+    let found = melyxar_app::music::browse::search(&state, &who, library, &query.words).await?;
+    Ok(Json(found_view(&found)))
+}
+
+fn found_view(found: &MusicFound) -> FoundView {
+    FoundView {
         albums: found.albums.iter().map(album_view).collect(),
         artists: found.artists.iter().map(artist_view).collect(),
         songs: found.songs.iter().map(song_view).collect(),
-    }))
+    }
+}
+
+async fn favourite_ids(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+) -> Result<Json<Vec<String>>> {
+    let ids = melyxar_app::music::marks::favourite_ids(&state, &who).await?;
+    Ok(Json(ids.iter().map(|id| id.to_string()).collect()))
+}
+
+async fn favourites(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(library): Path<String>,
+) -> Result<Json<FoundView>> {
+    let found =
+        melyxar_app::music::marks::favourites(&state, &who, parse_library(&library)?).await?;
+    Ok(Json(found_view(&found)))
+}
+
+#[derive(Debug, Deserialize)]
+struct ListenedQuery {
+    order: Listened,
+}
+
+async fn listened(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(library): Path<String>,
+    Query(query): Query<ListenedQuery>,
+) -> Result<Json<Vec<SongView>>> {
+    let songs =
+        melyxar_app::music::marks::listened(&state, &who, parse_library(&library)?, query.order)
+            .await?;
+    Ok(Json(songs.iter().map(song_view).collect()))
+}
+
+async fn record_listen(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    melyxar_app::music::marks::record_listen(&state, &who, parse_work(&id)?).await?;
+    Ok(Json(serde_json::json!({ "listened": true })))
 }
 
 #[derive(Debug, Serialize)]

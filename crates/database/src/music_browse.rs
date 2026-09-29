@@ -167,7 +167,7 @@ pub struct AlbumsWanted {
     pub by: Option<WorkId>,
 }
 
-const AN_ALBUM: &str = concat!(
+pub(crate) const AN_ALBUM: &str = concat!(
     "w.id, w.library_id, w.title, w.release_year, w.child_count, w.dominant_color, w.added_at,
      ma.is_compilation, ",
     initial_of_a_title!(),
@@ -177,7 +177,7 @@ const AN_ALBUM: &str = concat!(
        ORDER BY c.ordinal LIMIT 1) AS artist_sort"
 );
 
-const AN_ARTIST: &str = concat!(
+pub(crate) const AN_ARTIST: &str = concat!(
     "w.id, w.library_id, w.title, w.dominant_color, ",
     initial_of_a_title!(),
     " AS initial,
@@ -187,7 +187,7 @@ const AN_ARTIST: &str = concat!(
        WHERE c.artist_id = w.id AND c.role = 'artist') AS songs"
 );
 
-const A_SONG: &str = "w.id, w.title, w.ordinal, w.release_year, ms.disc_number,
+pub(crate) const A_SONG: &str = "w.id, w.title, w.ordinal, w.release_year, ms.disc_number,
      w.parent_id, al.title AS album_title, al.sort_title AS album_sort,
      (SELECT s.id FROM media_sources s WHERE s.work_id = w.id AND s.missing_since IS NULL
        ORDER BY s.added_at LIMIT 1) AS source_id,
@@ -519,7 +519,10 @@ impl Database {
     }
 
     /// Albums read from rows, with their artists and their covers.
-    async fn album_cards(&self, rows: &[sqlx::sqlite::SqliteRow]) -> Result<Vec<AlbumCard>> {
+    pub(crate) async fn album_cards(
+        &self,
+        rows: &[sqlx::sqlite::SqliteRow],
+    ) -> Result<Vec<AlbumCard>> {
         let ids: Vec<WorkId> = rows
             .iter()
             .map(|row| parse_id(&row.try_get::<String, _>("id")?))
@@ -548,7 +551,10 @@ impl Database {
 
     /// Artists read from rows, each with their picture or the cover of their
     /// first album.
-    async fn artist_cards(&self, rows: &[sqlx::sqlite::SqliteRow]) -> Result<Vec<ArtistCard>> {
+    pub(crate) async fn artist_cards(
+        &self,
+        rows: &[sqlx::sqlite::SqliteRow],
+    ) -> Result<Vec<ArtistCard>> {
         let ids: Vec<WorkId> = rows
             .iter()
             .map(|row| parse_id(&row.try_get::<String, _>("id")?))
@@ -587,7 +593,7 @@ impl Database {
     }
 
     /// Songs read from rows, with their artists.
-    async fn song_rows(&self, rows: &[sqlx::sqlite::SqliteRow]) -> Result<Vec<SongRow>> {
+    pub(crate) async fn song_rows(&self, rows: &[sqlx::sqlite::SqliteRow]) -> Result<Vec<SongRow>> {
         let ids: Vec<WorkId> = rows
             .iter()
             .map(|row| parse_id(&row.try_get::<String, _>("id")?))
