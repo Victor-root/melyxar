@@ -1,9 +1,9 @@
 /*
- * A moment of a film, as somebody reads it.
+ * A moment of a film or a song, as somebody reads it.
  *
- * On its own so that the bar, the preview and the chapter cards all write a
- * time the same way, and so that neither of the two files that need it has to
- * reach into the other.
+ * On its own so that the bar, the preview, the chapter cards and the lists of
+ * songs all write a time the same way, and so that none of them has to reach
+ * into another: music, kept apart from the player of films, reads it here.
  */
 
 export function asClock(seconds: number): string {

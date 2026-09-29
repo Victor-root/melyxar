@@ -26,7 +26,7 @@ import {
   PlayIcon,
   SeriesIcon,
 } from "../../icons";
-import { asClock } from "../../player/clock";
+import { asClock } from "../../clock";
 import {
   asRate,
   asSize,

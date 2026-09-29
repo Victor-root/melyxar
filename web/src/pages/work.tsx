@@ -61,7 +61,7 @@ import { elsewhere, groupCrew, useWorkScreen } from "../screens/work";
 import type { Tracks } from "../screens/work";
 import { useSettings } from "../settings";
 import { useShownPicture } from "../components/picture";
-import { asClock } from "../player/clock";
+import { asClock } from "../clock";
 import { trackName } from "../player/describe";
 import { Player } from "../player/player";
 import { cutOut } from "../player/thumbnail";

@@ -30,7 +30,7 @@ import type {
 import type { Appearance } from "./appearance";
 import type { Arrangement, Control, Zone } from "./arrangement";
 import { chapterStep } from "./chapters";
-import { asClock } from "./clock";
+import { asClock } from "../clock";
 import { Drawer, SHEETS } from "./drawer";
 import type { SheetName } from "./drawer";
 import type { Playback } from "./engine";
