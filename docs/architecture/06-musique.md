@@ -66,6 +66,18 @@ Ordre proposé, chaque étape livrable seule :
 - **Les paroles sont à mettre en place**, défilant en rythme quand elles portent l'heure de chaque ligne. Sources, de la plus locale à la plus distante : paroles intégrées au fichier, fichier `.lrc` à côté du morceau, puis LRCLIB (gratuit, sans clé) si le fournisseur est activé, réglable par médiathèque.
 - **LRCLIB vérifié le 29 septembre 2026** : sans compte ni clé, une requête `GET /api/get` avec artiste, titre, album et durée rend les paroles seules et les paroles synchronisées (une heure par ligne, au format `[0:07.78]`), et une réponse 404 `TrackNotFound` quand le morceau est inconnu. La durée n'a pas besoin d'être exacte à la seconde. Le service répond parfois 503 « serveur occupé » : la recherche ne doit jamais bloquer ni la lecture ni le scan, elle réessaie plus tard. Aucune limite de débit ni condition d'usage n'est publiée : s'identifier par un `User-Agent`, ne demander qu'une fois par morceau et garder la réponse, y compris l'absence de réponse.
 
+## Corriger la musique : deux niveaux
+
+- **Dans Melyxar, comme Jellyfin** : corriger un titre, un artiste, un album ou une pochette modifie seulement la fiche gardée par Melyxar, jamais le fichier. C'est le comportement de base, ouvert à ceux qui ont le droit de corriger.
+- **Un gestionnaire d'étiquettes dédié**, en plus, qui modifie la fiche **et le fichier physique**, pour remplacer un logiciel de retouche d'étiquettes sous Windows. Il permet de :
+  - corriger le titre, l'artiste, l'album et les autres étiquettes, et supprimer celles qui ne servent à rien ;
+  - ajouter une image d'album, enregistrée sous le nom `cover.jpg` à la racine du dossier de l'album ;
+  - renommer les fichiers à partir de leurs étiquettes.
+- **Qui peut s'en servir** : les administrateurs, et les comptes à qui ce droit est donné.
+- **Garde-fou** : une case à cocher, optionnelle, garde une copie de l'ancien fichier avant de l'écrire.
+- **Écrire dans les fichiers reste éteint tant qu'on ne l'a pas demandé**, comme la règle déjà en place pour les médias (le service ne peut qu'y lire par défaut).
+- **Isolation** : l'écriture des étiquettes vit dans son propre module, séparé de la lecture. Renommer un fichier ne doit rien faire perdre à la fiche (favoris, compteurs d'écoute, listes de lecture), sur le modèle du déplacement d'un film déjà géré.
+
 ## Pistes possibles, sans priorité
 
 Ouvertes à l'avenir, mais pas un objectif pour l'instant. Le chantier ne doit simplement pas les rendre impossibles.
@@ -73,7 +85,7 @@ Ouvertes à l'avenir, mais pas un objectif pour l'instant. Le chantier ne doit s
 - Clips vidéo rangés sous un artiste (Jellyfin le fait), lus par le lecteur vidéo.
 - Livres audio, comme sorte de médiathèque à part, avec reprise à l'endroit où l'on s'est arrêté.
 - Égaliseur dans le lecteur.
-- Envoi de ce qu'on écoute à des services comme Last.fm ou ListenBrainz (le « scrobbling »).
+- Envoi de ce qu'on écoute à des services comme Last.fm ou ListenBrainz (le « scrobbling »), sans priorité mais pas une porte fermée : si des gens le veulent, on le fait.
 
 ## Questions ouvertes
 
