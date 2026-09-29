@@ -11,7 +11,8 @@ import { useEffect, useRef } from "react";
 import { useBranding } from "./player/logo";
 import { wearTheLogo } from "./installing";
 import { nameTheTab } from "./tab";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useParams } from "react-router-dom";
+import type { Library } from "./api";
 import { api } from "./api";
 import { AttentionProvider } from "./attention";
 import { AdministrationLine } from "./live";
@@ -21,6 +22,9 @@ import { Toasts } from "./components/toasts";
 import { DebugJournal } from "./components/debug-journal";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
+import { MusicAlbumPage } from "./music/album";
+import { MusicArtistPage } from "./music/artist";
+import { MusicLibraryPage } from "./music/library";
 import { SearchPage } from "./pages/search";
 import { CollectionPage, CollectionsPage } from "./pages/collections";
 import { PersonPage } from "./pages/person";
@@ -169,7 +173,9 @@ function TheLibrary() {
           <div className="shell-scroll" ref={scrolling}>
             <Routes>
               <Route path="/" element={<HomePage libraries={libraries.all} />} />
-              <Route path="/library/:id" element={<LibraryPage libraries={libraries.all} />} />
+              <Route path="/library/:id" element={<LibraryOrMusic libraries={libraries.all} />} />
+              <Route path="/music/album/:id" element={<MusicAlbumPage />} />
+              <Route path="/music/artist/:id" element={<MusicArtistPage />} />
               <Route path="/search" element={<SearchPage libraries={libraries.all} />} />
               {/* The same grid, narrowed to what this account marked: a view of the
                   library rather than a library of its own. */}
@@ -216,5 +222,17 @@ function TheLibrary() {
         </Toasts>
       </LibrariesContext.Provider>
     </RunningContext.Provider>
+  );
+}
+
+/** A library opened by its address: a grid of films and series, or, for a
+ *  library of music, the pages of music, which are kept apart from them. */
+function LibraryOrMusic({ libraries }: { libraries: Library[] }) {
+  const { id } = useParams();
+  const library = libraries.find((entry) => entry.id === id);
+  return library?.kind === "music" ? (
+    <MusicLibraryPage library={library} />
+  ) : (
+    <LibraryPage libraries={libraries} />
   );
 }

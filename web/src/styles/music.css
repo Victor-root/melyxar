@@ -1,0 +1,383 @@
+/*
+ * Music: a library of albums, artists and songs, and the page of one album or
+ * one artist. Every colour and space comes from the tokens of the theme.
+ */
+
+/* --------------------------------------------------------------------------
+ * The head of a library, and its tabs
+ * ----------------------------------------------------------------------- */
+
+.music-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap) var(--gap-wide);
+  margin-bottom: var(--gap);
+}
+
+.music-head h1 {
+  margin: 0;
+}
+
+/* The tabs sit in one piece of the bar's glass, as the pieces of the bar of a
+   grid of films do, and scroll sideways on a narrow screen rather than
+   wrapping into a second row. */
+.music-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--header-glass);
+  backdrop-filter: blur(18px);
+}
+
+.music-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.music-tab {
+  flex: none;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--quick) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+.music-tab:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.music-tab-on,
+.music-tab-on:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* The count follows the sort rather than standing at the far end, where
+   the rail of letters stands over it. */
+.music-bar {
+  justify-content: flex-start;
+  margin-bottom: var(--gap-wide);
+}
+
+/* The list beside the letters takes the whole width it is given, the rail
+   gone under it on a narrow screen included. */
+.music-list {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+.music-genre-on {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+ * Grids of albums and artists
+ * ----------------------------------------------------------------------- */
+
+.music-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-width-wide), 1fr));
+  gap: var(--gap-wide) var(--gap);
+}
+
+.music-tile {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: inherit;
+  text-decoration: none;
+  /* Drawn only once it comes near the screen, which keeps a collection of
+     thousands of albums scrolling smoothly. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 260px;
+  scroll-margin-top: calc(var(--header-height) + var(--gap));
+  transition: transform var(--calm) var(--ease);
+}
+
+.music-tile:hover,
+.music-tile:focus-visible {
+  transform: scale(1.03);
+}
+
+.music-tile-name {
+  margin-top: 6px;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-tile-note {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 0.88em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-tile-artist {
+  text-align: center;
+}
+
+/* A cover is square, and an artist round. While there is no picture the
+   cover wears its colour, or the surface, and the first letter of its name. */
+.music-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--cover-color, var(--surface-raised));
+  box-shadow: var(--shadow-card);
+}
+
+.music-cover-round {
+  border-radius: 50%;
+}
+
+.music-cover img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.music-cover-letter {
+  color: var(--text-faint);
+  font-size: 2.6rem;
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+ * Genres
+ * ----------------------------------------------------------------------- */
+
+.music-genres {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--gap);
+}
+
+.music-genre {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border);
+  background: var(--panel-glass);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+.music-genre:hover {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}
+
+.music-genre-name {
+  font-size: 1.1em;
+  font-weight: 650;
+}
+
+/* --------------------------------------------------------------------------
+ * Lists of songs
+ * ----------------------------------------------------------------------- */
+
+.music-songs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.music-song {
+  display: grid;
+  grid-template-columns: 3ch minmax(0, 2fr) minmax(0, 1.2fr) 6ch;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 52px;
+  padding: 6px var(--gap);
+  border-bottom: 1px solid var(--border);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
+  transition: background var(--quick) var(--ease);
+}
+
+.music-songs-no-album .music-song {
+  grid-template-columns: 3ch minmax(0, 1fr) 6ch;
+}
+
+.music-song:hover {
+  background: var(--surface-hover);
+}
+
+.music-song-number,
+.music-song-length {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.music-song-number {
+  text-align: right;
+}
+
+.music-song-length {
+  text-align: right;
+}
+
+.music-song-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.music-song-title,
+.music-song-artists,
+.music-song-album {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-song-artists,
+.music-song-album {
+  color: var(--text-soft);
+  font-size: 0.9em;
+}
+
+.music-song a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.music-song a:hover {
+  color: var(--accent-bright);
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+ * The page of an album or an artist
+ * ----------------------------------------------------------------------- */
+
+.music-hero {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--gap-wide);
+  margin-bottom: var(--gap-section);
+}
+
+.music-hero-picture {
+  flex: none;
+  width: clamp(160px, 22vw, 280px);
+}
+
+.music-hero-words {
+  min-width: 0;
+}
+
+.music-hero-words h1 {
+  margin: 4px 0 6px;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1.1;
+}
+
+.music-hero-kind {
+  color: var(--text-soft);
+  font-size: 0.85em;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.music-hero-by {
+  margin: 0;
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+.music-hero-by a {
+  color: var(--accent-bright);
+  text-decoration: none;
+}
+
+.music-hero-by a:hover {
+  text-decoration: underline;
+}
+
+.music-hero-facts {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+}
+
+.music-disc + .music-disc {
+  margin-top: var(--gap-wide);
+}
+
+.music-disc-name {
+  margin: 0 0 var(--gap);
+  color: var(--text-soft);
+  font-size: 1em;
+  font-weight: 650;
+}
+
+.music-section + .music-section {
+  margin-top: var(--gap-section);
+}
+
+.music-section h2 {
+  margin: 0 0 var(--gap);
+}
+
+/* --------------------------------------------------------------------------
+ * A phone
+ * ----------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+  .music-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .music-song,
+  .music-songs-no-album .music-song {
+    grid-template-columns: 3ch minmax(0, 1fr) 5ch;
+    padding: 6px 4px;
+  }
+
+  /* The album is said nowhere else on the line, and a phone has no room for
+     it beside the name: the list of an album page never had it. */
+  .music-song-album {
+    display: none;
+  }
+
+  .music-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .music-hero-picture {
+    width: min(70vw, 260px);
+    align-self: center;
+  }
+}

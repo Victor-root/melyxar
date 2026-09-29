@@ -1,0 +1,90 @@
+/*
+ * The page of one artist: their picture, the albums that are theirs, and the
+ * albums of others they play on.
+ */
+
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { howMany } from "../readable";
+import { useSettings } from "../settings";
+import { music } from "./api";
+import type { Album, ArtistPage } from "./api";
+import { AlbumTile, ArtistPicture } from "./tiles";
+
+export function MusicArtistPage() {
+  const { t } = useSettings();
+  const { id = "" } = useParams();
+  const [artist, setArtist] = useState<ArtistPage | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const stop = new AbortController();
+    setArtist(null);
+    setFailed(false);
+    music
+      .artist(id, stop.signal)
+      .then(setArtist)
+      .catch(() => {
+        if (!stop.signal.aborted) {
+          setFailed(true);
+        }
+      });
+    return () => stop.abort();
+  }, [id]);
+
+  if (failed) {
+    return (
+      <main className="page">
+        <p className="notice">{t("music.artist_gone")}</p>
+      </main>
+    );
+  }
+  if (!artist) {
+    return (
+      <main className="page">
+        <p className="notice">{t("library.loading")}</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="page music-page">
+      <header className="music-hero music-hero-artist">
+        <div className="music-hero-picture">
+          <ArtistPicture artist={artist} />
+        </div>
+        <div className="music-hero-words">
+          <span className="music-hero-kind">{t("music.artist")}</span>
+          <h1>{artist.name}</h1>
+          <p className="music-hero-facts">
+            {[
+              artist.albums > 0 && howMany(artist.albums, "music.albums_count", t),
+              howMany(artist.songs, "music.songs_count", t),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+      </header>
+
+      <Albums name={t("music.their_albums")} albums={artist.their_albums} />
+      <Albums name={t("music.appears_on")} albums={artist.appears_on} />
+    </main>
+  );
+}
+
+function Albums({ name, albums }: { name: string; albums: Album[] }) {
+  if (albums.length === 0) {
+    return null;
+  }
+  return (
+    <section className="music-section">
+      <h2>{name}</h2>
+      <div className="music-grid">
+        {albums.map((album) => (
+          <AlbumTile key={album.id} album={album} />
+        ))}
+      </div>
+    </section>
+  );
+}
