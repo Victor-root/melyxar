@@ -54,84 +54,21 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use melyxar_core::id::{MediaSourceId, TrackId};
-    use melyxar_core::library::LibraryKind;
-    use melyxar_core::media::{AudioDetails, Loudness, Track, TrackKind};
-    use melyxar_core::music::{Named, SongFiling};
-    use melyxar_core::time::{Millis, now};
+    use melyxar_core::media::Loudness;
 
     use super::*;
-    use crate::catalogue::SourceAnalysis;
-    use crate::music::MusicFile;
+    use crate::music_testing::{a_read_song, empty_music_library};
 
     #[tokio::test]
     async fn a_song_is_played_from_its_file_on_the_disk() {
-        let database = Database::open_in_memory().await.expect("opens");
-        let library = database
-            .create_library(
-                "Music",
-                LibraryKind::Music,
-                "fr",
-                &[("disk-one".to_string(), PathBuf::from("/mnt/one"))],
-            )
-            .await
-            .expect("library");
-        let source_id = MediaSourceId::new();
-        let named = Named {
-            name: "Quiet Harbour".to_string(),
-            sort_name: "quiet harbour".to_string(),
-        };
-        let file = MusicFile {
-            source_id,
-            song: None,
-            relative_path: PathBuf::from("A/01.m4a"),
-            size_bytes: 10,
-            modified_at: now(),
-            filing: SongFiling {
-                title: named,
-                artists: Vec::new(),
-                album: None,
-                track: None,
-                disc: None,
-                year: None,
-                genres: Vec::new(),
-            },
-            reading: Ok((
-                SourceAnalysis {
-                    container: Some("mov,mp4,m4a,3gp,3g2,mj2".to_string()),
-                    duration: Some(Millis::new(1_000)),
-                    overall_bitrate: Some(900_000),
-                },
-                Track {
-                    id: TrackId::new(),
-                    source_id,
-                    stream_index: 0,
-                    language: None,
-                    title: None,
-                    is_default: true,
-                    is_forced: false,
-                    kind: TrackKind::Audio(AudioDetails {
-                        codec: "alac".to_string(),
-                        profile: None,
-                        channels: 2,
-                        channel_layout: None,
-                        sample_rate: None,
-                        bit_depth: None,
-                        bitrate: None,
-                        loudness: Loudness::default(),
-                    }),
-                },
-            )),
-        };
+        let (database, library, root) = empty_music_library().await;
+        let file = a_read_song("A/01.m4a", "Quiet Harbour", "alac", Loudness::default());
+        let source_id = file.source_id;
         database
-            .file_music(library.id, library.roots[0].id, &[file])
+            .file_music(library, root, &[file])
             .await
             .expect("filed");
-        let song = database
-            .sources_of_root(library.roots[0].id)
-            .await
-            .expect("read")[0]
-            .work_id;
+        let song = database.sources_of_root(root).await.expect("read")[0].work_id;
 
         let found = database
             .music_song_file(song)

@@ -259,6 +259,18 @@ async fn what_follows_a_scan(
     // And only then the readings of the files. A look up that went wrong
     // does not hold them back: they are about the files.
     read_what_follows_an_arrival_in(state, &library, priority).await;
+    // The songs are measured for how loud they are, which is music's own
+    // reading and the only one a library of music has.
+    if library.kind == LibraryKind::Music
+        && let Err(error) =
+            crate::music::loudness::start_when_needed(state, library.clone(), priority).await
+    {
+        tracing::warn!(
+            library = library.name,
+            %error,
+            "the songs could not be set to be measured"
+        );
+    }
     ended
 }
 

@@ -9,6 +9,7 @@
 
 pub mod browse;
 pub mod listen;
+pub mod loudness;
 pub mod lyrics;
 pub mod marks;
 pub(crate) mod pictures;
