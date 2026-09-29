@@ -78,6 +78,8 @@ pub struct MusicPreferences {
     /// one is converted down to it; nothing means every song as it is.
     pub max_bitrate_kbps: Option<u32>,
     pub volume_mode: VolumeMode,
+    /// How many seconds one song fades into the next, nought for none.
+    pub crossfade_seconds: u32,
 }
 
 impl Default for MusicPreferences {
@@ -87,6 +89,7 @@ impl Default for MusicPreferences {
             resume_queue: true,
             max_bitrate_kbps: None,
             volume_mode: VolumeMode::default(),
+            crossfade_seconds: 0,
         }
     }
 }
@@ -99,6 +102,9 @@ pub struct MusicLibraryOptions {
     /// online.
     pub lyrics_online: bool,
 }
+
+/// The longest a crossfade can be asked to last, in seconds.
+pub const LONGEST_CROSSFADE_SECONDS: u32 = 12;
 
 /// A ceiling brought within what can be asked of a conversion.
 pub fn bounded_ceiling(kbps: u32) -> u32 {

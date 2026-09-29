@@ -7,7 +7,8 @@ use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_core::music_preferences::{
-    FilmOnScreen, MusicLibraryOptions, MusicPreferences, VolumeMode, bounded_ceiling,
+    FilmOnScreen, LONGEST_CROSSFADE_SECONDS, MusicLibraryOptions, MusicPreferences, VolumeMode,
+    bounded_ceiling,
 };
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +34,8 @@ struct MusicPreferencesView {
     max_bitrate_kbps: Option<u32>,
     /// off, track or album.
     volume_mode: String,
+    /// Nought for songs that follow one another without a gap.
+    crossfade_seconds: u32,
 }
 
 fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
@@ -41,6 +44,7 @@ fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
         resume_queue: chosen.resume_queue,
         max_bitrate_kbps: chosen.max_bitrate_kbps,
         volume_mode: chosen.volume_mode.as_str().to_string(),
+        crossfade_seconds: chosen.crossfade_seconds,
     })
 }
 
@@ -74,6 +78,7 @@ fn chosen_from(body: &MusicPreferencesView) -> Result<MusicPreferences> {
         volume_mode: VolumeMode::parse(&body.volume_mode).ok_or_else(|| {
             ServerError::invalid_input("songs are levelled off, by track or by album")
         })?,
+        crossfade_seconds: body.crossfade_seconds.min(LONGEST_CROSSFADE_SECONDS),
     })
 }
 
@@ -127,6 +132,7 @@ mod tests {
             resume_queue: false,
             max_bitrate_kbps: Some(9000),
             volume_mode: "album".to_string(),
+            crossfade_seconds: 60,
         });
         let Ok(chosen) = chosen else {
             panic!("a choice that exists is read");
@@ -134,12 +140,14 @@ mod tests {
         assert_eq!(chosen.film_on_screen, FilmOnScreen::Pause);
         assert_eq!(chosen.max_bitrate_kbps, Some(320));
         assert_eq!(chosen.volume_mode, VolumeMode::Album);
+        assert_eq!(chosen.crossfade_seconds, LONGEST_CROSSFADE_SECONDS);
         assert!(
             chosen_from(&MusicPreferencesView {
                 film_on_screen: "louder".to_string(),
                 resume_queue: true,
                 max_bitrate_kbps: None,
                 volume_mode: "track".to_string(),
+                crossfade_seconds: 0,
             })
             .is_err()
         );
