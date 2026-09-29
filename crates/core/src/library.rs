@@ -80,6 +80,13 @@ impl LibraryKind {
         !matches!(self, Self::HomeMedia | Self::Music)
     }
 
+    /// Whether what it holds is played as video. Music is not, and none of the
+    /// readings that go through a video applies to it: where a jump lands,
+    /// the thumbnails of the bar, the subtitles inside the file.
+    pub fn holds_videos(self) -> bool {
+        !matches!(self, Self::Music)
+    }
+
     /// The kind of work a file in this library stands for when nothing better
     /// is known about it.
     ///
@@ -336,6 +343,13 @@ mod tests {
         assert!(!LibraryKind::Movies.is_episodic());
         assert!(!LibraryKind::Music.is_episodic());
         assert!(!LibraryKind::HomeMedia.is_episodic());
+    }
+
+    #[test]
+    fn every_kind_holds_videos_but_music() {
+        for kind in LibraryKind::every() {
+            assert_eq!(kind.holds_videos(), kind != LibraryKind::Music, "{kind:?}");
+        }
     }
 
     #[test]

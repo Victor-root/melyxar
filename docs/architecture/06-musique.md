@@ -37,17 +37,17 @@ Le code de la musique doit être bien séparé et facile à maintenir. Les règl
 
 ## Ce qui existe déjà
 
-- Le modèle de données : les œuvres de sorte artiste, album et morceau, avec parent et numéro de piste, et les colonnes de sonie (intégrée, crête, plage) sur les pistes audio.
-- La sorte de médiathèque « Musique » : dans le moteur, dans l'administration et dans l'ordre de l'accueil, éteinte.
-- Les listes de lecture, les images, les personnes, les tâches de fond.
-- L'analyse des fichiers, qui écarte déjà la pochette intégrée à un fichier audio.
+- Le modèle de données : les œuvres de sorte artiste, album et morceau. Un morceau pend sous son album, rangé par son numéro de piste ; un album et un artiste ne pendent sous rien, puisqu'un album peut être celui de plusieurs artistes. Ce qui n'appartient qu'à la musique vit dans ses propres tables (migration `0071_music.sql`) : le disque d'un morceau, à qui est un album (et s'il s'agit d'une compilation), et qui est crédité sur un morceau (`artist`) ou un album (`album_artist`). Les colonnes de sonie (intégrée, crête, plage) sont sur les pistes audio depuis la première migration.
+- Morceaux, albums et artistes sont marqués « à eux » (`own`), comme les photos et vidéos perso : nommés par leurs fichiers, ils n'attendent aucun catalogue tant que la musique n'a pas le sien.
+- La sorte de médiathèque « Musique » : dans le moteur, dans l'administration et dans l'ordre de l'accueil, éteinte dans l'interface tant que l'affichage n'existe pas.
+- Les listes de lecture, les images, les tâches de fond.
 - Un précédent de nouvelle sorte de médiathèque : les photos et vidéos perso.
 
 ## Ce qui reste à faire
 
 Ordre proposé, chaque étape livrable seule :
 
-1. **Le scan** : comprendre `Artiste/Album/01 - Titre.flac` et lire les étiquettes intégrées (titre, artiste, album, numéro de piste, année, disque).
+1. **Le scan. Fait.** Une médiathèque de musique ne prend que ses fichiers audio. Chaque fichier est lu sur place par la crate `tags` (étiquettes, durée, format), et les rares formats qu'elle ne connaît pas (WMA, DSD) par l'outil d'analyse des films, en secours. Le rangement se décide un dossier à la fois (`library/src/music.rs`) : l'étiquette fait foi, les dossiers comblent ce qu'elle tait, un dossier `CD 2` est le second disque de l'album au-dessus, un album sans artiste d'album dont les morceaux sont joués par des gens différents est une compilation rangée sous « Various Artists ». La base écrit un dossier en une seule opération (`database/src/music.rs`) ; un morceau ré-étiqueté garde son identité, ses favoris et son historique, et les albums et artistes laissés vides sont retirés, jamais ceux d'un disque débranché. Rien de la musique ne passe par l'identification des films, ni par les lectures qui traversent une vidéo (points de saut, vignettes, sous-titres).
 2. **L'affichage** : pages artiste, album et morceau, navigation pensée pour une discothèque de plus de 100 000 morceaux.
 3. **Un lecteur simple** : lire un morceau, et le suivant de l'album.
 4. **Le lecteur complet** : barre persistante qui reste pendant la navigation, file d'attente, aléatoire, répétition, enchaînement sans coupure.
