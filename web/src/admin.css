@@ -1454,12 +1454,15 @@
  * The first steps of a brand new server
  * ----------------------------------------------------------------------- */
 
+/* Its own scroll: the body never scrolls, the shell's box does, and this
+   screen is drawn without the shell. */
 .first-steps {
   display: flex;
   flex-direction: column;
   gap: var(--gap-wide);
-  max-width: 760px;
-  margin: 0 auto;
+  height: 100dvh;
+  overflow-y: auto;
+  padding-inline: max(var(--gutter), calc((100% - 760px) / 2));
 }
 
 .first-steps-head {
