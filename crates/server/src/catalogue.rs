@@ -392,7 +392,7 @@ pub(crate) struct CardView {
 }
 
 #[derive(Debug, Serialize, PartialEq)]
-struct ImageView {
+pub(crate) struct ImageView {
     url: String,
     width: Option<i32>,
     height: Option<i32>,
@@ -536,7 +536,7 @@ fn pictures_of(images: &[StoredImage], kind: &str) -> Vec<ImageView> {
         .collect()
 }
 
-fn image_view(image: &StoredImage) -> ImageView {
+pub(crate) fn image_view(image: &StoredImage) -> ImageView {
     ImageView {
         url: format!("/api/v1/images/{}", image.relative_path),
         width: image.width,
