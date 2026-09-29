@@ -737,15 +737,14 @@ pub async fn falling_behind(state: &AppState) -> usize {
         let Some(id) = seen.session else {
             continue;
         };
-        if let Ok(session) = sessions.get(id, seen.viewer.user).await {
-            if session
+        if let Ok(session) = sessions.get(id, seen.viewer.user).await
+            && session
                 .preparation()
                 .await
                 .producing
                 .is_some_and(|producing| producing.speed < KEEPING_UP)
-            {
-                behind += 1;
-            }
+        {
+            behind += 1;
         }
     }
     behind
@@ -800,10 +799,10 @@ pub async fn now_playing(state: &AppState) -> Result<Vec<Watched>> {
         // The episode's own still, then its series' wide picture; a film's
         // wide picture, then its poster.
         let mut picture = wide_picture_of(state, work.id).await?;
-        if picture.is_none() {
-            if let Some(series) = series {
-                picture = wide_picture_of(state, series.id).await?;
-            }
+        if picture.is_none()
+            && let Some(series) = series
+        {
+            picture = wide_picture_of(state, series.id).await?;
         }
 
         let producing = match (seen.session, state.sessions()) {

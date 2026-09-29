@@ -1304,19 +1304,19 @@ impl Session {
     /// core of the machine spent on nobody, and a folder left behind fills a
     /// disk one film at a time.
     pub async fn close(&self) {
-        if let Some(at_work) = self.running.lock().await.take() {
-            if let Err(error) = at_work.process.stop().await {
-                tracing::warn!(session = %self.id, error = %error, "a media tool would not stop");
-            }
+        if let Some(at_work) = self.running.lock().await.take()
+            && let Err(error) = at_work.process.stop().await
+        {
+            tracing::warn!(session = %self.id, error = %error, "a media tool would not stop");
         }
-        if let Err(error) = tokio::fs::remove_dir_all(&self.folder).await {
-            if error.kind() != std::io::ErrorKind::NotFound {
-                tracing::warn!(
-                    session = %self.id,
-                    error = %error,
-                    "the working folder of a session could not be removed"
-                );
-            }
+        if let Err(error) = tokio::fs::remove_dir_all(&self.folder).await
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(
+                session = %self.id,
+                error = %error,
+                "the working folder of a session could not be removed"
+            );
         }
     }
 }

@@ -182,10 +182,10 @@ fn marks_of(reader: &mut Reader, marks: Span, track: u64) -> Option<Vec<u64>> {
             }
             Some(())
         })?;
-        if let (Some(when), Some(belongs_to)) = (when, belongs_to) {
-            if belongs_to == track {
-                found.push(when);
-            }
+        if let (Some(when), Some(belongs_to)) = (when, belongs_to)
+            && belongs_to == track
+        {
+            found.push(when);
         }
         Some(())
     })?;

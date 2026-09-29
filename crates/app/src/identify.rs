@@ -332,18 +332,17 @@ where
             filled.pictures += 1;
         }
 
-        if work.wants_a_synopsis {
-            if let Some(synopsis) = details
+        if work.wants_a_synopsis
+            && let Some(synopsis) = details
                 .overview
                 .as_deref()
                 .filter(|text| !text.trim().is_empty())
-            {
-                state
-                    .database()
-                    .set_work_synopsis(work.id, language, details.tagline.as_deref(), synopsis)
-                    .await?;
-                filled.synopses += 1;
-            }
+        {
+            state
+                .database()
+                .set_work_synopsis(work.id, language, details.tagline.as_deref(), synopsis)
+                .await?;
+            filled.synopses += 1;
         }
         handle.advance(1).await;
     }

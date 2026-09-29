@@ -551,22 +551,22 @@ async fn record_changes(
     }
 
     for path in &changes.missing {
-        if let Some(source) = by_path.get(path.as_path()) {
-            if source.missing_since.is_none() {
-                database.mark_source_missing(source.id).await?;
-                report.missing += 1;
-            }
+        if let Some(source) = by_path.get(path.as_path())
+            && source.missing_since.is_none()
+        {
+            database.mark_source_missing(source.id).await?;
+            report.missing += 1;
         }
     }
 
     // A file that was absent and is back keeps the identifier it had, and with
     // it every position, favourite and count attached to it.
     for file in media {
-        if let Some(source) = by_path.get(file.relative_path.as_path()) {
-            if source.missing_since.is_some() {
-                database.mark_source_present(source.id).await?;
-                report.restored += 1;
-            }
+        if let Some(source) = by_path.get(file.relative_path.as_path())
+            && source.missing_since.is_some()
+        {
+            database.mark_source_present(source.id).await?;
+            report.restored += 1;
         }
     }
 
@@ -1069,10 +1069,10 @@ async fn work_for(
     if library.kind == LibraryKind::HomeMedia {
         return crate::own::work_for(state, library, relative_path).await;
     }
-    if library.kind.is_episodic() {
-        if let Some(work) = episode_work_for(state, library, relative_path, signs).await? {
-            return Ok(work);
-        }
+    if library.kind.is_episodic()
+        && let Some(work) = episode_work_for(state, library, relative_path, signs).await?
+    {
+        return Ok(work);
     }
 
     let database = state.database();

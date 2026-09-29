@@ -288,12 +288,10 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         || track_choice_forces_rebuild
         || delivery != SubtitleDelivery::None
     {
-        if !container_supported {
-            if let Some(container) = &container {
-                reasons.push(Reason::ContainerNotSupported {
-                    container: container.clone(),
-                });
-            }
+        if !container_supported && let Some(container) = &container {
+            reasons.push(Reason::ContainerNotSupported {
+                container: container.clone(),
+            });
         }
         if track_choice_forces_rebuild {
             reasons.push(Reason::NonDefaultTrackSelected);
@@ -406,10 +404,10 @@ pub(crate) fn chosen_audio<'a>(
     source: &'a MediaSource,
     requested: Option<&'a Track>,
 ) -> Option<(&'a Track, &'a AudioDetails)> {
-    if let Some(track) = requested {
-        if let TrackKind::Audio(details) = &track.kind {
-            return Some((track, details));
-        }
+    if let Some(track) = requested
+        && let TrackKind::Audio(details) = &track.kind
+    {
+        return Some((track, details));
     }
     let on_its_own = || {
         source
@@ -489,10 +487,10 @@ fn wide_gamut_colour(
     let Some(format) = details.hdr else {
         return Colour::Standard;
     };
-    if let HdrFormat::DolbyVision { profile } = format {
-        if format.is_incompatible_without_conversion() {
-            return Colour::Imposed(Some(Reason::DolbyVisionWithoutBaseLayer { profile }));
-        }
+    if let HdrFormat::DolbyVision { profile } = format
+        && format.is_incompatible_without_conversion()
+    {
+        return Colour::Imposed(Some(Reason::DolbyVisionWithoutBaseLayer { profile }));
     }
     if request.never_tone_map {
         return Colour::Imposed(None);
@@ -542,14 +540,14 @@ fn decide_video(
         must_rebuild = true;
     }
 
-    if let Some(max) = profile.max_height {
-        if details.visible_height() > max {
-            reasons.push(Reason::ResolutionTooHigh {
-                height: details.visible_height(),
-                max_height: max,
-            });
-            must_rebuild = true;
-        }
+    if let Some(max) = profile.max_height
+        && details.visible_height() > max
+    {
+        reasons.push(Reason::ResolutionTooHigh {
+            height: details.visible_height(),
+            max_height: max,
+        });
+        must_rebuild = true;
     }
 
     if details.is_interlaced {
@@ -564,14 +562,14 @@ fn decide_video(
     // no limit: somebody would set it, see no change, and conclude the setting
     // is broken.
     let arriving_at = details.bitrate.or(source.overall_bitrate);
-    if let (Some(max), Some(bitrate)) = (profile.max_bitrate, arriving_at) {
-        if bitrate > max {
-            reasons.push(Reason::BitrateTooHigh {
-                bitrate,
-                max_bitrate: max,
-            });
-            must_rebuild = true;
-        }
+    if let (Some(max), Some(bitrate)) = (profile.max_bitrate, arriving_at)
+        && bitrate > max
+    {
+        reasons.push(Reason::BitrateTooHigh {
+            bitrate,
+            max_bitrate: max,
+        });
+        must_rebuild = true;
     }
 
     if must_rebuild {
@@ -599,14 +597,14 @@ fn decide_audio(
         must_rebuild = true;
     }
 
-    if let Some(max) = request.profile.max_audio_channels {
-        if details.channels > max {
-            reasons.push(Reason::TooManyAudioChannels {
-                channels: details.channels,
-                max_channels: max,
-            });
-            must_rebuild = true;
-        }
+    if let Some(max) = request.profile.max_audio_channels
+        && details.channels > max
+    {
+        reasons.push(Reason::TooManyAudioChannels {
+            channels: details.channels,
+            max_channels: max,
+        });
+        must_rebuild = true;
     }
 
     // A fold has to be applied by the server, so asking for one means the

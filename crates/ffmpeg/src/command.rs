@@ -510,13 +510,13 @@ impl Command {
         // after a few jumps. Cutting everything at the second asked for, on
         // the way out, and putting the film's own clock back keeps both where
         // they belong.
-        if let (Some(start), Output::Segments { .. }) = (self.input.start_at, &self.output) {
-            if !matches!(self.video, VideoOutput::Copy) {
-                push!("-ss");
-                push!(&format_seconds(start));
-                push!("-output_ts_offset");
-                push!(&format_seconds(start));
-            }
+        if let (Some(start), Output::Segments { .. }) = (self.input.start_at, &self.output)
+            && !matches!(self.video, VideoOutput::Copy)
+        {
+            push!("-ss");
+            push!(&format_seconds(start));
+            push!("-output_ts_offset");
+            push!(&format_seconds(start));
         }
 
         if let Some(duration) = self.duration {
@@ -588,11 +588,11 @@ impl Command {
                 // Already written into the named graph when the picture is
                 // being painted with subtitles: saying it twice would apply
                 // it twice.
-                if painted.is_none() {
-                    if let Some(filters) = picture_filter_chain(encode) {
-                        push!("-vf");
-                        push!(&filters);
-                    }
+                if painted.is_none()
+                    && let Some(filters) = picture_filter_chain(encode)
+                {
+                    push!("-vf");
+                    push!(&filters);
                 }
 
                 push!("-c:v");
@@ -829,10 +829,10 @@ fn picture_filter_chain(encode: &VideoEncode) -> Option<String> {
 fn audio_filter_chain(encode: &AudioEncode) -> Option<String> {
     let mut stages: Vec<String> = Vec::new();
 
-    if let Some(gain) = encode.loudness_gain_db {
-        if gain.abs() > 0.01 {
-            stages.push(format!("volume={gain:.2}dB"));
-        }
+    if let Some(gain) = encode.loudness_gain_db
+        && gain.abs() > 0.01
+    {
+        stages.push(format!("volume={gain:.2}dB"));
     }
 
     if let Some(matrix) = downmix_matrix(encode.downmix, encode.source_channels, encode.channels) {

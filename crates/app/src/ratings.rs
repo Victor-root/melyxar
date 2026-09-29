@@ -268,10 +268,10 @@ where
 {
     let database = state.database();
     let ids = database.work_external_ids(work_id).await?;
-    if known_id(&ids, "imdb").is_none() {
-        if let Some(external_id) = known_id(&ids, provider.name()) {
-            find_imdb_id(state, provider, work_id, catalogue, &external_id).await?;
-        }
+    if known_id(&ids, "imdb").is_none()
+        && let Some(external_id) = known_id(&ids, provider.name())
+    {
+        find_imdb_id(state, provider, work_id, catalogue, &external_id).await?;
     }
     let Some(imdb_id) = known_id(&database.work_external_ids(work_id).await?, "imdb") else {
         return Ok(());
@@ -283,10 +283,10 @@ where
     if tokio::fs::try_exists(imdb_file(state)).await.unwrap_or(false) {
         read_imdb_ratings(state, &work).await?;
     }
-    if let Some(omdb) = omdb(state).await? {
-        if omdb_questions_today(state).await? < OMDB_QUESTIONS_A_DAY {
-            ask_the_critics(state, &omdb, &work[0]).await?;
-        }
+    if let Some(omdb) = omdb(state).await?
+        && omdb_questions_today(state).await? < OMDB_QUESTIONS_A_DAY
+    {
+        ask_the_critics(state, &omdb, &work[0]).await?;
     }
     Ok(())
 }
@@ -332,11 +332,11 @@ async fn fresh_imdb_file(state: &AppState) -> bool {
     if age.is_some_and(|age| age < IMDB_FILE_KEPT_FOR) {
         return true;
     }
-    if let Some(folder) = file.parent() {
-        if let Err(error) = tokio::fs::create_dir_all(folder).await {
-            tracing::warn!(%error, folder = %folder.display(), "the folder of the IMDb ratings could not be made");
-            return false;
-        }
+    if let Some(folder) = file.parent()
+        && let Err(error) = tokio::fs::create_dir_all(folder).await
+    {
+        tracing::warn!(%error, folder = %folder.display(), "the folder of the IMDb ratings could not be made");
+        return false;
     }
     match melyxar_metadata::imdb::download_ratings(&file).await {
         Ok(()) => {

@@ -105,25 +105,25 @@ fn tidied(given: WrittenDetails) -> std::result::Result<WrittenDetails, &'static
             return Err("a day is written year, month, day");
         }
     }
-    if let (Some(start), Some(end)) = (&release_date, &end_date) {
-        if end < start {
-            return Err("a work cannot end before it came out");
-        }
+    if let (Some(start), Some(end)) = (&release_date, &end_date)
+        && end < start
+    {
+        return Err("a work cannot end before it came out");
     }
     // The day, when there is one, says the year.
     let release_year = release_date
         .as_deref()
         .and_then(melyxar_core::time::year_of_day)
         .or(given.release_year);
-    if let Some(year) = release_year {
-        if !(EARLIEST_YEAR..=LATEST_YEAR).contains(&year) {
-            return Err("that year is not one a work came out in");
-        }
+    if let Some(year) = release_year
+        && !(EARLIEST_YEAR..=LATEST_YEAR).contains(&year)
+    {
+        return Err("that year is not one a work came out in");
     }
-    if let Some(rating) = given.community_rating {
-        if !(0.0..=HIGHEST_RATING).contains(&rating) {
-            return Err("a rating is between 0 and 10");
-        }
+    if let Some(rating) = given.community_rating
+        && !(0.0..=HIGHEST_RATING).contains(&rating)
+    {
+        return Err("a rating is between 0 and 10");
     }
     Ok(WrittenDetails {
         title,

@@ -115,10 +115,10 @@ impl Sessions {
         // Room is made first, since it walks every session, and refused only
         // when nothing more may go: the last resort, after everything watched
         // long enough ago has been given up.
-        if let Some(room) = limits.room {
-            if self.make_room(room).await >= room.most_bytes {
-                return Err(StreamingError::NoRoomLeft);
-            }
+        if let Some(room) = limits.room
+            && self.make_room(room).await >= room.most_bytes
+        {
+            return Err(StreamingError::NoRoomLeft);
         }
 
         let mut live = self.live.lock().await;

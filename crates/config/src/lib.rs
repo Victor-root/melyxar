@@ -351,12 +351,11 @@ impl Config {
             certificate_path,
             private_key_path,
         } = &self.access
+            && (!certificate_path.is_absolute() || !private_key_path.is_absolute())
         {
-            if !certificate_path.is_absolute() || !private_key_path.is_absolute() {
-                return Err(ConfigError::Invalid(
-                    "certificate and key paths must be absolute".into(),
-                ));
-            }
+            return Err(ConfigError::Invalid(
+                "certificate and key paths must be absolute".into(),
+            ));
         }
         Ok(())
     }
