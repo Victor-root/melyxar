@@ -81,6 +81,13 @@ Ordre proposé, chaque étape livrable seule :
 - **Écrire dans les fichiers reste éteint tant qu'on ne l'a pas demandé**, comme la règle déjà en place pour les médias (le service ne peut qu'y lire par défaut).
 - **Isolation** : l'écriture des étiquettes vit dans son propre module, séparé de la lecture. Renommer un fichier ne doit rien faire perdre à la fiche (favoris, compteurs d'écoute, listes de lecture), sur le modèle du déplacement d'un film déjà géré.
 
+## Vérifications techniques faites (29 septembre 2026)
+
+- **Lecture des étiquettes** : l'analyse actuelle lance `ffprobe` fichier par fichier et sait déjà renvoyer les étiquettes du fichier (titre, artiste, album, piste), mais ne les expose pas. Lancer un `ffprobe` par morceau coûte environ 50 ms, soit plus d'une heure pour 100 000 morceaux sur un seul fil. **La bibliothèque Rust `lofty` lit les mêmes informations (étiquettes, durée) en quelques microsecondes par fichier, sans lancer de programme** : le scan de la musique la prendra pour lire, et gardera `ffprobe` seulement pour les formats qu'elle ne connaît pas.
+- **Écriture des étiquettes** : `lofty` (licence MIT ou Apache 2.0, maintenue, très utilisée) a été essayée sur de vrais fichiers MP3, FLAC, M4A (AAC), OGG Vorbis, Opus, WavPack et ALAC : lecture, modification du titre et de l'artiste, suppression d'une étiquette, ajout d'une pochette intégrée, et **le son décodé est resté strictement identique dans les sept formats**. Relus ensuite par `ffprobe`, les nouvelles étiquettes sont bien là. Non couverts : WMA, qui reste en lecture seule (lue par `ffprobe`), et certains formats rares non essayés. Certaines informations techniques d'un MP3 (l'en-tête de l'encodeur) ne sont pas des étiquettes et ne se suppriment pas avec elles.
+- **Écrire sans risque** : `lofty` modifie le fichier en place. Le gestionnaire écrira donc sur une copie de travail, vérifiera que le son est inchangé, puis remplacera le fichier, pour qu'une coupure en plein travail ne laisse jamais un fichier à moitié écrit.
+- **Serveur existant** : le serveur accepte déjà de créer une médiathèque « musique », et rien n'est rangé sous cette sorte aujourd'hui. Son scan ne reconnaît que les fichiers vidéo : une médiathèque de musique créée maintenant resterait vide, et une vidéo posée dedans serait traitée comme un film. **La musique aura donc sa propre branche de scan avant que la création d'une médiathèque de musique soit ouverte à l'interface**, pour ne jamais passer par le chemin des films.
+
 ## Pistes possibles, sans priorité
 
 Ouvertes à l'avenir, mais pas un objectif pour l'instant. Le chantier ne doit simplement pas les rendre impossibles.
