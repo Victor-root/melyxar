@@ -5,7 +5,7 @@
  * requests: what goes wrong with music stays with music.
  */
 
-import { get } from "../api";
+import { get, put } from "../api";
 import type { Picture } from "../api";
 
 /** An artist named on an album or a song. */
@@ -84,6 +84,14 @@ export interface Found {
   songs: Song[];
 }
 
+/** What an account chose for its music. */
+export interface MusicPreferences {
+  film_on_screen: "stop" | "pause";
+  resume_queue: boolean;
+  /** Nothing for every song as it is. */
+  max_bitrate_kbps: number | null;
+}
+
 /** One album, as its own page shows it. */
 export interface AlbumPage extends Album {
   /** Its songs, in their order on it. */
@@ -156,6 +164,10 @@ export const music = {
     get<Genre[]>(`/api/v1/music/${library}/genres`, signal),
   initials: (library: string, of: "albums" | "artists" | "album_artists", signal?: AbortSignal) =>
     get<Initial[]>(`/api/v1/music/${library}/initials${query({ of })}`, signal),
+  preferences: (signal?: AbortSignal) =>
+    get<MusicPreferences>("/api/v1/music/preferences", signal),
+  setPreferences: (chosen: MusicPreferences) =>
+    put<MusicPreferences>("/api/v1/music/preferences", chosen),
   search: (words: string, library: string | undefined, signal?: AbortSignal) =>
     get<Found>(`/api/v1/music/search${query({ words, library })}`, signal),
   album: (id: string, signal?: AbortSignal) =>

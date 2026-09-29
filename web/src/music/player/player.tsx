@@ -13,7 +13,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useIsAFilmOnScreen } from "../../on-screen";
-import type { Song } from "../api";
+import { music as server } from "../api";
+import type { MusicPreferences, Song } from "../api";
 import { formsPlayedHere } from "./forms";
 import { rememberLoudness, rememberQueue, storedLoudness, storedQueue } from "./kept";
 import type { Loudness } from "./kept";
@@ -61,6 +62,11 @@ export interface Music {
   playLast: (songs: Song[]) => void;
   remove: (at: number) => void;
   setOpen: (open: boolean) => void;
+  /** What this account chose for its music, the defaults until the server
+      has said. */
+  preferences: MusicPreferences;
+  /** Changed here at once, and put back as it was if the server refuses. */
+  setPreferences: (chosen: MusicPreferences) => Promise<void>;
 }
 
 /** Where the song has got to, and how long it runs, in seconds. */
@@ -103,6 +109,13 @@ export function useMusicTime(): Time {
   );
 }
 
+/** What an account that chose nothing gets, as the server has it. */
+export const DEFAULT_PREFERENCES: MusicPreferences = {
+  film_on_screen: "stop",
+  resume_queue: true,
+  max_bitrate_kbps: null,
+};
+
 /** How often where the song has got to is written down, for a tab closed
  *  and opened again to take it up there. */
 const KEEP_EVERY_MS = 5_000;
@@ -114,9 +127,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     return element;
   });
   const kept = useMemo(storedQueue, []);
-  const [queue, setQueue] = useState<Queue>(() =>
-    kept ? { songs: kept.songs, order: kept.order, at: kept.at, shuffle: kept.shuffle, repeat: kept.repeat } : EMPTY,
-  );
+  /* Empty until the account has said whether a queue left in a closed tab
+     is taken up again: shown and then taken away, it would be a bar that
+     flickers on every visit. */
+  const [queue, setQueue] = useState<Queue>(EMPTY);
+  const [preferences, setPreferencesHere] = useState<MusicPreferences | null>(null);
   const [playing, setPlaying] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [loudness, setLoudness] = useState<Loudness>(storedLoudness);
@@ -128,7 +143,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const offset = useRef(0);
   const startAt = useRef(0);
   /* Where the queue taken up from an earlier visit had got to, used once. */
-  const resumeFrom = useRef(kept?.position ?? 0);
+  const resumeFrom = useRef(0);
   /* Whether the next song asked for plays at once: not for a queue only
      taken up again, which waits for somebody to press play. */
   const wantsToPlay = useRef(false);
@@ -166,6 +181,27 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     resumeFrom.current = 0;
     load(now, start, wantsToPlay.current);
   }, [songId, turn, load]);
+
+  // The account's choices, and with them the queue of the last visit when
+  // it asked for it back.
+  useEffect(() => {
+    const stop = new AbortController();
+    server
+      .preferences(stop.signal)
+      .catch(() => DEFAULT_PREFERENCES)
+      .then((chosen) => {
+        if (stop.signal.aborted) {
+          return;
+        }
+        const { film_on_screen, resume_queue, max_bitrate_kbps } = chosen;
+        setPreferencesHere({ film_on_screen, resume_queue, max_bitrate_kbps });
+        if (resume_queue && kept) {
+          resumeFrom.current = kept.position;
+          setQueue({ songs: kept.songs, order: kept.order, at: kept.at, shuffle: kept.shuffle, repeat: kept.repeat });
+        }
+      });
+    return () => stop.abort();
+  }, [kept]);
 
   useEffect(() => {
     audio.volume = loudness.volume;
@@ -246,8 +282,13 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [audio]);
 
   // The queue is kept for the next visit, and where the song has got to
-  // every few seconds and as the page goes.
+  // every few seconds and as the page goes. Not before the last one was
+  // taken up or let go, which would write an empty queue over it.
+  const settled = preferences !== null;
   useEffect(() => {
+    if (!settled) {
+      return;
+    }
     const keep = () =>
       rememberQueue(
         queueNow.current.songs.length > 0
@@ -261,7 +302,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       window.clearInterval(every);
       window.removeEventListener("pagehide", keep);
     };
-  }, [queue]);
+  }, [queue, settled]);
 
   const stop = useCallback(() => {
     audio.pause();
@@ -275,14 +316,38 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     time.set({ position: 0, length: 0 });
   }, [audio]);
 
-  // A film on the screen stops the music for good, and the bar goes with
-  // it: two sounds at once make sense to nobody.
+  // A film on the screen stops the music for good, the bar going with it,
+  // or pauses it until the film is closed, as the account chose: two sounds
+  // at once make sense to nobody.
   const filmOnScreen = useIsAFilmOnScreen();
+  const pausedForAFilm = useRef(false);
+  const onlyPause = preferences?.film_on_screen === "pause";
   useEffect(() => {
     if (filmOnScreen && queueNow.current.songs.length > 0) {
-      stop();
+      if (!onlyPause) {
+        stop();
+      } else if (!audio.paused) {
+        pausedForAFilm.current = true;
+        audio.pause();
+      }
+    } else if (!filmOnScreen && pausedForAFilm.current) {
+      pausedForAFilm.current = false;
+      void audio.play().catch(() => setPlaying(false));
     }
-  }, [filmOnScreen, stop]);
+  }, [filmOnScreen, onlyPause, stop, audio]);
+
+  const preferencesNow = useRef(preferences);
+  preferencesNow.current = preferences;
+  const setPreferences = useCallback(async (chosen: MusicPreferences) => {
+    const was = preferencesNow.current;
+    setPreferencesHere(chosen);
+    try {
+      await server.setPreferences(chosen);
+    } catch (error) {
+      setPreferencesHere(was);
+      throw error;
+    }
+  }, []);
 
   const music = useMemo<Music>(() => {
     /* Another place in the queue, whose song is asked for. */
@@ -371,8 +436,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       },
       remove: (at) => setQueue((was) => without(was, at)),
       setOpen,
+      preferences: preferences ?? DEFAULT_PREFERENCES,
+      setPreferences,
     };
-  }, [queue, song, playing, waiting, loudness, open, audio, load, stop]);
+  }, [queue, song, playing, waiting, loudness, open, audio, load, stop, preferences, setPreferences]);
 
   useMediaSession(music);
 

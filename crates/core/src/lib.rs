@@ -15,6 +15,7 @@ pub mod library;
 pub mod media;
 pub mod media_log;
 pub mod music;
+pub mod music_preferences;
 pub mod orientation;
 pub mod rating;
 pub mod refresh;

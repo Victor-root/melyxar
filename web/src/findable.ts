@@ -155,6 +155,22 @@ export const FINDABLE: FindableSection[] = [
   },
   {
     area: "settings",
+    path: "music",
+    name: "me.music",
+    files: ["music/settings.tsx"],
+    named: [
+      ["settings.music_listening", "settings.music_listening_why"],
+      ["settings.music_film", "settings.music_film_why"],
+      ["settings.music_resume_queue", "settings.music_resume_queue_why"],
+      ["settings.music_network", "settings.music_network_why"],
+      ["settings.music_max_bitrate", "settings.music_max_bitrate_why"],
+    ],
+    choices: {
+      "settings.music_film": ["settings.music_film.stop", "settings.music_film.pause"],
+    },
+  },
+  {
+    area: "settings",
     path: "subtitles",
     name: "me.subtitles",
     files: ["pages/settings/subtitles.tsx"],

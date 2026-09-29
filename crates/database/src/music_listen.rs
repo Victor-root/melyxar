@@ -15,6 +15,8 @@ pub struct SongFile {
     pub container: Option<String>,
     /// The codec of its sound, once it has been read.
     pub codec: Option<String>,
+    /// How heavy it is, in bits a second, once it has been read.
+    pub bitrate: Option<i64>,
 }
 
 impl Database {
@@ -23,7 +25,7 @@ impl Database {
     /// not a song.
     pub async fn music_song_file(&self, song: WorkId) -> Result<Option<SongFile>> {
         let row = sqlx::query(
-            "SELECT r.path AS root_path, s.relative_path, s.container,
+            "SELECT r.path AS root_path, s.relative_path, s.container, s.overall_bitrate,
                     (SELECT t.codec FROM tracks t
                       WHERE t.source_id = s.id AND t.kind = 'audio'
                       ORDER BY t.stream_index LIMIT 1) AS codec
@@ -43,6 +45,7 @@ impl Database {
                     .join(row.try_get::<String, _>("relative_path")?),
                 container: row.try_get("container")?,
                 codec: row.try_get("codec")?,
+                bitrate: row.try_get("overall_bitrate")?,
             })
         })
         .transpose()
@@ -97,7 +100,7 @@ mod tests {
                 SourceAnalysis {
                     container: Some("mov,mp4,m4a,3gp,3g2,mj2".to_string()),
                     duration: Some(Millis::new(1_000)),
-                    overall_bitrate: None,
+                    overall_bitrate: Some(900_000),
                 },
                 Track {
                     id: TrackId::new(),
@@ -137,6 +140,7 @@ mod tests {
             .expect("a file");
         assert_eq!(found.path, PathBuf::from("/mnt/one/A/01.m4a"));
         assert_eq!(found.codec.as_deref(), Some("alac"));
+        assert_eq!(found.bitrate, Some(900_000));
 
         database.mark_source_missing(source_id).await.expect("gone");
         assert_eq!(

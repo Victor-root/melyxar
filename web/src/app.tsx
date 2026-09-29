@@ -54,6 +54,7 @@ import { MyAppearance } from "./pages/settings/appearance";
 import { MyHomePage } from "./pages/settings/home";
 import { MyPlayback } from "./pages/settings/playback";
 import { MySubtitles } from "./pages/settings/subtitles";
+import { MyMusic } from "./music/settings";
 import { Door } from "./pages/door";
 import { FirstSteps } from "./pages/first-steps";
 import { useFirstSteps } from "./screens/first-steps";
@@ -212,6 +213,7 @@ function TheLibrary() {
                 <Route path="appearance" element={<MyAppearance />} />
                 <Route path="home" element={<MyHomePage />} />
                 <Route path="playback" element={<MyPlayback />} />
+                <Route path="music" element={<MyMusic />} />
                 <Route path="subtitles" element={<MySubtitles />} />
                 <Route path="about" element={<MyAbout />} />
               </Route>

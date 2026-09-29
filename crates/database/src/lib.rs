@@ -32,6 +32,7 @@ pub mod music;
 pub mod music_browse;
 pub mod music_listen;
 pub mod music_pictures;
+pub mod music_preferences;
 pub mod numbering;
 pub mod openings;
 pub mod own;
