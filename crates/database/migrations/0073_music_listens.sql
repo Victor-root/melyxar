@@ -10,3 +10,4 @@ CREATE TABLE music_listens (
 
 CREATE INDEX music_listens_lately ON music_listens (user_id, last_listened_at);
 CREATE INDEX music_listens_most ON music_listens (user_id, listens);
+CREATE INDEX music_listens_song ON music_listens (song_id);
