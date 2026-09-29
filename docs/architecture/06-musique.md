@@ -45,7 +45,10 @@ Ordre proposé, chaque étape livrable seule :
 ## Décisions prises avec le mainteneur
 
 - **Tous les formats audio courants se lisent**, y compris les plus rares (ALAC, WMA, APE, WavPack) : ce que le navigateur ne lit pas tel quel est converti en fichier audio simple par le chemin serveur de la musique.
-- **Un lecteur en bas de l'écran, comme Emby et Jellyfin** : pochette, titre et artiste, précédent, lecture, arrêt, suivant, temps, volume, aléatoire, répétition, favori et file d'attente. Il reste pendant qu'on navigue. Seule l'ergonomie est reprise, l'apparence est celle de Melyxar.
+- **Un lecteur en bas de l'écran, comme Emby et Jellyfin** : pochette, titre et artiste, précédent, lecture, arrêt, suivant, temps, volume, aléatoire, répétition, favori et file d'attente. Seule l'ergonomie est reprise, l'apparence est celle de Melyxar.
+  - **Il reste toujours visible**, sur toutes les pages de Melyxar.
+  - **La navigation ne l'interrompt jamais** : on va où on veut dans Melyxar, la musique continue sans coupure.
+  - **On peut l'ouvrir en grand de n'importe où** : un clic sur le lecteur affiche la page « en cours de lecture » (pochette, paroles, file d'attente) dans Melyxar, pas en plein écran du navigateur ni de l'écran, et on la referme pour retrouver la page d'où l'on venait.
 - **Page d'un album comme chez Jellyfin** : pochette, nom, artiste, nombre de pistes, boutons Lire, Aléatoire, favori et menu, puis la liste des morceaux avec leur durée, un favori et un menu par ligne.
 - **Le volume laisse toujours le choix** : un même niveau pour tous les morceaux, ou les écarts d'un album gardés.
 - **L'écoute en arrière-plan est prévue d'office** : écran verrouillé, onglet en arrière-plan, touches multimédia du clavier et du téléphone.
@@ -57,4 +60,4 @@ Ordre proposé, chaque étape livrable seule :
 
 À trancher avec le mainteneur avant de coder l'étape concernée. Les réponses sont ajoutées ici, puis au README des décisions.
 
-Aucune pour le moment.
+- Quand on lance un film pendant qu'une musique joue : la musique se met-elle en pause d'elle-même, et le lecteur du bas reste-t-il visible au-dessus de la page du film ?
