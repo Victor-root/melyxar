@@ -1013,7 +1013,9 @@
     calc(var(--anchor, 50%) - min(160px, (100% - var(--player-inset) * 2) / 2)),
     calc(100% - var(--player-inset) - min(320px, 100% - var(--player-inset) * 2))
   );
-  max-height: min(60vh, 480px);
+  /* As tall as the picture leaves room for, between the top row and the
+     controls: a fixed height scrolled a list that had simply grown. */
+  max-height: calc(100% - 124px - 88px);
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-card);
