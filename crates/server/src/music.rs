@@ -312,7 +312,8 @@ async fn initials(
 struct AlbumPageView {
     #[serde(flatten)]
     album: AlbumView,
-    songs: Vec<SongView>,
+    /// Its songs in their order on it. Named apart from how many there are.
+    tracks: Vec<SongView>,
 }
 
 async fn album(
@@ -325,7 +326,7 @@ async fn album(
         .ok_or_else(|| ServerError::not_found("no such album"))?;
     Ok(Json(AlbumPageView {
         album: album_view(&album),
-        songs: songs.iter().map(song_view).collect(),
+        tracks: songs.iter().map(song_view).collect(),
     }))
 }
 
@@ -333,7 +334,8 @@ async fn album(
 struct ArtistPageView {
     #[serde(flatten)]
     artist: ArtistView,
-    albums: Vec<AlbumView>,
+    /// The albums that are theirs. Named apart from how many there are.
+    their_albums: Vec<AlbumView>,
     appears_on: Vec<AlbumView>,
 }
 
@@ -348,7 +350,57 @@ async fn artist(
             .ok_or_else(|| ServerError::not_found("no such artist"))?;
     Ok(Json(ArtistPageView {
         artist: artist_view(&artist),
-        albums: theirs.iter().map(album_view).collect(),
+        their_albums: theirs.iter().map(album_view).collect(),
         appears_on: played_on.iter().map(album_view).collect(),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use melyxar_core::id::{LibraryId, WorkId};
+
+    use super::*;
+
+    #[test]
+    fn the_page_of_an_album_says_how_many_songs_and_which_under_two_names() {
+        let album = AlbumCard {
+            id: WorkId::new(),
+            library_id: LibraryId::new(),
+            title: "Northern Lights".to_string(),
+            artists: Vec::new(),
+            is_compilation: false,
+            year: Some(2019),
+            songs: 1,
+            color: None,
+            initial: "n".to_string(),
+            added_at: melyxar_core::time::now(),
+            cover: Vec::new(),
+        };
+        let song = SongRow {
+            id: WorkId::new(),
+            title: "Quiet Harbour".to_string(),
+            artists: Vec::new(),
+            album: None,
+            track: Some(1),
+            disc: None,
+            year: None,
+            duration: None,
+            source_id: None,
+        };
+        // Written as it is sent, where two keys of one name would both go
+        // out and a browser would keep only the last.
+        let written = serde_json::to_string(&AlbumPageView {
+            album: album_view(&album),
+            tracks: vec![song_view(&song)],
+        })
+        .expect("written");
+        assert_eq!(
+            written.matches("\"songs\"").count(),
+            1,
+            "one key of that name"
+        );
+        let page: serde_json::Value = serde_json::from_str(&written).expect("read back");
+        assert_eq!(page["songs"], 1, "how many");
+        assert_eq!(page["tracks"][0]["title"], "Quiet Harbour", "which");
+    }
 }

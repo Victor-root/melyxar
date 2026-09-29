@@ -472,41 +472,53 @@ function LibraryChoicesFields({
         <div className="setting-always-words">
           <span className="setting-always-title">{t("admin.always_done")}</span>
           <span>
-            {t(kind === "home_media" ? "admin.always_on_arrival_own" : "admin.always_on_arrival")}
+            {t(
+              kind === "music"
+                ? "admin.always_on_arrival_music"
+                : kind === "home_media"
+                  ? "admin.always_on_arrival_own"
+                  : "admin.always_on_arrival",
+            )}
           </span>
         </div>
       </div>
-      <h3 className="settings-heading">{t("admin.optional_processing")}</h3>
-      <Setting label={t("settings.extract_subtitles")} why={t("admin.extract_subtitles_why")}>
-        <Toggle
-          label={t("settings.extract_subtitles")}
-          checked={choices.extract_subtitles}
-          onChange={(extract_subtitles) => onChange({ extract_subtitles })}
-        />
-      </Setting>
-      <Setting label={t("settings.make_thumbnails")} why={t("admin.make_thumbnails_why")}>
-        <Toggle
-          label={t("settings.make_thumbnails")}
-          checked={choices.make_thumbnails}
-          onChange={(make_thumbnails) => onChange({ make_thumbnails })}
-        />
-      </Setting>
-      {EPISODIC.includes(kind) && (
-        <Setting label={t("settings.detect_openings")} why={t("admin.detect_openings_why")}>
-          <Toggle
-            label={t("settings.detect_openings")}
-            checked={choices.detect_openings}
-            onChange={(detect_openings) => onChange({ detect_openings })}
-          />
-        </Setting>
+      {/* Every reading offered here goes through a video: a library of music
+          has none of them to choose. */}
+      {kind !== "music" && (
+        <>
+          <h3 className="settings-heading">{t("admin.optional_processing")}</h3>
+          <Setting label={t("settings.extract_subtitles")} why={t("admin.extract_subtitles_why")}>
+            <Toggle
+              label={t("settings.extract_subtitles")}
+              checked={choices.extract_subtitles}
+              onChange={(extract_subtitles) => onChange({ extract_subtitles })}
+            />
+          </Setting>
+          <Setting label={t("settings.make_thumbnails")} why={t("admin.make_thumbnails_why")}>
+            <Toggle
+              label={t("settings.make_thumbnails")}
+              checked={choices.make_thumbnails}
+              onChange={(make_thumbnails) => onChange({ make_thumbnails })}
+            />
+          </Setting>
+          {EPISODIC.includes(kind) && (
+            <Setting label={t("settings.detect_openings")} why={t("admin.detect_openings_why")}>
+              <Toggle
+                label={t("settings.detect_openings")}
+                checked={choices.detect_openings}
+                onChange={(detect_openings) => onChange({ detect_openings })}
+              />
+            </Setting>
+          )}
+          <Setting label={t("settings.process_on_arrival")} why={t("admin.process_on_arrival_why")}>
+            <Toggle
+              label={t("settings.process_on_arrival")}
+              checked={choices.process_on_arrival}
+              onChange={(process_on_arrival) => onChange({ process_on_arrival })}
+            />
+          </Setting>
+        </>
       )}
-      <Setting label={t("settings.process_on_arrival")} why={t("admin.process_on_arrival_why")}>
-        <Toggle
-          label={t("settings.process_on_arrival")}
-          checked={choices.process_on_arrival}
-          onChange={(process_on_arrival) => onChange({ process_on_arrival })}
-        />
-      </Setting>
       <h3 className="settings-heading">{t("admin.library_tracking")}</h3>
       <Setting
         label={t("settings.watch_in_real_time")}
