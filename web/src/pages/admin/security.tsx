@@ -3,7 +3,7 @@
  * how many wrong passwords an account takes, and how the server is reached.
  */
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api";
 import type { AccessMode, AccessStatus } from "../../api";
 import { refusalAbout, refusalOf } from "../../asking";
@@ -11,21 +11,23 @@ import {
   NumberField,
   PageHead,
   Panel,
+  Picker,
   Setting,
-  Toggle,
 } from "../../components/panel";
 import { useToast } from "../../components/toasts";
 import { refusalKey } from "../../i18n";
 import { LockIcon, ShieldIcon, WarningIcon } from "../../icons";
 import { useSettings } from "../../settings";
-import { addressAfter, runningOut } from "./access";
+import type { Draft } from "./access";
+import { addressAfter, changed, draftOf, namesOf, runningOut } from "./access";
 import { ActivityJournal } from "./activity-list";
 
 /** The ways in this server offers, said as they are. */
-const ACCESS: AccessMode[] = ["proxy", "self_signed", "provided", "automatic"];
+const ACCESS: AccessMode[] = ["proxy", "self_signed", "provided"];
 
-/** Not offered by this version yet. */
-const NOT_YET: AccessMode = "automatic";
+/** What happens to somebody who opens the server without the padlock. */
+type Redirect = "on" | "off";
+const REDIRECTS: Redirect[] = ["on", "off"];
 
 /** The fewest and the most wrong passwords an account may take, as the
  *  server holds it to. */
@@ -112,9 +114,8 @@ function AccessPanel() {
   const { t, language } = useSettings();
   const toast = useToast();
   const [status, setStatus] = useState<AccessStatus | null>(null);
-  const [certificatePath, setCertificatePath] = useState("");
-  const [keyPath, setKeyPath] = useState("");
-  const [names, setNames] = useState("");
+  // What the page shows: nothing is sent before the administrator applies it.
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -123,9 +124,7 @@ function AccessPanel() {
       .access(controller.signal)
       .then((shown) => {
         setStatus(shown);
-        setCertificatePath(shown.certificate_path ?? "");
-        setKeyPath(shown.private_key_path ?? "");
-        setNames(shown.public_names.join(", "));
+        setDraft(draftOf(shown));
       })
       .catch(() => {
         // Left empty rather than showing a way in the server may not use.
@@ -133,54 +132,44 @@ function AccessPanel() {
     return () => controller.abort();
   }, []);
 
-  const choose = (mode: AccessMode) => {
-    if (!status) {
+  const edit = (changes: Partial<Draft>) =>
+    setDraft((now) => (now ? { ...now, ...changes } : now));
+
+  const apply = async () => {
+    if (!status || !draft) {
       return;
     }
     const encrypted = status.certificate !== null;
     setBusy(true);
-    api
-      .chooseAccess(
-        mode,
-        certificatePath.trim() || null,
-        keyPath.trim() || null,
-      )
-      .then((chosen) => {
-        setStatus(chosen);
-        const next =
-          chosen.certificate || chosen.mode === "proxy"
-            ? addressAfter(chosen.mode, encrypted, window.location)
-            : null;
-        if (next) {
-          window.location.replace(next);
-        }
-      })
-      .catch((error) => {
-        toast({
-          state: "trouble",
-          title: t("admin.access_failed"),
-          detail: t(refusalAbout(error, "access")),
-        });
-      })
-      .finally(() => setBusy(false));
-  };
-
-  const setOptions = (redirect: boolean, publicNames: string) => {
-    setBusy(true);
-    api
-      .setAccessOptions(redirect, publicNames.split(/[\s,]+/).filter(Boolean))
-      .then((chosen) => {
-        setStatus(chosen);
-        setNames(chosen.public_names.join(", "));
-      })
-      .catch((error) => {
-        toast({
-          state: "trouble",
-          title: t("admin.access_failed"),
-          detail: t(refusalAbout(error, "access")),
-        });
-      })
-      .finally(() => setBusy(false));
+    try {
+      // The names first, so a certificate made for this mode carries them.
+      let chosen = await api.setAccessOptions(
+        draft.redirect,
+        namesOf(draft.names),
+      );
+      chosen = await api.chooseAccess(
+        draft.mode,
+        draft.certificatePath.trim() || null,
+        draft.keyPath.trim() || null,
+      );
+      setStatus(chosen);
+      setDraft(draftOf(chosen));
+      const next =
+        chosen.certificate || chosen.mode === "proxy"
+          ? addressAfter(chosen.mode, encrypted, window.location)
+          : null;
+      if (next) {
+        window.location.replace(next);
+      }
+    } catch (error) {
+      toast({
+        state: "trouble",
+        title: t("admin.access_failed"),
+        detail: t(refusalAbout(error, "access")),
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const certificate = status?.certificate ?? null;
@@ -210,40 +199,24 @@ function AccessPanel() {
           })}
         </p>
       )}
-      {ACCESS.map((way) => (
-        <Fragment key={way}>
+      {draft && (
+        <>
           <Setting
-            label={t(`admin.access.${way}`)}
-            why={
-              <>
-                {t(`admin.access.${way}_why`)}
-                {way !== "proxy" && way !== NOT_YET && (
-                  <> {t("admin.access_not_behind_a_proxy")}</>
-                )}
-              </>
-            }
-            soon={way === NOT_YET}
+            label={t("admin.access_mode")}
+            why={t(`admin.access.${draft.mode}_why`)}
           >
-            <Toggle
-              label={t(`admin.access.${way}`)}
-              checked={status?.mode === way}
-              disabled={
-                !status ||
-                busy ||
-                way === NOT_YET ||
-                (way === "proxy" && status.mode === "proxy")
-              }
-              onChange={(on) => choose(on ? way : "proxy")}
+            <Picker<AccessMode>
+              label={t("admin.access_mode")}
+              value={draft.mode}
+              options={ACCESS.map(
+                (way) => [way, t(`admin.access.${way}`)] as const,
+              )}
+              onPick={(mode) => edit({ mode })}
+              disabled={busy}
             />
           </Setting>
-          {way === "provided" && (
-            <form
-              className="access-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                choose("provided");
-              }}
-            >
+          {draft.mode === "provided" && (
+            <div className="access-form">
               <input
                 type="text"
                 className="field-line"
@@ -251,8 +224,10 @@ function AccessPanel() {
                 placeholder={t("admin.access_certificate_path")}
                 autoComplete="off"
                 spellCheck={false}
-                value={certificatePath}
-                onChange={(event) => setCertificatePath(event.target.value)}
+                value={draft.certificatePath}
+                onChange={(event) =>
+                  edit({ certificatePath: event.target.value })
+                }
               />
               <input
                 type="text"
@@ -261,48 +236,31 @@ function AccessPanel() {
                 placeholder={t("admin.access_key_path")}
                 autoComplete="off"
                 spellCheck={false}
-                value={keyPath}
-                onChange={(event) => setKeyPath(event.target.value)}
+                value={draft.keyPath}
+                onChange={(event) => edit({ keyPath: event.target.value })}
               />
-              <span>
-                <button
-                  type="submit"
-                  className="button button-small button-accent"
-                  disabled={
-                    !status ||
-                    busy ||
-                    certificatePath.trim() === "" ||
-                    keyPath.trim() === ""
-                  }
-                >
-                  {t("admin.access_use_provided")}
-                </button>
-              </span>
-            </form>
+            </div>
           )}
-        </Fragment>
-      ))}
-      {status && status.mode !== "proxy" && (
-        <>
-          <Setting
-            label={t("admin.access_redirect")}
-            why={t("admin.access_redirect_why")}
-          >
-            <Toggle
+          {draft.mode !== "proxy" && (
+            <Setting
               label={t("admin.access_redirect")}
-              checked={status.redirect_to_https}
-              disabled={busy}
-              onChange={(on) => setOptions(on, names)}
-            />
-          </Setting>
-          {status.mode === "self_signed" && (
-            <form
-              className="access-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setOptions(status.redirect_to_https, names);
-              }}
+              why={t(
+                `admin.access_redirect.${draft.redirect ? "on" : "off"}_why`,
+              )}
             >
+              <Picker<Redirect>
+                label={t("admin.access_redirect")}
+                value={draft.redirect ? "on" : "off"}
+                options={REDIRECTS.map(
+                  (one) => [one, t(`admin.access_redirect.${one}`)] as const,
+                )}
+                onPick={(one) => edit({ redirect: one === "on" })}
+                disabled={busy}
+              />
+            </Setting>
+          )}
+          {draft.mode === "self_signed" && (
+            <div className="access-form">
               <input
                 type="text"
                 className="field-line"
@@ -310,20 +268,31 @@ function AccessPanel() {
                 placeholder={t("admin.access_names")}
                 autoComplete="off"
                 spellCheck={false}
-                value={names}
-                onChange={(event) => setNames(event.target.value)}
+                value={draft.names}
+                onChange={(event) => edit({ names: event.target.value })}
               />
-              <span>
-                <button
-                  type="submit"
-                  className="button button-small button-accent"
-                  disabled={busy}
-                >
-                  {t("admin.access_names_keep")}
-                </button>
-              </span>
-            </form>
+            </div>
           )}
+          <div className="access-form">
+            <span>
+              <button
+                type="button"
+                className="button button-small button-accent"
+                disabled={
+                  busy ||
+                  !status ||
+                  !changed(status, draft) ||
+                  (draft.mode === "provided" &&
+                    (draft.certificatePath.trim() === "" ||
+                      draft.keyPath.trim() === ""))
+                }
+                onClick={apply}
+              >
+                {t("admin.access_apply")}
+              </button>
+            </span>
+            <p className="setting-why">{t("admin.access_apply_why")}</p>
+          </div>
         </>
       )}
     </Panel>
