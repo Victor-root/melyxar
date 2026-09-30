@@ -151,7 +151,22 @@
   cursor: pointer;
   transition:
     background var(--quick) var(--ease),
-    box-shadow var(--quick) var(--ease);
+    box-shadow var(--quick) var(--ease),
+    transform var(--calm) var(--ease);
+}
+
+/* The whole tile comes forward under the pointer, as a card does. */
+.music-line:hover,
+.music-line:focus-visible {
+  z-index: 3;
+  transform: scale(1.035);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-line:hover,
+  .music-line:focus-visible {
+    transform: none;
+  }
 }
 
 /* The rim is drawn over the cover, which would otherwise hide its edge. */
