@@ -23,6 +23,8 @@ use crate::door::Peer;
 pub struct Caller {
     pub address: Option<String>,
     pub encrypted: bool,
+    /// Whether it came from this machine or the local network.
+    pub local: bool,
 }
 
 impl<S: Send + Sync> FromRequestParts<S> for Caller {
@@ -31,8 +33,10 @@ impl<S: Send + Sync> FromRequestParts<S> for Caller {
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
         let peer = parts.extensions.get::<ConnectInfo<Peer>>().map(|ConnectInfo(peer)| *peer);
         let ip = peer.map(|peer| peer.address.ip());
+        let address = address_of(ip, &parts.headers);
         Ok(Self {
-            address: address_of(ip, &parts.headers).map(|address| address.to_string()),
+            local: address.is_some_and(nearby),
+            address: address.map(|address| address.to_string()),
             encrypted: peer.is_some_and(|peer| peer.encrypted) || proxy_encrypted(ip, &parts.headers),
         })
     }

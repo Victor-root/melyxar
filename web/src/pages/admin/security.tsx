@@ -114,6 +114,7 @@ function AccessPanel() {
   const [status, setStatus] = useState<AccessStatus | null>(null);
   const [certificatePath, setCertificatePath] = useState("");
   const [keyPath, setKeyPath] = useState("");
+  const [names, setNames] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -124,6 +125,7 @@ function AccessPanel() {
         setStatus(shown);
         setCertificatePath(shown.certificate_path ?? "");
         setKeyPath(shown.private_key_path ?? "");
+        setNames(shown.public_names.join(", "));
       })
       .catch(() => {
         // Left empty rather than showing a way in the server may not use.
@@ -152,6 +154,24 @@ function AccessPanel() {
         if (next) {
           window.location.replace(next);
         }
+      })
+      .catch((error) => {
+        toast({
+          state: "trouble",
+          title: t("admin.access_failed"),
+          detail: t(refusalAbout(error, "access")),
+        });
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const setOptions = (redirect: boolean, publicNames: string) => {
+    setBusy(true);
+    api
+      .setAccessOptions(redirect, publicNames.split(/[\s,]+/).filter(Boolean))
+      .then((chosen) => {
+        setStatus(chosen);
+        setNames(chosen.public_names.join(", "));
       })
       .catch((error) => {
         toast({
@@ -262,6 +282,50 @@ function AccessPanel() {
           )}
         </Fragment>
       ))}
+      {status && status.mode !== "proxy" && (
+        <>
+          <Setting
+            label={t("admin.access_redirect")}
+            why={t("admin.access_redirect_why")}
+          >
+            <Toggle
+              label={t("admin.access_redirect")}
+              checked={status.redirect_to_https}
+              disabled={busy}
+              onChange={(on) => setOptions(on, names)}
+            />
+          </Setting>
+          {status.mode === "self_signed" && (
+            <form
+              className="access-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setOptions(status.redirect_to_https, names);
+              }}
+            >
+              <input
+                type="text"
+                className="field-line"
+                aria-label={t("admin.access_names")}
+                placeholder={t("admin.access_names")}
+                autoComplete="off"
+                spellCheck={false}
+                value={names}
+                onChange={(event) => setNames(event.target.value)}
+              />
+              <span>
+                <button
+                  type="submit"
+                  className="button button-small button-accent"
+                  disabled={busy}
+                >
+                  {t("admin.access_names_keep")}
+                </button>
+              </span>
+            </form>
+          )}
+        </>
+      )}
     </Panel>
   );
 }

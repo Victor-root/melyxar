@@ -258,6 +258,11 @@ pub struct Access {
     pub mode: String,
     pub certificate_path: Option<String>,
     pub private_key_path: Option<String>,
+    /// Whether a request in the clear is sent to the encrypted address.
+    pub redirect_to_https: bool,
+    /// The names the certificate signed by the server carries, separated by
+    /// commas.
+    pub public_names: Option<String>,
 }
 
 impl Database {
@@ -592,11 +597,12 @@ impl Database {
         Ok(())
     }
 
-    /// How the server is reached: its mode, as a word, and the paths of a
-    /// provided certificate and its key.
+    /// How the server is reached: its mode, as a word, the paths of a
+    /// provided certificate and its key, and its two options.
     pub async fn access(&self) -> Result<Access> {
         let row = sqlx::query(
-            "SELECT access_mode, certificate_path, private_key_path FROM server_settings WHERE id = 1",
+            "SELECT access_mode, certificate_path, private_key_path, redirect_to_https, public_names
+               FROM server_settings WHERE id = 1",
         )
         .fetch_one(self.reader())
         .await?;
@@ -604,6 +610,8 @@ impl Database {
             mode: row.try_get("access_mode")?,
             certificate_path: row.try_get("certificate_path")?,
             private_key_path: row.try_get("private_key_path")?,
+            redirect_to_https: row.try_get("redirect_to_https")?,
+            public_names: row.try_get("public_names")?,
         })
     }
 
@@ -611,12 +619,15 @@ impl Database {
     pub async fn set_access(&self, access: &Access) -> Result<()> {
         sqlx::query(
             "UPDATE server_settings
-                SET access_mode = ?, certificate_path = ?, private_key_path = ?, updated_at = ?
+                SET access_mode = ?, certificate_path = ?, private_key_path = ?,
+                    redirect_to_https = ?, public_names = ?, updated_at = ?
               WHERE id = 1",
         )
         .bind(&access.mode)
         .bind(&access.certificate_path)
         .bind(&access.private_key_path)
+        .bind(access.redirect_to_https)
+        .bind(&access.public_names)
         .bind(timestamp_to_text(now()))
         .execute(self.writer())
         .await?;
@@ -1199,11 +1210,15 @@ mod tests {
         let access = database.access().await.expect("read");
         assert_eq!(access.mode, "proxy");
         assert_eq!(access.certificate_path, None);
+        assert!(access.redirect_to_https);
+        assert_eq!(access.public_names, None);
 
         let provided = Access {
             mode: "provided".to_string(),
             certificate_path: Some("/etc/ssl/a.pem".to_string()),
             private_key_path: Some("/etc/ssl/a.key".to_string()),
+            redirect_to_https: false,
+            public_names: Some("media.example.org,203.0.113.7".to_string()),
         };
         database.set_access(&provided).await.expect("saved");
         assert_eq!(database.access().await.expect("read"), provided);
