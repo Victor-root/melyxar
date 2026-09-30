@@ -112,6 +112,9 @@ pub struct MusicLibraryOptions {
     /// Whether the covers its albums lack are looked up online, on
     /// MusicBrainz. Off until an administrator turns it on.
     pub covers_online: bool,
+    /// Whether the photos its artists lack are looked up online, on Deezer.
+    /// Off until an administrator turns it on.
+    pub artist_photos_online: bool,
 }
 
 /// The longest a crossfade can be asked to last, in seconds.

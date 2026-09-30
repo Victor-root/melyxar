@@ -278,7 +278,7 @@ async fn what_follows_a_scan(
         tracing::warn!(
             library = library.name,
             %error,
-            "the covers could not be set to be looked up"
+            "the covers and artist photos could not be set to be looked up"
         );
     }
     ended

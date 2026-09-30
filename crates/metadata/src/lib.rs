@@ -10,6 +10,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod deezer;
 pub mod defaults;
 pub mod imdb;
 pub mod lrclib;

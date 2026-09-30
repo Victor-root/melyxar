@@ -55,7 +55,8 @@ pub enum JobKind {
     /// Fetches the ratings a work carries from elsewhere than its provider:
     /// IMDb's, and Rotten Tomatoes' when a key for OMDb was given.
     FetchRatings,
-    /// Looks up online the covers the albums of a library of music lack.
+    /// Looks up online the covers the albums of a library of music lack, and
+    /// the photos its artists lack.
     LookUpAlbumCovers,
 }
 
@@ -164,11 +165,13 @@ pub enum JobStep {
     MeasuringSongs,
     /// Asking MusicBrainz for the covers the albums lack.
     LookingUpCovers,
+    /// Asking Deezer for the photos the artists lack.
+    LookingUpArtistPhotos,
 }
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
@@ -184,6 +187,7 @@ impl JobStep {
         Self::AskingOmdb,
         Self::MeasuringSongs,
         Self::LookingUpCovers,
+        Self::LookingUpArtistPhotos,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -203,6 +207,7 @@ impl JobStep {
             Self::AskingOmdb => "asking_omdb",
             Self::MeasuringSongs => "measuring_songs",
             Self::LookingUpCovers => "looking_up_covers",
+            Self::LookingUpArtistPhotos => "looking_up_artist_photos",
         }
     }
 
@@ -223,6 +228,7 @@ impl JobStep {
             "asking_omdb" => Some(Self::AskingOmdb),
             "measuring_songs" => Some(Self::MeasuringSongs),
             "looking_up_covers" => Some(Self::LookingUpCovers),
+            "looking_up_artist_photos" => Some(Self::LookingUpArtistPhotos),
             _ => None,
         }
     }

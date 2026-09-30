@@ -129,6 +129,8 @@ export interface MusicLibraryOptions {
   tag_writing: boolean;
   /** Whether the covers its albums lack are looked up on MusicBrainz. */
   covers_online: boolean;
+  /** Whether the photos its artists lack are looked up on Deezer. */
+  artist_photos_online: boolean;
 }
 
 /** One playlist of songs, as the list of them shows it. */
