@@ -5,7 +5,8 @@
  */
 
 import { PageHead, Panel, Picker, Setting, Toggle } from "../components/panel";
-import { MusicIcon, NetworkIcon } from "../icons";
+import { useAccount } from "../account";
+import { MusicIcon, NetworkIcon, TagIcon } from "../icons";
 import { useSettings } from "../settings";
 import type { MusicPreferences } from "./api";
 import { useMusic } from "./player/player";
@@ -30,6 +31,7 @@ export function ceilingOf(value: string): number | null {
 export function MyMusic() {
   const { t } = useSettings();
   const { preferences, setPreferences } = useMusic();
+  const { account } = useAccount();
   const change = (changes: Partial<MusicPreferences>) => {
     void setPreferences({ ...preferences, ...changes }).catch(() => {});
   };
@@ -96,6 +98,17 @@ export function MyMusic() {
           />
         </Setting>
       </Panel>
+      {account?.may_edit_tags && (
+        <Panel icon={TagIcon} title={t("settings.music_tags")} lead={t("settings.music_tags_why")}>
+          <Setting label={t("settings.music_tag_preview")} why={t("settings.music_tag_preview_why")}>
+            <Toggle
+              label={t("settings.music_tag_preview")}
+              checked={preferences.tag_preview}
+              onChange={(tag_preview) => change({ tag_preview })}
+            />
+          </Setting>
+        </Panel>
+      )}
     </>
   );
 }

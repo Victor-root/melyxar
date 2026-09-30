@@ -36,6 +36,13 @@ struct MusicPreferencesView {
     volume_mode: String,
     /// Nought for songs that follow one another without a gap.
     crossfade_seconds: u32,
+    /// Absent from what an older screen sends, which keeps the preview on.
+    #[serde(default = "shown")]
+    tag_preview: bool,
+}
+
+fn shown() -> bool {
+    true
 }
 
 fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
@@ -45,6 +52,7 @@ fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
         max_bitrate_kbps: chosen.max_bitrate_kbps,
         volume_mode: chosen.volume_mode.as_str().to_string(),
         crossfade_seconds: chosen.crossfade_seconds,
+        tag_preview: chosen.tag_preview,
     })
 }
 
@@ -79,12 +87,15 @@ fn chosen_from(body: &MusicPreferencesView) -> Result<MusicPreferences> {
             ServerError::invalid_input("songs are levelled off, by track or by album")
         })?,
         crossfade_seconds: body.crossfade_seconds.min(LONGEST_CROSSFADE_SECONDS),
+        tag_preview: body.tag_preview,
     })
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct LibraryOptionsView {
     lyrics_online: bool,
+    #[serde(default)]
+    tag_writing: bool,
 }
 
 async fn read_library_options(
@@ -97,6 +108,7 @@ async fn read_library_options(
             .await?;
     Ok(Json(LibraryOptionsView {
         lyrics_online: options.lyrics_online,
+        tag_writing: options.tag_writing,
     }))
 }
 
@@ -113,11 +125,13 @@ async fn write_library_options(
         parse_library(&library)?,
         &MusicLibraryOptions {
             lyrics_online: body.lyrics_online,
+            tag_writing: body.tag_writing,
         },
     )
     .await?;
     Ok(Json(LibraryOptionsView {
         lyrics_online: options.lyrics_online,
+        tag_writing: options.tag_writing,
     }))
 }
 
@@ -133,6 +147,7 @@ mod tests {
             max_bitrate_kbps: Some(9000),
             volume_mode: "album".to_string(),
             crossfade_seconds: 60,
+            tag_preview: true,
         });
         let Ok(chosen) = chosen else {
             panic!("a choice that exists is read");
@@ -148,6 +163,7 @@ mod tests {
                 max_bitrate_kbps: None,
                 volume_mode: "track".to_string(),
                 crossfade_seconds: 0,
+                tag_preview: true,
             })
             .is_err()
         );

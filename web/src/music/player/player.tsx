@@ -121,6 +121,7 @@ export const DEFAULT_PREFERENCES: MusicPreferences = {
   max_bitrate_kbps: null,
   volume_mode: "track",
   crossfade_seconds: 0,
+  tag_preview: true,
 };
 
 /** One element of sound, asking only for what it needs to start. */
@@ -245,8 +246,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         if (stop.signal.aborted) {
           return;
         }
-        const { film_on_screen, resume_queue, max_bitrate_kbps, volume_mode, crossfade_seconds } = chosen;
-        setPreferencesHere({ film_on_screen, resume_queue, max_bitrate_kbps, volume_mode, crossfade_seconds });
+        const { film_on_screen, resume_queue, max_bitrate_kbps, volume_mode, crossfade_seconds, tag_preview } = chosen;
+        setPreferencesHere({ film_on_screen, resume_queue, max_bitrate_kbps, volume_mode, crossfade_seconds, tag_preview });
         if (resume_queue && kept) {
           resumeFrom.current = kept.position;
           setQueue({ songs: kept.songs, order: kept.order, at: kept.at, shuffle: kept.shuffle, repeat: kept.repeat });
