@@ -271,6 +271,9 @@ export const music = {
       `/api/v1/music/${library}/songs${query({ order, descending, offset, limit })}`,
       signal,
     ),
+  /** The songs a whole library is played from, in the order of its albums. */
+  queue: (library: string, offset: number, signal?: AbortSignal) =>
+    get<Page<Song>>(`/api/v1/music/${library}/queue${query({ offset })}`, signal),
   genres: (library: string, signal?: AbortSignal) =>
     get<Genre[]>(`/api/v1/music/${library}/genres`, signal),
   initials: (library: string, of: "albums" | "artists" | "album_artists", signal?: AbortSignal) =>

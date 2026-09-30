@@ -171,6 +171,25 @@ pub async fn songs(
         .await?)
 }
 
+/// The most a queue started from a whole library holds: far more than is
+/// listened to in a sitting, and few enough to be sent at once.
+pub const LONGEST_QUEUE: i64 = 2000;
+
+/// The songs a whole library is played from, in the order of its albums,
+/// starting at this one. The total says how many there are beyond the queue.
+pub async fn queue(
+    state: &AppState,
+    who: &User,
+    library: LibraryId,
+    offset: i64,
+) -> Result<MusicPage<SongRow>> {
+    may_read(who, library)?;
+    Ok(state
+        .database()
+        .music_songs(library, SongOrder::Album, false, offset.max(0), LONGEST_QUEUE)
+        .await?)
+}
+
 pub async fn genres(state: &AppState, who: &User, library: LibraryId) -> Result<Vec<MusicGenre>> {
     may_read(who, library)?;
     Ok(state.database().music_genres(library).await?)

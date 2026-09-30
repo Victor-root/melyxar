@@ -29,6 +29,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/{library}/albums", get(albums))
         .route("/api/v1/music/{library}/artists", get(artists))
         .route("/api/v1/music/{library}/songs", get(songs))
+        .route("/api/v1/music/{library}/queue", get(queue))
         .route("/api/v1/music/{library}/genres", get(genres))
         .route("/api/v1/music/{library}/initials", get(initials))
         .route("/api/v1/music/search", get(search))
@@ -257,6 +258,28 @@ async fn songs(
         query.order.unwrap_or(SongOrder::Title),
         query.descending,
         paging(query.offset, query.limit),
+    )
+    .await?;
+    Ok(Json(page_view(&page, song_view)))
+}
+
+#[derive(Debug, Deserialize)]
+struct QueueQuery {
+    offset: Option<i64>,
+}
+
+/// The songs a whole library is played or shuffled from.
+async fn queue(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(library): Path<String>,
+    Query(query): Query<QueueQuery>,
+) -> Result<Json<PageView<SongView>>> {
+    let page = melyxar_app::music::browse::queue(
+        &state,
+        &who,
+        parse_library(&library)?,
+        query.offset.unwrap_or(0),
     )
     .await?;
     Ok(Json(page_view(&page, song_view)))

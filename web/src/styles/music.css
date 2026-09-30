@@ -74,6 +74,22 @@
   color: var(--accent-bright);
 }
 
+/* Play and shuffle: a piece of their own beside the tabs, pressed like them. */
+.browse-head .browse-piece.music-play-tools {
+  flex: none;
+}
+
+.music-play-tool {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+}
+
+.music-play-tool:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .music-tab-on,
 .music-tab-on:hover {
   background: var(--accent);

@@ -1605,6 +1605,7 @@ const en: Dictionary = {
   "admin.logo_remove": "Remove it",
   "admin.logo_failed": "The logo could not be changed",
   "admin.door": "Sign-in screen",
+  "music.play_tools": "Play the library",
   "admin.theme": "Default theme",
   "admin.theme_why":
     "The theme everyone sees until they choose their own, a first visit to the sign-in screen included. Anyone can still change it for themselves.",
@@ -3319,6 +3320,7 @@ const fr: Dictionary = {
   "admin.logo_remove": "Le retirer",
   "admin.logo_failed": "Impossible de changer le logo",
   "admin.door": "Écran de connexion",
+  "music.play_tools": "Lire la médiathèque",
   "admin.theme": "Thème par défaut",
   "admin.theme_why":
     "Le thème que chacun voit tant qu’il n’a pas choisi le sien, dès la première visite sur l’écran de connexion. Chacun peut toujours le changer pour lui.",
