@@ -76,7 +76,7 @@ const BETWEEN_NAMES: &str = "; ";
 /// Writes the edited tags into a file. Blocking, like every reading of one.
 pub fn write(path: &Path, edited: &EditedTags) -> Result<(), WriteError> {
     let mut tagged =
-        lofty::read_from_path(path).map_err(|error| WriteError::Unreadable(error.to_string()))?;
+        lofty::read_from_path(path).map_err(|error| WriteError::Unreadable(cause_of(&error)))?;
     let tag_type = tagged.primary_tag_type();
     if tagged.primary_tag().is_none() {
         tagged.insert_tag(Tag::new(tag_type));
@@ -88,7 +88,22 @@ pub fn write(path: &Path, edited: &EditedTags) -> Result<(), WriteError> {
     };
     fill(tag, edited);
     tag.save_to_path(path, WriteOptions::default())
-        .map_err(|error| WriteError::Unwritable(error.to_string()))
+        .map_err(|error| WriteError::Unwritable(cause_of(&error)))
+}
+
+/// An error and what lay under it, in one sentence. The library says only
+/// "failed to write to file" of an error that is the disk's, and the disk's
+/// word, a permission refused or a disk read only, is the one that says what
+/// to put right.
+fn cause_of(error: &(dyn std::error::Error + 'static)) -> String {
+    let mut said = error.to_string();
+    let mut under = error.source();
+    while let Some(cause) = under {
+        said.push_str(": ");
+        said.push_str(&cause.to_string());
+        under = cause.source();
+    }
+    said
 }
 
 /// The edited fields set in a tag, each taken away where nothing was chosen.
@@ -153,5 +168,21 @@ mod tests {
         };
         assert_eq!(after.changed_from(&before), vec!["title", "year"]);
         assert!(before.changed_from(&before).is_empty());
+    }
+
+    #[test]
+    fn an_error_is_told_with_what_lay_under_it() {
+        #[derive(Debug, thiserror::Error)]
+        #[error("failed to write to file")]
+        struct Outer(#[source] std::io::Error);
+
+        let error = Outer(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "Permission denied (os error 13)",
+        ));
+        assert_eq!(
+            cause_of(&error),
+            "failed to write to file: Permission denied (os error 13)"
+        );
     }
 }
