@@ -36,7 +36,7 @@ export function ForYouTab({ library }: { library: string }) {
   useEffect(() => {
     const stop = new AbortController();
     music
-      .albums(library, "added", true, 0, NEWEST, {}, stop.signal)
+      .albums(library, "added", false, 0, NEWEST, {}, stop.signal)
       .then((page) => setNewest(page.items))
       .catch(() => {});
     return () => stop.abort();

@@ -51,7 +51,7 @@ export function useNewestAlbums(libraries: Library[], readAgain: unknown): Album
     }
     const stop = new AbortController();
     Promise.all(
-      ids.split(",").map((library) => music.albums(library, "added", true, 0, ON_A_SHELF, {}, stop.signal)),
+      ids.split(",").map((library) => music.albums(library, "added", false, 0, ON_A_SHELF, {}, stop.signal)),
     )
       .then((pages) => setAlbums(inTurn(pages.map((page) => page.items), ON_A_SHELF)))
       .catch(() => {});

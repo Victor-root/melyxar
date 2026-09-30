@@ -24,6 +24,12 @@ import type { Job, Library } from "./api";
 /** How often the server is asked while it is busy. */
 const WHILE_BUSY_MS = 1500;
 
+/** How long after something was started here the server is still asked at
+ *  the fast beat, for work that has not begun by the first answer: a scan
+ *  started by the server itself after a write is not yet running when the
+ *  request that caused it returns. */
+const GRACE_MS = 8000;
+
 /**
  * How often it is asked when nothing is running.
  *
@@ -55,6 +61,7 @@ export function useWatchedWork(): Running {
   const [busy, setBusy] = useState(true);
   const [finished, setFinished] = useState(0);
   const wasBusy = useRef(false);
+  const graceUntil = useRef(0);
   /* The last work the server said it had done, so that one begun and ended
      between two looks, a quick scan or a few covers, still counts as ended:
      never seen running, it would otherwise never be seen at all. */
@@ -64,7 +71,7 @@ export function useWatchedWork(): Running {
     try {
       const answer = await api.jobs(signal);
       setJobs(answer.running);
-      setBusy(answer.running.length > 0);
+      setBusy(answer.running.length > 0 || Date.now() < graceUntil.current);
       const newest = answer.recent[0]?.id ?? null;
       const doneUnseen = lastDone.current !== undefined && newest !== lastDone.current;
       lastDone.current = newest;
@@ -96,7 +103,7 @@ export function useWatchedWork(): Running {
      the slow beat: a button that shows nothing for twenty seconds is
      indistinguishable from a button that did nothing. */
   const watch = useCallback(() => {
-    wasBusy.current = true;
+    graceUntil.current = Date.now() + GRACE_MS;
     setBusy(true);
     void look();
   }, [look]);
