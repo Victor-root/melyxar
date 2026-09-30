@@ -8,12 +8,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { asClock } from "../../clock";
-import { ChevronDownIcon, CloseIcon } from "../../icons";
+import { CloseIcon } from "../../icons";
 import { useIsAFilmOnScreen } from "../../on-screen";
+import { BackIcon } from "../../player/icons";
+import { ICON } from "../../player/sound";
 import { useSettings } from "../../settings";
-import { Heart } from "../heart";
-import { Clock, Cover, Loudness, PlayPause, Progress, Ways } from "./bar";
-import { NextIcon, PreviousIcon, StopIcon } from "./icons";
+import { Cover } from "./bar";
+import { HeartButton, Rail, Transport, Volume, Ways } from "./controls";
+import { StopIcon } from "./icons";
 import { LyricsPanel } from "./lyrics-panel";
 import { useMusic } from "./player";
 
@@ -45,20 +47,22 @@ export function MusicNowPlaying() {
   const { queue } = music;
 
   return (
-    <div className="music-now" role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
+    <div className="music-now music-dark" role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
       <div className="music-now-glow" aria-hidden="true" />
-      <button type="button" className="music-control music-now-close" onClick={close} aria-label={t("music.close_player")} title={t("music.close_player")}>
-        <ChevronDownIcon size={26} />
-      </button>
+      <div className="player-top">
+        <div className="player-zone player-zone-top-left">
+          <button type="button" className="player-button" onClick={close} aria-label={t("music.close_player")}>
+            <BackIcon size={ICON} />
+          </button>
+          <span className="player-title">{song.title}</span>
+        </div>
+      </div>
 
       <div className="music-now-body">
         <section className="music-now-playing">
           <Cover pictures={song.cover} large />
           <div className="music-now-words">
-            <div className="music-now-title">
-              <h2>{song.title}</h2>
-              <Heart id={song.id} size={22} />
-            </div>
+            <h2>{song.title}</h2>
             <p className="music-now-by">
               {song.artists.map((artist, index) => (
                 <span key={artist.id}>
@@ -77,24 +81,6 @@ export function MusicNowPlaying() {
               </p>
             )}
           </div>
-          <Progress music={music} standing />
-          <div className="music-now-clock">
-            <Clock />
-          </div>
-          <div className="music-now-controls">
-            <Ways music={music} />
-            <button type="button" className="music-control" onClick={music.previous} aria-label={t("music.previous")} title={t("music.previous")}>
-              <PreviousIcon size={26} />
-            </button>
-            <PlayPause music={music} large />
-            <button type="button" className="music-control" onClick={music.next} aria-label={t("music.next")} title={t("music.next")}>
-              <NextIcon size={26} />
-            </button>
-            <button type="button" className="music-control" onClick={music.stop} aria-label={t("music.stop")} title={t("music.stop")}>
-              <StopIcon size={22} />
-            </button>
-          </div>
-          <Loudness music={music} />
         </section>
 
         <section className="music-now-queue" aria-label={t(side === "queue" ? "music.queue" : "music.lyrics")}>
@@ -126,7 +112,7 @@ export function MusicNowPlaying() {
                   </button>
                   <span className="music-queue-length">{one.seconds === null ? "" : asClock(one.seconds)}</span>
                   {at > queue.at && (
-                    <button type="button" className="music-control music-queue-remove" onClick={() => music.remove(at)} aria-label={t("music.take_out", { title: one.title })} title={t("music.take_out", { title: one.title })}>
+                    <button type="button" className="player-button player-button-small music-queue-remove" onClick={() => music.remove(at)} aria-label={t("music.take_out", { title: one.title })}>
                       <CloseIcon size={14} />
                     </button>
                   )}
@@ -136,6 +122,23 @@ export function MusicNowPlaying() {
           </ol>
           )}
         </section>
+      </div>
+
+      <div className="player-bottom">
+        <Rail music={music} />
+        <div className="player-row">
+          <div className="player-zone player-zone-bottom-left">
+            <Transport music={music} />
+          </div>
+          <div className="player-zone player-zone-bottom-right">
+            <HeartButton id={song.id} />
+            <Volume music={music} />
+            <Ways music={music} />
+            <button type="button" className="player-button" onClick={music.stop} aria-label={t("music.stop")}>
+              <StopIcon size={ICON - 4} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
