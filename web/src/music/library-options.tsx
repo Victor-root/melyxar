@@ -2,8 +2,9 @@
  * What a library of music does beyond what every library does, on the
  * administration's screen of that library: whether it looks up lyrics
  * online, whether the covers its albums lack are looked up online, and
- * whether the tag manager may write into its files. Saved as soon as it is switched, and switched back if the server
- * refuses.
+ * whether the tag manager may write into its files. Saved as soon as it is
+ * switched, and switched back if the server refuses. The same choices are
+ * offered when the library is declared.
  */
 
 import { useEffect, useState } from "react";
@@ -12,8 +13,8 @@ import { useSettings } from "../settings";
 import { music } from "./api";
 import type { MusicLibraryOptions } from "./api";
 
+/** The options of a library saved as soon as they are switched. */
 export function MusicLibraryOptionsFields({ library }: { library: string }) {
-  const { t } = useSettings();
   const [options, setOptions] = useState<MusicLibraryOptions | null>(null);
 
   useEffect(() => {
@@ -33,6 +34,19 @@ export function MusicLibraryOptionsFields({ library }: { library: string }) {
     setOptions(next);
     music.setLibraryOptions(library, next).catch(() => setOptions(was));
   };
+  return <MusicOptionsFields options={options} onChange={change} />;
+}
+
+/** The options themselves, for a library being declared as well as for one
+    that exists. */
+export function MusicOptionsFields({
+  options,
+  onChange: change,
+}: {
+  options: MusicLibraryOptions;
+  onChange: (next: MusicLibraryOptions) => void;
+}) {
+  const { t } = useSettings();
   return (
     <>
       <h3 className="settings-heading">{t("music.lyrics")}</h3>

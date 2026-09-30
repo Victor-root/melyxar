@@ -133,6 +133,15 @@ export interface MusicLibraryOptions {
   artist_photos_online: boolean;
 }
 
+/** What a library of music does until an administrator says otherwise, the
+    same as the server's: nothing asked of anybody online, no file written. */
+export const NO_MUSIC_OPTIONS: MusicLibraryOptions = {
+  lyrics_online: false,
+  tag_writing: false,
+  covers_online: false,
+  artist_photos_online: false,
+};
+
 /** One playlist of songs, as the list of them shows it. */
 export interface MusicPlaylist {
   id: string;
