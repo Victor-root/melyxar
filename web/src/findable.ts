@@ -350,6 +350,7 @@ export const FINDABLE: FindableSection[] = [
       ["admin.brake", "admin.brake_lead"],
       ["admin.brake_after", "admin.brake_after_why"],
       ["admin.access", "admin.access_lead"],
+      ["admin.access_redirect", "admin.access_redirect_why"],
     ],
     choices: {
       "admin.access": [

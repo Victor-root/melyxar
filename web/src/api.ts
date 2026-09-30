@@ -1748,6 +1748,8 @@ export interface AccessStatus {
   mode: AccessMode;
   certificate_path: string | null;
   private_key_path: string | null;
+  redirect_to_https: boolean;
+  public_names: string[];
   /** The certificate in use, when the server encrypts. */
   certificate: {
     names: string[];
@@ -2165,6 +2167,11 @@ export const api = {
       mode,
       certificate_path: certificatePath,
       private_key_path: privateKeyPath,
+    }),
+  setAccessOptions: (redirectToHttps: boolean, publicNames: string[]) =>
+    put<AccessStatus>("/api/v1/system/security/access/options", {
+      redirect_to_https: redirectToHttps,
+      public_names: publicNames.join(","),
     }),
   signInTries: (signal?: AbortSignal) =>
     get<{ tries: number }>("/api/v1/system/security/tries", signal),

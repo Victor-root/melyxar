@@ -414,7 +414,7 @@ impl From<&User> for AccountView {
 async fn sign_in(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Caller { address, encrypted }: Caller,
+    Caller { address, encrypted, .. }: Caller,
     Json(asked): Json<WhoAndWhat>,
 ) -> Result<Response> {
     match melyxar_app::accounts::sign_in(
@@ -571,7 +571,7 @@ async fn name_the_browser(
 async fn set_this_server_up(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Caller { address, encrypted }: Caller,
+    Caller { address, encrypted, .. }: Caller,
     Json(asked): Json<WhoAndWhat>,
 ) -> Result<Response> {
     let user =

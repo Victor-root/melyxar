@@ -61,8 +61,9 @@ pub enum Io {
 }
 
 /// A request that came in the clear is sent to the encrypted address, once
-/// the server encrypts and is not behind a proxy. Kept for the same host and
-/// port, since it is the same door.
+/// the server encrypts, is not behind a proxy and the administrator wants it,
+/// unless it comes from this machine or the local network, where nobody is
+/// listening in. Kept for the same host and port, since it is the same door.
 pub async fn sent_to_encrypted(
     axum::extract::State(state): axum::extract::State<AppState>,
     request: axum::extract::Request,
@@ -73,7 +74,7 @@ pub async fn sent_to_encrypted(
 
     let (mut parts, body) = request.into_parts();
     let Ok(caller) = crate::address::Caller::from_request_parts(&mut parts, &state).await;
-    if !caller.encrypted && melyxar_app::access::sends_plain_to_encrypted(&state) {
+    if !caller.encrypted && !caller.local && melyxar_app::access::sends_plain_to_encrypted(&state) {
         let host = parts.headers.get(axum::http::header::HOST).and_then(|host| host.to_str().ok());
         let path = parts.uri.path_and_query().map_or("/", |path| path.as_str());
         if let Some(to) = host.and_then(|host| encrypted_address(host, path)) {

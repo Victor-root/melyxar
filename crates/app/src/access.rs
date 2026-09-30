@@ -107,6 +107,10 @@ pub struct Status {
     pub mode: Mode,
     pub certificate_path: Option<String>,
     pub private_key_path: Option<String>,
+    /// Whether a request in the clear is sent to the encrypted address.
+    pub redirect_to_https: bool,
+    /// The names the certificate signed by the server carries, besides its own.
+    pub public_names: Vec<String>,
     /// The certificate in use, when connections are being encrypted.
     pub certificate: Option<Certificate>,
     /// Why they are not, when they should be.
@@ -137,10 +141,11 @@ pub fn encryption(state: &AppState) -> Option<Arc<ServerConfig>> {
 }
 
 /// Whether a request that arrived in the clear is sent to the encrypted
-/// address: only when the server encrypts, and not behind a proxy.
+/// address: only when the server encrypts, is not behind a proxy, and the
+/// administrator has not turned it off.
 pub fn sends_plain_to_encrypted(state: &AppState) -> bool {
     let held = state.access().read();
-    held.status.mode != Mode::Proxy && held.encryption.is_some()
+    held.status.mode != Mode::Proxy && held.status.redirect_to_https && held.encryption.is_some()
 }
 
 /// Where the server stands.
@@ -155,8 +160,9 @@ pub async fn apply(state: &AppState) -> Result<Status> {
     let mode = Mode::from_word(&stored.mode).unwrap_or_default();
     let tls = state.config().directories.tls();
     let (certificate_path, private_key_path) = (stored.certificate_path, stored.private_key_path);
-    let asked = (mode, certificate_path.clone(), private_key_path.clone());
-    let loaded = tokio::task::spawn_blocking(move || prepared(asked.0, asked.1, asked.2, &tls))
+    let public_names = parse_names(stored.public_names.as_deref().unwrap_or_default()).unwrap_or_default();
+    let asked = (mode, certificate_path.clone(), private_key_path.clone(), public_names.clone());
+    let loaded = tokio::task::spawn_blocking(move || prepared(asked.0, asked.1, asked.2, &asked.3, &tls))
         .await
         .map_err(|error| AppError::Directory(std::io::Error::other(error)))?;
 
@@ -171,7 +177,15 @@ pub async fn apply(state: &AppState) -> Result<Status> {
     if encryption.is_some() {
         tracing::info!(mode = mode.as_str(), "connections are encrypted");
     }
-    let status = Status { mode, certificate_path, private_key_path, certificate, problem };
+    let status = Status {
+        mode,
+        certificate_path,
+        private_key_path,
+        redirect_to_https: stored.redirect_to_https,
+        public_names,
+        certificate,
+        problem,
+    };
     let mut held = state.access().held.write().unwrap_or_else(std::sync::PoisonError::into_inner);
     *held = Held { status: status.clone(), encryption };
     Ok(status)
@@ -184,12 +198,15 @@ pub enum Refused {
     PathNeeded,
     /// The certificate and key given cannot be used, for this reason.
     Unusable(Problem),
+    /// A name that is neither a domain nor an address.
+    InvalidName,
 }
 
 impl Refused {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::PathNeeded => "path_needed",
+            Self::InvalidName => "invalid_name",
             Self::Unusable(problem) => problem.as_str(),
         }
     }
@@ -234,16 +251,69 @@ pub async fn choose(
         // Kept for when the administrator comes back to it.
         _ => (absolute(certificate_path), absolute(private_key_path)),
     };
+    let kept = state.database().access().await.map_err(AppError::from)?;
     state
         .database()
         .set_access(&Stored {
             mode: mode.as_str().to_string(),
             certificate_path,
             private_key_path,
+            ..kept
         })
         .await
         .map_err(AppError::from)?;
     Ok(apply(state).await?)
+}
+
+/// The two options that go with the mode: whether a request in the clear is
+/// sent to the encrypted address, and the names the certificate signed by the
+/// server carries, given as a list.
+pub async fn set_options(
+    state: &AppState,
+    redirect_to_https: bool,
+    public_names: &str,
+) -> std::result::Result<Status, Trouble> {
+    let names = parse_names(public_names).ok_or(Trouble::Refused(Refused::InvalidName))?;
+    let kept = state.database().access().await.map_err(AppError::from)?;
+    state
+        .database()
+        .set_access(&Stored {
+            redirect_to_https,
+            public_names: (!names.is_empty()).then(|| names.join(",")),
+            ..kept
+        })
+        .await
+        .map_err(AppError::from)?;
+    Ok(apply(state).await?)
+}
+
+/// The names in a list separated by commas or spaces, or nothing when one of
+/// them is not something a certificate can be made for: a domain or an
+/// address, without a scheme, a port or a path.
+fn parse_names(text: &str) -> Option<Vec<String>> {
+    let mut names: Vec<String> = Vec::new();
+    for name in text.split(|character: char| character == ',' || character.is_whitespace()) {
+        if name.is_empty() {
+            continue;
+        }
+        let name = name.to_ascii_lowercase();
+        let valid = name.len() <= 253
+            && (name.parse::<std::net::IpAddr>().is_ok()
+                || name.split('.').all(|label| {
+                    !label.is_empty()
+                        && label.len() <= 63
+                        && !label.starts_with('-')
+                        && !label.ends_with('-')
+                        && label.chars().all(|character| character.is_ascii_alphanumeric() || character == '-')
+                }));
+        if !valid {
+            return None;
+        }
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    Some(names)
 }
 
 type Prepared = Option<(Arc<ServerConfig>, Certificate)>;
@@ -253,6 +323,7 @@ fn prepared(
     mode: Mode,
     certificate_path: Option<String>,
     private_key_path: Option<String>,
+    public_names: &[String],
     tls: &Path,
 ) -> std::result::Result<Prepared, Problem> {
     match mode {
@@ -266,8 +337,9 @@ fn prepared(
         }
         Mode::SelfSigned => {
             let (certificate, key) = (tls.join(SELF_SIGNED_CERTIFICATE), tls.join(SELF_SIGNED_KEY));
-            if !certificate.is_file() || !key.is_file() {
-                sign_one(tls, &certificate, &key).map_err(|error| {
+            let names = own_names(public_names);
+            if !certificate.is_file() || !key.is_file() || !names_match(&certificate, &names) {
+                sign_one(tls, &certificate, &key, &names).map_err(|error| {
                     tracing::warn!(%error, "the certificate this server signs itself could not be made");
                     Problem::NotMade
                 })?;
@@ -277,8 +349,9 @@ fn prepared(
     }
 }
 
-/// Makes a certificate for this machine, signed by itself.
-fn sign_one(tls: &Path, certificate: &Path, key: &Path) -> std::io::Result<()> {
+/// The names a certificate signed by the server carries: this machine's, and
+/// the ones the administrator gave.
+fn own_names(public_names: &[String]) -> Vec<String> {
     let mut names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
     if let Ok(host) = std::fs::read_to_string("/proc/sys/kernel/hostname") {
         let host = host.trim();
@@ -286,7 +359,38 @@ fn sign_one(tls: &Path, certificate: &Path, key: &Path) -> std::io::Result<()> {
             names.push(host.to_string());
         }
     }
-    let mut parameters = rcgen::CertificateParams::new(names).map_err(std::io::Error::other)?;
+    for name in public_names {
+        if !names.contains(name) {
+            names.push(name.clone());
+        }
+    }
+    names
+}
+
+/// Whether the certificate kept carries exactly these names, so it is made
+/// again when the administrator changes them.
+fn names_match(certificate: &Path, names: &[String]) -> bool {
+    let Some(first) = CertificateDer::pem_file_iter(certificate)
+        .ok()
+        .and_then(|mut chain| chain.next())
+        .and_then(std::result::Result::ok)
+    else {
+        return false;
+    };
+    let Some(kept) = described(&first) else {
+        return false;
+    };
+    let sorted = |list: &[String]| {
+        let mut list = list.to_vec();
+        list.sort();
+        list
+    };
+    sorted(&kept.names) == sorted(names)
+}
+
+/// Makes a certificate for these names, signed by itself.
+fn sign_one(tls: &Path, certificate: &Path, key: &Path, names: &[String]) -> std::io::Result<()> {
+    let mut parameters = rcgen::CertificateParams::new(names.to_vec()).map_err(std::io::Error::other)?;
     let mut name = rcgen::DistinguishedName::new();
     name.push(rcgen::DnType::CommonName, "Melyxar");
     parameters.distinguished_name = name;
@@ -398,7 +502,7 @@ mod tests {
     fn a_certificate_signed_here_is_made_once_and_read_back() {
         let directory = tempfile::tempdir().expect("directory");
         let tls = directory.path().join("tls");
-        let (_, about) = prepared(Mode::SelfSigned, None, None, &tls)
+        let (_, about) = prepared(Mode::SelfSigned, None, None, &[], &tls)
             .expect("made")
             .expect("encrypted");
         assert!(about.names.contains(&"localhost".to_string()));
@@ -406,7 +510,7 @@ mod tests {
 
         let (certificate, _) = self_signed_in(&tls);
         let first = std::fs::read(&certificate).expect("written");
-        prepared(Mode::SelfSigned, None, None, &tls).expect("read").expect("encrypted");
+        prepared(Mode::SelfSigned, None, None, &[], &tls).expect("read").expect("encrypted");
         assert_eq!(std::fs::read(&certificate).expect("kept"), first, "not made again");
     }
 
@@ -414,8 +518,8 @@ mod tests {
     fn a_key_that_is_not_the_certificate_s_own_is_refused() {
         let one = tempfile::tempdir().expect("directory");
         let other = tempfile::tempdir().expect("directory");
-        prepared(Mode::SelfSigned, None, None, one.path()).expect("made");
-        prepared(Mode::SelfSigned, None, None, other.path()).expect("made");
+        prepared(Mode::SelfSigned, None, None, &[], one.path()).expect("made");
+        prepared(Mode::SelfSigned, None, None, &[], other.path()).expect("made");
         let (certificate, _) = self_signed_in(one.path());
         let (_, key) = self_signed_in(other.path());
         assert_eq!(encryption_from(&certificate, &key).err(), Some(Problem::NotAPair));
@@ -479,7 +583,45 @@ mod tests {
     #[test]
     fn behind_a_proxy_nothing_is_encrypted() {
         let directory = tempfile::tempdir().expect("directory");
-        assert!(prepared(Mode::Proxy, None, None, directory.path()).expect("fine").is_none());
+        assert!(prepared(Mode::Proxy, None, None, &[], directory.path()).expect("fine").is_none());
         assert!(!directory.path().join(SELF_SIGNED_CERTIFICATE).exists());
+    }
+
+    #[test]
+    fn names_are_read_as_a_list_and_refused_when_they_are_not_names() {
+        assert_eq!(
+            parse_names("Media.Example.org, 203.0.113.7  media.example.org"),
+            Some(vec!["media.example.org".to_string(), "203.0.113.7".to_string()])
+        );
+        assert_eq!(parse_names(""), Some(Vec::new()));
+        for bad in ["https://media.example.org", "media.example.org:2100", "a/b", "-a.org", "a..org"] {
+            assert_eq!(parse_names(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_certificate_is_made_again_when_its_names_change() {
+        let directory = tempfile::tempdir().expect("directory");
+        let names = vec!["media.example.org".to_string()];
+        let (_, first) = prepared(Mode::SelfSigned, None, None, &[], directory.path()).expect("made").expect("on");
+        assert!(!first.names.contains(&names[0]));
+        let (_, second) = prepared(Mode::SelfSigned, None, None, &names, directory.path()).expect("made").expect("on");
+        assert!(second.names.contains(&names[0]));
+    }
+
+    #[tokio::test]
+    async fn the_redirection_can_be_turned_off_and_keeps_the_mode() {
+        let (_directory, state) = a_server().await;
+        choose(&state, Mode::SelfSigned, None, None).await.expect("chosen");
+        let set = set_options(&state, false, "media.example.org").await.expect("set");
+        assert!(!set.redirect_to_https);
+        assert_eq!(set.mode, Mode::SelfSigned);
+        assert!(set.certificate.expect("certificate").names.contains(&"media.example.org".to_string()));
+        assert!(!sends_plain_to_encrypted(&state));
+        assert!(matches!(
+            set_options(&state, true, "not a name!").await,
+            Err(Trouble::Refused(Refused::InvalidName))
+        ));
+        assert!(!status(&state).redirect_to_https);
     }
 }

@@ -22,6 +22,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/system/security/access",
             axum::routing::get(access).put(choose_access),
         )
+        .route(
+            "/api/v1/system/security/access/options",
+            axum::routing::put(set_access_options),
+        )
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,6 +63,8 @@ struct AccessView {
     mode: &'static str,
     certificate_path: Option<String>,
     private_key_path: Option<String>,
+    redirect_to_https: bool,
+    public_names: Vec<String>,
     /// The certificate in use, when connections are encrypted.
     certificate: Option<CertificateView>,
     /// Why they are not, when they should be, as a word.
@@ -71,6 +77,8 @@ impl From<Status> for AccessView {
             mode: status.mode.as_str(),
             certificate_path: status.certificate_path,
             private_key_path: status.private_key_path,
+            redirect_to_https: status.redirect_to_https,
+            public_names: status.public_names,
             certificate: status.certificate.map(|certificate| CertificateView {
                 names: certificate.names,
                 issuer: certificate.issuer,
@@ -89,6 +97,22 @@ struct AccessAsked {
     certificate_path: Option<String>,
     #[serde(default)]
     private_key_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AccessOptionsAsked {
+    redirect_to_https: bool,
+    /// Separated by commas or spaces.
+    public_names: String,
+}
+
+async fn set_access_options(
+    _: Administrator,
+    State(state): State<AppState>,
+    Json(asked): Json<AccessOptionsAsked>,
+) -> Result<Json<AccessView>> {
+    let status = melyxar_app::access::set_options(&state, asked.redirect_to_https, &asked.public_names).await?;
+    Ok(Json(status.into()))
 }
 
 async fn access(_: Administrator, State(state): State<AppState>) -> Json<AccessView> {
