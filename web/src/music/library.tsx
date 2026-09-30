@@ -52,7 +52,6 @@ export function MusicLibraryPage({ library }: { library: Library }) {
         </div>
         <div className="browse-bar">
           <TabsBar tabs={shown} open={tab} onOpen={open} />
-          <PlayTools library={library.id} />
           <UploadButton library={library} bare className="browse-piece browse-alone" />
         </div>
       </div>
@@ -123,6 +122,7 @@ function AlbumsTab({ library }: { library: string }) {
             </span>
           )}
         </div>
+        <PlayTools library={library} />
         {albums.total !== null && (
           <span className="count">{howMany(albums.total, "music.albums_count", t)}</span>
         )}
@@ -150,6 +150,7 @@ function ArtistsTab({ library, albumArtistsOnly }: { library: string; albumArtis
   return (
     <>
       <div className="browse-bar music-bar">
+        <PlayTools library={library} />
         {artists.total !== null && (
           <span className="count">{howMany(artists.total, "music.artists_count", t)}</span>
         )}
@@ -200,6 +201,7 @@ function SongsTab({ library }: { library: string }) {
             <Direction descending={descending} onFlip={() => choose("descending", descending ? null : "true")} />
           </span>
         </div>
+        <PlayTools library={library} />
         {songs.total !== null && (
           <span className="count">{howMany(songs.total, "music.songs_count", t)}</span>
         )}
