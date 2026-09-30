@@ -631,11 +631,11 @@
   padding: 0 var(--player-inset);
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   backdrop-filter: blur(22px) saturate(1.3);
-  /* The rim a card wears under the pointer, all the way round. */
+  /* The rim a card wears under the pointer, along the top edge only. */
   box-shadow:
-    inset 0 0 0 1.5px var(--accent-bright),
-    0 0 8px color-mix(in srgb, var(--accent) 55%, transparent),
-    0 0 26px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+    inset 0 1.5px 0 0 var(--accent-bright),
+    0 -2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 -8px 26px -6px color-mix(in srgb, var(--accent) 30%, transparent);
   color: var(--text);
 }
 
