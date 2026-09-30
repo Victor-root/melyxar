@@ -600,7 +600,7 @@
 /* Room at the foot of every page while the bar is there, so its end is
    never under the bar; and the words said in the corner rise above it. */
 :root {
-  --music-bar-height: 112px;
+  --music-bar-height: 100px;
 }
 
 /* The page ends where the bar begins, so the bar is a part of the page: it
@@ -628,9 +628,11 @@
   z-index: 18;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* The bar of the song is the very top of the player: its handle, which
+     swells under a hand, has the room of its own line and nothing over it. */
+  justify-content: flex-start;
   height: var(--music-bar-height);
-  padding: 0 var(--player-inset);
+  padding: 0 var(--player-inset) 6px;
   color: var(--text);
 }
 
@@ -975,7 +977,7 @@
 
 @media (max-width: 760px) {
   :root {
-    --music-bar-height: 104px;
+    --music-bar-height: 100px;
   }
 
   .music-bar-dock {
