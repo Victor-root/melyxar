@@ -90,16 +90,16 @@ export function StopButton({ music }: { music: Music }) {
 }
 
 /** The transport in the order the film's player has it, with the button that
-    stops for good beside the one that plays. */
+    stops for good after the one that goes to the next song. */
 export function Transport({ music }: { music: Music }) {
   return (
     <>
       <SongStepButton music={music} back />
       <SecondsButton music={music} back />
       <PlayButton music={music} />
-      <StopButton music={music} />
       <SecondsButton music={music} back={false} />
       <SongStepButton music={music} back={false} />
+      <StopButton music={music} />
     </>
   );
 }

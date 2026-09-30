@@ -74,6 +74,19 @@ export function useMediaSession(music: Music): void {
     }
   }, [session, music]);
 
+  /* A media key is a key pressed on the page, which is what makes the browser
+     draw the frame of the focused button: the play button, still focused from
+     the last click, was framed each time the keyboard paused it. The key acts
+     on the player, not on what has the focus, so nothing keeps it. */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.startsWith("Media") && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, []);
 }
 
 /**
