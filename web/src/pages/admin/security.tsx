@@ -24,8 +24,8 @@ export function AdminSecurity() {
     <>
       <PageHead lead={t("admin.security_lead")} />
       <div className="panels">
-        <SignInsPanel />
         <AccessPanel />
+        <SignInsPanel />
       </div>
     </>
   );
