@@ -9,7 +9,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useAccount } from "../account";
 import { refusalOf } from "../asking";
 import { Modal } from "../components/modal";
 import { Setting, Toggle } from "../components/panel";
@@ -40,6 +41,30 @@ const FIRST_PATTERN = "{track} - {title}";
 /** The largest side a cover is sent at: larger shows nothing more and weighs
  *  on every screen that loads it. */
 const LARGEST_COVER = 1600;
+
+/** Why the server would not, said as what is missing: the right of the
+ *  account, or the option of the library, which are put right in two
+ *  different places. */
+function Refusal({ refused }: { refused: string }) {
+  const { t } = useSettings();
+  const { account } = useAccount();
+  if (refused !== "forbidden") {
+    return <p className="notice">{t(refusalKey(refused))}</p>;
+  }
+  return (
+    <p className="notice">
+      {t(account?.may_edit_tags ? "music.tags_library_off" : "music.tags_no_right")}
+      {account?.is_administrator && (
+        <>
+          {" "}
+          <Link to={account.may_edit_tags ? "/admin/libraries" : "/admin/users"}>
+            {t(account.may_edit_tags ? "music.tags_open_libraries" : "music.tags_open_users")}
+          </Link>
+        </>
+      )}
+    </p>
+  );
+}
 
 export function TagEditorPage() {
   const { t } = useSettings();
@@ -82,7 +107,7 @@ export function TagEditorPage() {
   if (refused && !songs) {
     return (
       <main className="page">
-        <p className="notice">{t(refused === "forbidden" ? "music.tags_not_allowed" : refusalKey(refused))}</p>
+        <Refusal refused={refused} />
       </main>
     );
   }
@@ -159,7 +184,7 @@ export function TagEditorPage() {
       <div className="section-head">
         <h1>{t("music.edit_tags")}</h1>
       </div>
-      {refused && <p className="notice">{t(refused === "forbidden" ? "music.tags_not_allowed" : refusalKey(refused))}</p>}
+      {refused && <Refusal refused={refused} />}
 
       <section className="tag-editor-album">
         <h2>{t("music.album")}</h2>
