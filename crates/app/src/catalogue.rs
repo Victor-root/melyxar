@@ -86,6 +86,9 @@ pub struct Home {
     /// chose. Every row above is sent whatever this says: the banner is made
     /// of what was left halfway and what has just arrived, shown or not.
     pub sections: Vec<HomeSection>,
+    /// The kinds of library in the order this viewer chose, for the tiles that
+    /// lead to them, music's among them: the shelves above hold no music.
+    pub kind_order: Vec<LibraryKind>,
 }
 
 /// One row of the home page, for one kind of library.
@@ -360,6 +363,7 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
         works: counted.browsable,
         awaiting_identification: counted.awaiting_identification,
         sections: who.preferences.home_sections_shown(),
+        kind_order: who.preferences.home_order.clone(),
     })
 }
 
@@ -1000,6 +1004,12 @@ mod tests {
         .normalised();
         let page = home(&state, None, &viewer).await.expect("read");
         assert_eq!(kinds(&page), vec![LibraryKind::Anime, LibraryKind::Movies]);
+        assert_eq!(
+            page.kind_order.first(),
+            Some(&LibraryKind::Anime),
+            "the order is handed over whole, for the tile of music too"
+        );
+        assert!(page.kind_order.contains(&LibraryKind::Music));
     }
 
     #[tokio::test]

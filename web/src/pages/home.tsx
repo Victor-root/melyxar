@@ -123,7 +123,12 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       <Band
         shelves={home.shelves}
         libraries={libraries}
-        after={<MusicBandTile libraries={libraries} albums={newestAlbums} />}
+        order={home.kind_order}
+        music={
+          libraries.some((library) => library.kind === "music") ? (
+            <MusicBandTile libraries={libraries} albums={newestAlbums} />
+          ) : undefined
+        }
       />
     ),
 

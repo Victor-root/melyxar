@@ -25,8 +25,9 @@
  * mark, faint, where the posters will stand once there are any.
  */
 
+import { Fragment } from "react";
 import { Link } from "react-router-dom";
-import type { Card, Home, Library } from "../api";
+import type { Card, Home, Library, LibraryKind } from "../api";
 import { useShownPicture } from "./picture";
 import { nameOfKind, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
@@ -74,25 +75,33 @@ const RIPPLE = "band-ripple";
 export function Band({
   shelves,
   libraries,
-  after,
+  order,
+  music,
 }: {
   shelves: Shelf[];
   libraries: Library[];
-  /** Tiles drawn by others and standing after these, music's among them. */
-  after?: React.ReactNode;
+  /** The kinds of library in the order the viewer chose. */
+  order: LibraryKind[];
+  /** The tile of music, drawn by music, which takes its place among the
+      others by the same order. Nothing when there is no music to lead to. */
+  music?: React.ReactNode;
 }) {
   const { t } = useSettings();
 
-  if (shelves.length === 0 && !after) {
+  const tiles = [
+    ...shelves.map((shelf) => ({ kind: shelf.kind, tile: <Tile shelf={shelf} libraries={libraries} /> })),
+    ...(music ? [{ kind: "music" as LibraryKind, tile: music }] : []),
+  ].sort((one, other) => order.indexOf(one.kind) - order.indexOf(other.kind));
+
+  if (tiles.length === 0) {
     return null;
   }
   return (
     <nav className="band" aria-label={t("home.band")}>
       <Water />
-      {shelves.map((shelf) => (
-        <Tile key={shelf.kind} shelf={shelf} libraries={libraries} />
+      {tiles.map(({ kind, tile }) => (
+        <Fragment key={kind}>{tile}</Fragment>
       ))}
-      {after}
     </nav>
   );
 }
