@@ -424,3 +424,69 @@
 .access-field .field-line {
   margin-top: 6px;
 }
+
+/* The ways in, side by side: the one in force ticked, the others dimmed but
+   still there to pick. */
+.access-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+.access-choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: var(--gap-wide);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.access-choice:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.access-choice-on,
+.access-choice-on:hover:not(:disabled) {
+  opacity: 1;
+  border-color: var(--ok);
+  background: var(--ok-wash);
+}
+
+.access-choice-tick {
+  position: absolute;
+  top: var(--gap);
+  right: var(--gap);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ok);
+  color: var(--surface-deep);
+}
+
+.access-choice .setting-label {
+  padding-right: 28px;
+}
+
+.access-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .access-choices,
+  .access-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
