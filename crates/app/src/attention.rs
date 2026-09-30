@@ -262,6 +262,7 @@ mod tests {
         Event::SignInRefused {
             name: "nobody".to_string(),
             device: "a browser".to_string(),
+            address: None,
         }
     }
 

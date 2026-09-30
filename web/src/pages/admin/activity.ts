@@ -88,9 +88,13 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
       };
     case "server_stopped":
       return { title: t("activity.server_stopped"), note: null };
-    case "signed_in":
     case "sign_in_refused":
     case "sign_in_held_back":
+      return {
+        title: t(`activity.${line.kind}`, { user }),
+        note: joined([text(details, "address"), device]),
+      };
+    case "signed_in":
     case "signed_out":
       return { title: t(`activity.${line.kind}`, { user }), note: device };
     case "password_changed":

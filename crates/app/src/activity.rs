@@ -36,9 +36,11 @@ pub enum Event {
     },
     /// A name and a password that were not a pair. The name is what was
     /// typed, which may be nobody's.
-    SignInRefused { name: String, device: String },
+    /// Where it came from is the address the server saw, or the one the
+    /// proxy in front of it passed on.
+    SignInRefused { name: String, device: String, address: Option<String> },
     /// An account held back after too many wrong passwords.
-    SignInHeldBack { user: UserId, user_name: String, device: String },
+    SignInHeldBack { user: UserId, user_name: String, device: String, address: Option<String> },
     SignedOut {
         user: UserId,
         user_name: String,
@@ -112,6 +114,9 @@ pub struct TaskEnded {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Category {
     Access,
+    /// The sign ins refused and the accounts held back, which the page of
+    /// security lists on their own.
+    Refused,
     Playback,
     Library,
     Server,
@@ -121,6 +126,7 @@ impl Category {
     pub fn from_word(word: &str) -> Option<Self> {
         match word {
             "access" => Some(Self::Access),
+            "refused" => Some(Self::Refused),
             "playback" => Some(Self::Playback),
             "library" => Some(Self::Library),
             "server" => Some(Self::Server),
@@ -144,6 +150,7 @@ impl Category {
                 DEVICE_SIGNED_OUT,
                 OTHER_DEVICES_SIGNED_OUT,
             ],
+            Self::Refused => &[SIGN_IN_REFUSED, SIGN_IN_HELD_BACK],
             Self::Playback => &[WATCHED],
             Self::Library => &[TASK_FINISHED, TASK_FAILED, TASK_STOPPED, WORKS_DELETED],
             Self::Server => &[SERVER_STARTED, SERVER_STOPPED],
@@ -301,14 +308,17 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
             Some(device),
             json!({ "user_name": user_name, "device_id": device_id.to_db_string() }),
         ),
-        Event::SignInRefused { name, device } => {
-            line(SIGN_IN_REFUSED, None, Some(device), json!({ "user_name": name }))
-        }
-        Event::SignInHeldBack { user, user_name, device } => line(
+        Event::SignInRefused { name, device, address } => line(
+            SIGN_IN_REFUSED,
+            None,
+            Some(device),
+            json!({ "user_name": name, "address": address }),
+        ),
+        Event::SignInHeldBack { user, user_name, device, address } => line(
             SIGN_IN_HELD_BACK,
             Some(user),
             Some(device),
-            json!({ "user_name": user_name }),
+            json!({ "user_name": user_name, "address": address }),
         ),
         Event::SignedOut {
             user,
@@ -779,6 +789,7 @@ mod tests {
             Event::SignInRefused {
                 name: "nobody".to_string(),
                 device: "a browser".to_string(),
+                address: Some("192.0.2.7".to_string()),
             },
         )
         .await;
@@ -803,5 +814,9 @@ mod tests {
         assert_eq!(lines[1].kind, "sign_in_refused");
         assert_eq!(lines[1].level, Level::Attention);
         assert_eq!(lines[1].details["user_name"], "nobody");
+        assert_eq!(lines[1].details["address"], "192.0.2.7");
+
+        let refused = page(&state, &[Category::Refused], None, 10).await.expect("read");
+        assert_eq!(refused.len(), 1, "only the refusal, not the task");
     }
 }

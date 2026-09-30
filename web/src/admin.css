@@ -509,30 +509,6 @@
   color: var(--text-faint);
 }
 
-/* The outline of a table not filled yet. */
-.ghosts {
-  display: grid;
-  grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
-  gap: 12px var(--gap-wide);
-  align-items: center;
-}
-
-.ghosts-head {
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-faint);
-  font-size: 11.5px;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.ghosts-cell {
-  height: 12px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-hover);
-}
-
 /* --------------------------------------------------------------------------
  * Looking for a folder on the server's disk
  * ----------------------------------------------------------------------- */

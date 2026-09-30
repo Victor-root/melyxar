@@ -1763,7 +1763,9 @@ export interface ActivityPage {
 }
 
 /** The families the journal is read by. */
-export type ActivityFamily = "access" | "playback" | "library" | "server";
+/** The families the journal is read by; "refused" is only the refused sign
+    ins and held back accounts, for the page of security. */
+export type ActivityFamily = "access" | "playback" | "library" | "server" | "refused";
 
 /** One thing deserving a look. `point` says which; the rest depends on it,
  *  a worry of the summary carrying its own `kind` and what it names. */
@@ -2138,6 +2140,10 @@ export const api = {
     if (most) asked.set("most", String(most));
     return get<ActivityPage>(`/api/v1/system/activity?${asked.toString()}`, signal);
   },
+  signInTries: (signal?: AbortSignal) =>
+    get<{ tries: number }>("/api/v1/system/security/tries", signal),
+  setSignInTries: (tries: number) =>
+    put<{ tries: number }>("/api/v1/system/security/tries", { tries }),
   activityKeptDays: (signal?: AbortSignal) =>
     get<{ days: number }>("/api/v1/system/activity/kept", signal),
   keepActivityDays: (days: number) =>

@@ -112,11 +112,14 @@ fn stored_form_of(password: &str) -> std::result::Result<String, Trouble> {
     }
 }
 
-/// How many wrong answers in a row an account takes before it is held back.
+/// How many wrong answers in a row an account may be set to take before it
+/// is held back.
 ///
-/// Ten, which is more mistakes than anybody makes typing their own password
-/// and far fewer than guessing one needs.
-const ALLOWED_TRIES: u32 = 10;
+/// Ten by default, which is more mistakes than anybody makes typing their
+/// own password and far fewer than guessing one needs. Never fewer than three,
+/// which would shut out whoever mistypes twice, nor more than a hundred, past
+/// which the wait no longer slows any guessing.
+pub const SIGN_IN_TRIES: std::ops::RangeInclusive<i64> = 3..=100;
 
 /// How long an account is left alone for, once it has been held back.
 ///
@@ -155,14 +158,14 @@ impl WrongAnswers {
         (until > at).then(|| until - at)
     }
 
-    /// One more wrong answer, which past a point holds the account back.
-    fn one_more(&self, who: UserId, at: Timestamp) {
+    /// One more wrong answer, which at `allowed` holds the account back.
+    fn one_more(&self, who: UserId, allowed: u32, at: Timestamp) {
         let Ok(mut kept) = self.by_account.lock() else {
             return;
         };
         let counted = kept.entry(who).or_default();
         counted.how_many += 1;
-        if counted.how_many >= ALLOWED_TRIES {
+        if counted.how_many >= allowed {
             counted.how_many = 0;
             counted.until = Some(at + HELD_BACK_FOR);
         }
@@ -174,6 +177,22 @@ impl WrongAnswers {
             kept.remove(&who);
         }
     }
+}
+
+/// How many wrong passwords in a row an account takes before it is held back.
+pub async fn sign_in_tries(state: &AppState) -> Result<i64> {
+    Ok(state.database().sign_in_tries().await?)
+}
+
+/// Sets it, refusing what is out of bounds.
+pub async fn set_sign_in_tries(state: &AppState, tries: i64) -> Result<i64> {
+    if !SIGN_IN_TRIES.contains(&tries) {
+        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "an account takes between three and a hundred wrong passwords",
+        )));
+    }
+    state.database().set_sign_in_tries(tries).await?;
+    Ok(tries)
 }
 
 /// What a client is handed when it signs in.
@@ -233,6 +252,7 @@ pub async fn sign_in(
     device_name: &str,
     remembered: Remembered,
     client: Option<&str>,
+    address: Option<&str>,
 ) -> Result<SignedInOrNot> {
     let refused = || {
         record(
@@ -240,6 +260,7 @@ pub async fn sign_in(
             Event::SignInRefused {
                 name: name.chars().take(LONGEST_NAME_WRITTEN).collect(),
                 device: device_name.to_string(),
+                address: address.map(str::to_string),
             },
         )
     };
@@ -265,6 +286,7 @@ pub async fn sign_in(
                 user: user.id,
                 user_name: user.name.clone(),
                 device: device_name.to_string(),
+                address: address.map(str::to_string),
             },
         )
         .await;
@@ -274,7 +296,8 @@ pub async fn sign_in(
     }
 
     if !password_matches(password, &stored) {
-        state.wrong_answers().one_more(user.id, at);
+        let allowed = u32::try_from(state.database().sign_in_tries().await?).unwrap_or(u32::MAX);
+        state.wrong_answers().one_more(user.id, allowed, at);
         tracing::info!(account = %user.name, "refused a sign in");
         refused().await;
         return Ok(SignedInOrNot::NotAPair);
@@ -1057,6 +1080,9 @@ mod tests {
     use melyxar_database::Database;
     use time::macros::datetime;
 
+    /// How many wrong answers a server that was never set takes.
+    const ALLOWED_TRIES: u32 = 10;
+
     async fn a_server() -> (tempfile::TempDir, AppState) {
         let directory = tempfile::tempdir().expect("temporary directory");
         let config = Config {
@@ -1081,7 +1107,7 @@ mod tests {
         password: &str,
         device: &str,
     ) -> Option<OpenedSession> {
-        match sign_in(state, name, password, device, Remembered::Yes, None).await.expect("asked") {
+        match sign_in(state, name, password, device, Remembered::Yes, None, None).await.expect("asked") {
             SignedInOrNot::Opened(opened) => Some(*opened),
             SignedInOrNot::NotAPair => None,
             SignedInOrNot::HeldBack { seconds } => panic!("held back for {seconds} seconds"),
@@ -1216,7 +1242,7 @@ mod tests {
 
         for _ in 0..ALLOWED_TRIES {
             assert!(matches!(
-                sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None)
+                sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
                     .await
                     .expect("asked"),
                 SignedInOrNot::NotAPair
@@ -1227,7 +1253,7 @@ mod tests {
         // which is the point of holding it back: checking one is made
         // expensive on purpose, so a thousand guesses a second would be asking
         // this server to grind itself to a halt.
-        let held = sign_in(&state, "victor", "quiet harbour", "a browser", Remembered::Yes, None)
+        let held = sign_in(&state, "victor", "quiet harbour", "a browser", Remembered::Yes, None, None)
             .await
             .expect("asked");
         let SignedInOrNot::HeldBack { seconds } = held else {
@@ -1241,7 +1267,7 @@ mod tests {
         let (_directory, state) = a_server_with_an_account().await;
 
         for _ in 0..ALLOWED_TRIES - 1 {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None)
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
                 .await
                 .expect("asked");
         }
@@ -1253,13 +1279,32 @@ mod tests {
         // somebody who mistypes their password now and then is never locked
         // out by a week of them.
         for _ in 0..ALLOWED_TRIES - 1 {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None)
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
                 .await
                 .expect("asked");
         }
         assert!(a_session(&state, "victor", "quiet harbour", "a browser")
             .await
             .is_some());
+    }
+
+    #[tokio::test]
+    async fn an_account_is_held_back_after_the_tries_the_administrator_set() {
+        let (_directory, state) = a_server_with_an_account().await;
+        assert!(set_sign_in_tries(&state, 2).await.is_err(), "fewer than three shuts out a typo");
+        set_sign_in_tries(&state, 3).await.expect("set");
+
+        for _ in 0..3 {
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
+                .await
+                .expect("asked");
+        }
+        assert!(matches!(
+            sign_in(&state, "victor", "quiet harbour", "a browser", Remembered::Yes, None, None)
+                .await
+                .expect("asked"),
+            SignedInOrNot::HeldBack { .. }
+        ));
     }
 
     #[tokio::test]
@@ -1275,7 +1320,7 @@ mod tests {
             .expect("password set");
 
         for _ in 0..ALLOWED_TRIES {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None)
+            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
                 .await
                 .expect("asked");
         }
@@ -1294,7 +1339,7 @@ mod tests {
         let at = datetime!(2026-01-01 12:00 UTC);
 
         for _ in 0..ALLOWED_TRIES {
-            counted.one_more(who, at);
+            counted.one_more(who, ALLOWED_TRIES, at);
         }
         assert!(counted.held_back(who, at).is_some());
         assert!(
@@ -1764,6 +1809,7 @@ mod tests {
                 "a browser",
                 Remembered::Yes,
                 Some("0f6c2c1e-3b7a-4c55-9e0a-5d1f7a9b2c44"),
+                None,
             )
             .await
             .expect("asked");

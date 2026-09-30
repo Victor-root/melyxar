@@ -32,6 +32,7 @@ use melyxar_app::AppState;
 use melyxar_core::user::User;
 use serde::{Deserialize, Serialize};
 
+use crate::address::Caller;
 use crate::error::{Result, ServerError};
 
 /// The name the session travels under.
@@ -421,6 +422,7 @@ impl From<&User> for AccountView {
 async fn sign_in(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Caller(address): Caller,
     Json(asked): Json<WhoAndWhat>,
 ) -> Result<Response> {
     match melyxar_app::accounts::sign_in(
@@ -430,6 +432,7 @@ async fn sign_in(
         &what_asked(&headers),
         wished_for(asked.remember),
         asked.client.as_deref(),
+        address.as_deref(),
     )
     .await?
     {
@@ -575,6 +578,7 @@ async fn name_the_browser(
 async fn set_this_server_up(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Caller(address): Caller,
     Json(asked): Json<WhoAndWhat>,
 ) -> Result<Response> {
     let user =
@@ -593,6 +597,7 @@ async fn set_this_server_up(
         &what_asked(&headers),
         wished_for(asked.remember),
         asked.client.as_deref(),
+        address.as_deref(),
     )
     .await?
     else {
