@@ -634,6 +634,8 @@ button.seen-mark:not(.seen-mark-on):hover {
 .card-progress-done {
   display: block;
   height: 100%;
+  /* The end of the line is round, where it has got to. */
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
   background: var(--accent);
   transition: background var(--quick) var(--ease);
 }
