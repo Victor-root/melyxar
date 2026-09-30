@@ -83,9 +83,10 @@ export function MusicBar() {
   );
 }
 
-/** The cover of what is playing, enlarged and washed out behind the whole
-    bar: it takes the colours of the song, which is what sets the bar apart
-    from the page under it. */
+/** The cover of what is playing, enlarged and blurred behind the whole bar in
+    the accent of the account: the light and shade of the song, which is what
+    sets the bar apart from the page under it, in the colour of the rest of the
+    interface. */
 function Backdrop({ pictures }: { pictures: Picture[] }) {
   const { picture, itDidNotLoad } = useShownPicture(pictures);
   if (!picture) {

@@ -648,6 +648,13 @@
   /* Clipped here rather than on the bar, whose words above its buttons must
      be free to leave it. */
   overflow: hidden;
+  /* The ground is the accent of the account, deepened: the cover only gives
+     it its light and shade, never its colour. */
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent) 38%, var(--surface-raised)),
+    color-mix(in srgb, var(--accent) 22%, var(--surface-raised))
+  );
   pointer-events: none;
 }
 
@@ -655,10 +662,12 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.55;
+  opacity: 0.6;
+  mix-blend-mode: overlay;
   /* Blurred once, on a bar that is a hundred points tall and never moves: the
-     scale keeps the edges of the blur out of sight. */
-  filter: blur(28px) saturate(1.6);
+     scale keeps the edges of the blur out of sight. Grey, so that it lights
+     and shades the accent without bringing a colour of its own. */
+  filter: blur(28px) grayscale(1) contrast(1.2);
   transform: scale(1.25);
 }
 
