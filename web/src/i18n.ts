@@ -1605,6 +1605,10 @@ const en: Dictionary = {
   "admin.logo_remove": "Remove it",
   "admin.logo_failed": "The logo could not be changed",
   "admin.door": "Sign-in screen",
+  "admin.theme": "Default theme",
+  "admin.theme_why":
+    "The theme everyone sees until they choose their own, a first visit to the sign-in screen included. Anyone can still change it for themselves.",
+  "admin.theme_failed": "The default theme could not be changed",
   "admin.door_lead": "Choose what stands behind the sign-in screen.",
   "admin.door_background": "Background",
   "admin.door_background.abstract": "Light and particles",
@@ -3315,6 +3319,10 @@ const fr: Dictionary = {
   "admin.logo_remove": "Le retirer",
   "admin.logo_failed": "Impossible de changer le logo",
   "admin.door": "Écran de connexion",
+  "admin.theme": "Thème par défaut",
+  "admin.theme_why":
+    "Le thème que chacun voit tant qu’il n’a pas choisi le sien, dès la première visite sur l’écran de connexion. Chacun peut toujours le changer pour lui.",
+  "admin.theme_failed": "Impossible de changer le thème par défaut",
   "admin.door_lead": "Choisissez ce qui se trouve derrière l’écran de connexion.",
   "admin.door_background": "Arrière-plan",
   "admin.door_background.abstract": "Lumière et particules",

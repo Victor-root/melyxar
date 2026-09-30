@@ -551,8 +551,11 @@ pub enum ThemeMode {
     Light,
     Dark,
     /// Follow the operating system setting.
-    #[default]
     System,
+    /// Nothing chosen yet: whatever the server says is its own default, which
+    /// is itself one of the three above.
+    #[default]
+    Server,
 }
 
 impl ThemeMode {
@@ -561,6 +564,7 @@ impl ThemeMode {
             Self::Light => "light",
             Self::Dark => "dark",
             Self::System => "system",
+            Self::Server => "server",
         }
     }
 
@@ -569,6 +573,7 @@ impl ThemeMode {
             "light" => Some(Self::Light),
             "dark" => Some(Self::Dark),
             "system" => Some(Self::System),
+            "server" => Some(Self::Server),
             _ => None,
         }
     }
@@ -904,6 +909,7 @@ mod tests {
             (ThemeMode::Light, "light"),
             (ThemeMode::Dark, "dark"),
             (ThemeMode::System, "system"),
+            (ThemeMode::Server, "server"),
         ] {
             assert_eq!(mode.as_str(), written);
             assert_eq!(ThemeMode::parse(written), Some(mode));
@@ -915,8 +921,8 @@ mod tests {
         );
         assert_eq!(
             ThemeMode::default(),
-            ThemeMode::System,
-            "without a choice, the theme is the one the machine is set to"
+            ThemeMode::Server,
+            "without a choice, the theme is the one the server is set to"
         );
     }
 

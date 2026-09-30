@@ -935,7 +935,7 @@ mod tests {
         assert_eq!(loaded.name, "victor");
         assert!(loaded.permissions.is_administrator);
         assert_eq!(loaded.preferences.accent_color, "#c81e1e");
-        assert_eq!(loaded.preferences.theme_mode, ThemeMode::System);
+        assert_eq!(loaded.preferences.theme_mode, ThemeMode::Server);
         assert_eq!(
             loaded.preferences.downmix_method,
             DownmixMethod::BroadcastStandard
@@ -1410,7 +1410,7 @@ mod tests {
             .await
             .expect("readable")
             .expect("the account must still load");
-        assert_eq!(loaded.preferences.theme_mode, ThemeMode::System);
+        assert_eq!(loaded.preferences.theme_mode, ThemeMode::Server);
         assert_eq!(
             loaded.preferences.downmix_method,
             DownmixMethod::BroadcastStandard

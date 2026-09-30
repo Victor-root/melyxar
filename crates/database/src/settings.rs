@@ -1,6 +1,7 @@
 //! Server settings: one row, read often, written rarely.
 
 use melyxar_core::time::{now, Timestamp};
+use melyxar_core::user::ThemeMode;
 use sqlx::Row;
 
 use crate::convert::{
@@ -54,6 +55,15 @@ impl LoginBackground {
     }
 }
 
+/// The theme a word names as the server's own, the automatic one for anything
+/// else: "follow the server" would be the server following itself.
+fn default_theme_of(stored: &str) -> ThemeMode {
+    match ThemeMode::parse(stored) {
+        Some(theme @ (ThemeMode::Light | ThemeMode::Dark)) => theme,
+        _ => ThemeMode::System,
+    }
+}
+
 /// A file the administrator sent, kept by name in the settings row.
 #[derive(Debug, Clone, Copy)]
 enum Upload {
@@ -94,6 +104,8 @@ pub struct ServerSettings {
     /// the language of whoever is looking.
     pub door_slogan: Option<String>,
     pub global_custom_css: Option<String>,
+    /// The theme of whoever has not chosen one: light, dark or the device's.
+    pub default_theme: ThemeMode,
     /// Shows the account list before a password is typed. A deliberate
     /// disclosure, so it can be turned off.
     pub show_user_picker: bool,
@@ -245,9 +257,9 @@ impl Database {
     pub async fn server_settings(&self) -> Result<ServerSettings> {
         let row = sqlx::query(
             "SELECT server_name, logo_path, splash_path, login_background_path,
-                    login_background_style, door_slogan, global_custom_css, show_user_picker,
-                    maintenance_enabled, maintenance_message, maintenance_until,
-                    read_companion_files, write_companion_files, watched_threshold,
+                    login_background_style, door_slogan, global_custom_css, default_theme,
+                    show_user_picker, maintenance_enabled, maintenance_message,
+                    maintenance_until, read_companion_files, write_companion_files, watched_threshold,
                     activity_retention_days, check_for_updates, tone_mapping_disabled,
                     thumbnails_every_seconds, thumbnails_height, thumbnails_columns,
                     thumbnails_rows, updated_at
@@ -266,6 +278,7 @@ impl Database {
             ),
             door_slogan: row.try_get("door_slogan")?,
             global_custom_css: row.try_get("global_custom_css")?,
+            default_theme: default_theme_of(&row.try_get::<String, _>("default_theme")?),
             show_user_picker: int_to_bool(row.try_get("show_user_picker")?),
             maintenance_enabled: int_to_bool(row.try_get("maintenance_enabled")?),
             maintenance_message: row.try_get("maintenance_message")?,
@@ -294,8 +307,8 @@ impl Database {
         sqlx::query(
             "UPDATE server_settings SET
                 server_name = ?, logo_path = ?, splash_path = ?, login_background_path = ?,
-                login_background_style = ?, global_custom_css = ?, show_user_picker = ?,
-                maintenance_enabled = ?,
+                login_background_style = ?, global_custom_css = ?, default_theme = ?,
+                show_user_picker = ?, maintenance_enabled = ?,
                 maintenance_message = ?, maintenance_until = ?, read_companion_files = ?,
                 write_companion_files = ?, watched_threshold = ?, activity_retention_days = ?,
                 check_for_updates = ?, tone_mapping_disabled = ?, updated_at = ?
@@ -307,6 +320,7 @@ impl Database {
         .bind(&settings.login_background_path)
         .bind(settings.login_background.as_str())
         .bind(&settings.global_custom_css)
+        .bind(settings.default_theme.as_str())
         .bind(bool_to_int(settings.show_user_picker))
         .bind(bool_to_int(settings.maintenance_enabled))
         .bind(&settings.maintenance_message)
@@ -517,6 +531,16 @@ impl Database {
         .bind(timestamp_to_text(now()))
         .execute(self.writer())
         .await?;
+        Ok(())
+    }
+
+    /// The theme of whoever has not chosen one.
+    pub async fn set_default_theme(&self, theme: ThemeMode) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET default_theme = ?, updated_at = ? WHERE id = 1")
+            .bind(theme.as_str())
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
         Ok(())
     }
 
@@ -811,6 +835,7 @@ mod tests {
         settings.logo_path = Some("uploads/logo.png".into());
         settings.login_background = LoginBackground::Library;
         settings.show_user_picker = false;
+        settings.default_theme = ThemeMode::Dark;
         settings.work.read_companion_files = true;
         settings.activity_retention_days = 90;
         settings.tone_mapping_disabled = true;
@@ -825,9 +850,37 @@ mod tests {
         assert_eq!(reloaded.logo_path.as_deref(), Some("uploads/logo.png"));
         assert_eq!(reloaded.login_background, LoginBackground::Library);
         assert!(!reloaded.show_user_picker);
+        assert_eq!(reloaded.default_theme, ThemeMode::Dark);
         assert!(reloaded.work.read_companion_files);
         assert_eq!(reloaded.activity_retention_days, 90);
         assert!(reloaded.tone_mapping_disabled);
+    }
+
+    #[tokio::test]
+    async fn the_default_theme_is_the_devices_until_one_is_chosen_for_the_server() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(
+            database.server_settings().await.expect("read").default_theme,
+            ThemeMode::System
+        );
+
+        database
+            .set_default_theme(ThemeMode::Light)
+            .await
+            .expect("chosen");
+        assert_eq!(
+            database.server_settings().await.expect("read").default_theme,
+            ThemeMode::Light
+        );
+    }
+
+    #[test]
+    fn the_server_never_defaults_to_following_itself() {
+        assert_eq!(default_theme_of("dark"), ThemeMode::Dark);
+        assert_eq!(default_theme_of("light"), ThemeMode::Light);
+        assert_eq!(default_theme_of("system"), ThemeMode::System);
+        assert_eq!(default_theme_of("server"), ThemeMode::System);
+        assert_eq!(default_theme_of("neon"), ThemeMode::System);
     }
 
     /// A word nobody here knows is read as the one a fresh server wears.

@@ -5,6 +5,7 @@ use std::path::Path;
 
 use melyxar_core::fingerprint;
 use melyxar_core::orientation::Orientation;
+use melyxar_core::user::ThemeMode;
 
 use crate::{AppError, AppState};
 
@@ -144,6 +145,18 @@ pub async fn door(state: &AppState) -> Result<Door, AppError> {
         background: settings.login_background,
         slogan: settings.door_slogan,
     })
+}
+
+/// The theme of whoever has not chosen one.
+pub async fn default_theme(state: &AppState) -> Result<ThemeMode, AppError> {
+    Ok(state.database().server_settings().await?.default_theme)
+}
+
+/// Chooses the theme of whoever has not chosen one. It is one of the three
+/// themes themselves: "the server's" is what an account holds until it picks.
+pub async fn set_default_theme(state: &AppState, theme: ThemeMode) -> Result<(), AppError> {
+    state.database().set_default_theme(theme).await?;
+    Ok(())
 }
 
 /// The longest line the sign in screen says under the server's name: one
