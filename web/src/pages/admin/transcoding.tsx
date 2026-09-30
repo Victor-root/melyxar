@@ -6,7 +6,14 @@
  */
 
 import type { VideoCodec } from "../../api";
-import { NumberField, PageHead, Panel, Setting, Stat, Toggle } from "../../components/panel";
+import {
+  NumberField,
+  PageHead,
+  Panel,
+  Setting,
+  Stat,
+  Toggle,
+} from "../../components/panel";
 import {
   FfmpegIcon,
   GraphicsCardIcon,
@@ -47,9 +54,16 @@ export function AdminTranscoding() {
       <div className="panels">
         <CardPanel />
 
-        <Panel icon={PlaybackIcon} title={t("admin.limits")} lead={t("admin.limits_lead")}>
+        <Panel
+          icon={PlaybackIcon}
+          title={t("admin.limits")}
+          lead={t("admin.limits_lead")}
+        >
           {playback.kept && (
-            <Setting label={t("admin.limit_sessions")} why={t("admin.limit_sessions_why")}>
+            <Setting
+              label={t("admin.limit_sessions")}
+              why={t("admin.limit_sessions_why")}
+            >
               <Toggle
                 label={t("admin.limit_sessions")}
                 checked={playback.kept.max_transcoding_sessions !== null}
@@ -63,51 +77,71 @@ export function AdminTranscoding() {
                   on would set can be read beforehand. */}
               <NumberField
                 label={t("admin.limit_sessions_most")}
-                value={playback.kept.max_transcoding_sessions ?? A_FIRST_CEILING}
+                value={
+                  playback.kept.max_transcoding_sessions ?? A_FIRST_CEILING
+                }
                 min={1}
                 max={32}
                 disabled={playback.kept.max_transcoding_sessions === null}
-                onPick={(max_transcoding_sessions) => playback.setTo({ max_transcoding_sessions })}
+                onPick={(max_transcoding_sessions) =>
+                  playback.setTo({ max_transcoding_sessions })
+                }
               />
             </Setting>
           )}
           {playback.kept && (
             <>
-              <Setting label={t("admin.limit_room")} why={t("admin.limit_room_why")}>
+              <Setting
+                label={t("admin.limit_room")}
+                why={t("admin.limit_room_why")}
+              >
                 <Toggle
                   label={t("admin.limit_room")}
                   checked={playback.kept.transcode_cache_megabytes !== null}
                   onChange={(limited) =>
                     playback.setTo({
-                      transcode_cache_megabytes: limited ? A_FIRST_ROOM_GB * MEGABYTES_IN_A_GB : null,
+                      transcode_cache_megabytes: limited
+                        ? A_FIRST_ROOM_GB * MEGABYTES_IN_A_GB
+                        : null,
                     })
                   }
                 />
                 <NumberField
                   label={t("admin.limit_room_most")}
                   value={Math.round(
-                    (playback.kept.transcode_cache_megabytes ?? A_FIRST_ROOM_GB * MEGABYTES_IN_A_GB) /
-                      MEGABYTES_IN_A_GB,
+                    (playback.kept.transcode_cache_megabytes ??
+                      A_FIRST_ROOM_GB * MEGABYTES_IN_A_GB) / MEGABYTES_IN_A_GB,
                   )}
                   min={1}
                   max={1000}
                   disabled={playback.kept.transcode_cache_megabytes === null}
                   onPick={(gigabytes) =>
-                    playback.setTo({ transcode_cache_megabytes: gigabytes * MEGABYTES_IN_A_GB })
+                    playback.setTo({
+                      transcode_cache_megabytes: gigabytes * MEGABYTES_IN_A_GB,
+                    })
                   }
                 />
                 <span className="setting-unit">{t("admin.gigabytes")}</span>
               </Setting>
               {/* Asked only once there is a ceiling to keep under: without
                   one, nothing is ever given up. */}
-              <Setting label={t("admin.limit_kept_behind")} why={t("admin.limit_kept_behind_why")}>
+              <Setting
+                label={t("admin.limit_kept_behind")}
+                why={t("admin.limit_kept_behind_why")}
+              >
                 <NumberField
                   label={t("admin.limit_kept_behind")}
-                  value={Math.round(playback.kept.transcode_kept_behind_seconds / 60)}
+                  value={Math.round(
+                    playback.kept.transcode_kept_behind_seconds / 60,
+                  )}
                   min={3}
                   max={30}
                   disabled={playback.kept.transcode_cache_megabytes === null}
-                  onPick={(minutes) => playback.setTo({ transcode_kept_behind_seconds: minutes * 60 })}
+                  onPick={(minutes) =>
+                    playback.setTo({
+                      transcode_kept_behind_seconds: minutes * 60,
+                    })
+                  }
                 />
                 <span className="setting-unit">{t("admin.minutes")}</span>
               </Setting>
@@ -116,7 +150,11 @@ export function AdminTranscoding() {
         </Panel>
 
         {playback.kept && (
-          <Panel icon={FfmpegIcon} title={t("admin.codecs")} lead={t("admin.codecs_why")}>
+          <Panel
+            icon={FfmpegIcon}
+            title={t("admin.codecs")}
+            lead={t("admin.codecs_why")}
+          >
             {EVERY_CODEC.map((codec) => {
               const chosen = playback.kept?.transcode_video_codecs ?? [];
               const allowed = chosen.includes(codec);
@@ -151,21 +189,29 @@ export function AdminTranscoding() {
               <Toggle
                 label={t("settings.tone_mapping_disabled")}
                 checked={playback.kept.tone_mapping_disabled}
-                onChange={(tone_mapping_disabled) => playback.setTo({ tone_mapping_disabled })}
+                onChange={(tone_mapping_disabled) =>
+                  playback.setTo({ tone_mapping_disabled })
+                }
               />
             </Setting>
           </Panel>
         )}
 
         {work.kept && (
-          <Panel icon={ImageIcon} title={t("settings.thumbnails")} lead={t("settings.thumbnails_why")}>
+          <Panel
+            icon={ImageIcon}
+            title={t("settings.thumbnails")}
+            lead={t("settings.thumbnails_why")}
+          >
             <Setting label={t("settings.thumbnails_every")}>
               <NumberField
                 label={t("settings.thumbnails_every")}
                 value={work.kept.thumbnails_every_seconds}
                 min={1}
                 max={600}
-                onPick={(thumbnails_every_seconds) => work.setTo({ thumbnails_every_seconds })}
+                onPick={(thumbnails_every_seconds) =>
+                  work.setTo({ thumbnails_every_seconds })
+                }
               />
             </Setting>
             <Setting label={t("settings.thumbnails_height")}>
@@ -174,7 +220,9 @@ export function AdminTranscoding() {
                 value={work.kept.thumbnails_height}
                 min={1}
                 max={1080}
-                onPick={(thumbnails_height) => work.setTo({ thumbnails_height })}
+                onPick={(thumbnails_height) =>
+                  work.setTo({ thumbnails_height })
+                }
               />
             </Setting>
             {/* Said before the change and not after it: changing the shape puts
@@ -188,9 +236,13 @@ export function AdminTranscoding() {
                 value={work.kept.thumbnails_columns}
                 min={1}
                 max={20}
-                onPick={(thumbnails_columns) => work.setTo({ thumbnails_columns })}
+                onPick={(thumbnails_columns) =>
+                  work.setTo({ thumbnails_columns })
+                }
               />
-              <span className="setting-times" aria-hidden="true">×</span>
+              <span className="setting-times" aria-hidden="true">
+                ×
+              </span>
               <NumberField
                 label={t("settings.thumbnails_rows")}
                 value={work.kept.thumbnails_rows}
@@ -211,14 +263,28 @@ export function CardPanel() {
   const { t } = useSettings();
   const overview = useOverview().answer;
   return (
-    <Panel icon={GraphicsCardIcon} title={t("admin.card")} lead={t("admin.card_lead")}>
+    <Panel
+      icon={GraphicsCardIcon}
+      title={t("admin.card")}
+      lead={t("admin.card_lead")}
+    >
       <div className="stats">
         <Stat
           icon={FfmpegIcon}
           label={t("admin.media_tools")}
-          value={overview ? t(overview.media_tools.found ? "admin.found" : "admin.missing") : "–"}
+          value={
+            overview
+              ? t(overview.media_tools.found ? "admin.found" : "admin.missing")
+              : "–"
+          }
           note={overview?.media_tools.version ?? undefined}
-          state={overview ? (overview.media_tools.found ? "ok" : "trouble") : undefined}
+          state={
+            overview
+              ? overview.media_tools.found
+                ? "ok"
+                : "trouble"
+              : undefined
+          }
         />
         <Stat
           icon={GraphicsCardIcon}
@@ -230,7 +296,13 @@ export function CardPanel() {
                 : t("admin.card_unused")
               : "–"
           }
-          state={overview ? (overview.media_tools.card ? "ok" : "attention") : undefined}
+          state={
+            overview
+              ? overview.media_tools.card
+                ? "ok"
+                : "attention"
+              : undefined
+          }
         />
       </div>
     </Panel>

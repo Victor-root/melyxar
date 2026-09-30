@@ -52,7 +52,11 @@ const SECTIONS: SectionGroup[] = [
     label: "admin.group.playback",
     sections: [
       { path: "playback", icon: PlaybackIcon, label: "admin.playback" },
-      { path: "transcoding", icon: GraphicsCardIcon, label: "admin.transcoding" },
+      {
+        path: "transcoding",
+        icon: GraphicsCardIcon,
+        label: "admin.transcoding",
+      },
     ],
   },
   {
@@ -68,7 +72,11 @@ const SECTIONS: SectionGroup[] = [
     sections: [
       { path: "tasks", icon: TasksIcon, label: "admin.tasks" },
       { path: "journal", icon: JournalIcon, label: "admin.journal" },
-      { path: "diagnostics", icon: DiagnosticsIcon, label: "admin.diagnostics" },
+      {
+        path: "diagnostics",
+        icon: DiagnosticsIcon,
+        label: "admin.diagnostics",
+      },
       { path: "settings", icon: SlidersIcon, label: "admin.settings" },
     ],
   },
@@ -80,7 +88,9 @@ const OverviewContext = createContext<Asked<Overview> | null>(null);
 export function useOverview(): Asked<Overview> {
   const overview = useContext(OverviewContext);
   if (!overview) {
-    throw new Error("the state of the server is read inside the administration");
+    throw new Error(
+      "the state of the server is read inside the administration",
+    );
   }
   return overview;
 }
@@ -111,13 +121,22 @@ export function OverviewProvider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(timer);
   }, [look]);
 
-  return <OverviewContext.Provider value={overview}>{children}</OverviewContext.Provider>;
+  return (
+    <OverviewContext.Provider value={overview}>
+      {children}
+    </OverviewContext.Provider>
+  );
 }
 
 function TheAdministration() {
   return (
     <OverviewProvider>
-      <Sectioned base="/admin" place="admin.title" groups={SECTIONS} foot={<ServerState />} />
+      <Sectioned
+        base="/admin"
+        place="admin.title"
+        groups={SECTIONS}
+        foot={<ServerState />}
+      />
     </OverviewProvider>
   );
 }
@@ -129,7 +148,10 @@ function ServerState() {
   const cut = overview.failure !== null;
   return (
     <span className="side-state">
-      <span className={`state-dot state-${cut ? "trouble" : "ok"}`} aria-hidden="true" />
+      <span
+        className={`state-dot state-${cut ? "trouble" : "ok"}`}
+        aria-hidden="true"
+      />
       <span>
         {cut || !overview.answer
           ? t(cut ? "admin.unreachable" : "admin.title")

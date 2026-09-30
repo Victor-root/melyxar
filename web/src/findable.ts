@@ -354,7 +354,7 @@ export const FINDABLE: FindableSection[] = [
     area: "admin",
     path: "security",
     name: "admin.security",
-    files: ["pages/admin/security.tsx"],
+    files: ["pages/admin/security.tsx", "pages/admin/access-panel.tsx"],
     named: [
       ["admin.refused_sign_ins", "admin.refused_sign_ins_lead"],
       ["admin.brake", "admin.brake_lead"],

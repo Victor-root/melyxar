@@ -47,10 +47,16 @@ export function OnlineSubtitlesPanel() {
           : null;
 
   return (
-    <Panel icon={SubtitlesIcon} title={t("admin.opensubtitles")} lead={t("admin.opensubtitles_lead")}>
+    <Panel
+      icon={SubtitlesIcon}
+      title={t("admin.opensubtitles")}
+      lead={t("admin.opensubtitles_lead")}
+    >
       {shown && (
         <Setting label={t("admin.opensubtitles_state")}>
-          <span className={`state-pill ${shown.has_key ? "state-ok" : "state-attention"}`}>
+          <span
+            className={`state-pill ${shown.has_key ? "state-ok" : "state-attention"}`}
+          >
             <span className="state-dot" aria-hidden="true" />
             {t(
               shown.signed_in
@@ -98,7 +104,11 @@ export function OnlineSubtitlesPanel() {
           onChange={(event) => setPassword(event.target.value)}
         />
         <span className="opensubtitles-actions">
-          <button type="submit" className="button button-small button-accent" disabled={told.busy || key.trim() === ""}>
+          <button
+            type="submit"
+            className="button button-small button-accent"
+            disabled={told.busy || key.trim() === ""}
+          >
             {t("admin.omdb_keep")}
           </button>
           {shown?.has_key && (
@@ -116,15 +126,22 @@ export function OnlineSubtitlesPanel() {
       </form>
 
       {said && (
-        <p className={`panel-notice${shown?.tried === "kept" ? " panel-notice-ok" : " panel-notice-trouble"}`}>
+        <p
+          className={`panel-notice${shown?.tried === "kept" ? " panel-notice-ok" : " panel-notice-trouble"}`}
+        >
           {t(said)}
         </p>
       )}
       {told.failure && (
-        <p className="panel-notice panel-notice-trouble">{t(refusalKey(refusalOf(told.failure)))}</p>
+        <p className="panel-notice panel-notice-trouble">
+          {t(refusalKey(refusalOf(told.failure)))}
+        </p>
       )}
 
-      <details className="ratings-guide" open={shown !== null && !shown.has_key}>
+      <details
+        className="ratings-guide"
+        open={shown !== null && !shown.has_key}
+      >
         <summary>{t("admin.omdb_guide")}</summary>
         <ol>
           <li>

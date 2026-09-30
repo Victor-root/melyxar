@@ -33,10 +33,18 @@ export function AdminDiagnostics() {
         lead={t("admin.diagnostics_lead")}
         actions={
           <>
-            <button className="button button-accent" onClick={copy} disabled={!report.answer}>
+            <button
+              className="button button-accent"
+              onClick={copy}
+              disabled={!report.answer}
+            >
               {t(copied === "yes" ? "report.copied" : "report.copy")}
             </button>
-            <button className="button" onClick={report.again} disabled={report.waiting}>
+            <button
+              className="button"
+              onClick={report.again}
+              disabled={report.waiting}
+            >
               <RefreshIcon size={16} />
               {t("admin.read_again")}
             </button>
@@ -44,13 +52,23 @@ export function AdminDiagnostics() {
         }
       />
 
-      {copied === "failed" && <p className="panel-notice">{t("report.select")}</p>}
+      {copied === "failed" && (
+        <p className="panel-notice">{t("report.select")}</p>
+      )}
 
-      <Panel icon={DiagnosticsIcon} title={t("admin.report")} lead={t("admin.report_lead")}>
+      <Panel
+        icon={DiagnosticsIcon}
+        title={t("admin.report")}
+        lead={t("admin.report_lead")}
+      >
         {report.failure && (
-          <p className="panel-notice panel-notice-trouble">{t("error.unreachable")}</p>
+          <p className="panel-notice panel-notice-trouble">
+            {t("error.unreachable")}
+          </p>
         )}
-        {report.answer && <pre className="log report-view">{report.answer}</pre>}
+        {report.answer && (
+          <pre className="log report-view">{report.answer}</pre>
+        )}
       </Panel>
     </>
   );

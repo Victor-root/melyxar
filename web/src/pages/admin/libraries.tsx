@@ -12,7 +12,13 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../../api";
-import type { Library, LibraryChoices, LibraryKind, Root, SetAsideFile } from "../../api";
+import type {
+  Library,
+  LibraryChoices,
+  LibraryKind,
+  Root,
+  SetAsideFile,
+} from "../../api";
 import { useAsked, useTold } from "../../asking";
 import { FolderPicker } from "../../components/folders";
 import { Modal } from "../../components/modal";
@@ -27,15 +33,28 @@ import {
 } from "../../components/panel";
 import type { State } from "../../components/panel";
 import { refusalKey } from "../../i18n";
-import { DeleteIcon, FolderIcon, InfoIcon, KindIcon, RefreshIcon } from "../../icons";
+import {
+  DeleteIcon,
+  FolderIcon,
+  InfoIcon,
+  KindIcon,
+  RefreshIcon,
+} from "../../icons";
 import type { IconProps } from "../../icons";
 import { languageName, METADATA_LANGUAGES } from "../../languages";
 import { EPISODIC, KINDS, useLibraries } from "../../libraries";
 import { howMany } from "../../readable";
 import { useStartScan } from "../../running";
-import { useDeclaring, useLibraryEditing, useRemoving } from "../../screens/declaring";
+import {
+  useDeclaring,
+  useLibraryEditing,
+  useRemoving,
+} from "../../screens/declaring";
 import type { LibraryEditing } from "../../screens/declaring";
-import { MusicLibraryOptionsFields, MusicOptionsFields } from "../../music/library-options";
+import {
+  MusicLibraryOptionsFields,
+  MusicOptionsFields,
+} from "../../music/library-options";
 import { useSettings } from "../../settings";
 
 export function AdminLibraries() {
@@ -60,7 +79,10 @@ export function AdminLibraries() {
         lead={t("admin.libraries_page_lead")}
         actions={
           !adding && (
-            <button className="button button-accent" onClick={() => setAdding(true)}>
+            <button
+              className="button button-accent"
+              onClick={() => setAdding(true)}
+            >
               <FolderIcon size={18} />
               {t("settings.add_library")}
             </button>
@@ -69,7 +91,9 @@ export function AdminLibraries() {
       />
 
       {editing.refused && (
-        <p className="panel-notice panel-notice-trouble">{t(editing.refused)}</p>
+        <p className="panel-notice panel-notice-trouble">
+          {t(editing.refused)}
+        </p>
       )}
       {said && <p className="panel-notice">{said}</p>}
 
@@ -85,7 +109,12 @@ export function AdminLibraries() {
       )}
 
       {libraries.map((library) => (
-        <LibraryPanel key={library.id} library={library} editing={editing} onChanged={refresh} />
+        <LibraryPanel
+          key={library.id}
+          library={library}
+          editing={editing}
+          onChanged={refresh}
+        />
       ))}
     </>
   );
@@ -142,7 +171,11 @@ function LibraryPanel({
       folding={{ open, toggle: () => setOpen((was) => !was) }}
       action={
         <>
-          <button className="button button-small" onClick={scan.start} disabled={scan.starting}>
+          <button
+            className="button button-small"
+            onClick={scan.start}
+            disabled={scan.starting}
+          >
             <RefreshIcon size={15} />
             {t("home.scan")}
           </button>
@@ -159,7 +192,11 @@ function LibraryPanel({
         </>
       }
     >
-      {scan.refused && <p className="panel-notice panel-notice-trouble">{t(refusalKey(scan.refused))}</p>}
+      {scan.refused && (
+        <p className="panel-notice panel-notice-trouble">
+          {t(refusalKey(scan.refused))}
+        </p>
+      )}
 
       {removing && (
         <Removal
@@ -167,7 +204,11 @@ function LibraryPanel({
           root={removing.root}
           onDone={(went) => {
             setRemoving(null);
-            editing.report({ kind: "removal_done", works: went.works, files: went.files });
+            editing.report({
+              kind: "removal_done",
+              works: went.works,
+              files: went.files,
+            });
             onChanged();
           }}
           onRefused={(key) => {
@@ -191,10 +232,16 @@ function LibraryPanel({
           kind={library.kind}
           choices={library}
           onChange={(changes) => editing.settle(library, changes)}
-          watchWhy={library.watch_state === "starting" ? "admin.watch_starting" : undefined}
+          watchWhy={
+            library.watch_state === "starting"
+              ? "admin.watch_starting"
+              : undefined
+          }
           watchRefusal={library.watch_refusal}
         />
-        {library.kind === "music" && <MusicLibraryOptionsFields library={library.id} />}
+        {library.kind === "music" && (
+          <MusicLibraryOptionsFields library={library.id} />
+        )}
       </div>
 
       {/* The folders it looks in. A log line shows only the label, but this is
@@ -203,7 +250,10 @@ function LibraryPanel({
       <div className="library-folders">
         <div className="library-folders-head">
           <span>{t("admin.folders")}</span>
-          <button className="button button-small" onClick={() => setAddingFolder(true)}>
+          <button
+            className="button button-small"
+            onClick={() => setAddingFolder(true)}
+          >
             <FolderIcon size={15} />
             {t("settings.add_folder")}
           </button>
@@ -219,11 +269,15 @@ function LibraryPanel({
                   value={root.label}
                   label={t("settings.folder_label")}
                   className="field-quiet"
-                  onSettled={(label) => editing.renameFolder(library, root.id, label)}
+                  onSettled={(label) =>
+                    editing.renameFolder(library, root.id, label)
+                  }
                 />
                 <span className="line-note line-path">{root.path}</span>
                 {ACCESS_STATE[root.access] === "trouble" && (
-                  <span className="line-note line-trouble">{t(`root.${root.explanation_code}`)}</span>
+                  <span className="line-note line-trouble">
+                    {t(`root.${root.explanation_code}`)}
+                  </span>
                 )}
               </span>
               <span className="line-end">
@@ -235,7 +289,9 @@ function LibraryPanel({
                   title={t("settings.remove_folder")}
                   aria-label={t("settings.remove_folder")}
                   onClick={() =>
-                    setRemoving(removing?.root === root.id ? null : { root: root.id })
+                    setRemoving(
+                      removing?.root === root.id ? null : { root: root.id },
+                    )
                   }
                 >
                   <DeleteIcon size={15} />
@@ -251,10 +307,15 @@ function LibraryPanel({
       {library.set_aside > 0 && (
         <div className="line">
           <span className="line-words">
-            <span className="line-name">{howMany(library.set_aside, "library.set_aside", t)}</span>
+            <span className="line-name">
+              {howMany(library.set_aside, "library.set_aside", t)}
+            </span>
           </span>
           <span className="line-end">
-            <button className="button button-small" onClick={() => setTakingBack(true)}>
+            <button
+              className="button button-small"
+              onClick={() => setTakingBack(true)}
+            >
               {t("library.take_back")}
             </button>
           </span>
@@ -285,7 +346,9 @@ function LibraryPanel({
       {/* Read here as well as on the page of what the works are described
           in, because it is also what a library was made with. */}
       <span className="panel-say">
-        {t("admin.described_in", { language: languageName(library.metadata_language, language) })}
+        {t("admin.described_in", {
+          language: languageName(library.metadata_language, language),
+        })}
       </span>
     </Panel>
   );
@@ -306,7 +369,10 @@ function SetAsideDialog({
   onTakenBack: () => void;
 }) {
   const { t } = useSettings();
-  const listed = useAsked((signal) => api.setAsideFiles(library.id, signal), [library.id]);
+  const listed = useAsked(
+    (signal) => api.setAsideFiles(library.id, signal),
+    [library.id],
+  );
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
   const told = useTold(async (files: SetAsideFile[] | null) => {
     await api.takeBackSetAside(library.id, files);
@@ -364,7 +430,11 @@ function SetAsideDialog({
           </li>
         ))}
       </ul>
-      {refused && <p className="panel-notice panel-notice-trouble">{t(refusalKey(refused.code))}</p>}
+      {refused && (
+        <p className="panel-notice panel-notice-trouble">
+          {t(refusalKey(refused.code))}
+        </p>
+      )}
     </Modal>
   );
 }
@@ -395,7 +465,12 @@ function Removal({
   onCancel: () => void;
 }) {
   const { t } = useSettings();
-  const { going, counting, busy, goAhead } = useRemoving(library, root, onDone, onRefused);
+  const { going, counting, busy, goAhead } = useRemoving(
+    library,
+    root,
+    onDone,
+    onRefused,
+  );
   const label = library.roots.find((one) => one.id === root)?.label ?? "";
 
   return (
@@ -489,14 +564,20 @@ function LibraryChoicesFields({
       {kind !== "music" && (
         <>
           <h3 className="settings-heading">{t("admin.optional_processing")}</h3>
-          <Setting label={t("settings.extract_subtitles")} why={t("admin.extract_subtitles_why")}>
+          <Setting
+            label={t("settings.extract_subtitles")}
+            why={t("admin.extract_subtitles_why")}
+          >
             <Toggle
               label={t("settings.extract_subtitles")}
               checked={choices.extract_subtitles}
               onChange={(extract_subtitles) => onChange({ extract_subtitles })}
             />
           </Setting>
-          <Setting label={t("settings.make_thumbnails")} why={t("admin.make_thumbnails_why")}>
+          <Setting
+            label={t("settings.make_thumbnails")}
+            why={t("admin.make_thumbnails_why")}
+          >
             <Toggle
               label={t("settings.make_thumbnails")}
               checked={choices.make_thumbnails}
@@ -504,7 +585,10 @@ function LibraryChoicesFields({
             />
           </Setting>
           {EPISODIC.includes(kind) && (
-            <Setting label={t("settings.detect_openings")} why={t("admin.detect_openings_why")}>
+            <Setting
+              label={t("settings.detect_openings")}
+              why={t("admin.detect_openings_why")}
+            >
               <Toggle
                 label={t("settings.detect_openings")}
                 checked={choices.detect_openings}
@@ -512,11 +596,16 @@ function LibraryChoicesFields({
               />
             </Setting>
           )}
-          <Setting label={t("settings.process_on_arrival")} why={t("admin.process_on_arrival_why")}>
+          <Setting
+            label={t("settings.process_on_arrival")}
+            why={t("admin.process_on_arrival_why")}
+          >
             <Toggle
               label={t("settings.process_on_arrival")}
               checked={choices.process_on_arrival}
-              onChange={(process_on_arrival) => onChange({ process_on_arrival })}
+              onChange={(process_on_arrival) =>
+                onChange({ process_on_arrival })
+              }
             />
           </Setting>
         </>
@@ -539,14 +628,20 @@ function LibraryChoicesFields({
           {t(`admin.watch_refused.${watchRefusal}`)}
         </p>
       )}
-      <Setting label={t("settings.keeps_resume_points")} why={t("admin.resume_points_why")}>
+      <Setting
+        label={t("settings.keeps_resume_points")}
+        why={t("admin.resume_points_why")}
+      >
         <Toggle
           label={t("settings.keeps_resume_points")}
           checked={choices.keeps_resume_points}
           onChange={(keeps_resume_points) => onChange({ keeps_resume_points })}
         />
       </Setting>
-      <Setting label={t("settings.keeps_watched_marks")} why={t("admin.watched_marks_why")}>
+      <Setting
+        label={t("settings.keeps_watched_marks")}
+        why={t("admin.watched_marks_why")}
+      >
         <Toggle
           label={t("settings.keeps_watched_marks")}
           checked={choices.keeps_watched_marks}
@@ -583,7 +678,9 @@ export function NewLibrary({
     dropRoot,
     busy,
     create,
-  } = useDeclaring(language, onDone, onRefused, (one) => t(`library.kind.${one}`));
+  } = useDeclaring(language, onDone, onRefused, (one) =>
+    t(`library.kind.${one}`),
+  );
   const [picking, setPicking] = useState(false);
 
   return (
@@ -613,7 +710,9 @@ export function NewLibrary({
               <Picker
                 label={t("settings.library_kind")}
                 value={kind}
-                options={KINDS.map((one) => [one, t(`library.kind.${one}`)] as const)}
+                options={KINDS.map(
+                  (one) => [one, t(`library.kind.${one}`)] as const,
+                )}
                 onPick={setKind}
               />
             </Setting>
@@ -621,7 +720,9 @@ export function NewLibrary({
               <Picker
                 label={t("settings.metadata_language")}
                 value={metadata}
-                options={METADATA_LANGUAGES.map((code) => [code, languageName(code, language)] as const)}
+                options={METADATA_LANGUAGES.map(
+                  (code) => [code, languageName(code, language)] as const,
+                )}
                 onPick={setMetadata}
               />
             </Setting>
@@ -630,13 +731,18 @@ export function NewLibrary({
           <div className="library-folders">
             <div className="library-folders-head">
               <span>{t("admin.folders")}</span>
-              <button className="button button-small" onClick={() => setPicking(true)}>
+              <button
+                className="button button-small"
+                onClick={() => setPicking(true)}
+              >
                 <FolderIcon size={15} />
                 {t("settings.add_folder")}
               </button>
             </div>
             <div className="lines">
-              {roots.length === 0 && <p className="empty-line">{t("admin.no_folder_yet")}</p>}
+              {roots.length === 0 && (
+                <p className="empty-line">{t("admin.no_folder_yet")}</p>
+              )}
               {roots.map((path) => (
                 <div className="line" key={path}>
                   <span className="line-mark" aria-hidden="true">
@@ -646,7 +752,10 @@ export function NewLibrary({
                     <span className="line-name line-path">{path}</span>
                   </span>
                   <span className="line-end">
-                    <button className="button button-small button-quiet" onClick={() => dropRoot(path)}>
+                    <button
+                      className="button button-small button-quiet"
+                      onClick={() => dropRoot(path)}
+                    >
                       {t("settings.forget_folder")}
                     </button>
                   </span>
@@ -657,8 +766,17 @@ export function NewLibrary({
         </div>
 
         <div className="settings-lines">
-          <LibraryChoicesFields kind={kind} choices={choices} onChange={choose} />
-          {kind === "music" && <MusicOptionsFields options={musicOptions} onChange={setMusicOptions} />}
+          <LibraryChoicesFields
+            kind={kind}
+            choices={choices}
+            onChange={choose}
+          />
+          {kind === "music" && (
+            <MusicOptionsFields
+              options={musicOptions}
+              onChange={setMusicOptions}
+            />
+          )}
         </div>
       </div>
 

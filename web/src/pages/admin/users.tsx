@@ -18,7 +18,14 @@ import { useAccount } from "../../account";
 import { useAsked, useTold } from "../../asking";
 import { Face } from "../../components/face";
 import { Modal } from "../../components/modal";
-import { Editable, PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
+import {
+  Editable,
+  PageHead,
+  Panel,
+  Picker,
+  Setting,
+  Toggle,
+} from "../../components/panel";
 import { lastSeen } from "../../devices";
 import { AccountAddIcon, KindIcon, LockIcon, PeopleIcon } from "../../icons";
 import type { IconProps } from "../../icons";
@@ -27,7 +34,13 @@ import { useJournalNews } from "../../live";
 import { howMany } from "../../readable";
 import type { Wording } from "../../readable";
 import { useSettings } from "../../settings";
-import { AN_ORDINARY_ACCOUNT, granting, MOST_STREAMS_OFFERED, reachOf, settled } from "./rights";
+import {
+  AN_ORDINARY_ACCOUNT,
+  granting,
+  MOST_STREAMS_OFFERED,
+  reachOf,
+  settled,
+} from "./rights";
 
 export function AdminUsers() {
   const { t } = useSettings();
@@ -66,7 +79,9 @@ export function AdminUsers() {
       />
 
       {accounts.failure && (
-        <p className="panel-notice panel-notice-trouble">{t("error.unreachable")}</p>
+        <p className="panel-notice panel-notice-trouble">
+          {t("error.unreachable")}
+        </p>
       )}
       {said && <p className="panel-notice panel-notice-ok">{said}</p>}
 
@@ -99,7 +114,13 @@ export function AdminUsers() {
 /** The face of an account, in the shape a panel takes an icon in. */
 function faceOf(account: ManagedAccount) {
   return function AccountFace(_: IconProps) {
-    return <Face name={account.name} avatar={account.avatar} className="account-face" />;
+    return (
+      <Face
+        name={account.name}
+        avatar={account.avatar}
+        className="account-face"
+      />
+    );
   };
 }
 
@@ -118,7 +139,11 @@ function refusalOf(failure: ApiError | null, t: Wording): string | null {
 
 /** Who an account is and where it is, in a line: its role, what it reaches,
  *  and where it is signed in. */
-function leadOf(account: ManagedAccount, libraries: Library[], t: Wording): string {
+function leadOf(
+  account: ManagedAccount,
+  libraries: Library[],
+  t: Wording,
+): string {
   const { rights } = account;
   const role = rights.is_administrator
     ? t("users.role.administrator")
@@ -178,20 +203,29 @@ function AccountPanel({
   return (
     <Panel
       icon={faceOf(account)}
-      title={account.is_you ? t("users.named_you", { name: account.name }) : account.name}
+      title={
+        account.is_you
+          ? t("users.named_you", { name: account.name })
+          : account.name
+      }
       lead={leadOf(account, libraries, t)}
       className="account-panel"
       action={
         !account.is_you && (
           <>
-            <button className="button button-small" onClick={() => setChoosingPassword(true)}>
+            <button
+              className="button button-small"
+              onClick={() => setChoosingPassword(true)}
+            >
               <LockIcon size={15} />
               {t("users.password")}
             </button>
             <button
               className="button button-small"
               disabled={account.devices === 0}
-              onClick={() => setAsking(asking === "sign_out" ? null : "sign_out")}
+              onClick={() =>
+                setAsking(asking === "sign_out" ? null : "sign_out")
+              }
             >
               {t("users.sign_out")}
             </button>
@@ -205,23 +239,33 @@ function AccountPanel({
         )
       }
     >
-      {refusal && <p className="panel-notice panel-notice-trouble">{refusal}</p>}
+      {refusal && (
+        <p className="panel-notice panel-notice-trouble">{refusal}</p>
+      )}
 
       {asking && (
         <div className="removal-box">
           <p className="removal-ask">
-            {t(asking === "remove" ? "users.remove_asks" : "users.sign_out_asks", {
-              name: account.name,
-            })}
+            {t(
+              asking === "remove" ? "users.remove_asks" : "users.sign_out_asks",
+              {
+                name: account.name,
+              },
+            )}
           </p>
           <div className="removal-actions">
-            <button className="button button-small" onClick={() => setAsking(null)}>
+            <button
+              className="button button-small"
+              onClick={() => setAsking(null)}
+            >
               {t("settings.cancel")}
             </button>
             <button
               className="button button-small button-danger-full"
               disabled={signOut.busy || remove.busy}
-              onClick={() => (asking === "remove" ? remove.tell() : signOut.tell())}
+              onClick={() =>
+                asking === "remove" ? remove.tell() : signOut.tell()
+              }
             >
               {t(asking === "remove" ? "users.remove" : "users.sign_out")}
             </button>
@@ -245,7 +289,9 @@ function AccountPanel({
         />
       </div>
 
-      {account.is_you && <span className="panel-say">{t("users.not_yourself")}</span>}
+      {account.is_you && (
+        <span className="panel-say">{t("users.not_yourself")}</span>
+      )}
 
       {choosingPassword && (
         <PasswordDialog
@@ -280,11 +326,15 @@ function RightsLines({
   onChange: (rights: Rights) => void;
 }) {
   const { t } = useSettings();
-  const set = (changed: Partial<Rights>) => onChange(settled({ ...rights, ...changed }));
+  const set = (changed: Partial<Rights>) =>
+    onChange(settled({ ...rights, ...changed }));
 
   return (
     <>
-      <Setting label={t("users.administrator")} why={t("users.administrator_why")}>
+      <Setting
+        label={t("users.administrator")}
+        why={t("users.administrator_why")}
+      >
         <Toggle
           label={t("users.administrator")}
           checked={rights.is_administrator}
@@ -295,7 +345,10 @@ function RightsLines({
 
       {!rights.is_administrator && (
         <>
-          <Setting label={t("users.every_library")} why={t("users.every_library_why")}>
+          <Setting
+            label={t("users.every_library")}
+            why={t("users.every_library_why")}
+          >
             <Toggle
               label={t("users.every_library")}
               checked={rights.sees_every_library}
@@ -305,7 +358,9 @@ function RightsLines({
 
           {!rights.sees_every_library && (
             <div className="lines account-libraries">
-              {libraries.length === 0 && <p className="empty-line">{t("users.no_library_yet")}</p>}
+              {libraries.length === 0 && (
+                <p className="empty-line">{t("users.no_library_yet")}</p>
+              )}
               {libraries.map((library) => {
                 const granted = rights.libraries.includes(library.id);
                 return (
@@ -320,7 +375,9 @@ function RightsLines({
                       <Toggle
                         label={library.name}
                         checked={granted}
-                        onChange={(wanted) => onChange(granting(rights, library.id, wanted))}
+                        onChange={(wanted) =>
+                          onChange(granting(rights, library.id, wanted))
+                        }
                       />
                     </span>
                   </div>
@@ -332,7 +389,10 @@ function RightsLines({
             </div>
           )}
 
-          <Setting label={t("admin.right.may_delete")} why={t("users.may_delete_why")}>
+          <Setting
+            label={t("admin.right.may_delete")}
+            why={t("users.may_delete_why")}
+          >
             <Toggle
               label={t("admin.right.may_delete")}
               checked={rights.may_delete}
@@ -350,10 +410,15 @@ function RightsLines({
               onChange={(may_delete_from_disk) => set({ may_delete_from_disk })}
             />
           </Setting>
-          <Setting label={t("admin.limit_streams")} why={t("users.streams_why")}>
+          <Setting
+            label={t("admin.limit_streams")}
+            why={t("users.streams_why")}
+          >
             <Picker
               label={t("admin.limit_streams")}
-              value={rights.most_streams === null ? "" : String(rights.most_streams)}
+              value={
+                rights.most_streams === null ? "" : String(rights.most_streams)
+              }
               options={[
                 ["", t("users.no_limit")] as const,
                 ...Array.from(
@@ -361,31 +426,47 @@ function RightsLines({
                   (_, index) => [String(index + 1), String(index + 1)] as const,
                 ),
               ]}
-              onPick={(value) => set({ most_streams: value === "" ? null : Number(value) })}
+              onPick={(value) =>
+                set({ most_streams: value === "" ? null : Number(value) })
+              }
             />
           </Setting>
-          <Setting label={t("admin.right.may_download")} why={t("users.may_download_why")}>
+          <Setting
+            label={t("admin.right.may_download")}
+            why={t("users.may_download_why")}
+          >
             <Toggle
               label={t("admin.right.may_download")}
               checked={rights.may_download}
               onChange={(may_download) => set({ may_download })}
             />
           </Setting>
-          <Setting label={t("admin.right.may_manage_collections")} why={t("users.may_manage_collections_why")}>
+          <Setting
+            label={t("admin.right.may_manage_collections")}
+            why={t("users.may_manage_collections_why")}
+          >
             <Toggle
               label={t("admin.right.may_manage_collections")}
               checked={rights.may_manage_collections}
-              onChange={(may_manage_collections) => set({ may_manage_collections })}
+              onChange={(may_manage_collections) =>
+                set({ may_manage_collections })
+              }
             />
           </Setting>
-          <Setting label={t("admin.right.may_edit_tags")} why={t("users.may_edit_tags_why")}>
+          <Setting
+            label={t("admin.right.may_edit_tags")}
+            why={t("users.may_edit_tags_why")}
+          >
             <Toggle
               label={t("admin.right.may_edit_tags")}
               checked={rights.may_edit_tags}
               onChange={(may_edit_tags) => set({ may_edit_tags })}
             />
           </Setting>
-          <Setting label={t("admin.right.may_upload")} why={t("users.may_upload_why")}>
+          <Setting
+            label={t("admin.right.may_upload")}
+            why={t("users.may_upload_why")}
+          >
             <Toggle
               label={t("admin.right.may_upload")}
               checked={rights.may_upload}
@@ -393,7 +474,12 @@ function RightsLines({
             />
           </Setting>
           <Setting label={t("admin.limit_age")} soon>
-            <Toggle label={t("admin.limit_age")} checked={false} onChange={() => {}} disabled />
+            <Toggle
+              label={t("admin.limit_age")}
+              checked={false}
+              onChange={() => {}}
+              disabled
+            />
           </Setting>
         </>
       )}
@@ -431,7 +517,9 @@ function PasswordDialog({
     setMismatch(false);
     void keep.tell();
   };
-  const refusal = mismatch ? t("users.password_mismatch") : refusalOf(keep.failure, t);
+  const refusal = mismatch
+    ? t("users.password_mismatch")
+    : refusalOf(keep.failure, t);
 
   return (
     <Modal
@@ -481,7 +569,9 @@ function PasswordDialog({
             onChange={(event) => setAgain(event.target.value)}
           />
         </label>
-        {refusal && <p className="panel-notice panel-notice-trouble">{refusal}</p>}
+        {refusal && (
+          <p className="panel-notice panel-notice-trouble">{refusal}</p>
+        )}
         {/* Enter in either field keeps the password, as a form does. */}
         <button type="submit" hidden />
       </form>
@@ -523,10 +613,17 @@ function NewAccount({
     setMismatch(false);
     void create.tell();
   };
-  const refusal = mismatch ? t("users.password_mismatch") : refusalOf(create.failure, t);
+  const refusal = mismatch
+    ? t("users.password_mismatch")
+    : refusalOf(create.failure, t);
 
   return (
-    <Panel icon={PeopleIcon} title={t("users.new")} lead={t("users.new_why")} className="account-new">
+    <Panel
+      icon={PeopleIcon}
+      title={t("users.new")}
+      lead={t("users.new_why")}
+      className="account-new"
+    >
       <div className="settings-lines">
         <Setting label={t("users.name")}>
           <input
@@ -559,10 +656,17 @@ function NewAccount({
             onChange={(event) => setAgain(event.target.value)}
           />
         </Setting>
-        <RightsLines rights={rights} libraries={libraries} you={false} onChange={setRights} />
+        <RightsLines
+          rights={rights}
+          libraries={libraries}
+          you={false}
+          onChange={setRights}
+        />
       </div>
 
-      {refusal && <p className="panel-notice panel-notice-trouble">{refusal}</p>}
+      {refusal && (
+        <p className="panel-notice panel-notice-trouble">{refusal}</p>
+      )}
 
       <div className="panel-foot">
         <button className="button" onClick={onCancel}>
@@ -570,7 +674,12 @@ function NewAccount({
         </button>
         <button
           className="button button-accent"
-          disabled={create.busy || !name.trim() || password.length === 0 || again.length === 0}
+          disabled={
+            create.busy ||
+            !name.trim() ||
+            password.length === 0 ||
+            again.length === 0
+          }
           onClick={submit}
         >
           {t("users.create")}
