@@ -9,11 +9,11 @@
  * make anyone do.
  *
  * So it is read here, and read again whenever something changed it: at once
- * when this interface changed it, and whenever work ends, since a scan is what
- * makes a library grow.
+ * when this interface changed it, on a slow beat while work runs, since a
+ * scan is what makes a library grow, and once more when that work ends.
  */
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { api } from "./api";
 import { useAsked } from "./asking";
 import type { Library, LibraryKind } from "./api";
@@ -40,18 +40,36 @@ export const LibrariesContext = createContext<Libraries>({
   refresh: () => {},
 });
 
+/** How often the libraries are read again while work runs. */
+const WHILE_WORKING_MS = 3000;
+
 /**
  * What the provider at the top of the interface holds.
  *
- * Reads again each time work ends, which is how the count beside a library
- * grows during a scan without anybody asking.
+ * Reads again every few seconds while work runs and once more when it ends,
+ * which is how the count beside a library grows during a scan without anybody
+ * asking.
  */
-export function useWatchedLibraries(finished: number): Libraries {
+export function useWatchedLibraries(working: boolean, finished: number): Libraries {
   // A server that did not answer keeps the list that was there, which is what
   // asking is built to do: emptying the navigation over one failed request
   // would say the collection is gone, a far worse thing to say than nothing.
   const asked = useAsked((signal) => api.libraries(signal), [finished]);
-  return { all: asked.answer ?? [], refresh: asked.again };
+  const { look } = asked;
+
+  useEffect(() => {
+    if (!working) {
+      return;
+    }
+    const timer = window.setInterval(look, WHILE_WORKING_MS);
+    return () => window.clearInterval(timer);
+  }, [working, look]);
+
+  // The same list read again is the same list: every screen built from it is
+  // left alone until something in it really moved.
+  const said = JSON.stringify(asked.answer ?? []);
+  const all = useMemo(() => JSON.parse(said) as Library[], [said]);
+  return useMemo(() => ({ all, refresh: asked.again }), [all, asked.again]);
 }
 
 /** The libraries, for any page or part of the bar that shows them. */

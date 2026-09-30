@@ -132,8 +132,8 @@ function TheLibrary() {
   const running = useWatchedWork();
   // The libraries are what the whole navigation is built from, so they are
   // held here rather than by every page that mentions them, and read again
-  // whenever the settings screen changes one or a scan ends.
-  const libraries = useWatchedLibraries(running.finished);
+  // whenever the settings screen changes one, while work runs and when it ends.
+  const libraries = useWatchedLibraries(running.jobs.length > 0, running.finished);
   // A brand new server takes its administrator through its first steps
   // before anything else, and nothing is drawn until it has said whether.
   const firstSteps = useFirstSteps(useAccount().account?.is_administrator ?? false);
