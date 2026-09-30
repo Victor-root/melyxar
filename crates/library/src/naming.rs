@@ -1102,6 +1102,16 @@ const VIDEO_EXTENSIONS: [&str; 14] = [
     "ogv",
 ];
 
+/// Whether a file or folder is left where it is by every walk: what is
+/// hidden, and what a system keeps for itself on a disk, such as the
+/// recycle bin Windows makes on each one or the folders a network drive makes
+/// for its thumbnails, full of copies of what the disk holds.
+pub fn is_left_alone(name: &str) -> bool {
+    name.starts_with(['.', '$', '@', '#'])
+        || name.eq_ignore_ascii_case("System Volume Information")
+        || name == "lost+found"
+}
+
 /// Whether a name looks like a video file worth scanning.
 pub fn is_video_file(file_name: &str) -> bool {
     let Some(extension) = file_name.rsplit('.').next() else {

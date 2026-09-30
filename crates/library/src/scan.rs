@@ -122,14 +122,15 @@ fn walk_into(
 
         for entry in entries.filter_map(Result::ok) {
             let path = entry.path();
-            // Anything hidden is left where it is, folder or file. A collection
+            // Anything hidden or kept by the system is left where it is,
+            // folder or file. A collection
             // that has lived on a network drive carries folders the drive made
             // for itself, and they are full of things that look exactly like
             // films: seen on the maintainer's own library, a `.@__thumb` folder
             // holding twenty pictures each named after a film and ending in
             // .mkv, every one of them walked in, described, and read through
             // for the little pictures of its bar.
-            if entry.file_name().to_string_lossy().starts_with('.') {
+            if naming::is_left_alone(&entry.file_name().to_string_lossy()) {
                 continue;
             }
             let Ok(metadata) = entry.metadata() else {
@@ -711,6 +712,27 @@ mod tests {
             "only the film"
         );
         assert!(outcome.unreadable_folders.is_empty());
+    }
+
+    #[test]
+    fn what_a_system_keeps_on_a_disk_for_itself_is_not_walked() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        for kept in ["$RECYCLE.BIN", "System Volume Information", "@eaDir", "#recycle"] {
+            let folder = directory.path().join(kept);
+            std::fs::create_dir_all(&folder).expect("the folder a system makes");
+            std::fs::write(folder.join("Old.Song.mp3"), b"a deleted song").expect("what is in it");
+        }
+        std::fs::write(directory.path().join("Real.Song.mp3"), b"a song").expect("a song");
+
+        let outcome = walk("disk-one", directory.path(), LibraryKind::Music).expect("readable");
+        assert_eq!(
+            outcome
+                .files
+                .iter()
+                .map(|file| file.relative_path.clone())
+                .collect::<Vec<_>>(),
+            vec![PathBuf::from("Real.Song.mp3")]
+        );
     }
 
     #[test]
