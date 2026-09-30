@@ -13,7 +13,7 @@ import type { ComponentType } from "react";
 import { api } from "../../api";
 import type { ActivityFamily, ActivityLine, ActivityPage } from "../../api";
 import { wasAbandoned } from "../../asking";
-import { FolderIcon, LockIcon, PlaybackIcon, ServerIcon } from "../../icons";
+import { FolderIcon, LockIcon, PlaybackIcon, ServerIcon, WarningIcon } from "../../icons";
 import type { IconProps } from "../../icons";
 import { useJournalNews } from "../../live";
 import { useSettings } from "../../settings";
@@ -25,6 +25,7 @@ const FAMILY_ICONS: Record<ActivityFamily, ComponentType<IconProps>> = {
   playback: PlaybackIcon,
   library: FolderIcon,
   server: ServerIcon,
+  refused: WarningIcon,
 };
 
 export const FAMILIES: ActivityFamily[] = ["access", "playback", "library", "server"];

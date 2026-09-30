@@ -584,6 +584,26 @@ impl Database {
         Ok(())
     }
 
+    /// How many wrong passwords in a row an account takes before it is
+    /// held back.
+    pub async fn sign_in_tries(&self) -> Result<i64> {
+        Ok(
+            sqlx::query_scalar("SELECT sign_in_tries FROM server_settings WHERE id = 1")
+                .fetch_one(self.reader())
+                .await?,
+        )
+    }
+
+    /// Sets it, on its own for the same reason as the journal's days.
+    pub async fn set_sign_in_tries(&self, tries: i64) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET sign_in_tries = ?, updated_at = ? WHERE id = 1")
+            .bind(tries)
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// Replaces what the server does with a library, and nothing else.
     ///
     /// A call of its own rather than a full save, for the same reason as
@@ -1124,5 +1144,13 @@ mod tests {
         let cleared = database.server_settings().await.expect("settings readable");
         assert!(!cleared.maintenance_enabled);
         assert!(cleared.maintenance_message.is_none());
+    }
+
+    #[tokio::test]
+    async fn the_tries_before_an_account_is_held_back_start_at_ten_and_are_kept() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.sign_in_tries().await.expect("read"), 10);
+        database.set_sign_in_tries(5).await.expect("saved");
+        assert_eq!(database.sign_in_tries().await.expect("read"), 5);
     }
 }

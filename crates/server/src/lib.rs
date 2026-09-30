@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 pub mod account;
+mod address;
 pub mod accounts;
 pub mod activity;
 pub mod calibration;
@@ -36,6 +37,7 @@ pub mod playback;
 pub mod playlists;
 pub mod preferences;
 pub mod routes;
+pub mod security;
 pub mod timing;
 pub mod uploads;
 
@@ -100,7 +102,10 @@ pub async fn serve(
     let listener = tokio::net::TcpListener::bind(address).await?;
     tracing::info!(%address, "listening");
     let closing = state.clone();
-    axum::serve(listener, build(state))
+    axum::serve(
+        listener,
+        build(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
         .with_graceful_shutdown(async move {
             shutdown.await;
             // A live line never ends on its own, and a stopping server waits
