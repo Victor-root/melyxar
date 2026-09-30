@@ -1544,7 +1544,7 @@ where
 
 
 /// The library a work is in.
-async fn library_of(state: &AppState, library_id: LibraryId) -> Result<Library> {
+pub(crate) async fn library_of(state: &AppState, library_id: LibraryId) -> Result<Library> {
     state
         .database()
         .list_libraries()

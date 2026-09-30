@@ -37,6 +37,7 @@ pub mod music_marks;
 pub mod music_playlists;
 pub mod music_pictures;
 pub mod music_preferences;
+pub mod music_tag_editing;
 #[cfg(test)]
 mod music_testing;
 pub mod numbering;

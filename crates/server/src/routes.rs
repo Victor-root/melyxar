@@ -71,6 +71,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::music::router())
         .merge(crate::music_preferences::router())
         .merge(crate::music_playlists::router())
+        .merge(crate::music_tags::router())
         .merge(crate::deletion::router())
         .merge(crate::devices::router())
         .merge(crate::pictures::router())

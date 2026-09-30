@@ -23,6 +23,45 @@ pub struct EditedTags {
     pub compilation: bool,
 }
 
+impl From<&crate::Tags> for EditedTags {
+    /// What a file carries now, as the tag manager starts from it.
+    fn from(tags: &crate::Tags) -> Self {
+        Self {
+            title: tags.title.clone(),
+            artists: tags.artists.clone(),
+            album: tags.album.clone(),
+            album_artists: tags.album_artists.clone(),
+            track: tags.track,
+            disc: tags.disc,
+            year: tags.year,
+            genres: tags.genres.clone(),
+            compilation: tags.compilation,
+        }
+    }
+}
+
+impl EditedTags {
+    /// The fields that differ from what the file carried, by name.
+    pub fn changed_from(&self, before: &Self) -> Vec<&'static str> {
+        let mut changed = Vec::new();
+        let mut differs = |name: &'static str, different: bool| {
+            if different {
+                changed.push(name);
+            }
+        };
+        differs("title", self.title != before.title);
+        differs("artists", self.artists != before.artists);
+        differs("album", self.album != before.album);
+        differs("album_artists", self.album_artists != before.album_artists);
+        differs("track", self.track != before.track);
+        differs("disc", self.disc != before.disc);
+        differs("year", self.year != before.year);
+        differs("genres", self.genres != before.genres);
+        differs("compilation", self.compilation != before.compilation);
+        changed
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError {
     #[error("the file could not be read to be written: {0}")]
@@ -94,4 +133,25 @@ fn fill(tag: &mut Tag, edited: &EditedTags) {
         ItemKey::FlagCompilation,
         edited.compilation.then(|| "1".to_string()),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn what_changed_is_named_field_by_field() {
+        let before = EditedTags {
+            title: Some("Tides".to_string()),
+            track: Some(2),
+            ..EditedTags::default()
+        };
+        let after = EditedTags {
+            title: Some("Low Tide".to_string()),
+            year: Some(2019),
+            ..before.clone()
+        };
+        assert_eq!(after.changed_from(&before), vec!["title", "year"]);
+        assert!(before.changed_from(&before).is_empty());
+    }
 }
