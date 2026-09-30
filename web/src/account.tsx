@@ -115,6 +115,7 @@ export function useWhoIsThere(): Who {
           login_background_path: null,
           login_background_style: "abstract",
           door_slogan: null,
+          default_theme: "system",
           setup_complete: true,
         });
       });

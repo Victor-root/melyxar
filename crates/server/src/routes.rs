@@ -333,6 +333,8 @@ struct PublicBranding {
     login_background_style: &'static str,
     /// The line under the server's name, or nothing for Melyxar's own.
     door_slogan: Option<String>,
+    /// The theme of whoever has not chosen one, so a first visit is drawn in it.
+    default_theme: &'static str,
     setup_complete: bool,
 }
 
@@ -356,6 +358,7 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
         login_background_path: door_picture,
         login_background_style: settings.login_background.as_str(),
         door_slogan: settings.door_slogan,
+        default_theme: settings.default_theme.as_str(),
         setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,
     }))
 }

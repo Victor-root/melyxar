@@ -32,11 +32,17 @@ import type { Language, LanguageChoice } from "./i18n";
 import { colourTheWindow, markTheApp } from "./installing";
 import { LIGHTS } from "./lights";
 import { markTheTab, vividOf } from "./mark";
+import { useBranding } from "./player/logo";
 import { THE_USUAL_STEP_BACK, THE_USUAL_STEP_ON } from "./player/steps";
 
 export type ThemeChoice = "dark" | "light" | "system";
 
+/** What an account holds: a theme it chose, or nothing chosen yet, which
+ *  follows the server's. */
+type HeldTheme = ThemeChoice | "server";
+
 const STORED_THEME = "melyxar.theme";
+const STORED_SERVER_THEME = "melyxar.theme.server";
 const STORED_ACCENT = "melyxar.accent";
 const STORED_BANNER_HEIGHT = "melyxar.banner.height";
 const STORED_BANNER_CUT = "melyxar.banner.cut";
@@ -134,9 +140,14 @@ interface Settings {
 
 const SettingsContext = createContext<Settings | null>(null);
 
-function initialTheme(): ThemeChoice {
+function initialTheme(): HeldTheme {
   const stored = safeRead(STORED_THEME);
-  return stored === "dark" || stored === "light" || stored === "system" ? stored : "system";
+  return stored === "dark" || stored === "light" || stored === "system" ? stored : "server";
+}
+
+/** A theme the server can have as its own, the device's for anything else. */
+function serverThemeOf(word: string | null | undefined): ThemeChoice {
+  return word === "dark" || word === "light" ? word : "system";
 }
 
 function initialAccent(): string {
@@ -167,7 +178,17 @@ function initialNumber(key: string, usual: number): number {
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [languageChoice, setLanguageChoiceState] = useState<LanguageChoice>(initialLanguageChoice);
   const language = languageOf(languageChoice, navigator.language);
-  const [theme, setThemeState] = useState<ThemeChoice>(initialTheme);
+  const [held, setHeldState] = useState<HeldTheme>(initialTheme);
+  /* What the server says it wears by default, kept in this browser so the
+     next visit is drawn right before the server has answered. */
+  const branding = useBranding();
+  const serverTheme = serverThemeOf(branding?.default_theme ?? safeRead(STORED_SERVER_THEME));
+  const theme: ThemeChoice = held === "server" ? serverTheme : held;
+  useEffect(() => {
+    if (branding) {
+      safeWrite(STORED_SERVER_THEME, serverThemeOf(branding.default_theme));
+    }
+  }, [branding]);
   const [accent, setAccentState] = useState<string>(initialAccent);
   const [bannerHeight, setBannerHeightState] = useState(() =>
     initialNumber(STORED_BANNER_HEIGHT, THE_USUAL_BANNER.height),
@@ -280,7 +301,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setTheme = useCallback((next: ThemeChoice) => {
     safeWrite(STORED_THEME, next);
-    setThemeState(next);
+    setHeldState(next);
     tellTheServer({ theme_mode: next });
   }, []);
 
@@ -376,10 +397,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setLanguageChoiceState(choice);
 
     const mode = chosen.theme_mode;
-    const theme: ThemeChoice =
-      mode === "dark" || mode === "light" || mode === "system" ? mode : "system";
-    safeWrite(STORED_THEME, theme);
-    setThemeState(theme);
+    const held: HeldTheme =
+      mode === "dark" || mode === "light" || mode === "system" ? mode : "server";
+    safeWrite(STORED_THEME, held);
+    setHeldState(held);
 
     safeWrite(STORED_ACCENT, chosen.accent_color);
     setAccentState(chosen.accent_color);

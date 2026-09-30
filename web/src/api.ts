@@ -105,7 +105,10 @@ export type LoginBackgroundStyle = "abstract" | "library" | "picture";
  *  the server ships with is a fallback the screen holds, never something the
  *  screen assumes. */
 /** What the server is called and where its logo is, when it was given one. */
-export type ServerIdentity = Pick<Branding, "server_name" | "logo" | "logo_icon">;
+export type ServerIdentity = Pick<Branding, "server_name" | "logo" | "logo_icon" | "default_theme">;
+
+/** A theme the administrator can make the server's own. */
+export type ServerTheme = "dark" | "light" | "system";
 
 /** The same, as the administrator changing them reads it: with the name the
  *  server would be given back. */
@@ -136,6 +139,8 @@ export interface Branding {
   /** The line under the server's name as the administrator wrote it, or
    *  nothing for Melyxar's own, worded in the language of whoever looks. */
   door_slogan: string | null;
+  /** The theme of whoever has not chosen one. */
+  default_theme: ServerTheme;
   /** False on a brand new server, which asks for a first account instead of a
       password. */
   setup_complete: boolean;
@@ -2148,6 +2153,8 @@ export const api = {
     put<ServerSettings>("/api/v1/settings/server/door/background", { door_background }),
   setDoorPicture: (image: Blob) =>
     put<ServerSettings>("/api/v1/settings/server/door/picture", image),
+  setDefaultTheme: (default_theme: ServerTheme) =>
+    put<ServerSettings>("/api/v1/settings/server/theme", { default_theme }),
   setDoorSlogan: (door_slogan: string) =>
     put<ServerSettings>("/api/v1/settings/server/door/slogan", { door_slogan }),
   removeDoorPicture: () => remove<ServerSettings>("/api/v1/settings/server/door/picture"),

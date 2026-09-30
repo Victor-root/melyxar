@@ -42,6 +42,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(choose_door_background),
         )
         .route(
+            "/api/v1/settings/server/theme",
+            axum::routing::put(choose_default_theme),
+        )
+        .route(
             "/api/v1/settings/server/door/slogan",
             axum::routing::put(write_door_slogan),
         )
@@ -77,6 +81,8 @@ struct ServerView {
     /// The line under the server's name, or nothing for Melyxar's own.
     door_slogan: Option<String>,
     longest_slogan: usize,
+    /// The theme of whoever has not chosen one.
+    default_theme: &'static str,
 }
 
 impl ServerView {
@@ -95,6 +101,7 @@ impl ServerView {
             door_picture: door.picture.as_deref().map(crate::images::door_picture_url),
             door_slogan: door.slogan,
             longest_slogan: melyxar_app::server::LONGEST_SLOGAN,
+            default_theme: melyxar_app::server::default_theme(state).await?.as_str(),
         }))
     }
 }
@@ -166,6 +173,24 @@ async fn choose_door_background(
             crate::error::ServerError::invalid_input("no background goes by that name")
         })?;
     melyxar_app::server::set_door_background(&state, background).await?;
+    ServerView::of(&state).await
+}
+
+#[derive(Debug, Deserialize)]
+struct ThemeAsked {
+    default_theme: String,
+}
+
+/// Chooses the theme of whoever has not chosen one.
+async fn choose_default_theme(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    Json(asked): Json<ThemeAsked>,
+) -> Result<Json<ServerView>> {
+    let theme = melyxar_core::user::ThemeMode::parse(&asked.default_theme)
+        .filter(|theme| *theme != melyxar_core::user::ThemeMode::Server)
+        .ok_or_else(|| crate::error::ServerError::invalid_input("no theme goes by that name"))?;
+    melyxar_app::server::set_default_theme(&state, theme).await?;
     ServerView::of(&state).await
 }
 

@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../../api";
-import type { LoginBackgroundStyle, ServerSettings } from "../../api";
+import type { LoginBackgroundStyle, ServerSettings, ServerTheme } from "../../api";
 import {
   NumberField,
   PageHead,
@@ -142,6 +142,17 @@ export function ServerPanel() {
       .finally(() => setSending(false));
   };
 
+  const changeTheme = (theme: ServerTheme) => {
+    setSending(true);
+    api
+      .setDefaultTheme(theme)
+      .then(kept)
+      .catch((error) => {
+        toast({ state: "trouble", title: t("admin.theme_failed"), detail: t(refusalAbout(error, "server")) });
+      })
+      .finally(() => setSending(false));
+  };
+
   return (
     <Panel icon={ServerIcon} title={t("admin.server")} lead={t("admin.server_lead")}>
       <Setting label={t("admin.server_name")}>
@@ -186,6 +197,21 @@ export function ServerPanel() {
               {t("admin.server_name_default")}
             </button>
           </form>
+        )}
+      </Setting>
+      <Setting label={t("admin.theme")} why={t("admin.theme_why")}>
+        {server && (
+          <Picker<ServerTheme>
+            label={t("admin.theme")}
+            value={server.default_theme}
+            onPick={changeTheme}
+            disabled={sending}
+            options={[
+              ["system", t("theme.system")],
+              ["dark", t("theme.dark")],
+              ["light", t("theme.light")],
+            ]}
+          />
         )}
       </Setting>
       <Setting label={t("admin.logo")} why={t("admin.logo_why")}>

@@ -505,6 +505,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_account_on_the_automatic_theme_follows_the_server_once_it_has_a_default() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database opens");
+        crate::MIGRATOR
+            .run_to(84, &pool)
+            .await
+            .expect("migrated to just before the server has a default theme");
+        for (id, theme) in [("automatic", "system"), ("dark", "dark"), ("light", "light")] {
+            sqlx::query("INSERT INTO users (id, name, created_at) VALUES (?, ?, '2026-09-27T00:00:00Z')")
+                .bind(id)
+                .bind(id)
+                .execute(&pool)
+                .await
+                .expect("account written");
+            sqlx::query("INSERT INTO user_preferences (user_id, theme_mode) VALUES (?, ?)")
+                .bind(id)
+                .bind(theme)
+                .execute(&pool)
+                .await
+                .expect("preferences written");
+        }
+
+        crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+        let themes: Vec<String> =
+            sqlx::query_scalar("SELECT theme_mode FROM user_preferences ORDER BY user_id")
+                .fetch_all(&pool)
+                .await
+                .expect("read");
+        assert_eq!(themes, ["server", "dark", "light"]);
+    }
+
+    #[tokio::test]
     async fn the_one_section_of_library_rows_becomes_a_section_per_kind() {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
