@@ -45,7 +45,9 @@ pub mod uploads;
 use std::net::SocketAddr;
 
 use melyxar_app::AppState;
+use axum::http::header;
 use tower_http::compression::CompressionLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 
 pub use error::{ApiError, ServerError};
@@ -90,7 +92,16 @@ pub fn build(state: AppState) -> axum::Router {
         // Outside the compression, so the time reported is the time the client
         // waited and not the time before the answer was packed.
         .layer(axum::middleware::from_fn(timing::measured))
+        .layer(guarded(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
+        // No other site may frame these pages and trick a click on them.
+        .layer(guarded(header::X_FRAME_OPTIONS, "DENY"))
+        .layer(guarded(header::REFERRER_POLICY, "same-origin"))
         .layer(TraceLayer::new_for_http())
+}
+
+/// A header every response carries, unless a route already set its own.
+fn guarded(name: header::HeaderName, value: &'static str) -> SetResponseHeaderLayer<header::HeaderValue> {
+    SetResponseHeaderLayer::if_not_present(name, header::HeaderValue::from_static(value))
 }
 
 /// Serves until the shutdown signal fires.

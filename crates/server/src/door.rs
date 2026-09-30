@@ -13,6 +13,7 @@
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -21,7 +22,7 @@ use axum::serve::{IncomingStream, Listener};
 use melyxar_app::AppState;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
 
@@ -34,6 +35,11 @@ const PATIENCE: Duration = Duration::from_secs(10);
 
 /// How many connections, done with their handshake, may wait to be served.
 const WAITING: usize = 128;
+
+/// How many connections may be opening at once. Past it, the next one waits
+/// in the system's queue, so clients that connect and say nothing cannot
+/// pile up without end.
+const OPENING: usize = 512;
 
 /// Who is at the other end of a connection, and whether it is encrypted.
 #[derive(Debug, Clone, Copy)]
@@ -102,8 +108,12 @@ impl Door {
     pub fn new(listener: TcpListener, state: AppState) -> io::Result<Self> {
         let local = listener.local_addr()?;
         let (send, arrived) = mpsc::channel(WAITING);
+        let opening = Arc::new(Semaphore::new(OPENING));
         let accepting = tokio::spawn(async move {
             loop {
+                let Ok(permit) = opening.clone().acquire_owned().await else {
+                    return;
+                };
                 let (stream, address) = match listener.accept().await {
                     Ok(accepted) => accepted,
                     Err(error) => {
@@ -116,7 +126,9 @@ impl Door {
                 };
                 let (send, state) = (send.clone(), state.clone());
                 tokio::spawn(async move {
-                    if let Some(opened) = opened(stream, address, &state).await {
+                    let opened = opened(stream, address, &state).await;
+                    drop(permit);
+                    if let Some(opened) = opened {
                         let _ = send.send(opened).await;
                     }
                 });
