@@ -22,8 +22,16 @@ export function AdminDevices() {
   return (
     <>
       <PageHead lead={t("admin.devices_lead")} />
-      <Panel icon={DeviceIcon} title={t("admin.devices_signed_in")} lead={t("admin.devices_signed_in_lead")}>
-        {devices.failure && <p className="panel-notice panel-notice-trouble">{t("error.unreachable")}</p>}
+      <Panel
+        icon={DeviceIcon}
+        title={t("admin.devices_signed_in")}
+        lead={t("admin.devices_signed_in_lead")}
+      >
+        {devices.failure && (
+          <p className="panel-notice panel-notice-trouble">
+            {t("error.unreachable")}
+          </p>
+        )}
         {devices.answer && (
           <DeviceLines
             devices={devices.answer}
@@ -33,7 +41,12 @@ export function AdminDevices() {
           />
         )}
       </Panel>
-      <Panel icon={LockIcon} title={t("admin.tv_code")} lead={t("admin.tv_code_lead")} soon />
+      <Panel
+        icon={LockIcon}
+        title={t("admin.tv_code")}
+        lead={t("admin.tv_code_lead")}
+        soon
+      />
     </>
   );
 }

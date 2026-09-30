@@ -42,9 +42,18 @@ import { PauseIcon } from "../../player/icons";
 import { containerName } from "../../readable";
 import { useSettings } from "../../settings";
 import { ActivityJournal } from "./activity-list";
-import { countedOf, overOf, positionNow, shareWatched, useNowPlaying } from "./playing";
+import {
+  countedOf,
+  overOf,
+  positionNow,
+  shareWatched,
+  useNowPlaying,
+} from "./playing";
 
-type Wording = (key: string, values?: Record<string, string | number>) => string;
+type Wording = (
+  key: string,
+  values?: Record<string, string | number>,
+) => string;
 
 /** The history below the list is the journal of what was watched. */
 const WATCHED: ActivityFamily[] = ["playback"];
@@ -63,7 +72,11 @@ export function AdminPlayback() {
     <>
       <PageHead lead={t("admin.playback_lead")} />
       <PlayingPanel />
-      <Panel icon={HistoryIcon} title={t("admin.history")} lead={t("admin.history_lead")}>
+      <Panel
+        icon={HistoryIcon}
+        title={t("admin.history")}
+        lead={t("admin.history_lead")}
+      >
         <ActivityJournal families={WATCHED} />
       </Panel>
     </>
@@ -75,7 +88,13 @@ export function AdminPlayback() {
  * same panel here and on the summary, which sets what just happened beside
  * it and its ways further in at the foot.
  */
-export function PlayingPanel({ beside, children }: { beside?: ReactNode; children?: ReactNode }) {
+export function PlayingPanel({
+  beside,
+  children,
+}: {
+  beside?: ReactNode;
+  children?: ReactNode;
+}) {
   const { t } = useSettings();
   const playing = useNowPlaying();
   const watched = playing.watched ?? [];
@@ -85,11 +104,17 @@ export function PlayingPanel({ beside, children }: { beside?: ReactNode; childre
       <PlayingStats watched={playing.watched} />
       {playing.cut && <p className="panel-notice">{t("error.unreachable")}</p>}
       {watched.length === 0 ? (
-        <p className="empty-line">{playing.watched && t("admin.playing_none")}</p>
+        <p className="empty-line">
+          {playing.watched && t("admin.playing_none")}
+        </p>
       ) : (
         <div className="watches">
           {watched.map((one) => (
-            <WatchCard key={one.device} watched={one} heardAt={playing.heardAt} />
+            <WatchCard
+              key={one.device}
+              watched={one}
+              heardAt={playing.heardAt}
+            />
           ))}
         </div>
       )}
@@ -97,7 +122,11 @@ export function PlayingPanel({ beside, children }: { beside?: ReactNode; childre
   );
 
   return (
-    <Panel icon={PlaybackIcon} title={t("admin.playing")} lead={t("admin.playing_lead")}>
+    <Panel
+      icon={PlaybackIcon}
+      title={t("admin.playing")}
+      lead={t("admin.playing_lead")}
+    >
       {beside ? (
         <div className="playing-split">
           <div className="playing-now">{now}</div>
@@ -120,13 +149,21 @@ function PlayingStats({ watched }: { watched: Watched[] | null }) {
 
   return (
     <div className="stats stats-three">
-      <Stat icon={PlaybackIcon} label={t("admin.playing_count")} value={count(counted?.playing)} />
+      <Stat
+        icon={PlaybackIcon}
+        label={t("admin.playing_count")}
+        value={count(counted?.playing)}
+      />
       <Stat
         icon={GraphicsCardIcon}
         label={t("admin.transcoding_count")}
         value={count(counted?.rebuilt)}
       />
-      <Stat icon={DeviceIcon} label={t("admin.direct_count")} value={count(counted?.direct)} />
+      <Stat
+        icon={DeviceIcon}
+        label={t("admin.direct_count")}
+        value={count(counted?.direct)}
+      />
     </div>
   );
 }
@@ -138,7 +175,9 @@ function MethodPill({ decision }: { decision: WatchedDecision | null }) {
     return <span className="method-pill">{t("method.unknown")}</span>;
   }
   return (
-    <span className={`method-pill ${decision.expensive ? "method-rebuilt" : "method-direct"}`}>
+    <span
+      className={`method-pill ${decision.expensive ? "method-rebuilt" : "method-direct"}`}
+    >
       {t(`method.${decision.method}`)}
     </span>
   );
@@ -175,13 +214,22 @@ function useRunningClock(running: boolean): number {
     if (!running) {
       return;
     }
-    const timer = window.setInterval(() => setNow(performance.now()), A_SECOND_MS);
+    const timer = window.setInterval(
+      () => setNow(performance.now()),
+      A_SECOND_MS,
+    );
     return () => window.clearInterval(timer);
   }, [running]);
   return now;
 }
 
-function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) {
+function WatchCard({
+  watched,
+  heardAt,
+}: {
+  watched: Watched;
+  heardAt: number;
+}) {
   const { t } = useSettings();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -194,7 +242,11 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
   const share = shareWatched(watched, position);
   const { decision, producing } = watched;
   const Placeholder =
-    watched.kind === "song" ? MusicIcon : watched.series === null ? FilmIcon : SeriesIcon;
+    watched.kind === "song"
+      ? MusicIcon
+      : watched.series === null
+        ? FilmIcon
+        : SeriesIcon;
 
   const stop = async () => {
     setSending(true);
@@ -208,9 +260,15 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
     } catch (error) {
       toast({
         state: refusalOf(error) === "not_found" ? "attention" : "trouble",
-        title: t(refusalOf(error) === "not_found" ? "admin.stop_already" : "admin.stop_failed"),
+        title: t(
+          refusalOf(error) === "not_found"
+            ? "admin.stop_already"
+            : "admin.stop_failed",
+        ),
         detail:
-          refusalOf(error) === "not_found" ? undefined : t(refusalKey(refusalOf(error))),
+          refusalOf(error) === "not_found"
+            ? undefined
+            : t(refusalKey(refusalOf(error))),
       });
     } finally {
       setSending(false);
@@ -227,7 +285,9 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
           ) : (
             <Placeholder size={30} />
           )}
-          <span className={`watch-moving${watched.paused ? "" : " watch-moving-on"}`}>
+          <span
+            className={`watch-moving${watched.paused ? "" : " watch-moving-on"}`}
+          >
             {watched.paused ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
             {t(watched.paused ? "admin.paused" : "admin.playing_now")}
           </span>
@@ -245,7 +305,8 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
             </span>
             <span className="watch-time">
               {asClock(position)}
-              {watched.duration_seconds !== null && ` / ${asClock(watched.duration_seconds)}`}
+              {watched.duration_seconds !== null &&
+                ` / ${asClock(watched.duration_seconds)}`}
             </span>
           </div>
 
@@ -255,7 +316,9 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
 
           <div className="watch-foot">
             {watched.kind === "song" ? (
-              <span className="method-pill method-direct">{t("method.music")}</span>
+              <span className="method-pill method-direct">
+                {t("method.music")}
+              </span>
             ) : (
               <MethodPill decision={decision} />
             )}
@@ -264,12 +327,15 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
                 className={`watch-speed${producing.speed < KEEPING_UP ? " watch-speed-behind" : ""}`}
               >
                 <GraphicsCardIcon size={15} />
-                {decision?.rebuild && t(`admin.rebuilt_by.${decision.rebuild.by}`)}
+                {decision?.rebuild &&
+                  t(`admin.rebuilt_by.${decision.rebuild.by}`)}
                 {" · "}
                 {asWork(producing, t)}
               </span>
             )}
-            {watched.stopping && <span className="watch-stop-word">{t("admin.stopping")}</span>}
+            {watched.stopping && (
+              <span className="watch-stop-word">{t("admin.stopping")}</span>
+            )}
             <span className="watch-actions">
               <button
                 className="button button-small button-quiet"
@@ -297,7 +363,10 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
                     </button>
                   </>
                 ) : (
-                  <button className="button button-small button-danger" onClick={() => setAsking(true)}>
+                  <button
+                    className="button button-small button-danger"
+                    onClick={() => setAsking(true)}
+                  >
                     {t("admin.stop")}
                   </button>
                 ))}
@@ -312,7 +381,15 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
 }
 
 /** One fact of the details: a name and what it is, or nothing at all. */
-function Fact({ name, is, behind = false }: { name: string; is: string | null; behind?: boolean }) {
+function Fact({
+  name,
+  is,
+  behind = false,
+}: {
+  name: string;
+  is: string | null;
+  behind?: boolean;
+}) {
   if (is === null || is === "") {
     return null;
   }
@@ -337,7 +414,10 @@ function WatchDetails({ watched, t }: { watched: Watched; t: Wording }) {
         <section>
           <h4>{t("facts.stream")}</h4>
           <dl>
-            <Fact name={t("facts.method")} is={t(`playback.${decision.method}`)} />
+            <Fact
+              name={t("facts.method")}
+              is={t(`playback.${decision.method}`)}
+            />
             <Fact name={t("facts.why")} is={reasonsSaid(decision.reasons, t)} />
             <Fact
               name={t("facts.working")}
@@ -353,18 +433,26 @@ function WatchDetails({ watched, t }: { watched: Watched; t: Wording }) {
           <h4>{t("facts.picture")}</h4>
           <dl>
             <Fact name={t("facts.held")} is={pictureHeld(picture, t)} />
-            <Fact name={t("facts.done")} is={pictureDone(decision.rebuild, t)} />
+            <Fact
+              name={t("facts.done")}
+              is={pictureDone(decision.rebuild, t)}
+            />
             <Fact
               name={t("admin.card")}
               is={
                 decision.card_way
                   ? `${decision.card_way.toUpperCase()} · ${t(
-                      decision.card_reads_the_film ? "admin.card_reads" : "admin.card_writes",
+                      decision.card_reads_the_film
+                        ? "admin.card_reads"
+                        : "admin.card_writes",
                     )}`
                   : null
               }
             />
-            <Fact name={t("admin.tone_map")} is={decision.tone_map ? t("admin.tone_map_on") : null} />
+            <Fact
+              name={t("admin.tone_map")}
+              is={decision.tone_map ? t("admin.tone_map_on") : null}
+            />
           </dl>
         </section>
       )}
@@ -375,7 +463,10 @@ function WatchDetails({ watched, t }: { watched: Watched; t: Wording }) {
           <dl>
             <Fact name={t("facts.held")} is={sound && soundHeld(sound, t)} />
             <Fact name={t("facts.done")} is={t(SOUND_DONE[decision.sound])} />
-            <Fact name={t("admin.subtitles")} is={t(`admin.subtitles.${decision.subtitles}`)} />
+            <Fact
+              name={t("admin.subtitles")}
+              is={t(`admin.subtitles.${decision.subtitles}`)}
+            />
           </dl>
         </section>
       )}
@@ -386,10 +477,19 @@ function WatchDetails({ watched, t }: { watched: Watched; t: Wording }) {
           <dl>
             <Fact
               name={t("facts.container")}
-              is={decision.film.container && containerName(decision.film.container)}
+              is={
+                decision.film.container &&
+                containerName(decision.film.container)
+              }
             />
-            <Fact name={t("facts.size")} is={asSize(decision.film.size_bytes)} />
-            <Fact name={t("facts.rate")} is={asRate(decision.film.overall_bitrate)} />
+            <Fact
+              name={t("facts.size")}
+              is={asSize(decision.film.size_bytes)}
+            />
+            <Fact
+              name={t("facts.rate")}
+              is={asRate(decision.film.overall_bitrate)}
+            />
           </dl>
         </section>
       )}

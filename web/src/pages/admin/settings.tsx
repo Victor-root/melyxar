@@ -6,7 +6,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../../api";
-import type { LoginBackgroundStyle, ServerSettings, ServerTheme } from "../../api";
+import type {
+  LoginBackgroundStyle,
+  ServerSettings,
+  ServerTheme,
+} from "../../api";
 import {
   NumberField,
   PageHead,
@@ -44,26 +48,56 @@ export function AdminSettings() {
 
         <DoorPanel />
 
-        <Panel icon={WarningIcon} title={t("admin.maintenance")} lead={t("admin.maintenance_lead")} soon>
+        <Panel
+          icon={WarningIcon}
+          title={t("admin.maintenance")}
+          lead={t("admin.maintenance_lead")}
+          soon
+        >
           <Setting label={t("admin.maintenance_on")} soon>
-            <Toggle label={t("admin.maintenance_on")} checked={false} onChange={() => {}} disabled />
+            <Toggle
+              label={t("admin.maintenance_on")}
+              checked={false}
+              onChange={() => {}}
+              disabled
+            />
           </Setting>
           <Setting label={t("admin.maintenance_message")} soon>
             <input className="field-line" disabled readOnly value="" />
           </Setting>
         </Panel>
 
-        <Panel icon={RefreshIcon} title={t("admin.updates")} lead={t("admin.updates_lead")} soon>
+        <Panel
+          icon={RefreshIcon}
+          title={t("admin.updates")}
+          lead={t("admin.updates_lead")}
+          soon
+        >
           <Setting label={t("admin.updates_check")} soon>
-            <Toggle label={t("admin.updates_check")} checked={false} onChange={() => {}} disabled />
+            <Toggle
+              label={t("admin.updates_check")}
+              checked={false}
+              onChange={() => {}}
+              disabled
+            />
           </Setting>
         </Panel>
 
         <JournalPanel />
 
-        <Panel icon={DatabaseIcon} title={t("admin.backups")} lead={t("admin.backups_lead")} soon>
+        <Panel
+          icon={DatabaseIcon}
+          title={t("admin.backups")}
+          lead={t("admin.backups_lead")}
+          soon
+        >
           <Setting label={t("admin.backups_daily")} soon>
-            <Toggle label={t("admin.backups_daily")} checked={false} onChange={() => {}} disabled />
+            <Toggle
+              label={t("admin.backups_daily")}
+              checked={false}
+              onChange={() => {}}
+              disabled
+            />
           </Setting>
         </Panel>
       </div>
@@ -123,7 +157,11 @@ export function ServerPanel() {
         toast({ state: "ok", title: t(done, { name: now.server_name }) });
       })
       .catch((error) => {
-        toast({ state: "trouble", title: t("admin.server_name_failed"), detail: t(refusalAbout(error, "server")) });
+        toast({
+          state: "trouble",
+          title: t("admin.server_name_failed"),
+          detail: t(refusalAbout(error, "server")),
+        });
       })
       .finally(() => setNaming(false));
   };
@@ -137,7 +175,11 @@ export function ServerPanel() {
           error instanceof ApiError && error.status === TOO_LARGE
             ? "refused.server.too_large"
             : refusalAbout(error, "server");
-        toast({ state: "trouble", title: t("admin.logo_failed"), detail: t(refused) });
+        toast({
+          state: "trouble",
+          title: t("admin.logo_failed"),
+          detail: t(refused),
+        });
       })
       .finally(() => setSending(false));
   };
@@ -148,20 +190,31 @@ export function ServerPanel() {
       .setDefaultTheme(theme)
       .then(kept)
       .catch((error) => {
-        toast({ state: "trouble", title: t("admin.theme_failed"), detail: t(refusalAbout(error, "server")) });
+        toast({
+          state: "trouble",
+          title: t("admin.theme_failed"),
+          detail: t(refusalAbout(error, "server")),
+        });
       })
       .finally(() => setSending(false));
   };
 
   return (
-    <Panel icon={ServerIcon} title={t("admin.server")} lead={t("admin.server_lead")}>
+    <Panel
+      icon={ServerIcon}
+      title={t("admin.server")}
+      lead={t("admin.server_lead")}
+    >
       <Setting label={t("admin.server_name")}>
         {server && (
           <form
             className="name-choice"
             onSubmit={(event) => {
               event.preventDefault();
-              changeName(() => api.renameServer(typed), "admin.server_name_saved");
+              changeName(
+                () => api.renameServer(typed),
+                "admin.server_name_saved",
+              );
             }}
           >
             <span className="name-field">
@@ -176,13 +229,19 @@ export function ServerPanel() {
               />
               {/* Counted in letters, the way the server counts them. */}
               <span id="name-left" className="name-left" aria-live="polite">
-                {howMany(LONGEST_NAME - [...typed].length, "admin.server_name_left", t)}
+                {howMany(
+                  LONGEST_NAME - [...typed].length,
+                  "admin.server_name_left",
+                  t,
+                )}
               </span>
             </span>
             <button
               type="submit"
               className="button button-small button-accent"
-              disabled={naming || !typed.trim() || typed.trim() === server.server_name}
+              disabled={
+                naming || !typed.trim() || typed.trim() === server.server_name
+              }
             >
               {t("admin.server_name_save")}
             </button>
@@ -190,8 +249,12 @@ export function ServerPanel() {
               type="button"
               className="button button-small button-quiet"
               disabled={naming || server.server_name === server.default_name}
-              onClick={() => changeName(api.forgetServerName, "admin.server_name_given_back")}
-              title={t("admin.server_name_default_why", { name: server.default_name })}
+              onClick={() =>
+                changeName(api.forgetServerName, "admin.server_name_given_back")
+              }
+              title={t("admin.server_name_default_why", {
+                name: server.default_name,
+              })}
             >
               <ResetIcon size={15} />
               {t("admin.server_name_default")}
@@ -218,7 +281,12 @@ export function ServerPanel() {
         {server && (
           <div className="logo-choice">
             {server.logo ? (
-              <img className="logo-choice-picture" src={server.logo} alt="" aria-hidden="true" />
+              <img
+                className="logo-choice-picture"
+                src={server.logo}
+                alt=""
+                aria-hidden="true"
+              />
             ) : (
               <MelyxarMark size={32} />
             )}
@@ -252,7 +320,9 @@ export function ServerPanel() {
                 {t("admin.logo_remove")}
               </button>
             )}
-            {sending && <span className="line-note">{t("settings.avatar_busy")}</span>}
+            {sending && (
+              <span className="line-note">{t("settings.avatar_busy")}</span>
+            )}
           </div>
         )}
       </Setting>
@@ -287,7 +357,11 @@ function DoorPanel() {
           error instanceof ApiError && error.status === TOO_LARGE
             ? "refused.server.too_large"
             : refusalAbout(error, "server");
-        toast({ state: "trouble", title: t("admin.door_failed"), detail: t(refused) });
+        toast({
+          state: "trouble",
+          title: t("admin.door_failed"),
+          detail: t(refused),
+        });
       })
       .finally(() => setSending(false));
   };
@@ -296,7 +370,10 @@ function DoorPanel() {
     <Panel icon={EnterIcon} title={t("admin.door")} lead={t("admin.door_lead")}>
       {shown && (
         <>
-          <Setting label={t("admin.door_background")} why={t("admin.door_background_why")}>
+          <Setting
+            label={t("admin.door_background")}
+            why={t("admin.door_background_why")}
+          >
             <Picker
               label={t("admin.door_background")}
               value={shown.door_background}
@@ -312,10 +389,18 @@ function DoorPanel() {
             />
           </Setting>
           {shown.door_background === "picture" && (
-            <Setting label={t("admin.door_picture")} why={t("admin.door_picture_why")}>
+            <Setting
+              label={t("admin.door_picture")}
+              why={t("admin.door_picture_why")}
+            >
               <div className="logo-choice">
                 {shown.door_picture && (
-                  <img className="door-choice-picture" src={shown.door_picture} alt="" aria-hidden="true" />
+                  <img
+                    className="door-choice-picture"
+                    src={shown.door_picture}
+                    alt=""
+                    aria-hidden="true"
+                  />
                 )}
                 <input
                   ref={chooser}
@@ -336,7 +421,11 @@ function DoorPanel() {
                   disabled={sending}
                   onClick={() => chooser.current?.click()}
                 >
-                  {t(shown.door_picture ? "admin.logo_change" : "admin.logo_choose")}
+                  {t(
+                    shown.door_picture
+                      ? "admin.logo_change"
+                      : "admin.logo_choose",
+                  )}
                 </button>
                 {shown.door_picture && (
                   <button
@@ -347,11 +436,16 @@ function DoorPanel() {
                     {t("admin.logo_remove")}
                   </button>
                 )}
-                {sending && <span className="line-note">{t("settings.avatar_busy")}</span>}
+                {sending && (
+                  <span className="line-note">{t("settings.avatar_busy")}</span>
+                )}
               </div>
             </Setting>
           )}
-          <Setting label={t("admin.door_slogan")} why={t("admin.door_slogan_why")}>
+          <Setting
+            label={t("admin.door_slogan")}
+            why={t("admin.door_slogan_why")}
+          >
             <form
               className="name-choice"
               onSubmit={(event) => {
@@ -373,7 +467,9 @@ function DoorPanel() {
               <button
                 type="submit"
                 className="button button-small button-accent"
-                disabled={sending || slogan.trim() === (shown.door_slogan ?? "")}
+                disabled={
+                  sending || slogan.trim() === (shown.door_slogan ?? "")
+                }
               >
                 {t("admin.server_name_save")}
               </button>
@@ -424,12 +520,20 @@ function JournalPanel() {
       .then((kept) => setDays(kept.days))
       .catch((error) => {
         setDays(before);
-        toast({ state: "trouble", title: t("activity.kept_failed"), detail: t(refusalKey(refusalOf(error))) });
+        toast({
+          state: "trouble",
+          title: t("activity.kept_failed"),
+          detail: t(refusalKey(refusalOf(error))),
+        });
       });
   };
 
   return (
-    <Panel icon={HistoryIcon} title={t("activity.title")} lead={t("activity.kept_lead")}>
+    <Panel
+      icon={HistoryIcon}
+      title={t("activity.title")}
+      lead={t("activity.kept_lead")}
+    >
       <Setting label={t("activity.kept")} why={t("activity.kept_why")}>
         {days !== null && (
           <NumberField

@@ -12,7 +12,12 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "../../api";
-import type { LiveMeasures, MeasuredDisk, MeasuredOver, MeasurePoint } from "../../api";
+import type {
+  LiveMeasures,
+  MeasuredDisk,
+  MeasuredOver,
+  MeasurePoint,
+} from "../../api";
 import { useAsked } from "../../asking";
 import { Panel, Picker } from "../../components/panel";
 import { Sparkline } from "../../components/sparkline";
@@ -62,7 +67,8 @@ export function SystemPanel({ card }: { card: string | null }) {
   }, [lookLive]);
 
   const kept = useAsked(
-    (signal) => (reach === "live" ? Promise.resolve([]) : api.measuresOver(reach, signal)),
+    (signal) =>
+      reach === "live" ? Promise.resolve([]) : api.measuresOver(reach, signal),
     [reach],
   );
   const lookKept = kept.look;
@@ -76,7 +82,8 @@ export function SystemPanel({ card }: { card: string | null }) {
     setReach(picked);
   };
 
-  const points = reach === "live" ? (live.answer?.recent ?? []) : (kept.answer ?? []);
+  const points =
+    reach === "live" ? (live.answer?.recent ?? []) : (kept.answer ?? []);
 
   return (
     <Panel
@@ -88,17 +95,28 @@ export function SystemPanel({ card }: { card: string | null }) {
         <Picker<Reach>
           label={t("admin.reach")}
           value={reach}
-          options={REACHES.map((one) => [one, t(`admin.reach.${one}`)] as const)}
+          options={REACHES.map(
+            (one) => [one, t(`admin.reach.${one}`)] as const,
+          )}
           onPick={choose}
         />
       }
     >
       {live.failure && !live.answer ? (
-        <p className="panel-notice panel-notice-trouble">{t("admin.measures_unreachable")}</p>
+        <p className="panel-notice panel-notice-trouble">
+          {t("admin.measures_unreachable")}
+        </p>
       ) : (
         <>
-          <Gauges live={live.answer} points={points} reach={reach} card={card} />
-          {live.answer && live.answer.disks.length > 0 && <Disks disks={live.answer.disks} />}
+          <Gauges
+            live={live.answer}
+            points={points}
+            reach={reach}
+            card={card}
+          />
+          {live.answer && live.answer.disks.length > 0 && (
+            <Disks disks={live.answer.disks} />
+          )}
         </>
       )}
     </Panel>
@@ -115,21 +133,33 @@ function Disks({ disks }: { disks: MeasuredDisk[] }) {
         {disks.map((disk) => {
           const used = usedShare(disk);
           const state = fullness(used);
-          const holds = [...disk.libraries, ...(disk.holds_the_server ? [t("admin.disk_server")] : [])];
+          const holds = [
+            ...disk.libraries,
+            ...(disk.holds_the_server ? [t("admin.disk_server")] : []),
+          ];
           return (
             <div key={disk.mount} className="line disk-line" title={disk.mount}>
-              <span className={`line-mark${state ? ` state-${state}` : ""}`} aria-hidden="true">
+              <span
+                className={`line-mark${state ? ` state-${state}` : ""}`}
+                aria-hidden="true"
+              >
                 <DiskIcon size={18} />
               </span>
               <span className="line-words">
-                <span className="line-name">{diskName(disk.mount) ?? t("admin.disk_system")}</span>
+                <span className="line-name">
+                  {diskName(disk.mount) ?? t("admin.disk_system")}
+                </span>
                 <span className="line-note">{holds.join(" · ")}</span>
               </span>
               <span className="disk-line-meter">
                 <Meter used={used} />
               </span>
               <span className="disk-line-figures">
-                <span className={`line-figure${state ? ` state-${state}` : ""}`}>{percentOf(used, language)}</span>
+                <span
+                  className={`line-figure${state ? ` state-${state}` : ""}`}
+                >
+                  {percentOf(used, language)}
+                </span>
                 <span className="line-note">
                   {t("admin.disk_free", {
                     free: amountOfData(disk.available_bytes, language),
@@ -180,7 +210,10 @@ function Gauges({
 
   const disks = live?.disks ?? [];
   const storageTotal = disks.reduce((sum, disk) => sum + disk.total_bytes, 0);
-  const storageUsed = disks.reduce((sum, disk) => sum + disk.total_bytes - disk.available_bytes, 0);
+  const storageUsed = disks.reduce(
+    (sum, disk) => sum + disk.total_bytes - disk.available_bytes,
+    0,
+  );
 
   return (
     <div className="gauges">
@@ -194,7 +227,9 @@ function Gauges({
             live ? t("admin.threads", { threads: live.machine.threads }) : null,
             now?.temperature !== null && now?.temperature !== undefined
               ? t("admin.temperature", {
-                  degrees: now.temperature.toLocaleString(language, { maximumFractionDigits: 0 }),
+                  degrees: now.temperature.toLocaleString(language, {
+                    maximumFractionDigits: 0,
+                  }),
                 })
               : null,
           ]
@@ -206,7 +241,9 @@ function Gauges({
             label={t("admin.cpu")}
             ceiling={1}
             series={[{ values: points.map((point) => point.processor) }]}
-            say={(index) => `${share(points[index]?.processor)} · ${when(index)}`}
+            say={(index) =>
+              `${share(points[index]?.processor)} · ${when(index)}`
+            }
           />
         }
       />
@@ -215,7 +252,9 @@ function Gauges({
         icon={MemoryIcon}
         label={t("admin.memory")}
         value={
-          now ? `${amountOfData(now.memory_used, language)} / ${amountOfData(now.memory_total, language)}` : "–"
+          now
+            ? `${amountOfData(now.memory_used, language)} / ${amountOfData(now.memory_total, language)}`
+            : "–"
         }
         note={now && now.memory_total > 0 ? share(memoryShare(now)) : undefined}
         curve={
@@ -240,10 +279,15 @@ function Gauges({
         }
         note={
           storageTotal > 0
-            ? t(disks.length === 1 ? "admin.storage_note_one" : "admin.storage_note", {
-                share: share(storageUsed / storageTotal),
-                disks: disks.length,
-              })
+            ? t(
+                disks.length === 1
+                  ? "admin.storage_note_one"
+                  : "admin.storage_note",
+                {
+                  share: share(storageUsed / storageTotal),
+                  disks: disks.length,
+                },
+              )
             : undefined
         }
         curve={
@@ -314,7 +358,10 @@ function Gauges({
         value={
           now?.load === null || now?.load === undefined
             ? "–"
-            : now.load.toLocaleString(language, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+            : now.load.toLocaleString(language, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              })
         }
         note={t("admin.load_note")}
         curve={
@@ -375,17 +422,28 @@ function Gauge({
 }
 
 /** When a point was, as precisely as the stretch it belongs to asks for. */
-function whenOf(at: string | undefined, reach: Reach, language: string): string {
+function whenOf(
+  at: string | undefined,
+  reach: Reach,
+  language: string,
+): string {
   if (!at) {
     return "";
   }
   const instant = new Date(at);
   switch (reach) {
     case "live":
-      return instant.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      return instant.toLocaleTimeString(language, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
     case "hour":
     case "day":
-      return instant.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" });
+      return instant.toLocaleTimeString(language, {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     case "week":
     case "month":
       return instant.toLocaleString(language, {
@@ -395,6 +453,9 @@ function whenOf(at: string | undefined, reach: Reach, language: string): string 
         minute: "2-digit",
       });
     case "year":
-      return instant.toLocaleDateString(language, { day: "numeric", month: "short" });
+      return instant.toLocaleDateString(language, {
+        day: "numeric",
+        month: "short",
+      });
   }
 }

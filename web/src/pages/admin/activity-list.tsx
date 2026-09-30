@@ -13,7 +13,13 @@ import type { ComponentType } from "react";
 import { api } from "../../api";
 import type { ActivityFamily, ActivityLine, ActivityPage } from "../../api";
 import { wasAbandoned } from "../../asking";
-import { FolderIcon, LockIcon, PlaybackIcon, ServerIcon, WarningIcon } from "../../icons";
+import {
+  FolderIcon,
+  LockIcon,
+  PlaybackIcon,
+  ServerIcon,
+  WarningIcon,
+} from "../../icons";
 import type { IconProps } from "../../icons";
 import { useJournalNews } from "../../live";
 import { useSettings } from "../../settings";
@@ -28,7 +34,12 @@ const FAMILY_ICONS: Record<ActivityFamily, ComponentType<IconProps>> = {
   refused: WarningIcon,
 };
 
-export const FAMILIES: ActivityFamily[] = ["access", "playback", "library", "server"];
+export const FAMILIES: ActivityFamily[] = [
+  "access",
+  "playback",
+  "library",
+  "server",
+];
 
 interface Following {
   lines: ActivityLine[];
@@ -42,7 +53,10 @@ interface Following {
  * The lines of these families, newest first: the newest page asked for again
  * whenever a line is written, the older ones kept once fetched.
  */
-export function useActivity(families: ActivityFamily[], most?: number): Following {
+export function useActivity(
+  families: ActivityFamily[],
+  most?: number,
+): Following {
   const [head, setHead] = useState<ActivityPage | null>(null);
   const [tail, setTail] = useState<ActivityPage | null>(null);
   const [failed, setFailed] = useState(false);
@@ -77,7 +91,9 @@ export function useActivity(families: ActivityFamily[], most?: number): Followin
   // its last line: a line written meanwhile moves the head, never the tail.
   const headLines = head?.lines ?? [];
   const last = headLines[headLines.length - 1]?.id ?? null;
-  const tailLines = (tail?.lines ?? []).filter((line) => last === null || line.id < last);
+  const tailLines = (tail?.lines ?? []).filter(
+    (line) => last === null || line.id < last,
+  );
   const lines = [...headLines, ...tailLines];
   const more = tail ? tail.more : (head?.more ?? false);
 
@@ -90,7 +106,10 @@ export function useActivity(families: ActivityFamily[], most?: number): Followin
     api
       .activity(wanted, oldest, undefined, most)
       .then((page) =>
-        setTail((was) => ({ lines: [...(was?.lines ?? []), ...page.lines], more: page.more })),
+        setTail((was) => ({
+          lines: [...(was?.lines ?? []), ...page.lines],
+          more: page.more,
+        })),
       )
       .catch(() => setFailed(true));
   }, [asked, oldest, most]);
@@ -115,12 +134,17 @@ export function ActivityLines({ lines }: { lines: ActivityLine[] }) {
       {lines.map((line) => {
         const said = sayLine(line, t);
         const FamilyIcon = FAMILY_ICONS[familyOf(line.kind)];
-        const state = line.level === "information" ? "" : ` state-${line.level}`;
+        const state =
+          line.level === "information" ? "" : ` state-${line.level}`;
         return (
           <div className="line activity-line" key={line.id}>
             {line.user_id ? (
               <span className={`line-mark line-mark-face${state}`}>
-                <Face name={whoOf(line, t)} avatar={line.user_avatar} className="account-face" />
+                <Face
+                  name={whoOf(line, t)}
+                  avatar={line.user_avatar}
+                  className="account-face"
+                />
               </span>
             ) : (
               <span className={`line-mark${state}`} aria-hidden="true">
@@ -131,7 +155,10 @@ export function ActivityLines({ lines }: { lines: ActivityLine[] }) {
               <span className="line-name">{said.title}</span>
               {said.note && <span className="line-note">{said.note}</span>}
             </span>
-            <span className="line-end" title={new Date(line.at).toLocaleString(language)}>
+            <span
+              className="line-end"
+              title={new Date(line.at).toLocaleString(language)}
+            >
               {whenItHappened(line.at, now, language, t)}
             </span>
           </div>
@@ -148,7 +175,11 @@ export function ActivityJournal({ families }: { families: ActivityFamily[] }) {
   const { lines, more, failed, older } = useActivity(families);
   return (
     <>
-      {failed && <p className="panel-notice panel-notice-trouble">{t("error.unreachable")}</p>}
+      {failed && (
+        <p className="panel-notice panel-notice-trouble">
+          {t("error.unreachable")}
+        </p>
+      )}
       <ActivityLines lines={lines} />
       {more && (
         <div className="panel-foot">

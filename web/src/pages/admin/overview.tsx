@@ -31,7 +31,12 @@ import {
 } from "../../icons";
 import type { IconProps } from "../../icons";
 import { useLibraries } from "../../libraries";
-import { howLongSince, howMany, outOfAHundred, releaseOf } from "../../readable";
+import {
+  howLongSince,
+  howMany,
+  outOfAHundred,
+  releaseOf,
+} from "../../readable";
 import { useRunning } from "../../running";
 import { useAttention } from "../../attention";
 import { useSettings } from "../../settings";
@@ -68,7 +73,10 @@ export function AdminOverview() {
             {t("activity.see_journal")}
             <ArrowRightIcon size={15} />
           </Link>
-          <Link className="button button-small button-accent" to="/admin/playback">
+          <Link
+            className="button button-small button-accent"
+            to="/admin/playback"
+          >
             {t("admin.see_playback")}
             <ArrowRightIcon size={15} />
           </Link>
@@ -77,7 +85,10 @@ export function AdminOverview() {
 
       <div className="panels">
         <SystemPanel card={overview.answer?.media_tools.card ?? null} />
-        <ServerPanel overview={overview.answer} unreachable={overview.failure !== null} />
+        <ServerPanel
+          overview={overview.answer}
+          unreachable={overview.failure !== null}
+        />
         <LibrariesPanel />
         <TasksPanel />
         <WatchPanel />
@@ -101,19 +112,33 @@ function useMinute(): number {
  * The server itself, beside what the machine spends: its name, whether all is
  * well, and the handful of facts every other answer rests on.
  */
-function ServerPanel({ overview, unreachable }: { overview: Overview | null; unreachable: boolean }) {
+function ServerPanel({
+  overview,
+  unreachable,
+}: {
+  overview: Overview | null;
+  unreachable: boolean;
+}) {
   const { t, language } = useSettings();
   const branding = useBranding();
   const now = useMinute();
 
   const worries = overview?.worries ?? [];
-  const state: State = unreachable ? "trouble" : worries.length > 0 ? "attention" : "ok";
+  const state: State = unreachable
+    ? "trouble"
+    : worries.length > 0
+      ? "attention"
+      : "ok";
 
   return (
     <section className="panel server-panel">
       <div className="server-who">
         <span className="server-mark" aria-hidden="true">
-          <ServerMark branding={branding} size={36} logoClassName="server-logo" />
+          <ServerMark
+            branding={branding}
+            size={36}
+            logoClassName="server-logo"
+          />
         </span>
         <div className="server-words">
           <h2>{branding?.server_name ?? overview?.server_name}</h2>
@@ -157,14 +182,28 @@ function ServerPanel({ overview, unreachable }: { overview: Overview | null; unr
         <Fact
           icon={DatabaseIcon}
           label={t("admin.database")}
-          value={overview && t(overview.database_ready ? "admin.ready" : "admin.to_check")}
-          state={overview ? (overview.database_ready ? "ok" : "trouble") : undefined}
+          value={
+            overview &&
+            t(overview.database_ready ? "admin.ready" : "admin.to_check")
+          }
+          state={
+            overview ? (overview.database_ready ? "ok" : "trouble") : undefined
+          }
         />
         <Fact
           icon={FfmpegIcon}
           label={t("admin.media_tools")}
-          value={overview && t(overview.media_tools.found ? "admin.found" : "admin.missing")}
-          state={overview ? (overview.media_tools.found ? "ok" : "trouble") : undefined}
+          value={
+            overview &&
+            t(overview.media_tools.found ? "admin.found" : "admin.missing")
+          }
+          state={
+            overview
+              ? overview.media_tools.found
+                ? "ok"
+                : "trouble"
+              : undefined
+          }
         />
         <Fact
           icon={GraphicsCardIcon}
@@ -190,7 +229,10 @@ function ServerPanel({ overview, unreachable }: { overview: Overview | null; unr
       </div>
 
       <div className="panel-foot">
-        <Link className="button button-small button-accent" to="/admin/diagnostics">
+        <Link
+          className="button button-small button-accent"
+          to="/admin/diagnostics"
+        >
           {t("admin.see_diagnostics")}
           <ArrowRightIcon size={15} />
         </Link>
@@ -222,7 +264,9 @@ function Fact({
         <span className="fact-label">{label}</span>
         <span className="fact-value">
           {value ?? "–"}
-          {state && <span className={`state-dot state-${state}`} aria-hidden="true" />}
+          {state && (
+            <span className={`state-dot state-${state}`} aria-hidden="true" />
+          )}
         </span>
       </span>
     </div>
@@ -238,9 +282,15 @@ function LibrariesPanel() {
   const hasMusic = libraries.some((library) => library.kind === "music");
 
   return (
-    <Panel icon={FolderIcon} title={t("admin.libraries")} lead={t("admin.libraries_lead")}>
+    <Panel
+      icon={FolderIcon}
+      title={t("admin.libraries")}
+      lead={t("admin.libraries_lead")}
+    >
       <div className="lines">
-        {libraries.length === 0 && <p className="empty-line">{t("admin.no_library")}</p>}
+        {libraries.length === 0 && (
+          <p className="empty-line">{t("admin.no_library")}</p>
+        )}
         {libraries.map((library) => (
           <LibraryLine key={library.id} library={library} language={language} />
         ))}
@@ -262,7 +312,10 @@ function LibrariesPanel() {
       {scanning && <WorkUnderWay job={scanning} />}
 
       <div className="panel-foot">
-        <Link className="button button-small button-accent" to="/admin/libraries">
+        <Link
+          className="button button-small button-accent"
+          to="/admin/libraries"
+        >
           {t("admin.manage_libraries")}
           <ArrowRightIcon size={15} />
         </Link>
@@ -271,7 +324,13 @@ function LibrariesPanel() {
   );
 }
 
-function LibraryLine({ library, language }: { library: Library; language: string }) {
+function LibraryLine({
+  library,
+  language,
+}: {
+  library: Library;
+  language: string;
+}) {
   const { t } = useSettings();
   return (
     <div className="line">
@@ -283,7 +342,9 @@ function LibraryLine({ library, language }: { library: Library; language: string
         <span className="line-note">{t(`kind.${library.kind}`)}</span>
       </span>
       <span className="line-end">
-        <span className="line-figure">{library.works.toLocaleString(language)}</span>
+        <span className="line-figure">
+          {library.works.toLocaleString(language)}
+        </span>
         {t(library.works === 1 ? "admin.titles_one" : "admin.titles")}
       </span>
     </div>
@@ -297,7 +358,9 @@ function WorkUnderWay({ job }: { job: Job }) {
     <div className="under-way">
       <span className="under-way-words">
         <span>{t(`jobs.${job.kind}`)}</span>
-        {job.step && <span className="line-note">{t(`jobs.step.${job.step}`)}</span>}
+        {job.step && (
+          <span className="line-note">{t(`jobs.step.${job.step}`)}</span>
+        )}
         {job.ratio !== null && (
           <span className="under-way-share">{outOfAHundred(job.ratio)} %</span>
         )}
@@ -305,7 +368,9 @@ function WorkUnderWay({ job }: { job: Job }) {
       <span className="meter">
         <span
           className="meter-fill"
-          style={{ width: `${job.ratio === null ? 0 : outOfAHundred(job.ratio)}%` }}
+          style={{
+            width: `${job.ratio === null ? 0 : outOfAHundred(job.ratio)}%`,
+          }}
         />
       </span>
     </div>
@@ -320,7 +385,11 @@ function TasksPanel() {
   const next = tasks.answer?.next_run ?? null;
 
   return (
-    <Panel icon={TasksIcon} title={t("admin.tasks")} lead={t("admin.tasks_lead")}>
+    <Panel
+      icon={TasksIcon}
+      title={t("admin.tasks")}
+      lead={t("admin.tasks_lead")}
+    >
       {jobs.length === 0 ? (
         <p className="empty-line">{t("jobs.none")}</p>
       ) : (
@@ -367,7 +436,11 @@ function WatchPanel() {
   const shown = points ?? [];
 
   return (
-    <Panel icon={WarningIcon} title={t("admin.watch")} lead={t("admin.watch_lead")}>
+    <Panel
+      icon={WarningIcon}
+      title={t("admin.watch")}
+      lead={t("admin.watch_lead")}
+    >
       {points !== null && shown.length === 0 && (
         <p className="empty-line">{t("attention.none")}</p>
       )}
@@ -376,7 +449,10 @@ function WatchPanel() {
           const said = sayPoint(point, t, language);
           return (
             <Link className="line line-link" to={said.to} key={index}>
-              <span className={`line-mark state-${point.state}`} aria-hidden="true">
+              <span
+                className={`line-mark state-${point.state}`}
+                aria-hidden="true"
+              >
                 <WarningIcon size={18} />
               </span>
               <span className="line-words">
@@ -391,7 +467,10 @@ function WatchPanel() {
       </div>
       {shown.some((point) => point.may_be_seen) && (
         <div className="panel-foot">
-          <button className="button button-small" onClick={() => void markSeen()}>
+          <button
+            className="button button-small"
+            onClick={() => void markSeen()}
+          >
             {t("attention.mark_seen")}
           </button>
         </div>
@@ -407,10 +486,22 @@ function PeoplePanel({ overview }: { overview: Overview | null }) {
     value === undefined ? "–" : value.toLocaleString(language);
 
   return (
-    <Panel icon={PeopleIcon} title={t("admin.people")} lead={t("admin.people_lead")}>
+    <Panel
+      icon={PeopleIcon}
+      title={t("admin.people")}
+      lead={t("admin.people_lead")}
+    >
       <div className="stats stats-three">
-        <Stat icon={PeopleIcon} label={t("admin.accounts")} value={count(overview?.accounts)} />
-        <Stat icon={DeviceIcon} label={t("admin.devices")} value={count(overview?.devices)} />
+        <Stat
+          icon={PeopleIcon}
+          label={t("admin.accounts")}
+          value={count(overview?.accounts)}
+        />
+        <Stat
+          icon={DeviceIcon}
+          label={t("admin.devices")}
+          value={count(overview?.devices)}
+        />
         <Stat
           icon={ClockIcon}
           label={t("admin.active_today")}

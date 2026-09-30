@@ -54,13 +54,21 @@ export function RatingsPanel() {
           : null;
 
   return (
-    <Panel icon={StarIcon} title={t("admin.ratings")} lead={t("admin.ratings_lead")}>
+    <Panel
+      icon={StarIcon}
+      title={t("admin.ratings")}
+      lead={t("admin.ratings_lead")}
+    >
       <Setting label={t("admin.imdb")} why={t("admin.imdb_why")}>
         {shown && (
-          <span className={`state-pill ${shown.imdb_fetched_at ? "state-ok" : "state-attention"}`}>
+          <span
+            className={`state-pill ${shown.imdb_fetched_at ? "state-ok" : "state-attention"}`}
+          >
             <span className="state-dot" aria-hidden="true" />
             {shown.imdb_fetched_at
-              ? t("admin.imdb_fetched", { since: howLongSince(shown.imdb_fetched_at, Date.now(), t) })
+              ? t("admin.imdb_fetched", {
+                  since: howLongSince(shown.imdb_fetched_at, Date.now(), t),
+                })
               : t("admin.imdb_never")}
           </span>
         )}
@@ -80,7 +88,9 @@ export function RatingsPanel() {
                 type="text"
                 className="field-line"
                 aria-label={t("admin.omdb_key")}
-                placeholder={shown.has_omdb_key ? "••••••••" : t("admin.omdb_placeholder")}
+                placeholder={
+                  shown.has_omdb_key ? "••••••••" : t("admin.omdb_placeholder")
+                }
                 autoComplete="off"
                 spellCheck={false}
                 value={typed}
@@ -110,15 +120,22 @@ export function RatingsPanel() {
       </Setting>
 
       {said && (
-        <p className={`panel-notice${shown?.tried === "kept" ? " panel-notice-ok" : " panel-notice-trouble"}`}>
+        <p
+          className={`panel-notice${shown?.tried === "kept" ? " panel-notice-ok" : " panel-notice-trouble"}`}
+        >
           {t(said)}
         </p>
       )}
       {told.failure && (
-        <p className="panel-notice panel-notice-trouble">{t(refusalKey(refusalOf(told.failure)))}</p>
+        <p className="panel-notice panel-notice-trouble">
+          {t(refusalKey(refusalOf(told.failure)))}
+        </p>
       )}
 
-      <details className="ratings-guide" open={shown !== null && !shown.has_omdb_key}>
+      <details
+        className="ratings-guide"
+        open={shown !== null && !shown.has_omdb_key}
+      >
         <summary>{t("admin.omdb_guide")}</summary>
         <ol>
           <li>
@@ -134,7 +151,9 @@ export function RatingsPanel() {
               <button
                 type="button"
                 className="button button-small"
-                onClick={async () => setCopied(await putOnTheClipboard(WHAT_THE_KEY_IS_FOR))}
+                onClick={async () =>
+                  setCopied(await putOnTheClipboard(WHAT_THE_KEY_IS_FOR))
+                }
               >
                 {t(copied ? "admin.omdb_copied" : "admin.omdb_copy")}
               </button>

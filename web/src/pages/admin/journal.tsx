@@ -92,57 +92,66 @@ export function TechnicalJournal({ bare = false }: { bare?: boolean }) {
   );
   const lines = (
     <>
-    <div className="journal-filters">
-      <label className="journal-search">
-        <SearchIcon size={18} />
-        <input
-          type="search"
-          value={holding}
-          placeholder={t("journal.holding")}
-          aria-label={t("journal.holding")}
-          onChange={(event) => setHolding(event.target.value)}
-        />
-      </label>
-      <div className="chips">
-        <button
-          className={`chip${ticked.length === 0 ? " chip-on" : ""}`}
-          aria-pressed={ticked.length === 0}
-          onClick={everyTag}
-        >
-          {t("journal.every_tag")}
-        </button>
-        {journal.tags.map((tag) => (
+      <div className="journal-filters">
+        <label className="journal-search">
+          <SearchIcon size={18} />
+          <input
+            type="search"
+            value={holding}
+            placeholder={t("journal.holding")}
+            aria-label={t("journal.holding")}
+            onChange={(event) => setHolding(event.target.value)}
+          />
+        </label>
+        <div className="chips">
           <button
-            key={tag.name}
-            className={`chip${ticked.includes(tag.name) ? " chip-on" : ""}`}
-            aria-pressed={ticked.includes(tag.name)}
-            onClick={() => toggle(tag.name)}
+            className={`chip${ticked.length === 0 ? " chip-on" : ""}`}
+            aria-pressed={ticked.length === 0}
+            onClick={everyTag}
           >
-            {tag.name}
-            <span className="chip-count">{tag.lines}</span>
+            {t("journal.every_tag")}
           </button>
-        ))}
+          {journal.tags.map((tag) => (
+            <button
+              key={tag.name}
+              className={`chip${ticked.includes(tag.name) ? " chip-on" : ""}`}
+              aria-pressed={ticked.includes(tag.name)}
+              onClick={() => toggle(tag.name)}
+            >
+              {tag.name}
+              <span className="chip-count">{tag.lines}</span>
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
 
-    {failed && <p className="panel-notice panel-notice-trouble">{t("error.unreachable")}</p>}
+      {failed && (
+        <p className="panel-notice panel-notice-trouble">
+          {t("error.unreachable")}
+        </p>
+      )}
 
-    {shown && (
-      <>
-        <p className="panel-say">{t("report.select")}</p>
-        <textarea className="report-text" ref={selectable} readOnly value={shown} />
-      </>
-    )}
+      {shown && (
+        <>
+          <p className="panel-say">{t("report.select")}</p>
+          <textarea
+            className="report-text"
+            ref={selectable}
+            readOnly
+            value={shown}
+          />
+        </>
+      )}
 
-    {journal.lines.length === 0 ? (
-      <p className="empty-line">{t("journal.nothing")}</p>
-    ) : (
-      <div className="log">
-        {journal.lines.map((line, index) => (
-          <Line key={`${line.at}-${index}`} line={line} />
-        ))}
-      </div>
-    )}
+      {journal.lines.length === 0 ? (
+        <p className="empty-line">{t("journal.nothing")}</p>
+      ) : (
+        <div className="log">
+          {journal.lines.map((line, index) => (
+            <Line key={`${line.at}-${index}`} line={line} />
+          ))}
+        </div>
+      )}
     </>
   );
 
@@ -155,7 +164,12 @@ export function TechnicalJournal({ bare = false }: { bare?: boolean }) {
     );
   }
   return (
-    <Panel icon={JournalIcon} title={t("admin.journal_lines")} className="journal-panel" action={actions}>
+    <Panel
+      icon={JournalIcon}
+      title={t("admin.journal_lines")}
+      className="journal-panel"
+      action={actions}
+    >
       {lines}
     </Panel>
   );
@@ -171,7 +185,9 @@ function ActivityPanel() {
   const [address, setAddress] = useSearchParams();
   const ticked = (address.get("families") ?? "")
     .split(",")
-    .filter((word): word is ActivityFamily => (FAMILIES as string[]).includes(word));
+    .filter((word): word is ActivityFamily =>
+      (FAMILIES as string[]).includes(word),
+    );
 
   const tick = (family: ActivityFamily | null) => {
     const next = new URLSearchParams(address);
@@ -184,7 +200,11 @@ function ActivityPanel() {
   };
 
   return (
-    <Panel icon={HistoryIcon} title={t("activity.title")} lead={t("activity.lead")}>
+    <Panel
+      icon={HistoryIcon}
+      title={t("activity.title")}
+      lead={t("activity.lead")}
+    >
       <div className="chips">
         <button
           className={`chip${ticked.length === 0 ? " chip-on" : ""}`}
