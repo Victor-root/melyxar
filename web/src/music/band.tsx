@@ -7,6 +7,7 @@
  * gives it its place after the others: the band knows nothing of albums.
  */
 
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Library } from "../api";
 import { useShownPicture } from "../components/picture";
@@ -17,6 +18,9 @@ import type { Album } from "./api";
 
 /** As many covers as the other tiles fan out posters. */
 const IN_A_FAN = 5;
+
+/** How many covers, from the middle out, have a record behind them. */
+const WITH_A_RECORD = 3;
 
 /** What the tile fans out: the newest albums with a cover first, as the
  *  other tiles put their posters ahead of the holes. */
@@ -29,6 +33,9 @@ export function coversOf(albums: Album[]): Album[] {
 export function MusicBandTile({ libraries, albums }: { libraries: Library[]; albums: Album[] }) {
   const { t } = useSettings();
   const fan = coversOf(albums);
+  // The records are drawn the first time the pointer or the keyboard comes
+  // to the tile, since nothing of them is seen before.
+  const [woken, setWoken] = useState(false);
   if (!libraries.some((library) => library.kind === "music")) {
     return null;
   }
@@ -36,6 +43,8 @@ export function MusicBandTile({ libraries, albums }: { libraries: Library[]; alb
     <Link
       className="band-tile band-tile-music"
       to={whereAKindLeads("music", libraries)}
+      onPointerEnter={() => setWoken(true)}
+      onFocus={() => setWoken(true)}
       style={{ ["--tile-color" as string]: fan[0]?.color ?? "var(--surface-raised)" }}
     >
       {fan.length > 0 ? (
@@ -45,7 +54,7 @@ export function MusicBandTile({ libraries, albums }: { libraries: Library[]; alb
           </span>
           <span className="band-halo" aria-hidden="true" />
           <Fan fan={fan} mirror />
-          <Fan fan={fan} />
+          <Fan fan={fan} records={woken} />
         </>
       ) : (
         <span className="band-mark" aria-hidden="true">
@@ -65,20 +74,23 @@ export function MusicBandTile({ libraries, albums }: { libraries: Library[]; alb
   );
 }
 
-function Fan({ fan, mirror }: { fan: Album[]; mirror?: boolean }) {
+/** Never in the floor's reflection: a filter blurs and ripples it, and a
+ *  turning record under it would have that filter redone every frame. */
+function Fan({ fan, mirror, records }: { fan: Album[]; mirror?: boolean; records?: boolean }) {
   return (
     <span className={`band-posters band-fan-${fan.length}${mirror ? " band-mirror" : ""}`} aria-hidden="true">
-      {fan.map((album) => (
-        <Cover key={album.id} album={album} />
+      {fan.map((album, at) => (
+        <Cover key={album.id} album={album} record={records === true && at < WITH_A_RECORD} />
       ))}
     </span>
   );
 }
 
-function Cover({ album }: { album: Album }) {
+function Cover({ album, record }: { album: Album; record: boolean }) {
   const { picture, itDidNotLoad } = useShownPicture(album.cover);
   return (
     <span className="band-poster" style={{ ["--card-color" as string]: album.color ?? "var(--surface-raised)" }}>
+      {record && <span className="band-record" />}
       {picture ? (
         <img
           src={picture.src}
