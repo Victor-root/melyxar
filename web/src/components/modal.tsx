@@ -49,12 +49,17 @@ export function Modal({
 }) {
   const { t } = useSettings();
   const panel = useRef<HTMLDivElement>(null);
+  /* Read at the moment of use: a parent that draws again, at every letter
+     typed in a field, hands a new function each time, and an effect that
+     depended on it would take the focus back to the panel at every one. */
+  const shutRef = useRef(onClose);
+  shutRef.current = onClose;
 
   useEffect(() => {
     const shut = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        shutRef.current();
       }
     };
     document.addEventListener("keydown", shut);
@@ -68,7 +73,7 @@ export function Modal({
       document.removeEventListener("keydown", shut);
       document.body.style.overflow = before;
     };
-  }, [onClose]);
+  }, []);
 
   return createPortal(
     <div
