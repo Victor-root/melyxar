@@ -11,7 +11,7 @@ import type { AccessMode, AccessStatus } from "../../api";
 import { refusalAbout } from "../../asking";
 import { Panel, Picker, Setting } from "../../components/panel";
 import { useToast } from "../../components/toasts";
-import { ShieldIcon } from "../../icons";
+import { ShieldIcon, TickIcon } from "../../icons";
 import { useSettings } from "../../settings";
 import type { Draft } from "./access";
 import { addressAfter, changed, draftOf, namesOf, runningOut } from "./access";
@@ -123,6 +123,7 @@ export function AccessPanel() {
       icon={ShieldIcon}
       title={t("admin.access")}
       lead={t("admin.access_lead")}
+      wide
     >
       {certificate && (
         <p
@@ -146,23 +147,40 @@ export function AccessPanel() {
       )}
       {status && draft && (
         <>
-          <Setting
-            stacked
-            label={t("admin.access_mode")}
-            why={t(`admin.access.${draft.mode}_why`)}
+          <div
+            className="access-choices"
+            role="radiogroup"
+            aria-label={t("admin.access")}
           >
-            <Picker<AccessMode>
-              label={t("admin.access_mode")}
-              value={draft.mode}
-              options={ACCESS.map(
-                (way) => [way, t(`admin.access.${way}`)] as const,
-              )}
-              onPick={(mode) => edit({ mode })}
-              disabled={busy}
-            />
-          </Setting>
+            {ACCESS.map((way) => {
+              const on = draft.mode === way;
+              return (
+                <button
+                  key={way}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  className={`access-choice${on ? " access-choice-on" : ""}`}
+                  disabled={busy}
+                  onClick={() => edit({ mode: way })}
+                >
+                  {on && (
+                    <span className="access-choice-tick" aria-hidden="true">
+                      <TickIcon size={14} />
+                    </span>
+                  )}
+                  <span className="setting-label">
+                    {t(`admin.access.${way}`)}
+                  </span>
+                  <span className="setting-why">
+                    {t(`admin.access.${way}_why`)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           {draft.mode === "provided" && (
-            <div className="access-form">
+            <div className="access-form access-fields">
               <Field
                 label={t("admin.access_certificate_path")}
                 why={t("admin.access_certificate_path_why")}
@@ -181,7 +199,6 @@ export function AccessPanel() {
           )}
           {draft.mode !== "proxy" && (
             <Setting
-              stacked
               label={t("admin.access_redirect")}
               why={t(
                 `admin.access_redirect.${draft.redirect ? "on" : "off"}_why`,

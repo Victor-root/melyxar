@@ -359,18 +359,12 @@ export const FINDABLE: FindableSection[] = [
       ["admin.refused_sign_ins", "admin.refused_sign_ins_lead"],
       ["admin.brake_after", "admin.brake_after_why"],
       ["admin.access", "admin.access_lead"],
-      ["admin.access_mode"],
       ["admin.access_redirect"],
     ],
     choices: {
       "admin.access_redirect": [
         "admin.access_redirect.on",
         "admin.access_redirect.off",
-      ],
-      "admin.access_mode": [
-        "admin.access.proxy",
-        "admin.access.self_signed",
-        "admin.access.provided",
       ],
     },
   },
