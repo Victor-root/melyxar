@@ -17,7 +17,7 @@ import type { Album, Found, MusicPlaylist, Song } from "./api";
 import { useMusicMarks } from "./marks";
 import { useMusic } from "./player/player";
 import { MusicFound, foundAny } from "./search";
-import { SongList } from "./songs";
+import { SongTiles } from "./song-tiles";
 import { AlbumTile, PlaylistTile } from "./tiles";
 
 /** As many albums as the row of the newest on the home page. */
@@ -76,7 +76,7 @@ function Listened({ title, songs, onPlay }: { title: string; songs: Song[]; onPl
   return (
     <section className="section">
       <RowHead title={title} />
-      <SongList songs={songs} numbered="place" onPlay={onPlay} />
+      <SongTiles songs={songs} onPlay={onPlay} />
     </section>
   );
 }
