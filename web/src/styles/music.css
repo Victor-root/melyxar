@@ -603,7 +603,9 @@
   --music-bar-height: 112px;
 }
 
-:root[data-music-bar] .shell-scroll {
+/* The page ends where the bar begins, so the bar is a part of the page: it
+   shows the same ground and the same backdrop, and nothing scrolls under it. */
+:root[data-music-bar] .shell {
   padding-bottom: var(--music-bar-height);
 }
 
@@ -629,8 +631,6 @@
   justify-content: center;
   height: var(--music-bar-height);
   padding: 0 var(--player-inset);
-  isolation: isolate;
-  background: var(--surface-raised);
   /* The rim a card wears under the pointer, along the top edge only. */
   box-shadow:
     inset 0 1.5px 0 0 var(--accent-bright),
@@ -639,36 +639,29 @@
   color: var(--text);
 }
 
-/* Behind everything the bar holds, faint enough for white to read over it
-   and strong enough to give the bar the colour of the song. */
-.music-bar-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  /* Clipped here rather than on the bar, whose words above its buttons must
-     be free to leave it. */
-  overflow: hidden;
-  /* The ground is the accent of the account, deepened: the cover only gives
-     it its light and shade, never its colour. */
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--accent) 16%, var(--surface-raised)),
-    color-mix(in srgb, var(--accent) 8%, var(--surface-raised))
-  );
-  pointer-events: none;
+/* Part of the page, so in the colours of the theme it is read in: the
+   player's own white is for a picture that is always dark. */
+.music-bar-dock .player-button,
+.music-bar-dock .player-clock {
+  color: var(--text);
+  text-shadow: none;
 }
 
-.music-bar-backdrop img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.32;
-  mix-blend-mode: overlay;
-  /* Blurred once, on a bar that is a hundred points tall and never moves: the
-     scale keeps the edges of the blur out of sight. Grey, so that it lights
-     and shades the accent without bringing a colour of its own. */
-  filter: blur(28px) grayscale(1) contrast(1.2);
-  transform: scale(1.25);
+.music-bar-dock .player-button:hover:not(:disabled) {
+  color: var(--accent-bright);
+}
+
+.music-bar-dock .player-button-lit {
+  color: var(--accent-bright);
+}
+
+.music-bar-dock .player-rail-track,
+.music-bar-dock .player-loudness::before {
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+}
+
+.music-bar-dock .player-rail-held {
+  background: color-mix(in srgb, var(--text) 34%, transparent);
 }
 
 .music-bar-now .music-now-cover {
