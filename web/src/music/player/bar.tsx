@@ -47,8 +47,7 @@ export function MusicBar() {
   const song = music.song;
 
   return (
-    <div className="music-bar-dock music-dark" role="region" aria-label={t("music.player")}>
-      <Backdrop pictures={song.cover} />
+    <div className="music-bar-dock" role="region" aria-label={t("music.player")}>
       <Rail music={music} />
       <div className="music-bar-row">
         <button
@@ -80,29 +79,6 @@ export function MusicBar() {
         </div>
       </div>
     </div>
-  );
-}
-
-/** The cover of what is playing, enlarged and blurred behind the whole bar in
-    the accent of the account: the light and shade of the song, which is what
-    sets the bar apart from the page under it, in the colour of the rest of the
-    interface. */
-function Backdrop({ pictures }: { pictures: Picture[] }) {
-  const { picture, itDidNotLoad } = useShownPicture(pictures);
-  if (!picture) {
-    return null;
-  }
-  return (
-    <span className="music-bar-backdrop" aria-hidden="true">
-      <img
-        src={picture.src}
-        srcSet={picture.srcSet || undefined}
-        sizes="160px"
-        alt=""
-        draggable={false}
-        onError={itDidNotLoad}
-      />
-    </span>
   );
 }
 
