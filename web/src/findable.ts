@@ -174,7 +174,10 @@ export const FINDABLE: FindableSection[] = [
       ["settings.music_tag_preview", "settings.music_tag_preview_why"],
     ],
     choices: {
-      "settings.music_film": ["settings.music_film.stop", "settings.music_film.pause"],
+      "settings.music_film": [
+        "settings.music_film.stop",
+        "settings.music_film.pause",
+      ],
       "settings.music_volume_mode": [
         "settings.music_volume_mode.track",
         "settings.music_volume_mode.album",
@@ -305,7 +308,11 @@ export const FINDABLE: FindableSection[] = [
       ["admin.thumbnails_grid", "settings.thumbnails_shape_why"],
     ],
     choices: {
-      "admin.codecs": ["admin.codec.av1", "admin.codec.hevc", "admin.codec.h264"],
+      "admin.codecs": [
+        "admin.codec.av1",
+        "admin.codec.hevc",
+        "admin.codec.h264",
+      ],
     },
   },
   {
@@ -321,7 +328,10 @@ export const FINDABLE: FindableSection[] = [
       ["admin.right.may_delete_from_disk", "users.may_delete_from_disk_why"],
       ["admin.limit_streams", "users.streams_why"],
       ["admin.right.may_download", "users.may_download_why"],
-      ["admin.right.may_manage_collections", "users.may_manage_collections_why"],
+      [
+        "admin.right.may_manage_collections",
+        "users.may_manage_collections_why",
+      ],
       ["admin.right.may_edit_tags", "users.may_edit_tags_why"],
       ["admin.right.may_upload", "users.may_upload_why"],
       ["admin.limit_age"],
@@ -350,14 +360,18 @@ export const FINDABLE: FindableSection[] = [
       ["admin.brake", "admin.brake_lead"],
       ["admin.brake_after", "admin.brake_after_why"],
       ["admin.access", "admin.access_lead"],
-      ["admin.access_redirect", "admin.access_redirect_why"],
+      ["admin.access_mode"],
+      ["admin.access_redirect"],
     ],
     choices: {
-      "admin.access": [
+      "admin.access_redirect": [
+        "admin.access_redirect.on",
+        "admin.access_redirect.off",
+      ],
+      "admin.access_mode": [
         "admin.access.proxy",
         "admin.access.self_signed",
         "admin.access.provided",
-        "admin.access.automatic",
       ],
     },
   },
@@ -379,19 +393,14 @@ export const FINDABLE: FindableSection[] = [
     path: "journal",
     name: "admin.journal",
     files: ["pages/admin/journal.tsx"],
-    named: [
-      ["admin.journal_lines"],
-      ["activity.title", "activity.lead"],
-    ],
+    named: [["admin.journal_lines"], ["activity.title", "activity.lead"]],
   },
   {
     area: "admin",
     path: "diagnostics",
     name: "admin.diagnostics",
     files: ["pages/admin/diagnostics.tsx"],
-    named: [
-      ["admin.report", "admin.report_lead"],
-    ],
+    named: [["admin.report", "admin.report_lead"]],
   },
   {
     area: "admin",
@@ -418,7 +427,10 @@ export const FINDABLE: FindableSection[] = [
       ["activity.kept", "activity.kept_why"],
     ],
     choices: {
-      "admin.door_background": ["admin.door_background.abstract", "admin.door_background.library"],
+      "admin.door_background": [
+        "admin.door_background.abstract",
+        "admin.door_background.library",
+      ],
     },
   },
 ];
@@ -472,7 +484,13 @@ export function find(
   for (const section of FINDABLE.filter((one) => one.area === area)) {
     const name = t(section.name);
     if (matches(name)) {
-      byName.push({ area, path: section.path, said: name, section: name, key: null });
+      byName.push({
+        area,
+        path: section.path,
+        said: name,
+        section: name,
+        key: null,
+      });
     }
     for (const [key, why] of section.named) {
       const said = t(key);
@@ -498,7 +516,10 @@ export function find(
     }
   }
   const first = asked[0];
-  const leads = (one: Found) => folded(one.said).split(" ").some((word) => word.startsWith(first));
+  const leads = (one: Found) =>
+    folded(one.said)
+      .split(" ")
+      .some((word) => word.startsWith(first));
   return [
     ...byName.filter(leads),
     ...byName.filter((one) => !leads(one)),
