@@ -8,13 +8,14 @@
  * going back to the library finds it the way it was left.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
 import { PageBackdrop } from "../components/backdrop";
 import { Picker } from "../components/panel";
 import { ArrowRightIcon, CloseIcon } from "../icons";
+import { landOn, scrollerOf } from "../landing";
 import { useLibraryVersion } from "../libraries";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
@@ -30,7 +31,7 @@ import { PlayTools } from "./play-tools";
 import { TabsBar } from "./tabs-bar";
 import { openTab, shownTabs } from "./tabs";
 import type { MusicTab } from "./tabs";
-import { AlbumTile, ArtistTile } from "./tiles";
+import { AlbumTile, ArtistTile, LetterStarts } from "./tiles";
 
 
 const ALBUM_ORDERS: AlbumOrder[] = ["title", "artist", "year", "added"];
@@ -127,12 +128,22 @@ function AlbumsTab({ library }: { library: string }) {
           <span className="count">{howMany(albums.total, "music.albums_count", t)}</span>
         )}
       </div>
-      <Lettered paged={albums} letters={letters} empty="music.no_album">
-        <div className="music-grid">
-          {albums.items.map((album, index) => (
-            <AlbumTile key={album.id} album={album} index={index} />
-          ))}
-        </div>
+      <Lettered
+        paged={albums}
+        letters={letters}
+        listKey={`${library}|${order}|${descending}|${genre ?? ""}`}
+        empty="music.no_album"
+      >
+        {(starts) => (
+          <div className="music-grid">
+            {albums.items.map((album, index) => (
+              <Fragment key={album.id}>
+                {starts?.offset === index && <LetterStarts offset={index} letter={starts.letter} />}
+                <AlbumTile album={album} index={index} />
+              </Fragment>
+            ))}
+          </div>
+        )}
       </Lettered>
     </>
   );
@@ -155,12 +166,22 @@ function ArtistsTab({ library, albumArtistsOnly }: { library: string; albumArtis
           <span className="count">{howMany(artists.total, "music.artists_count", t)}</span>
         )}
       </div>
-      <Lettered paged={artists} letters={letters} empty="music.no_artist">
-        <div className="music-grid music-grid-artists">
-          {artists.items.map((artist, index) => (
-            <ArtistTile key={artist.id} artist={artist} index={index} />
-          ))}
-        </div>
+      <Lettered
+        paged={artists}
+        letters={letters}
+        listKey={`${library}|${albumArtistsOnly}`}
+        empty="music.no_artist"
+      >
+        {(starts) => (
+          <div className="music-grid music-grid-artists">
+            {artists.items.map((artist, index) => (
+              <Fragment key={artist.id}>
+                {starts?.offset === index && <LetterStarts offset={index} letter={starts.letter} round />}
+                <ArtistTile artist={artist} index={index} />
+              </Fragment>
+            ))}
+          </div>
+        )}
       </Lettered>
     </>
   );
@@ -206,7 +227,7 @@ function SongsTab({ library }: { library: string }) {
           <span className="count">{howMany(songs.total, "music.songs_count", t)}</span>
         )}
       </div>
-      <Lettered paged={songs} letters={null} empty="music.no_song">
+      <Lettered paged={songs} letters={null} listKey={`${library}|${order}|${descending}`} empty="music.no_song">
         <SongList songs={songs.items} numbered="place" onPlay={(index) => player.play(songs.items, index)} />
       </Lettered>
     </>
@@ -298,6 +319,12 @@ function useInitials(
   return letters;
 }
 
+/** The place in a list a letter begins at, and the letter. */
+interface LetterMark {
+  offset: number;
+  letter: string;
+}
+
 /**
  * A list, what it says while it is empty, the letters beside it, and what
  * reads its next page as its end comes near.
@@ -305,13 +332,18 @@ function useInitials(
 function Lettered<T>({
   paged,
   letters,
+  listKey,
   empty,
   children,
 }: {
   paged: Paged<T>;
   letters: Initial[] | null;
+  /** What the list is, so the letter marked is dropped when it is read
+   *  another way. */
+  listKey: string;
   empty: string;
-  children: ReactNode;
+  /** The list, given where the letter last jumped to begins. */
+  children: ReactNode | ((starts: LetterMark | null) => ReactNode);
 }) {
   const { t } = useSettings();
   const holder = useRef<HTMLDivElement>(null);
@@ -335,16 +367,38 @@ function Lettered<T>({
     return () => watcher.disconnect();
   }, [loadMore, more]);
 
+  /* Where the letter last jumped to begins, marked in the list itself, and
+     kept until another letter is chosen or the list is read another way. */
+  const [starts, setStarts] = useState<LetterMark | null>(null);
+  const [landing, setLanding] = useState<LetterMark | null>(null);
+  useEffect(() => setStarts(null), [listKey]);
+
   const jumpTo = async (letter: Initial) => {
     if (await paged.reach(letter.offset)) {
-      // Drawn on the next frame, once the pages read on the way are.
-      requestAnimationFrame(() =>
-        holder.current
-          ?.querySelector<HTMLElement>(`[data-index="${letter.offset}"]`)
-          ?.scrollIntoView({ block: "start" }),
-      );
+      const mark = { offset: letter.offset, letter: letter.letter };
+      setStarts(mark);
+      setLanding(mark);
     }
   };
+
+  const { items } = paged;
+  useEffect(() => {
+    if (!landing) {
+      return;
+    }
+    const target = holder.current?.querySelector<HTMLElement>(`[data-starts="${landing.offset}"]`);
+    // Not drawn yet: the entries that hold it are on their way to the screen,
+    // and this runs again when they arrive.
+    if (!target) {
+      return;
+    }
+    const box = scrollerOf(target);
+    if (!box) {
+      setLanding(null);
+      return;
+    }
+    return landOn(target, box, () => setLanding(null));
+  }, [landing, items]);
 
   const shownLetters = letters && letters.length > 1 ? letters : null;
   return (
@@ -356,7 +410,7 @@ function Lettered<T>({
         ref={holder}
       >
         <div className="music-list">
-          {children}
+          {typeof children === "function" ? children(starts) : children}
           <div ref={end} aria-hidden="true" />
         </div>
         {shownLetters && (
