@@ -295,13 +295,27 @@
 /* A cover is square: as tall as a poster it would be half as wide again,
    so it is drawn two thirds as large, from its foot, and fans out over the
    same room the posters of the other tiles do. */
+.band-tile-music {
+  /* How large a cover is drawn next to the height a poster would have. The
+     covers are as large as the tile lets them be, the outer ones stopping
+     just inside its sides. */
+  --size: 0.75;
+}
+
+.band-tile-music .band-posters {
+  /* The same places as the posters' on the tile, whatever the size: bigger
+     covers do not spread further, they overlap a little more. */
+  --spread: calc(0.667 / var(--size));
+}
+
 .band-tile-music .band-poster {
   aspect-ratio: 1;
-  scale: 0.667;
+  scale: var(--size);
   /* The scale is applied to the whole move that centres the cover, so it
-     leaves the cover a sixth of its width to the right of where it stands.
-     Taken back here, before the scale, in the cover's own width. */
-  translate: -16.667% 0;
+     leaves the cover to the right of where it stands by what the scale takes
+     off half its width. Taken back here, before the scale, in the cover's
+     own width. */
+  translate: calc((var(--size) - 1) * 50%) 0;
   /* Open, so that the record can come out past its edge; the corners are
      rounded by what is inside instead. */
   overflow: visible;
@@ -352,7 +366,7 @@
     ),
     var(--app-ground);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
-  translate: 0 calc(-42% * var(--open));
+  translate: 0 calc(-32% * var(--open));
   transition: translate var(--calm) var(--ease);
 }
 
@@ -436,7 +450,7 @@
 .band-fan-5 > :nth-child(2) {
   z-index: 2;
   height: 56%;
-  --shift: calc(-84% - 10% * var(--open));
+  --shift: calc((-84% - 10% * var(--open)) * var(--spread, 1));
   --lean: calc(-7deg - 2deg * var(--open));
 }
 
@@ -444,7 +458,7 @@
 .band-fan-5 > :nth-child(3) {
   z-index: 2;
   height: 56%;
-  --shift: calc(84% + 10% * var(--open));
+  --shift: calc((84% + 10% * var(--open)) * var(--spread, 1));
   --lean: calc(7deg + 2deg * var(--open));
 }
 
@@ -454,14 +468,14 @@
 .band-fan-5 > :nth-child(4) {
   z-index: 1;
   height: 47%;
-  --shift: calc(-168% - 16% * var(--open));
+  --shift: calc((-168% - 16% * var(--open)) * var(--spread, 1));
   --lean: calc(-14deg - 3deg * var(--open));
 }
 
 .band-fan-5 > :nth-child(5) {
   z-index: 1;
   height: 47%;
-  --shift: calc(168% + 16% * var(--open));
+  --shift: calc((168% + 16% * var(--open)) * var(--spread, 1));
   --lean: calc(14deg + 3deg * var(--open));
 }
 
@@ -471,7 +485,7 @@
 .band-fan-4 > :nth-child(1) {
   z-index: 3;
   height: 61%;
-  --shift: calc(45% + 7% * var(--open));
+  --shift: calc((45% + 7% * var(--open)) * var(--spread, 1));
   --lean: calc(5deg + 2deg * var(--open));
 }
 
@@ -479,21 +493,21 @@
 .band-fan-4 > :nth-child(2) {
   z-index: 2;
   height: 61%;
-  --shift: calc(-45% - 7% * var(--open));
+  --shift: calc((-45% - 7% * var(--open)) * var(--spread, 1));
   --lean: calc(-5deg - 2deg * var(--open));
 }
 
 .band-fan-4 > :nth-child(3) {
   z-index: 1;
   height: 50%;
-  --shift: calc(132% + 14% * var(--open));
+  --shift: calc((132% + 14% * var(--open)) * var(--spread, 1));
   --lean: calc(13deg + 3deg * var(--open));
 }
 
 .band-fan-4 > :nth-child(4) {
   z-index: 1;
   height: 50%;
-  --shift: calc(-132% - 14% * var(--open));
+  --shift: calc((-132% - 14% * var(--open)) * var(--spread, 1));
   --lean: calc(-13deg - 3deg * var(--open));
 }
 
@@ -570,7 +584,7 @@
 .band-pile-3 > :nth-child(2) {
   z-index: 2;
   height: 46%;
-  --shift: calc(-42% - 8% * var(--open));
+  --shift: calc((-42% - 8% * var(--open)) * var(--spread, 1));
   --lift: -6%;
   --lean: calc(-9deg - 3deg * var(--open));
 }
@@ -578,7 +592,7 @@
 .band-pile-3 > :nth-child(3) {
   z-index: 1;
   height: 44%;
-  --shift: calc(44% + 8% * var(--open));
+  --shift: calc((44% + 8% * var(--open)) * var(--spread, 1));
   --lift: -10%;
   --lean: calc(8deg + 3deg * var(--open));
 }
