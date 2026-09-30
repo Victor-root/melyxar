@@ -652,8 +652,8 @@
      it its light and shade, never its colour. */
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--accent) 38%, var(--surface-raised)),
-    color-mix(in srgb, var(--accent) 22%, var(--surface-raised))
+    color-mix(in srgb, var(--accent) 16%, var(--surface-raised)),
+    color-mix(in srgb, var(--accent) 8%, var(--surface-raised))
   );
   pointer-events: none;
 }
@@ -662,7 +662,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.6;
+  opacity: 0.32;
   mix-blend-mode: overlay;
   /* Blurred once, on a bar that is a hundred points tall and never moves: the
      scale keeps the edges of the blur out of sight. Grey, so that it lights
