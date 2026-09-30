@@ -519,6 +519,11 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .context("closing what a previous run left")?;
     melyxar_app::startup::take_up_again_what_a_restart_cut_short(&state, &cut_short).await;
 
+    // How the server is reached, applied before the first connection.
+    melyxar_app::access::apply(&state)
+        .await
+        .context("applying how the server is reached")?;
+
     melyxar_app::activity::record(&state, melyxar_app::activity::Event::ServerStarted).await;
     melyxar_server::serve(address, state.clone(), shutdown_signal())
         .await

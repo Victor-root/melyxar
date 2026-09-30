@@ -47,6 +47,8 @@ struct Inner {
     /// forgotten them, which is the right way round for somebody who locked
     /// themselves out and rebooted it.
     wrong_answers: crate::accounts::WrongAnswers,
+    /// How the server is reached, and what encrypts it when it is.
+    access: crate::access::Current,
     /// When this server came up, for how long it has been running.
     started_at: melyxar_core::time::Timestamp,
     /// What the machine spent lately, read on a steady beat.
@@ -115,6 +117,7 @@ impl AppState {
                 capabilities,
                 counts: crate::counted::Counts::default(),
                 wrong_answers: crate::accounts::WrongAnswers::default(),
+                access: crate::access::Current::default(),
                 started_at: melyxar_core::time::now(),
                 measuring: crate::measures::Measuring::new(),
                 watching: crate::watching::Watching::default(),
@@ -159,6 +162,10 @@ impl AppState {
     /// The scheduled tasks running right now.
     pub(crate) fn schedule(&self) -> &crate::schedule::Running {
         &self.inner.schedule
+    }
+
+    pub(crate) fn access(&self) -> &crate::access::Current {
+        &self.inner.access
     }
 
     /// What each library has been counted for.

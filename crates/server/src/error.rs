@@ -173,6 +173,15 @@ impl From<melyxar_app::server::Trouble> for ServerError {
     }
 }
 
+impl From<melyxar_app::access::Trouble> for ServerError {
+    fn from(trouble: melyxar_app::access::Trouble) -> Self {
+        match trouble {
+            melyxar_app::access::Trouble::Refused(refused) => Self::refused(refused.as_str()),
+            melyxar_app::access::Trouble::Failed(error) => Self::from(error),
+        }
+    }
+}
+
 impl From<melyxar_app::avatars::Trouble> for ServerError {
     fn from(trouble: melyxar_app::avatars::Trouble) -> Self {
         match trouble {

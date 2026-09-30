@@ -33,22 +33,6 @@ pub enum ConfigError {
 
 pub type Result<T> = std::result::Result<T, ConfigError>;
 
-/// How the server is reached.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "mode")]
-pub enum AccessMode {
-    /// Plain connections, for a server sitting behind a reverse proxy or used
-    /// on a trusted local network.
-    #[default]
-    Plain,
-    /// Encrypted connections served by Melyxar itself, from a certificate and
-    /// key already on disk.
-    Encrypted {
-        certificate_path: PathBuf,
-        private_key_path: PathBuf,
-    },
-}
-
 /// Where everything is written, and where the interface is read from.
 ///
 /// Three separate directories are written on purpose: what must be backed
@@ -145,6 +129,11 @@ impl Directories {
 
     pub fn backups(&self) -> PathBuf {
         self.data.join("backups")
+    }
+
+    /// The certificate this server signs itself, and its key.
+    pub fn tls(&self) -> PathBuf {
+        self.data.join("tls")
     }
 }
 
@@ -245,8 +234,6 @@ pub struct Config {
     #[serde(default = "default_port")]
     pub port: u16,
     #[serde(default)]
-    pub access: AccessMode,
-    #[serde(default)]
     pub directories: Directories,
     #[serde(default)]
     pub media_tools: MediaToolsConfig,
@@ -274,7 +261,6 @@ impl Default for Config {
         Self {
             bind_address: default_bind_address(),
             port: default_port(),
-            access: AccessMode::default(),
             directories: Directories::default(),
             media_tools: MediaToolsConfig::default(),
             limits: LimitsConfig::default(),
@@ -346,16 +332,6 @@ impl Config {
                     )));
                 }
             }
-        }
-        if let AccessMode::Encrypted {
-            certificate_path,
-            private_key_path,
-        } = &self.access
-            && (!certificate_path.is_absolute() || !private_key_path.is_absolute())
-        {
-            return Err(ConfigError::Invalid(
-                "certificate and key paths must be absolute".into(),
-            ));
         }
         Ok(())
     }

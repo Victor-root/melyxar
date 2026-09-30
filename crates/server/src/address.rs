@@ -1,4 +1,5 @@
-//! Where a request came from, for the journal to say.
+//! Where a request came from, for the journal to say, and whether it came
+//! encrypted, for the cookie to say.
 //!
 //! The address the connection came from, unless it came from this machine
 //! or the local network and carries the address a proxy in front passed on:
@@ -9,25 +10,41 @@
 //! Written down to be read by the administrator, never to decide anything.
 
 use std::convert::Infallible;
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 
 use axum::extract::{ConnectInfo, FromRequestParts};
 use axum::http::request::Parts;
 use axum::http::HeaderMap;
 
-/// The address a request came from, when it can be told.
-pub struct Caller(pub Option<String>);
+use crate::door::Peer;
+
+/// Where a request came from, when it can be told, and whether it travelled
+/// encrypted to whoever the browser spoke to.
+pub struct Caller {
+    pub address: Option<String>,
+    pub encrypted: bool,
+}
 
 impl<S: Send + Sync> FromRequestParts<S> for Caller {
     type Rejection = Infallible;
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
-        let peer = parts
-            .extensions
-            .get::<ConnectInfo<SocketAddr>>()
-            .map(|ConnectInfo(address)| address.ip());
-        Ok(Self(address_of(peer, &parts.headers).map(|address| address.to_string())))
+        let peer = parts.extensions.get::<ConnectInfo<Peer>>().map(|ConnectInfo(peer)| *peer);
+        let ip = peer.map(|peer| peer.address.ip());
+        Ok(Self {
+            address: address_of(ip, &parts.headers).map(|address| address.to_string()),
+            encrypted: peer.is_some_and(|peer| peer.encrypted) || proxy_encrypted(ip, &parts.headers),
+        })
     }
+}
+
+/// Whether a proxy in front says the browser spoke to it encrypted.
+fn proxy_encrypted(peer: Option<IpAddr>, headers: &HeaderMap) -> bool {
+    peer.is_some_and(nearby)
+        && headers
+            .get("x-forwarded-proto")
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|proto| proto.trim().eq_ignore_ascii_case("https"))
 }
 
 /// Whether a proxy may sit at this address: this machine or the local
@@ -89,6 +106,14 @@ mod tests {
     fn a_header_from_far_away_is_not_believed() {
         let said = headers(&[("x-forwarded-for", "10.0.0.1")]);
         assert_eq!(address_of(Some(ip("203.0.113.9")), &said), Some(ip("203.0.113.9")));
+    }
+
+    #[test]
+    fn only_a_proxy_nearby_is_believed_about_encryption() {
+        let said = headers(&[("x-forwarded-proto", "https")]);
+        assert!(proxy_encrypted(Some(ip("192.168.1.20")), &said));
+        assert!(!proxy_encrypted(Some(ip("203.0.113.9")), &said));
+        assert!(!proxy_encrypted(Some(ip("192.168.1.20")), &HeaderMap::new()));
     }
 
     #[test]

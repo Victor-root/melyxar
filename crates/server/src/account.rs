@@ -275,8 +275,8 @@ impl<S: Send + Sync> FromRequestParts<S> for Administrator {
 ///
 /// Closed to scripts, so nothing running on the page can read it. Kept to this
 /// site, so another site cannot make this one act in somebody's name behind
-/// their back. And marked as needing an encrypted connection only when this
-/// server is serving one: a server reached in the clear on a home network,
+/// their back. And marked as needing an encrypted connection only when the
+/// request that asked for it came encrypted: a server reached in the clear on a home network,
 /// which is how most of them start, would otherwise hand out a cookie the
 /// browser refuses to send back, and nobody would ever sign in.
 ///
@@ -290,15 +290,7 @@ impl<S: Send + Sync> FromRequestParts<S> for Administrator {
 /// is the browser rather than this server that honours it, which is what
 /// makes it true even for somebody who walks away from a machine that stays
 /// on.
-fn cookie_carrying(
-    token: &SessionToken,
-    state: &AppState,
-    remembered: Remembered,
-) -> HeaderValue {
-    let encrypted = matches!(
-        state.config().access,
-        melyxar_config::AccessMode::Encrypted { .. }
-    );
+fn cookie_carrying(token: &SessionToken, encrypted: bool, remembered: Remembered) -> HeaderValue {
     let written = cookie_written(token.as_text(), encrypted, remembered);
     // Every piece of it is a constant here or a token this server just drew,
     // so there is nothing in it a header cannot hold.
@@ -422,7 +414,7 @@ impl From<&User> for AccountView {
 async fn sign_in(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Caller(address): Caller,
+    Caller { address, encrypted }: Caller,
     Json(asked): Json<WhoAndWhat>,
 ) -> Result<Response> {
     match melyxar_app::accounts::sign_in(
@@ -437,9 +429,9 @@ async fn sign_in(
     .await?
     {
         SignedInOrNot::Opened(opened) => Ok(answered_with_a_session(
-            &state,
             *opened,
             wished_for(asked.remember),
+            encrypted,
         )),
         SignedInOrNot::NotAPair => Err(ServerError::unauthenticated(
             "no account answers to that pair",
@@ -506,6 +498,7 @@ async fn change_password(
     ThisBrowser {
         remembered, client, ..
     }: ThisBrowser,
+    Caller { encrypted, .. }: Caller,
     Json(asked): Json<TheOldAndTheNew>,
 ) -> Result<Response> {
     let changed = melyxar_app::accounts::change_password(
@@ -521,9 +514,9 @@ async fn change_password(
 
     match changed {
         PasswordChange::Changed(token) => Ok(answered_with_a_session(
-            &state,
             OpenedSession { token, user },
             remembered,
+            encrypted,
         )),
         PasswordChange::NotTheCurrentOne => Err(ServerError::unauthenticated(
             "that is not the current password",
@@ -578,7 +571,7 @@ async fn name_the_browser(
 async fn set_this_server_up(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Caller(address): Caller,
+    Caller { address, encrypted }: Caller,
     Json(asked): Json<WhoAndWhat>,
 ) -> Result<Response> {
     let user =
@@ -606,11 +599,7 @@ async fn set_this_server_up(
         ));
     };
 
-    Ok(answered_with_a_session(
-        &state,
-        *opened,
-        wished_for(asked.remember),
-    ))
+    Ok(answered_with_a_session(*opened, wished_for(asked.remember), encrypted))
 }
 
 /// Whether the first steps of this server are still ahead, which an
@@ -634,15 +623,11 @@ async fn finish_first_steps(
 }
 
 /// The answer to every door that opens a session: the cookie, and who it is.
-fn answered_with_a_session(
-    state: &AppState,
-    opened: OpenedSession,
-    remembered: Remembered,
-) -> Response {
+fn answered_with_a_session(opened: OpenedSession, remembered: Remembered, encrypted: bool) -> Response {
     (
         [(
             header::SET_COOKIE,
-            cookie_carrying(&opened.token, state, remembered),
+            cookie_carrying(&opened.token, encrypted, remembered),
         )],
         Json(AccountView::from(&opened.user)),
     )
