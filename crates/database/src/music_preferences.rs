@@ -1,7 +1,9 @@
-//! What each account chose for its music.
+//! What was chosen for music: by each account, and for each library of it.
 
-use melyxar_core::id::UserId;
-use melyxar_core::music_preferences::{FilmOnScreen, MusicPreferences, VolumeMode};
+use melyxar_core::id::{LibraryId, UserId};
+use melyxar_core::music_preferences::{
+    FilmOnScreen, MusicLibraryOptions, MusicPreferences, VolumeMode,
+};
 use sqlx::Row;
 
 use crate::{Database, Result};
@@ -64,6 +66,47 @@ impl Database {
         .await?;
         Ok(())
     }
+
+    /// What a library of music does beyond the rest, the defaults while
+    /// nothing was chosen.
+    pub async fn music_library_options(&self, library: LibraryId) -> Result<MusicLibraryOptions> {
+        let row = sqlx::query(
+            "SELECT lyrics_online, tag_writing, covers_online
+               FROM music_library_options WHERE library_id = ?",
+        )
+        .bind(library.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+        Ok(match row {
+            Some(row) => MusicLibraryOptions {
+                lyrics_online: row.try_get::<i64, _>("lyrics_online")? != 0,
+                tag_writing: row.try_get::<i64, _>("tag_writing")? != 0,
+                covers_online: row.try_get::<i64, _>("covers_online")? != 0,
+            },
+            None => MusicLibraryOptions::default(),
+        })
+    }
+
+    pub async fn set_music_library_options(
+        &self,
+        library: LibraryId,
+        options: &MusicLibraryOptions,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO music_library_options (library_id, lyrics_online, tag_writing, covers_online)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (library_id) DO UPDATE SET
+                lyrics_online = excluded.lyrics_online, tag_writing = excluded.tag_writing,
+                covers_online = excluded.covers_online",
+        )
+        .bind(library.to_db_string())
+        .bind(options.lyrics_online)
+        .bind(options.tag_writing)
+        .bind(options.covers_online)
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -71,6 +114,7 @@ mod tests {
     use melyxar_core::user::Permissions;
 
     use super::*;
+    use crate::music_testing::collection;
 
     #[tokio::test]
     async fn an_account_that_chose_nothing_has_the_defaults_and_keeps_what_it_chooses() {
@@ -111,5 +155,30 @@ mod tests {
             .await
             .expect("saved again");
         assert_eq!(database.music_preferences(user).await.expect("read"), again);
+    }
+
+    #[tokio::test]
+    async fn a_library_asks_nothing_online_until_told_to() {
+        let (database, library, _) = collection().await;
+        assert!(
+            !database
+                .music_library_options(library)
+                .await
+                .expect("read")
+                .lyrics_online
+        );
+        let on = MusicLibraryOptions {
+            lyrics_online: true,
+            tag_writing: true,
+            covers_online: true,
+        };
+        database
+            .set_music_library_options(library, &on)
+            .await
+            .expect("set");
+        assert_eq!(
+            database.music_library_options(library).await.expect("read"),
+            on
+        );
     }
 }

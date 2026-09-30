@@ -96,6 +96,8 @@ struct LibraryOptionsView {
     lyrics_online: bool,
     #[serde(default)]
     tag_writing: bool,
+    #[serde(default)]
+    covers_online: bool,
 }
 
 async fn read_library_options(
@@ -109,6 +111,7 @@ async fn read_library_options(
     Ok(Json(LibraryOptionsView {
         lyrics_online: options.lyrics_online,
         tag_writing: options.tag_writing,
+        covers_online: options.covers_online,
     }))
 }
 
@@ -126,12 +129,14 @@ async fn write_library_options(
         &MusicLibraryOptions {
             lyrics_online: body.lyrics_online,
             tag_writing: body.tag_writing,
+            covers_online: body.covers_online,
         },
     )
     .await?;
     Ok(Json(LibraryOptionsView {
         lyrics_online: options.lyrics_online,
         tag_writing: options.tag_writing,
+        covers_online: options.covers_online,
     }))
 }
 

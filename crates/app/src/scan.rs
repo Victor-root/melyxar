@@ -271,6 +271,16 @@ async fn what_follows_a_scan(
             "the songs could not be set to be measured"
         );
     }
+    if library.kind == LibraryKind::Music
+        && let Err(error) =
+            crate::music::covers::start_when_needed(state, library.clone(), priority).await
+    {
+        tracing::warn!(
+            library = library.name,
+            %error,
+            "the covers could not be set to be looked up"
+        );
+    }
     ended
 }
 

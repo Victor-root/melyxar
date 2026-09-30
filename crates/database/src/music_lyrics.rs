@@ -1,8 +1,7 @@
 //! What was found online for the lyrics of a song, kept so it is asked once,
-//! what a song is asked by, and whether a library of music asks at all.
+//! and what a song is asked by.
 
 use melyxar_core::id::{LibraryId, WorkId};
-use melyxar_core::music_preferences::MusicLibraryOptions;
 use melyxar_core::time::Timestamp;
 use sqlx::Row;
 
@@ -95,43 +94,6 @@ impl Database {
         })
         .transpose()
     }
-
-    /// What a library of music does beyond the rest, the defaults while
-    /// nothing was chosen.
-    pub async fn music_library_options(&self, library: LibraryId) -> Result<MusicLibraryOptions> {
-        let row = sqlx::query(
-            "SELECT lyrics_online, tag_writing FROM music_library_options WHERE library_id = ?",
-        )
-        .bind(library.to_db_string())
-        .fetch_optional(self.reader())
-        .await?;
-        Ok(match row {
-            Some(row) => MusicLibraryOptions {
-                lyrics_online: row.try_get::<i64, _>("lyrics_online")? != 0,
-                tag_writing: row.try_get::<i64, _>("tag_writing")? != 0,
-            },
-            None => MusicLibraryOptions::default(),
-        })
-    }
-
-    pub async fn set_music_library_options(
-        &self,
-        library: LibraryId,
-        options: &MusicLibraryOptions,
-    ) -> Result<()> {
-        sqlx::query(
-            "INSERT INTO music_library_options (library_id, lyrics_online, tag_writing)
-             VALUES (?, ?, ?)
-             ON CONFLICT (library_id) DO UPDATE SET
-                lyrics_online = excluded.lyrics_online, tag_writing = excluded.tag_writing",
-        )
-        .bind(library.to_db_string())
-        .bind(options.lyrics_online)
-        .bind(options.tag_writing)
-        .execute(self.writer())
-        .await?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -199,30 +161,6 @@ mod tests {
         assert_eq!(
             database.looked_up_lyrics(song).await.expect("read"),
             Some(found)
-        );
-    }
-
-    #[tokio::test]
-    async fn a_library_asks_nothing_online_until_told_to() {
-        let (database, library, _) = collection().await;
-        assert!(
-            !database
-                .music_library_options(library)
-                .await
-                .expect("read")
-                .lyrics_online
-        );
-        let on = MusicLibraryOptions {
-            lyrics_online: true,
-            tag_writing: true,
-        };
-        database
-            .set_music_library_options(library, &on)
-            .await
-            .expect("set");
-        assert_eq!(
-            database.music_library_options(library).await.expect("read"),
-            on
         );
     }
 }

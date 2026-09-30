@@ -8,6 +8,7 @@
 //! read it.
 
 pub mod browse;
+pub mod covers;
 pub mod listen;
 pub mod loudness;
 pub mod lyrics;

@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { PlayIcon } from "../icons";
+import { useLibraryVersion } from "../libraries";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
@@ -21,6 +22,9 @@ export function MusicArtistPage() {
   const { id = "" } = useParams();
   const [artist, setArtist] = useState<ArtistPage | null>(null);
   const [failed, setFailed] = useState(false);
+  /* Read again whenever its library moves: an album filed, a cover found. */
+  const [inLibrary, setInLibrary] = useState<string | null>(null);
+  const version = useLibraryVersion(inLibrary);
   const player = useMusic();
   /* Asked for only when pressed: their songs are the whole of their work,
      and most visits to an artist never play all of it. */
@@ -34,20 +38,24 @@ export function MusicArtistPage() {
       .finally(() => setStarting(false));
   };
 
+  useEffect(() => setArtist(null), [id]);
+
   useEffect(() => {
     const stop = new AbortController();
-    setArtist(null);
     setFailed(false);
     music
       .artist(id, stop.signal)
-      .then(setArtist)
+      .then((read) => {
+        setArtist(read);
+        setInLibrary(read.library);
+      })
       .catch(() => {
         if (!stop.signal.aborted) {
           setFailed(true);
         }
       });
     return () => stop.abort();
-  }, [id]);
+  }, [id, version]);
 
   if (failed) {
     return (
