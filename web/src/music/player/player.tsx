@@ -40,6 +40,8 @@ import {
 import type { Queue } from "./queue";
 import { useTellTheServer } from "./reporting";
 import { MediaSessionPosition, useMediaSession } from "./session";
+import { useTabs } from "./tabs";
+import type { Command } from "./tabs";
 
 export interface Music {
   queue: Queue;
@@ -251,7 +253,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       return;
     }
     const now = current(queueNow.current);
-    if (!now) {
+    if (!now || tabs.followingNow.current) {
       return;
     }
     letGoOfTheNext();
@@ -272,7 +274,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           return;
         }
         setPreferencesHere(chosen);
-        if (chosen.resume_queue && kept) {
+        if (chosen.resume_queue && kept && !tabs.followingNow.current) {
           resumeFrom.current = kept.position;
           setQueue({ songs: kept.songs, order: kept.order, at: kept.at, shuffle: kept.shuffle, repeat: kept.repeat });
         }
@@ -549,19 +551,57 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     };
   }, [queue, settled]);
 
-  const stop = useCallback(() => {
+  /* The sound let go of, the queue left as it is. */
+  const letGoOfTheSound = useCallback(() => {
     letGoOfTheNext();
     const audio = live();
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
     wantsToPlay.current = false;
+  }, [live, letGoOfTheNext]);
+
+  const stop = useCallback(() => {
+    letGoOfTheSound();
     setPlaying(false);
     setWaiting(false);
     setOpen(false);
     setQueue(EMPTY);
     time.set({ position: 0, length: 0 });
-  }, [live, letGoOfTheNext]);
+  }, [letGoOfTheSound]);
+
+  const pause = useCallback(() => live().pause(), [live]);
+  const resume = useCallback(() => {
+    void live().play().catch(() => setPlaying(false));
+  }, [live]);
+
+  /* What is done to the music in any tab is done by the one that holds the
+     sound: see `tabs.ts`. */
+  const stateNow = useRef({ playing, waiting, loudness });
+  stateNow.current = { playing, waiting, loudness };
+  const commandsNow = useRef<Record<Command, (...args: never[]) => void> | null>(null);
+  const tabs = useTabs(
+    {
+      queue: () => queueNow.current,
+      beat: () => ({ ...stateNow.current, position: time.now.position, length: time.now.length }),
+      follow: (next, beat) => {
+        if (next) {
+          letGoOfTheSound();
+          setQueue(next);
+        }
+        setPlaying(beat.playing);
+        setWaiting(beat.waiting);
+        setLoudness((was) =>
+          was.volume === beat.loudness.volume && was.muted === beat.loudness.muted ? was : beat.loudness,
+        );
+        time.set({ position: beat.position, length: beat.length, loaded: beat.position });
+      },
+      letGo: letGoOfTheSound,
+      obey: (name, args) => (commandsNow.current?.[name] as (...args: unknown[]) => void)(...args),
+    },
+    { queue, playing, waiting, loudness },
+  );
+  const { run } = tabs;
 
   // A film on the screen stops the music for good, the bar going with it,
   // or pauses it until the film is closed, as the account chose: two sounds
@@ -570,21 +610,20 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const pausedForAFilm = useRef(false);
   const onlyPause = preferences?.film_on_screen === "pause";
   useEffect(() => {
-    const audio = live();
     if (filmOnScreen && queueNow.current.songs.length > 0) {
       if (!onlyPause) {
-        stop();
-      } else if (!audio.paused) {
+        run("stop", [], stop);
+      } else if (stateNow.current.playing) {
         pausedForAFilm.current = true;
-        audio.pause();
+        run("pause", [], pause);
       }
     } else if (!filmOnScreen && pausedForAFilm.current) {
       pausedForAFilm.current = false;
-      void audio.play().catch(() => setPlaying(false));
+      run("resume", [], resume);
     }
-  }, [filmOnScreen, onlyPause, stop, live]);
+  }, [filmOnScreen, onlyPause, run, stop, pause, resume]);
 
-  useTellTheServer(song, playing, stop, () => time.now.position);
+  useTellTheServer(tabs.holds ? song : null, playing, stop, () => time.now.position);
 
   const preferencesNow = useRef(preferences);
   preferencesNow.current = preferences;
@@ -599,7 +638,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const music = useMemo<Music>(() => {
+  const commands = useMemo(() => {
     /* Another place in the queue, whose song is asked for. */
     const change = (next: Queue | null, andPlay = true) => {
       if (!next) {
@@ -610,13 +649,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setTurn((was) => was + 1);
     };
     return {
-      queue,
-      song,
-      playing,
-      waiting,
-      loudness,
-      open,
-      play: (songs, index, shuffle = false) => {
+      play: (songs: Song[], index: number, shuffle = false) => {
         if (songs.length === 0) {
           return;
         }
@@ -636,6 +669,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           audio.pause();
         }
       },
+      pause,
+      resume,
       stop,
       next: () => change(forward(queueNow.current)),
       previous: () => {
@@ -649,7 +684,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           change(back);
         }
       },
-      seek: (seconds) => {
+      seek: (seconds: number) => {
         const now = current(queueNow.current);
         if (!now) {
           return;
@@ -667,12 +702,13 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         }
         time.set({ position: Math.floor(to), length: time.now.length, loaded: time.now.loaded });
       },
-      setVolume: (volume) => setLoudness((was) => ({ volume: Math.min(Math.max(volume, 0), 1), muted: volume > 0 ? false : was.muted })),
-      setMuted: (muted) => setLoudness((was) => ({ ...was, muted })),
+      setVolume: (volume: number) =>
+        setLoudness((was) => ({ volume: Math.min(Math.max(volume, 0), 1), muted: volume > 0 ? false : was.muted })),
+      setMuted: (muted: boolean) => setLoudness((was) => ({ ...was, muted })),
       toggleShuffle: () => setQueue((was) => withShuffle(was, !was.shuffle)),
       cycleRepeat: () => setQueue((was) => ({ ...was, repeat: nextRepeat(was.repeat) })),
-      jump: (at) => change(jumpTo(queueNow.current, at)),
-      playNext: (songs) => {
+      jump: (at: number) => change(jumpTo(queueNow.current, at)),
+      playNext: (songs: Song[]) => {
         const empty = queueNow.current.songs.length === 0;
         const next = playNext(queueNow.current, songs);
         if (empty) {
@@ -681,7 +717,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           setQueue(next);
         }
       },
-      playLast: (songs) => {
+      playLast: (songs: Song[]) => {
         const empty = queueNow.current.songs.length === 0;
         const next = playLast(queueNow.current, songs);
         if (empty) {
@@ -690,12 +726,46 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           setQueue(next);
         }
       },
-      remove: (at) => setQueue((was) => without(was, at)),
+      remove: (at: number) => setQueue((was) => without(was, at)),
+    };
+  }, [live, load, stop, pause, resume]);
+  commandsNow.current = commands;
+
+  const music = useMemo<Music>(() => {
+    /* A command of the interface, done by the tab that holds the sound. */
+    const sent =
+      <Args extends unknown[]>(name: Command, local: (...args: Args) => void) =>
+      (...args: Args) =>
+        run(name, args, () => local(...args));
+    /* A button hands its click to what it calls: a command that asks for
+       nothing is sent without it. */
+    const sentBare = (name: Command, local: () => void) => () => run(name, [], local);
+    return {
+      queue,
+      song,
+      playing,
+      waiting,
+      loudness,
+      open,
       setOpen,
+      play: sent("play", commands.play),
+      toggle: sentBare("toggle", commands.toggle),
+      stop: sentBare("stop", commands.stop),
+      next: sentBare("next", commands.next),
+      previous: sentBare("previous", commands.previous),
+      seek: sent("seek", commands.seek),
+      setVolume: sent("setVolume", commands.setVolume),
+      setMuted: sent("setMuted", commands.setMuted),
+      toggleShuffle: sentBare("toggleShuffle", commands.toggleShuffle),
+      cycleRepeat: sentBare("cycleRepeat", commands.cycleRepeat),
+      jump: sent("jump", commands.jump),
+      playNext: sent("playNext", commands.playNext),
+      playLast: sent("playLast", commands.playLast),
+      remove: sent("remove", commands.remove),
       preferences: preferences ?? DEFAULT_PREFERENCES,
       setPreferences,
     };
-  }, [queue, song, playing, waiting, loudness, open, live, load, stop, preferences, setPreferences]);
+  }, [queue, song, playing, waiting, loudness, open, commands, run, preferences, setPreferences]);
 
   useMediaSession(music);
 
