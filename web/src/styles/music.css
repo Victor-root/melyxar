@@ -600,7 +600,7 @@
 /* Room at the foot of every page while the bar is there, so its end is
    never under the bar; and the words said in the corner rise above it. */
 :root {
-  --music-bar-height: 92px;
+  --music-bar-height: 100px;
 }
 
 /* The page ends where the bar begins, so the bar is a part of the page: it
@@ -634,40 +634,6 @@
   height: var(--music-bar-height);
   padding: 0 var(--player-inset) 6px;
   color: var(--text);
-}
-
-/* The bar of the song is flush with the top edge of the player: the line
-   itself starts there, and its two clocks are as tall as it is, so nothing
-   stands above it. The handle, which swells under a hand, is free to rise
-   over the page. */
-.music-bar-dock .player-seek {
-  align-items: flex-start;
-}
-
-.music-bar-dock .player-seek-end {
-  height: var(--player-rail);
-  align-items: center;
-}
-
-.music-bar-dock .player-clock {
-  line-height: var(--player-rail);
-}
-
-.music-bar-dock .player-rail {
-  align-items: flex-start;
-  height: calc(var(--player-rail-hovered) + 4px);
-}
-
-.music-bar-dock .player-rail-fill {
-  top: 0;
-}
-
-.music-bar-dock .player-rail-handle {
-  top: calc((var(--player-rail) - var(--player-handle-down)) / 2);
-}
-
-.music-bar-dock .music-bar-row {
-  margin-top: var(--gap-tight);
 }
 
 /* Part of the page, so in the colours of the theme it is read in: the
@@ -1011,7 +977,7 @@
 
 @media (max-width: 760px) {
   :root {
-    --music-bar-height: 92px;
+    --music-bar-height: 100px;
   }
 
   .music-bar-dock {
