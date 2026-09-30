@@ -49,15 +49,14 @@ export function PlayButton({ music }: { music: Music }) {
   );
 }
 
-export function SongStepButton({ music, back, onlyIfThere }: { music: Music; back: boolean; onlyIfThere?: boolean }) {
+export function SongStepButton({ music, back, greyedWhenNone }: { music: Music; back: boolean; greyedWhenNone?: boolean }) {
   const { t } = useSettings();
-  if (onlyIfThere && !(back ? canStepBack(music.queue) : canStepOn(music.queue))) {
-    return null;
-  }
+  const greyed = greyedWhenNone === true && !(back ? canStepBack(music.queue) : canStepOn(music.queue));
   return (
     <button
       type="button"
       className="player-button"
+      disabled={greyed}
       onClick={back ? music.previous : music.next}
       aria-label={t(back ? "music.previous" : "music.next")}
     >
@@ -95,14 +94,14 @@ export function StopButton({ music }: { music: Music }) {
 
 /** The transport in the order the film's player has it, with the button that
     stops for good after the one that goes to the next song. */
-export function Transport({ music, onlyIfThere }: { music: Music; onlyIfThere?: boolean }) {
+export function Transport({ music, greyedWhenNone }: { music: Music; greyedWhenNone?: boolean }) {
   return (
     <>
-      <SongStepButton music={music} back onlyIfThere={onlyIfThere} />
+      <SongStepButton music={music} back greyedWhenNone={greyedWhenNone} />
       <SecondsButton music={music} back />
       <PlayButton music={music} />
       <SecondsButton music={music} back={false} />
-      <SongStepButton music={music} back={false} onlyIfThere={onlyIfThere} />
+      <SongStepButton music={music} back={false} greyedWhenNone={greyedWhenNone} />
       <StopButton music={music} />
     </>
   );

@@ -64,11 +64,11 @@ export function MusicBar() {
         </button>
 
         <div className="player-zone music-bar-transport">
-          <Transport music={music} onlyIfThere />
+          <Transport music={music} greyedWhenNone />
         </div>
         <div className="player-zone music-bar-phone">
           <PlayButton music={music} />
-          <SongStepButton music={music} back={false} onlyIfThere />
+          <SongStepButton music={music} back={false} greyedWhenNone />
         </div>
 
         <div className="player-zone player-zone-bottom-right music-bar-tools">
