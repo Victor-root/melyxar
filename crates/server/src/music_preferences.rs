@@ -7,7 +7,8 @@ use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_core::music_preferences::{
-    FilmOnScreen, LONGEST_CROSSFADE_SECONDS, MusicLibraryOptions, MusicPreferences, VolumeMode,
+    FilmOnScreen, HiddenTabs, LONGEST_CROSSFADE_SECONDS, LONGEST_SKIP_SECONDS, MusicLibraryOptions,
+    MusicPreferences, MusicTab, VolumeMode, bounded_skip,
     bounded_ceiling,
 };
 use serde::{Deserialize, Serialize};
@@ -39,10 +40,30 @@ struct MusicPreferencesView {
     /// Absent from what an older screen sends, which keeps the preview on.
     #[serde(default = "shown")]
     tag_preview: bool,
+    /// How far the buttons that skip back and on move within a song.
+    #[serde(default = "a_usual_skip")]
+    skip_back_seconds: u32,
+    #[serde(default = "a_usual_skip")]
+    skip_on_seconds: u32,
+    /// The tabs of a library of music this account hides.
+    #[serde(default)]
+    hidden_tabs: Vec<String>,
+    /// The longest a skip can be, said here so that the screen offers no more
+    /// than the server keeps. Never read from what is sent.
+    #[serde(default = "the_longest_skip")]
+    longest_skip_seconds: u32,
 }
 
 fn shown() -> bool {
     true
+}
+
+fn a_usual_skip() -> u32 {
+    MusicPreferences::default().skip_back_seconds
+}
+
+fn the_longest_skip() -> u32 {
+    LONGEST_SKIP_SECONDS
 }
 
 fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
@@ -53,6 +74,15 @@ fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
         volume_mode: chosen.volume_mode.as_str().to_string(),
         crossfade_seconds: chosen.crossfade_seconds,
         tag_preview: chosen.tag_preview,
+        skip_back_seconds: chosen.skip_back_seconds,
+        skip_on_seconds: chosen.skip_on_seconds,
+        hidden_tabs: chosen
+            .hidden_tabs
+            .tabs()
+            .into_iter()
+            .map(|tab| tab.as_str().to_string())
+            .collect(),
+        longest_skip_seconds: LONGEST_SKIP_SECONDS,
     })
 }
 
@@ -88,6 +118,13 @@ fn chosen_from(body: &MusicPreferencesView) -> Result<MusicPreferences> {
         })?,
         crossfade_seconds: body.crossfade_seconds.min(LONGEST_CROSSFADE_SECONDS),
         tag_preview: body.tag_preview,
+        skip_back_seconds: bounded_skip(body.skip_back_seconds),
+        skip_on_seconds: bounded_skip(body.skip_on_seconds),
+        hidden_tabs: HiddenTabs::from_tabs(
+            body.hidden_tabs
+                .iter()
+                .filter_map(|name| MusicTab::parse(name)),
+        ),
     })
 }
 
@@ -158,6 +195,10 @@ mod tests {
             volume_mode: "album".to_string(),
             crossfade_seconds: 60,
             tag_preview: true,
+            skip_back_seconds: 0,
+            skip_on_seconds: 500,
+            hidden_tabs: vec!["songs".to_string(), "nonsense".to_string()],
+            longest_skip_seconds: 0,
         });
         let Ok(chosen) = chosen else {
             panic!("a choice that exists is read");
@@ -166,6 +207,10 @@ mod tests {
         assert_eq!(chosen.max_bitrate_kbps, Some(320));
         assert_eq!(chosen.volume_mode, VolumeMode::Album);
         assert_eq!(chosen.crossfade_seconds, LONGEST_CROSSFADE_SECONDS);
+        assert_eq!(chosen.skip_back_seconds, 1, "a skip is at least a second");
+        assert_eq!(chosen.skip_on_seconds, LONGEST_SKIP_SECONDS);
+        assert!(chosen.hidden_tabs.hides(MusicTab::Songs), "a name nobody knows is dropped");
+        assert_eq!(chosen.hidden_tabs.tabs().len(), 1);
         assert!(
             chosen_from(&MusicPreferencesView {
                 film_on_screen: "louder".to_string(),
@@ -174,6 +219,10 @@ mod tests {
                 volume_mode: "track".to_string(),
                 crossfade_seconds: 0,
                 tag_preview: true,
+                skip_back_seconds: 10,
+                skip_on_seconds: 10,
+                hidden_tabs: Vec::new(),
+                longest_skip_seconds: 0,
             })
             .is_err()
         );

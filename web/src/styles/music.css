@@ -7,18 +7,50 @@
  * The head of a library, and its tabs
  * ----------------------------------------------------------------------- */
 
-/* The tabs are one piece of the glass a grid of films is read by, scrolling
-   sideways on a narrow screen rather than wrapping into a second row. */
+/* The tabs are one piece of the glass a grid of films is read by. What does
+   not fit scrolls sideways, with an arrow at the edge that has more beyond
+   it. */
 .browse-piece.music-tabs {
   flex-wrap: nowrap;
   gap: 2px;
   max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
+  min-width: 0;
 }
 
-.music-tabs::-webkit-scrollbar {
+.music-tabs-track {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  cursor: grab;
+}
+
+.music-tabs-track::-webkit-scrollbar {
   display: none;
+}
+
+.music-tabs-track[data-dragging="yes"] {
+  cursor: grabbing;
+}
+
+.music-tabs-arrow {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--accent-bright);
+  cursor: pointer;
+  transition: background var(--quick) var(--ease);
+}
+
+.music-tabs-arrow:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .music-tab {
@@ -36,9 +68,10 @@
     color var(--quick) var(--ease);
 }
 
+/* Lit as the letters beside a grid are under the pointer. */
 .music-tab:hover {
-  background: var(--surface-hover);
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-bright);
 }
 
 .music-tab-on,

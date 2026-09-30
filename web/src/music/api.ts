@@ -101,6 +101,13 @@ export interface MusicPreferences {
   crossfade_seconds: number;
   /** Whether the tag manager shows what is about to change first. */
   tag_preview: boolean;
+  /** How far the buttons that skip back and on move within a song. */
+  skip_back_seconds: number;
+  skip_on_seconds: number;
+  /** The tabs of a library of music this account hides, by name. */
+  hidden_tabs: string[];
+  /** The longest a skip can be, as the server keeps it. */
+  longest_skip_seconds: number;
 }
 
 /** How songs are levelled: not at all, each to the same level, or each

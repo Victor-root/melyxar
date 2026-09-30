@@ -28,8 +28,7 @@ import type { Music } from "./player";
 /** How large the play button's icon is drawn. */
 const PLAY_ICON = 34;
 
-/** How far the two step buttons and the arrow keys jump, in seconds. */
-const STEP = 10;
+/** How far the arrow keys jump, in seconds. */
 const KEY_STEP = 5;
 
 /** How wide the time shown over the bar is, for keeping it inside it. */
@@ -67,15 +66,16 @@ export function SongStepButton({ music, back }: { music: Music; back: boolean })
 export function SecondsButton({ music, back }: { music: Music; back: boolean }) {
   const { t } = useSettings();
   const { position, length } = useMusicTime();
-  const go = () => music.seek(Math.min(Math.max(position + (back ? -STEP : STEP), 0), length));
+  const step = back ? music.preferences.skip_back_seconds : music.preferences.skip_on_seconds;
+  const go = () => music.seek(Math.min(Math.max(position + (back ? -step : step), 0), length));
   return (
     <button
       type="button"
       className="player-button"
       onClick={go}
-      aria-label={t(back ? "player.step_back" : "player.step_on", { seconds: STEP })}
+      aria-label={t(back ? "player.step_back" : "player.step_on", { seconds: step })}
     >
-      {back ? <StepBackIcon seconds={STEP} size={ICON} /> : <StepOnIcon seconds={STEP} size={ICON} />}
+      {back ? <StepBackIcon seconds={step} size={ICON} /> : <StepOnIcon seconds={step} size={ICON} />}
     </button>
   );
 }

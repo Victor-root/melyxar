@@ -2,7 +2,7 @@
 
 use melyxar_core::id::{LibraryId, UserId};
 use melyxar_core::music_preferences::{
-    FilmOnScreen, MusicLibraryOptions, MusicPreferences, VolumeMode,
+    FilmOnScreen, HiddenTabs, MusicLibraryOptions, MusicPreferences, VolumeMode, bounded_skip,
 };
 use sqlx::Row;
 
@@ -13,7 +13,7 @@ impl Database {
     pub async fn music_preferences(&self, user: UserId) -> Result<MusicPreferences> {
         let row = sqlx::query(
             "SELECT film_on_screen, resume_queue, max_bitrate_kbps, volume_mode, crossfade_seconds,
-                    tag_preview
+                    tag_preview, skip_back_seconds, skip_on_seconds, hidden_tabs
                FROM music_preferences WHERE user_id = ?",
         )
         .bind(user.to_db_string())
@@ -34,6 +34,15 @@ impl Database {
             crossfade_seconds: u32::try_from(row.try_get::<i64, _>("crossfade_seconds")?)
                 .unwrap_or(0),
             tag_preview: row.try_get("tag_preview")?,
+            skip_back_seconds: bounded_skip(
+                u32::try_from(row.try_get::<i64, _>("skip_back_seconds")?).unwrap_or(0),
+            ),
+            skip_on_seconds: bounded_skip(
+                u32::try_from(row.try_get::<i64, _>("skip_on_seconds")?).unwrap_or(0),
+            ),
+            hidden_tabs: HiddenTabs::from_bits(
+                u8::try_from(row.try_get::<i64, _>("hidden_tabs")?).unwrap_or(0),
+            ),
         })
     }
 
@@ -45,15 +54,18 @@ impl Database {
         sqlx::query(
             "INSERT INTO music_preferences
                 (user_id, film_on_screen, resume_queue, max_bitrate_kbps, volume_mode,
-                 crossfade_seconds, tag_preview)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+                 crossfade_seconds, tag_preview, skip_back_seconds, skip_on_seconds, hidden_tabs)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT (user_id) DO UPDATE SET
                 film_on_screen = excluded.film_on_screen,
                 resume_queue = excluded.resume_queue,
                 max_bitrate_kbps = excluded.max_bitrate_kbps,
                 volume_mode = excluded.volume_mode,
                 crossfade_seconds = excluded.crossfade_seconds,
-                tag_preview = excluded.tag_preview",
+                tag_preview = excluded.tag_preview,
+                skip_back_seconds = excluded.skip_back_seconds,
+                skip_on_seconds = excluded.skip_on_seconds,
+                hidden_tabs = excluded.hidden_tabs",
         )
         .bind(user.to_db_string())
         .bind(chosen.film_on_screen.as_str())
@@ -62,6 +74,9 @@ impl Database {
         .bind(chosen.volume_mode.as_str())
         .bind(i64::from(chosen.crossfade_seconds))
         .bind(chosen.tag_preview)
+        .bind(i64::from(chosen.skip_back_seconds))
+        .bind(i64::from(chosen.skip_on_seconds))
+        .bind(i64::from(chosen.hidden_tabs.bits()))
         .execute(self.writer())
         .await?;
         Ok(())
@@ -115,6 +130,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
+    use melyxar_core::music_preferences::MusicTab;
     use melyxar_core::user::Permissions;
 
     use super::*;
@@ -140,6 +156,9 @@ mod tests {
             volume_mode: VolumeMode::Album,
             crossfade_seconds: 6,
             tag_preview: false,
+            skip_back_seconds: 15,
+            skip_on_seconds: 30,
+            hidden_tabs: HiddenTabs::from_tabs([MusicTab::Genres, MusicTab::Songs]),
         };
         database
             .save_music_preferences(user, &chosen)
