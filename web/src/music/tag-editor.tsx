@@ -16,6 +16,7 @@ import { Modal } from "../components/modal";
 import { Setting, Toggle } from "../components/panel";
 import { useToast } from "../components/toasts";
 import { refusalKey } from "../i18n";
+import { useRunning } from "../running";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
@@ -72,6 +73,7 @@ export function TagEditorPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const { preferences } = useMusic();
+  const { watch } = useRunning();
   const [songs, setSongs] = useState<SongFields[] | null>(null);
   const [album, setAlbum] = useState<AlbumFields>(albumFieldsOf(undefined));
   const [renaming, setRenaming] = useState(false);
@@ -155,6 +157,9 @@ export function TagEditorPage() {
       } else {
         toast({ state: "ok", title: t("music.tags_written", { what: howMany(done.written, "music.songs_count", t) }) });
       }
+      // The server reads the library again once it has written: watched at
+      // once, so the album and every screen showing it follow without a reload.
+      watch();
       navigate(`/music/album/${id}`, { replace: true });
     } catch (error) {
       setRefused(refusalOf(error));

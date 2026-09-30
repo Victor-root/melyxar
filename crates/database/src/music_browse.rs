@@ -138,8 +138,8 @@ impl AlbumOrder {
             (Self::Artist, true) => "artist_sort DESC, w.release_year DESC, w.sort_title, w.id",
             (Self::Year, false) => "w.release_year IS NULL, w.release_year, w.sort_title, w.id",
             (Self::Year, true) => "w.release_year IS NULL, w.release_year DESC, w.sort_title, w.id",
-            (Self::Added, false) => "w.added_at DESC, w.id",
-            (Self::Added, true) => "w.added_at, w.id",
+            (Self::Added, false) => "last_arrival DESC, w.id",
+            (Self::Added, true) => "last_arrival, w.id",
         }
     }
 }
@@ -181,7 +181,9 @@ pub(crate) const AN_ALBUM: &str = concat!(
     " AS initial,
      (SELECT a.sort_title FROM music_credits c JOIN works a ON a.id = c.artist_id
        WHERE c.work_id = w.id AND c.role = 'album_artist'
-       ORDER BY c.ordinal LIMIT 1) AS artist_sort"
+       ORDER BY c.ordinal LIMIT 1) AS artist_sort,
+     coalesce((SELECT max(s.added_at) FROM works c JOIN media_sources s ON s.work_id = c.id
+                WHERE c.parent_id = w.id), w.added_at) AS last_arrival"
 );
 
 pub(crate) const AN_ARTIST: &str = concat!(
@@ -844,6 +846,40 @@ mod tests {
             vec!["Amber Field"]
         );
         assert!(next.items[1].is_compilation);
+    }
+
+    #[tokio::test]
+    async fn an_album_a_song_has_just_reached_comes_first_among_the_newest() {
+        let (database, library, _) = collection().await;
+        let wanted = AlbumsWanted::default();
+        let first = || async {
+            database
+                .music_albums(library, &wanted, AlbumOrder::Added, false, 0, 1)
+                .await
+                .expect("read")
+                .items
+                .remove(0)
+                .id
+        };
+        let before = first().await;
+        let oldest: String = sqlx::query_scalar(
+            "SELECT w.id FROM works w WHERE w.library_id = ? AND w.kind = 'album' AND w.id <> ?
+              ORDER BY w.added_at LIMIT 1",
+        )
+        .bind(library.to_db_string())
+        .bind(before.to_db_string())
+        .fetch_one(database.reader())
+        .await
+        .expect("another album");
+        sqlx::query(
+            "UPDATE media_sources SET added_at = '2999-01-01T00:00:00Z'
+              WHERE work_id = (SELECT id FROM works WHERE parent_id = ? LIMIT 1)",
+        )
+        .bind(&oldest)
+        .execute(database.writer())
+        .await
+        .expect("a song arrives");
+        assert_eq!(first().await.to_db_string(), oldest);
     }
 
     #[tokio::test]
