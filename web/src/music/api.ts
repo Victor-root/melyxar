@@ -99,6 +99,8 @@ export interface MusicPreferences {
   volume_mode: VolumeMode;
   /** How many seconds one song fades into the next, nought for none. */
   crossfade_seconds: number;
+  /** Whether the tag manager shows what is about to change first. */
+  tag_preview: boolean;
 }
 
 /** How songs are levelled: not at all, each to the same level, or each
@@ -123,6 +125,8 @@ export interface SongLyrics {
 /** What a library of music does beyond the rest. */
 export interface MusicLibraryOptions {
   lyrics_online: boolean;
+  /** Whether the tag manager may write into its files. */
+  tag_writing: boolean;
 }
 
 /** One playlist of songs, as the list of them shows it. */

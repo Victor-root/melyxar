@@ -16,6 +16,8 @@ export interface Account {
   may_manage_collections: boolean;
   may_delete: boolean;
   may_delete_from_disk: boolean;
+  /** Whether it may write into the files of songs with the tag manager. */
+  may_edit_tags: boolean;
   /** Where the picture it chose is served, when it chose one. */
   avatar: string | null;
 }
@@ -33,6 +35,8 @@ export interface Rights {
   may_download: boolean;
   /** Whether it may make and fill the server's collections. */
   may_manage_collections: boolean;
+  /** Whether it may write into the files of songs with the tag manager. */
+  may_edit_tags: boolean;
   /** How many films it may watch at once. Nothing for no limit. */
   most_streams: number | null;
 }

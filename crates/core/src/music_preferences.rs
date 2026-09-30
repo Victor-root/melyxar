@@ -80,6 +80,9 @@ pub struct MusicPreferences {
     pub volume_mode: VolumeMode,
     /// How many seconds one song fades into the next, nought for none.
     pub crossfade_seconds: u32,
+    /// Whether the tag manager shows what is about to change before it
+    /// writes it.
+    pub tag_preview: bool,
 }
 
 impl Default for MusicPreferences {
@@ -90,6 +93,7 @@ impl Default for MusicPreferences {
             max_bitrate_kbps: None,
             volume_mode: VolumeMode::default(),
             crossfade_seconds: 0,
+            tag_preview: true,
         }
     }
 }
@@ -101,6 +105,10 @@ pub struct MusicLibraryOptions {
     /// LRCLIB. Off until an administrator turns it on, like every source
     /// online.
     pub lyrics_online: bool,
+    /// Whether the tag manager may write into the files of this library.
+    /// Off until an administrator turns it on: the server only ever reads
+    /// the media it is given, unless told otherwise.
+    pub tag_writing: bool,
 }
 
 /// The longest a crossfade can be asked to last, in seconds.

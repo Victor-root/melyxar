@@ -41,6 +41,9 @@ pub struct Permissions {
     /// Also erase the file from disk. Administrators only, and still gated on
     /// the root being writable.
     pub may_delete_from_disk: bool,
+    /// Write into the files of songs with the tag manager, where a library
+    /// lets its files be written.
+    pub may_edit_tags: bool,
     /// Simultaneous playback sessions. None means no limit.
     pub max_sessions: Option<i32>,
 }
@@ -57,6 +60,7 @@ impl Permissions {
             may_manage_collections: true,
             may_delete: true,
             may_delete_from_disk: true,
+            may_edit_tags: true,
             max_sessions: None,
         }
     }
@@ -72,6 +76,7 @@ impl Permissions {
             may_manage_collections: false,
             may_delete: false,
             may_delete_from_disk: false,
+            may_edit_tags: false,
             max_sessions: None,
         }
     }

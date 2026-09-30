@@ -41,6 +41,10 @@ struct RightsView {
     may_delete_from_disk: bool,
     may_download: bool,
     may_manage_collections: bool,
+    /// Write into the files of songs with the tag manager. Absent from what
+    /// an older screen sends, which leaves it off.
+    #[serde(default)]
+    may_edit_tags: bool,
     /// How many films it may watch at once. Absent for no limit.
     most_streams: Option<i32>,
 }
@@ -60,6 +64,7 @@ impl RightsView {
             may_delete_from_disk: held.may_delete_from_disk,
             may_download: held.may_download,
             may_manage_collections: held.may_manage_collections,
+            may_edit_tags: held.may_edit_tags,
             most_streams: held.max_sessions,
         }
     }
@@ -77,6 +82,7 @@ impl RightsView {
             may_delete_from_disk: self.may_delete_from_disk,
             may_download: self.may_download,
             may_manage_collections: self.may_manage_collections,
+            may_edit_tags: self.may_edit_tags,
             most_streams: self.most_streams,
         })
     }
