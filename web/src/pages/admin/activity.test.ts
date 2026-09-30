@@ -69,6 +69,26 @@ describe("sayLine", () => {
     );
   });
 
+  it("says a song was listened to, and by whom it is played", () => {
+    const said = sayLine(
+      line(
+        "watched",
+        {
+          user_name: "somebody",
+          kind: "song",
+          title: "Tides",
+          artist: "Amber Field",
+          album: "Tides",
+          played_seconds: 200,
+        },
+        WINDOWS_CHROME,
+      ),
+      t,
+    );
+    expect(said.title).toBe("activity.listened(somebody|Tides)");
+    expect(said.note).toBe("Amber Field · activity.played(work.minutes(3)) · device.on(Chrome|Windows)");
+  });
+
   it("says which release started, without the commit it was built from", () => {
     expect(sayLine(line("server_started", { version: "0.1.0 (ade0738b)" }), t).title).toBe(
       "activity.server_started(0.1.0)",

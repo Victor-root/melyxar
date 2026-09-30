@@ -1109,9 +1109,12 @@ async fn record_progress(
         &who,
         watcher,
         work_id,
-        Some(position),
-        body.paused,
-        body.leaving,
+        PlayerWord {
+            position: Some(position),
+            paused: body.paused,
+            leaving: body.leaving,
+            fresh: false,
+        },
     )
     .await?;
 
@@ -1130,6 +1133,10 @@ struct StillPlayingBody {
     paused: Option<bool>,
     #[serde(default)]
     leaving: bool,
+    /// The first word of a song just loaded, which is not a late word of the
+    /// one the device left a moment ago.
+    #[serde(default)]
+    fresh: bool,
 }
 
 async fn still_playing(
@@ -1143,14 +1150,26 @@ async fn still_playing(
         &who,
         watcher,
         parse_work(&body.work_id)?,
-        body.position_seconds
-            .filter(|seconds| seconds.is_finite())
-            .map(Millis::from_seconds_f64),
-        body.paused,
-        body.leaving,
+        PlayerWord {
+            position: body
+                .position_seconds
+                .filter(|seconds| seconds.is_finite())
+                .map(Millis::from_seconds_f64),
+            paused: body.paused,
+            leaving: body.leaving,
+            fresh: body.fresh,
+        },
     )
     .await?;
     Ok(Json(serde_json::json!({ "stop": stop })))
+}
+
+/// What a player said about what it has open.
+struct PlayerWord {
+    position: Option<Millis>,
+    paused: Option<bool>,
+    leaving: bool,
+    fresh: bool,
 }
 
 /// What a player said about the film it has open. Answers whether it has
@@ -1160,15 +1179,22 @@ async fn heard_from(
     who: &User,
     watcher: melyxar_app::watching::Viewer,
     work: melyxar_core::id::WorkId,
-    position: Option<Millis>,
-    paused: Option<bool>,
-    leaving: bool,
+    said: PlayerWord,
 ) -> Result<bool> {
-    if leaving {
+    if said.leaving {
         melyxar_app::watching::gone(state, watcher.device, work);
         return Ok(false);
     }
-    Ok(melyxar_app::watching::heard(state, who, watcher, work, position, paused).await?)
+    Ok(melyxar_app::watching::heard(
+        state,
+        who,
+        watcher,
+        work,
+        said.position,
+        said.paused,
+        said.fresh,
+    )
+    .await?)
 }
 
 /// Kept open by a player while it shows a film. Says "stop" the moment an
@@ -1182,6 +1208,7 @@ async fn player_line(
     RoutePath(work): RoutePath<String>,
 ) -> Result<Response> {
     let line = melyxar_app::watching::line(&state, watcher, parse_work(&work)?)
+        .await
         .ok_or_else(|| ServerError::not_found("that film is not playing on this device"))?;
     let told = futures_util::stream::unfold(Some(line), |line| async move {
         let mut line = line?;
@@ -1231,6 +1258,9 @@ pub(crate) struct WatchedView {
     series: Option<String>,
     season: Option<i32>,
     episode: Option<i32>,
+    /// For a song: who plays it, and its album.
+    artist: Option<String>,
+    album: Option<String>,
     picture: Option<String>,
     position_seconds: f64,
     duration_seconds: Option<f64>,
@@ -1301,6 +1331,8 @@ pub(crate) async fn watched_views(state: &AppState) -> melyxar_app::Result<Vec<W
                 series: one.series,
                 season: one.season,
                 episode: one.episode,
+                artist: one.artist,
+                album: one.album,
                 picture: one
                     .picture
                     .map(|path| format!("/api/v1/images/{path}")),
@@ -1309,6 +1341,7 @@ pub(crate) async fn watched_views(state: &AppState) -> melyxar_app::Result<Vec<W
                     .plan
                     .as_ref()
                     .and_then(|plan| plan.duration)
+                    .or(one.length)
                     .map(|duration| duration.as_seconds_f64()),
                 started_at: melyxar_core::time::to_text(one.started_at),
                 paused: one.paused,

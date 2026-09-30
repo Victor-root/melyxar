@@ -77,6 +77,22 @@ export function shareWatched(watched: Watched, position: number): number | null 
   return Math.min(1, Math.max(0, position / length));
 }
 
+/** The line over what is playing: its series for an episode, who plays it
+ *  and where it is for a song, its year for a film. */
+export function overOf(
+  watched: Watched,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string | null {
+  const episode = episodeOf(watched, t);
+  if (episode !== null) {
+    return episode;
+  }
+  if (watched.artist !== null) {
+    return [watched.artist, watched.album].filter((part) => part).join(" · ") || null;
+  }
+  return watched.year !== null ? String(watched.year) : null;
+}
+
 /** Which episode, when it is one: its series and where it sits in it. */
 export function episodeOf(
   watched: Watched,

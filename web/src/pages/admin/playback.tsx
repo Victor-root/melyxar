@@ -21,6 +21,7 @@ import {
   FilmIcon,
   GraphicsCardIcon,
   HistoryIcon,
+  MusicIcon,
   PeopleIcon,
   PlaybackIcon,
   PlayIcon,
@@ -41,7 +42,7 @@ import { PauseIcon } from "../../player/icons";
 import { containerName } from "../../readable";
 import { useSettings } from "../../settings";
 import { ActivityJournal } from "./activity-list";
-import { countedOf, episodeOf, positionNow, shareWatched, useNowPlaying } from "./playing";
+import { countedOf, overOf, positionNow, shareWatched, useNowPlaying } from "./playing";
 
 type Wording = (key: string, values?: Record<string, string | number>) => string;
 
@@ -146,7 +147,7 @@ function MethodPill({ decision }: { decision: WatchedDecision | null }) {
 /** What is playing, how far it has got, and whether it is moving. */
 function WatchedWords({ watched }: { watched: Watched }) {
   const { t } = useSettings();
-  const over = episodeOf(watched, t) ?? (watched.year !== null ? String(watched.year) : null);
+  const over = overOf(watched, t);
   return (
     <span className="watch-words">
       {over && <span className="watch-over">{over}</span>}
@@ -192,7 +193,8 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
   const position = positionNow(watched, heardAt, Math.max(now, heardAt));
   const share = shareWatched(watched, position);
   const { decision, producing } = watched;
-  const Placeholder = watched.series === null ? FilmIcon : SeriesIcon;
+  const Placeholder =
+    watched.kind === "song" ? MusicIcon : watched.series === null ? FilmIcon : SeriesIcon;
 
   const stop = async () => {
     setSending(true);
@@ -252,7 +254,11 @@ function WatchCard({ watched, heardAt }: { watched: Watched; heardAt: number }) 
           )}
 
           <div className="watch-foot">
-            <MethodPill decision={decision} />
+            {watched.kind === "song" ? (
+              <span className="method-pill method-direct">{t("method.music")}</span>
+            ) : (
+              <MethodPill decision={decision} />
+            )}
             {producing && (
               <span
                 className={`watch-speed${producing.speed < KEEPING_UP ? " watch-speed-behind" : ""}`}

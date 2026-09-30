@@ -221,6 +221,23 @@ async fn what_was_watched(database: &Database, work: WorkId) -> Result<Value> {
     let Some(watched) = database.work(work).await? else {
         return Ok(json!({}));
     };
+    if watched.kind == WorkKind::Song {
+        let song = database.music_song(work).await?;
+        return Ok(json!({
+            "kind": "song",
+            "title": watched.title,
+            "artist": song.as_ref().map(|song| {
+                song.artists
+                    .iter()
+                    .map(|artist| artist.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }),
+            "album": song
+                .as_ref()
+                .and_then(|song| song.album.as_ref().map(|album| album.name.clone())),
+        }));
+    }
     if watched.kind != WorkKind::Episode {
         return Ok(json!({ "title": watched.title, "year": watched.release_year }));
     }
@@ -699,6 +716,50 @@ mod tests {
         assert_eq!(line.details["method"], "direct_play");
 
         assert_eq!(page(&state, &[], None, 10).await.expect("read").len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_song_listened_to_is_written_as_a_song() {
+        let (_held, state) = a_server().await;
+        let library = state
+            .database()
+            .library_by_name("Films")
+            .await
+            .expect("read")
+            .expect("declared");
+        let song = state
+            .database()
+            .create_work(library.id, WorkKind::Song, "Tides", "Tides", None)
+            .await
+            .expect("work created")
+            .id;
+        let user = state
+            .database()
+            .create_user("somebody", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
+        record(
+            &state,
+            Event::Watched(Viewing {
+                user,
+                user_name: "somebody".to_string(),
+                device: "a browser".to_string(),
+                browser: None,
+                work: song,
+                method: None,
+                played: Duration::from_secs(200),
+                reached: Millis::from_seconds_f64(200.0),
+                length: None,
+                started_at: melyxar_core::time::now(),
+                stopped_by_administrator: false,
+            }),
+        )
+        .await;
+
+        let lines = page(&state, &[Category::Playback], None, 10).await.expect("read");
+        assert_eq!(lines[0].details["kind"], "song");
+        assert_eq!(lines[0].details["title"], "Tides");
     }
 
     #[tokio::test]

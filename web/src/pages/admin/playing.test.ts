@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Watched, WatchedDecision } from "../../api";
-import { countedOf, episodeOf, positionNow, shareWatched } from "./playing";
+import { countedOf, episodeOf, overOf, positionNow, shareWatched } from "./playing";
 
 function watched(changes: Partial<Watched> = {}): Watched {
   return {
@@ -15,6 +15,8 @@ function watched(changes: Partial<Watched> = {}): Watched {
     series: null,
     season: null,
     episode: null,
+    artist: null,
+    album: null,
     picture: null,
     position_seconds: 0,
     duration_seconds: null,
@@ -94,5 +96,23 @@ describe("episodeOf", () => {
     );
     expect(episodeOf(watched({ series: "Lantern Street" }), t)).toBe("Lantern Street");
     expect(episodeOf(watched(), t)).toBeNull();
+  });
+});
+
+describe("the line over what is playing", () => {
+  const t = (key: string) => key;
+
+  it("names who plays a song and its album", () => {
+    expect(overOf(watched({ kind: "song", artist: "Amber Field", album: "Tides" }), t)).toBe(
+      "Amber Field · Tides",
+    );
+    expect(overOf(watched({ kind: "song", artist: "Amber Field", album: null }), t)).toBe(
+      "Amber Field",
+    );
+  });
+
+  it("gives the year of a film", () => {
+    expect(overOf(watched(), t)).toBe("2019");
+    expect(overOf(watched({ year: null }), t)).toBeNull();
   });
 });
