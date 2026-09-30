@@ -1740,6 +1740,25 @@ export interface Producing {
   speed: number;
 }
 
+/** How the server is reached. */
+export type AccessMode = "proxy" | "self_signed" | "provided" | "automatic";
+
+/** How the server is reached, and what came of it. */
+export interface AccessStatus {
+  mode: AccessMode;
+  certificate_path: string | null;
+  private_key_path: string | null;
+  /** The certificate in use, when the server encrypts. */
+  certificate: {
+    names: string[];
+    issuer: string;
+    not_before: string;
+    not_after: string;
+  } | null;
+  /** Why it does not, when it should, as a word. */
+  problem: string | null;
+}
+
 /** One line of the activity journal. What it says beyond its columns is in
  *  `details`, whose fields depend on `kind`. */
 export interface ActivityLine {
@@ -2140,6 +2159,13 @@ export const api = {
     if (most) asked.set("most", String(most));
     return get<ActivityPage>(`/api/v1/system/activity?${asked.toString()}`, signal);
   },
+  access: (signal?: AbortSignal) => get<AccessStatus>("/api/v1/system/security/access", signal),
+  chooseAccess: (mode: AccessMode, certificatePath: string | null, privateKeyPath: string | null) =>
+    put<AccessStatus>("/api/v1/system/security/access", {
+      mode,
+      certificate_path: certificatePath,
+      private_key_path: privateKeyPath,
+    }),
   signInTries: (signal?: AbortSignal) =>
     get<{ tries: number }>("/api/v1/system/security/tries", signal),
   setSignInTries: (tries: number) =>
