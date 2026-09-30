@@ -202,6 +202,7 @@ function AccessPanel() {
       {draft && (
         <>
           <Setting
+            stacked
             label={t("admin.access_mode")}
             why={t(`admin.access.${draft.mode}_why`)}
           >
@@ -243,6 +244,7 @@ function AccessPanel() {
           )}
           {draft.mode !== "proxy" && (
             <Setting
+              stacked
               label={t("admin.access_redirect")}
               why={t(
                 `admin.access_redirect.${draft.redirect ? "on" : "off"}_why`,

@@ -24,7 +24,13 @@ import { useSection } from "./sectioned";
  * The icon and the name come from the section the page is drawn in, so the
  * side bar and the head of the page can never name a page two ways.
  */
-export function PageHead({ lead, actions }: { lead: string; actions?: ReactNode }) {
+export function PageHead({
+  lead,
+  actions,
+}: {
+  lead: string;
+  actions?: ReactNode;
+}) {
   const { t } = useSettings();
   const section = useSection();
   const SectionIcon = section.icon;
@@ -131,13 +137,26 @@ export function Setting({
   label,
   why,
   soon,
+  stacked,
   children,
 }: {
   label: string;
   why?: ReactNode;
   soon?: boolean;
+  /** The control under the label and above what it does, for a choice whose
+   *  wording is long enough that a control at the far end would be lost. */
+  stacked?: boolean;
   children: ReactNode;
 }) {
+  if (stacked) {
+    return (
+      <div className="setting setting-stacked">
+        <span className="setting-label">{label}</span>
+        <div className="setting-control">{children}</div>
+        {why && <span className="setting-why">{why}</span>}
+      </div>
+    );
+  }
   return (
     <div className={`setting${soon ? " setting-soon" : ""}`}>
       <div className="setting-words">
@@ -189,20 +208,46 @@ export function Toggle({
  */
 /** Where a picker's list goes: under its field, or over it when the window
     has more room there, never running past the edge of the window. */
-type Placed = { top?: number; bottom?: number; left: number; width: number; room: number };
+type Placed = {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+  width: number;
+  room: number;
+};
 
 const LIST_GAP = 6;
 const LIST_TALLEST = 340;
 
-export function placeList(field: DOMRect, height: number): Placed {
+export function placeList(
+  field: DOMRect,
+  height: number,
+  across: number = Infinity,
+): Placed {
   const below = height - field.bottom - LIST_GAP * 2;
   const above = field.top - LIST_GAP * 2;
-  const left = field.left;
   const width = field.width;
+  // A list wider than its field grows away from the nearer edge of the
+  // window, so it stays on the page whatever its longest line says.
+  const side =
+    field.left + width / 2 > across / 2
+      ? { right: across - field.right }
+      : { left: field.left };
   if (below >= LIST_TALLEST || below >= above) {
-    return { top: field.bottom + LIST_GAP, left, width, room: Math.min(LIST_TALLEST, below) };
+    return {
+      top: field.bottom + LIST_GAP,
+      ...side,
+      width,
+      room: Math.min(LIST_TALLEST, below),
+    };
   }
-  return { bottom: height - field.top + LIST_GAP, left, width, room: Math.min(LIST_TALLEST, above) };
+  return {
+    bottom: height - field.top + LIST_GAP,
+    ...side,
+    width,
+    room: Math.min(LIST_TALLEST, above),
+  };
 }
 
 export function Picker<T extends string>({
@@ -232,7 +277,13 @@ export function Picker<T extends string>({
     const place = () => {
       const it = field.current?.getBoundingClientRect();
       if (it) {
-        setUnder(placeList(it, window.innerHeight));
+        setUnder(
+          placeList(
+            it,
+            window.innerHeight,
+            document.documentElement.clientWidth,
+          ),
+        );
       }
     };
     place();
@@ -275,7 +326,9 @@ export function Picker<T extends string>({
     document.addEventListener("keydown", away);
     // The chosen line takes the focus, so the arrow and tab keys start from
     // where the answer already is.
-    list.current?.querySelector<HTMLButtonElement>("[aria-selected=true]")?.focus();
+    list.current
+      ?.querySelector<HTMLButtonElement>("[aria-selected=true]")
+      ?.focus();
     return () => {
       document.removeEventListener("mousedown", elsewhere);
       document.removeEventListener("keydown", away);
@@ -290,7 +343,9 @@ export function Picker<T extends string>({
       return;
     }
     event.preventDefault();
-    const lines = [...(list.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+    const lines = [
+      ...(list.current?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+    ];
     const at = lines.indexOf(document.activeElement as HTMLButtonElement);
     const next = event.key === "ArrowDown" ? at + 1 : at - 1;
     lines[(next + lines.length) % lines.length]?.focus();
@@ -324,6 +379,7 @@ export function Picker<T extends string>({
               top: under.top,
               bottom: under.bottom,
               left: under.left,
+              right: under.right,
               minWidth: under.width,
               maxHeight: under.room,
             }}
@@ -389,7 +445,10 @@ export function Slider({
   const share = max > min ? (value - min) / (max - min) : 0;
   return (
     <span className="slider">
-      <span className="slider-rail" style={{ ["--share" as string]: `${share}` }}>
+      <span
+        className="slider-rail"
+        style={{ ["--share" as string]: `${share}` }}
+      >
         <input
           type="range"
           min={min}
@@ -478,7 +537,9 @@ export function Stat({
         <span className="stat-label">{label}</span>
         <span className="stat-value">
           {value}
-          {state && <span className={`state-dot state-${state}`} aria-hidden="true" />}
+          {state && (
+            <span className={`state-dot state-${state}`} aria-hidden="true" />
+          )}
         </span>
         {note && <span className="stat-note">{note}</span>}
       </span>
@@ -490,7 +551,13 @@ export function Stat({
 export type State = "ok" | "attention" | "trouble";
 
 /** A state said in a word, in its own colour. */
-export function StatePill({ state, children }: { state: State; children: ReactNode }) {
+export function StatePill({
+  state,
+  children,
+}: {
+  state: State;
+  children: ReactNode;
+}) {
   return (
     <span className={`state-pill state-${state}`}>
       <span className="state-dot" aria-hidden="true" />
