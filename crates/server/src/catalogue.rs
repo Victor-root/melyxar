@@ -580,6 +580,9 @@ struct HomeView {
     /// The sections to draw below the banner, in order: band, carry_on,
     /// up_next, recently_added and libraries, those this viewer shows.
     sections: Vec<&'static str>,
+    /// The kinds of library in the order this viewer chose, for the tiles that
+    /// lead to them.
+    kind_order: Vec<&'static str>,
 }
 
 /// One work the page opens on, and why it is there.
@@ -739,6 +742,7 @@ async fn home(
         works: page.works,
         awaiting_identification: page.awaiting_identification,
         sections: page.sections.iter().map(|section| section.as_str()).collect(),
+        kind_order: page.kind_order.iter().map(|kind| kind.as_str()).collect(),
     }))
 }
 

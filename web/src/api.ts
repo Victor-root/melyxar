@@ -668,6 +668,9 @@ export interface Home {
   awaiting_identification: number;
   /** The sections this viewer shows below the banner, in their order. */
   sections: HomeSection[];
+  /** The kinds of library in the order this viewer chose, which the tiles
+      leading to them follow, music's among them. */
+  kind_order: LibraryKind[];
 }
 
 /** One section of the home page below its banner: the newest of each kind
