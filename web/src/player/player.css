@@ -2126,6 +2126,17 @@
   transform: translateX(-50%) scale(1);
 }
 
+/* Under a resting hand the word waits a second, as the browser's own do, so
+   passing over the buttons does not flash one after another. It goes at
+   once when the hand leaves, and comes at once for the keyboard. */
+.player-button[aria-label]:hover::before {
+  transition-delay: 1s;
+}
+
+.player-button[aria-label]:focus-visible::before {
+  transition-delay: 0s;
+}
+
 /* The corner is the one place there is nothing above a button, so its word
    goes underneath instead of off the top of the screen. */
 .player-top .player-button[aria-label]::before {
