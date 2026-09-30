@@ -24,6 +24,7 @@ import { useMusicMarks } from "../marks";
 import { QueueIcon, RepeatIcon, ShuffleIcon, StopIcon } from "./icons";
 import { useMusicTime } from "./player";
 import type { Music } from "./player";
+import { canStepBack, canStepOn } from "./queue";
 
 /** How large the play button's icon is drawn. */
 const PLAY_ICON = 34;
@@ -48,8 +49,11 @@ export function PlayButton({ music }: { music: Music }) {
   );
 }
 
-export function SongStepButton({ music, back }: { music: Music; back: boolean }) {
+export function SongStepButton({ music, back, onlyIfThere }: { music: Music; back: boolean; onlyIfThere?: boolean }) {
   const { t } = useSettings();
+  if (onlyIfThere && !(back ? canStepBack(music.queue) : canStepOn(music.queue))) {
+    return null;
+  }
   return (
     <button
       type="button"
@@ -91,14 +95,14 @@ export function StopButton({ music }: { music: Music }) {
 
 /** The transport in the order the film's player has it, with the button that
     stops for good after the one that goes to the next song. */
-export function Transport({ music }: { music: Music }) {
+export function Transport({ music, onlyIfThere }: { music: Music; onlyIfThere?: boolean }) {
   return (
     <>
-      <SongStepButton music={music} back />
+      <SongStepButton music={music} back onlyIfThere={onlyIfThere} />
       <SecondsButton music={music} back />
       <PlayButton music={music} />
       <SecondsButton music={music} back={false} />
-      <SongStepButton music={music} back={false} />
+      <SongStepButton music={music} back={false} onlyIfThere={onlyIfThere} />
       <StopButton music={music} />
     </>
   );

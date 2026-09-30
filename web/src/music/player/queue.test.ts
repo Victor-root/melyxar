@@ -3,6 +3,8 @@ import type { Song } from "../api";
 import {
   afterTheEnd,
   backward,
+  canStepBack,
+  canStepOn,
   current,
   forward,
   jumpTo,
@@ -99,5 +101,34 @@ describe("changing what is to come", () => {
     const queue = playing(ABCD, 0, false, "off");
     expect(current(jumpTo(queue, 3))?.title).toBe("d");
     expect(jumpTo(queue, 9)).toBe(queue);
+  });
+});
+
+describe("the songs there are to step to", () => {
+  it("offers neither on a lone song, whatever the repeat", () => {
+    for (const repeat of ["off", "all", "one"] as const) {
+      const queue = playing([song("a")], 0, false, repeat);
+      expect(canStepBack(queue)).toBe(false);
+      expect(canStepOn(queue)).toBe(false);
+    }
+  });
+
+  it("offers only the way there is a song to go to", () => {
+    const first = playing(ABCD, 0, false, "off");
+    expect(canStepBack(first)).toBe(false);
+    expect(canStepOn(first)).toBe(true);
+    const last = playing(ABCD, 3, false, "off");
+    expect(canStepBack(last)).toBe(true);
+    expect(canStepOn(last)).toBe(false);
+    const middle = playing(ABCD, 1, false, "off");
+    expect(canStepBack(middle)).toBe(true);
+    expect(canStepOn(middle)).toBe(true);
+  });
+
+  it("offers both on the ends of a queue that goes round", () => {
+    const first = playing(ABCD, 0, false, "all");
+    expect(canStepBack(first)).toBe(true);
+    const last = playing(ABCD, 3, false, "all");
+    expect(canStepOn(last)).toBe(true);
   });
 });
