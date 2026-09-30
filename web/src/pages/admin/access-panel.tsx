@@ -23,6 +23,39 @@ const ACCESS: AccessMode[] = ["proxy", "self_signed", "provided"];
 type Redirect = "on" | "off";
 const REDIRECTS: Redirect[] = ["on", "off"];
 
+/** A text field with its name and what it takes said above it, since a
+ *  placeholder is gone as soon as something is typed and is cut short when
+ *  the card is narrow. */
+function Field({
+  label,
+  why,
+  example,
+  value,
+  onChange,
+}: {
+  label: string;
+  why: string;
+  example: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="access-field">
+      <span className="setting-label">{label}</span>
+      <span className="setting-why">{why}</span>
+      <input
+        type="text"
+        className="field-line"
+        placeholder={example}
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
 export function AccessPanel() {
   const { t, language } = useSettings();
   const toast = useToast();
@@ -130,27 +163,19 @@ export function AccessPanel() {
           </Setting>
           {draft.mode === "provided" && (
             <div className="access-form">
-              <input
-                type="text"
-                className="field-line"
-                aria-label={t("admin.access_certificate_path")}
-                placeholder={t("admin.access_certificate_path")}
-                autoComplete="off"
-                spellCheck={false}
+              <Field
+                label={t("admin.access_certificate_path")}
+                why={t("admin.access_certificate_path_why")}
+                example="/etc/ssl/melyxar.crt"
                 value={draft.certificatePath}
-                onChange={(event) =>
-                  edit({ certificatePath: event.target.value })
-                }
+                onChange={(certificatePath) => edit({ certificatePath })}
               />
-              <input
-                type="text"
-                className="field-line"
-                aria-label={t("admin.access_key_path")}
-                placeholder={t("admin.access_key_path")}
-                autoComplete="off"
-                spellCheck={false}
+              <Field
+                label={t("admin.access_key_path")}
+                why={t("admin.access_key_path_why")}
+                example="/etc/ssl/melyxar.key"
                 value={draft.keyPath}
-                onChange={(event) => edit({ keyPath: event.target.value })}
+                onChange={(keyPath) => edit({ keyPath })}
               />
             </div>
           )}
@@ -175,15 +200,12 @@ export function AccessPanel() {
           )}
           {draft.mode === "self_signed" && (
             <div className="access-form">
-              <input
-                type="text"
-                className="field-line"
-                aria-label={t("admin.access_names")}
-                placeholder={t("admin.access_names")}
-                autoComplete="off"
-                spellCheck={false}
+              <Field
+                label={t("admin.access_names")}
+                why={t("admin.access_names_why")}
+                example="media.example.org"
                 value={draft.names}
-                onChange={(event) => edit({ names: event.target.value })}
+                onChange={(names) => edit({ names })}
               />
             </div>
           )}

@@ -411,6 +411,16 @@
 .access-form {
   display: flex;
   flex-direction: column;
-  gap: var(--gap-tight);
+  gap: var(--gap);
   margin-top: var(--gap);
+}
+
+.access-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.access-field .field-line {
+  margin-top: 6px;
 }
