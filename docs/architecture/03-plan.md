@@ -286,7 +286,7 @@ Fait depuis, en avance sur ce jalon : la moitié serveur du refus de la conversi
 
 ## Jalon 9 : accès et chiffrement
 
-État : à faire.
+État : en cours. Fait : le choix à l'écran, un seul port pour le chiffré et le non chiffré, le certificat auto-signé et le certificat fourni, appliqués sans redémarrage. Reste : le certificat obtenu automatiquement.
 
 - Quatre options présentées honnêtement : derrière un reverse proxy, certificat auto-signé, certificat fourni par l'administrateur, certificat reconnu obtenu automatiquement avec un nom de domaine.
 - Service HTTPS par le serveur lui-même pour les options concernées.

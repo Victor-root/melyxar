@@ -406,3 +406,11 @@
     transition: none;
   }
 }
+
+/* The two paths of a provided certificate, under the ways in. */
+.access-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  margin-top: var(--gap);
+}
