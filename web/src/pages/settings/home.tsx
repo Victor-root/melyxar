@@ -22,7 +22,7 @@ import {
   KindIcon,
   SlidersIcon,
 } from "../../icons";
-import { kindsHeld, kindsOnTheHomePage, nameOfKind, newestOfKind, useLibraries } from "../../libraries";
+import { kindsHeld, nameOfKind, newestOfKind, useLibraries } from "../../libraries";
 import { useMarks } from "../../marks";
 import { kindOfSection, sectionsOnOffer } from "../../screens/home";
 import { usePreferences } from "../../screens/settings";
@@ -226,7 +226,7 @@ function LibraryOrder({ preferences }: { preferences: Preferences }) {
   if (!kept) {
     return null;
   }
-  const shown = kindsOnTheHomePage(kept.home_order, libraries.all);
+  const shown = kindsHeld(kept.home_order, libraries.all);
 
   return (
     <Panel icon={HomeIcon} title={t("settings.library_order")} lead={t("settings.library_order_why")}>

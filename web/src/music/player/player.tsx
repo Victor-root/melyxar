@@ -436,6 +436,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       const after = afterTheEnd(queueNow.current);
       if (!after) {
         setPlaying(false);
+        // The last second is rounded away by the clock: a song that has
+        // ended shows its whole length played.
+        time.set({ ...time.now, position: time.now.length, loaded: time.now.length });
         return;
       }
       wantsToPlay.current = true;
