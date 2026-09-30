@@ -604,9 +604,26 @@
 }
 
 /* The page ends where the bar begins, so the bar is a part of the page: it
-   shows the same ground and the same backdrop, and nothing scrolls under it. */
+   shows the same ground and the same backdrop, and nothing scrolls under it.
+   What reaches the bar gives way to the page behind it the way the banner of
+   the home page does, in the same shape: holding almost full strength at
+   first and letting go faster the lower it gets. */
 :root[data-music-bar] .shell {
+  --music-bar-fade: linear-gradient(
+    to bottom,
+    #000 calc(100% - 64px),
+    color-mix(in srgb, #000 88%, transparent) calc(100% - 50px),
+    color-mix(in srgb, #000 56%, transparent) calc(100% - 34px),
+    color-mix(in srgb, #000 24%, transparent) calc(100% - 16px),
+    transparent 100%
+  );
+
   padding-bottom: var(--music-bar-height);
+}
+
+:root[data-music-bar] .shell-scroll {
+  mask-image: var(--music-bar-fade);
+  -webkit-mask-image: var(--music-bar-fade);
 }
 
 :root[data-music-bar] .toasts {
