@@ -100,7 +100,12 @@
   inset: 0;
   z-index: 100;
   background: #000;
+}
 
+/* The player of music wears the same dark, over the interface instead of over
+   a film. */
+.player,
+.music-dark {
   /* The theme's own tokens, answered dark for everything inside the player.
      Every rule below reads these rather than a colour, so the player is one
      edit away from following the interface again if that is ever wanted, and

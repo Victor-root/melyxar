@@ -1,0 +1,282 @@
+/*
+ * The controls of the player of music, drawn with the classes and the icons
+ * of the player of films: the two are one design with two engines behind
+ * it, and a button that looked different here would be a second player to
+ * learn.
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
+import { asClock } from "../../clock";
+import { HeartIcon } from "../../icons";
+import {
+  NextEpisodeIcon,
+  PauseIcon,
+  PlayIcon,
+  PreviousEpisodeIcon,
+  StepBackIcon,
+  StepOnIcon,
+} from "../../player/icons";
+import { previewPlace } from "../../player/seek";
+import { ICON, SoundControl } from "../../player/sound";
+import { useSettings } from "../../settings";
+import { useMusicMarks } from "../marks";
+import { QueueIcon, RepeatIcon, ShuffleIcon } from "./icons";
+import { useMusicTime } from "./player";
+import type { Music } from "./player";
+
+/** How large the play button's icon is drawn. */
+const PLAY_ICON = 34;
+
+/** How far the two step buttons and the arrow keys jump, in seconds. */
+const STEP = 10;
+const KEY_STEP = 5;
+
+/** How wide the time shown over the bar is, for keeping it inside it. */
+const TIME_ACROSS = 64;
+
+export function PlayButton({ music }: { music: Music }) {
+  const { t } = useSettings();
+  return (
+    <button
+      type="button"
+      className={`player-button player-button-play${music.waiting ? " music-waiting" : ""}`}
+      onClick={music.toggle}
+      aria-label={t(music.playing ? "music.pause" : "music.play")}
+    >
+      {music.playing ? <PauseIcon size={PLAY_ICON} /> : <PlayIcon size={PLAY_ICON} />}
+    </button>
+  );
+}
+
+export function SongStepButton({ music, back }: { music: Music; back: boolean }) {
+  const { t } = useSettings();
+  return (
+    <button
+      type="button"
+      className="player-button"
+      onClick={back ? music.previous : music.next}
+      aria-label={t(back ? "music.previous" : "music.next")}
+    >
+      {back ? <PreviousEpisodeIcon size={ICON} /> : <NextEpisodeIcon size={ICON} />}
+    </button>
+  );
+}
+
+/** The two jumps within the song, back and on. */
+export function SecondsButton({ music, back }: { music: Music; back: boolean }) {
+  const { t } = useSettings();
+  const { position, length } = useMusicTime();
+  const go = () => music.seek(Math.min(Math.max(position + (back ? -STEP : STEP), 0), length));
+  return (
+    <button
+      type="button"
+      className="player-button"
+      onClick={go}
+      aria-label={t(back ? "player.step_back" : "player.step_on", { seconds: STEP })}
+    >
+      {back ? <StepBackIcon seconds={STEP} size={ICON} /> : <StepOnIcon seconds={STEP} size={ICON} />}
+    </button>
+  );
+}
+
+/** The transport in the order the film's player has it. */
+export function Transport({ music }: { music: Music }) {
+  return (
+    <>
+      <SongStepButton music={music} back />
+      <SecondsButton music={music} back />
+      <PlayButton music={music} />
+      <SecondsButton music={music} back={false} />
+      <SongStepButton music={music} back={false} />
+    </>
+  );
+}
+
+export function HeartButton({ id }: { id: string }) {
+  const { t } = useSettings();
+  const marks = useMusicMarks();
+  const liked = marks.liked(id);
+  const label = t(liked ? "card.unfavourite" : "card.favourite");
+  return (
+    <button
+      type="button"
+      className={`player-button${liked ? " player-button-lit" : ""}`}
+      aria-pressed={liked}
+      aria-label={label}
+      onClick={() => marks.setLiked(id, !liked)}
+    >
+      <HeartIcon size={ICON} filled={liked} />
+    </button>
+  );
+}
+
+export function Volume({ music }: { music: Music }) {
+  const { t } = useSettings();
+  return (
+    <SoundControl
+      loudness={music.loudness.volume}
+      muted={music.loudness.muted}
+      onMuted={music.setMuted}
+      onLoudness={music.setVolume}
+      t={t}
+    />
+  );
+}
+
+/** Shuffle and repeat, lit when they are on. */
+export function Ways({ music }: { music: Music }) {
+  const { t } = useSettings();
+  const { shuffle, repeat } = music.queue;
+  return (
+    <>
+      <button
+        type="button"
+        className={`player-button${shuffle ? " player-button-lit" : ""}`}
+        onClick={music.toggleShuffle}
+        aria-pressed={shuffle}
+        aria-label={t("music.shuffle")}
+      >
+        <ShuffleIcon size={ICON} />
+      </button>
+      <button
+        type="button"
+        className={`player-button${repeat !== "off" ? " player-button-lit" : ""}`}
+        onClick={music.cycleRepeat}
+        aria-label={t(`music.repeat.${repeat}`)}
+      >
+        <RepeatIcon one={repeat === "one"} size={ICON} />
+      </button>
+    </>
+  );
+}
+
+export function QueueButton({ music, lit = false }: { music: Music; lit?: boolean }) {
+  const { t } = useSettings();
+  return (
+    <button
+      type="button"
+      className={`player-button${lit ? " player-button-open" : ""}`}
+      onClick={() => music.setOpen(true)}
+      aria-label={t("music.queue")}
+    >
+      <QueueIcon size={ICON} />
+    </button>
+  );
+}
+
+/**
+ * How far into the song, with the time already played at one end and the
+ * time left at the other, drawn as the bar of a film is: a hand on it swells
+ * it and shows the time under the pointer, and while it is held the song
+ * stays where it is and letting go is the move.
+ */
+export function Rail({ music }: { music: Music }) {
+  const { t } = useSettings();
+  const { position, length } = useMusicTime();
+  const rail = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [held, setHeld] = useState<number | null>(null);
+  const [railWidth, setRailWidth] = useState(0);
+
+  const shareAt = useCallback((clientX: number): number | null => {
+    const bar = rail.current?.getBoundingClientRect();
+    if (!bar || bar.width <= 0) {
+      return null;
+    }
+    setRailWidth(bar.width);
+    return Math.min(1, Math.max(0, (clientX - bar.left) / bar.width));
+  }, []);
+
+  /* Followed on the window rather than on the bar: a finger that leaves the
+     bar while still held down is still dragging. */
+  const dragging = held !== null;
+  useEffect(() => {
+    if (!dragging) {
+      return;
+    }
+    const moved = (event: PointerEvent) => {
+      const share = shareAt(event.clientX);
+      if (share !== null) {
+        setHeld(share);
+        setHovered(share);
+      }
+    };
+    const letGo = (event: PointerEvent) => {
+      const share = shareAt(event.clientX);
+      if (share !== null && length > 0) {
+        music.seek(share * length);
+      }
+      setHeld(null);
+      setHovered(null);
+    };
+    window.addEventListener("pointermove", moved);
+    window.addEventListener("pointerup", letGo);
+    window.addEventListener("pointercancel", letGo);
+    return () => {
+      window.removeEventListener("pointermove", moved);
+      window.removeEventListener("pointerup", letGo);
+      window.removeEventListener("pointercancel", letGo);
+    };
+  }, [dragging, shareAt, length, music]);
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const by = event.key === "ArrowRight" ? KEY_STEP : event.key === "ArrowLeft" ? -KEY_STEP : 0;
+    if (by !== 0) {
+      event.preventDefault();
+      music.seek(Math.min(Math.max(position + by, 0), length));
+    }
+  };
+
+  const played = held ?? (length > 0 ? Math.min(1, position / length) : 0);
+  const shown = held !== null ? held * length : position;
+  const previewed = hovered !== null && length > 0 ? hovered * length : null;
+  const { left: previewLeft } = previewPlace(TIME_ACROSS, hovered ?? 0, railWidth);
+
+  return (
+    <div className="player-seek">
+      <span className="player-seek-end">
+        <span className="player-clock">{asClock(shown)}</span>
+      </span>
+      <div
+        className="player-rail"
+        ref={rail}
+        role="slider"
+        tabIndex={0}
+        aria-label={t("music.position")}
+        aria-valuemin={0}
+        aria-valuemax={Math.round(length)}
+        aria-valuenow={Math.round(shown)}
+        aria-valuetext={asClock(shown)}
+        onKeyDown={onKeyDown}
+        onPointerDown={(event) => {
+          const share = shareAt(event.clientX);
+          if (share !== null) {
+            setHeld(share);
+            setHovered(share);
+          }
+        }}
+        onPointerMove={(event) => setHovered(shareAt(event.clientX))}
+        onPointerLeave={() => {
+          if (!dragging) {
+            setHovered(null);
+          }
+        }}
+      >
+        {previewed !== null && (
+          <div className="player-preview" style={{ left: `${previewLeft}px` }} aria-hidden="true">
+            <span className="player-preview-time">{asClock(previewed)}</span>
+          </div>
+        )}
+        <span className="player-rail-fill">
+          <span className="player-rail-track" />
+          <span className="player-rail-played" style={{ width: `${played * 100}%` }} />
+        </span>
+        <span className="player-rail-handle" style={{ left: `${played * 100}%` }} />
+      </div>
+      <span className="player-seek-end">
+        <span className="player-clock">{length > 0 ? `-${asClock(Math.max(length - shown, 0))}` : ""}</span>
+      </span>
+    </div>
+  );
+}

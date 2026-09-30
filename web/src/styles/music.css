@@ -587,7 +587,7 @@
 /* Room at the foot of every page while the bar is there, so its end is
    never under the bar; and the words said in the corner rise above it. */
 :root {
-  --music-bar-height: 76px;
+  --music-bar-height: 112px;
 }
 
 :root[data-music-bar] .shell-scroll {
@@ -603,27 +603,30 @@
  * ----------------------------------------------------------------------- */
 
 /* Over the page and its scroll bar, under the bar at the top and the menus
-   that open from it. */
+   that open from it. Drawn as the strip along the bottom of a film: the same
+   pane, the same bar, the same buttons. */
 .music-bar-dock {
   position: fixed;
   right: 0;
   bottom: 0;
   left: 0;
   z-index: 18;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   height: var(--music-bar-height);
-  border-top: 1px solid var(--border);
-  background: var(--header-glass);
+  padding: 0 var(--player-inset);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   backdrop-filter: blur(22px) saturate(1.3);
-  box-shadow: var(--shadow-raised);
+  border-top: 1px solid var(--border);
+  color: var(--text);
 }
 
-.music-bar-inner {
+.music-bar-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--gap);
-  height: 100%;
-  padding: 0 var(--gutter);
 }
 
 .music-bar-now {
@@ -662,17 +665,19 @@
   font-size: 0.9em;
 }
 
-.music-bar-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.music-bar-dock .music-bar-phone {
+  display: none;
 }
 
-.music-bar-side {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 4px;
+/* Waiting for the sound: the play button breathes rather than lying. */
+.music-waiting {
+  animation: music-waiting 1.1s var(--ease) infinite alternate;
+}
+
+@keyframes music-waiting {
+  to {
+    opacity: 0.45;
+  }
 }
 
 .music-now-cover {
@@ -700,147 +705,30 @@
   box-shadow: var(--shadow-raised);
 }
 
-.music-control {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-soft);
-  cursor: pointer;
-  transition:
-    background var(--quick) var(--ease),
-    color var(--quick) var(--ease),
-    transform var(--quick) var(--ease);
-}
-
-.music-control:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.music-control-on,
-.music-control-on:hover {
-  color: var(--accent-bright);
-}
-
-.music-control-main {
-  width: 46px;
-  height: 46px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  box-shadow: 0 4px 16px var(--accent-glow);
-}
-
-.music-control-main:hover {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  transform: scale(1.06);
-}
-
-.music-control-large {
-  width: 68px;
-  height: 68px;
-}
-
-/* Waiting for the sound: the button breathes rather than lying. */
-.music-control-waiting {
-  animation: music-waiting 1.2s var(--ease) infinite alternate;
-}
-
-@keyframes music-waiting {
-  to {
-    box-shadow: 0 0 0 6px var(--accent-glow);
-  }
-}
-
-.music-clock {
-  margin-left: var(--gap-tight);
-  color: var(--text-soft);
-  font-size: 0.88em;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* How far into the song, along the top edge of the bar: a line that thickens
-   under a hand. */
-.music-progress,
-.music-volume {
-  appearance: none;
-  height: 4px;
-  margin: 0;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(
-    to right,
-    var(--accent) 0 var(--played, 0%),
-    var(--border-strong) var(--played, 0%) 100%
-  );
-  cursor: pointer;
-}
-
-.music-progress {
-  position: absolute;
-  top: -2px;
-  right: 0;
-  left: 0;
-  width: 100%;
-  transition: height var(--quick) var(--ease);
-}
-
-.music-progress:hover,
-.music-progress:focus-visible {
-  height: 6px;
-}
-
-.music-progress-standing {
-  position: static;
-  width: 100%;
-}
-
-.music-progress::-webkit-slider-thumb,
-.music-volume::-webkit-slider-thumb {
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--accent-bright);
-  box-shadow: 0 0 8px var(--accent-glow);
-}
-
-.music-progress::-moz-range-thumb,
-.music-volume::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--accent-bright);
-}
-
-.music-loudness {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.music-volume {
-  width: 96px;
-}
-
 /* --------------------------------------------------------------------------
  * The page of what is playing
  * ----------------------------------------------------------------------- */
 
-/* Over the whole interface, under the windows that ask something. */
+/* Over the whole interface, under the windows that ask something. Laid out
+   as the player of films is: the strip across the top, the bar and its
+   buttons along the bottom, and the song between them. */
 .music-now {
   position: fixed;
   inset: 0;
   z-index: 50;
-  overflow-y: auto;
-  background: var(--surface-deep);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.music-now .player-top {
+  padding-bottom: 0;
+  background: none;
+}
+
+.music-now .player-bottom {
+  padding-top: 24px;
 }
 
 .music-now-glow {
@@ -855,20 +743,17 @@
   pointer-events: none;
 }
 
-.music-now-close {
-  position: fixed;
-  top: var(--gap);
-  left: var(--gutter);
-  z-index: 1;
-}
-
 .music-now-body {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--gap-section);
+  width: 100%;
   max-width: 1300px;
   margin: 0 auto;
-  padding: calc(var(--gap-section) + var(--gap)) var(--gutter) var(--gap-section);
+  padding: var(--gap) var(--gutter) var(--gap);
+  overflow-y: auto;
 }
 
 .music-now-playing {
@@ -909,17 +794,6 @@
 .music-now-words a:hover {
   color: var(--accent-bright);
   text-decoration: underline;
-}
-
-.music-now-clock {
-  align-self: stretch;
-  text-align: right;
-}
-
-.music-now-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
 }
 
 .music-now-tabs {
@@ -1059,30 +933,48 @@
 
 @media (max-width: 760px) {
   :root {
-    --music-bar-height: 68px;
+    --music-bar-height: 104px;
+  }
+
+  .music-bar-dock {
+    padding: 0 var(--gap);
   }
 
   /* What is playing and the two buttons a thumb reaches for: the rest is
-     on the page of what is playing, a press away. */
-  .music-bar-inner {
+     on the page of what is playing, a press away. The clocks give their room
+     to the bar. */
+  .music-bar-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .music-bar-side,
-  .music-control-wide,
-  .music-bar-controls .music-clock {
+  .music-bar-dock .music-bar-transport,
+  .music-bar-dock .music-bar-tools,
+  .music-bar-dock .player-seek-end {
     display: none;
+  }
+
+  .music-bar-dock .music-bar-phone {
+    display: flex;
   }
 
   .music-now-cover {
     width: 46px;
   }
 
-  /* Clear of the button that closes the page, which stays in its corner. */
   .music-now-body {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--gap-wide);
-    padding-top: calc(var(--gap) + 56px);
+  }
+
+  /* Only what a thumb needs on the page of what is playing: the clocks and
+     the steps give way, and the rest wraps rather than running off. */
+  .music-now .player-row {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .music-now .player-seek-end {
+    display: none;
   }
 
   .music-now-cover-large {

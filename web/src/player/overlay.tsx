@@ -61,6 +61,7 @@ import type { Mark } from "./logo";
 import { captionOf } from "../readable";
 import { Panels } from "./panels";
 import { Seek } from "./seek";
+import { ICON, SoundControl, levelOf } from "./sound";
 import type { Panel, Shape, Turn } from "./panels";
 import { useMarks } from "../marks";
 import { markTheOpening } from "./opening";
@@ -69,7 +70,6 @@ import type { PlayerSettings } from "./settings";
 
 /* How large an icon is drawn, read from the stylesheet so that the sizes live
    in one place and a viewer changing them later changes them everywhere. */
-const ICON = 27;
 const PLAY_ICON = 34;
 
 /**
@@ -485,11 +485,6 @@ function Favourite({ card, t }: { card: Card; t: Props["t"] }) {
   );
 }
 
-/** What the sound icon shows for a share of the full sound. */
-function levelOf(loud: number): "off" | "low" | "middling" | "high" {
-  return loud === 0 ? "off" : loud < 0.34 ? "low" : loud < 0.67 ? "middling" : "high";
-}
-
 /** What every control is handed, which is the player and its surroundings. */
 export interface Surroundings extends Props {
   chapters: PlaybackChapter[];
@@ -802,41 +797,16 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
   }
 }
 
-/** The sound, always out where a hand can reach it rather than behind a button. */
 function Volume({ surroundings }: { surroundings: Surroundings }) {
   const { playback, t } = surroundings;
-  const loud = playback.muted ? 0 : playback.loudness;
   return (
-    <span className="player-sound">
-      <button
-        className="player-button"
-        onClick={() => playback.setMuted(!playback.muted)}
-        aria-label={t(playback.muted ? "player.unmute" : "player.mute")}
-      >
-        <VolumeIcon level={levelOf(loud)} size={ICON} />
-      </button>
-      {/* The share is handed over as a bare number rather than as a width, so
-          the stylesheet can work out where the handle actually stands: a
-          browser keeps its handle inside the track at both ends, so the middle
-          of it travels a little less than the whole width. Anything drawn at a
-          plain percentage drifts away from it towards the ends. */}
-      <span className="player-loudness" style={{ ["--share" as string]: `${loud}` }}>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={loud}
-          aria-label={t("player.loudness")}
-          onChange={(event) => playback.setLoudness(Number(event.target.value))}
-        />
-        {/* How loud, in the round numbers a person thinks in, standing over the
-            handle while a hand is on it. */}
-        <span className="player-loudness-said" aria-hidden="true">
-          {Math.round(loud * 100)}
-        </span>
-      </span>
-    </span>
+    <SoundControl
+      loudness={playback.loudness}
+      muted={playback.muted}
+      onMuted={playback.setMuted}
+      onLoudness={playback.setLoudness}
+      t={t}
+    />
   );
 }
 
