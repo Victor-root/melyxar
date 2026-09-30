@@ -26,6 +26,7 @@ import { useMusic } from "./player/player";
 import type { Paged } from "./paging";
 import { SongList } from "./songs";
 import { UploadButton } from "../components/upload-button";
+import { PlayTools } from "./play-tools";
 import { TabsBar } from "./tabs-bar";
 import { openTab, shownTabs } from "./tabs";
 import type { MusicTab } from "./tabs";
@@ -51,6 +52,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
         </div>
         <div className="browse-bar">
           <TabsBar tabs={shown} open={tab} onOpen={open} />
+          <PlayTools library={library.id} />
           <UploadButton library={library} bare className="browse-piece browse-alone" />
         </div>
       </div>
