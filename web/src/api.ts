@@ -1422,7 +1422,7 @@ async function getText(path: string, signal?: AbortSignal): Promise<string> {
 
 export const post = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
   send<T>("POST", path, body, signal);
-const remove = <T>(path: string, signal?: AbortSignal) =>
+export const remove = <T>(path: string, signal?: AbortSignal) =>
   send<T>("DELETE", path, undefined, signal);
 export const put = <T>(path: string, body?: unknown, signal?: AbortSignal) =>
   send<T>("PUT", path, body, signal);

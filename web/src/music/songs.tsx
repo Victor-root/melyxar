@@ -8,6 +8,8 @@ import { asClock } from "../clock";
 import { useSettings } from "../settings";
 import type { Credited, Song } from "./api";
 import { Heart } from "./heart";
+import { SongMenuButton } from "./song-menu";
+import type { MenuLine } from "./song-menu";
 import { useMusic } from "./player/player";
 
 /** Who plays a song, each a way to their page. */
@@ -31,6 +33,7 @@ export function SongList({
   hideArtists,
   first = 0,
   onPlay,
+  moreFor,
 }: {
   songs: Song[];
   /** By the song's own number on its album, or by its place in the list. */
@@ -43,6 +46,8 @@ export function SongList({
   first?: number;
   /** Plays the list from the line pressed. */
   onPlay?: (index: number) => void;
+  /** What the menu of a line offers beyond what every song's does. */
+  moreFor?: (index: number) => MenuLine[];
 }) {
   const { t } = useSettings();
   const { song: playingNow } = useMusic();
@@ -88,6 +93,11 @@ export function SongList({
               </span>
             )}
             <Heart id={song.id} size={16} />
+            <SongMenuButton
+              songs={[song]}
+              label={t("music.more_about", { title: song.title })}
+              extra={moreFor?.(index)}
+            />
             <span className="music-song-length" title={t("music.length")}>
               {song.seconds === null ? "" : asClock(song.seconds)}
             </span>

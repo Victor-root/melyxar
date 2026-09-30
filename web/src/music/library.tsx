@@ -1,7 +1,8 @@
 /*
  * A library of music: what is new and what was listened to, its albums, its
- * artists, its songs, what this account likes and its genres, each under a
- * tab of its own, as the servers people come from lay it out.
+ * artists, its songs, this account's playlists and what it likes, and its
+ * genres, each under a tab of its own, as the servers people come from lay
+ * it out.
  *
  * Which tab is open, and how its list is read, is written in the address, so
  * going back to the library finds it the way it was left.
@@ -17,14 +18,14 @@ import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { AlbumOrder, Genre, Initial, SongOrder } from "./api";
-import { FavouritesTab, ForYouTab } from "./for-you";
+import { FavouritesTab, ForYouTab, PlaylistsTab } from "./for-you";
 import { usePaged } from "./paging";
 import { useMusic } from "./player/player";
 import type { Paged } from "./paging";
 import { SongList } from "./songs";
 import { AlbumTile, ArtistTile } from "./tiles";
 
-const TABS = ["for_you", "albums", "album_artists", "artists", "songs", "favourites", "genres"] as const;
+const TABS = ["for_you", "albums", "album_artists", "artists", "songs", "playlists", "favourites", "genres"] as const;
 type Tab = (typeof TABS)[number];
 
 const ALBUM_ORDERS: AlbumOrder[] = ["title", "artist", "year", "added"];
@@ -60,6 +61,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
       {tab === "album_artists" && <ArtistsTab library={library.id} albumArtistsOnly />}
       {tab === "artists" && <ArtistsTab library={library.id} albumArtistsOnly={false} />}
       {tab === "songs" && <SongsTab library={library.id} />}
+      {tab === "playlists" && <PlaylistsTab />}
       {tab === "favourites" && <FavouritesTab library={library.id} />}
       {tab === "genres" && <GenresTab library={library.id} />}
     </main>

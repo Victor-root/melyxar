@@ -315,6 +315,8 @@ mod tests {
             .expect("there");
         assert_eq!(name, "Morning");
         assert_eq!(titles(&held), vec!["Tides", "Zebra", "Tides"]);
+        assert_eq!(held[0].artists, held[2].artists, "a song twice is the same song twice");
+        assert!(!held[2].artists.is_empty());
 
         let every = database.music_playlists(owner, None).await.expect("read");
         assert_eq!(every.len(), 1);

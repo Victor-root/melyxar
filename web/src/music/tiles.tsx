@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 import { useShownPicture } from "../components/picture";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
-import type { Album, Artist, Credited } from "./api";
+import type { Album, Artist, Credited, MusicPlaylist } from "./api";
 
 /** Whose album it is, as a line under its title. */
 export function useWhoseAlbum(): (album: Album) => string {
@@ -92,6 +92,23 @@ export function ArtistTile({ artist, index }: { artist: Artist; index?: number }
       </span>
     </Link>
   );
+}
+
+/** A playlist of songs, wearing the cover of its first song's album. */
+export function PlaylistTile({ playlist }: { playlist: MusicPlaylist }) {
+  const { t } = useSettings();
+  return (
+    <Link className="music-tile" to={`/music/playlist/${playlist.id}`}>
+      <Cover pictures={playlist.cover} color={null} name={playlist.name} />
+      <span className="music-tile-name">{playlist.name}</span>
+      <span className="music-tile-note">{howMany(playlist.songs, "music.songs_count", t)}</span>
+    </Link>
+  );
+}
+
+/** The cover of a playlist, larger, for the head of its own page. */
+export function PlaylistCover({ playlist }: { playlist: { name: string; cover: MusicPlaylist["cover"] } }) {
+  return <Cover pictures={playlist.cover} color={null} name={playlist.name} />;
 }
 
 /** The cover of an album, larger, for the head of its own page. */
