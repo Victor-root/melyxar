@@ -535,6 +535,21 @@ impl Database {
         )))
     }
 
+    /// One song, as a list of them would give it.
+    pub async fn music_song(&self, song: WorkId) -> Result<Option<SongRow>> {
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {A_SONG}
+               FROM works w
+               LEFT JOIN music_songs ms ON ms.work_id = w.id
+               LEFT JOIN works al ON al.id = w.parent_id
+              WHERE w.id = ? AND w.kind = 'song'"
+        )))
+        .bind(song.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+        Ok(self.song_rows(&rows).await?.into_iter().next())
+    }
+
     /// Every song an artist plays on, album by album from the earliest,
     /// each in its order on its album.
     pub async fn music_artist_songs(&self, artist: WorkId) -> Result<Vec<SongRow>> {
@@ -1116,6 +1131,37 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["Beginnings", "The Long Road", "Quiet Harbour", "Tides"],
             "2011, then the song they sing on in 2015, then 2019 in its order"
+        );
+    }
+
+    #[tokio::test]
+    async fn one_song_is_read_with_its_artists_and_its_album() {
+        let (database, library, _) = collection().await;
+        let listed = database
+            .music_songs(library, SongOrder::Title, false, 0, 50)
+            .await
+            .expect("read")
+            .items;
+        let wanted = listed
+            .iter()
+            .find(|song| song.title == "Tides")
+            .expect("in the collection");
+        let found = database
+            .music_song(wanted.id)
+            .await
+            .expect("read")
+            .expect("there");
+        assert_eq!(&found, wanted);
+        let album = database
+            .music_albums(library, &AlbumsWanted::default(), AlbumOrder::Title, false, 0, 1)
+            .await
+            .expect("read")
+            .items
+            .remove(0);
+        assert_eq!(
+            database.music_song(album.id).await.expect("read"),
+            None,
+            "an album is not a song"
         );
     }
 

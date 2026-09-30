@@ -124,9 +124,14 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
     case "watched": {
       const method = text(details, "method");
       const played = figure(details, "played_seconds");
+      const song = details.kind === "song";
       return {
-        title: t("activity.watched", { user, title: titleOf(details, t) }),
+        title: t(song ? "activity.listened" : "activity.watched", {
+          user,
+          title: titleOf(details, t),
+        }),
         note: joined([
+          song ? text(details, "artist") : null,
           played === null ? null : t("activity.played", { time: lastingFor(played, t) }),
           method === null ? null : t(`method.${method}`),
           device,

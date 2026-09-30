@@ -1795,6 +1795,9 @@ export interface Watched {
   series: string | null;
   season: number | null;
   episode: number | null;
+  /** For a song: who plays it, and its album. */
+  artist: string | null;
+  album: string | null;
   picture: string | null;
   /** Where the film had got to when the server sent this. */
   position_seconds: number;
@@ -2324,12 +2327,19 @@ export const api = {
   /* The same news while the film is not anywhere worth remembering yet:
      getting ready, or its first seconds. Null until the picture has shown
      anything. */
-  stillPlaying: (work: string, seconds: number | null, paused: boolean, leaving = false) =>
+  stillPlaying: (
+    work: string,
+    seconds: number | null,
+    paused: boolean,
+    leaving = false,
+    fresh = false,
+  ) =>
     post<{ stop: boolean }>("/api/v1/playback/watching", {
       work_id: work,
       position_seconds: seconds,
       paused,
       leaving,
+      fresh,
     }),
   /* Held open by the player while it shows the film: its end tells the
      server the player is gone, and the server sends "stop" down it the moment

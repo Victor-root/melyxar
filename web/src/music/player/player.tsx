@@ -38,6 +38,7 @@ import {
   without,
 } from "./queue";
 import type { Queue } from "./queue";
+import { useTellTheServer } from "./reporting";
 import { MediaSessionPosition, useMediaSession } from "./session";
 
 export interface Music {
@@ -582,6 +583,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       void audio.play().catch(() => setPlaying(false));
     }
   }, [filmOnScreen, onlyPause, stop, live]);
+
+  useTellTheServer(song, playing, stop, () => time.now.position);
 
   const preferencesNow = useRef(preferences);
   preferencesNow.current = preferences;
