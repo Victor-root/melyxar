@@ -271,7 +271,8 @@ fn worth_a_scan(event: &notify::Event, roots: &[PathBuf]) -> Option<Vec<PathBuf>
     (!paths.is_empty()).then_some(paths)
 }
 
-/// Whether a path lies in a hidden file or folder under the root it is in.
+/// Whether a path lies in a file or folder every walk leaves alone, under the
+/// root it is in.
 fn is_hidden(path: &Path, roots: &[PathBuf]) -> bool {
     let inside = roots
         .iter()
@@ -279,7 +280,7 @@ fn is_hidden(path: &Path, roots: &[PathBuf]) -> bool {
         .unwrap_or(path);
     inside
         .components()
-        .any(|part| part.as_os_str().to_string_lossy().starts_with('.'))
+        .any(|part| melyxar_library::naming::is_left_alone(&part.as_os_str().to_string_lossy()))
 }
 
 /// What to do next about a library whose folders changed.

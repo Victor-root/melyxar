@@ -113,7 +113,7 @@ pub fn folders_in(path: &Path) -> Result<Listing, FolderError> {
         let name = entry.file_name().to_string_lossy().to_string();
         // Hidden, unreadable or not a folder at all: none of the three is
         // something somebody is choosing between.
-        if name.starts_with('.') {
+        if naming::is_left_alone(&name) {
             continue;
         }
         let Ok(kind) = entry.file_type() else {
@@ -167,7 +167,7 @@ fn videos_in(folder: &Path) -> (usize, bool) {
     let mut counted = 0;
     for entry in entries.filter_map(Result::ok).take(COUNTED_AT_MOST) {
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with('.') || !naming::is_video_file(&name) {
+        if naming::is_left_alone(&name) || !naming::is_video_file(&name) {
             continue;
         }
         if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
