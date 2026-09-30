@@ -14,6 +14,7 @@ import { music } from "./api";
 import type { AlbumPage } from "./api";
 import { byDisc, minutesOf } from "./discs";
 import { Heart } from "./heart";
+import { useKeptState } from "./keeping";
 import { SongMenuButton } from "./song-menu";
 import { ShuffleIcon } from "./player/icons";
 import { useMusic } from "./player/player";
@@ -27,12 +28,9 @@ export function MusicAlbumPage() {
   const { account } = useAccount();
   /* Read again whenever its library moves, which is how the album follows
      tags written into its files and a scan filing them anew. */
-  const [inLibrary, setInLibrary] = useState<string | null>(null);
-  const version = useLibraryVersion(inLibrary);
-  const [album, setAlbum] = useState<AlbumPage | null>(null);
+  const [album, setAlbum] = useKeptState<AlbumPage | null>(`album|${id}`, null);
+  const version = useLibraryVersion(album?.library);
   const [failed, setFailed] = useState(false);
-
-  useEffect(() => setAlbum(null), [id]);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -41,7 +39,6 @@ export function MusicAlbumPage() {
       .album(id, stop.signal)
       .then((read) => {
         setAlbum(read);
-        setInLibrary(read.library);
       })
       .catch(() => {
         if (!stop.signal.aborted) {
@@ -49,7 +46,7 @@ export function MusicAlbumPage() {
         }
       });
     return () => stop.abort();
-  }, [id, version]);
+  }, [id, version, setAlbum]);
 
   if (failed) {
     return (

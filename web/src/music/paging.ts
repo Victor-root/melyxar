@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { keep, recall } from "../kept";
 import type { Page } from "./api";
 
 /** How much one request brings: the most the server gives at once. */
@@ -26,6 +27,14 @@ export interface Paged<T> {
   reach: (index: number) => Promise<boolean>;
 }
 
+/** What a list held when it was left, kept for when it is walked back to. */
+interface Kept<T> {
+  items: T[];
+  total: number | null;
+}
+
+const keptAs = (key: string) => `music-list|${key}`;
+
 /**
  * Reads a list, starting again from its first page whenever `key` changes:
  * the key says what the list is (which library, in which order, narrowed to
@@ -34,22 +43,26 @@ export interface Paged<T> {
  * When `version` moves, the library changed under the list: what is held is
  * read again and put in its place at once, the list neither emptied nor
  * moved, so an album filed or a cover found during a scan simply appears.
+ *
+ * A list walked back to is drawn whole at once from what it held when it was
+ * left, and read again quietly: the page can then be put back where it was
+ * scrolled to, which an empty list could not be.
  */
 export function usePaged<T>(
   key: string,
   read: (offset: number, limit: number, signal: AbortSignal) => Promise<Page<T>>,
   version: number | undefined,
 ): Paged<T> {
-  const [items, setItems] = useState<T[]>([]);
-  const [total, setTotal] = useState<number | null>(null);
+  const [items, setItems] = useState<T[]>(() => recall<Kept<T>>(keptAs(key))?.value.items ?? []);
+  const [total, setTotal] = useState<number | null>(() => recall<Kept<T>>(keptAs(key))?.value.total ?? null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   /* What is held, read without waiting for the page to be drawn again: two
      requests for more in one moment must not both ask for the same page. */
   const held = useRef<{ key: string; items: T[]; total: number | null; asking: Promise<void> | null }>({
     key,
-    items: [],
-    total: null,
+    items,
+    total,
     asking: null,
   });
   const reading = useRef(read);
@@ -94,31 +107,16 @@ export function usePaged<T>(
     return asking;
   }, []);
 
-  useEffect(() => {
-    stop.current?.abort();
-    stop.current = new AbortController();
-    held.current = { key, items: [], total: null, asking: null };
-    setItems([]);
-    setTotal(null);
-    setFailed(false);
-    void next();
-    return () => stop.current?.abort();
-  }, [key, next]);
-
-  const seenVersion = useRef(version);
-  useEffect(() => {
-    if (version === seenVersion.current) {
-      return;
-    }
-    seenVersion.current = version;
+  /* What is held, read again from the start and put in its place at once,
+     the list neither emptied nor moved. */
+  const readAgain = useCallback((signal: AbortSignal) => {
     const now = held.current;
     const wanted = Math.max(now.items.length, PAGE);
-    const controller = new AbortController();
     void (async () => {
       const again: T[] = [];
       let whole: number | null = null;
       for (let offset = 0; offset < wanted; offset += PAGE) {
-        const page = await reading.current(offset, PAGE, controller.signal);
+        const page = await reading.current(offset, PAGE, signal);
         again.push(...page.items);
         whole = page.total;
         if (page.items.length < PAGE) {
@@ -132,8 +130,41 @@ export function usePaged<T>(
         setTotal(whole);
       }
     })().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    stop.current?.abort();
+    const controller = new AbortController();
+    stop.current = controller;
+    const kept = recall<Kept<T>>(keptAs(key))?.value;
+    held.current = { key, items: kept?.items ?? [], total: kept?.total ?? null, asking: null };
+    setItems(held.current.items);
+    setTotal(held.current.total);
+    setFailed(false);
+    if (kept && kept.items.length > 0) {
+      readAgain(controller.signal);
+    } else {
+      void next();
+    }
     return () => controller.abort();
-  }, [version]);
+  }, [key, next, readAgain]);
+
+  useEffect(() => {
+    if (total !== null && held.current.key === key && held.current.items === items) {
+      keep(keptAs(key), { items, total } satisfies Kept<T>);
+    }
+  }, [key, items, total]);
+
+  const seenVersion = useRef(version);
+  useEffect(() => {
+    if (version === seenVersion.current) {
+      return;
+    }
+    seenVersion.current = version;
+    const controller = new AbortController();
+    readAgain(controller.signal);
+    return () => controller.abort();
+  }, [version, readAgain]);
 
   const reach = useCallback(
     async (index: number) => {

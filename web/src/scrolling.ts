@@ -21,7 +21,7 @@
  * a moment: a page that cannot reach its place any more is shown as it is.
  */
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
 
 /** Where one page was left. */
@@ -135,11 +135,19 @@ export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
   const page = useRef(pageOf(location));
   const places = useRef<Map<string, Place>>(readStored());
 
+  /* The box, as soon as there is one. The interface holds its screen back
+     until it knows whether the server is being set up, so the box is not
+     there when this first runs, and a listener looked for once would never
+     be put on it. */
+  const [box, setBox] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setBox(scroller.current);
+  });
+
   /* Written down as the page moves: the box and every row in it, since a
      row's own scrolling is caught on its way through the box. Once a frame,
      however many times it moved in it. */
   useEffect(() => {
-    const box = scroller.current;
     if (!box) {
       return;
     }
@@ -161,7 +169,7 @@ export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
       box.removeEventListener("scroll", moved, { capture: true });
       window.removeEventListener("pagehide", leaving);
     };
-  }, [scroller]);
+  }, [box]);
 
   useLayoutEffect(() => {
     page.current = pageOf(location);

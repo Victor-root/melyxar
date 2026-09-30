@@ -14,6 +14,7 @@ import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Album, ArtistPage } from "./api";
 import { Heart } from "./heart";
+import { useKeptState } from "./keeping";
 import { ShuffleIcon } from "./player/icons";
 import { useMusic } from "./player/player";
 import { AlbumTile, ArtistPicture } from "./tiles";
@@ -21,11 +22,10 @@ import { AlbumTile, ArtistPicture } from "./tiles";
 export function MusicArtistPage() {
   const { t } = useSettings();
   const { id = "" } = useParams();
-  const [artist, setArtist] = useState<ArtistPage | null>(null);
+  const [artist, setArtist] = useKeptState<ArtistPage | null>(`artist|${id}`, null);
   const [failed, setFailed] = useState(false);
   /* Read again whenever its library moves: an album filed, a cover found. */
-  const [inLibrary, setInLibrary] = useState<string | null>(null);
-  const version = useLibraryVersion(inLibrary);
+  const version = useLibraryVersion(artist?.library);
   const player = useMusic();
   /* Asked for only when pressed: their songs are the whole of their work,
      and most visits to an artist never play all of it. */
@@ -39,8 +39,6 @@ export function MusicArtistPage() {
       .finally(() => setStarting(false));
   };
 
-  useEffect(() => setArtist(null), [id]);
-
   useEffect(() => {
     const stop = new AbortController();
     setFailed(false);
@@ -48,7 +46,6 @@ export function MusicArtistPage() {
       .artist(id, stop.signal)
       .then((read) => {
         setArtist(read);
-        setInLibrary(read.library);
       })
       .catch(() => {
         if (!stop.signal.aborted) {

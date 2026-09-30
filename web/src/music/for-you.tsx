@@ -16,6 +16,7 @@ import { music } from "./api";
 import type { Album, Found, MusicPlaylist, Song } from "./api";
 import { useMusicMarks } from "./marks";
 import { useMusic } from "./player/player";
+import { useKeptState } from "./keeping";
 import { MusicFound, foundAny } from "./search";
 import { SongTiles } from "./song-tiles";
 import { AlbumTile, PlaylistTile } from "./tiles";
@@ -28,9 +29,9 @@ export function ForYouTab({ library }: { library: string }) {
   const version = useLibraryVersion(library);
   const { listenedAt } = useMusicMarks();
   const player = useMusic();
-  const [newest, setNewest] = useState<Album[] | null>(null);
-  const [lately, setLately] = useState<Song[]>([]);
-  const [most, setMost] = useState<Song[]>([]);
+  const [newest, setNewest] = useKeptState<Album[] | null>(`for-you|newest|${library}`, null);
+  const [lately, setLately] = useKeptState<Song[]>(`for-you|lately|${library}`, []);
+  const [most, setMost] = useKeptState<Song[]>(`for-you|most|${library}`, []);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -39,14 +40,14 @@ export function ForYouTab({ library }: { library: string }) {
       .then((page) => setNewest(page.items))
       .catch(() => {});
     return () => stop.abort();
-  }, [library, version]);
+  }, [library, version, setNewest]);
 
   useEffect(() => {
     const stop = new AbortController();
     music.listened(library, "lately", stop.signal).then(setLately).catch(() => {});
     music.listened(library, "most", stop.signal).then(setMost).catch(() => {});
     return () => stop.abort();
-  }, [library, listenedAt]);
+  }, [library, listenedAt, setLately, setMost]);
 
   if (newest && newest.length === 0) {
     return <p className="notice">{t("music.no_album")}</p>;
