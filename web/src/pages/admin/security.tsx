@@ -32,8 +32,8 @@ export function AdminSecurity() {
           <ActivityJournal families={["refused"]} />
         </Panel>
         <BrakePanel />
+        <AccessPanel />
       </div>
-      <AccessPanel />
     </>
   );
 }
