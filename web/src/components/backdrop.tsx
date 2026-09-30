@@ -8,6 +8,7 @@
  * of them.
  */
 
+import { createPortal } from "react-dom";
 import { useSettings } from "../settings";
 import { DrawnLibrary } from "./door-background";
 
@@ -16,12 +17,17 @@ export function PageBackdrop() {
   if (backdrop === "none") {
     return null;
   }
-  if (backdrop === "library") {
-    return (
+  /* Put on the body rather than in the page: it is the window's, and what
+     stands over the page, such as the fade of the page into the player of
+     music, must never take it along. */
+  return createPortal(
+    backdrop === "library" ? (
       <div className="home-backdrop" aria-hidden="true">
         <DrawnLibrary />
       </div>
-    );
-  }
-  return <div className="home-backdrop drift" data-light={backdropLight} aria-hidden="true" />;
+    ) : (
+      <div className="home-backdrop drift" data-light={backdropLight} aria-hidden="true" />
+    ),
+    document.body,
+  );
 }
