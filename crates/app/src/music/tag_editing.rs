@@ -122,7 +122,12 @@ pub async fn write(
         .join(melyxar_core::time::now().unix_timestamp().to_string());
     let mut written = Written::default();
     let mut libraries: Vec<LibraryId> = Vec::new();
-    for plan in planned {
+    // A song that nothing changes is left alone, and so is its file: no copy
+    // of it is kept and the library is not read again for it.
+    for plan in planned
+        .into_iter()
+        .filter(|plan| !plan.changed.is_empty() || plan.new_file_name.is_some())
+    {
         let Some(on_disk) = state.database().song_on_disk(plan.song).await? else {
             continue;
         };

@@ -1002,3 +1002,142 @@
     width: min(78vw, 360px);
   }
 }
+
+/* The tag manager: the album's fields, then a table of its songs, then how
+   they are written. */
+.tag-editor section {
+  margin-top: calc(var(--gap) * 2);
+}
+
+.tag-editor h2 {
+  margin: 0 0 var(--gap);
+  font-size: 1.2rem;
+}
+
+.tag-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--gap);
+}
+
+.tag-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tag-editor-label {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.tag-editor-hint,
+.tag-editor-file {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+}
+
+.tag-editor-cover {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.tag-editor-cover img {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-control);
+  object-fit: cover;
+}
+
+.tag-editor-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tag-editor-row {
+  display: grid;
+  grid-template-columns: 5ch 6ch minmax(0, 2fr) minmax(0, 1.4fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.tag-editor-head {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tag-editor-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tag-editor-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap);
+  margin-top: var(--gap);
+}
+
+.tag-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag-preview-song {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tag-preview-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.tag-preview-field {
+  min-width: 10ch;
+  color: var(--text-soft);
+}
+
+.tag-preview-before {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.tag-preview-after {
+  color: var(--text);
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .tag-editor-row {
+    grid-template-columns: 4ch 5ch minmax(0, 1fr);
+  }
+
+  .tag-editor-row > :last-child {
+    grid-column: 3;
+  }
+
+  .tag-editor-head > :last-child {
+    display: none;
+  }
+}

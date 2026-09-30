@@ -146,6 +146,43 @@ export interface MusicPlaylistPage {
   tracks: Song[];
 }
 
+/** The tags a song's file carries, as the tag manager edits them. */
+export interface EditedTags {
+  title: string | null;
+  artists: string[];
+  album: string | null;
+  album_artists: string[];
+  track: number | null;
+  disc: number | null;
+  year: number | null;
+  genres: string[];
+  compilation: boolean;
+}
+
+/** One song's file and what it carries now. */
+export interface SongTags {
+  song: string;
+  file_name: string;
+  tags: EditedTags;
+}
+
+/** What writing would do to one song. */
+export interface PlannedTags {
+  song: string;
+  file_name: string;
+  new_file_name: string | null;
+  changed: (keyof EditedTags)[];
+  before: EditedTags;
+  after: EditedTags;
+}
+
+/** What is asked of the tag manager. */
+export interface TagsAsked {
+  songs: { song: string; tags: EditedTags }[];
+  pattern: string | null;
+  keep_a_copy: boolean;
+}
+
 /** One album, as its own page shows it. */
 export interface AlbumPage extends Album {
   /** Its songs, in their order on it. */
@@ -245,6 +282,13 @@ export const music = {
     post<null>(`/api/v1/music/playlists/${id}/songs`, { songs }),
   setPlaylistSongs: (id: string, songs: string[]) =>
     put<null>(`/api/v1/music/playlists/${id}/songs`, { songs }),
+  albumTags: (album: string, signal?: AbortSignal) =>
+    get<SongTags[]>(`/api/v1/music/albums/${album}/tags`, signal),
+  previewTags: (asked: TagsAsked) => post<PlannedTags[]>("/api/v1/music/tags/preview", asked),
+  writeTags: (asked: TagsAsked) =>
+    post<{ written: number; failed: { song: string; reason: string }[] }>("/api/v1/music/tags/write", asked),
+  setCover: (album: string, jpeg: Blob, keepACopy: boolean) =>
+    put<null>(`/api/v1/music/albums/${album}/cover?keep_a_copy=${keepACopy}`, jpeg),
   search: (words: string, library: string | undefined, signal?: AbortSignal) =>
     get<Found>(`/api/v1/music/search${query({ words, library })}`, signal),
   album: (id: string, signal?: AbortSignal) =>

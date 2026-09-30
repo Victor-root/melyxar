@@ -5,7 +5,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { howMany } from "../readable";
-import { PlayIcon } from "../icons";
+import { useAccount } from "../account";
+import { PlayIcon, TagIcon } from "../icons";
+import { useLibraries } from "../libraries";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { AlbumPage } from "./api";
@@ -21,23 +23,33 @@ export function MusicAlbumPage() {
   const { t } = useSettings();
   const { id = "" } = useParams();
   const player = useMusic();
+  const { account } = useAccount();
+  /* Read again whenever its library moves, which is how the album follows
+     tags written into its files and a scan filing them anew. */
+  const { all: libraries } = useLibraries();
+  const [inLibrary, setInLibrary] = useState<string | null>(null);
+  const version = libraries.find((library) => library.id === inLibrary)?.version;
   const [album, setAlbum] = useState<AlbumPage | null>(null);
   const [failed, setFailed] = useState(false);
 
+  useEffect(() => setAlbum(null), [id]);
+
   useEffect(() => {
     const stop = new AbortController();
-    setAlbum(null);
     setFailed(false);
     music
       .album(id, stop.signal)
-      .then(setAlbum)
+      .then((read) => {
+        setAlbum(read);
+        setInLibrary(read.library);
+      })
       .catch(() => {
         if (!stop.signal.aborted) {
           setFailed(true);
         }
       });
     return () => stop.abort();
-  }, [id]);
+  }, [id, version]);
 
   if (failed) {
     return (
@@ -100,6 +112,12 @@ export function MusicAlbumPage() {
               label={t("music.more_about", { title: album.title })}
               className="music-hero-heart"
             />
+            {account?.may_edit_tags && (
+              <Link className="button button-quiet" to={`/music/album/${album.id}/tags`}>
+                <TagIcon size={16} />
+                {t("music.edit_tags")}
+              </Link>
+            )}
           </div>
           <p className="music-hero-facts">
             {[
