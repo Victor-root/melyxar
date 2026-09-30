@@ -35,7 +35,7 @@ import { howMany } from "../../readable";
 import { useStartScan } from "../../running";
 import { useDeclaring, useLibraryEditing, useRemoving } from "../../screens/declaring";
 import type { LibraryEditing } from "../../screens/declaring";
-import { MusicLibraryOptionsFields } from "../../music/library-options";
+import { MusicLibraryOptionsFields, MusicOptionsFields } from "../../music/library-options";
 import { useSettings } from "../../settings";
 
 export function AdminLibraries() {
@@ -576,12 +576,14 @@ export function NewLibrary({
     setMetadata,
     choices,
     choose,
+    musicOptions,
+    setMusicOptions,
     roots,
     addRoot,
     dropRoot,
     busy,
     create,
-  } = useDeclaring(language, onDone, onRefused);
+  } = useDeclaring(language, onDone, onRefused, (one) => t(`library.kind.${one}`));
   const [picking, setPicking] = useState(false);
 
   return (
@@ -601,6 +603,7 @@ export function NewLibrary({
                 type="text"
                 className="field-line"
                 value={name}
+                placeholder={t(`library.kind.${kind}`)}
                 autoFocus
                 aria-label={t("settings.library_name")}
                 onChange={(event) => setName(event.target.value)}
@@ -655,6 +658,7 @@ export function NewLibrary({
 
         <div className="settings-lines">
           <LibraryChoicesFields kind={kind} choices={choices} onChange={choose} />
+          {kind === "music" && <MusicOptionsFields options={musicOptions} onChange={setMusicOptions} />}
         </div>
       </div>
 
@@ -674,7 +678,7 @@ export function NewLibrary({
         </button>
         <button
           className="button button-accent"
-          disabled={busy || !name.trim() || roots.length === 0}
+          disabled={busy || roots.length === 0}
           onClick={create}
         >
           {t("settings.create_library")}

@@ -16,6 +16,8 @@ import { useCallback, useState } from "react";
 import { api } from "../api";
 import type { Library, LibraryChoices, LibraryKind, WouldGo } from "../api";
 import { refusalAbout, useAsked, useTold } from "../asking";
+import { NO_MUSIC_OPTIONS, music } from "../music/api";
+import type { MusicLibraryOptions } from "../music/api";
 
 /** Turns whatever the server refused about a library into a sentence's key. */
 export function refusal(error: unknown): string {
@@ -204,6 +206,9 @@ export interface Declaring {
       to begin with. */
   choices: LibraryChoices;
   choose: (changes: Partial<LibraryChoices>) => void;
+  /** What a library of music does beyond that, chosen from the start. */
+  musicOptions: MusicLibraryOptions;
+  setMusicOptions: (options: MusicLibraryOptions) => void;
   roots: string[];
   addRoot: (path: string) => void;
   dropRoot: (path: string) => void;
@@ -215,6 +220,8 @@ export function useDeclaring(
   language: string,
   onDone: () => void,
   onRefused: (key: string) => void,
+  /** What a kind is called, which a library left unnamed takes for a name. */
+  nameOf: (kind: LibraryKind) => string,
 ): Declaring {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<LibraryKind>("movies");
@@ -224,11 +231,21 @@ export function useDeclaring(
     (changes: Partial<LibraryChoices>) => setChoices((was) => ({ ...was, ...changes })),
     [],
   );
+  const [musicOptions, setMusicOptions] = useState<MusicLibraryOptions>(NO_MUSIC_OPTIONS);
   const [roots, setRoots] = useState<string[]>([]);
 
   const told = useTold(async () => {
     try {
-      await api.createLibrary({ name, kind, metadata_language: metadata, roots, options: choices });
+      const made = await api.createLibrary({
+        name: name.trim() || nameOf(kind),
+        kind,
+        metadata_language: metadata,
+        roots,
+        options: choices,
+      });
+      if (kind === "music") {
+        await music.setLibraryOptions(made.id, musicOptions);
+      }
       onDone();
     } catch (error) {
       onRefused(refusal(error));
@@ -253,6 +270,8 @@ export function useDeclaring(
     setMetadata,
     choices,
     choose,
+    musicOptions,
+    setMusicOptions,
     roots,
     addRoot,
     dropRoot,
