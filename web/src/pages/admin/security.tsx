@@ -9,7 +9,7 @@ import { refusalOf } from "../../asking";
 import { NumberField, PageHead, Panel, Setting } from "../../components/panel";
 import { useToast } from "../../components/toasts";
 import { refusalKey } from "../../i18n";
-import { LockIcon, WarningIcon } from "../../icons";
+import { WarningIcon } from "../../icons";
 import { useSettings } from "../../settings";
 import { AccessPanel } from "./access-panel";
 import { ActivityJournal } from "./activity-list";
@@ -24,22 +24,16 @@ export function AdminSecurity() {
     <>
       <PageHead lead={t("admin.security_lead")} />
       <div className="panels">
-        <Panel
-          icon={WarningIcon}
-          title={t("admin.refused_sign_ins")}
-          lead={t("admin.refused_sign_ins_lead")}
-        >
-          <ActivityJournal families={["refused"]} />
-        </Panel>
-        <BrakePanel />
+        <SignInsPanel />
         <AccessPanel />
       </div>
     </>
   );
 }
 
-/** How many wrong passwords in a row an account takes before it waits. */
-function BrakePanel() {
+/** The sign ins refused, and how many wrong passwords in a row an account
+ *  takes before it waits. */
+function SignInsPanel() {
   const { t } = useSettings();
   const toast = useToast();
   const [tries, setTries] = useState<number | null>(null);
@@ -74,9 +68,9 @@ function BrakePanel() {
 
   return (
     <Panel
-      icon={LockIcon}
-      title={t("admin.brake")}
-      lead={t("admin.brake_lead")}
+      icon={WarningIcon}
+      title={t("admin.refused_sign_ins")}
+      lead={t("admin.refused_sign_ins_lead")}
     >
       <Setting label={t("admin.brake_after")} why={t("admin.brake_after_why")}>
         {tries !== null && (
@@ -89,6 +83,9 @@ function BrakePanel() {
           />
         )}
       </Setting>
+      <div className="panel-rule">
+        <ActivityJournal families={["refused"]} />
+      </div>
     </Panel>
   );
 }

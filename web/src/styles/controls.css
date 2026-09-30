@@ -215,6 +215,11 @@ input[type="radio"]:disabled {
   margin-left: auto;
 }
 
+/* A line between two kinds of content in one card. */
+.panel-rule {
+  border-top: 1px solid var(--border);
+}
+
 .setting-stacked {
   flex-direction: column;
   align-items: flex-start;
