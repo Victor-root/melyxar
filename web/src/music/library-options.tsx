@@ -51,6 +51,13 @@ export function MusicLibraryOptionsFields({ library }: { library: string }) {
           onChange={(covers_online) => change({ ...options, covers_online })}
         />
       </Setting>
+      <Setting label={t("music.artist_photos_online")} why={t("music.artist_photos_online_why")}>
+        <Toggle
+          label={t("music.artist_photos_online")}
+          checked={options.artist_photos_online}
+          onChange={(artist_photos_online) => change({ ...options, artist_photos_online })}
+        />
+      </Setting>
       <h3 className="settings-heading">{t("music.tag_manager")}</h3>
       <Setting label={t("music.tag_writing")} why={t("music.tag_writing_why")}>
         <Toggle

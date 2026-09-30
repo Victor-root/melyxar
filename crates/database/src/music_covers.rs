@@ -1,5 +1,5 @@
-//! The albums whose cover is looked up online: those with none, never
-//! looked up before, found or not.
+//! The albums whose cover and the artists whose photo are looked up online:
+//! those with none, never looked up before, found or not.
 
 use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::time::Timestamp;
@@ -23,6 +23,24 @@ const LEFT: &str = "FROM works w
         AND NOT EXISTS (SELECT 1 FROM images i WHERE i.owner_kind = 'work'
                          AND i.image_kind = 'poster' AND i.owner_id = w.id)
         AND NOT EXISTS (SELECT 1 FROM music_cover_lookups l WHERE l.album_id = w.id)";
+
+/// An artist who has no photo, as they are looked up.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtistWithoutPhoto {
+    pub id: WorkId,
+    pub name: String,
+}
+
+/// The artists of a library with no photo that were never looked up, apart
+/// from the name compilations are filed under, which is nobody's face.
+const ARTISTS_LEFT: &str = "FROM works w
+      WHERE w.library_id = ? AND w.kind = 'artist'
+        AND NOT EXISTS (SELECT 1 FROM images i WHERE i.owner_kind = 'work'
+                         AND i.image_kind = 'poster' AND i.owner_id = w.id)
+        AND NOT EXISTS (SELECT 1 FROM music_artist_photo_lookups l WHERE l.artist_id = w.id)
+        AND NOT EXISTS (SELECT 1 FROM music_credits c
+                          JOIN music_albums ma ON ma.work_id = c.work_id AND ma.is_compilation = 1
+                         WHERE c.artist_id = w.id AND c.role = 'album_artist')";
 
 impl Database {
     /// Up to `limit` albums of a library to look a cover up for.
@@ -76,6 +94,53 @@ impl Database {
     }
 }
 
+impl Database {
+    /// Up to `limit` artists of a library to look a photo up for.
+    pub async fn artists_without_photo(
+        &self,
+        library: LibraryId,
+        limit: i64,
+    ) -> Result<Vec<ArtistWithoutPhoto>> {
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "SELECT w.id, w.title {ARTISTS_LEFT} ORDER BY w.id LIMIT ?"
+        )))
+        .bind(library.to_db_string())
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?
+        .iter()
+        .map(|row| {
+            Ok(ArtistWithoutPhoto {
+                id: parse_id(&row.try_get::<String, _>("id")?)?,
+                name: row.try_get("title")?,
+            })
+        })
+        .collect()
+    }
+
+    pub async fn count_artists_without_photo(&self, library: LibraryId) -> Result<i64> {
+        Ok(sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT count(*) {ARTISTS_LEFT}"
+        )))
+        .bind(library.to_db_string())
+        .fetch_one(self.reader())
+        .await?)
+    }
+
+    /// An artist looked up, found or not: they are not asked about again.
+    pub async fn mark_artist_photo_looked_up(&self, artist: WorkId, at: Timestamp) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO music_artist_photo_lookups (artist_id, looked_up_at) VALUES (?, ?)
+             ON CONFLICT (artist_id) DO UPDATE SET looked_up_at = excluded.looked_up_at",
+        )
+        .bind(artist.to_db_string())
+        .bind(timestamp_to_text(at))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::music_testing::collection;
@@ -111,5 +176,41 @@ mod tests {
             .expect("read");
         assert_eq!(left.len(), 3);
         assert!(left.iter().all(|album| album.id != road.id));
+    }
+
+    #[tokio::test]
+    async fn an_artist_without_a_photo_is_looked_up_once_and_various_artists_never() {
+        let (database, library, _) = collection().await;
+        let left = database
+            .artists_without_photo(library, 50)
+            .await
+            .expect("read");
+        assert!(left.iter().any(|artist| artist.name == "The Lanterns"));
+        assert!(
+            left.iter().all(|artist| artist.name != "Various Artists"),
+            "the name compilations are filed under is nobody's face"
+        );
+        assert_eq!(
+            database
+                .count_artists_without_photo(library)
+                .await
+                .expect("read"),
+            left.len() as i64
+        );
+
+        let lanterns = left
+            .iter()
+            .find(|artist| artist.name == "The Lanterns")
+            .expect("filed");
+        database
+            .mark_artist_photo_looked_up(lanterns.id, melyxar_core::time::now())
+            .await
+            .expect("marked");
+        let after = database
+            .artists_without_photo(library, 50)
+            .await
+            .expect("read");
+        assert_eq!(after.len(), left.len() - 1);
+        assert!(after.iter().all(|artist| artist.id != lanterns.id));
     }
 }
