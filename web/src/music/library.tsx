@@ -25,19 +25,21 @@ import { usePaged } from "./paging";
 import { useMusic } from "./player/player";
 import type { Paged } from "./paging";
 import { SongList } from "./songs";
+import { TabsBar } from "./tabs-bar";
+import { openTab, shownTabs } from "./tabs";
+import type { MusicTab } from "./tabs";
 import { AlbumTile, ArtistTile } from "./tiles";
 
-const TABS = ["for_you", "albums", "album_artists", "artists", "songs", "playlists", "favourites", "genres"] as const;
-type Tab = (typeof TABS)[number];
 
 const ALBUM_ORDERS: AlbumOrder[] = ["title", "artist", "year", "added"];
 const SONG_ORDERS: SongOrder[] = ["title", "album", "added"];
 
 export function MusicLibraryPage({ library }: { library: Library }) {
-  const { t } = useSettings();
   const [params, setParams] = useSearchParams();
-  const tab: Tab = TABS.find((one) => one === params.get("tab")) ?? "for_you";
-  const open = (next: Tab) => setParams(next === "for_you" ? {} : { tab: next }, { replace: true });
+  const { preferences } = useMusic();
+  const shown = shownTabs(preferences.hidden_tabs);
+  const tab = openTab(params.get("tab"), shown);
+  const open = (next: MusicTab) => setParams(next === shown[0] ? {} : { tab: next }, { replace: true });
 
   return (
     <main className="page music-page">
@@ -47,19 +49,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
           <h1>{library.name}</h1>
         </div>
         <div className="browse-bar">
-          <nav className="browse-piece music-tabs" aria-label={t("music.tabs")}>
-            {TABS.map((one) => (
-              <button
-                key={one}
-                type="button"
-                className={`music-tab${one === tab ? " music-tab-on" : ""}`}
-                aria-current={one === tab ? "page" : undefined}
-                onClick={() => open(one)}
-              >
-                {t(`music.tab.${one}`)}
-              </button>
-            ))}
-          </nav>
+          <TabsBar tabs={shown} open={tab} onOpen={open} />
         </div>
       </div>
 

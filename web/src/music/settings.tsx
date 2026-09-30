@@ -6,9 +6,11 @@
 
 import { PageHead, Panel, Picker, Setting, Toggle } from "../components/panel";
 import { useAccount } from "../account";
-import { MusicIcon, NetworkIcon, TagIcon } from "../icons";
+import { LengthPicker } from "../pages/settings/length";
+import { MusicIcon, NetworkIcon, PlaybackIcon, TagIcon } from "../icons";
 import { useSettings } from "../settings";
 import type { MusicPreferences } from "./api";
+import { MUSIC_TABS } from "./tabs";
 import { useMusic } from "./player/player";
 
 /** The ceilings offered, heaviest first, in kilobits a second. The server
@@ -84,6 +86,46 @@ export function MyMusic() {
             onChange={(resume_queue) => change({ resume_queue })}
           />
         </Setting>
+      </Panel>
+      <Panel icon={PlaybackIcon} title={t("settings.music_skips")} lead={t("settings.music_skips_why")}>
+        <Setting label={t("settings.music_skip_on")}>
+          <LengthPicker
+            label={t("settings.music_skip_on")}
+            seconds={preferences.skip_on_seconds}
+            longest={preferences.longest_skip_seconds}
+            onPick={(skip_on_seconds) => change({ skip_on_seconds })}
+          />
+        </Setting>
+        <Setting label={t("settings.music_skip_back")}>
+          <LengthPicker
+            label={t("settings.music_skip_back")}
+            seconds={preferences.skip_back_seconds}
+            longest={preferences.longest_skip_seconds}
+            onPick={(skip_back_seconds) => change({ skip_back_seconds })}
+          />
+        </Setting>
+      </Panel>
+      <Panel icon={MusicIcon} title={t("settings.music_tabs")} lead={t("settings.music_tabs_why")}>
+        {MUSIC_TABS.map((tab) => {
+          const hidden = preferences.hidden_tabs.includes(tab);
+          const lastShown = !hidden && MUSIC_TABS.length - preferences.hidden_tabs.length === 1;
+          return (
+            <Setting key={tab} label={t(`music.tab.${tab}`)}>
+              <Toggle
+                label={t(`music.tab.${tab}`)}
+                checked={!hidden}
+                disabled={lastShown}
+                onChange={(shown) =>
+                  change({
+                    hidden_tabs: shown
+                      ? preferences.hidden_tabs.filter((name) => name !== tab)
+                      : [...preferences.hidden_tabs, tab],
+                  })
+                }
+              />
+            </Setting>
+          );
+        })}
       </Panel>
       <Panel icon={NetworkIcon} title={t("settings.music_network")} lead={t("settings.music_network_why")}>
         <Setting label={t("settings.music_max_bitrate")} why={t("settings.music_max_bitrate_why")}>

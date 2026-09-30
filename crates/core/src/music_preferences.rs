@@ -68,6 +68,91 @@ impl VolumeMode {
 pub const LOWEST_CEILING_KBPS: u32 = 64;
 pub const HIGHEST_CEILING_KBPS: u32 = 320;
 
+/// The tabs of a library of music, in the order they are shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MusicTab {
+    ForYou,
+    Albums,
+    AlbumArtists,
+    Artists,
+    Songs,
+    Playlists,
+    Favourites,
+    Genres,
+}
+
+impl MusicTab {
+    pub const ALL: [Self; 8] = [
+        Self::ForYou,
+        Self::Albums,
+        Self::AlbumArtists,
+        Self::Artists,
+        Self::Songs,
+        Self::Playlists,
+        Self::Favourites,
+        Self::Genres,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ForYou => "for_you",
+            Self::Albums => "albums",
+            Self::AlbumArtists => "album_artists",
+            Self::Artists => "artists",
+            Self::Songs => "songs",
+            Self::Playlists => "playlists",
+            Self::Favourites => "favourites",
+            Self::Genres => "genres",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|tab| tab.as_str() == value)
+    }
+
+    fn bit(self) -> u8 {
+        1 << Self::ALL.iter().position(|tab| *tab == self).unwrap_or(0)
+    }
+}
+
+/// The tabs an account hides. Never all of them: a library with no tab to
+/// open would show nothing at all, so a choice that hides every one hides
+/// none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct HiddenTabs(u8);
+
+impl HiddenTabs {
+    pub fn from_tabs(tabs: impl IntoIterator<Item = MusicTab>) -> Self {
+        Self::from_bits(tabs.into_iter().fold(0, |bits, tab| bits | tab.bit()))
+    }
+
+    /// As stored: a bit for each tab.
+    pub fn from_bits(bits: u8) -> Self {
+        let every = MusicTab::ALL.iter().fold(0, |all, tab| all | tab.bit());
+        Self(if bits == every { 0 } else { bits })
+    }
+
+    pub fn bits(self) -> u8 {
+        self.0
+    }
+
+    pub fn hides(self, tab: MusicTab) -> bool {
+        self.0 & tab.bit() != 0
+    }
+
+    pub fn tabs(self) -> Vec<MusicTab> {
+        MusicTab::ALL
+            .into_iter()
+            .filter(|tab| self.hides(*tab))
+            .collect()
+    }
+}
+
+/// The shortest and longest a skip within a song can be asked to be, in
+/// seconds.
+pub const SHORTEST_SKIP_SECONDS: u32 = 1;
+pub const LONGEST_SKIP_SECONDS: u32 = 90;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MusicPreferences {
     pub film_on_screen: FilmOnScreen,
@@ -83,6 +168,10 @@ pub struct MusicPreferences {
     /// Whether the tag manager shows what is about to change before it
     /// writes it.
     pub tag_preview: bool,
+    /// How far the buttons that skip back and on move within a song.
+    pub skip_back_seconds: u32,
+    pub skip_on_seconds: u32,
+    pub hidden_tabs: HiddenTabs,
 }
 
 impl Default for MusicPreferences {
@@ -94,6 +183,9 @@ impl Default for MusicPreferences {
             volume_mode: VolumeMode::default(),
             crossfade_seconds: 0,
             tag_preview: true,
+            skip_back_seconds: 10,
+            skip_on_seconds: 10,
+            hidden_tabs: HiddenTabs::default(),
         }
     }
 }
@@ -119,6 +211,11 @@ pub struct MusicLibraryOptions {
 
 /// The longest a crossfade can be asked to last, in seconds.
 pub const LONGEST_CROSSFADE_SECONDS: u32 = 12;
+
+/// A skip brought within what can be asked of one.
+pub fn bounded_skip(seconds: u32) -> u32 {
+    seconds.clamp(SHORTEST_SKIP_SECONDS, LONGEST_SKIP_SECONDS)
+}
 
 /// A ceiling brought within what can be asked of a conversion.
 pub fn bounded_ceiling(kbps: u32) -> u32 {
@@ -148,6 +245,26 @@ mod tests {
         for mode in [VolumeMode::Off, VolumeMode::Track, VolumeMode::Album] {
             assert_eq!(VolumeMode::parse(mode.as_str()), Some(mode));
         }
+    }
+
+    #[test]
+    fn a_choice_that_hides_every_tab_hides_none() {
+        let some = HiddenTabs::from_tabs([MusicTab::Genres, MusicTab::Songs]);
+        assert!(some.hides(MusicTab::Genres) && some.hides(MusicTab::Songs));
+        assert!(!some.hides(MusicTab::Albums));
+        assert_eq!(some.tabs(), vec![MusicTab::Songs, MusicTab::Genres]);
+        assert_eq!(HiddenTabs::from_bits(some.bits()), some);
+        assert_eq!(HiddenTabs::from_tabs(MusicTab::ALL), HiddenTabs::default());
+        for tab in MusicTab::ALL {
+            assert_eq!(MusicTab::parse(tab.as_str()), Some(tab));
+        }
+    }
+
+    #[test]
+    fn a_skip_is_held_between_the_shortest_and_the_longest() {
+        assert_eq!(bounded_skip(0), SHORTEST_SKIP_SECONDS);
+        assert_eq!(bounded_skip(15), 15);
+        assert_eq!(bounded_skip(600), LONGEST_SKIP_SECONDS);
     }
 
     #[test]

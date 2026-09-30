@@ -167,6 +167,10 @@ export const FINDABLE: FindableSection[] = [
       ["settings.music_network", "settings.music_network_why"],
       ["settings.music_max_bitrate", "settings.music_max_bitrate_why"],
       ["settings.music_tags", "settings.music_tags_why"],
+      ["settings.music_skips", "settings.music_skips_why"],
+      ["settings.music_skip_on"],
+      ["settings.music_skip_back"],
+      ["settings.music_tabs", "settings.music_tabs_why"],
       ["settings.music_tag_preview", "settings.music_tag_preview_why"],
     ],
     choices: {
