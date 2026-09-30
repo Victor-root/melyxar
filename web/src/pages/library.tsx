@@ -2,6 +2,7 @@
  * A grid of a whole library, with what narrows it.
  */
 
+import { UploadButton } from "../components/upload-button";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
@@ -292,6 +293,8 @@ export function LibraryPage({
               />
             )}
           </div>
+
+          {library && <UploadButton library={library} className="browse-piece browse-alone" />}
 
           {offersUnidentified && (
             <button

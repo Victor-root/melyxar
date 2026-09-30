@@ -39,6 +39,7 @@
 @import "./settings.css";
 @import "./feedback.css";
 @import "./narrow.css";
+@import "./upload.css";
 @import "../door.css";
 @import "../admin.css";
 @import "../player/player.css";

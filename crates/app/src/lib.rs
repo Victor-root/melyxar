@@ -48,6 +48,7 @@ pub mod startup;
 pub mod state;
 pub mod subtitles;
 pub mod thumbnails;
+pub mod uploads;
 pub mod upkeep;
 pub mod watching;
 

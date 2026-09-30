@@ -8,7 +8,8 @@ import { Link, useParams } from "react-router-dom";
 import { howMany } from "../readable";
 import { useAccount } from "../account";
 import { PlayIcon, TagIcon } from "../icons";
-import { useLibraryVersion } from "../libraries";
+import { useLibraries, useLibraryVersion } from "../libraries";
+import { UploadButton } from "../components/upload-button";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { AlbumPage } from "./api";
@@ -30,6 +31,7 @@ export function MusicAlbumPage() {
      tags written into its files and a scan filing them anew. */
   const [album, setAlbum] = useKeptState<AlbumPage | null>(`album|${id}`, null);
   const version = useLibraryVersion(album?.library);
+  const inLibrary = useLibraries().all.find((library) => library.id === album?.library);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -115,6 +117,13 @@ export function MusicAlbumPage() {
                 <TagIcon size={16} />
                 {t("music.edit_tags")}
               </Link>
+            )}
+            {inLibrary && (
+              <UploadButton
+                library={inLibrary}
+                album={{ id: album.id, title: album.title }}
+                className="button button-quiet"
+              />
             )}
           </div>
           <p className="music-hero-facts">

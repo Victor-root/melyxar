@@ -396,6 +396,7 @@ struct AccountView {
     may_delete: bool,
     may_delete_from_disk: bool,
     may_edit_tags: bool,
+    may_upload: bool,
     /// Where its picture is served, when it has one.
     avatar: Option<String>,
 }
@@ -411,6 +412,7 @@ impl From<&User> for AccountView {
             may_delete: user.permissions.may_delete,
             may_delete_from_disk: user.permissions.may_delete_from_disk,
             may_edit_tags: user.permissions.may_edit_tags,
+            may_upload: user.permissions.may_upload,
             avatar: user.avatar_path.as_deref().map(crate::images::face_url),
         }
     }

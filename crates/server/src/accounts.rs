@@ -45,6 +45,10 @@ struct RightsView {
     /// an older screen sends, which leaves it off.
     #[serde(default)]
     may_edit_tags: bool,
+    /// Put files into the libraries. Absent from what an older screen sends,
+    /// which leaves it off.
+    #[serde(default)]
+    may_upload: bool,
     /// How many films it may watch at once. Absent for no limit.
     most_streams: Option<i32>,
 }
@@ -65,6 +69,7 @@ impl RightsView {
             may_download: held.may_download,
             may_manage_collections: held.may_manage_collections,
             may_edit_tags: held.may_edit_tags,
+            may_upload: held.may_upload,
             most_streams: held.max_sessions,
         }
     }
@@ -83,6 +88,7 @@ impl RightsView {
             may_download: self.may_download,
             may_manage_collections: self.may_manage_collections,
             may_edit_tags: self.may_edit_tags,
+            may_upload: self.may_upload,
             most_streams: self.most_streams,
         })
     }

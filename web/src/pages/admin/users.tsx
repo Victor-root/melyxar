@@ -385,6 +385,13 @@ function RightsLines({
               onChange={(may_edit_tags) => set({ may_edit_tags })}
             />
           </Setting>
+          <Setting label={t("admin.right.may_upload")} why={t("users.may_upload_why")}>
+            <Toggle
+              label={t("admin.right.may_upload")}
+              checked={rights.may_upload}
+              onChange={(may_upload) => set({ may_upload })}
+            />
+          </Setting>
           <Setting label={t("admin.limit_age")} soon>
             <Toggle label={t("admin.limit_age")} checked={false} onChange={() => {}} disabled />
           </Setting>

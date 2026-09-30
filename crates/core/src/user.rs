@@ -44,6 +44,9 @@ pub struct Permissions {
     /// Write into the files of songs with the tag manager, where a library
     /// lets its files be written.
     pub may_edit_tags: bool,
+    /// Put files into the libraries from the interface, where a folder lets
+    /// files be written into it.
+    pub may_upload: bool,
     /// Simultaneous playback sessions. None means no limit.
     pub max_sessions: Option<i32>,
 }
@@ -61,6 +64,7 @@ impl Permissions {
             may_delete: true,
             may_delete_from_disk: true,
             may_edit_tags: true,
+            may_upload: true,
             max_sessions: None,
         }
     }
@@ -77,6 +81,7 @@ impl Permissions {
             may_delete: false,
             may_delete_from_disk: false,
             may_edit_tags: false,
+            may_upload: false,
             max_sessions: None,
         }
     }
