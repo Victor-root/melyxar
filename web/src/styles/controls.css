@@ -220,6 +220,24 @@ input[type="radio"]:disabled {
   border-top: 1px solid var(--border);
 }
 
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: var(--gap);
+  padding-top: var(--gap);
+}
+
+.panel-section h3,
+.panel-section p {
+  margin: 0;
+}
+
+.panel-section .setting {
+  border-top: 0;
+  padding-bottom: 0;
+}
+
 .setting-stacked {
   flex-direction: column;
   align-items: flex-start;
