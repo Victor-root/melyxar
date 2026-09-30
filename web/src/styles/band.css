@@ -349,14 +349,16 @@
       var(--accent) 3.5% 17%,
       transparent 17.5%
     ),
-    /* The two glints a record catches from a light above it. */
+    /* The two glints a record catches from a light above it, in the arc
+       that shows over the top of the cover: the brighter to the right of
+       the middle and the fainter to its left. */
     conic-gradient(
-      from 20deg,
-      transparent 0 9%,
-      color-mix(in srgb, var(--text) 16%, transparent) 14% 18%,
-      transparent 23% 59%,
-      color-mix(in srgb, var(--text) 16%, transparent) 64% 68%,
-      transparent 73%
+      from 0deg,
+      transparent 0 8deg,
+      color-mix(in srgb, var(--text) 50%, transparent) 24deg,
+      transparent 44deg 300deg,
+      color-mix(in srgb, var(--text) 32%, transparent) 322deg,
+      transparent 342deg
     ),
     /* The grooves. */
     repeating-radial-gradient(
@@ -365,7 +367,9 @@
       color-mix(in srgb, var(--text) 7%, transparent) 2px 3px
     ),
     var(--app-ground);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent),
+    inset 0 2px 3px -1px color-mix(in srgb, var(--text) 30%, transparent);
   translate: 0 calc(-32% * var(--open));
   transition: translate var(--calm) var(--ease);
 }
