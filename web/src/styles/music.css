@@ -450,6 +450,7 @@
    cover, its name, the album, what can be done with it, its length. */
 .music-song-full {
   position: relative;
+  border-radius: var(--radius-control);
   grid-template-columns: 40px 4ch 44px minmax(0, 2fr) minmax(0, 1.2fr) auto 6ch;
   border-bottom: 0;
 }
@@ -601,6 +602,21 @@
 
 .music-song:hover {
   background: var(--surface-hover);
+}
+
+/* Under the pointer a line is lit as the pieces of the browse bar are: its
+   shadow, and the light of the accent about it. */
+.music-song-full:hover {
+  background: transparent;
+  box-shadow:
+    var(--shadow-card),
+    0 0 14px 2px var(--accent-glow);
+}
+
+/* The bar down the side of the page ends where the player begins, or the
+   player would stand over the part of it a hand reaches for. */
+:root[data-music-bar] .scrollbar {
+  bottom: var(--music-bar-height);
 }
 
 .music-song-number,
