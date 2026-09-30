@@ -79,6 +79,18 @@ export function forward(queue: Queue): Queue | null {
   return null;
 }
 
+/** Whether there is another song to ask for on: one to come, or one to come
+ *  back to under repeat. A lone song has none, repeat or not. */
+export function canStepOn(queue: Queue): boolean {
+  return queue.at + 1 < queue.order.length || (queue.repeat !== "off" && queue.order.length > 1);
+}
+
+/** Whether there is another song to go back to: one already played, or the
+ *  last one under repeat all. A lone song has none, repeat or not. */
+export function canStepBack(queue: Queue): boolean {
+  return queue.at > 0 || (queue.repeat === "all" && queue.order.length > 1);
+}
+
 /** How far into a song "previous" still means "this one from the start". */
 export const BACK_TO_THE_START_SECONDS = 3;
 
