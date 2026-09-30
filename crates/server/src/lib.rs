@@ -9,6 +9,7 @@
 
 pub mod account;
 mod address;
+mod door;
 pub mod accounts;
 pub mod activity;
 pub mod calibration;
@@ -80,9 +81,12 @@ pub fn build(state: AppState) -> axum::Router {
         // packing for somebody who is not going to be answered, and a refusal
         // is a request this server spent time on like any other.
         .layer(axum::middleware::from_fn_with_state(
-            state,
+            state.clone(),
             account::at_the_gate,
         ))
+        // Outside the gate, so somebody not signed in yet is sent to the
+        // encrypted address before anything else.
+        .layer(axum::middleware::from_fn_with_state(state, door::sent_to_encrypted))
         // Outside the compression, so the time reported is the time the client
         // waited and not the time before the answer was packed.
         .layer(axum::middleware::from_fn(timing::measured))
@@ -102,10 +106,8 @@ pub async fn serve(
     let listener = tokio::net::TcpListener::bind(address).await?;
     tracing::info!(%address, "listening");
     let closing = state.clone();
-    axum::serve(
-        listener,
-        build(state).into_make_service_with_connect_info::<SocketAddr>(),
-    )
+    let door = door::Door::new(listener, state.clone())?;
+    axum::serve(door, build(state).into_make_service_with_connect_info::<door::Peer>())
         .with_graceful_shutdown(async move {
             shutdown.await;
             // A live line never ends on its own, and a stopping server waits
