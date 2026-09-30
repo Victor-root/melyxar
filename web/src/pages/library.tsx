@@ -14,6 +14,7 @@ import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
 import { ArrowRightIcon, ChevronRightIcon, CloseIcon, IdentifyIcon } from "../icons";
 import { useMarks } from "../marks";
+import { landOn, scrollerOf } from "../landing";
 import { letterOfTheTopRow } from "../letters";
 import { cardShapeOf, nameOfKind } from "../libraries";
 import { ORDERS, useBrowsing } from "../screens/browsing";
@@ -125,42 +126,11 @@ export function LibraryPage({
       setLanding(null);
       return;
     }
-    const style = getComputedStyle(box);
-    const air = parseFloat(style.getPropertyValue("--gap-wide")) || 0;
-    const below = () => target.getBoundingClientRect().top - box.getBoundingClientRect().top;
-    /* Under the bar at the top while it is out, at the very top once it has
-       stepped aside. Which one it is depends on the jump itself, since the
-       bar steps aside when the page is read down and comes back when it is
-       read up, so it is read again on every frame rather than guessed. */
-    const clearOfTheBar = () => parseFloat(style.getPropertyValue("--header-room")) || 0;
-    /* Straight there rather than gliding, and put there again on every
-       frame until it holds still. The cards off the screen are not drawn and
-       stand at a guessed height, so where the row is only settles as the
-       cards around it are drawn: a glide drew them one after the other on
-       the way and ended short of it, and a single second look came before
-       they had been. */
-    let frames = 0;
-    let still = 0;
-    let next = 0;
-    const land = () => {
-      const off = below() - clearOfTheBar() - air;
-      if (Math.abs(off) > 1) {
-        box.scrollBy({ top: off, behavior: "instant" });
-        still = 0;
-      } else {
-        still += 1;
-      }
-      frames += 1;
-      if (still < STILL_FRAMES && frames < LANDING_FRAMES) {
-        next = requestAnimationFrame(land);
-      } else {
-        held.current = { letter, at: box.scrollTop };
-        setReading(letter);
-        setLanding(null);
-      }
-    };
-    land();
-    return () => cancelAnimationFrame(next);
+    return landOn(target, box, (at) => {
+      held.current = { letter, at };
+      setReading(letter);
+      setLanding(null);
+    });
   }, [landing, cards]);
 
   /* Which letter is on the screen, read again as the page moves: the one
@@ -377,13 +347,6 @@ export function LibraryPage({
   );
 }
 
-/** How many frames in a row a jump has to stand where it was sent before it
- *  counts as there: enough for the bar at the top to have answered it. */
-const STILL_FRAMES = 6;
-/** The most frames a jump is given to settle, under a second: long enough for
- *  the cards around it to be drawn, and never a page that fights a hand. */
-const LANDING_FRAMES = 45;
-
 /** How far the page may move after a jump before the letter jumped to gives
  *  way to the one on the screen: less than any hand moves it. */
 const A_NUDGE = 2;
@@ -405,18 +368,6 @@ function letterAtTheTop(
     },
     box.getBoundingClientRect().top + room,
   );
-}
-
-/** The box a page scrolls in, which is not the window here: the nearest one
- *  above the element that can be scrolled up and down. */
-function scrollerOf(element: HTMLElement): HTMLElement | null {
-  for (let box = element.parentElement; box; box = box.parentElement) {
-    const { overflowY } = getComputedStyle(box);
-    if (overflowY === "auto" || overflowY === "scroll") {
-      return box;
-    }
-  }
-  return null;
 }
 
 /**

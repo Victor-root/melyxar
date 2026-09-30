@@ -8,7 +8,8 @@ import { useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import { PicturesAhead } from "../components/card";
 import { useShownPicture } from "../components/picture";
-import { HeartIcon, PlayIcon } from "../icons";
+import { ChevronRightIcon, HeartIcon, PlayIcon } from "../icons";
+import { PauseIcon } from "../player/icons";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
@@ -84,6 +85,7 @@ function Tile({
   round = false,
   liking,
   songs,
+  owns,
 }: {
   to: string;
   index?: number;
@@ -96,6 +98,9 @@ function Tile({
   liking?: string;
   /** The songs a press of play starts, in the order they play. */
   songs: () => Promise<Song[]>;
+  /** Whether a song playing or paused is one of this tile's, so its button
+   *  pauses and resumes it rather than starting it over. */
+  owns?: (song: Song) => boolean;
 }) {
   const { t } = useSettings();
   const player = useMusic();
@@ -111,10 +116,14 @@ function Tile({
     event.stopPropagation();
     doing();
   };
+  const ours = owns !== undefined && player.song !== null && owns(player.song);
+  const going = ours && player.playing;
   const play = () =>
-    songs()
-      .then((found) => found.length > 0 && player.play(found, 0))
-      .catch(() => {});
+    ours
+      ? player.toggle()
+      : songs()
+          .then((found) => found.length > 0 && player.play(found, 0))
+          .catch(() => {});
   return (
     <article
       className={`card card-square${round ? " card-round" : ""}`}
@@ -148,11 +157,11 @@ function Tile({
             <button
               type="button"
               className="card-play"
-              aria-label={t("music.play")}
-              title={t("music.play")}
+              aria-label={t(going ? "music.pause" : "music.play")}
+              title={t(going ? "music.pause" : "music.play")}
               onClick={stop(play)}
             >
-              <PlayIcon size={32} />
+              {going ? <PauseIcon size={32} /> : <PlayIcon size={32} />}
             </button>
             {liking !== undefined && (
               <div className="card-corner">
@@ -191,6 +200,7 @@ export function AlbumTile({ album, index }: { album: Album; index?: number }) {
       note={[whose(album), album.year].filter(Boolean).join(" · ")}
       liking={album.id}
       songs={() => music.album(album.id).then((page) => page.tracks)}
+      owns={(song) => song.album?.id === album.id}
     />
   );
 }
@@ -212,6 +222,7 @@ export function ArtistTile({ artist, index }: { artist: Artist; index?: number }
       round
       liking={artist.id}
       songs={() => music.artistSongs(artist.id)}
+      owns={(song) => song.artists.some((credited) => credited.id === artist.id)}
     />
   );
 }
@@ -244,4 +255,22 @@ export function AlbumCover({ album }: { album: Album }) {
 /** The picture of an artist, larger, for the head of their own page. */
 export function ArtistPicture({ artist }: { artist: Artist }) {
   return <Cover pictures={artist.picture} color={artist.color} name={artist.name} round />;
+}
+
+/**
+ * Where the letter just chosen begins, standing in the grid as one more tile
+ * before the first of its entries, the way it does in the grids of the films:
+ * the row it opens may still end the letter before.
+ */
+export function LetterStarts({ offset, letter, round }: { offset: number; letter: string; round?: boolean }) {
+  return (
+    <div
+      className={`letter-starts letter-starts-${round ? "round" : "square"}`}
+      data-starts={offset}
+      aria-hidden="true"
+    >
+      <span>{letter.toUpperCase()}</span>
+      <ChevronRightIcon size={40} />
+    </div>
+  );
 }

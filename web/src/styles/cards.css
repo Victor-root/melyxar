@@ -780,6 +780,16 @@ button.seen-mark:not(.seen-mark-on):hover {
   aspect-ratio: 16 / 9;
 }
 
+/* A cover is square, and the picture of an artist round. */
+.letter-starts-square {
+  aspect-ratio: 1;
+}
+
+.letter-starts-round {
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
 .letters {
   --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide));
   --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 26px);
