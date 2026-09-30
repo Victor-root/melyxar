@@ -694,6 +694,7 @@ pub struct Rights {
     pub may_download: bool,
     pub may_manage_collections: bool,
     pub may_edit_tags: bool,
+    pub may_upload: bool,
     /// How many films it may watch at once, when it is limited.
     pub most_streams: Option<i32>,
 }
@@ -710,6 +711,7 @@ impl Rights {
             may_download: self.may_download,
             may_manage_collections: self.may_manage_collections,
             may_edit_tags: self.may_edit_tags,
+            may_upload: self.may_upload,
             max_sessions: self.most_streams,
             ..held.clone()
         }
@@ -1571,6 +1573,7 @@ mod tests {
             may_download: permissions.may_download,
             may_manage_collections: permissions.may_manage_collections,
             may_edit_tags: permissions.may_edit_tags,
+            may_upload: permissions.may_upload,
             most_streams: permissions.max_sessions,
         }
     }

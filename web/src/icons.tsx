@@ -484,6 +484,17 @@ export function DownloadIcon(props: IconProps) {
   );
 }
 
+/** An arrow out of a tray, for sending a file in. */
+export function UploadIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 14.6v-11" />
+      <path d="M7.8 7.8 12 3.6l4.2 4.2" />
+      <path d="M4.4 17.4v1.2a1.8 1.8 0 0 0 1.8 1.8h11.6a1.8 1.8 0 0 0 1.8-1.8v-1.2" />
+    </Icon>
+  );
+}
+
 /** A pencil, for editing what is written. */
 export function EditIcon(props: IconProps) {
   return (

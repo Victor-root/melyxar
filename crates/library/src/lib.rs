@@ -19,6 +19,7 @@ pub mod naming;
 pub mod orientation;
 pub mod scan;
 pub mod sidecar;
+pub mod upload;
 
 pub use access::check as check_root_access;
 pub use episode::{

@@ -1,0 +1,100 @@
+/*
+ * The window for putting files into a library.
+ */
+
+.upload-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--gap-wide) var(--gap);
+  border: 2px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: var(--radius-card);
+  color: var(--accent-bright);
+  cursor: pointer;
+  transition:
+    background var(--quick) var(--ease),
+    border-color var(--quick) var(--ease);
+}
+
+.upload-drop:hover,
+.upload-drop:focus-within,
+.upload-drop-over {
+  border-color: var(--accent-bright);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.upload-drop-words {
+  font-weight: 650;
+}
+
+.upload-drop-note {
+  color: var(--text-soft);
+  font-size: 0.9em;
+}
+
+.upload-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  margin: var(--gap) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.upload-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--gap);
+  padding: var(--gap-tight) var(--gap);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.upload-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-item-state {
+  color: var(--text-soft);
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+}
+
+.upload-item-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 100px;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+.upload-item-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--quick) var(--ease);
+}
+
+.upload-item-done .upload-item-state {
+  color: var(--accent-bright);
+}
+
+.upload-item-failed .upload-item-state {
+  grid-column: 1 / -1;
+  color: var(--text);
+}
+
+.upload-item-failed .upload-item-bar {
+  display: none;
+}
+
+.upload-note {
+  margin: var(--gap) 0 0;
+  color: var(--text-faint);
+  font-size: 0.85em;
+}

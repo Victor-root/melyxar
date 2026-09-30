@@ -37,6 +37,7 @@ pub mod playlists;
 pub mod preferences;
 pub mod routes;
 pub mod timing;
+pub mod uploads;
 
 use std::net::SocketAddr;
 
