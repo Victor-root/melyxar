@@ -629,14 +629,42 @@
   justify-content: center;
   height: var(--music-bar-height);
   padding: 0 var(--player-inset);
-  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
-  backdrop-filter: blur(22px) saturate(1.3);
+  isolation: isolate;
+  background: var(--surface-raised);
   /* The rim a card wears under the pointer, along the top edge only. */
   box-shadow:
     inset 0 1.5px 0 0 var(--accent-bright),
     0 -2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent),
     0 -8px 26px -6px color-mix(in srgb, var(--accent) 30%, transparent);
   color: var(--text);
+}
+
+/* Behind everything the bar holds, faint enough for white to read over it
+   and strong enough to give the bar the colour of the song. */
+.music-bar-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Clipped here rather than on the bar, whose words above its buttons must
+     be free to leave it. */
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.music-bar-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.55;
+  /* Blurred once, on a bar that is a hundred points tall and never moves: the
+     scale keeps the edges of the blur out of sight. */
+  filter: blur(28px) saturate(1.6);
+  transform: scale(1.25);
+}
+
+.music-bar-now .music-now-cover {
+  width: 60px;
+  box-shadow: var(--shadow-raised);
 }
 
 .music-bar-row {
