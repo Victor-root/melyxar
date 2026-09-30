@@ -14,6 +14,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useIsAFilmOnScreen } from "../../on-screen";
+import { useSettings } from "../../settings";
+import { showListening } from "../../tab";
 import { music as server } from "../api";
 import type { MusicPreferences, Song } from "../api";
 import { useMusicMarks } from "../marks";
@@ -624,6 +626,14 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [filmOnScreen, onlyPause, run, stop, pause, resume]);
 
   useTellTheServer(tabs.holds ? song : null, playing, stop, () => time.now.position);
+
+  // The tab that makes the sound says so, as long as it does.
+  const { t } = useSettings();
+  const heard = tabs.holds && playing;
+  useEffect(() => {
+    showListening(heard ? t("music.tab") : null);
+    return () => showListening(null);
+  }, [heard, t]);
 
   const preferencesNow = useRef(preferences);
   preferencesNow.current = preferences;
