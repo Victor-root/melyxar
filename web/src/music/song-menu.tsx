@@ -30,21 +30,53 @@ export interface MenuLine {
 /** How far from the edge of the window a menu is allowed to sit. */
 const OFF_THE_EDGE = 8;
 
+/** What can be done with songs beyond pressing them, in the order a menu and
+ *  a line of a list both offer them, and the window that adding to a playlist
+ *  opens, to be drawn wherever the actions are. */
+export function useSongActions(songs: Song[]): { actions: MenuLine[]; dialog: ReactNode } {
+  const { t } = useSettings();
+  const navigate = useNavigate();
+  const player = useMusic();
+  const [adding, setAdding] = useState(false);
+  const one = songs.length === 1 ? songs[0] : null;
+  const actions: MenuLine[] = [
+    { key: "next", said: t("music.play_next"), mark: <PlayAllIcon size={17} />, act: () => player.playNext(songs) },
+    { key: "last", said: t("music.play_last"), mark: <QueueIcon size={17} />, act: () => player.playLast(songs) },
+    { key: "playlist", said: t("music.add_to_playlist"), mark: <PlaylistIcon size={17} />, act: () => setAdding(true) },
+    ...(one?.album
+      ? [{ key: "album", said: t("music.go_to_album"), mark: <MusicIcon size={17} />, act: () => navigate(`/music/album/${one.album!.id}`) }]
+      : []),
+    ...(one && one.artists.length > 0
+      ? [{ key: "artist", said: t("music.go_to_artist"), mark: <ProfileIcon size={17} />, act: () => navigate(`/music/artist/${one.artists[0].id}`) }]
+      : []),
+  ];
+  return { actions, dialog: adding ? <AddToPlaylist songs={songs} onClose={() => setAdding(false)} /> : null };
+}
+
 export function SongMenuButton({
   songs,
   label,
   extra = [],
   className = "",
+  inline = 0,
 }: {
   songs: Song[];
   label: string;
   extra?: MenuLine[];
   className?: string;
+  /** How many of the first actions a line already carries on itself, and
+      that the menu therefore leaves out. */
+  inline?: number;
 }) {
   const [from, setFrom] = useState<DOMRect | null>(null);
-  const [adding, setAdding] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const close = useCallback(() => setFrom(null), []);
+  const { actions, dialog } = useSongActions(songs);
+  const lines = [...actions.slice(inline), ...extra];
+  // A line that carries every action itself has nothing left for a menu.
+  if (lines.length === 0) {
+    return <>{dialog}</>;
+  }
   return (
     <>
       <button
@@ -61,39 +93,23 @@ export function SongMenuButton({
       >
         <span aria-hidden="true">⋯</span>
       </button>
-      {from && (
-        <SongMenu
-          songs={songs}
-          from={from}
-          openedBy={button.current}
-          extra={extra}
-          onAdd={() => setAdding(true)}
-          onClose={close}
-        />
-      )}
-      {adding && <AddToPlaylist songs={songs} onClose={() => setAdding(false)} />}
+      {from && <SongMenu lines={lines} from={from} openedBy={button.current} onClose={close} />}
+      {dialog}
     </>
   );
 }
 
 function SongMenu({
-  songs,
+  lines,
   from,
   openedBy,
-  extra,
-  onAdd,
   onClose,
 }: {
-  songs: Song[];
+  lines: MenuLine[];
   from: DOMRect;
   openedBy: HTMLElement | null;
-  extra: MenuLine[];
-  onAdd: () => void;
   onClose: () => void;
 }) {
-  const { t } = useSettings();
-  const navigate = useNavigate();
-  const player = useMusic();
   const holder = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
 
@@ -139,20 +155,6 @@ function SongMenu({
       window.removeEventListener("resize", onClose);
     };
   }, [onClose, openedBy]);
-
-  const one = songs.length === 1 ? songs[0] : null;
-  const lines: MenuLine[] = [
-    { key: "next", said: t("music.play_next"), mark: <PlayAllIcon size={17} />, act: () => player.playNext(songs) },
-    { key: "last", said: t("music.play_last"), mark: <QueueIcon size={17} />, act: () => player.playLast(songs) },
-    { key: "playlist", said: t("music.add_to_playlist"), mark: <PlaylistIcon size={17} />, act: onAdd },
-    ...(one?.album
-      ? [{ key: "album", said: t("music.go_to_album"), mark: <MusicIcon size={17} />, act: () => navigate(`/music/album/${one.album!.id}`) }]
-      : []),
-    ...(one && one.artists.length > 0
-      ? [{ key: "artist", said: t("music.go_to_artist"), mark: <ProfileIcon size={17} />, act: () => navigate(`/music/artist/${one.artists[0].id}`) }]
-      : []),
-    ...extra,
-  ];
 
   return createPortal(
     <div
