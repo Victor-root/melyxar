@@ -22,11 +22,13 @@ mod lyrics;
 mod pairs;
 mod read;
 mod values;
+mod write;
 
 pub use cover::{Cover, front_cover};
 pub use lyrics::lyrics;
 pub use pairs::from_pairs;
 pub use read::read;
+pub use write::{EditedTags, WriteError, write};
 
 /// Everything read out of one music file.
 #[derive(Debug, Clone, PartialEq)]

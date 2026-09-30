@@ -1,0 +1,97 @@
+//! Writing the tags of one music file, as the tag manager asks: the fields a
+//! person edits set to what they chose, and taken away where they chose
+//! nothing. Everything else the file carries, its pictures first, is left as
+//! it was, and so is its sound.
+
+use std::path::Path;
+
+use lofty::config::WriteOptions;
+use lofty::file::TaggedFileExt;
+use lofty::tag::{ItemKey, Tag, TagExt};
+
+/// The tags a person edits, as they want them written.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EditedTags {
+    pub title: Option<String>,
+    pub artists: Vec<String>,
+    pub album: Option<String>,
+    pub album_artists: Vec<String>,
+    pub track: Option<u32>,
+    pub disc: Option<u32>,
+    pub year: Option<i32>,
+    pub genres: Vec<String>,
+    pub compilation: bool,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum WriteError {
+    #[error("the file could not be read to be written: {0}")]
+    Unreadable(String),
+    #[error("the tags could not be written: {0}")]
+    Unwritable(String),
+}
+
+/// Several names as one value, the way the reader splits them again.
+const BETWEEN_NAMES: &str = "; ";
+
+/// Writes the edited tags into a file. Blocking, like every reading of one.
+pub fn write(path: &Path, edited: &EditedTags) -> Result<(), WriteError> {
+    let mut tagged =
+        lofty::read_from_path(path).map_err(|error| WriteError::Unreadable(error.to_string()))?;
+    let tag_type = tagged.primary_tag_type();
+    if tagged.primary_tag().is_none() {
+        tagged.insert_tag(Tag::new(tag_type));
+    }
+    let Some(tag) = tagged.primary_tag_mut() else {
+        return Err(WriteError::Unwritable(
+            "the file holds no tag it can be given".to_string(),
+        ));
+    };
+    fill(tag, edited);
+    tag.save_to_path(path, WriteOptions::default())
+        .map_err(|error| WriteError::Unwritable(error.to_string()))
+}
+
+/// The edited fields set in a tag, each taken away where nothing was chosen.
+fn fill(tag: &mut Tag, edited: &EditedTags) {
+    let mut set = |key: ItemKey, value: Option<String>| {
+        tag.remove_key(key);
+        if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
+            tag.insert_text(key, value.trim().to_string());
+        }
+    };
+    let names = |names: &[String]| {
+        let kept: Vec<&str> = names
+            .iter()
+            .map(|name| name.trim())
+            .filter(|name| !name.is_empty())
+            .collect();
+        (!kept.is_empty()).then(|| kept.join(BETWEEN_NAMES))
+    };
+    set(ItemKey::TrackTitle, edited.title.clone());
+    // One value for all the names: the several-valued key is taken away, or
+    // the reader, which prefers it, would go on reading the old names.
+    set(ItemKey::TrackArtists, None);
+    set(ItemKey::TrackArtist, names(&edited.artists));
+    set(ItemKey::AlbumTitle, edited.album.clone());
+    set(ItemKey::AlbumArtists, None);
+    set(ItemKey::AlbumArtist, names(&edited.album_artists));
+    set(
+        ItemKey::TrackNumber,
+        edited.track.map(|track| track.to_string()),
+    );
+    set(
+        ItemKey::DiscNumber,
+        edited.disc.map(|disc| disc.to_string()),
+    );
+    // Written both ways: some forms keep a year of its own, and ID3 only
+    // the date of the recording, which the reader falls back on.
+    let year = edited.year.map(|year| year.to_string());
+    set(ItemKey::RecordingDate, year.clone());
+    set(ItemKey::Year, year);
+    set(ItemKey::Genre, names(&edited.genres));
+    set(
+        ItemKey::FlagCompilation,
+        edited.compilation.then(|| "1".to_string()),
+    );
+}
