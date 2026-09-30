@@ -72,19 +72,24 @@ function SignInsPanel() {
       title={t("admin.refused_sign_ins")}
       lead={t("admin.refused_sign_ins_lead")}
     >
-      <Setting label={t("admin.brake_after")} why={t("admin.brake_after_why")}>
-        {tries !== null && (
-          <NumberField
-            label={t("admin.brake_after")}
-            value={tries}
-            min={TRIES.min}
-            max={TRIES.max}
-            onPick={keep}
-          />
-        )}
-      </Setting>
-      <div className="panel-rule">
-        <ActivityJournal families={["refused"]} />
+      <ActivityJournal families={["refused"]} />
+      <div className="panel-rule panel-section">
+        <h3 className="setting-label">{t("admin.brake")}</h3>
+        <p className="setting-why">{t("admin.brake_lead")}</p>
+        <Setting
+          label={t("admin.brake_after")}
+          why={t("admin.brake_after_why")}
+        >
+          {tries !== null && (
+            <NumberField
+              label={t("admin.brake_after")}
+              value={tries}
+              min={TRIES.min}
+              max={TRIES.max}
+              onPick={keep}
+            />
+          )}
+        </Setting>
       </div>
     </Panel>
   );
