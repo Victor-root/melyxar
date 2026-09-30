@@ -9,13 +9,14 @@
  */
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAccount } from "../account";
 import { refusalOf } from "../asking";
 import { Modal } from "../components/modal";
 import { Setting, Toggle } from "../components/panel";
 import { useToast } from "../components/toasts";
 import { refusalKey } from "../i18n";
+import { useLeave } from "../leaving";
 import { useRunning } from "../running";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
@@ -70,7 +71,7 @@ function Refusal({ refused }: { refused: string }) {
 export function TagEditorPage() {
   const { t } = useSettings();
   const { id = "" } = useParams();
-  const navigate = useNavigate();
+  const leave = useLeave(`/music/album/${id}`);
   const toast = useToast();
   const { preferences } = useMusic();
   const { watch } = useRunning();
@@ -160,7 +161,7 @@ export function TagEditorPage() {
       // The server reads the library again once it has written: watched at
       // once, so the album and every screen showing it follow without a reload.
       watch();
-      navigate(`/music/album/${id}`, { replace: true });
+      leave();
     } catch (error) {
       setRefused(refusalOf(error));
       setPlanned(null);
@@ -298,7 +299,7 @@ export function TagEditorPage() {
           <Toggle label={t("music.tag.keep_a_copy")} checked={keepACopy} onChange={setKeepACopy} />
         </Setting>
         <div className="tag-editor-actions">
-          <button type="button" className="button button-quiet" onClick={() => navigate(-1)}>
+          <button type="button" className="button button-quiet" onClick={leave}>
             {t("lists.cancel")}
           </button>
           <button type="button" className="button button-accent" disabled={busy} onClick={() => void save()}>

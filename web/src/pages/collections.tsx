@@ -6,7 +6,7 @@
  * wherever that was done.
  */
 
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { api } from "../api";
 import { useAccount } from "../account";
 import { refusalOf, useAsked } from "../asking";
@@ -16,6 +16,7 @@ import { Grid } from "../components/grid";
 import { InOrder } from "../components/in-order";
 import { ListHead, ListTile } from "../components/lists";
 import { refusalKey } from "../i18n";
+import { useLeave } from "../leaving";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
 
@@ -55,7 +56,7 @@ export function CollectionsPage() {
 export function CollectionPage() {
   const { id } = useParams();
   const { t } = useSettings();
-  const navigate = useNavigate();
+  const leave = useLeave("/collections");
   const { account } = useAccount();
   const { rowsMoved, rowsHaveMoved } = useMarks();
   const asked = useAsked(
@@ -101,7 +102,7 @@ export function CollectionPage() {
               ? async () => {
                   await api.deleteCollection(collection.id);
                   rowsHaveMoved();
-                  navigate("/collections", { replace: true });
+                  leave();
                 }
               : null
           }

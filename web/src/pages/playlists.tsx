@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Card as CardData } from "../api";
 import { refusalOf, useAsked } from "../asking";
@@ -20,6 +20,7 @@ import { ListHead, ListTile } from "../components/lists";
 import { Sortable } from "../components/sortable";
 import { refusalKey } from "../i18n";
 import { CloseIcon } from "../icons";
+import { useLeave } from "../leaving";
 import { useMarks } from "../marks";
 import { howLong } from "../readable";
 import { useSettings } from "../settings";
@@ -60,7 +61,7 @@ export function PlaylistsPage() {
 export function PlaylistPage() {
   const { id } = useParams();
   const { t } = useSettings();
-  const navigate = useNavigate();
+  const leave = useLeave("/playlists");
   const { rowsMoved, rowsHaveMoved } = useMarks();
   const asked = useAsked(
     (signal) => (id ? api.playlist(id, signal) : Promise.resolve(null)),
@@ -119,7 +120,7 @@ export function PlaylistPage() {
           onDelete={async () => {
             await api.deletePlaylist(id);
             rowsHaveMoved();
-            navigate("/playlists", { replace: true });
+            leave();
           }}
         />
         {refused && <p className="notice">{t(refusalKey(refused))}</p>}
