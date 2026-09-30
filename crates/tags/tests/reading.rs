@@ -266,3 +266,85 @@ fn the_gain_a_tagging_program_measured_is_read_with_the_sound() {
     let (_other, untagged) = copy_of("one-second.mp3");
     assert_eq!(read(&untagged).expect("read").sound.replay_gain_db, None);
 }
+
+#[test]
+fn what_the_tag_manager_writes_is_read_back_and_the_sound_is_untouched() {
+    for name in [
+        "one-second.flac",
+        "one-second.mp3",
+        "one-second.m4a",
+        "one-second.ogg",
+        "one-second.opus",
+    ] {
+        let (_directory, song) = copy_of(name);
+        tag_file(&song, |tag| {
+            tag.insert_text(ItemKey::TrackTitle, "Old title".to_string());
+            tag.insert_text(ItemKey::Genre, "Old genre".to_string());
+        });
+        let before = read(&song).expect("read").sound;
+        let edited = melyxar_tags::EditedTags {
+            title: Some("Quiet Harbour".to_string()),
+            artists: vec!["Amber Field".to_string(), "The Lanterns".to_string()],
+            album: Some("Northern Lights".to_string()),
+            album_artists: vec!["Amber Field".to_string()],
+            track: Some(3),
+            disc: Some(2),
+            year: Some(2019),
+            genres: Vec::new(),
+            compilation: false,
+        };
+        melyxar_tags::write(&song, &edited).expect("written");
+
+        let after = read(&song).expect("read again");
+        assert_eq!(after.tags.title.as_deref(), Some("Quiet Harbour"), "{name}");
+        assert_eq!(
+            after.tags.artists,
+            vec!["Amber Field", "The Lanterns"],
+            "{name}"
+        );
+        assert_eq!(
+            after.tags.album.as_deref(),
+            Some("Northern Lights"),
+            "{name}"
+        );
+        assert_eq!(after.tags.album_artists, vec!["Amber Field"], "{name}");
+        assert_eq!(after.tags.track, Some(3), "{name}");
+        assert_eq!(after.tags.disc, Some(2), "{name}");
+        assert_eq!(after.tags.year, Some(2019), "{name}");
+        assert!(
+            after.tags.genres.is_empty(),
+            "{name}: a genre chosen away is gone"
+        );
+        assert_eq!(after.sound.duration_ms, before.duration_ms, "{name}");
+        assert_eq!(after.sound.codec, before.codec, "{name}");
+    }
+}
+
+#[test]
+fn the_cover_a_file_carries_is_still_there_once_its_tags_are_written() {
+    use lofty::picture::{MimeType, Picture, PictureType};
+
+    let (_directory, song) = copy_of("one-second.flac");
+    tag_file(&song, |tag| {
+        tag.push_picture(
+            Picture::unchecked(b"the front".to_vec())
+                .pic_type(PictureType::CoverFront)
+                .mime_type(MimeType::Jpeg)
+                .build(),
+        );
+    });
+    melyxar_tags::write(
+        &song,
+        &melyxar_tags::EditedTags {
+            title: Some("Tides".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("written");
+    let cover = front_cover(&song).expect("read").expect("still a cover");
+    assert_eq!(cover.data, b"the front");
+    assert_eq!(
+        read(&song).expect("read").tags.title.as_deref(),
+        Some("Tides")
+    );
+}

@@ -16,6 +16,7 @@ pub mod media;
 pub mod media_log;
 pub mod music;
 pub mod music_lyrics;
+pub mod music_naming;
 pub mod music_preferences;
 pub mod orientation;
 pub mod rating;
