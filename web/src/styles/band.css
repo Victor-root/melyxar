@@ -315,10 +315,9 @@
 /*
  * The record that slides out from behind the covers in the middle.
  *
- * Only what the compositor does alone moves: the slide and the turn are a
- * translate and a rotate, and the picture of the record is painted once.
- * The turn runs only under the pointer, and the layer is only asked for
- * then.
+ * Only what the compositor does alone moves: the slide is a translate, and
+ * the picture of the record is painted once. The layer is only asked for
+ * under the pointer.
  */
 .band-record {
   position: absolute;
@@ -355,7 +354,6 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
   translate: 0 calc(-42% * var(--open));
   transition: translate var(--calm) var(--ease);
-  animation: band-record-turn 4s linear infinite paused;
 }
 
 /* Where it slides from the first time it is drawn, which is already under
@@ -368,20 +366,7 @@
 
 .band-tile:hover .band-record,
 .band-tile:focus-visible .band-record {
-  animation-play-state: running;
-  will-change: translate, rotate;
-}
-
-@keyframes band-record-turn {
-  to {
-    rotate: 360deg;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .band-record {
-    animation: none;
-  }
+  will-change: translate;
 }
 
 .band-poster img {
