@@ -16,11 +16,9 @@ import { useEffect } from "react";
 import type { Picture } from "../../api";
 import { useShownPicture } from "../../components/picture";
 import { useIsAFilmOnScreen } from "../../on-screen";
-import { ICON } from "../../player/sound";
 import { useSettings } from "../../settings";
 import { namesOf } from "../tiles";
 import { HeartButton, PlayButton, QueueButton, Rail, SongStepButton, Transport, Ways, Volume } from "./controls";
-import { StopIcon } from "./icons";
 import { useMusic } from "./player";
 
 export function MusicBar() {
@@ -77,9 +75,6 @@ export function MusicBar() {
           <HeartButton id={song.id} />
           <Volume music={music} />
           <Ways music={music} />
-          <button type="button" className="player-button" onClick={music.stop} aria-label={t("music.stop")}>
-            <StopIcon size={ICON - 4} />
-          </button>
           <QueueButton music={music} />
         </div>
       </div>

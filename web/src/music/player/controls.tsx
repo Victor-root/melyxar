@@ -21,7 +21,7 @@ import { previewPlace } from "../../player/seek";
 import { ICON, SoundControl } from "../../player/sound";
 import { useSettings } from "../../settings";
 import { useMusicMarks } from "../marks";
-import { QueueIcon, RepeatIcon, ShuffleIcon } from "./icons";
+import { QueueIcon, RepeatIcon, ShuffleIcon, StopIcon } from "./icons";
 import { useMusicTime } from "./player";
 import type { Music } from "./player";
 
@@ -80,13 +80,24 @@ export function SecondsButton({ music, back }: { music: Music; back: boolean }) 
   );
 }
 
-/** The transport in the order the film's player has it. */
+export function StopButton({ music }: { music: Music }) {
+  const { t } = useSettings();
+  return (
+    <button type="button" className="player-button" onClick={music.stop} aria-label={t("music.stop")}>
+      <StopIcon size={ICON - 4} />
+    </button>
+  );
+}
+
+/** The transport in the order the film's player has it, with the button that
+    stops for good beside the one that plays. */
 export function Transport({ music }: { music: Music }) {
   return (
     <>
       <SongStepButton music={music} back />
       <SecondsButton music={music} back />
       <PlayButton music={music} />
+      <StopButton music={music} />
       <SecondsButton music={music} back={false} />
       <SongStepButton music={music} back={false} />
     </>

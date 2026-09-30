@@ -15,7 +15,6 @@ import { ICON } from "../../player/sound";
 import { useSettings } from "../../settings";
 import { Cover } from "./bar";
 import { HeartButton, Rail, Transport, Volume, Ways } from "./controls";
-import { StopIcon } from "./icons";
 import { LyricsPanel } from "./lyrics-panel";
 import { useMusic } from "./player";
 
@@ -134,9 +133,6 @@ export function MusicNowPlaying() {
             <HeartButton id={song.id} />
             <Volume music={music} />
             <Ways music={music} />
-            <button type="button" className="player-button" onClick={music.stop} aria-label={t("music.stop")}>
-              <StopIcon size={ICON - 4} />
-            </button>
           </div>
         </div>
       </div>
