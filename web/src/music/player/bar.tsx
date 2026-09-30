@@ -1,6 +1,8 @@
 /*
  * The bar of the player of music, at the foot of every page for as long as
- * there is something in the queue, and gone while a film plays.
+ * there is something in the queue, and gone while a film plays. It stays in
+ * place under the page of what is playing, so opening and closing that page
+ * moves nothing of the interface.
  *
  * Drawn as the player of films is drawn, with its bar, its clocks, its
  * buttons and its sound: the bar along the top with the time at both ends,
@@ -25,7 +27,7 @@ export function MusicBar() {
   const { t } = useSettings();
   const music = useMusic();
   const film = useIsAFilmOnScreen();
-  const shown = music.song !== null && !film && !music.open;
+  const shown = music.song !== null && !film;
 
   // Room kept at the foot of the pages, so the bar never hides the end of
   // one.

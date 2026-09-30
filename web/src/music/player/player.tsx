@@ -78,23 +78,43 @@ export interface Music {
 export interface Time {
   position: number;
   length: number;
+  /** How far the sound is already in hand, in seconds from the start of the
+      song, which is what the bar shows in grey. */
+  loaded: number;
 }
 
 const MusicContext = createContext<Music | null>(null);
 
 /** Where the song has got to, read only by what shows it. */
 const time = {
-  now: { position: 0, length: 0 } as Time,
+  now: { position: 0, length: 0, loaded: 0 } as Time,
   listeners: new Set<() => void>(),
-  set(next: Time) {
-    if (next.position !== this.now.position || next.length !== this.now.length) {
-      this.now = next;
+  set(next: Omit<Time, "loaded"> & { loaded?: number }) {
+    const loaded = next.loaded ?? 0;
+    if (
+      next.position !== this.now.position ||
+      next.length !== this.now.length ||
+      loaded !== this.now.loaded
+    ) {
+      this.now = { ...next, loaded };
       for (const listener of this.listeners) {
         listener();
       }
     }
   },
 };
+
+/** How far into the song the sound is in hand, from where the deck was
+    started: the end of the stretch it is playing in. */
+function bufferedTo(audio: HTMLAudioElement): number {
+  const { buffered, currentTime } = audio;
+  for (let at = 0; at < buffered.length; at += 1) {
+    if (buffered.start(at) <= currentTime + 0.5 && buffered.end(at) >= currentTime) {
+      return buffered.end(at);
+    }
+  }
+  return currentTime;
+}
 
 export function useMusic(): Music {
   const music = useContext(MusicContext);
@@ -366,12 +386,17 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       }
       startAt.current = 0;
     };
+    const onLoaded = () => {
+      const audio = live();
+      time.set({ ...time.now, loaded: offset.current + bufferedTo(audio) });
+    };
     const onTime = () => {
       const audio = live();
       const now = queueNow.current.songs.length > 0 ? current(queueNow.current) : null;
       time.set({
         position: Math.floor(offset.current + audio.currentTime),
         length: now?.seconds ?? (Number.isFinite(audio.duration) ? Math.floor(audio.duration) : 0),
+        loaded: offset.current + bufferedTo(audio),
       });
       if (!now || audio.paused) {
         return;
@@ -438,6 +463,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const events: [string, () => void][] = [
       ["loadedmetadata", onMetadata],
       ["timeupdate", onTime],
+      ["progress", onLoaded],
       ["play", onPlay],
       ["pause", onPause],
       ["waiting", onWaiting],
@@ -630,7 +656,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         } else {
           load(now, to, !audio.paused || wantsToPlay.current);
         }
-        time.set({ position: Math.floor(to), length: time.now.length });
+        time.set({ position: Math.floor(to), length: time.now.length, loaded: time.now.loaded });
       },
       setVolume: (volume) => setLoudness((was) => ({ volume: Math.min(Math.max(volume, 0), 1), muted: volume > 0 ? false : was.muted })),
       setMuted: (muted) => setLoudness((was) => ({ ...was, muted })),

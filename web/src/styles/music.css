@@ -7,32 +7,14 @@
  * The head of a library, and its tabs
  * ----------------------------------------------------------------------- */
 
-.music-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gap) var(--gap-wide);
-  margin-bottom: var(--gap);
-}
-
-.music-head h1 {
-  margin: 0;
-}
-
-/* The tabs sit in one piece of the bar's glass, as the pieces of the bar of a
-   grid of films do, and scroll sideways on a narrow screen rather than
-   wrapping into a second row. */
-.music-tabs {
-  display: flex;
+/* The tabs are one piece of the glass a grid of films is read by, scrolling
+   sideways on a narrow screen rather than wrapping into a second row. */
+.browse-piece.music-tabs {
+  flex-wrap: nowrap;
   gap: 2px;
-  padding: 4px;
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: var(--header-glass);
-  backdrop-filter: blur(18px);
 }
 
 .music-tabs::-webkit-scrollbar {
@@ -68,7 +50,6 @@
 /* The count follows the sort rather than standing at the far end, where
    the rail of letters stands over it. */
 .music-bar {
-  justify-content: flex-start;
   margin-bottom: var(--gap-wide);
 }
 
@@ -164,7 +145,6 @@
   border: none;
   border-radius: var(--radius-card);
   background: var(--surface-raised);
-  box-shadow: inset 0 0 0 1.5px transparent;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -174,12 +154,30 @@
     box-shadow var(--quick) var(--ease);
 }
 
+/* The rim is drawn over the cover, which would otherwise hide its edge. */
+.music-line {
+  position: relative;
+}
+
+.music-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1.5px transparent;
+  pointer-events: none;
+  transition: box-shadow var(--quick) var(--ease);
+}
+
 .music-line:hover,
 .music-line:focus-visible {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
-  box-shadow:
-    inset 0 0 0 1.5px var(--accent-bright),
-    0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.music-line:hover::after,
+.music-line:focus-visible::after {
+  box-shadow: inset 0 0 0 1.5px var(--accent-bright);
 }
 
 .music-line-cover {
@@ -955,6 +953,16 @@
 
   .music-bar-dock .music-bar-phone {
     display: flex;
+  }
+
+  /* Shown and not touched: changing where the song is takes the page of what
+     is playing. */
+  .music-bar-dock .player-rail {
+    pointer-events: none;
+  }
+
+  .music-bar-dock .player-rail-handle {
+    display: none;
   }
 
   .music-now-cover {

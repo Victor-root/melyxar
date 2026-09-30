@@ -2,6 +2,7 @@
  * The page of one album: its cover, whose it is, and its songs disc by disc.
  */
 
+import { PageBackdrop } from "../components/backdrop";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { howMany } from "../readable";
@@ -69,6 +70,7 @@ export function MusicAlbumPage() {
   const whose = album.compilation ? null : namesOf(album.artists);
   return (
     <main className="page music-page">
+      <PageBackdrop />
       <header className="music-hero">
         <div className="music-hero-picture">
           <AlbumCover album={album} />

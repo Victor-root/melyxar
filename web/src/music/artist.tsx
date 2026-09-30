@@ -4,6 +4,7 @@
  * on.
  */
 
+import { PageBackdrop } from "../components/backdrop";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { PlayIcon } from "../icons";
@@ -74,6 +75,7 @@ export function MusicArtistPage() {
 
   return (
     <main className="page music-page">
+      <PageBackdrop />
       <header className="music-hero music-hero-artist">
         <div className="music-hero-picture">
           <ArtistPicture artist={artist} />

@@ -173,7 +173,7 @@ export function QueueButton({ music, lit = false }: { music: Music; lit?: boolea
  */
 export function Rail({ music }: { music: Music }) {
   const { t } = useSettings();
-  const { position, length } = useMusicTime();
+  const { position, length, loaded } = useMusicTime();
   const rail = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<number | null>(null);
   const [held, setHeld] = useState<number | null>(null);
@@ -270,6 +270,10 @@ export function Rail({ music }: { music: Music }) {
         )}
         <span className="player-rail-fill">
           <span className="player-rail-track" />
+          <span
+            className="player-rail-held"
+            style={{ width: `${(length > 0 ? Math.min(1, loaded / length) : 0) * 100}%` }}
+          />
           <span className="player-rail-played" style={{ width: `${played * 100}%` }} />
         </span>
         <span className="player-rail-handle" style={{ left: `${played * 100}%` }} />

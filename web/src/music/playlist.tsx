@@ -8,6 +8,7 @@
  * once the server agrees.
  */
 
+import { PageBackdrop } from "../components/backdrop";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { refusalOf } from "../asking";
@@ -111,6 +112,7 @@ export function MusicPlaylistPage() {
 
   return (
     <main className="page music-page">
+      <PageBackdrop />
       <header className="music-hero">
         <div className="music-hero-picture">
           <PlaylistCover playlist={{ name: playlist.name, cover: songs[0]?.cover ?? [] }} />
