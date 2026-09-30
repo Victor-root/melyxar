@@ -59,6 +59,12 @@ export function useLibraries(): Libraries {
   return useContext(LibrariesContext);
 }
 
+/** Where a library stands: moves whenever anything in it moves, which is
+ *  what a screen showing it reads it again by. */
+export function useLibraryVersion(id: string | null | undefined): number | undefined {
+  return useLibraries().all.find((library) => library.id === id)?.version;
+}
+
 /** The libraries of one kind, which is what a category really is. */
 export function librariesOfKind(kind: LibraryKind, libraries: Library[]): Library[] {
   return libraries.filter((library) => library.kind === kind);

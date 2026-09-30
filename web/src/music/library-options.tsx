@@ -1,7 +1,8 @@
 /*
  * What a library of music does beyond what every library does, on the
  * administration's screen of that library: whether it looks up lyrics
- * online, and whether the tag manager may write into its files. Saved as soon as it is switched, and switched back if the server
+ * online, whether the covers its albums lack are looked up online, and
+ * whether the tag manager may write into its files. Saved as soon as it is switched, and switched back if the server
  * refuses.
  */
 
@@ -40,6 +41,14 @@ export function MusicLibraryOptionsFields({ library }: { library: string }) {
           label={t("music.lyrics_online")}
           checked={options.lyrics_online}
           onChange={(lyrics_online) => change({ ...options, lyrics_online })}
+        />
+      </Setting>
+      <h3 className="settings-heading">{t("music.covers")}</h3>
+      <Setting label={t("music.covers_online")} why={t("music.covers_online_why")}>
+        <Toggle
+          label={t("music.covers_online")}
+          checked={options.covers_online}
+          onChange={(covers_online) => change({ ...options, covers_online })}
         />
       </Setting>
       <h3 className="settings-heading">{t("music.tag_manager")}</h3>

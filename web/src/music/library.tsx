@@ -14,6 +14,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
 import { Picker } from "../components/panel";
 import { ArrowRightIcon, CloseIcon } from "../icons";
+import { useLibraryVersion } from "../libraries";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
@@ -70,6 +71,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
 
 function AlbumsTab({ library }: { library: string }) {
   const { t } = useSettings();
+  const version = useLibraryVersion(library);
   const [params, setParams] = useSearchParams();
   const order = ALBUM_ORDERS.find((one) => one === params.get("order")) ?? "title";
   const descending = params.get("descending") === "true";
@@ -84,8 +86,10 @@ function AlbumsTab({ library }: { library: string }) {
     setParams(next, { replace: true });
   };
 
-  const albums = usePaged(`${library}|${order}|${descending}|${genre ?? ""}`, (offset, limit, signal) =>
-    music.albums(library, order, descending, offset, limit, { genre }, signal),
+  const albums = usePaged(
+    `${library}|${order}|${descending}|${genre ?? ""}`,
+    (offset, limit, signal) => music.albums(library, order, descending, offset, limit, { genre }, signal),
+    version,
   );
   const letters = useInitials(library, "albums", order === "title" && !descending && !genre);
 
@@ -136,8 +140,11 @@ function AlbumsTab({ library }: { library: string }) {
 
 function ArtistsTab({ library, albumArtistsOnly }: { library: string; albumArtistsOnly: boolean }) {
   const { t } = useSettings();
-  const artists = usePaged(`${library}|${albumArtistsOnly}`, (offset, limit, signal) =>
-    music.artists(library, albumArtistsOnly, offset, limit, signal),
+  const version = useLibraryVersion(library);
+  const artists = usePaged(
+    `${library}|${albumArtistsOnly}`,
+    (offset, limit, signal) => music.artists(library, albumArtistsOnly, offset, limit, signal),
+    version,
   );
   const letters = useInitials(library, albumArtistsOnly ? "album_artists" : "artists", true);
   return (
@@ -160,6 +167,7 @@ function ArtistsTab({ library, albumArtistsOnly }: { library: string; albumArtis
 
 function SongsTab({ library }: { library: string }) {
   const { t } = useSettings();
+  const version = useLibraryVersion(library);
   const [params, setParams] = useSearchParams();
   const order = SONG_ORDERS.find((one) => one === params.get("order")) ?? "title";
   const descending = params.get("descending") === "true";
@@ -175,6 +183,7 @@ function SongsTab({ library }: { library: string }) {
   const player = useMusic();
   const songs = usePaged(`${library}|${order}|${descending}`, (offset, limit, signal) =>
     music.songs(library, order, descending, offset, limit, signal),
+    version,
   );
   return (
     <>
@@ -204,6 +213,7 @@ function SongsTab({ library }: { library: string }) {
 
 function GenresTab({ library }: { library: string }) {
   const { t } = useSettings();
+  const version = useLibraryVersion(library);
   const [genres, setGenres] = useState<Genre[] | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -217,7 +227,7 @@ function GenresTab({ library }: { library: string }) {
         }
       });
     return () => stop.abort();
-  }, [library]);
+  }, [library, version]);
 
   if (failed) {
     return <p className="notice">{t("error.unreachable")}</p>;
@@ -268,8 +278,9 @@ function useInitials(
   wanted: boolean,
 ): Initial[] | null {
   const [letters, setLetters] = useState<Initial[] | null>(null);
+  const version = useLibraryVersion(library);
+  useEffect(() => setLetters(null), [library, of, wanted]);
   useEffect(() => {
-    setLetters(null);
     if (!wanted) {
       return;
     }
@@ -281,7 +292,7 @@ function useInitials(
         // No rail, which is what a list the server could not count shows.
       });
     return () => stop.abort();
-  }, [library, of, wanted]);
+  }, [library, of, wanted, version]);
   return letters;
 }
 

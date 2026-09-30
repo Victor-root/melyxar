@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Row, RowHead } from "../components/row";
+import { useLibraryVersion } from "../libraries";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Album, Found, MusicPlaylist, Song } from "./api";
@@ -24,6 +25,7 @@ const NEWEST = 20;
 
 export function ForYouTab({ library }: { library: string }) {
   const { t } = useSettings();
+  const version = useLibraryVersion(library);
   const { listenedAt } = useMusicMarks();
   const player = useMusic();
   const [newest, setNewest] = useState<Album[] | null>(null);
@@ -37,7 +39,7 @@ export function ForYouTab({ library }: { library: string }) {
       .then((page) => setNewest(page.items))
       .catch(() => {});
     return () => stop.abort();
-  }, [library]);
+  }, [library, version]);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -119,6 +121,7 @@ export function stillLiked(found: Found, liked: (id: string) => boolean): Found 
 
 export function FavouritesTab({ library }: { library: string }) {
   const { t } = useSettings();
+  const version = useLibraryVersion(library);
   const { liked } = useMusicMarks();
   const [found, setFound] = useState<Found | null>(null);
 
@@ -126,7 +129,7 @@ export function FavouritesTab({ library }: { library: string }) {
     const stop = new AbortController();
     music.favourites(library, stop.signal).then(setFound).catch(() => {});
     return () => stop.abort();
-  }, [library]);
+  }, [library, version]);
 
   const shown = useMemo(() => (found ? stillLiked(found, liked) : null), [found, liked]);
   if (!shown) {

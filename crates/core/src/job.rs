@@ -55,6 +55,8 @@ pub enum JobKind {
     /// Fetches the ratings a work carries from elsewhere than its provider:
     /// IMDb's, and Rotten Tomatoes' when a key for OMDb was given.
     FetchRatings,
+    /// Looks up online the covers the albums of a library of music lack.
+    LookUpAlbumCovers,
 }
 
 impl JobKind {
@@ -64,7 +66,7 @@ impl JobKind {
     /// several things have to cover all of them: the interface needs a
     /// sentence for each, and a kind with none reaches the screen as its own
     /// name.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::ScanLibrary,
         Self::IdentifyWork,
         Self::ReadCopyAgain,
@@ -77,6 +79,7 @@ impl JobKind {
         Self::PurgeActivity,
         Self::Backup,
         Self::FetchRatings,
+        Self::LookUpAlbumCovers,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -93,6 +96,7 @@ impl JobKind {
             Self::PurgeActivity => "purge_activity",
             Self::Backup => "backup",
             Self::FetchRatings => "fetch_ratings",
+            Self::LookUpAlbumCovers => "look_up_album_covers",
         }
     }
 
@@ -110,6 +114,7 @@ impl JobKind {
             "purge_activity" => Some(Self::PurgeActivity),
             "backup" => Some(Self::Backup),
             "fetch_ratings" => Some(Self::FetchRatings),
+            "look_up_album_covers" => Some(Self::LookUpAlbumCovers),
             _ => None,
         }
     }
@@ -157,11 +162,13 @@ pub enum JobStep {
     AskingOmdb,
     /// Reading each song through for how loud it is.
     MeasuringSongs,
+    /// Asking MusicBrainz for the covers the albums lack.
+    LookingUpCovers,
 }
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
@@ -176,6 +183,7 @@ impl JobStep {
         Self::ReadingImdbRatings,
         Self::AskingOmdb,
         Self::MeasuringSongs,
+        Self::LookingUpCovers,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -194,6 +202,7 @@ impl JobStep {
             Self::ReadingImdbRatings => "reading_imdb_ratings",
             Self::AskingOmdb => "asking_omdb",
             Self::MeasuringSongs => "measuring_songs",
+            Self::LookingUpCovers => "looking_up_covers",
         }
     }
 
@@ -213,6 +222,7 @@ impl JobStep {
             "reading_imdb_ratings" => Some(Self::ReadingImdbRatings),
             "asking_omdb" => Some(Self::AskingOmdb),
             "measuring_songs" => Some(Self::MeasuringSongs),
+            "looking_up_covers" => Some(Self::LookingUpCovers),
             _ => None,
         }
     }

@@ -7,7 +7,7 @@ import { Link, useParams } from "react-router-dom";
 import { howMany } from "../readable";
 import { useAccount } from "../account";
 import { PlayIcon, TagIcon } from "../icons";
-import { useLibraries } from "../libraries";
+import { useLibraryVersion } from "../libraries";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { AlbumPage } from "./api";
@@ -26,9 +26,8 @@ export function MusicAlbumPage() {
   const { account } = useAccount();
   /* Read again whenever its library moves, which is how the album follows
      tags written into its files and a scan filing them anew. */
-  const { all: libraries } = useLibraries();
   const [inLibrary, setInLibrary] = useState<string | null>(null);
-  const version = libraries.find((library) => library.id === inLibrary)?.version;
+  const version = useLibraryVersion(inLibrary);
   const [album, setAlbum] = useState<AlbumPage | null>(null);
   const [failed, setFailed] = useState(false);
 

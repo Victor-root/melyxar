@@ -30,10 +30,15 @@ export interface Paged<T> {
  * Reads a list, starting again from its first page whenever `key` changes:
  * the key says what the list is (which library, in which order, narrowed to
  * what), so a list read another way is never mixed with the one before.
+ *
+ * When `version` moves, the library changed under the list: what is held is
+ * read again and put in its place at once, the list neither emptied nor
+ * moved, so an album filed or a cover found during a scan simply appears.
  */
 export function usePaged<T>(
   key: string,
   read: (offset: number, limit: number, signal: AbortSignal) => Promise<Page<T>>,
+  version: number | undefined,
 ): Paged<T> {
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -99,6 +104,36 @@ export function usePaged<T>(
     void next();
     return () => stop.current?.abort();
   }, [key, next]);
+
+  const seenVersion = useRef(version);
+  useEffect(() => {
+    if (version === seenVersion.current) {
+      return;
+    }
+    seenVersion.current = version;
+    const now = held.current;
+    const wanted = Math.max(now.items.length, PAGE);
+    const controller = new AbortController();
+    void (async () => {
+      const again: T[] = [];
+      let whole: number | null = null;
+      for (let offset = 0; offset < wanted; offset += PAGE) {
+        const page = await reading.current(offset, PAGE, controller.signal);
+        again.push(...page.items);
+        whole = page.total;
+        if (page.items.length < PAGE) {
+          break;
+        }
+      }
+      if (held.current === now && !now.asking) {
+        now.items = again;
+        now.total = whole;
+        setItems(again);
+        setTotal(whole);
+      }
+    })().catch(() => {});
+    return () => controller.abort();
+  }, [version]);
 
   const reach = useCallback(
     async (index: number) => {

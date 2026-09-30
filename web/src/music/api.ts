@@ -127,6 +127,8 @@ export interface MusicLibraryOptions {
   lyrics_online: boolean;
   /** Whether the tag manager may write into its files. */
   tag_writing: boolean;
+  /** Whether the covers its albums lack are looked up on MusicBrainz. */
+  covers_online: boolean;
 }
 
 /** One playlist of songs, as the list of them shows it. */

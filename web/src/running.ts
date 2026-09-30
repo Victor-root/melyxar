@@ -55,17 +55,24 @@ export function useWatchedWork(): Running {
   const [busy, setBusy] = useState(true);
   const [finished, setFinished] = useState(0);
   const wasBusy = useRef(false);
+  /* The last work the server said it had done, so that one begun and ended
+     between two looks, a quick scan or a few covers, still counts as ended:
+     never seen running, it would otherwise never be seen at all. */
+  const lastDone = useRef<string | null | undefined>(undefined);
 
   const look = useCallback(async (signal?: AbortSignal) => {
     try {
       const answer = await api.jobs(signal);
       setJobs(answer.running);
       setBusy(answer.running.length > 0);
+      const newest = answer.recent[0]?.id ?? null;
+      const doneUnseen = lastDone.current !== undefined && newest !== lastDone.current;
+      lastDone.current = newest;
       if (answer.running.length > 0) {
         wasBusy.current = true;
         return;
       }
-      if (wasBusy.current) {
+      if (wasBusy.current || doneUnseen) {
         wasBusy.current = false;
         setFinished((count) => count + 1);
       }

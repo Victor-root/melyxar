@@ -162,6 +162,11 @@ pub async fn take_up_again_what_a_restart_cut_short(state: &AppState, cut_short:
                     .await
                     .map(|_| ())
             }
+            JobKind::LookUpAlbumCovers => {
+                crate::music::covers::start(state, library.clone(), JobPriority::BACKGROUND)
+                    .await
+                    .map(|_| ())
+            }
             JobKind::FetchRatings => {
                 crate::ratings::start(state, library.clone(), JobPriority::BACKGROUND)
                     .await
@@ -621,6 +626,7 @@ mod tests {
             JobKind::PullOutSubtitles,
             JobKind::ListenForOpenings,
             JobKind::AnalyseLoudness,
+            JobKind::LookUpAlbumCovers,
         ];
         for kind in kinds {
             state

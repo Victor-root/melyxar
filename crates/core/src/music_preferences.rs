@@ -109,6 +109,9 @@ pub struct MusicLibraryOptions {
     /// Off until an administrator turns it on: the server only ever reads
     /// the media it is given, unless told otherwise.
     pub tag_writing: bool,
+    /// Whether the covers its albums lack are looked up online, on
+    /// MusicBrainz. Off until an administrator turns it on.
+    pub covers_online: bool,
 }
 
 /// The longest a crossfade can be asked to last, in seconds.
