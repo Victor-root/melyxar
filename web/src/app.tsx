@@ -23,6 +23,7 @@ import { DebugJournal } from "./components/debug-journal";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { MusicAlbumPage } from "./music/album";
+import { MusicPlaylistPage } from "./music/playlist";
 import { MusicArtistPage } from "./music/artist";
 import { MusicLibraryPage } from "./music/library";
 import { MusicBar } from "./music/player/bar";
@@ -184,6 +185,7 @@ function TheLibrary() {
               <Route path="/" element={<HomePage libraries={libraries.all} />} />
               <Route path="/library/:id" element={<LibraryOrMusic libraries={libraries.all} />} />
               <Route path="/music/album/:id" element={<MusicAlbumPage />} />
+              <Route path="/music/playlist/:id" element={<MusicPlaylistPage />} />
               <Route path="/music/artist/:id" element={<MusicArtistPage />} />
               <Route path="/search" element={<SearchPage libraries={libraries.all} />} />
               {/* The same grid, narrowed to what this account marked: a view of the

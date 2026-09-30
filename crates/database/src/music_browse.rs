@@ -667,7 +667,7 @@ impl Database {
             .iter()
             .map(|row| parse_id(&row.try_get::<String, _>("id")?))
             .collect::<Result<_>>()?;
-        let mut artists = self.credited_on(&ids, "artist").await?;
+        let artists = self.credited_on(&ids, "artist").await?;
         let albums: Vec<WorkId> = rows
             .iter()
             .filter_map(|row| row.try_get::<Option<String>, _>("parent_id").ok().flatten())
@@ -690,7 +690,7 @@ impl Database {
                 Ok(SongRow {
                     id,
                     title: row.try_get("title")?,
-                    artists: artists.remove(&id).unwrap_or_default(),
+                    artists: artists.get(&id).cloned().unwrap_or_default(),
                     track: row.try_get("ordinal")?,
                     disc: row.try_get("disc_number")?,
                     year: row.try_get("release_year")?,

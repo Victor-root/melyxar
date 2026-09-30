@@ -5,7 +5,7 @@
  * requests: what goes wrong with music stays with music.
  */
 
-import { get, post, put } from "../api";
+import { get, post, put, remove } from "../api";
 import type { Picture } from "../api";
 
 /** An artist named on an album or a song. */
@@ -125,6 +125,23 @@ export interface MusicLibraryOptions {
   lyrics_online: boolean;
 }
 
+/** One playlist of songs, as the list of them shows it. */
+export interface MusicPlaylist {
+  id: string;
+  name: string;
+  songs: number;
+  seconds: number;
+  /** The cover of the album of its first song. */
+  cover: Picture[];
+}
+
+/** One playlist of songs with its songs, in its order. */
+export interface MusicPlaylistPage {
+  id: string;
+  name: string;
+  tracks: Song[];
+}
+
 /** One album, as its own page shows it. */
 export interface AlbumPage extends Album {
   /** Its songs, in their order on it. */
@@ -213,6 +230,17 @@ export const music = {
     get<MusicLibraryOptions>(`/api/v1/music/${library}/options`, signal),
   setLibraryOptions: (library: string, options: MusicLibraryOptions) =>
     put<MusicLibraryOptions>(`/api/v1/music/${library}/options`, options),
+  playlists: (signal?: AbortSignal) => get<MusicPlaylist[]>("/api/v1/music/playlists", signal),
+  playlist: (id: string, signal?: AbortSignal) =>
+    get<MusicPlaylistPage>(`/api/v1/music/playlists/${id}`, signal),
+  createPlaylist: (name: string, songs: string[]) =>
+    post<{ id: string }>("/api/v1/music/playlists", { name, songs }),
+  renamePlaylist: (id: string, name: string) => put<null>(`/api/v1/music/playlists/${id}/name`, { name }),
+  deletePlaylist: (id: string) => remove<null>(`/api/v1/music/playlists/${id}`),
+  addToPlaylist: (id: string, songs: string[]) =>
+    post<null>(`/api/v1/music/playlists/${id}/songs`, { songs }),
+  setPlaylistSongs: (id: string, songs: string[]) =>
+    put<null>(`/api/v1/music/playlists/${id}/songs`, { songs }),
   search: (words: string, library: string | undefined, signal?: AbortSignal) =>
     get<Found>(`/api/v1/music/search${query({ words, library })}`, signal),
   album: (id: string, signal?: AbortSignal) =>

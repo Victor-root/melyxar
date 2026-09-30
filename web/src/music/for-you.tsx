@@ -1,7 +1,7 @@
 /*
- * The two tabs of a library of music that are this account's own: the one
- * it opens on, with what arrived lately and what was listened to lately and
- * most, and the one of what it likes.
+ * The tabs of a library of music that are this account's own: the one it
+ * opens on, with what arrived lately and what was listened to lately and
+ * most, the one of its playlists, and the one of what it likes.
  *
  * What was listened to is read again each time a listen is counted, and
  * what is liked follows the hearts at once: a song taken off here leaves the
@@ -12,12 +12,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Row, RowHead } from "../components/row";
 import { useSettings } from "../settings";
 import { music } from "./api";
-import type { Album, Found, Song } from "./api";
+import type { Album, Found, MusicPlaylist, Song } from "./api";
 import { useMusicMarks } from "./marks";
 import { useMusic } from "./player/player";
 import { MusicFound, foundAny } from "./search";
 import { SongList } from "./songs";
-import { AlbumTile } from "./tiles";
+import { AlbumTile, PlaylistTile } from "./tiles";
 
 /** As many albums as the row of the newest on the home page. */
 const NEWEST = 20;
@@ -76,6 +76,34 @@ function Listened({ title, songs, onPlay }: { title: string; songs: Song[]; onPl
       <RowHead title={title} />
       <SongList songs={songs} numbered="place" onPlay={onPlay} />
     </section>
+  );
+}
+
+export function PlaylistsTab() {
+  const { t } = useSettings();
+  const { playlistsAt } = useMusicMarks();
+  const [playlists, setPlaylists] = useState<MusicPlaylist[] | null>(null);
+
+  useEffect(() => {
+    const stop = new AbortController();
+    music.playlists(stop.signal).then(setPlaylists).catch(() => {});
+    return () => stop.abort();
+  }, [playlistsAt]);
+
+  if (!playlists) {
+    return null;
+  }
+  if (playlists.length === 0) {
+    return <p className="notice">{t("music.no_playlist")}</p>;
+  }
+  return (
+    <div className="music-list">
+      <div className="music-grid">
+        {playlists.map((playlist) => (
+          <PlaylistTile key={playlist.id} playlist={playlist} />
+        ))}
+      </div>
+    </div>
   );
 }
 

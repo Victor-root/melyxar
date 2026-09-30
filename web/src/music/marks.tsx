@@ -1,6 +1,7 @@
 /*
  * What this account makes of its music, held once for every screen: the
- * songs, albums and artists it likes, and when its listening last moved.
+ * songs, albums and artists it likes, and when its listening and its
+ * playlists last moved.
  *
  * A heart pressed anywhere changes here first, before the server answers,
  * and goes back if the server refuses, so every heart and every list of
@@ -20,6 +21,10 @@ export interface MusicMarks {
       listened to to be read again. */
   listenedAt: number;
   listened: (song: string) => void;
+  /** Moves each time a playlist is made, changed or deleted, for every
+      screen showing one to read it again. */
+  playlistsAt: number;
+  playlistsHaveMoved: () => void;
 }
 
 const MarksContext = createContext<MusicMarks | null>(null);
@@ -35,6 +40,8 @@ export function useMusicMarks(): MusicMarks {
 export function MusicMarksProvider({ children }: { children: ReactNode }) {
   const [liked, setLikedHere] = useState<ReadonlySet<string>>(new Set());
   const [listenedAt, setListenedAt] = useState(0);
+  const [playlistsAt, setPlaylistsAt] = useState(0);
+  const playlistsHaveMoved = useCallback(() => setPlaylistsAt(Date.now()), []);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -68,8 +75,8 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const marks = useMemo<MusicMarks>(
-    () => ({ liked: (id) => liked.has(id), setLiked, listenedAt, listened }),
-    [liked, setLiked, listenedAt, listened],
+    () => ({ liked: (id) => liked.has(id), setLiked, listenedAt, listened, playlistsAt, playlistsHaveMoved }),
+    [liked, setLiked, listenedAt, listened, playlistsAt, playlistsHaveMoved],
   );
   return <MarksContext.Provider value={marks}>{children}</MarksContext.Provider>;
 }
