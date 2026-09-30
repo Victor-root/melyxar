@@ -1,14 +1,20 @@
 /*
- * An album and an artist, as a grid shows them: a square cover under which
- * the album is named with whose it is, and a round picture over an artist's
- * name.
+ * An album and an artist, as a grid shows them: the card of the rest of the
+ * interface over a square cover under which the album is named with whose it
+ * is, and over a round picture for an artist.
  */
 
+import { useContext, useState } from "react";
 import { Link } from "react-router-dom";
+import { PicturesAhead } from "../components/card";
 import { useShownPicture } from "../components/picture";
+import { HeartIcon, PlayIcon } from "../icons";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
-import type { Album, Artist, Credited, MusicPlaylist } from "./api";
+import { music } from "./api";
+import type { Album, Artist, Credited, MusicPlaylist, Song } from "./api";
+import { useMusicMarks } from "./marks";
+import { useMusic } from "./player/player";
 
 /** Whose album it is, as a line under its title. */
 export function useWhoseAlbum(): (album: Album) => string {
@@ -62,35 +68,151 @@ function Cover({
   );
 }
 
+/**
+ * One tile of a grid or a row: the card of the rest of the interface, with
+ * its play button in the middle and its heart in the corner under the
+ * pointer, over a square cover or a round picture. What it plays is asked of
+ * the server at the press, since a grid holds thousands of them.
+ */
+function Tile({
+  to,
+  index,
+  pictures,
+  color,
+  name,
+  note,
+  round = false,
+  liking,
+  songs,
+}: {
+  to: string;
+  index?: number;
+  pictures: Album["cover"];
+  color: string | null;
+  name: string;
+  note: string;
+  round?: boolean;
+  /** What the heart likes, when the tile has one. */
+  liking?: string;
+  /** The songs a press of play starts, in the order they play. */
+  songs: () => Promise<Song[]>;
+}) {
+  const { t } = useSettings();
+  const player = useMusic();
+  const marks = useMusicMarks();
+  const { picture, itDidNotLoad } = useShownPicture(pictures);
+  const ahead = useContext(PicturesAhead);
+  /* Made the first time the tile is reached, like the card of a film: a
+     grid of thousands does not hold thousands of hidden buttons. */
+  const [reached, setReached] = useState(false);
+  const liked = liking !== undefined && marks.liked(liking);
+  const stop = (doing: () => void) => (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    doing();
+  };
+  const play = () =>
+    songs()
+      .then((found) => found.length > 0 && player.play(found, 0))
+      .catch(() => {});
+  return (
+    <article
+      className={`card card-square${round ? " card-round" : ""}`}
+      data-index={index}
+      style={{ ["--card-color" as string]: color ?? "var(--surface-raised)" }}
+      onPointerEnter={() => setReached(true)}
+      onFocus={() => setReached(true)}
+    >
+      <div className="card-picture">
+        {picture ? (
+          <img
+            src={picture.src}
+            srcSet={picture.srcSet || undefined}
+            sizes="(max-width: 700px) 40vw, 186px"
+            alt=""
+            loading={ahead ? "eager" : "lazy"}
+            decoding="async"
+            draggable={false}
+            onError={itDidNotLoad}
+          />
+        ) : (
+          <span className="card-initial" aria-hidden="true">
+            {name.slice(0, 1)}
+          </span>
+        )}
+        <Link className="card-open" to={to} title={name} draggable={false}>
+          <span className="visually-hidden">{name}</span>
+        </Link>
+        {reached && (
+          <div className="card-hover">
+            <button
+              type="button"
+              className="card-play"
+              aria-label={t("music.play")}
+              title={t("music.play")}
+              onClick={stop(play)}
+            >
+              <PlayIcon size={32} />
+            </button>
+            {liking !== undefined && (
+              <div className="card-corner">
+                <button
+                  type="button"
+                  className={`card-mark${liked ? " card-mark-on" : ""}`}
+                  aria-pressed={liked}
+                  aria-label={t(liked ? "card.unfavourite" : "card.favourite")}
+                  title={t(liked ? "card.unfavourite" : "card.favourite")}
+                  onClick={stop(() => marks.setLiked(liking, !liked))}
+                >
+                  <HeartIcon size={17} filled={liked} />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      <span className="card-line">
+        <span className="card-title">{name}</span>
+      </span>
+      <span className="card-year">{note}</span>
+    </article>
+  );
+}
+
 export function AlbumTile({ album, index }: { album: Album; index?: number }) {
   const whose = useWhoseAlbum();
   return (
-    <Link className="music-tile" to={`/music/album/${album.id}`} data-index={index}>
-      <Cover pictures={album.cover} color={album.color} name={album.title} />
-      <span className="music-tile-name">{album.title}</span>
-      <span className="music-tile-note">
-        {[whose(album), album.year].filter(Boolean).join(" · ")}
-      </span>
-    </Link>
+    <Tile
+      to={`/music/album/${album.id}`}
+      index={index}
+      pictures={album.cover}
+      color={album.color}
+      name={album.title}
+      note={[whose(album), album.year].filter(Boolean).join(" · ")}
+      liking={album.id}
+      songs={() => music.album(album.id).then((page) => page.tracks)}
+    />
   );
 }
 
 export function ArtistTile({ artist, index }: { artist: Artist; index?: number }) {
   const { t } = useSettings();
   return (
-    <Link
-      className="music-tile music-tile-artist"
+    <Tile
       to={`/music/artist/${artist.id}`}
-      data-index={index}
-    >
-      <Cover pictures={artist.picture} color={artist.color} name={artist.name} round />
-      <span className="music-tile-name">{artist.name}</span>
-      <span className="music-tile-note">
-        {artist.albums > 0
+      index={index}
+      pictures={artist.picture}
+      color={artist.color}
+      name={artist.name}
+      note={
+        artist.albums > 0
           ? howMany(artist.albums, "music.albums_count", t)
-          : howMany(artist.songs, "music.songs_count", t)}
-      </span>
-    </Link>
+          : howMany(artist.songs, "music.songs_count", t)
+      }
+      round
+      liking={artist.id}
+      songs={() => music.artistSongs(artist.id)}
+    />
   );
 }
 
@@ -98,11 +220,14 @@ export function ArtistTile({ artist, index }: { artist: Artist; index?: number }
 export function PlaylistTile({ playlist }: { playlist: MusicPlaylist }) {
   const { t } = useSettings();
   return (
-    <Link className="music-tile" to={`/music/playlist/${playlist.id}`}>
-      <Cover pictures={playlist.cover} color={null} name={playlist.name} />
-      <span className="music-tile-name">{playlist.name}</span>
-      <span className="music-tile-note">{howMany(playlist.songs, "music.songs_count", t)}</span>
-    </Link>
+    <Tile
+      to={`/music/playlist/${playlist.id}`}
+      pictures={playlist.cover}
+      color={null}
+      name={playlist.name}
+      note={howMany(playlist.songs, "music.songs_count", t)}
+      songs={() => music.playlist(playlist.id).then((page) => page.tracks)}
+    />
   );
 }
 
