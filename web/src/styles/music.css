@@ -142,6 +142,119 @@
 }
 
 /* --------------------------------------------------------------------------
+ * Songs as wide tiles
+ * ----------------------------------------------------------------------- */
+
+/* Two tiles above one another make one column of the row, about three of
+   them across a wide screen with the next peeking in at the edge. */
+.row-track > .music-lines {
+  flex-basis: clamp(260px, 30vw, 440px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.music-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+  padding: 0 var(--gap) 0 0;
+  overflow: hidden;
+  border: none;
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1.5px transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease);
+}
+
+.music-line:hover,
+.music-line:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
+  box-shadow:
+    inset 0 0 0 1.5px var(--accent-bright),
+    0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.music-line-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 80px;
+  aspect-ratio: 1;
+  background: var(--surface-deep);
+}
+
+.music-line-cover img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The disc of the play button of a card, smaller, over the cover under the
+   pointer. */
+.music-line-play {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 90%, transparent);
+  color: var(--accent-contrast);
+  opacity: 0;
+  transform: scale(0.86);
+  transition:
+    opacity var(--quick) var(--ease),
+    transform var(--calm) var(--ease);
+}
+
+.music-line:hover .music-line-play,
+.music-line:focus-visible .music-line-play {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (hover: none) {
+  .music-line-play {
+    display: none;
+  }
+}
+
+.music-line-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.music-line-title,
+.music-line-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-line-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.music-line-note {
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+/* --------------------------------------------------------------------------
  * Genres
  * ----------------------------------------------------------------------- */
 
