@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
+import { PageBackdrop } from "../components/backdrop";
 import { Picker } from "../components/panel";
 import { ArrowRightIcon, CloseIcon } from "../icons";
 import { useLibraryVersion } from "../libraries";
@@ -40,21 +41,26 @@ export function MusicLibraryPage({ library }: { library: Library }) {
 
   return (
     <main className="page music-page">
-      <div className="music-head">
-        <h1>{library.name}</h1>
-        <nav className="music-tabs" aria-label={t("music.tabs")}>
-          {TABS.map((one) => (
-            <button
-              key={one}
-              type="button"
-              className={`music-tab${one === tab ? " music-tab-on" : ""}`}
-              aria-current={one === tab ? "page" : undefined}
-              onClick={() => open(one)}
-            >
-              {t(`music.tab.${one}`)}
-            </button>
-          ))}
-        </nav>
+      <PageBackdrop />
+      <div className="browse-head">
+        <div className="section-head">
+          <h1>{library.name}</h1>
+        </div>
+        <div className="browse-bar">
+          <nav className="browse-piece music-tabs" aria-label={t("music.tabs")}>
+            {TABS.map((one) => (
+              <button
+                key={one}
+                type="button"
+                className={`music-tab${one === tab ? " music-tab-on" : ""}`}
+                aria-current={one === tab ? "page" : undefined}
+                onClick={() => open(one)}
+              >
+                {t(`music.tab.${one}`)}
+              </button>
+            ))}
+          </nav>
+        </div>
       </div>
 
       {tab === "for_you" && <ForYouTab library={library.id} />}
